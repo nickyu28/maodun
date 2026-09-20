@@ -2968,7 +2968,7 @@
                 }
             } else {
                 if (isPlaying && !gState.isDead && dragSourceObj.container === 'inv') {
-                    let hudBox = document.getElementById('hud-hotbar-container'); let bpBox = document.getElementById('backpack-grid-box'); let garageBox = document.getElementById('garage-inventory-container');
+                    let hudBox = document.getElementById('hud-hotbar-container'); let bpBox = document.getElementById('backpack-grid-box'); let garageBox = document.getElementById('garage-active-inv');
                     let inBox = function (box) { if (!box || box.offsetParent === null) return false; let rect = box.getBoundingClientRect(); return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom; };
                     if (!inBox(hudBox) && !inBox(bpBox) && !inBox(garageBox)) { executeThrow(dragSourceObj.idx); }
                 }
@@ -4397,6 +4397,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-20-night-fixes', date: '2026-09-20', title: '惊魂夜修复', items: [
+                    '修好了放倒的窗板能隔着楼层砸晕猎人的问题——现在窗板只有跟猎人在同一层时倒下才会把他砸晕。',
+                    '猎人 3 号的钉刺陷阱以前对 AI 队友完全没用，现在 AI 队友踩到钉刺后也会像真人一样变慢、修机变慢。'
+                ]
+            },
             {
                 id: '2026-09-20-fixes', date: '2026-09-20', title: '小修复', items: [
                     '修好了一个会让大厅界面卡在最上面、退不出去的显示问题（四角布局引入的 CSS 优先级冲突）。',
@@ -7422,6 +7428,7 @@
             if (blaze && blaze.aimLine) scene.remove(blaze.aimLine);
             if (blaze) blaze.actors.forEach(function (a) { if (a.mesh) scene.remove(a.mesh); });
             if (blaze) blaze.projectiles.forEach(function (q) { if (q.mesh) scene.remove(q.mesh); });
+            if (blaze) blaze.atkHold = false;
             // 先把 blaze 清掉再停音乐 —— bgmFightMode() 看的就是这个变量，
             // 不先清的话会被判成「还在战斗」，回大厅还在放打斗曲。
             blaze = null;
@@ -7429,7 +7436,6 @@
             document.body.onclick = null; document.body.onmousedown = null; document.body.onmouseup = null;
             if (document.pointerLockElement) document.exitPointerLock();
             document.getElementById('blaze-hud').classList.add('hidden');
-            if (blaze) blaze.atkHold = false;
             blazeStatsOpen = false;
             let bdExit = document.getElementById('blaze-ffa-board');
             if (bdExit) { bdExit.classList.add('hidden'); bdExit.innerHTML = ''; }
@@ -11008,7 +11014,7 @@
 
             let h = night.hunter;
             let d = Math.hypot(p.x * TILE - h.p.x, p.z * TILE - h.p.z);
-            if (d <= TILE / 2 + NIGHT.palletHitRange) nightStunHunter(NIGHT.palletStun, '板子砸中！');
+            if (d <= TILE / 2 + NIGHT.palletHitRange && nightPalletSameLevel(p, h.gy)) nightStunHunter(NIGHT.palletStun, '板子砸中！');
             nightEjectFromPallet(p);
 
         }
@@ -11828,6 +11834,7 @@
             if (a.beingHealed) return;
 
             let dh = nightFlatDist(h.p, a.p);
+            let survSpd = NIGHT.surv * (a.slowUntil && performance.now() < a.slowUntil ? SKILL.hgouSpikeSlow : 1);
 
             let safeAt = DANGER_FAR * 1.35;
             let inDanger = nightSameLevel(h.p, a.p) && (a.fleeing ? dh < safeAt : dh < DANGER_FAR);
@@ -11873,7 +11880,7 @@
                 a.repairing = null;
                 if (dh < 70) nightAISay(a, 'chased');
                 nightSurvivorAISkill(a, dh, dt);
-                nightMoveToward(a, nightFleeTarget(a), NIGHT.surv * (a.hitBoost > 0 ? NIGHT.hitBoost : 1), dt); return;
+                nightMoveToward(a, nightFleeTarget(a), survSpd * (a.hitBoost > 0 ? NIGHT.hitBoost : 1), dt); return;
             }
 
             if (iAmRescuer) {
@@ -11914,7 +11921,7 @@
                             return;
                         }
                     }
-                    nightMoveToward(a, t.p, NIGHT.surv, dt);
+                    nightMoveToward(a, t.p, survSpd, dt);
                 }
                 return;
             }
@@ -11933,7 +11940,7 @@
                         if (td <= SKILL.catHealRange) {
                             if (t.downed) nightRescue(t); else t.hp = 2;
                             a.skillCd = SKILL.catHealCd; nightRefreshFish();
-                        } else { nightMoveToward(a, t.p, NIGHT.surv, dt); }
+                        } else { nightMoveToward(a, t.p, survSpd, dt); }
                         return;
                     }
                 }
@@ -11941,7 +11948,7 @@
 
                 let me0 = night.survivors[0];
                 if (me0 && me0 !== a && !me0.out && !me0.escaped && nightFlatDist(a.p, me0.p) > 26) {
-                    nightMoveToward(a, me0.p, NIGHT.surv, dt); return;
+                    nightMoveToward(a, me0.p, survSpd, dt); return;
                 }
             } else if (order === 'door') {
                 let od = null, ob = Infinity;
@@ -11956,7 +11963,7 @@
                         if (nightSealed(od)) { /* 被封住了，只能等 */ }
                         else if (!od.open) { od.openProgress += dt; if (od.openProgress >= NIGHT.doorOpenTime) nightOpenDoor(od); }
                         else { a.escaped = true; if (a.mesh) a.mesh.visible = false; }
-                    } else { nightAISay(a, 'toDoor'); nightMoveToward(a, new THREE.Vector3(od.x * TILE, a.p.y, od.z * TILE), NIGHT.surv, dt); }
+                    } else { nightAISay(a, 'toDoor'); nightMoveToward(a, new THREE.Vector3(od.x * TILE, a.p.y, od.z * TILE), survSpd, dt); }
                     return;
                 }
             }
@@ -11986,7 +11993,7 @@
                     } else {
                         a.healT = 0;
                         nightAISay(a, a.charKey === 'cat' ? 'toHealCat' : 'toHeal');
-                        nightMoveToward(a, sick.p, NIGHT.surv, dt);
+                        nightMoveToward(a, sick.p, survSpd, dt);
                     }
                     return;
                 }
@@ -12004,7 +12011,7 @@
                 if (nightEatFish(a)) return;
                 let f = null, fd = Infinity;
                 myFish.forEach(function (o) { let d = Math.hypot(o.p.x - a.p.x, o.p.z - a.p.z); if (d < fd) { fd = d; f = o; } });
-                if (f && fd < 260) { nightMoveToward(a, new THREE.Vector3(f.p.x, a.p.y, f.p.z), NIGHT.surv, dt); return; }
+                if (f && fd < 260) { nightMoveToward(a, new THREE.Vector3(f.p.x, a.p.y, f.p.z), survSpd, dt); return; }
             }
 
             let anyOpen = gState.doors.some(function (o) { return o.open; });
@@ -12025,7 +12032,7 @@
                         a.escapeProg = (a.escapeProg || 0) + dt;
                         if (a.escapeProg >= NIGHT.escapeTime) { a.escaped = true; if (a.mesh) a.mesh.visible = false; }
                     }
-                } else { a.escapeProg = 0; nightAISay(a, d.open ? 'doorOpen' : 'toDoor'); nightMoveToward(a, new THREE.Vector3(d.x * TILE, a.p.y, d.z * TILE), NIGHT.surv, dt); }
+                } else { a.escapeProg = 0; nightAISay(a, d.open ? 'doorOpen' : 'toDoor'); nightMoveToward(a, new THREE.Vector3(d.x * TILE, a.p.y, d.z * TILE), survSpd, dt); }
                 return;
             }
 
@@ -12059,12 +12066,12 @@
                 if (m.c2Boost) mult *= SKILL.c2BoostMul;
                 mult *= nightC2MarkMul(a);
                 mult *= nightSealSlow(a);
-                m.progress = Math.min(100, m.progress + nightBaseRate() * mult * NIGHT.aiRepairFactor * nightSkillK().repair * dt * NIGHT.gamePerReal);
+                m.progress = Math.min(100, m.progress + nightBaseRate() * mult * NIGHT.aiRepairFactor * nightSkillK().repair * dt * NIGHT.gamePerReal / nightActMul(a));
                 nightAICalib(a, m, dt);
                 nightAIMiBurst(a, m);
                 nightCheckMachine(m);
             }
-            else { a.calibT = 0; nightMoveToward(a, new THREE.Vector3(m.x * TILE, a.p.y, m.z * TILE), NIGHT.surv, dt); }
+            else { a.calibT = 0; nightMoveToward(a, new THREE.Vector3(m.x * TILE, a.p.y, m.z * TILE), survSpd, dt); }
         }
 
         function nightAICalib(a, m, dt) {
@@ -17765,15 +17772,6 @@
             a.mustReturn = !!ball.centerBall;
             ball.centerBall = false;
         }
-        // 触屏「捡/接」键还是走这个合并版——手空的时候点一下，够近就捡，不够近就张手等接。
-        function dodgeSpaceAction(a) {
-            if (a.out || a.holding) return;
-            let ball = dodge.balls.find(function (b) {
-                return b.state === 'idle' && Math.hypot(b.p.x - a.p.x, b.p.z - a.p.z) < DODGE.pickupRange;
-            });
-            if (ball) { dodgePickupBall(a, ball); return; }
-            a.catchWindow = DODGE.catchWindow;
-        }
         // 鼠标端拆成两个独立动作：左键点一下专门捡球，右键专门接球，互不干扰
         function dodgePickupNearby(a) {
             if (a.out || a.holding) return;
@@ -17854,8 +17852,8 @@
             else { a.mvx = 0; a.mvz = 0; }
             dodgeClampCourt(a);
 
-            // 捡球/接球改成右键触发（mousedown 里直接调 dodgeSpaceAction，一次点击就是一次尝试，
-            // 不用像轮询那样自己做「刚按下」的边缘检测）。这里只保留触屏「捡/接」键的轮询——
+            // 接球改成右键触发（mousedown 里直接调 dodgeOpenCatch，一次点击就是一次尝试，
+            // 不用像轮询那样自己做「刚按下」的边缘检测）。这里只保留触屏「接」键的轮询——
             // 触屏没有右键这回事，还是靠点一下算一下的 touchBtn.jump 标记位。
             let catchTapped = touchBtn.jump; touchBtn.jump = false;
             if (catchTapped) dodgeOpenCatch(a);
