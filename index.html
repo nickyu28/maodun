@@ -841,6 +841,7 @@
             <button onclick="openChangelog()" style="width:100%; margin:0 0 6px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">📋 更新公告<span id="changelog-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
             <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">🥚 彩蛋图鉴</button>
             <button onclick="openChatSetup()" style="width:100%; margin:0 0 6px; background:#607d8b; color:#fff; border:none; font-size:12px; padding:7px 4px;">💬 发言设置</button>
+            <button onclick="openFeedback()" style="width:100%; margin:0 0 6px; background:#e91e63; color:#fff; border:none; font-size:12px; padding:7px 4px;">💌 反馈</button>
             <div id="lobby-rank" style="font-size:11px; color:#888; margin-top:4px;"></div>
             <div id="daily-mod-banner" style="font-size:11px; color:#795548; background:#fff8e1; border:1px solid #ffe082; border-radius:5px; padding:5px 6px; margin-top:4px;"></div>
         </div>
@@ -4438,6 +4439,35 @@
             try { localStorage.setItem('TH_changelog_seen', CHANGELOG[0].id); } catch (e) { }
             changelogBadgeSync();
             showSysModal('📋 更新公告', html, [{ label: '关闭', color: '#666' }]);
+        }
+
+        // 反馈：没有后端，收不到结构化数据，就走最土但最不会掉链子的路——
+        // 拼一封邮件，带上测试者的 ID/模式方便我对上号，发不出邮件就退化成复制文本。
+        function openFeedback() {
+            let html = '<div style="text-align:left;">' +
+                '<textarea id="feedback-text" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
+                '<div style="font-size:11px; color:#999; margin-top:6px;">会顺便带上你的 ID（' + gState.id + '）和当前模式，方便我知道你说的是哪儿。</div>' +
+                '</div>';
+            showSysModal('💌 反馈', html, [
+                { label: '发送邮件', color: '#e91e63', onClick: function () { feedbackSend('mail'); } },
+                { label: '复制文字', color: '#607d8b', onClick: function () { feedbackSend('copy'); } },
+                { label: '取消' }
+            ]);
+        }
+        function feedbackSend(mode) {
+            let box = document.getElementById('feedback-text');
+            let text = box ? box.value.trim() : '';
+            if (!text) { showSysModal('提示', '写点什么再发吧', [{ label: '确定' }]); return; }
+            let body = text + '\n\n——\nID: ' + gState.id + '\n模式: ' + (gState.gameMode || '') + '\n时间: ' + new Date().toLocaleString();
+            if (mode === 'mail') {
+                window.location.href = 'mailto:iway.yu@gmail.com?subject=' + encodeURIComponent('猫盾の游戏 反馈') + '&body=' + encodeURIComponent(body);
+            } else {
+                navigator.clipboard.writeText(body).then(function () {
+                    blazeFlash('已复制，发给开发者就行');
+                }).catch(function () {
+                    showSysModal('复制内容', '<textarea readonly style="width:100%; height:120px; font-size:12px;">' + body.replace(/</g, '&lt;') + '</textarea>', [{ label: '关闭' }]);
+                });
+            }
         }
 
         function openEggBook() {
