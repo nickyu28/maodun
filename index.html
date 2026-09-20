@@ -838,6 +838,7 @@
             <button onclick="openShop()" style="width:100%; margin:0 0 6px; background:#e6a23c; color:#fff; border:none; font-size:13px; padding:8px 4px;">🛒 商店</button>
             <button onclick="selectGameMode('park')" style="width:100%; margin:0 0 6px; background:#ad1457; color:#fff; border:none; font-size:13px; padding:8px 4px;">🎨 猫盾乐园</button>
             <button onclick="hubBegin()" style="width:100%; margin:0 0 6px; background:#00acc1; color:#fff; border:none; font-size:13px; padding:8px 4px; font-weight:bold;">🏃 大厅广场</button>
+            <button onclick="openChangelog()" style="width:100%; margin:0 0 6px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">📋 更新公告<span id="changelog-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
             <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">🥚 彩蛋图鉴</button>
             <button onclick="openChatSetup()" style="width:100%; margin:0 0 6px; background:#607d8b; color:#fff; border:none; font-size:12px; padding:7px 4px;">💬 发言设置</button>
             <div id="lobby-rank" style="font-size:11px; color:#888; margin-top:4px;"></div>
@@ -2156,7 +2157,7 @@
         function proceedToLobby(pid) {
             let ai1Name = pid + "_AI_1"; let ai2Name = pid + "_AI_2"; gState.id = pid;
             gState.team = [{ id: pid, isLeader: true, isReady: true, isAI: false }, { id: ai1Name, isLeader: false, isReady: true, isAI: true }, { id: ai2Name, isLeader: false, isReady: true, isAI: true }];
-            loadProgress(pid); loadEggs(); friendLoad(); updateTeamListUI(); teamRenderUI(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
+            loadProgress(pid); loadEggs(); friendLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
             chatLoad();
             try { let r = localStorage.getItem('TH_room'); if (r) document.getElementById('net-room').value = r; } catch (e) { }
             let eb = document.getElementById('btn-egg-book');
@@ -4390,6 +4391,53 @@
             gState.nightHistory.push(!!won);
             if (gState.nightHistory.length > 30) gState.nightHistory.shift();
             saveProgress();
+        }
+
+        // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
+        // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
+        const CHANGELOG = [
+            {
+                id: '2026-09-20-fixes', date: '2026-09-20', title: '小修复', items: [
+                    '修好了一个会让大厅界面卡在最上面、退不出去的显示问题（四角布局引入的 CSS 优先级冲突）。',
+                    '大厅广场的跑酷台阶原来紧贴在一起不用跳，现在改成真的有间隙要跳过去；助跑跳也修好了（原来贴着台阶边缘按跳会直接掉下去，现在能正常跳过空隙）。'
+                ]
+            },
+            {
+                id: '2026-09-20-lobby', date: '2026-09-20', title: '大厅四角布局 + 大厅广场', items: [
+                    '大厅改成四角布局：左上商店/猫盾乐园等入口，右上选模式 + "开始游戏！"，下方聊天/好友/组队/麦克风。',
+                    '新增"大厅广场"：能自由走动的 3D 空间，一小段真跑酷，还有 AI 路人可以偶遇——靠近会弹出"组队"和"加好友"。',
+                    '组队改成要对方同意才算数，不是点一下就秒组队；同房间的真人也可以在好友列表里发"邀请组队"。'
+                ]
+            },
+            {
+                id: '2026-09-20-dodge-park', date: '2026-09-20', title: '躲避球手感 + 猫盾乐园重做', items: [
+                    '躲避球投球改成所见即所得瞄准，球速、重力都调高了，手感更"实"。',
+                    '猫盾乐园从调参数改成真的拼积木：移动、等待、转向、判断、变量都是独立小块，能拼出各种小游戏。',
+                    '惊魂夜角色名字统一改成 1 号到 6 号。'
+                ]
+            }
+        ];
+        function changelogHasUnseen() {
+            try { return localStorage.getItem('TH_changelog_seen') !== CHANGELOG[0].id; } catch (e) { return false; }
+        }
+        function changelogBadgeSync() {
+            let b = document.getElementById('changelog-badge');
+            if (b) b.style.display = changelogHasUnseen() ? 'inline-block' : 'none';
+        }
+        function openChangelog() {
+            let html = '<div style="max-height:320px; overflow-y:auto; text-align:left;">';
+            CHANGELOG.forEach(function (e) {
+                html += '<div style="padding:8px 10px; margin-bottom:8px; border-radius:5px; background:#eef6ff;">' +
+                    '<div style="font-size:11px; color:#999;">' + e.date + '</div>' +
+                    '<div style="font-weight:bold; color:#2c5d8f; margin:2px 0 5px;">' + e.title + '</div>' +
+                    '<ul style="margin:0; padding-left:18px; font-size:12px; color:#555; line-height:1.7;">' +
+                    e.items.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul>' +
+                    '</div>';
+            });
+            html += '</div>';
+            try { localStorage.setItem('TH_changelog_seen', CHANGELOG[0].id); } catch (e) { }
+            changelogBadgeSync();
+            showSysModal('📋 更新公告', html, [{ label: '关闭', color: '#666' }]);
         }
 
         function openEggBook() {
