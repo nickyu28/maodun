@@ -4398,6 +4398,12 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-20-pity-fix', date: '2026-09-20', title: '修复"保底"战利品箱一直不消失的问题', items: [
+                    '之前连续输了好几局之后会触发一次"保底"（下一局必出高级战利品箱），但只要赢了一局，这个保底不会消失，导致后面每一局都会稳出高级箱子。',
+                    '现在保底会在你成功撤离的那一局用掉，之后恢复正常概率——保底还在，只是不会一直白嫖了。'
+                ]
+            },
+            {
                 id: '2026-09-20-night-fixes', date: '2026-09-20', title: '惊魂夜修复', items: [
                     '修好了放倒的窗板能隔着楼层砸晕猎人的问题——现在窗板只有跟猎人在同一层时倒下才会把他砸晕。',
                     '猎人 3 号的钉刺陷阱以前对 AI 队友完全没用，现在 AI 队友踩到钉刺后也会像真人一样变慢、修机变慢。'
@@ -15232,6 +15238,7 @@
 
         function completeExtraction(text) {
             gState.isFirstRound = false;
+            gState.pityGuaranteed = false;
             gState.matchHistory.push(true); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
 
             gState.inv.forEach(function (i) { if (i) nightTreasureEgg(i.n); });
