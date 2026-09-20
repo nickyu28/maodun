@@ -4443,14 +4443,21 @@
 
         // 反馈：没有后端，收不到结构化数据，就走最土但最不会掉链子的路——
         // 拼一封邮件，带上测试者的 ID/模式方便我对上号，发不出邮件就退化成复制文本。
+        // 反馈走 GitHub issue（仓库：nickyu28/maodun），不是随便存个本地文本——
+        // 这样夜里那个自动检查 bug 的云端任务才能真的读到，跟它读代码一样，同一次
+        // 运行里顺手看一眼有没有新反馈。本地没法直接建 issue（没有后端、不能带 token），
+        // 用 GitHub 预填链接开一个新标签页，测试者自己确认提交——邮件/复制文字留着
+        // 当备选，给没有 GitHub 账号的人用。
+        const FEEDBACK_REPO = 'nickyu28/maodun';
         function openFeedback() {
             let html = '<div style="text-align:left;">' +
                 '<textarea id="feedback-text" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
-                '<div style="font-size:11px; color:#999; margin-top:6px;">会顺便带上你的 ID（' + gState.id + '）和当前模式，方便我知道你说的是哪儿。</div>' +
+                '<div style="font-size:11px; color:#999; margin-top:6px;">会顺便带上你的 ID（' + gState.id + '）和当前模式。优先用 GitHub 提交——开发者每天会自动检查一遍，没有 GitHub 账号就用下面的备选。</div>' +
                 '</div>';
             showSysModal('💌 反馈', html, [
-                { label: '发送邮件', color: '#e91e63', onClick: function () { feedbackSend('mail'); } },
+                { label: '提交（GitHub）', color: '#24292e', onClick: function () { feedbackSend('github'); } },
                 { label: '复制文字', color: '#607d8b', onClick: function () { feedbackSend('copy'); } },
+                { label: '发送邮件', onClick: function () { feedbackSend('mail'); } },
                 { label: '取消' }
             ]);
         }
@@ -4458,8 +4465,14 @@
             let box = document.getElementById('feedback-text');
             let text = box ? box.value.trim() : '';
             if (!text) { showSysModal('提示', '写点什么再发吧', [{ label: '确定' }]); return; }
-            let body = text + '\n\n——\nID: ' + gState.id + '\n模式: ' + (gState.gameMode || '') + '\n时间: ' + new Date().toLocaleString();
-            if (mode === 'mail') {
+            let meta = 'ID: ' + gState.id + '\n模式: ' + (gState.gameMode || '') + '\n时间: ' + new Date().toLocaleString();
+            let body = text + '\n\n——\n' + meta;
+            if (mode === 'github') {
+                let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
+                let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
+                    '&body=' + encodeURIComponent(body) + '&labels=feedback';
+                window.open(url, '_blank');
+            } else if (mode === 'mail') {
                 window.location.href = 'mailto:iway.yu@gmail.com?subject=' + encodeURIComponent('猫盾の游戏 反馈') + '&body=' + encodeURIComponent(body);
             } else {
                 navigator.clipboard.writeText(body).then(function () {
