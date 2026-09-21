@@ -2968,9 +2968,9 @@
                 }
             } else {
                 if (isPlaying && !gState.isDead && dragSourceObj.container === 'inv') {
-                    let hudBox = document.getElementById('hud-hotbar-container'); let bpBox = document.getElementById('backpack-grid-box'); let garageBox = document.getElementById('garage-inventory-container');
+                    let hudBox = document.getElementById('hud-hotbar-container'); let bpBox = document.getElementById('backpack-grid-box');
                     let inBox = function (box) { if (!box || box.offsetParent === null) return false; let rect = box.getBoundingClientRect(); return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom; };
-                    if (!inBox(hudBox) && !inBox(bpBox) && !inBox(garageBox)) { executeThrow(dragSourceObj.idx); }
+                    if (!inBox(hudBox) && !inBox(bpBox)) { executeThrow(dragSourceObj.idx); }
                 }
             }
             let allSlots = document.querySelectorAll('.slot'); allSlots.forEach(s => s.style.opacity = '1');
