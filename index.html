@@ -15497,7 +15497,9 @@
             if (night.side === 'hunter') nightHunterBreak();
         });
 
-        bindTouchTap('blaze-jump-btn', function () { touchBtn.jump = true; });
+        // 躲避球模式下这颗键被专门借去当「跳」，此时 touchBtn.jump 另有用途（接球），
+        // 不能被跳跃键顺带带上，不然一按跳就顺手打开接球判定窗口
+        bindTouchTap('blaze-jump-btn', function () { if (!(dodge && !dodge.over)) touchBtn.jump = true; });
         bindTouchTap('blaze-jump-btn', function () { touchBtn.dodgeJump = true; });   // 躲避球复用同一颗「跳」键，单独一个标记位
         bindTouchTap('race-jump-btn', function () { touchBtn.jump = true; });
         bindTouchTap('race-dash-btn', function () { touchBtn.ability = true; });
