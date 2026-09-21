@@ -7721,6 +7721,11 @@
             let cell = row && row[gx];
             if (!cell || cell.type !== 0) return false;
             // 有活人正踩在这格上就不封，不然人会被关进墙里
+            let occupied = blaze.actors.some(function (a) {
+                return a.alive && a.floor === 0 &&
+                    Math.round(a.p.x / TILE) === gx && Math.round(a.p.z / TILE) === gz;
+            });
+            if (occupied) return false;
             let g = new THREE.Group();
             // 一根碑一样的圆柱。原来是整整一格的方块，一死封一大片，
             // 打两轮场地就被切成迷宫了。
