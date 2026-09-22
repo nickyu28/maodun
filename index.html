@@ -54,12 +54,16 @@
             position: absolute;
             top: 14px;
             box-sizing: border-box;
-            max-height: calc(100% - 190px);
+            /* 100% 减固定像素在矮屏幕上会算出负数，CSS 会把负的 max-height 当成 0——
+               整块内容直接消失、大厅一片空白。用 max() 兜个底，再矮也留一块能滚动的区域。 */
+            max-height: max(140px, calc(100% - 190px));
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
         }
-        #lobby-tl { left: 14px; width: 190px; }
-        #lobby-tr { right: 14px; width: 320px; text-align: left; }
+        /* 固定宽度 190px + 320px 在窄屏（手机竖屏）上会加起来超过屏幕宽度，两块内容
+           叠在一起——用 min() 在窄屏上按比例收窄，宽屏（平板/电脑）上还是原来的宽度。 */
+        #lobby-tl { left: 14px; width: min(190px, 42vw); }
+        #lobby-tr { right: 14px; width: min(320px, 50vw); text-align: left; }
         #lobby-bottom {
             position: absolute;
             left: 0; bottom: 0; width: 100%;
