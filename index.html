@@ -834,10 +834,25 @@
     </div>
 
     <div id="screen-lobby" class="screen hidden">
+        <!-- 中间大片空白看着像没做完——放一个跟猫盾角色同风格的简笔画小猫当水印，
+             比干巴巴一个字号顶到最大的"猫盾"看着更像有意为之的设计。 -->
         <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden;">
-            <div style="font-size:min(18vw, 220px); font-weight:bold; color:#eaeaea; white-space:nowrap;">猫盾</div>
+            <svg width="min(46vw, 380px)" height="min(46vw, 380px)" viewBox="0 0 200 200" style="opacity:0.1;">
+                <rect x="45" y="65" width="110" height="105" rx="26" fill="none" stroke="#999" stroke-width="5"/>
+                <path d="M62 68 L50 30 L84 58 Z" fill="none" stroke="#999" stroke-width="5" stroke-linejoin="round"/>
+                <path d="M138 68 L150 30 L116 58 Z" fill="none" stroke="#999" stroke-width="5" stroke-linejoin="round"/>
+                <circle cx="82" cy="112" r="4.5" fill="#999"/>
+                <circle cx="118" cy="112" r="4.5" fill="#999"/>
+                <path d="M92 128 L100 138 L108 128 Z" fill="none" stroke="#999" stroke-width="4" stroke-linejoin="round"/>
+                <path d="M45 118 Q22 122 27 142" fill="none" stroke="#999" stroke-width="5" stroke-linecap="round"/>
+                <path d="M155 118 Q178 122 173 142" fill="none" stroke="#999" stroke-width="5" stroke-linecap="round"/>
+                <path d="M78 170 L78 188" stroke="#999" stroke-width="5" stroke-linecap="round"/>
+                <path d="M122 170 L122 188" stroke="#999" stroke-width="5" stroke-linecap="round"/>
+            </svg>
         </div>
-        <h1 id="lobby-title" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); font-size:22px; color:#aaa; margin:0; pointer-events:none;">寻宝队</h1>
+        <!-- 当前模式已经在右上角的模式网格里高亮显示了，这行标题是多余的重复信息——
+             不删元素本身（selectGameMode 还在往里面写字），只是不显示。 -->
+        <h1 id="lobby-title" style="display:none;">寻宝队</h1>
 
         <!-- 左上角：商店 / 猫盾乐园 / 大厅广场等入口 -->
         <div id="lobby-tl">
