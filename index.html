@@ -4534,6 +4534,11 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-24-cake-body', date: '2026-09-24', title: '松饼大作战换了新造型', items: [
+                    '松饼大作战里的角色不再用其他模式那套身体了：躯干改成卷起来的圆柱形，胳膊腿也换成贴着身体的矮圆墩，更像只松饼猫。'
+                ]
+            },
+            {
                 id: '2026-09-24-mcoin', date: '2026-09-24', title: '货币统一成猫盾币 + 皮肤系统 + 组队联机实验', items: [
                     '寻宝队/惊魂夜/超燃各自的金币，还有商店宠物/表情用的通用币，合并成一份"猫盾币"，全模式通用（寻宝队自己的钱还是单独一套，不受影响）。',
                     '因为货币结构变了，这次更新会把所有人的存档（寻宝队的钱、猫盾币、角色解锁）清零重来——现在还没人正式在玩，直接清干净比小心翼翼换算更省事。',
@@ -19288,8 +19293,7 @@
         //  松饼大作战（原代号 "I'm a pancake"）：自由混战抓人，不分队伍——
         //  面朝谁、又让谁进了你手的范围，谁就当场出局，最后剩下的人赢。
         //  地图上会刷新几种短效增益，捡到能占点便宜。
-        //  这版先把玩法本身做完；猫的建模/手型换成松饼那批参考图留到下一步再做，
-        //  这里先照旧用猫盾的身体（raceMakeBody）。
+        //  身体换成松饼卷起来的圆柱形（cakeMakeBody），胳膊腿也改成贴身的小圆墩。
         // ══════════════════════════════════════════════════════════
         const CAKE = {
             playerCount: 8,       // 1 真人 + 7 个 AI 一起下场
@@ -19607,6 +19611,67 @@
             if (!cake.over) cakeTick(dt);
             cake.raf = requestAnimationFrame(cakeLoop);
         }
+        // 松饼大作战专属身体：躯干换成圆柱（卷起来的松饼），耳朵不变，
+        // 胳膊腿都改成贴着身体的矮圆墩——不再是伸得老远的细长方块。
+        function cakeMakeBody(col, handRange) {
+            let g = new THREE.Group();
+            let mat = new THREE.MeshLambertMaterial({ color: col });
+            let body = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10, 18), mat);
+            body.position.y = 5; g.add(body);
+            let earGeo = new THREE.ConeGeometry(1.6, 3.2, 4);
+            [-1, 1].forEach(function (sdir) {
+                let ear = new THREE.Mesh(earGeo, mat);
+                ear.position.set(sdir * 2.1, 11.2, 0); g.add(ear);
+            });
+            // 腿：矮墩墩的小圆柱，贴着身体下沿露出一截
+            let legs = [];
+            [-1, 1].forEach(function (sdir) {
+                let hip = new THREE.Group();
+                hip.position.set(sdir * 1.8, 2, 0);
+                let leg = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 2.6, 10), mat);
+                leg.position.y = -1.3; hip.add(leg);
+                g.add(hip); legs.push(hip);
+            });
+            g.userData.legs = legs;
+            g.userData.body = body;
+            // 胳膊：肩膀紧贴身体，短短一截圆柱 + 缩小版的半圆爪子，摆动幅度天然就小
+            let arms = [];
+            [-1, 1].forEach(function (sdir) {
+                let shoulder = new THREE.Group();
+                shoulder.position.set(sdir * 3.4, 6.4, 0);
+                let arm = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 2.2, 10), mat);
+                arm.position.y = -1.1; shoulder.add(arm);
+                let hand = new THREE.Mesh(new THREE.CircleGeometry(1.7, 12, 0, Math.PI),
+                    new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide }));
+                hand.position.y = -2.2; hand.rotation.z = Math.PI; shoulder.add(hand);
+                g.add(shoulder); arms.push(shoulder);
+            });
+            g.userData.arms = arms;
+            // 白描边，远处也认得出轮廓
+            let outMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, depthWrite: false });
+            let parts = []; g.traverse(function (o) { if (o.isMesh) parts.push(o); });
+            parts.forEach(function (m) {
+                let o = new THREE.Mesh(m.geometry, outMat);
+                o.position.copy(m.position); o.rotation.copy(m.rotation);
+                o.scale.copy(m.scale).multiplyScalar(1.09);
+                o.renderOrder = -1;
+                (m.parent || g).add(o);
+            });
+            // 脚下一圈本人颜色，混战时看得出自己站哪儿
+            let ring = new THREE.Mesh(new THREE.TorusGeometry(4.6, 0.8, 6, 20),
+                new THREE.MeshBasicMaterial({ color: col }));
+            ring.rotation.x = -Math.PI / 2; ring.position.y = 0.6; g.add(ring);
+            g.userData.ring = ring;
+            // 手能摸到多远——常驻显示，不用等你伸手才知道范围
+            if (handRange) {
+                let reach = new THREE.Mesh(new THREE.TorusGeometry(handRange, 0.35, 6, 24),
+                    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }));
+                reach.rotation.x = -Math.PI / 2; reach.position.y = 0.4; g.add(reach);
+                g.userData.reach = reach;
+            }
+            return g;
+        }
+
         function cakeBegin() {
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
@@ -19633,7 +19698,7 @@
             for (let i = 0; i < n; i++) {
                 let isP = (i === 0);
                 let col = isP ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
-                let mesh = raceMakeBody(col, CAKE.handRange);
+                let mesh = cakeMakeBody(col, CAKE.handRange);
                 scene.add(mesh);
                 let sp = spawns[i];
                 let name = isP ? (gState.id || '你') : (pool.length ? pool.splice(Math.floor(Math.random() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
