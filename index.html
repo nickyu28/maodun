@@ -841,22 +841,6 @@
     </div>
 
     <div id="screen-lobby" class="screen hidden">
-        <!-- 中间大片空白看着像没做完——放一个跟猫盾角色同风格的简笔画小猫当水印，
-             比干巴巴一个字号顶到最大的"猫盾"看着更像有意为之的设计。 -->
-        <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden;">
-            <svg width="min(46vw, 380px)" height="min(46vw, 380px)" viewBox="0 0 200 200" style="opacity:0.1;">
-                <rect x="45" y="65" width="110" height="105" rx="26" fill="none" stroke="#999" stroke-width="5"/>
-                <path d="M62 68 L50 30 L84 58 Z" fill="none" stroke="#999" stroke-width="5" stroke-linejoin="round"/>
-                <path d="M138 68 L150 30 L116 58 Z" fill="none" stroke="#999" stroke-width="5" stroke-linejoin="round"/>
-                <circle cx="82" cy="112" r="4.5" fill="#999"/>
-                <circle cx="118" cy="112" r="4.5" fill="#999"/>
-                <path d="M92 128 L100 138 L108 128 Z" fill="none" stroke="#999" stroke-width="4" stroke-linejoin="round"/>
-                <path d="M45 118 Q22 122 27 142" fill="none" stroke="#999" stroke-width="5" stroke-linecap="round"/>
-                <path d="M155 118 Q178 122 173 142" fill="none" stroke="#999" stroke-width="5" stroke-linecap="round"/>
-                <path d="M78 170 L78 188" stroke="#999" stroke-width="5" stroke-linecap="round"/>
-                <path d="M122 170 L122 188" stroke="#999" stroke-width="5" stroke-linecap="round"/>
-            </svg>
-        </div>
         <!-- 当前模式已经在右上角的模式网格里高亮显示了，这行标题是多余的重复信息——
              不删元素本身（selectGameMode 还在往里面写字），只是不显示。 -->
         <h1 id="lobby-title" style="display:none;">寻宝队</h1>
@@ -875,7 +859,12 @@
 
         <!-- 右上角：选择模式 + 开始游戏 -->
         <div id="lobby-tr">
-            <div style="font-size:12px; color:#888; margin-bottom:6px; text-align:right;">选择模式</div>
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                <button onclick="toggleModeDetail()" style="margin:0; font-size:12px; padding:8px 10px; background:#607d8b; color:#fff; border:none; white-space:nowrap;">选择模式</button>
+                <div id="mode-bar-current" style="flex:1; min-width:0; font-size:13px; color:#333; text-align:center; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">寻宝队</div>
+                <button id="lobby-start-btn" onclick="lobbyPrimaryStart()" style="margin:0; font-size:13px; padding:8px 12px; background:#4caf50; color:#fff; border:none; font-weight:bold; white-space:nowrap;">开始游戏！</button>
+            </div>
+            <div id="mode-detail-panel" class="hidden">
             <div id="game-mode-select" style="display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:10px;">
                 <button id="btn-mode-hunt" onclick="selectGameMode('hunt')" style="margin:0; font-size:11px; padding:7px 2px;">寻宝队</button>
                 <button id="btn-mode-night" onclick="selectGameMode('night')" style="margin:0; font-size:11px; padding:7px 2px;">惊魂夜</button>
@@ -908,7 +897,6 @@
             <label><input type="radio" name="map_diff" value="med" onchange="broadcastMapDiff()"> 中等模式</label>
             <label><input type="radio" name="map_diff" value="hard" onchange="broadcastMapDiff()"> 困难模式</label>
         </div>
-        <button id="lobby-enter-btn" onclick="requestStartGame()" style="width:100%; margin:8px 0 0; background:#5cb85c; color:#fff; font-size:15px; padding:10px 0;">进入仓库</button>
         </div>
 
         <div id="night-only" class="hidden" style="text-align:center; margin:0 0 8px;">
@@ -951,7 +939,6 @@
                 空格/触屏「跳」可以跳跃，免费不吃体力。体力用来跑——按住 Shift（平板是「跑/走」开关）加速 60%，跟寻宝队一样，跑没了就只能走。<br>
                 AI 现在有视野范围，看不见的敌人不会凭空知道。地图墙比乱斗少很多，更开阔。
             </div>
-            <button onclick="jailBegin()" style="width:100%; margin:0; background:#4527a0; color:#fff; border:none; padding:10px 0; font-size:15px;">开始</button>
         </div>
 
         <div id="dodge-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff8e1; border:1px solid #ffca28; border-radius:6px; padding:12px 14px; text-align:left;">
@@ -989,7 +976,6 @@
                 <b>拉杆门</b>：一人按住拉杆开门，其他人趁门开着的这几秒穿过去，拉杆一松门就关。<br>
                 全员走到终点才算通关；4 分钟时间到还没通关就算失败。
             </div>
-            <button onclick="escapeBegin()" style="width:100%; margin:0; background:#43a047; color:#fff; border:none; padding:10px 0; font-size:15px;">开始</button>
         </div>
 
         <div id="park-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fce4ec; border:1px solid #f48fb1; border-radius:6px; padding:12px 14px; text-align:left;">
@@ -1042,7 +1028,6 @@
                 时间到还没分胜负，比谁拍出局的人多。<br>
                 空格/触屏「跳」可以跳跃。
             </div>
-            <button onclick="cakeBegin()" style="width:100%; margin:0; background:#f57f17; color:#fff; border:none; padding:10px 0; font-size:15px;">开始</button>
         </div>
 
         <div id="blaze-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff3e0; border:1px solid #ffcc80; border-radius:6px; padding:12px 14px; text-align:left;">
@@ -1070,7 +1055,7 @@
             </div>
         </div>
 
-        <button id="lobby-start-btn" onclick="lobbyPrimaryStart()" style="width:100%; box-sizing:border-box; margin:2px 0 4px; background:#4caf50; color:#fff; border:none; font-size:16px; padding:11px 0; font-weight:bold;">开始游戏！</button>
+            </div>
         </div>
 
         <!-- 下方：联机房间 / 好友 / 组队 / 麦克风 / 聊天 -->
@@ -1672,8 +1657,6 @@
                     }
                 }
             }
-            let enterBtn = document.getElementById('lobby-enter-btn');
-            if (enterBtn) enterBtn.style.display = (gState.gameMode === 'hunt') ? 'block' : 'none';
         }
 
         // 大厅里的"组队"：纯社交性质，不直接绑对局分队，双方都要同意才算数。
@@ -2266,6 +2249,10 @@
             if (!el) return;
             el.innerHTML = '<b>今日效果：' + DAILY_MOD.name + '</b>　' + DAILY_MOD.desc + '（惊魂夜之外全模式生效，每天换一条）';
         }
+        function toggleModeDetail() {
+            let p = document.getElementById('mode-detail-panel');
+            if (p) p.classList.toggle('hidden');
+        }
         function selectGameMode(m) {
             gState.gameMode = m;
             refreshRankUI();
@@ -2280,12 +2267,13 @@
             document.getElementById('escape-only').classList.toggle('hidden', !isEscape);
             document.getElementById('park-only').classList.toggle('hidden', !isPark);
             document.getElementById('cake-only').classList.toggle('hidden', !isCake);
-            document.getElementById('lobby-title').innerText = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : '超燃');
+            let modeName = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : '超燃');
+            document.getElementById('lobby-title').innerText = modeName;
+            let mbc = document.getElementById('mode-bar-current'); if (mbc) mbc.innerText = modeName;
             if (isNight) selectNightChar(gState.nightChar || 'cat');
             if (isBlaze) blazeRenderChars();
             if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsOf('park'); parkRenderBlocks(); }
             if (isRace) raceTestCardBtnSync();
-            document.getElementById('lobby-enter-btn').style.display = isHunt ? 'block' : 'none';
             if (isJail || isDodge || isEscape) applyControlHints();
             let cb = document.getElementById('hunt-ai-fill');
             if (cb) cb.checked = gState.aiFill !== false;
@@ -4511,6 +4499,17 @@
                 ]
             },
             {
+                id: '2026-09-24-lobby-cleanup', date: '2026-09-24', title: '大厅精简 + 跑酷再修一版 + 反馈简化', items: [
+                    '右上角改成"选择模式"按钮 + 当前模式 + "开始游戏！"，选模式的详情面板不再自带各自的"开始"按钮（点开选、收起来再统一按"开始游戏！"）。',
+                    '去掉了大厅正中间那个半透明猫脸水印。',
+                    '修好一个"人没在动、脚却在动"的动画 bug——大厅里站定不动时腿不会再自己甩了。',
+                    '加大了跑酷台子的碰撞范围，之前会出现耳朵/身体卡进台子里的穿模现在挡住了。',
+                    '大厅广场整体扩大到原来的 5 倍，路人数量也跟着从 8 个加到 30 个，不会显得太空。',
+                    '跑酷嫌太难：移动速度调快了一些，扣不到点的跳跃也更容易够到下一块台子。',
+                    '反馈从 3 个按钮（GitHub/复制/邮件）合并成 1 个"提交"按钮：点了会自动复制内容 + 打开 GitHub 提交页，没有 GitHub 账号也能把复制好的内容直接发给开发者。'
+                ]
+            },
+            {
                 id: '2026-09-24-cake-mode', date: '2026-09-24', title: '新模式：松饼大作战（第一步） + 跑酷手感修复', items: [
                     '新增"松饼大作战"：不分队伍的自由混战抓人，面朝对方并让对方进入你手的范围就能把他拍出局，最后剩下的人赢。地图上会刷新加速/长手/护盾三种短效增益。（这版先做玩法，猫的建模换成松饼形状留到下一步。）',
                     '修好大厅跑酷摔得快时会直接穿模摔穿台子的问题；加上了跳跃缓冲和土狼时间，不用再卡着刚好落地/离台那一帧按空格才跳得起来。',
@@ -4573,35 +4572,27 @@
         function openFeedback() {
             let html = '<div style="text-align:left;">' +
                 '<textarea id="feedback-text" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
-                '<div style="font-size:11px; color:#999; margin-top:6px;">会顺便带上你的 ID（' + gState.id + '）和当前模式。优先用 GitHub 提交——开发者每天会自动检查一遍，没有 GitHub 账号就用下面的备选。</div>' +
+                '<div style="font-size:11px; color:#999; margin-top:6px;">会顺便带上你的 ID（' + gState.id + '）和当前模式，打开 GitHub 提交页（顺手也复制了一份，没有 GitHub 账号就直接粘贴发给开发者）。</div>' +
                 '</div>';
             showSysModal('反馈', html, [
-                { label: '提交（GitHub）', color: '#24292e', onClick: function () { feedbackSend('github'); } },
-                { label: '复制文字', color: '#607d8b', onClick: function () { feedbackSend('copy'); } },
-                { label: '发送邮件', onClick: function () { feedbackSend('mail'); } },
+                { label: '提交', color: '#24292e', onClick: function () { feedbackSend(); } },
                 { label: '取消' }
             ]);
         }
-        function feedbackSend(mode) {
+        function feedbackSend() {
             let box = document.getElementById('feedback-text');
             let text = box ? box.value.trim() : '';
             if (!text) { showSysModal('提示', '写点什么再发吧', [{ label: '确定' }]); return; }
             let meta = 'ID: ' + gState.id + '\n模式: ' + (gState.gameMode || '') + '\n时间: ' + new Date().toLocaleString();
             let body = text + '\n\n——\n' + meta;
-            if (mode === 'github') {
-                let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
-                let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
-                    '&body=' + encodeURIComponent(body) + '&labels=feedback';
-                window.open(url, '_blank');
-            } else if (mode === 'mail') {
-                window.location.href = 'mailto:iway.yu@gmail.com?subject=' + encodeURIComponent('猫盾の游戏 反馈') + '&body=' + encodeURIComponent(body);
-            } else {
-                navigator.clipboard.writeText(body).then(function () {
-                    blazeFlash('已复制，发给开发者就行');
-                }).catch(function () {
-                    showSysModal('复制内容', '<textarea readonly style="width:100%; height:120px; font-size:12px;">' + body.replace(/</g, '&lt;') + '</textarea>', [{ label: '关闭' }]);
-                });
-            }
+            // 顺手复制一份：没有 GitHub 账号、懒得注册的人，GitHub 页面开着不管，
+            // 直接把复制好的内容粘贴发给开发者（邮件/聊天都行）就算提交成功了。
+            try { navigator.clipboard.writeText(body); } catch (e) { }
+            let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
+            let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
+                '&body=' + encodeURIComponent(body) + '&labels=feedback';
+            window.open(url, '_blank');
+            blazeFlash('已复制内容，也打开了 GitHub 提交页');
         }
 
         function openEggBook() {
@@ -19512,8 +19503,8 @@
         //  在线玩家列表，所以"其他玩家"目前是本地模拟的路人，不是真人。
         // ══════════════════════════════════════════════════════════
         const HUB = {
-            plazaHalf: 130, moveSpeed: 30, jumpV: 48, gravity: 140,
-            wanderCount: 8, proximityRange: 14
+            plazaHalf: 650, moveSpeed: 44, jumpV: 48, gravity: 140,
+            wanderCount: 30, proximityRange: 14
         };
         function hubBuildWorld() {
             let floor = new THREE.Mesh(new THREE.PlaneGeometry(HUB.plazaHalf * 2, HUB.plazaHalf * 2),
@@ -19622,9 +19613,11 @@
             }
             // 台子侧面要当墙挡住，不然朝台子横着走/半空中蹭到侧面会直接穿模过去——
             // 只在人确实比台面矮一截时才挡（不是正要落到台子上那一下，留点余量避免误挡）。
+            // pad 得盖过猫盾模型自己的半宽（身体+耳朵大概 3~3.5 个单位），不然挡住的只是
+            // 中心点还没碰到边，但耳朵/身体的网格已经先一步露在台子里面，看着照样像穿模。
             let blockedBySide = false;
             for (let i = 0; i < hub.platforms.length; i++) {
-                let p = hub.platforms[i], pad = 1.1;
+                let p = hub.platforms[i], pad = 3.5;
                 if (Math.abs(newX - p.x) < p.half + pad && Math.abs(newZ - p.z) < p.half + pad &&
                     prevY < p.y - 1.2 && prevY > p.y - 6) { blockedBySide = true; break; }
             }
@@ -19702,15 +19695,23 @@
                 (hub.party.length ? hub.party.join('、') : '（还没组队）');
         }
         function hubTick(dt) {
+            let prevPx = hub.p.x, prevPz = hub.p.z;
             hubPlayerMove(dt);
-            hub.wanderers.forEach(function (w) { hubWandererTick(w, dt); });
-            [{ p: hub.p, faceDir: hub.faceDir, mesh: hub.mesh, animT: hub.animT }].concat(hub.wanderers).forEach(function (a, idx) {
-                let real = idx === 0 ? hub : a;
+            hub.spd = Math.hypot(hub.p.x - prevPx, hub.p.z - prevPz) / dt;
+            hub.wanderers.forEach(function (w) {
+                let px0 = w.p.x, pz0 = w.p.z;
+                hubWandererTick(w, dt);
+                w.spd = Math.hypot(w.p.x - px0, w.p.z - pz0) / dt;
+            });
+            // 站着不动的时候腿不该还在原地摆——之前不管有没有真的在移动都按固定频率甩腿，
+            // 看着就是「人没在动脚在动」。现在按这一步真实挪动的距离算摆动幅度，站定就归零。
+            [hub].concat(hub.wanderers).forEach(function (real) {
                 real.mesh.position.set(real.p.x, real.p.y, real.p.z);
                 if (real.faceDir) real.mesh.rotation.y = Math.atan2(real.faceDir.x, real.faceDir.z);
                 let u = real.mesh.userData;
-                real.animT = (real.animT || 0) + dt * 8;
-                if (u.legs) { u.legs[0].rotation.x = Math.sin(real.animT) * 0.6; u.legs[1].rotation.x = -Math.sin(real.animT) * 0.6; }
+                let run = Math.min(1, (real.spd || 0) / HUB.moveSpeed);
+                real.animT = (real.animT || 0) + dt * (2 + run * 14);
+                if (u.legs) { u.legs[0].rotation.x = Math.sin(real.animT) * 0.6 * run; u.legs[1].rotation.x = -Math.sin(real.animT) * 0.6 * run; }
             });
             hubProximityTick();
             let camPos = hubCameraPos();
