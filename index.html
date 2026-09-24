@@ -823,7 +823,7 @@
         <h1 style="font-size: 36px; color: #666;">猫盾の游戏</h1>
         <h2 style="font-size: 24px; color: #666; font-weight:normal;">选择id</h2>
         <div style="margin: 20px; display: flex; align-items: center; justify-content: center;">
-            <input type="text" id="player-id" value="玩家" style="border: none; border-bottom: 1px solid #999; border-radius: 0; background: transparent; font-size: 24px; text-align: center; width: 200px;">
+            <input type="text" id="player-id" value="" placeholder="给自己起个 ID" style="border: none; border-bottom: 1px solid #999; border-radius: 0; background: transparent; font-size: 24px; text-align: center; width: 200px;">
         </div>
         <button onclick="requestLobbyAccess()" style="background:#5cb85c; color:#fff; font-size: 18px; padding: 10px 40px;">确定</button>
     </div>
@@ -1486,19 +1486,34 @@
 
         function netCount() { return peerConns.filter(function (c) { return c && c.open; }).length + 1; }
         function netRefreshCount() {
-            netSetStatus((peerIsHost ? '房主' : '已加入') + '　房间 ' + peerRoom + '　' + netCount() + ' 人', '#5cb85c');
+            netSetStatus((peerIsHost ? '房主' : '已加入') + '　房间 ' + peerRoom + '　在线 ' + netCount() + ' 人', '#5cb85c');
         }
 
         function netHookConn(c) {
             peerConns.push(c);
-            c.on('open', function () { netRefreshCount(); roomHello(); });
+            // 连接发起了不代表真连上了——之前这里全靠 PeerJS 自己的 open/error 事件，
+            // 但对面不在/房间号错的时候经常两边都不触发，状态栏会一直停在"已加入"，
+            // 其实什么都没连上。加个超时兜底：迟迟没 open 就当失败处理。
+            let openTimeout = setTimeout(function () {
+                if (c.open) return;
+                try { c.close(); } catch (e) { }
+            }, 8000);
+            c.on('open', function () { clearTimeout(openTimeout); netRefreshCount(); roomHello(); });
             c.on('data', function (m) { netDeliver(m, c); });
             c.on('close', function () {
+                clearTimeout(openTimeout);
+                let wasOpen = c.open;
                 peerConns = peerConns.filter(function (x) { return x !== c; });
                 if (c._who) { delete roomPeers[c._who]; roomSync(); }
-                netRefreshCount();
+                if (!peerIsHost && !wasOpen && peerWant) {
+                    netSetStatus('连不上房间 ' + peerRoom + '，重试中…', '#d9534f');
+                    if (peerRetry) clearTimeout(peerRetry);
+                    peerRetry = setTimeout(function () { if (peerWant) netTryGuest(); }, 3000);
+                } else {
+                    netRefreshCount();
+                }
             });
-            c.on('error', function () { });
+            c.on('error', function () { try { c.close(); } catch (e) { } });
         }
 
         const NET_PREFIX = 'maodun-';
@@ -1544,14 +1559,17 @@
             try { peer = new Peer(); } catch (e) { netSetStatus('联机初始化失败', '#d9534f'); return; }
             peer.on('open', function () {
                 peerIsHost = false;
+                // 这里只是自己的 peer 对象连上了信令服务器，跟房主之间的连接还没打开——
+                // 真正的"已加入"要等 netHookConn 里 c.on('open') 才算数，不然房主已经
+                // 下线/房间号打错的时候，状态栏会骗你说连上了，其实什么都没连上。
+                netSetStatus('连接房主中…', '#e8a33d');
                 netHookConn(peer.connect(NET_PREFIX + peerRoom, { reliable: true }));
-                netSetStatus('已加入　房间 ' + peerRoom, '#5cb85c');
             });
             peer.on('error', function () {
                 if (!peerWant) return;
-                netSetStatus('连不上房主，重试中…', '#d9534f');
+                netSetStatus('连接出错，重试中…', '#d9534f');
                 if (peerRetry) clearTimeout(peerRetry);
-                peerRetry = setTimeout(function () { if (peerWant) netTryHost(); }, 3000);
+                peerRetry = setTimeout(function () { if (peerWant) netTryGuest(); }, 3000);
             });
         }
 
@@ -1593,9 +1611,26 @@
 
         function roomHello() { if (peerWant) bc.postMessage(roomSelfMsg()); }
 
+        // 撞 ID 了：不帮你自动改名（容易更乱），直接把你踢出房间，
+        // 让你自己回去换个 ID 再进来。
+        function idConflictKick() {
+            netLeaveRoom();
+            showSysModal('ID 冲突', '你的 ID「' + gState.id + '」跟房间里另一个人撞了——联机的位置同步、组队全靠 ID 认人，' +
+                '撞了的话双方消息都会对不上，已经把你退出房间。请换一个别人不会用的 ID 再进房间。', [
+                { label: '换个 ID', color: '#5cb85c', onClick: function () { nav('screen-id'); } }
+            ]);
+        }
+
         function roomOnHello(m) {
             if (!m.sender) return;
-            if (m.sender === gState.id) { roomDupId = performance.now(); return; }
+            if (m.sender === gState.id) {
+                // 房间里有人跟你用同一个 ID——联机的各种同步全靠 ID 认人，
+                // 撞了的话谁的消息都对不上号，不能就这么留着，直接把你踢出房间，
+                // 让你自己去改个 ID 再进来（不自动帮你改名，改名容易更乱）。
+                if (!roomDupId) idConflictKick();
+                roomDupId = performance.now();
+                return;
+            }
             friendSeen(m.sender);
             roomPeers[m.sender] = {
                 host: !!m.host, matching: !!m.matching,
@@ -4508,7 +4543,7 @@
             if (RED_EGG_NAMES.indexOf(name) !== -1) unlockEgg('red_' + name);
         }
 
-        let NIGHT_FRIENDLY_DISABLED_FOR_TESTING = true;
+        let NIGHT_FRIENDLY_DISABLED_FOR_TESTING = false;
 
         function nightIsFriendly() {
             if (NIGHT_FRIENDLY_DISABLED_FOR_TESTING) { gState.nightFriendlyStreak = 0; return false; }
@@ -4542,6 +4577,13 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-24-net-fixes', date: '2026-09-24', title: '联机稳定性修复', items: [
+                    '修好了一个 bug：以前"加入房间"点下去马上就显示"已加入"，但跟房主的连接其实还没建好——房间号打错、房主已经下线的时候，你会一直以为自己在房间里，其实谁都联不上。现在会显示"连接房主中…"，真的连上了才算数，连不上会自动重试。',
+                    '起名默认不再是"玩家"了——如果两个人在同一个房间里用了一模一样的 ID，联机的位置同步、组队全靠 ID 认人，会互相顶掉，谁都收不到对方消息。现在检测到撞 ID 会直接把你请出房间，弹窗提示换个 ID 再进来。',
+                    '把测试用的调试开关（无限猫盾币、寻宝队血量体力锁满/不刷怪、惊魂夜无冷却等）默认全部关掉，设置面板里想开还能自己开。'
+                ]
+            },
             {
                 id: '2026-09-24-cake-net', date: '2026-09-24', title: '松饼大作战上线真联机', items: [
                     '松饼大作战现在是真联机了，跨设备也能玩：进大厅时房间里的其他真人会一起进同一局，人不够用 AI 补齐。',
@@ -4749,12 +4791,11 @@
         }
 
         // 测试用：只有你自己的技能没有冷却（AI 照常吃冷却，不然对面无限放技能没法打）。
-        // 正式发布改回 false。
-        let BLAZE_TEST_NO_CD = true;
-        // 测试用：按 Q 直接跳过这一局，判给目前赢得少的那一方。正式发布改回 false。
-        let BLAZE_TEST_SKIP_KEY = true;
-        // 测试用：选卡不计时，想看多久看多久。正式发布改回 false。
-        let BLAZE_TEST_NO_PERK_TIMER = true;
+        let BLAZE_TEST_NO_CD = false;
+        // 测试用：按 Q 直接跳过这一局，判给目前赢得少的那一方。
+        let BLAZE_TEST_SKIP_KEY = false;
+        // 测试用：选卡不计时，想看多久看多久。
+        let BLAZE_TEST_NO_PERK_TIMER = false;
 
         // ══════════════ 超燃：2v2 一条命，先赢 5 局 ══════════════
         // 每日效果：按当天日期定一条全局手感修正，所有模式共用同一份——
@@ -5262,7 +5303,7 @@
             night: { mi: 1, cat: 1 },
             blaze: { bow: 1, sword: 1 }
         };
-        let TEST_INFINITE_COINS = true;   // 测试用，可以在设置面板里关掉
+        let TEST_INFINITE_COINS = false;   // 测试用，可以在设置面板里开
 
         function coinsOf() {
             if (TEST_INFINITE_COINS) return 99999;
@@ -11107,11 +11148,11 @@
         let RACE_TEST_NO_PICK_TIMER = false; // 选技能不计时，慢慢挑
         let HUNT_TEST_AI_NOLOOT = false;   // AI 队友不去抢箱子，全场的箱子都留给你
         let HUNT_TEST_NOWEIGHT = false;    // 负重不减速
-        let HUNT_TEST_MONEY = true;
-        let HUNT_TEST_GOD = true;
-        let HUNT_TEST_NOMOB = true;
-        let NIGHT_DEBUG_CAM = true;
-        let NIGHT_NO_CD = true;
+        let HUNT_TEST_MONEY = false;
+        let HUNT_TEST_GOD = false;
+        let HUNT_TEST_NOMOB = false;
+        let NIGHT_DEBUG_CAM = false;
+        let NIGHT_NO_CD = false;
         const NIGHT_SKELETON_SEED = 424242;
         function nightCellKey(wx, wz) {
             return Math.floor((wx + TILE / 2) / TILE) + ',' + Math.floor((wz + TILE / 2) / TILE);
