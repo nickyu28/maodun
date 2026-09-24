@@ -4534,6 +4534,12 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-24-cake-buffs', date: '2026-09-24', title: '松饼大作战护盾/长手改成永久', items: [
+                    '护盾、长手两种增益从捡到算限时（6/8 秒）改成捡到就是永久的，直到这局结束或你出局为止。加速还是限时的。',
+                    '顺手修了护盾的一个 bug：以前护盾期间照样会被拍出局，护盾完全没起作用；现在护盾期间真的不会被拍出局了。'
+                ]
+            },
+            {
                 id: '2026-09-24-cake-arena', date: '2026-09-24', title: '松饼大作战地图翻新 + 全角色换手臂', items: [
                     '松饼大作战不再是一马平川：加了几栋高矮不一的楼（能挡视线、绕不过去），另外放了几个能跳上去的矮台子，抢个居高临下的视野。',
                     '开局站位从挤在地图正中间改成沿一圈均匀散开，不会一开局就贴脸。',
@@ -19315,8 +19321,8 @@
             camBack: 30, camUp: 20,
             buffEvery: 9, buffLifespan: 22, buffMaxOnField: 4,
             buffSpeedMul: 1.35, buffSpeedT: 8,
-            buffReachAdd: 5, buffReachT: 8,
-            buffShieldT: 6,
+            buffReachAdd: 5,   // 长手：捡到就是永久的，不再计时
+
             aiVision: 60, aiPanicRange: 16,
             buildingCount: 6, buildingMinH: 20, buildingMaxH: 48,   // 场上几栋高矮不一的楼，当掩体兼天际线
             platformCount: 4, platformH: 4.5, platformHalf: 6.5     // 另外几个能跳上去的矮台子，抢个居高临下的视野
@@ -19350,11 +19356,12 @@
             cake.buffs.push({ mesh: mesh, kind: kind, x: c.x * TILE, z: c.z * TILE, life: CAKE.buffLifespan });
         }
         function cakeApplyBuff(a, kind) {
+            // 长手/护盾捡到就是永久的（Infinity），只有加速还是限时的
             if (kind.key === 'speed') a.speedT = CAKE.buffSpeedT;
-            else if (kind.key === 'reach') a.reachT = CAKE.buffReachT;
-            else if (kind.key === 'shield') a.shieldT = CAKE.buffShieldT;
+            else if (kind.key === 'reach') a.reachT = Infinity;
+            else if (kind.key === 'shield') a.shieldT = Infinity;
             cakeBurst(a.p.x, a.p.z, kind.color);
-            if (a.isPlayer) blazeFlash('捡到增益：' + kind.label + '！');
+            if (a.isPlayer) blazeFlash('捡到增益：' + kind.label + (kind.key === 'speed' ? '！' : '（永久）！'));
         }
         function cakeBuffTick(dt) {
             cake.buffTimer -= dt;
@@ -19505,6 +19512,7 @@
                 if (b.out) return;
                 live.forEach(function (a) {
                     if (a === b || a.out || b.out) return;
+                    if (a.shieldT > 0) return;   // 护盾期间不会被拍出局
                     let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
                     if (d > cakeHandRange(b)) return;
                     let dx = (a.p.x - b.p.x) / (d || 1), dz = (a.p.z - b.p.z) / (d || 1);
@@ -19575,7 +19583,7 @@
             document.getElementById('blaze-round').innerText =
                 '松饼大作战　面朝对方并进入手的范围即可拍出局，最后剩下的人赢　已拍出局 ' + (me.kills || 0) + ' 人' +
                 (me.out ? '　你已出局，正在观战' : '') +
-                (me.shieldT > 0 ? '　护盾 ' + me.shieldT.toFixed(1) + 's' : '') +
+                (me.shieldT > 0 ? '　护盾' : '') +
                 (me.speedT > 0 ? '　加速中' : '') +
                 (me.reachT > 0 ? '　长手中' : '');
             document.getElementById('blaze-roster').innerHTML = '';
@@ -19600,9 +19608,7 @@
                 let px0 = a.p.x, pz0 = a.p.z;
                 if (a.isPlayer) cakePlayerMove(a, dt); else cakeAi(a, dt);
                 a.spd = Math.hypot(a.p.x - px0, a.p.z - pz0) / dt;
-                if (a.speedT > 0) a.speedT -= dt;
-                if (a.reachT > 0) a.reachT -= dt;
-                if (a.shieldT > 0) a.shieldT -= dt;
+                if (a.speedT > 0) a.speedT -= dt;   // 长手/护盾捡到是永久的，不用倒计时
             });
             cakeTagCheck();
             cakeBuffTick(dt);
