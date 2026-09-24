@@ -4534,6 +4534,13 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-24-cake-arena', date: '2026-09-24', title: '松饼大作战地图翻新 + 全角色换手臂', items: [
+                    '松饼大作战不再是一马平川：加了几栋高矮不一的楼（能挡视线、绕不过去），另外放了几个能跳上去的矮台子，抢个居高临下的视野。',
+                    '开局站位从挤在地图正中间改成沿一圈均匀散开，不会一开局就贴脸。',
+                    '所有模式的角色手臂统一改短、贴近身体，不再是伸得老远的细长方块。'
+                ]
+            },
+            {
                 id: '2026-09-24-cake-body', date: '2026-09-24', title: '松饼大作战换了新造型', items: [
                     '松饼大作战里的角色不再用其他模式那套身体了：躯干改成卷起来的圆柱形，胳膊腿也换成贴着身体的矮圆墩，更像只松饼猫。'
                 ]
@@ -6409,6 +6416,8 @@
         let park = null;        // 猫盾乐园当前在玩的小游戏
         let hub = null;         // 大厅广场（跑酷+遇到人组队）的状态
         let cake = null;        // 松饼大作战（自由混战抓人）的状态
+        let cakePlatforms = [];  // 松饼地图里能跳上去的矮台子（不进 maze 网格，单独判定高度）
+        let cakePlatformMeshes = [];  // 上面那些台子对应的 3D 网格，重新生成地图时先拿掉旧的
 
         // ── 竞速的轮间三选一 ──
         // 每轮开跑前抽三张，**只在这一轮生效**，下一轮重新抽。
@@ -16137,16 +16146,17 @@
             g.userData.body = body;
             // 手臂：肩膀是个可以转的枢轴，跑步甩、抓东西/扔东西/接东西也靠转它——
             // 「所有动作都要有动画」，这两条胳膊是最基础的载体。
+            // 改成短短一截、紧贴身体，不再是伸得老远的细长方块（跟松饼大作战那版一个思路）。
             let arms = [];
             [-1, 1].forEach(function (sdir) {
                 let shoulder = new THREE.Group();
-                shoulder.position.set(sdir * 3.3, 9.3, 0);
-                let arm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 4.4, 1.6), mat);
-                arm.position.y = -2.2; shoulder.add(arm);
+                shoulder.position.set(sdir * 3.1, 9.1, 0);
+                let arm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.2, 1.6), mat);
+                arm.position.y = -1.1; shoulder.add(arm);
                 // 爪子是一个平的半圆片，不是球也不是半球——平边贴着手臂，圆弧鼓在外面
-                let hand = new THREE.Mesh(new THREE.CircleGeometry(2.1, 12, 0, Math.PI),
+                let hand = new THREE.Mesh(new THREE.CircleGeometry(1.7, 12, 0, Math.PI),
                     new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide }));
-                hand.position.y = -4.4; hand.rotation.z = Math.PI; shoulder.add(hand);
+                hand.position.y = -2.2; hand.rotation.z = Math.PI; shoulder.add(hand);
                 g.add(shoulder); arms.push(shoulder);
             });
             g.userData.arms = arms;
@@ -19307,7 +19317,9 @@
             buffSpeedMul: 1.35, buffSpeedT: 8,
             buffReachAdd: 5, buffReachT: 8,
             buffShieldT: 6,
-            aiVision: 60, aiPanicRange: 16
+            aiVision: 60, aiPanicRange: 16,
+            buildingCount: 6, buildingMinH: 20, buildingMaxH: 48,   // 场上几栋高矮不一的楼，当掩体兼天际线
+            platformCount: 4, platformH: 4.5, platformHalf: 6.5     // 另外几个能跳上去的矮台子，抢个居高临下的视野
         };
         const CAKE_BUFF_KINDS = [
             { key: 'speed', label: '加速', color: 0xffee58 },
@@ -19402,15 +19414,28 @@
             let k = Math.min(1, rate * dt);
             a.mvx = (a.mvx || 0) + (wx - (a.mvx || 0)) * k;
             a.mvz = (a.mvz || 0) + (wz - (a.mvz || 0)) * k;
-            if (Math.abs(a.mvx) >= 0.4 || Math.abs(a.mvz) >= 0.4) blazeStep(a, a.mvx * dt, a.mvz * dt);
+            let prevY = a.p.y;
+            if (Math.abs(a.mvx) >= 0.4 || Math.abs(a.mvz) >= 0.4) {
+                let dx = a.mvx * dt, dz = a.mvz * dt;
+                // 跳台侧面要当墙挡住，不然贴着台子横着走会直接穿模过去——
+                // 只在人确实比台面矮一截时才挡（人已经站上去、正要落地那一下不算）。
+                let blockedBySide = cakePlatforms.some(function (p) {
+                    let pad = 3.5, nx = a.p.x + dx, nz = a.p.z + dz;
+                    return Math.abs(nx - p.x) < p.half + pad && Math.abs(nz - p.z) < p.half + pad &&
+                        prevY < p.y - 1.2 && prevY > p.y - 6;
+                });
+                if (!blockedBySide) blazeStep(a, dx, dz);
+            }
             else { a.mvx = 0; a.mvz = 0; }
 
-            let onGround = a.p.y <= 0.01;
+            let curGroundY = cakeGroundYAt(a.p.x, a.p.z, prevY);
+            let onGround = a.p.y <= curGroundY + 0.01;
             if ((keys[' '] || touchBtn.jump) && onGround) a.vy = CAKE.jumpV * DAILY_MOD.jumpMul;
             keys[' '] = false; touchBtn.jump = false;
             a.vy = (a.vy || 0) - CAKE.gravity * dt;
             a.p.y += a.vy * dt;
-            if (a.p.y < 0) { a.p.y = 0; a.vy = 0; }
+            let groundY = cakeGroundYAt(a.p.x, a.p.z, prevY);
+            if (a.p.y < groundY) { a.p.y = groundY; a.vy = 0; }
         }
 
         // 判断 from 是否面朝 (tx,tz)——跟 cakeTagCheck 用的同一套朝向锥判定，
@@ -19466,7 +19491,8 @@
 
             a.vy = (a.vy || 0) - CAKE.gravity * dt;
             a.p.y += a.vy * dt;
-            if (a.p.y < 0) { a.p.y = 0; a.vy = 0; }
+            let groundY = cakeGroundYAt(a.p.x, a.p.z, a.p.y - a.vy * dt);
+            if (a.p.y < groundY) { a.p.y = groundY; a.vy = 0; }
         }
 
         // 抓人：谁进了别人的手范围、又被那个人面朝着，就当场出局。
@@ -19611,6 +19637,108 @@
             if (!cake.over) cakeTick(dt);
             cake.raf = requestAnimationFrame(cakeLoop);
         }
+        // 出生点：以前是挤在地图正中间那一小块，8 个人贴脸站。改成沿一个大圈
+        // 均匀摆开，每个人对应圈上一个角度，再各自吸到最近的空地格（复用
+        // jailOpenCellsNear 的"贴最近空地"逻辑，保证不会摆进墙里）。
+        function cakeEvenSpawns(n) {
+            let mid = mSize / 2, r = mSize / 2 - 5;
+            let pts = [];
+            for (let i = 0; i < n; i++) {
+                let ang = (i / n) * Math.PI * 2;
+                let gx = Math.round(mid + Math.cos(ang) * r);
+                let gz = Math.round(mid + Math.sin(ang) * r);
+                pts.push(jailOpenCellsNear(gx, gz, 1)[0]);
+            }
+            return pts;
+        }
+
+        // 楼：找几块空地直接在网格里标成墙（跟柱子一个套路，谁都绕不过去），
+        // 但做得高很多、高矮不一，顶上加一圈"屋檐"、腰上加几道亮色窗带，
+        // 一看就是楼不是矮墙，顺便当混战的视线遮挡物。
+        function cakeAddBuildings() {
+            let mid = Math.floor(mSize / 2);
+            let placed = [];
+            let tooClose = function (x, z, min) {
+                return placed.some(function (p) { return Math.hypot(p.x - x, p.z - z) < min; });
+            };
+            let cols = [0x8d6e63, 0xa1887f, 0xef9a9a, 0x90a4ae, 0xce93d8, 0xffb74d];
+            for (let i = 0; i < CAKE.buildingCount; i++) {
+                let x = 0, z = 0, ok = false;
+                for (let tries = 0; tries < 30; tries++) {
+                    x = 4 + Math.floor(Math.random() * (mSize - 8));
+                    z = 4 + Math.floor(Math.random() * (mSize - 8));
+                    let row = maze[0] && maze[0][z];
+                    if (row && row[x] && row[x].type === 0 && Math.hypot(x - mid, z - mid) > 5 && !tooClose(x, z, 6)) { ok = true; break; }
+                }
+                if (!ok) continue;
+                placed.push({ x: x, z: z });
+                let old = maze[0][z][x];
+                if (old && old.mesh) { scene.remove(old.mesh); let wi = walkableMeshes.indexOf(old.mesh); if (wi > -1) walkableMeshes.splice(wi, 1); }
+                let h = CAKE.buildingMinH + Math.random() * (CAKE.buildingMaxH - CAKE.buildingMinH);
+                let col = cols[i % cols.length];
+                let g = new THREE.Group();
+                let body = new THREE.Mesh(new THREE.BoxGeometry(TILE * 0.92, h, TILE * 0.92),
+                    new THREE.MeshLambertMaterial({ color: col }));
+                body.position.y = h / 2; g.add(body);
+                let roof = new THREE.Mesh(new THREE.BoxGeometry(TILE * 1.05, TILE * 0.26, TILE * 1.05),
+                    new THREE.MeshLambertMaterial({ color: 0x5d4037 }));
+                roof.position.y = h + TILE * 0.13; g.add(roof);
+                for (let fl = 1; fl * 12 < h - 4; fl++) {
+                    let band = new THREE.Mesh(new THREE.BoxGeometry(TILE * 0.95, 1.4, TILE * 0.95),
+                        new THREE.MeshLambertMaterial({ color: 0xfff3c4, emissive: 0x8d6e00 }));
+                    band.position.y = fl * 12; g.add(band);
+                }
+                g.position.set(x * TILE, 0, z * TILE);
+                scene.add(g);
+                maze[0][z][x] = { type: 1, mesh: g };
+            }
+        }
+
+        // 跳台：几个单独放的矮台子，不进网格（脚下照样是空地，走位不受影响），
+        // 只在 cakePlayerMove 里额外判一次「脚下有没有台子」——跳上去能占个视野。
+        function cakeAddPlatforms() {
+            cakePlatformMeshes.forEach(function (m) { scene.remove(m); });
+            cakePlatformMeshes = [];
+            cakePlatforms = [];
+            let mid = Math.floor(mSize / 2);
+            for (let i = 0; i < CAKE.platformCount; i++) {
+                let ok = false, x = 0, z = 0;
+                for (let tries = 0; tries < 30; tries++) {
+                    x = 6 + Math.floor(Math.random() * (mSize - 12));
+                    z = 6 + Math.floor(Math.random() * (mSize - 12));
+                    let row = maze[0] && maze[0][z];
+                    if (row && row[x] && row[x].type === 0 && Math.hypot(x - mid, z - mid) > 5) { ok = true; break; }
+                }
+                if (!ok) continue;
+                let px = x * TILE, pz = z * TILE;
+                let m = new THREE.Mesh(new THREE.CylinderGeometry(CAKE.platformHalf, CAKE.platformHalf, 2, 16),
+                    new THREE.MeshLambertMaterial({ color: 0xffe082 }));
+                m.position.set(px, CAKE.platformH, pz); scene.add(m);
+                let leg = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, CAKE.platformH, 8),
+                    new THREE.MeshLambertMaterial({ color: 0xd7ccc8 }));
+                leg.position.set(px, CAKE.platformH / 2, pz); scene.add(leg);
+                cakePlatformMeshes.push(m, leg);
+                cakePlatforms.push({ x: px, z: pz, half: CAKE.platformHalf, y: CAKE.platformH });
+            }
+        }
+
+        // 脚下这一点，台子和地面里取更高的那个——跟大厅跑酷同一套判法：
+        // 台子得比「移动前」的脚下高度矮一截才算数，不然贴着台子边走过去会被吸上去。
+        function cakeGroundYAt(x, z, curY) {
+            let best = 0;
+            for (let i = 0; i < cakePlatforms.length; i++) {
+                let p = cakePlatforms[i];
+                if (Math.abs(x - p.x) < p.half && Math.abs(z - p.z) < p.half && p.y <= curY + 0.6 && p.y > best) best = p.y;
+            }
+            return best;
+        }
+
+        function cakeBuildArena() {
+            blazeBuildArena(true, false, false);
+            cakeAddBuildings();
+            cakeAddPlatforms();
+        }
+
         // 松饼大作战专属身体：躯干换成圆柱（卷起来的松饼），耳朵不变，
         // 胳膊腿都改成贴着身体的矮圆墩——不再是伸得老远的细长方块。
         function cakeMakeBody(col, handRange) {
@@ -19687,11 +19815,10 @@
             ensureScene();
             scene.background = new THREE.Color(0xfff3cd);
             scene.fog = new THREE.FogExp2(0xfff3cd, 0.0012);
-            blazeBuildArena(true, false, false);
+            cakeBuildArena();
 
             let n = CAKE.playerCount;
-            let center = Math.floor(mSize / 2);
-            let spawns = jailOpenCellsNear(center, center, n);
+            let spawns = cakeEvenSpawns(n);
             cake = { over: false, clock: 0, actors: [], fx: [], buffs: [], buffTimer: CAKE.buffEvery * 0.4, last: performance.now(), raf: null };
 
             let pool = HUB_BOT_NAMES.slice();
