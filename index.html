@@ -49,17 +49,28 @@
         #screen-lobby:not(.hidden) {
             display: block !important;
             padding: 0 !important;
+            background: transparent !important;
+            /* 大厅现在是常驻的 3D 广场铺在底下，这层只负责摆角落的 UI——
+               中间空的地方要让鼠标事件穿透下去，不然人在里面走不动、也转不了镜头。 */
+            pointer-events: none;
+        }
+        #lobby-tl, #lobby-tr, #lobby-bottom {
+            pointer-events: auto;
         }
         #lobby-tl, #lobby-tr {
             position: absolute;
             top: 14px;
             box-sizing: border-box;
-            max-height: calc(100% - 190px);
+            /* 100% 减固定像素在矮屏幕上会算出负数，CSS 会把负的 max-height 当成 0——
+               整块内容直接消失、大厅一片空白。用 max() 兜个底，再矮也留一块能滚动的区域。 */
+            max-height: max(140px, calc(100% - 190px));
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
         }
-        #lobby-tl { left: 14px; width: 190px; }
-        #lobby-tr { right: 14px; width: 320px; text-align: left; }
+        /* 固定宽度 190px + 320px 在窄屏（手机竖屏）上会加起来超过屏幕宽度，两块内容
+           叠在一起——用 min() 在窄屏上按比例收窄，宽屏（平板/电脑）上还是原来的宽度。 */
+        #lobby-tl { left: 14px; width: min(190px, 42vw); }
+        #lobby-tr { right: 14px; width: min(320px, 50vw); text-align: left; }
         #lobby-bottom {
             position: absolute;
             left: 0; bottom: 0; width: 100%;
@@ -824,31 +835,37 @@
             <button onclick="shopTab('pet')" id="shop-tab-pet">宠物</button>
             <button onclick="shopTab('face')" id="shop-tab-face">表情</button>
             <button onclick="shopTab('char')" id="shop-tab-char">角色</button>
+            <button onclick="shopTab('skin')" id="shop-tab-skin">皮肤</button>
         </div>
         <div id="shop-body" style="width:340px; max-height:60vh; overflow-y:auto; touch-action:pan-y;"></div>
         <button onclick="nav('screen-lobby')" style="margin-top:12px; background:#999; color:#fff; border:none;">返回</button>
     </div>
 
     <div id="screen-lobby" class="screen hidden">
-        <h1 id="lobby-title" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); font-size:22px; color:#aaa; margin:0; pointer-events:none;">寻宝队</h1>
+        <!-- 当前模式已经在右上角的模式网格里高亮显示了，这行标题是多余的重复信息——
+             不删元素本身（selectGameMode 还在往里面写字），只是不显示。 -->
+        <h1 id="lobby-title" style="display:none;">寻宝队</h1>
 
         <!-- 左上角：商店 / 猫盾乐园 / 大厅广场等入口 -->
         <div id="lobby-tl">
             <div style="font-size:12px; color:#888; margin-bottom:4px;">入口</div>
-            <button onclick="openShop()" style="width:100%; margin:0 0 6px; background:#e6a23c; color:#fff; border:none; font-size:13px; padding:8px 4px;">🛒 商店</button>
-            <button onclick="selectGameMode('park')" style="width:100%; margin:0 0 6px; background:#ad1457; color:#fff; border:none; font-size:13px; padding:8px 4px;">🎨 猫盾乐园</button>
-            <button onclick="hubBegin()" style="width:100%; margin:0 0 6px; background:#00acc1; color:#fff; border:none; font-size:13px; padding:8px 4px; font-weight:bold;">🏃 大厅广场</button>
-            <button onclick="openChangelog()" style="width:100%; margin:0 0 6px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">📋 更新公告<span id="changelog-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
-            <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">🥚 彩蛋图鉴</button>
-            <button onclick="openChatSetup()" style="width:100%; margin:0 0 6px; background:#607d8b; color:#fff; border:none; font-size:12px; padding:7px 4px;">💬 发言设置</button>
-            <button onclick="openFeedback()" style="width:100%; margin:0 0 6px; background:#e91e63; color:#fff; border:none; font-size:12px; padding:7px 4px;">💌 反馈</button>
+            <button onclick="openShop()" style="width:100%; margin:0 0 6px; background:#e6a23c; color:#fff; border:none; font-size:13px; padding:8px 4px;">商店</button>
+            <button onclick="openChangelog()" style="width:100%; margin:0 0 6px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">更新公告<span id="changelog-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
+            <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">彩蛋图鉴</button>
+            <button onclick="openChatSetup()" style="width:100%; margin:0 0 6px; background:#607d8b; color:#fff; border:none; font-size:12px; padding:7px 4px;">发言设置</button>
+            <button onclick="openFeedback()" style="width:100%; margin:0 0 6px; background:#e91e63; color:#fff; border:none; font-size:12px; padding:7px 4px;">反馈</button>
             <div id="lobby-rank" style="font-size:11px; color:#888; margin-top:4px;"></div>
             <div id="daily-mod-banner" style="font-size:11px; color:#795548; background:#fff8e1; border:1px solid #ffe082; border-radius:5px; padding:5px 6px; margin-top:4px;"></div>
         </div>
 
         <!-- 右上角：选择模式 + 开始游戏 -->
         <div id="lobby-tr">
-            <div style="font-size:12px; color:#888; margin-bottom:6px; text-align:right;">选择模式</div>
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                <button onclick="toggleModeDetail()" style="margin:0; font-size:12px; padding:8px 10px; background:#607d8b; color:#fff; border:none; white-space:nowrap;">选择模式</button>
+                <div id="mode-bar-current" style="flex:1; min-width:0; font-size:13px; color:#333; text-align:center; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">寻宝队</div>
+                <button id="lobby-start-btn" onclick="lobbyPrimaryStart()" style="margin:0; font-size:13px; padding:8px 12px; background:#4caf50; color:#fff; border:none; font-weight:bold; white-space:nowrap;">开始游戏！</button>
+            </div>
+            <div id="mode-detail-panel" class="hidden">
             <div id="game-mode-select" style="display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:10px;">
                 <button id="btn-mode-hunt" onclick="selectGameMode('hunt')" style="margin:0; font-size:11px; padding:7px 2px;">寻宝队</button>
                 <button id="btn-mode-night" onclick="selectGameMode('night')" style="margin:0; font-size:11px; padding:7px 2px;">惊魂夜</button>
@@ -858,6 +875,7 @@
                 <button id="btn-mode-dodge" onclick="selectGameMode('dodge')" style="margin:0; font-size:11px; padding:7px 2px;">躲避球</button>
                 <button id="btn-mode-escape" onclick="selectGameMode('escape')" style="margin:0; font-size:11px; padding:7px 2px;">密室</button>
                 <button id="btn-mode-park" onclick="selectGameMode('park')" style="margin:0; font-size:11px; padding:7px 2px;">猫盾乐园</button>
+                <button id="btn-mode-cake" onclick="selectGameMode('cake')" style="margin:0; font-size:11px; padding:7px 2px;">松饼大作战</button>
             </div>
 
         <div id="hunt-only">
@@ -880,7 +898,6 @@
             <label><input type="radio" name="map_diff" value="med" onchange="broadcastMapDiff()"> 中等模式</label>
             <label><input type="radio" name="map_diff" value="hard" onchange="broadcastMapDiff()"> 困难模式</label>
         </div>
-        <button id="lobby-enter-btn" onclick="requestStartGame()" style="width:100%; margin:8px 0 0; background:#5cb85c; color:#fff; font-size:15px; padding:10px 0;">进入仓库</button>
         </div>
 
         <div id="night-only" class="hidden" style="text-align:center; margin:0 0 8px;">
@@ -923,7 +940,6 @@
                 空格/触屏「跳」可以跳跃，免费不吃体力。体力用来跑——按住 Shift（平板是「跑/走」开关）加速 60%，跟寻宝队一样，跑没了就只能走。<br>
                 AI 现在有视野范围，看不见的敌人不会凭空知道。地图墙比乱斗少很多，更开阔。
             </div>
-            <button onclick="jailBegin()" style="width:100%; margin:0; background:#4527a0; color:#fff; border:none; padding:10px 0; font-size:15px;">开始</button>
         </div>
 
         <div id="dodge-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff8e1; border:1px solid #ffca28; border-radius:6px; padding:12px 14px; text-align:left;">
@@ -961,14 +977,13 @@
                 <b>拉杆门</b>：一人按住拉杆开门，其他人趁门开着的这几秒穿过去，拉杆一松门就关。<br>
                 全员走到终点才算通关；4 分钟时间到还没通关就算失败。
             </div>
-            <button onclick="escapeBegin()" style="width:100%; margin:0; background:#43a047; color:#fff; border:none; padding:10px 0; font-size:15px;">开始</button>
         </div>
 
         <div id="park-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fce4ec; border:1px solid #f48fb1; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#ad1457; font-weight:bold; margin-bottom:2px;">猫盾乐园</div>
             <div style="font-size:12px; color:#6d4c41; line-height:1.6; margin-bottom:8px;">
                 用积木拼你自己的小游戏——不用写代码，选积木、填参数、拼成一串就是一个能玩的游戏。
-                别人玩得越多，你赚的猫盾乐园币越多（得跟你同房间才会实时到账）。当前币：<span id="park-coin-disp">0</span>
+                别人玩得越多，你赚的猫盾币越多（得跟你同房间才会实时到账），跟其他模式、商店用的是同一份钱包。当前猫盾币：<span id="park-coin-disp">0</span>
             </div>
             <div style="display:flex; gap:6px; margin-bottom:8px;">
                 <button onclick="parkBegin(PARK_BUILTIN.easy)" style="flex:1; margin:0; background:#4fc3f7; color:#fff; border:none; padding:9px 0; font-size:13px;">鱼干捕手·简单</button>
@@ -1006,6 +1021,16 @@
             </div>
         </div>
 
+        <div id="cake-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff8e1; border:1px solid #ffca28; border-radius:6px; padding:12px 14px; text-align:left;">
+            <div style="font-size:14px; color:#f57f17; font-weight:bold; margin-bottom:2px;">松饼大作战 · 自由混战</div>
+            <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
+                不分队伍，人人都能抓人：<b>面朝对方</b>又让对方进了你「手」的范围，对方就当场出局。<br>
+                最后剩下的那一个赢；捡到地上的增益能占点便宜——加速、伸长手的范围、或者一次护盾免疫被抓。<br>
+                时间到还没分胜负，比谁拍出局的人多。<br>
+                空格/触屏「跳」可以跳跃。
+            </div>
+        </div>
+
         <div id="blaze-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff3e0; border:1px solid #ffcc80; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#e64a19; font-weight:bold; margin-bottom:2px;">超燃 · 2v2</div>
             <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
@@ -1031,7 +1056,7 @@
             </div>
         </div>
 
-        <button id="lobby-start-btn" onclick="lobbyPrimaryStart()" style="width:100%; box-sizing:border-box; margin:2px 0 4px; background:#4caf50; color:#fff; border:none; font-size:16px; padding:11px 0; font-weight:bold;">▶ 开始游戏！</button>
+            </div>
         </div>
 
         <!-- 下方：联机房间 / 好友 / 组队 / 麦克风 / 聊天 -->
@@ -1060,7 +1085,7 @@
             </div>
             <div>
                 <div style="font-size:12px; color:#666; margin-bottom:4px;">麦克风</div>
-                <button id="lobby-mic-btn" onclick="lobbyToggleMic()" style="width:100%; margin:0; font-size:12px; padding:7px 4px; background:#eceff1; border:1px solid #cfd8dc;">🎤 麦克风：关</button>
+                <button id="lobby-mic-btn" onclick="lobbyToggleMic()" style="width:100%; margin:0; font-size:12px; padding:7px 4px; background:#eceff1; border:1px solid #cfd8dc;">麦克风：关</button>
                 <div style="font-size:10px; color:#999; margin-top:4px;">占位开关，语音通话还没接通</div>
             </div>
             <div>
@@ -1300,8 +1325,8 @@
         <div id="hub-prompt" style="position:absolute; bottom:120px; left:50%; transform:translateX(-50%); display:none; flex-direction:column; align-items:center; gap:6px; pointer-events:auto;">
             <div id="hub-prompt-name" style="background:rgba(0,0,0,0.72); color:#fff; padding:4px 12px; border-radius:12px; font-size:13px;"></div>
             <div style="display:flex; gap:8px;">
-                <button id="hub-prompt-team" onclick="hubTeamUp()" style="margin:0; background:#00acc1; color:#fff; border:none; padding:8px 16px; font-size:14px;">🤝 组队</button>
-                <button id="hub-prompt-friend" onclick="hubAddFriend()" style="margin:0; background:#5cb85c; color:#fff; border:none; padding:8px 16px; font-size:14px;">➕ 加好友</button>
+                <button id="hub-prompt-team" onclick="hubTeamUp()" style="margin:0; background:#00acc1; color:#fff; border:none; padding:8px 16px; font-size:14px;">组队</button>
+                <button id="hub-prompt-friend" onclick="hubAddFriend()" style="margin:0; background:#5cb85c; color:#fff; border:none; padding:8px 16px; font-size:14px;">加好友</button>
             </div>
         </div>
         <div style="position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center;">
@@ -1409,6 +1434,9 @@
         function seededRandom() { gameSeed = (gameSeed * 9301 + 49297) % 233280; return gameSeed / 233280; }
 
         function showSysModal(title, text, buttons) {
+            // 大厅里鼠标一直是指针锁定状态（转视角用），弹窗一开还锁着的话，
+            // 想点弹窗按钮鼠标根本不会动，还一直在转镜头——弹窗前先解锁。
+            if (document.pointerLockElement) { try { document.exitPointerLock(); } catch (e) { } }
             document.getElementById('sys-modal-title').innerText = title;
             document.getElementById('sys-modal-text').innerHTML = text;
             let btnContainer = document.getElementById('sys-modal-btns'); btnContainer.innerHTML = '';
@@ -1630,8 +1658,6 @@
                     }
                 }
             }
-            let enterBtn = document.getElementById('lobby-enter-btn');
-            if (enterBtn) enterBtn.style.display = (gState.gameMode === 'hunt') ? 'block' : 'none';
         }
 
         // 大厅里的"组队"：纯社交性质，不直接绑对局分队，双方都要同意才算数。
@@ -1681,7 +1707,7 @@
         function lobbyToggleMic() {
             gState.micOn = !gState.micOn;
             let b = document.getElementById('lobby-mic-btn');
-            if (b) { b.innerText = gState.micOn ? '🎤 麦克风：开' : '🎤 麦克风：关'; b.style.background = gState.micOn ? '#c8e6c9' : '#eceff1'; }
+            if (b) { b.innerText = gState.micOn ? '麦克风：开' : '麦克风：关'; b.style.background = gState.micOn ? '#c8e6c9' : '#eceff1'; }
         }
         function lobbyPrimaryStart() {
             let m = gState.gameMode;
@@ -1693,6 +1719,7 @@
             else if (m === 'dodge') dodgeBegin(false);
             else if (m === 'escape') escapeBegin();
             else if (m === 'park') parkBegin(PARK_BUILTIN.easy);
+            else if (m === 'cake') cakeBegin();
         }
 
         let friends = [];
@@ -1866,7 +1893,7 @@
         let initArr = new Array(6).fill(null); initArr[0] = { ...shopItems['鱼叉'] }; initArr[1] = { ...shopItems['地窖徽章'] };
         const gState = {
             control: 'laptop', char: 'green', id: '', money: 10000, team: [], aiFill: true, runCash: 0, aiSubmitted: 0, aiChestsTaken: 0, blazeChar: 'bow',
-            coins: { hunt: 0, night: 0, blaze: 0 }, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, inv: initArr, garage: new Array(200).fill(null),
+            mcoin: 0, skins: {}, skinColor: null, parkUnlocked: {}, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, inv: initArr, garage: new Array(200).fill(null),
             maxInv: 6, hp: 100, maxHp: 100, isDead: false, selectedContainer: 'inv', selectedSlot: 0, totalSubmitted: 0,
             backpackOpen: false, largeMapOpen: false, inSafeZone: true, needsLock: false, pAtkCd: 0, timeStop: 0, preGenSpawns: [],
             mapDifficulty: 'easy', extractTarget: 140000, gameMode: 'hunt',
@@ -1888,9 +1915,12 @@
 
         const MOB_WAVES_AT = [10 * 3600, 12 * 3600, 14 * 3600];
 
+        // 存档格式版本：改了货币结构（金币/通用币合并成猫盾币）之后老存档字段对不上号，
+        // 干脆整个当成没存过档处理，重新按新玩家初始化——反正现在还没人正经玩，不用做兼容迁移。
+        const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, coins: gState.coins, owned: gState.owned, streak: gState.streak, gems: gState.gems, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -1898,12 +1928,17 @@
             try {
                 const saved = localStorage.getItem('TH_save_' + pid);
                 if (saved) {
-                    const data = JSON.parse(saved); gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.coins = data.coins || { hunt: 0, night: 0, blaze: 0 }; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
-                    gState.gems = data.gems || 0; gState.shop = data.shop || null; gState.rank = data.rank || null;
-                    expandInventory(); grantBadgeIfMissing(); return;
+                    const data = JSON.parse(saved);
+                    if (data.ver === SAVE_VER) {
+                        gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
+                        gState.shop = data.shop || null; gState.rank = data.rank || null;
+                        expandInventory(); grantBadgeIfMissing(); return;
+                    }
+                    // 版本对不上：老存档，忽略，走下面全新初始化
                 }
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
+            gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 };
             expandInventory();
         }
 
@@ -1978,8 +2013,15 @@
                 if (msg.target === gState.id) teamOnInviteReceived(msg.sender);
             } else if (msg.type === 'TEAM_INVITE_ACK') {
                 if (msg.target === gState.id) teamOnInviteAck(msg.sender, msg.accept);
+            } else if (msg.type === 'TEAM_SYNC') {
+                let isLeader = (roomList.length === 0 || peerIsHost);
+                if (!isLeader && msg.team) {
+                    gState.team = msg.team;
+                    if (msg.map) gState.mapDifficulty = msg.map;
+                    updateTeamListUI();
+                }
             } else if (msg.type === 'PARK_CREDIT') {
-                if (msg.to === gState.id) { coinsAdd('park', msg.amount || 0); blazeFlash('有人玩了你设计的密室小游戏，+' + (msg.amount || 0) + ' 猫盾乐园币！'); }
+                if (msg.to === gState.id) { coinsAdd('park', msg.amount || 0); blazeFlash('有人玩了你设计的密室小游戏，+' + (msg.amount || 0) + ' 猫盾币！'); }
             } else if (msg.type === 'SPAWN_MOBS') {
                 let flag = 'wave' + (msg.wave || 1) + 'Spawned';
                 if (!gState[flag]) { gState[flag] = true; spawnMonstersWithData(msg.spawns); }
@@ -2004,6 +2046,30 @@
         }
 
         function broadcastTeam() { bc.postMessage({ type: 'TEAM_SYNC', target: '*', team: gState.team, map: gState.mapDifficulty }); updateTeamListUI(); }
+
+        // 寻宝队组队实验：以前"邀请组队"点了也没用——gState.team 从进大厅那一刻就
+        // 写死成"你 + 2 个固定名字的 AI"，从来没跟房间里的真人对上过。现在房主（单机时
+        // 就是自己）在开局前把真正组了队、又还在房间里的真人塞进队伍，AI 只补空位，
+        // 再把这份队伍广播给所有人——大家的 gState.team 统一之后，寻宝队已有的
+        // POS_SYNC（按名字找对应的队友模型）才第一次真的对得上号，能看见彼此。
+        const HUNT_TEAM_SIZE = 3;
+        function huntRebuildTeam() {
+            let isLeader = (roomList.length === 0 || peerIsHost);
+            if (!isLeader) return;   // 不是房主就等房主的 TEAM_SYNC，不要自己瞎组
+            let mates = lobbyParty.filter(function (id) {
+                return roomList.some(function (r) { return r.id === id; });
+            });
+            let team = [{ id: gState.id, isLeader: true, isReady: true, isAI: false }];
+            mates.slice(0, HUNT_TEAM_SIZE - 1).forEach(function (id) {
+                team.push({ id: id, isLeader: false, isReady: true, isAI: false });
+            });
+            if (huntAiOn()) {
+                let n = 1;
+                while (team.length < HUNT_TEAM_SIZE) { team.push({ id: gState.id + '_AI_' + n, isLeader: false, isReady: true, isAI: true }); n++; }
+            }
+            gState.team = team;
+            broadcastTeam();
+        }
 
         const CHAT_DEFAULT = ['救我！', '追捕在我这！', '去修机子', '我去救人', '好的'];
         let chatQuick = CHAT_DEFAULT.slice();
@@ -2083,6 +2149,7 @@
                 (typeof dodge !== 'undefined' && dodge && !dodge.over) ||
                 (typeof escapeRoom !== 'undefined' && escapeRoom && !escapeRoom.over) ||
                 (typeof park !== 'undefined' && park && !park.over) ||
+                (typeof cake !== 'undefined' && cake && !cake.over) ||
                 (typeof hub !== 'undefined' && hub));
         }
         function chatVisTick() {
@@ -2125,7 +2192,14 @@
             ]);
         }
 
-        function nav(id) { document.querySelectorAll('.screen').forEach(function (s) { s.classList.add('hidden'); }); if (id !== 'none') { document.getElementById(id).classList.remove('hidden'); } }
+        function nav(id) {
+            document.querySelectorAll('.screen').forEach(function (s) { s.classList.add('hidden'); });
+            if (id !== 'none') { document.getElementById(id).classList.remove('hidden'); }
+            // 大厅现在就是那个能走动的 3D 广场——回大厅自动站在里面，离开大厅
+            // （进任何一个实际模式）就把它收起来，不用每个模式自己记得处理。
+            if (id === 'screen-lobby') { if (typeof hub !== 'undefined' && !hub) hubBegin(); }
+            else if (typeof hub !== 'undefined' && hub) { hubExit(); }
+        }
 
         function goToIdScreen(deviceStr) {
             gState.control = deviceStr; nav('screen-id');
@@ -2169,6 +2243,7 @@
 
         function requestStartGame() {
             if (roomList.length > 1 && !peerIsHost) { showSysModal('提示', '等房主开局。', [{ label: '确定' }]); return; }
+            huntRebuildTeam();
             bc.postMessage({ type: 'START_GARAGE', target: '*' });
             nav('screen-garage'); initGarage();
         }
@@ -2215,11 +2290,15 @@
             if (!el) return;
             el.innerHTML = '<b>今日效果：' + DAILY_MOD.name + '</b>　' + DAILY_MOD.desc + '（惊魂夜之外全模式生效，每天换一条）';
         }
+        function toggleModeDetail() {
+            let p = document.getElementById('mode-detail-panel');
+            if (p) p.classList.toggle('hidden');
+        }
         function selectGameMode(m) {
             gState.gameMode = m;
             refreshRankUI();
             renderDailyModBanner();
-            let isHunt = m === 'hunt', isNight = m === 'night', isBlaze = m === 'blaze', isRace = m === 'race', isJail = m === 'jail', isDodge = m === 'dodge', isEscape = m === 'escape', isPark = m === 'park';
+            let isHunt = m === 'hunt', isNight = m === 'night', isBlaze = m === 'blaze', isRace = m === 'race', isJail = m === 'jail', isDodge = m === 'dodge', isEscape = m === 'escape', isPark = m === 'park', isCake = m === 'cake';
             document.getElementById('hunt-only').classList.toggle('hidden', !isHunt);
             document.getElementById('night-only').classList.toggle('hidden', !isNight);
             document.getElementById('blaze-only').classList.toggle('hidden', !isBlaze);
@@ -2228,12 +2307,14 @@
             document.getElementById('dodge-only').classList.toggle('hidden', !isDodge);
             document.getElementById('escape-only').classList.toggle('hidden', !isEscape);
             document.getElementById('park-only').classList.toggle('hidden', !isPark);
-            document.getElementById('lobby-title').innerText = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : '超燃');
+            document.getElementById('cake-only').classList.toggle('hidden', !isCake);
+            let modeName = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : '超燃');
+            document.getElementById('lobby-title').innerText = modeName;
+            let mbc = document.getElementById('mode-bar-current'); if (mbc) mbc.innerText = modeName;
             if (isNight) selectNightChar(gState.nightChar || 'cat');
             if (isBlaze) blazeRenderChars();
-            if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsOf('park'); parkRenderBlocks(); }
+            if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsOf(); parkRenderBlocks(); parkRenderAddTypeOptions(); }
             if (isRace) raceTestCardBtnSync();
-            document.getElementById('lobby-enter-btn').style.display = isHunt ? 'block' : 'none';
             if (isJail || isDodge || isEscape) applyControlHints();
             let cb = document.getElementById('hunt-ai-fill');
             if (cb) cb.checked = gState.aiFill !== false;
@@ -2244,7 +2325,8 @@
             ['btn-mode-jail', isJail, '#4527a0'],
             ['btn-mode-dodge', isDodge, '#e65100'],
             ['btn-mode-escape', isEscape, '#2e7d32'],
-            ['btn-mode-park', isPark, '#ad1457']].forEach(function (e) {
+            ['btn-mode-park', isPark, '#ad1457'],
+            ['btn-mode-cake', isCake, '#f57f17']].forEach(function (e) {
                 let b = document.getElementById(e[0]); if (!b) return;
                 b.style.borderColor = e[1] ? e[2] : '#ccc';
                 b.style.color = e[1] ? e[2] : '#333';
@@ -3312,7 +3394,9 @@
         function buildProceduralMaze() {
             mSize = HUNT_SIZE;
             chests.forEach(function (c) { scene.remove(c); }); groundItems.forEach(function (g) { scene.remove(g); }); entities.forEach(function (e) { scene.remove(e); }); clearFootprints3D();
-            maze.forEach(function (fRows) { if (fRows) fRows.forEach(function (row) { if (row) row.forEach(function (m) { if (m && m.mesh) scene.remove(m.mesh); }); }); }); chests = []; groundItems = []; entities = []; maze = []; walkableMeshes = [];
+            huntDropMerged();
+            // 从躲猫猫/火拼图切过来时，上一张图的屋顶(roof…roof6)也得一起拿掉，不然留在场景里白白多画几百个 mesh
+            maze.forEach(function (fRows) { if (fRows) fRows.forEach(function (row) { if (row) row.forEach(function (m) { if (m) ['mesh', 'roof', 'roof2', 'roof3', 'roof4', 'roof5', 'roof6'].forEach(function (k) { if (m[k]) scene.remove(m[k]); }); }); }); }); chests = []; groundItems = []; entities = []; maze = []; walkableMeshes = [];
 
             const wallTex = createProceduralTexture('wall', '#e5e5ea', '#cccccc'); const floorTex = createProceduralTexture('floor', '#ffffff', '#e5e5ea');
             const safeFloorTex = createProceduralTexture('safe_floor', '#a8e6cf', '#dcedc1'); const safeWallTex = createProceduralTexture('safe_wall', '#1abc9c', '#16a085');
@@ -3576,7 +3660,58 @@
                 }
             }
 
+            huntMergeStatic();
             camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
+        }
+
+        // 反馈「游戏有点卡」：寻宝图每一格墙/地板/台阶都是单独一个 mesh + 单独一个材质，
+        // 三层加起来一千四百多个，一帧平均四百次、最多一千一百次 draw call，低配机器直接掉帧。
+        // 地图建好以后就不会再变，所以按贴图把它们合成几块大 mesh 来画。
+        // 原来那些小 mesh 从场景里拿掉，但对象留着：walkableMeshes 往下打射线还用它们，
+        // 各处清图的代码 scene.remove 它们也照样不出错。
+        let huntMerged = [];
+        function huntDropMerged() {
+            huntMerged.forEach(function (m) { scene.remove(m); m.geometry.dispose(); m.material.dispose(); });
+            huntMerged = [];
+        }
+        function huntMergeStatic() {
+            huntDropMerged();
+            let set = new Set(walkableMeshes);
+            maze.forEach(function (rows) { rows.forEach(function (row) { row.forEach(function (c) { if (c && c.mesh) set.add(c.mesh); }); }); });
+            let byTex = new Map();
+            set.forEach(function (m) {
+                if (!m.parent || !m.material || !m.material.map) return;
+                m.updateMatrixWorld(true);
+                let g = m.geometry.clone();
+                g.applyMatrix4(m.matrixWorld);
+                let k = m.material.map;
+                if (!byTex.has(k)) byTex.set(k, []);
+                byTex.get(k).push(g);
+                scene.remove(m);
+            });
+            byTex.forEach(function (geos, tex) {
+                let nv = 0, ni = 0;
+                geos.forEach(function (g) { nv += g.attributes.position.count; ni += g.index ? g.index.count : g.attributes.position.count; });
+                let pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), idx = new Uint32Array(ni);
+                let vo = 0, io = 0;
+                geos.forEach(function (g) {
+                    let n = g.attributes.position.count;
+                    pos.set(g.attributes.position.array, vo * 3);
+                    nor.set(g.attributes.normal.array, vo * 3);
+                    uv.set(g.attributes.uv.array, vo * 2);
+                    if (g.index) { let a = g.index.array; for (let i = 0; i < a.length; i++) idx[io++] = a[i] + vo; }
+                    else { for (let i = 0; i < n; i++) idx[io++] = vo + i; }
+                    vo += n; g.dispose();
+                });
+                let geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+                geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+                geo.setIndex(new THREE.BufferAttribute(idx, 1));
+                geo.computeBoundingSphere();
+                let mm = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex }));
+                scene.add(mm); huntMerged.push(mm);
+            });
         }
 
         // 惊魂夜的 AI 强度：反应快慢、追捕视野、队友修机效率，三样跟着隐藏分走。
@@ -3634,6 +3769,7 @@
             mSize = NIGHT_SIZE;
             chests.forEach(function (c) { scene.remove(c); }); groundItems.forEach(function (g) { scene.remove(g); });
             entities.forEach(function (e) { scene.remove(e); }); clearFootprints3D();
+            huntDropMerged();
             maze.forEach(function (fRows) {
                 if (fRows) fRows.forEach(function (row) {
                     if (row) row.forEach(function (m) {
@@ -4352,7 +4488,7 @@
                 return '<div style="margin:8px 0;"><b>' + e.name + '</b>' +
                     (how ? '<br><span style="color:#666; font-size:13px;">' + how + '</span>' : '') + '</div>';
             }).join('');
-            showSysModal('🥚 本局解锁 ' + ids.length + ' 个彩蛋', body,
+            showSysModal('本局解锁 ' + ids.length + ' 个彩蛋', body,
                 [{ label: '收下', color: '#9b59b6', onClick: function () { if (after) after(); } }]);
         }
 
@@ -4398,10 +4534,57 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-24-mcoin', date: '2026-09-24', title: '货币统一成猫盾币 + 皮肤系统 + 组队联机实验', items: [
+                    '寻宝队/惊魂夜/超燃各自的金币，还有商店宠物/表情用的通用币，合并成一份"猫盾币"，全模式通用（寻宝队自己的钱还是单独一套，不受影响）。',
+                    '因为货币结构变了，这次更新会把所有人的存档（寻宝队的钱、猫盾币、角色解锁）清零重来——现在还没人正式在玩，直接清干净比小心翼翼换算更省事。',
+                    '商店新增"皮肤"：50 猫盾币抽一次，15 种颜色 + 5 个"谢谢参与"，抽到的颜色能在大厅广场/竞速/密室/松饼大作战里换上（监狱救援/躲避球颜色代表队伍，不受影响）。',
+                    '猫盾乐园新增几块要花猫盾币解锁的进阶积木（变量/判断/随机转向），解锁一次永久能用。',
+                    '寻宝队的"邀请组队"第一次真的有用了：房主开局前会把已经组队、还在房间里的真人排进队伍（AI 补剩下的位置），大家能在同一局里看到彼此，不再是各玩各的。惊魂夜本来就是真联机，不用改。监狱救援等其他模式暂时还是本地模拟，看这次效果再考虑要不要跟进。',
+                    '反馈框里"模式"不再偷偷默认写成寻宝队——改成勾选框，可以自己选跟哪个/哪些模式有关。'
+                ]
+            },
+            {
+                id: '2026-09-24-hunt-perf', date: '2026-09-24', title: '寻宝队不卡了', items: [
+                    '根据反馈"游戏有点卡"：寻宝队地图原来每一块墙、地板、台阶都单独画一次，一帧要画几百到一千多次；现在地图建好后合并成几块一起画，每帧只画十次左右，画面一模一样，低配电脑也应该流畅很多。',
+                    '玩过躲猫猫再进寻宝队时，上一张图的屋顶不会再残留在场景里拖慢速度。'
+                ]
+            },
+            {
+                id: '2026-09-24-lobby-cleanup', date: '2026-09-24', title: '大厅精简 + 跑酷再修一版 + 反馈简化', items: [
+                    '右上角改成"选择模式"按钮 + 当前模式 + "开始游戏！"，选模式的详情面板不再自带各自的"开始"按钮（点开选、收起来再统一按"开始游戏！"）。',
+                    '去掉了大厅正中间那个半透明猫脸水印。',
+                    '修好一个"人没在动、脚却在动"的动画 bug——大厅里站定不动时腿不会再自己甩了。',
+                    '加大了跑酷台子的碰撞范围，之前会出现耳朵/身体卡进台子里的穿模现在挡住了。',
+                    '大厅广场整体扩大到原来的 5 倍，路人数量也跟着从 8 个加到 30 个，不会显得太空。',
+                    '跑酷嫌太难：移动速度调快了一些，扣不到点的跳跃也更容易够到下一块台子。',
+                    '反馈从 3 个按钮（GitHub/复制/邮件）合并成 1 个"提交"按钮：点了会自动复制内容 + 打开 GitHub 提交页，没有 GitHub 账号也能把复制好的内容直接发给开发者。'
+                ]
+            },
+            {
+                id: '2026-09-24-cake-mode', date: '2026-09-24', title: '新模式：松饼大作战（第一步） + 跑酷手感修复', items: [
+                    '新增"松饼大作战"：不分队伍的自由混战抓人，面朝对方并让对方进入你手的范围就能把他拍出局，最后剩下的人赢。地图上会刷新加速/长手/护盾三种短效增益。（这版先做玩法，猫的建模换成松饼形状留到下一步。）',
+                    '修好大厅跑酷摔得快时会直接穿模摔穿台子的问题；加上了跳跃缓冲和土狼时间，不用再卡着刚好落地/离台那一帧按空格才跳得起来。',
+                    '大厅跑酷台子的侧面现在会真的挡人，不会再直接穿过去。',
+                    '大厅路人的名字换了一批更少见的，不容易跟真玩家自己取的昵称撞上。'
+                ]
+            },
+            {
                 id: '2026-09-21-nightly-fixes', date: '2026-09-21', title: '小修复', items: [
                     '葬场模式修好了一个 bug：死亡光柱变成墓碑墙的时候，如果正好有活人站在那一格上，人不会再被直接封进墙里了。',
                     '躲避球模式修好了：平板上按"跳"键不会再顺带打开接球判定了（以前跳一下等于顺手也接了一下球，现在跳和接球分开，得按各自的键）。',
                     '清理了一处拖东西出背包时的死代码（引用了一个已经不存在的仓库格子，实际不影响游戏）。'
+                ]
+            },
+            {
+                id: '2026-09-20-pity-fix', date: '2026-09-20', title: '修复"保底"战利品箱一直不消失的问题', items: [
+                    '之前连续输了好几局之后会触发一次"保底"（下一局必出高级战利品箱），但只要赢了一局，这个保底不会消失，导致后面每一局都会稳出高级箱子。',
+                    '现在保底会在你成功撤离的那一局用掉，之后恢复正常概率——保底还在，只是不会一直白嫖了。'
+                ]
+            },
+            {
+                id: '2026-09-20-night-fixes', date: '2026-09-20', title: '惊魂夜修复', items: [
+                    '修好了放倒的窗板能隔着楼层砸晕猎人的问题——现在窗板只有跟猎人在同一层时倒下才会把他砸晕。',
+                    '猎人 3 号的钉刺陷阱以前对 AI 队友完全没用，现在 AI 队友踩到钉刺后也会像真人一样变慢、修机变慢。'
                 ]
             },
             {
@@ -4445,7 +4628,7 @@
             html += '</div>';
             try { localStorage.setItem('TH_changelog_seen', CHANGELOG[0].id); } catch (e) { }
             changelogBadgeSync();
-            showSysModal('📋 更新公告', html, [{ label: '关闭', color: '#666' }]);
+            showSysModal('更新公告', html, [{ label: '关闭', color: '#666' }]);
         }
 
         // 反馈：没有后端，收不到结构化数据，就走最土但最不会掉链子的路——
@@ -4456,38 +4639,59 @@
         // 用 GitHub 预填链接开一个新标签页，测试者自己确认提交——邮件/复制文字留着
         // 当备选，给没有 GitHub 账号的人用。
         const FEEDBACK_REPO = 'nickyu28/maodun';
+        // 反馈涉及哪个/哪些模式让用户自己勾，不再偷偷塞 gState.gameMode——
+        // 那个字段只是"选择模式面板里选中的是哪个"，在大厅里从来没真的进任何模式，
+        // 却一直默认显示寻宝队，反馈里"模式"那一栏全是错的。
+        const FEEDBACK_MODES = [
+            ['hunt', '寻宝队'], ['night', '惊魂夜'], ['blaze', '超燃'], ['race', '竞速'],
+            ['jail', '监狱救援'], ['dodge', '躲避球'], ['escape', '密室'], ['park', '猫盾乐园'],
+            ['cake', '松饼大作战'], ['hub', '大厅广场'], ['other', '其他/不确定']
+        ];
+        function feedbackActiveMode() {
+            if (typeof isPlaying !== 'undefined' && isPlaying) return 'hunt';
+            if (typeof night !== 'undefined' && night) return 'night';
+            if (typeof blaze !== 'undefined' && blaze) return 'blaze';
+            if (typeof race !== 'undefined' && race) return 'race';
+            if (typeof jail !== 'undefined' && jail) return 'jail';
+            if (typeof dodge !== 'undefined' && dodge) return 'dodge';
+            if (typeof escapeRoom !== 'undefined' && escapeRoom) return 'escape';
+            if (typeof park !== 'undefined' && park) return 'park';
+            if (typeof cake !== 'undefined' && cake) return 'cake';
+            if (typeof hub !== 'undefined' && hub) return 'hub';
+            return null;
+        }
         function openFeedback() {
+            let active = feedbackActiveMode();
+            let modesHtml = '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">' +
+                FEEDBACK_MODES.map(function (m) {
+                    return '<label style="font-size:12px; background:#f0f0f0; border-radius:4px; padding:4px 8px;">' +
+                        '<input type="checkbox" class="feedback-mode-cb" value="' + m[0] + '"' + (m[0] === active ? ' checked' : '') + '> ' + m[1] + '</label>';
+                }).join('') + '</div>';
             let html = '<div style="text-align:left;">' +
                 '<textarea id="feedback-text" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
-                '<div style="font-size:11px; color:#999; margin-top:6px;">会顺便带上你的 ID（' + gState.id + '）和当前模式。优先用 GitHub 提交——开发者每天会自动检查一遍，没有 GitHub 账号就用下面的备选。</div>' +
+                '<div style="font-size:11px; color:#999; margin-top:8px;">这条反馈跟哪个/哪些模式有关？（可多选）</div>' + modesHtml +
+                '<div style="font-size:11px; color:#999; margin-top:8px;">会顺便带上你的 ID（' + gState.id + '），打开 GitHub 提交页（顺手也复制了一份，没有 GitHub 账号就直接粘贴发给开发者）。</div>' +
                 '</div>';
-            showSysModal('💌 反馈', html, [
-                { label: '提交（GitHub）', color: '#24292e', onClick: function () { feedbackSend('github'); } },
-                { label: '复制文字', color: '#607d8b', onClick: function () { feedbackSend('copy'); } },
-                { label: '发送邮件', onClick: function () { feedbackSend('mail'); } },
+            showSysModal('反馈', html, [
+                { label: '提交', color: '#24292e', onClick: function () { feedbackSend(); } },
                 { label: '取消' }
             ]);
         }
-        function feedbackSend(mode) {
+        function feedbackSend() {
             let box = document.getElementById('feedback-text');
             let text = box ? box.value.trim() : '';
             if (!text) { showSysModal('提示', '写点什么再发吧', [{ label: '确定' }]); return; }
-            let meta = 'ID: ' + gState.id + '\n模式: ' + (gState.gameMode || '') + '\n时间: ' + new Date().toLocaleString();
+            let modes = Array.from(document.querySelectorAll('.feedback-mode-cb:checked')).map(function (cb) { return cb.value; });
+            let meta = 'ID: ' + gState.id + '\n模式: ' + (modes.length ? modes.join('、') : '（没选）') + '\n时间: ' + new Date().toLocaleString();
             let body = text + '\n\n——\n' + meta;
-            if (mode === 'github') {
-                let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
-                let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
-                    '&body=' + encodeURIComponent(body) + '&labels=feedback';
-                window.open(url, '_blank');
-            } else if (mode === 'mail') {
-                window.location.href = 'mailto:iway.yu@gmail.com?subject=' + encodeURIComponent('猫盾の游戏 反馈') + '&body=' + encodeURIComponent(body);
-            } else {
-                navigator.clipboard.writeText(body).then(function () {
-                    blazeFlash('已复制，发给开发者就行');
-                }).catch(function () {
-                    showSysModal('复制内容', '<textarea readonly style="width:100%; height:120px; font-size:12px;">' + body.replace(/</g, '&lt;') + '</textarea>', [{ label: '关闭' }]);
-                });
-            }
+            // 顺手复制一份：没有 GitHub 账号、懒得注册的人，GitHub 页面开着不管，
+            // 直接把复制好的内容粘贴发给开发者（邮件/聊天都行）就算提交成功了。
+            try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
+            let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
+            let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
+                '&body=' + encodeURIComponent(body) + '&labels=feedback';
+            window.open(url, '_blank');
+            blazeFlash('已复制内容，也打开了 GitHub 提交页');
         }
 
         function openEggBook() {
@@ -4524,12 +4728,12 @@
         // 只动"跑多快、跳多高"这两个最通用、最不容易搞坏平衡的维度，不碰球的物理、
         // 平台机关这些跟"公平/关卡设计"绑死的数值。换个日期就换一条，明天又不一样。
         const DAILY_MODIFIERS = [
-            { id: 'turbo', name: '⚡ 风驰电掣', desc: '所有人跑得更快', speedMul: 1.35, jumpMul: 1 },
-            { id: 'moon', name: '🌙 月球重力', desc: '跳得更高更远', speedMul: 1, jumpMul: 1.6 },
-            { id: 'slow', name: '🐌 举步维艰', desc: '所有人都变慢了，拼反应', speedMul: 0.75, jumpMul: 0.85 },
-            { id: 'hop', name: '🦘 弹簧腿', desc: '走路一般，但跳跃格外带劲', speedMul: 0.95, jumpMul: 1.8 },
-            { id: 'rush', name: '🏃 全员疾跑', desc: '速度和跳跃都往上提一提', speedMul: 1.2, jumpMul: 1.25 },
-            { id: 'normal', name: '📅 平常日子', desc: '今天没有特殊效果', speedMul: 1, jumpMul: 1 }
+            { id: 'turbo', name: '风驰电掣', desc: '所有人跑得更快', speedMul: 1.35, jumpMul: 1 },
+            { id: 'moon', name: '月球重力', desc: '跳得更高更远', speedMul: 1, jumpMul: 1.6 },
+            { id: 'slow', name: '举步维艰', desc: '所有人都变慢了，拼反应', speedMul: 0.75, jumpMul: 0.85 },
+            { id: 'hop', name: '弹簧腿', desc: '走路一般，但跳跃格外带劲', speedMul: 0.95, jumpMul: 1.8 },
+            { id: 'rush', name: '全员疾跑', desc: '速度和跳跃都往上提一提', speedMul: 1.2, jumpMul: 1.25 },
+            { id: 'normal', name: '平常日子', desc: '今天没有特殊效果', speedMul: 1, jumpMul: 1 }
         ];
         function computeDailyModifier() {
             let key = new Date().toDateString();
@@ -4946,7 +5150,7 @@
                 },
                 label: '排位：看一眼当前隐藏分'
             },
-            { get: function () { return TEST_INFINITE_COINS; }, set: function (v) { TEST_INFINITE_COINS = v; }, label: '通用：无限金币 / 全解锁' },
+            { get: function () { return TEST_INFINITE_COINS; }, set: function (v) { TEST_INFINITE_COINS = v; }, label: '通用：无限猫盾币 / 全解锁' },
             {
                 get: function () { return BGM_ENABLED; },
                 set: function (v) {
@@ -5013,9 +5217,13 @@
             if (e.key === 't' || e.key === 'T') testPanelShow();
         });
 
-        // ══════════════ 金币 / 角色解锁 ══════════════
-        // 三个模式各有各的金币，互不通用。免费角色：寻宝队全部；惊魂夜的 4 号和 1 号；
-        // 超燃的远程和剑。其余一律 20 金币。
+        // ══════════════ 猫盾币 / 角色解锁 ══════════════
+        // 全模式通用的一个钱包（寻宝队自己的钱是另一套，不通用）。免费角色：寻宝队全部；
+        // 惊魂夜的 4 号和 1 号；超燃的远程和剑。其余一律 20 猫盾币。
+        // 猫盾币是全模式通用的唯一货币（寻宝队的钱是单独一套，不通用）——
+        // 以前寻宝队/惊魂夜/超燃解锁角色的"金币"和商店宠物/表情用的"通用币"(gems)
+        // 其实一直都是同额度发放的两份重复记账，现在合并成一份，coinsOf/coinsAdd
+        // 不再区分 mode，谁存的都是同一个池子。
         const COIN_PRICE = 20;
         const COIN_FREE = {
             night: { mi: 1, cat: 1 },
@@ -5023,14 +5231,12 @@
         };
         let TEST_INFINITE_COINS = true;   // 测试用，可以在设置面板里关掉
 
-        function coinsOf(mode) {
+        function coinsOf() {
             if (TEST_INFINITE_COINS) return 99999;
-            if (!gState.coins) gState.coins = { hunt: 0, night: 0, blaze: 0 };
-            return gState.coins[mode] || 0;
+            return gState.mcoin || 0;
         }
         function coinsAdd(mode, n) {
-            if (!gState.coins) gState.coins = { hunt: 0, night: 0, blaze: 0 };
-            gState.coins[mode] = (gState.coins[mode] || 0) + n;
+            gState.mcoin = (gState.mcoin || 0) + n;
             saveProgress();
         }
         function charOwned(mode, key) {
@@ -5041,8 +5247,8 @@
         }
         function charBuy(mode, key) {
             if (charOwned(mode, key)) return true;
-            if (coinsOf(mode) < COIN_PRICE) {
-                showSysModal('金币不够', '解锁这个角色需要 ' + COIN_PRICE + ' 金币，你现在有 ' + coinsOf(mode) + ' 个。\n打一局 +2，赢了再 +2，连胜还有额外奖励。', [{ label: '知道了' }]);
+            if (coinsOf() < COIN_PRICE) {
+                showSysModal('猫盾币不够', '解锁这个角色需要 ' + COIN_PRICE + ' 猫盾币，你现在有 ' + coinsOf() + ' 个。\n打一局 +2，赢了再 +2，连胜还有额外奖励。', [{ label: '知道了' }]);
                 return false;
             }
             coinsAdd(mode, -COIN_PRICE);
@@ -5115,8 +5321,6 @@
                 gState.streak[mode] = 0;
             }
             coinsAdd(mode, gain);
-            // 商店那份通用币跟着一起给 —— 宠物和表情花的是它，不分模式
-            gState.gems = (gState.gems || 0) + gain;
             saveProgress();
             return gain;
         }
@@ -5187,7 +5391,7 @@
             return sh;
         }
 
-        function gemsOf() { return TEST_INFINITE_COINS ? 9999 : (gState.gems || 0); }
+        function gemsOf() { return coinsOf(); }   // 宠物/表情/皮肤用的也是猫盾币，跟别的花销共用一个池子
 
         // 每个自然日第一次开局，给当前带着的宠物记一天
         function shopTickDay() {
@@ -5219,15 +5423,16 @@
 
         function shopTab(t) {
             gState.shopTab = t;
-            ['pet', 'face', 'char'].forEach(function (k) {
+            ['pet', 'face', 'char', 'skin'].forEach(function (k) {
                 let b = document.getElementById('shop-tab-' + k);
                 if (b) { b.style.background = (k === t) ? '#e6a23c' : ''; b.style.color = (k === t) ? '#fff' : ''; }
             });
             let w = document.getElementById('shop-wallet');
-            if (w) w.innerText = '通用币 ' + gemsOf() + '　（打一局 +2，赢了再 +2，连胜还有额外）';
+            if (w) w.innerText = '猫盾币 ' + coinsOf() + '　（打一局 +2，赢了再 +2，连胜还有额外）';
             let el = document.getElementById('shop-body'); if (!el) return;
             if (t === 'pet') el.innerHTML = shopPetHtml();
             else if (t === 'face') el.innerHTML = shopFaceHtml();
+            else if (t === 'skin') el.innerHTML = shopSkinHtml();
             else el.innerHTML = shopCharHtml();
         }
 
@@ -5300,17 +5505,16 @@
         function shopCharHtml() {
             let modes = [{ m: 'blaze', n: '超燃', list: BLAZE_ORDER, def: BLAZE_CHARS }];
             let out = '<div style="font-size:12px; color:#888; margin-bottom:8px; text-align:left;">' +
-                '角色花的是各模式自己的金币，不是通用币。</div>';
+                '角色花的也是猫盾币，跟宠物/表情/皮肤是同一份钱包。</div>';
             modes.forEach(function (g) {
-                out += '<div style="font-weight:bold; margin:6px 0 4px; text-align:left;">' + g.n +
-                    '　金币 ' + coinsOf(g.m) + '</div>';
+                out += '<div style="font-weight:bold; margin:6px 0 4px; text-align:left;">' + g.n + '</div>';
                 g.list.forEach(function (k) {
                     let c = g.def[k], owned = charOwned(g.m, k);
                     out += shopRow(
                         '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-                        '<b style="color:' + c.css + ';">' + c.icon + ' ' + c.name + '</b>' +
+                        '<b style="color:' + c.css + ';">' + c.name + '</b>' +
                         (owned ? '<span style="font-size:12px; color:#5cb85c;">已拥有</span>'
-                            : '<button onclick="shopBuyChar(\'' + g.m + '\',\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:#e6a23c; color:#fff; border:none;">' + COIN_PRICE + ' 金币</button>') +
+                            : '<button onclick="shopBuyChar(\'' + g.m + '\',\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:#e6a23c; color:#fff; border:none;">' + COIN_PRICE + ' 猫盾币</button>') +
                         '</div>' +
                         '<div style="font-size:11px; color:#666; margin-top:3px;">' + c.pas + '</div>');
                 });
@@ -5320,11 +5524,11 @@
 
         function shopSpend(n) {
             if (TEST_INFINITE_COINS) return true;
-            if ((gState.gems || 0) < n) {
-                showSysModal('通用币不够', '还差 ' + (n - (gState.gems || 0)) + ' 个。打一局 +2，赢了再 +2。', [{ label: '知道了' }]);
+            if (coinsOf() < n) {
+                showSysModal('猫盾币不够', '还差 ' + (n - coinsOf()) + ' 个。打一局 +2，赢了再 +2。', [{ label: '知道了' }]);
                 return false;
             }
-            gState.gems -= n; return true;
+            gState.mcoin -= n; saveProgress(); return true;
         }
 
         function shopBuyPet(k) {
@@ -6024,68 +6228,59 @@
         }
         const BLAZE_CHARS = {
             bow: {
-                name: '远程猫盾', color: 0x66bb6a, css: '#66bb6a', hp: 70, icon: '🏹',
-                atk: '普攻 cd 0.8s：射一箭，10 伤，基础射程 10 身位，会被墙挡住',
+                name: '远程猫盾', color: 0x66bb6a, css: '#66bb6a', hp: 70, atk: '普攻 cd 0.8s：射一箭，10 伤，基础射程 10 身位，会被墙挡住',
                 act: '穿墙狙 cd 5s：无视墙体锁定最近敌人，10 伤，射程固定 10 身位',
                 act2: '疾射 cd 15s：攻速 +10%，持续 7 秒',
                 pas: '每打中一次，普攻射程 +1 身位（最多 5 层），5 秒没打中就清空。血量 70'
             },
             sword: {
-                name: '剑猫盾', color: 0xef5350, css: '#ef5350', icon: '⚔',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '剑猫盾', color: 0xef5350, css: '#ef5350', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '突进 cd 10s：向前冲 5 身位，撞到的第一个敌人吃 20 伤并眩晕 1 秒',
                 act2: '击晕 cd 7s：面前一名敌人 10 伤并眩晕 1 秒（面前没人就放不出去）',
                 pas: '技能每命中一次，之后技能伤害 +2，最多 3 层（挨打不清空）'
             },
             heal: {
-                name: '回血猫盾', color: 0x42a5f5, css: '#42a5f5', icon: '✚',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '回血猫盾', color: 0x42a5f5, css: '#42a5f5', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '治疗 cd 7s：自己回 10% 最大生命；6 身位内的队友也各回各自 10% 上限',
                 act2: '汲取 cd 5s：6 身位内所有敌人各 10 伤，自己回 10% 上限（没敌人也照回）',
                 pas: '被你治疗的队友 5 秒内伤害 ×1.5'
             },
             tank: {
-                name: '抗伤猫盾', color: 0xffa726, css: '#ffa726', icon: '🛡',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '抗伤猫盾', color: 0xffa726, css: '#ffa726', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '震地 cd 5s：5 身位内所有敌人 10 伤并眩晕 1 秒，自己同时减伤 20% 持续 5 秒',
                 act2: '护盾 cd 20s：获得最大生命 50% 的护盾，10 秒匀速掉完（毒圈无视护盾）',
                 pas: '受到的伤害 −30%'
             },
             guard: {
-                name: '保命猫盾', color: 0xab47bc, css: '#ab47bc', icon: '⏱',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '保命猫盾', color: 0xab47bc, css: '#ab47bc', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '闪身 cd 10s：3 段位移，每段 2 身位；撞到敌人 15 伤，不管撞没撞到都回 10% 上限。' +
                     '每段之间只有 5 秒窗口，超时没接上就直接进冷却',
                 act2: '回溯 cd 20s：回到 5 秒前的位置和血量，并立刻刷新 1 技能',
                 pas: '每回合一次：受到致命伤害时免疫，血量拉回 5% 最大生命'
             },
             control: {
-                name: '控制猫盾', color: 0x26c6da, css: '#26c6da', icon: '⛓',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '控制猫盾', color: 0x26c6da, css: '#26c6da', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '钩锁 cd 10s：向前甩出钩子，命中造成 15 伤并把人拖向自己，' +
                     '拖拽期间对方放不出技能，撞到自己身上再定身 1 秒（钩空了不进冷却）',
                 act2: '震慑 cd 15s：5 身位内所有敌人 10 伤并眩晕 3 秒（范围内没人就放不出去）',
                 pas: '普攻和眩晕每命中一次，下一次眩晕再长 0.1 秒，最多叠 5 层'
             },
             mage: {
-                name: '法师猫盾', color: 0x7e57c2, css: '#7e57c2', hp: 70, icon: '✦',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '法师猫盾', color: 0x7e57c2, css: '#7e57c2', hp: 70, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '激光 cd 10s：向正前方射出一道贯穿激光，长度 21 身位（约地图边长 1/3），' +
                     '路径上的敌人全部命中，每个 15 伤',
                 act2: '瞬移 cd 10s：直接闪到面前 4 身位的位置，撞墙会停在墙前',
                 pas: '滚雪球：每过一局，伤害永久 +5（第 N 局就是 +5×(N−1)）。血量只有 70'
             },
             assassin: {
-                name: '刺客猫盾', color: 0x78909c, css: '#78909c', hp: 70, icon: '🗡',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '刺客猫盾', color: 0x78909c, css: '#78909c', hp: 70, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '隐身 cd 15s：隐身 7 秒，期间不会被锁定；范围技能照样打得到，' +
                     '普攻预判准了也能砍中。自己放技能或普攻会立刻现身',
                 act2: '爆发 cd 20s：前方 3 身位内的敌人各吃 20 伤（面前没人就放不出去）',
                 pas: '每回合一次：血量掉到 10% 以下时刷新全部冷却并立刻隐身。血量 70'
             },
             engineer: {
-                name: '工程猫盾', color: 0x6d4c41, css: '#6d4c41', hp: 90, icon: '🔧',
-                atk: '普攻 cd 0.8s：扳手近战，10 伤',
+                name: '工程猫盾', color: 0x6d4c41, css: '#6d4c41', hp: 90, atk: '普攻 cd 0.8s：扳手近战，10 伤',
                 act: '炮台 cd 12s：放一座炮台，存在 15 秒，自动打 8 身位内的敌人。' +
                     '炮台完全继承你的攻击力和你身上所有伤害卡，最多同时 2 座（40 血，能被打掉）',
                 act2: '立墙 cd 8s：面前 3 身位立一堵墙，挡视线和弹道，存在 8 秒（60 血）。' +
@@ -6093,8 +6288,7 @@
                 pas: '过载：场上每有一个你的建筑，你自己伤害 +15%、冷却缩减 +8%（最多算 3 个）。血量 90'
             },
             mirror: {
-                name: '镜猫盾', color: 0x3949ab, css: '#3949ab', hp: 85, icon: '🪞',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '镜猫盾', color: 0x3949ab, css: '#3949ab', hp: 85, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '格挡 cd 10s：架起 1.5 秒，期间受到的伤害 −70%。只要挡下至少一次攻击，' +
                     '所有打过你的人眩晕 0.5 秒并减速 15% 持续 2 秒，并立刻刷新 2 技能。挡空只走冷却',
                 act2: '换位 cd 14s：和 8 身位内最近的敌人交换位置，不造成伤害但眩晕对方 1 秒。' +
@@ -6103,8 +6297,7 @@
                     '完全免疫那一次，并让攻击者接下来 3 秒造成的伤害 −25%。血量 85'
             },
             shift: {
-                name: '位移猫盾', color: 0x26a69a, css: '#26a69a', hp: 80, icon: '💨',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '位移猫盾', color: 0x26a69a, css: '#26a69a', hp: 80, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '贯影（要满充能）：向前冲 5 身位，穿过路径上所有敌人，每个 12 伤。撞墙就停',
                 act2: '跃击（要满充能）：闪到 8 身位内最近敌人的背后，落地造成 15 伤。附近没人就放不出去',
                 pas: '疾行：移速永久 +10%，之后每 20 秒再永久 +5%（最多 +100%），活得越久跑得越快。' +
@@ -6145,7 +6338,7 @@
                 offer.map(function (k) {
                     let c = BLAZE_CHARS[k];
                     return '<div style="margin:7px 0; text-align:left; border-left:3px solid ' + c.css + '; padding-left:7px;">' +
-                        '<b style="color:' + c.css + ';">' + c.icon + ' ' + c.name + '</b>' +
+                        '<b style="color:' + c.css + ';">' + c.name + '</b>' +
                         '<br><span style="font-size:12px; color:#666;">' + c.pas + '</span></div>';
                 }).join('');
             showSysModal('本局三选一', txt, offer.map(function (k) {
@@ -6210,6 +6403,7 @@
         let escapeRoom = null;  // 合作密室的状态（不叫 escape，那是浏览器自带的全局函数名）
         let park = null;        // 猫盾乐园当前在玩的小游戏
         let hub = null;         // 大厅广场（跑酷+遇到人组队）的状态
+        let cake = null;        // 松饼大作战（自由混战抓人）的状态
 
         // ── 竞速的轮间三选一 ──
         // 每轮开跑前抽三张，**只在这一轮生效**，下一轮重新抽。
@@ -6406,10 +6600,10 @@
                 let c = BLAZE_CHARS[k], on = gState.blazeChar === k, owned = charOwned('blaze', k);
                 return '<button onclick="blazePick(\'' + k + '\')" style="margin:0; padding:8px 0; font-size:14px; border:2px solid ' +
                     (on ? c.css : '#ddd') + '; color:' + (on ? c.css : (owned ? '#777' : '#bbb')) + '; background:' + (on ? '#fff' : '#fafafa') + ';">' +
-                    c.name + (owned ? '' : '<br><span style="font-size:11px; color:#e6a23c;">🔒 ' + COIN_PRICE + ' 金币</span>') + '</button>';
+                    c.name + (owned ? '' : '<br><span style="font-size:11px; color:#e6a23c;">' + COIN_PRICE + ' 猫盾币</span>') + '</button>';
             }).join('');
             let cw = document.getElementById('blaze-coins');
-            if (cw) cw.innerText = '金币 ' + coinsOf('blaze') + (gState.streak && gState.streak.blaze ? '　连胜 ' + gState.streak.blaze : '');
+            if (cw) cw.innerText = '猫盾币 ' + coinsOf() + (gState.streak && gState.streak.blaze ? '　连胜 ' + gState.streak.blaze : '');
             let c = BLAZE_CHARS[gState.blazeChar];
             document.getElementById('blaze-detail').innerHTML =
                 '<b style="color:' + c.css + ';">' + kTxt('空格', '普攻') + '</b>　' + c.atk +
@@ -6437,6 +6631,7 @@
             groundItems.forEach(function (g) { scene.remove(g); });
             entities.forEach(function (e) { scene.remove(e); });
             clearFootprints3D();
+            huntDropMerged();
             maze.forEach(function (fRows) {
                 if (fRows) fRows.forEach(function (row) {
                     if (row) row.forEach(function (m) {
@@ -7442,6 +7637,7 @@
             if (blaze && blaze.aimLine) scene.remove(blaze.aimLine);
             if (blaze) blaze.actors.forEach(function (a) { if (a.mesh) scene.remove(a.mesh); });
             if (blaze) blaze.projectiles.forEach(function (q) { if (q.mesh) scene.remove(q.mesh); });
+            if (blaze) blaze.atkHold = false;
             // 先把 blaze 清掉再停音乐 —— bgmFightMode() 看的就是这个变量，
             // 不先清的话会被判成「还在战斗」，回大厅还在放打斗曲。
             blaze = null;
@@ -7449,7 +7645,6 @@
             document.body.onclick = null; document.body.onmousedown = null; document.body.onmouseup = null;
             if (document.pointerLockElement) document.exitPointerLock();
             document.getElementById('blaze-hud').classList.add('hidden');
-            if (blaze) blaze.atkHold = false;
             blazeStatsOpen = false;
             let bdExit = document.getElementById('blaze-ffa-board');
             if (bdExit) { bdExit.classList.add('hidden'); bdExit.innerHTML = ''; }
@@ -9637,7 +9832,7 @@
             let gain = coinsSettle('blaze', place <= 3);
             // 结算就报一个名次，别再糊一屏数字
             let txt = '<div style="font-size:34px; font-weight:bold; color:#ff9800;">第 ' + place + ' 名</div>' +
-                '<div style="color:#888; margin-top:4px;">共 ' + list.length + ' 人　金币 +' + gain + '</div>';
+                '<div style="color:#888; margin-top:4px;">共 ' + list.length + ' 人　猫盾币 +' + gain + '</div>';
             showSysModal('乱斗结束', txt, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { blazeExit(); } }]);
         }
 
@@ -9649,7 +9844,7 @@
             let mvp = blazeFfaMvp();
             let who = (mvp === blaze.me) ? '你' : (mvp.team === mine ? mvp.name + '（你队友）' : mvp.name);
             let txt = '<div style="font-size:34px; font-weight:bold; color:#ff9800;">队伍第 ' + place + ' 名</div>' +
-                '<div style="color:#888; margin-top:4px;">共 ' + list.length + ' 队　金币 +' + gain + '</div>' +
+                '<div style="color:#888; margin-top:4px;">共 ' + list.length + ' 队　猫盾币 +' + gain + '</div>' +
                 '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #eee;">' +
                 '<b style="color:#ffb300;">MVP</b>　' + who + '　' + blazeFfaScore(mvp) + ' 分' +
                 '（' + mvp.kills + '/' + mvp.assists + '/' + mvp.deaths + '）</div>' +
@@ -9696,7 +9891,7 @@
                 let gain = coinsSettle('blaze', win);
                 showSysModal(win ? '超燃 · 你赢了' : '超燃 · 你输了',
                     '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +
-                    '　　金币 +' + gain + '（共 ' + coinsOf('blaze') + '）',
+                    '　　猫盾币 +' + gain + '（共 ' + coinsOf() + '）',
                     [{ label: '返回大厅', color: '#ff5722', onClick: blazeExit }]);
                 return;
             }
@@ -9740,7 +9935,7 @@
                 blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: 'lucky', r: rolled });
                 if (blazePerksSettled()) blazeStartNextRound();
                 // 开局那句「第 N 局」会把这条盖掉，所以稍微延后再弹
-                let luckyMsg = '🎁 ' + blazeLuckyLabel(rolled) + '　效果 ×' + BLAZE.perkLuckyMul;
+                let luckyMsg = '' + blazeLuckyLabel(rolled) + '　效果 ×' + BLAZE.perkLuckyMul;
                 setTimeout(function () { blazeFlash(luckyMsg); }, 80);
                 return;
             }
@@ -9935,7 +10130,7 @@
                     : '') +
                 (blaze.ffaFinal && !me.out ? '　决赛 ❤×' + Math.max(0, me.lives) : '') +
                 (!me.out && !me.alive ? '　复活 ' + Math.ceil(Math.max(0, me.respawnT)) + 's' : '') +
-                '　💰 ' + blaze.ffaMoney + '（' + kTxt('C', '点「商店」') + ' 开商店）';
+                '　' + blaze.ffaMoney + '（' + kTxt('C', '点「商店」') + ' 开商店）';
             document.getElementById('blaze-roster').innerHTML = '';
 
             let bd = document.getElementById('blaze-ffa-board');
@@ -10122,13 +10317,13 @@
             if (me.key === 'sword' && me.alive) sk += '　层数 ' + me.swordStacks + '/' + BLAZE.swordStackMax;
             if (me.key === 'bow' && me.alive) sk += '　射程 ' + Math.round(blazeBowMissileRange(me) / 8) + ' 身位';
             if (me.key === 'guard' && me.dashCharges > 0) sk += '　闪身剩 ' + me.dashCharges + ' 段（' + Math.max(0, me.dashWindow).toFixed(1) + 's）';
-            if (me.invulT > 0) sk += '　🛡 复活保护 ' + me.invulT.toFixed(1) + 's';
+            if (me.invulT > 0) sk += '　复活保护 ' + me.invulT.toFixed(1) + 's';
             if (me.key === 'shift') sk += '　充能 ' + Math.round((me.charge || 0) * 100) + '%' + (blazeShiftReady(me) ? '（满）' : '');
             if (me.invisT > 0) sk += '　隐身 ' + me.invisT.toFixed(1) + 's';
             if (me.buffT > 0) sk += '　增伤 ' + me.buffT.toFixed(1) + 's';
             if (me.shield > 0) sk += '　护盾 ' + Math.round(me.shield);
             if (me.tank2T > 0) sk += '　格挡 ' + me.tank2T.toFixed(1) + 's';
-            if (me.inPoison) sk += '　⚠ 圈外掉血';
+            if (me.inPoison) sk += '　圈外掉血';
             document.getElementById('blaze-skill').innerText = sk;
 
             let perkEl = document.getElementById('blaze-perk');
@@ -10142,7 +10337,7 @@
                                     'style="display:block; width:100%; margin:4px 0; padding:8px 0;">' + o.label + '</button>';
                             }).join('') +
                             ((me.perkRerollsLeft || 0) > 0
-                                ? '<button onclick="blazePerkReroll()" style="display:block; width:100%; margin:10px 0 0; padding:8px 0; background:#4a2b57; color:#ffd54f; border:1px solid #ffd54f;">🎲 换一批（剩 ' + me.perkRerollsLeft + ' 次）</button>'
+                                ? '<button onclick="blazePerkReroll()" style="display:block; width:100%; margin:10px 0 0; padding:8px 0; background:#4a2b57; color:#ffd54f; border:1px solid #ffd54f;">换一批（剩 ' + me.perkRerollsLeft + ' 次）</button>'
                                 : '');
                         blaze.perkUIActor = me;
                     }
@@ -10501,7 +10696,7 @@
                     let gain2 = coinsSettle('blaze', m.w === blaze.me.team);
                     showSysModal(m.w === blaze.me.team ? '超燃 · 你赢了' : '超燃 · 你输了',
                         '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +
-                        '　　金币 +' + gain2 + '（共 ' + coinsOf('blaze') + '）',
+                        '　　猫盾币 +' + gain2 + '（共 ' + coinsOf() + '）',
                         [{ label: '返回大厅', color: '#ff5722', onClick: blazeExit }]);
                 }
             }
@@ -11033,7 +11228,7 @@
 
             let h = night.hunter;
             let d = Math.hypot(p.x * TILE - h.p.x, p.z * TILE - h.p.z);
-            if (d <= TILE / 2 + NIGHT.palletHitRange) nightStunHunter(NIGHT.palletStun, '板子砸中！');
+            if (d <= TILE / 2 + NIGHT.palletHitRange && nightPalletSameLevel(p, h.gy)) nightStunHunter(NIGHT.palletStun, '板子砸中！');
             nightEjectFromPallet(p);
 
         }
@@ -11853,6 +12048,7 @@
             if (a.beingHealed) return;
 
             let dh = nightFlatDist(h.p, a.p);
+            let survSpd = NIGHT.surv * (a.slowUntil && performance.now() < a.slowUntil ? SKILL.hgouSpikeSlow : 1);
 
             let safeAt = DANGER_FAR * 1.35;
             let inDanger = nightSameLevel(h.p, a.p) && (a.fleeing ? dh < safeAt : dh < DANGER_FAR);
@@ -11898,7 +12094,7 @@
                 a.repairing = null;
                 if (dh < 70) nightAISay(a, 'chased');
                 nightSurvivorAISkill(a, dh, dt);
-                nightMoveToward(a, nightFleeTarget(a), NIGHT.surv * (a.hitBoost > 0 ? NIGHT.hitBoost : 1), dt); return;
+                nightMoveToward(a, nightFleeTarget(a), survSpd * (a.hitBoost > 0 ? NIGHT.hitBoost : 1), dt); return;
             }
 
             if (iAmRescuer) {
@@ -11939,7 +12135,7 @@
                             return;
                         }
                     }
-                    nightMoveToward(a, t.p, NIGHT.surv, dt);
+                    nightMoveToward(a, t.p, survSpd, dt);
                 }
                 return;
             }
@@ -11958,7 +12154,7 @@
                         if (td <= SKILL.catHealRange) {
                             if (t.downed) nightRescue(t); else t.hp = 2;
                             a.skillCd = SKILL.catHealCd; nightRefreshFish();
-                        } else { nightMoveToward(a, t.p, NIGHT.surv, dt); }
+                        } else { nightMoveToward(a, t.p, survSpd, dt); }
                         return;
                     }
                 }
@@ -11966,7 +12162,7 @@
 
                 let me0 = night.survivors[0];
                 if (me0 && me0 !== a && !me0.out && !me0.escaped && nightFlatDist(a.p, me0.p) > 26) {
-                    nightMoveToward(a, me0.p, NIGHT.surv, dt); return;
+                    nightMoveToward(a, me0.p, survSpd, dt); return;
                 }
             } else if (order === 'door') {
                 let od = null, ob = Infinity;
@@ -11981,7 +12177,7 @@
                         if (nightSealed(od)) { /* 被封住了，只能等 */ }
                         else if (!od.open) { od.openProgress += dt; if (od.openProgress >= NIGHT.doorOpenTime) nightOpenDoor(od); }
                         else { a.escaped = true; if (a.mesh) a.mesh.visible = false; }
-                    } else { nightAISay(a, 'toDoor'); nightMoveToward(a, new THREE.Vector3(od.x * TILE, a.p.y, od.z * TILE), NIGHT.surv, dt); }
+                    } else { nightAISay(a, 'toDoor'); nightMoveToward(a, new THREE.Vector3(od.x * TILE, a.p.y, od.z * TILE), survSpd, dt); }
                     return;
                 }
             }
@@ -12011,7 +12207,7 @@
                     } else {
                         a.healT = 0;
                         nightAISay(a, a.charKey === 'cat' ? 'toHealCat' : 'toHeal');
-                        nightMoveToward(a, sick.p, NIGHT.surv, dt);
+                        nightMoveToward(a, sick.p, survSpd, dt);
                     }
                     return;
                 }
@@ -12029,7 +12225,7 @@
                 if (nightEatFish(a)) return;
                 let f = null, fd = Infinity;
                 myFish.forEach(function (o) { let d = Math.hypot(o.p.x - a.p.x, o.p.z - a.p.z); if (d < fd) { fd = d; f = o; } });
-                if (f && fd < 260) { nightMoveToward(a, new THREE.Vector3(f.p.x, a.p.y, f.p.z), NIGHT.surv, dt); return; }
+                if (f && fd < 260) { nightMoveToward(a, new THREE.Vector3(f.p.x, a.p.y, f.p.z), survSpd, dt); return; }
             }
 
             let anyOpen = gState.doors.some(function (o) { return o.open; });
@@ -12050,7 +12246,7 @@
                         a.escapeProg = (a.escapeProg || 0) + dt;
                         if (a.escapeProg >= NIGHT.escapeTime) { a.escaped = true; if (a.mesh) a.mesh.visible = false; }
                     }
-                } else { a.escapeProg = 0; nightAISay(a, d.open ? 'doorOpen' : 'toDoor'); nightMoveToward(a, new THREE.Vector3(d.x * TILE, a.p.y, d.z * TILE), NIGHT.surv, dt); }
+                } else { a.escapeProg = 0; nightAISay(a, d.open ? 'doorOpen' : 'toDoor'); nightMoveToward(a, new THREE.Vector3(d.x * TILE, a.p.y, d.z * TILE), survSpd, dt); }
                 return;
             }
 
@@ -12084,12 +12280,12 @@
                 if (m.c2Boost) mult *= SKILL.c2BoostMul;
                 mult *= nightC2MarkMul(a);
                 mult *= nightSealSlow(a);
-                m.progress = Math.min(100, m.progress + nightBaseRate() * mult * NIGHT.aiRepairFactor * nightSkillK().repair * dt * NIGHT.gamePerReal);
+                m.progress = Math.min(100, m.progress + nightBaseRate() * mult * NIGHT.aiRepairFactor * nightSkillK().repair * dt * NIGHT.gamePerReal / nightActMul(a));
                 nightAICalib(a, m, dt);
                 nightAIMiBurst(a, m);
                 nightCheckMachine(m);
             }
-            else { a.calibT = 0; nightMoveToward(a, new THREE.Vector3(m.x * TILE, a.p.y, m.z * TILE), NIGHT.surv, dt); }
+            else { a.calibT = 0; nightMoveToward(a, new THREE.Vector3(m.x * TILE, a.p.y, m.z * TILE), survSpd, dt); }
         }
 
         function nightAICalib(a, m, dt) {
@@ -15237,6 +15433,7 @@
 
         function completeExtraction(text) {
             gState.isFirstRound = false;
+            gState.pityGuaranteed = false;
             gState.matchHistory.push(true); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
 
             gState.inv.forEach(function (i) { if (i) nightTreasureEgg(i.n); });
@@ -15867,6 +16064,52 @@
             0x26c6da, 0xd4e157, 0x8d6e63, 0xec407a, 0x5c6bc0, 0x9ccc65,
             0xffa726, 0x78909c, 0x26a69a, 0xba68c8
         ];
+        // 皮肤：15 种颜色抽奖，另外掺 5 个「谢谢参与」空签，一共 20 签，抽中颜色才进口袋。
+        // 只在没有队伍含义的地方（大厅广场/竞速/松饼大作战/密室，都是靠名字认人，不靠颜色分队）
+        // 才用玩家自己选的皮肤颜色覆盖默认色；监狱救援/躲避球这种颜色代表队伍的地方不能乱套。
+        const SKIN_COLORS = RACE_COLORS.slice(0, 15);
+        const SKIN_BLANKS = 5;
+        const SKIN_PRICE = 50;
+        function mySkinColor(defaultColor) { return (gState.skinColor !== null && gState.skinColor !== undefined) ? gState.skinColor : defaultColor; }
+        function skinDraw() {
+            if (!shopSpend(SKIN_PRICE)) return;
+            let roll = Math.floor(Math.random() * (SKIN_COLORS.length + SKIN_BLANKS));
+            if (roll < SKIN_COLORS.length) {
+                let col = SKIN_COLORS[roll];
+                let already = !!(gState.skins && gState.skins[col]);
+                if (!gState.skins) gState.skins = {};
+                gState.skins[col] = true;
+                saveProgress();
+                blazeFlash(already ? '又抽到了这个颜色（已拥有）' : '抽到新皮肤颜色！');
+            } else {
+                blazeFlash('谢谢参与，这次什么都没抽到');
+            }
+            shopTab('skin');
+        }
+        function shopEquipSkin(col) {
+            if (col !== null && !(gState.skins && gState.skins[col])) return;
+            gState.skinColor = col;
+            saveProgress();
+            shopTab('skin');
+        }
+        function shopSkinHtml() {
+            let out = '<div style="font-size:12px; color:#888; margin-bottom:8px; text-align:left;">' +
+                '抽一次 ' + SKIN_PRICE + ' 猫盾币，15 种颜色里随机抽一个，另外还有 ' + SKIN_BLANKS + ' 个"谢谢参与"（不保底，抽到算白抽）。' +
+                '只换颜色，不影响任何数值；作用于大厅广场、竞速、密室、松饼大作战——监狱救援/躲避球这些颜色代表队伍的模式不受影响。</div>' +
+                '<button onclick="skinDraw()" style="width:100%; margin:0 0 10px; background:#e6a23c; color:#fff; border:none; padding:9px 0; font-size:14px;">抽一次（' + SKIN_PRICE + ' 猫盾币）</button>' +
+                '<div style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px;">';
+            SKIN_COLORS.forEach(function (col) {
+                let owned = !!(gState.skins && gState.skins[col]);
+                let on = gState.skinColor === col;
+                let hex = '#' + col.toString(16).padStart(6, '0');
+                out += '<div onclick="' + (owned ? 'shopEquipSkin(' + col + ')' : '') + '" style="cursor:' + (owned ? 'pointer' : 'default') + '; aspect-ratio:1; border-radius:8px; background:' + hex +
+                    '; opacity:' + (owned ? '1' : '0.25') + '; border:3px solid ' + (on ? '#333' : 'transparent') + '; display:flex; align-items:flex-end; justify-content:center;">' +
+                    (owned ? '' : '<span style="font-size:10px; color:#fff; background:rgba(0,0,0,.4); border-radius:3px; padding:0 3px;">未解锁</span>') + '</div>';
+            });
+            out += '</div>' +
+                (gState.skinColor !== null ? '<button onclick="shopEquipSkin(null)" style="width:100%; margin-top:10px; background:#999; color:#fff; border:none; font-size:12px; padding:6px 0;">换回默认颜色</button>' : '');
+            return out;
+        }
         function raceMakeBody(col, handRange) {
             let g = new THREE.Group();
             let mat = new THREE.MeshLambertMaterial({ color: col });
@@ -15956,7 +16199,7 @@
         }
 
         function raceMakeRacer(i, isPlayer, key) {
-            let col = RACE_COLORS[i % RACE_COLORS.length];
+            let col = isPlayer ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
             let mesh = raceMakeBody(col);
             scene.add(mesh);
             return {
@@ -16420,7 +16663,7 @@
             let line = (sk ? '【' + sk.name + '】（' + kTxt('右键 / E', '「技能」键') + '）' : '');
             if (bf) line += '　+【' + bf.name + '】';
             if (ev && ev.id !== 'none') {
-                line += '　' + (ev.good ? '✨' : '⚠') + ' 本轮：' + ev.name + ' —— ' + ev.desc;
+                line += '　' + '本轮：' + ev.name + ' —— ' + ev.desc;
             }
             blazeFlash(line);
         }
@@ -16453,7 +16696,7 @@
                 title = '你被淘汰了 · 第 ' + me.place + ' 名';
                 btn = { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } };
             } else if (next <= 1 || race.round + 1 >= RACE.ladder.length) {
-                title = '🏆 冠军';
+                title = '冠军';
                 btn = { label: '返回大厅', color: '#5cb85c', onClick: function () { raceExit(); } };
             }
             showSysModal(title, lines, [btn]);
@@ -16510,7 +16753,7 @@
                 title = '你的队伍被淘汰了';
                 btn = { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } };
             } else if (target <= 1 || race.round + 1 >= RACE_DUO.ladder.length) {
-                title = '🏆 冠军队伍';
+                title = '冠军队伍';
                 btn = { label: '返回大厅', color: '#5cb85c', onClick: function () { raceExit(); } };
             }
             showSysModal(title, lines, [btn]);
@@ -16716,10 +16959,10 @@
                     if (bf) out += '　+' + bf.name;
                     return out;
                 })() +
-                (me.item ? '　🎁 ' + raceItemDef(me.item).name + '（Q）' : '') +
+                (me.item ? '　' + raceItemDef(me.item).name + '（Q）' : '') +
                 (function () {
                     let ev = raceEventDef(race.event);
-                    return (ev && ev.id !== 'none') ? '　' + (ev.good ? '✨' : '⚠') + ev.name : '';
+                    return (ev && ev.id !== 'none') ? '　' + ev.name : '';
                 })();
             document.getElementById('blaze-roster').innerHTML = '';
             let bd = document.getElementById('blaze-ffa-board');
@@ -17187,7 +17430,7 @@
             let text = (reason ? reason + '<br>' : '') + '本队物品：' + ic[me.team] + ' 件　对面物品：' + ic[1 - me.team] + ' 件';
             let title;
             if (winTeam === null) { title = '平局'; text = '时间到，双方物品数量一样多。<br>' + text; }
-            else { title = (winTeam === me.team) ? '🏆 你的队伍获胜' : '你的队伍输了'; }
+            else { title = (winTeam === me.team) ? '你的队伍获胜' : '你的队伍输了'; }
             showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { jailExit(); } }]);
         }
 
@@ -17231,9 +17474,9 @@
             document.getElementById('blaze-round').innerText =
                 '监狱救援　我方物品 ' + ic[me.team] + '　对面物品 ' + ic[1 - me.team] +
                 '　我方被抓 ' + jc[me.team] + '　对面被抓 ' + jc[1 - me.team] +
-                (me.jailed ? '　你被关在监狱里，等队友来救' : inEnemy ? '　⚠ 你在敌方地盘，小心' : '　你在自己地盘，安全') +
+                (me.jailed ? '　你被关在监狱里，等队友来救' : inEnemy ? '　你在敌方地盘，小心' : '　你在自己地盘，安全') +
                 (me.invulT > 0 ? '　无敌 ' + me.invulT.toFixed(1) + 's' : '') +
-                (me.carrying ? '　🎁 扛着一件物品，快回家！' : '');
+                (me.carrying ? '　扛着一件物品，快回家！' : '');
             document.getElementById('blaze-roster').innerHTML = '';
             // 体力条：借超燃的血条槽位
             let pct = Math.max(0, me.stamina / JAIL.staminaMax * 100);
@@ -17792,15 +18035,6 @@
             a.mustReturn = !!ball.centerBall;
             ball.centerBall = false;
         }
-        // 触屏「捡/接」键还是走这个合并版——手空的时候点一下，够近就捡，不够近就张手等接。
-        function dodgeSpaceAction(a) {
-            if (a.out || a.holding) return;
-            let ball = dodge.balls.find(function (b) {
-                return b.state === 'idle' && Math.hypot(b.p.x - a.p.x, b.p.z - a.p.z) < DODGE.pickupRange;
-            });
-            if (ball) { dodgePickupBall(a, ball); return; }
-            a.catchWindow = DODGE.catchWindow;
-        }
         // 鼠标端拆成两个独立动作：左键点一下专门捡球，右键专门接球，互不干扰
         function dodgePickupNearby(a) {
             if (a.out || a.holding) return;
@@ -17881,8 +18115,8 @@
             else { a.mvx = 0; a.mvz = 0; }
             dodgeClampCourt(a);
 
-            // 捡球/接球改成右键触发（mousedown 里直接调 dodgeSpaceAction，一次点击就是一次尝试，
-            // 不用像轮询那样自己做「刚按下」的边缘检测）。这里只保留触屏「捡/接」键的轮询——
+            // 接球改成右键触发（mousedown 里直接调 dodgeOpenCatch，一次点击就是一次尝试，
+            // 不用像轮询那样自己做「刚按下」的边缘检测）。这里只保留触屏「接」键的轮询——
             // 触屏没有右键这回事，还是靠点一下算一下的 touchBtn.jump 标记位。
             let catchTapped = touchBtn.jump; touchBtn.jump = false;
             if (catchTapped) dodgeOpenCatch(a);
@@ -18085,7 +18319,7 @@
             let me = dodge.me;
             let title, text = '';
             if (winTeam === null) { title = '平局'; text = '时间到，双方存活人数一样多。'; }
-            else title = (winTeam === me.team) ? '🏆 你的队伍获胜' : '你的队伍输了';
+            else title = (winTeam === me.team) ? '你的队伍获胜' : '你的队伍输了';
             showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { dodgeExit(); } }]);
         }
 
@@ -18503,7 +18737,7 @@
             if (!escapeRoom || escapeRoom.over) return;
             escapeRoom.over = true;
             if (won) blazeFlash('通关了！');
-            showSysModal(won ? '🎉 通关成功' : '时间到，没能通关', '',
+            showSysModal(won ? '通关成功' : '时间到，没能通关', '',
                 [{ label: '返回大厅', color: '#5cb85c', onClick: function () { escapeExit(); } }]);
         }
 
@@ -18574,7 +18808,7 @@
             let n = ESCAPE.teamSize;
             for (let i = 0; i < n; i++) {
                 let isP = i === 0;
-                let mesh = raceMakeBody(0x8d6e63, 0);
+                let mesh = raceMakeBody(isP ? mySkinColor(0x8d6e63) : 0x8d6e63, 0);
                 scene.add(mesh);
                 let x = (i - (n - 1) / 2) * 10;
                 let a = {
@@ -18646,6 +18880,24 @@
             arena: { bg: '#26a69a', label: '场地大小' },
             speed: { bg: '#78909c', label: '移动速度' }
         };
+        // 部分进阶积木要花猫盾币解锁一次，解锁之后永久能用——给猫盾币一个花的地方，
+        // 也让新手先从基础积木上手，不至于一上来就被"变量/判断"这种概念绕晕。
+        const PARK_BLOCK_PRICE = { var: 30, condition: 40, turnrandom: 20 };
+        function parkBlockUnlocked(type) {
+            if (TEST_INFINITE_COINS) return true;
+            if (!PARK_BLOCK_PRICE[type]) return true;
+            return !!(gState.parkUnlocked && gState.parkUnlocked[type]);
+        }
+        function parkRenderAddTypeOptions() {
+            let sel = document.getElementById('park-add-type'); if (!sel) return;
+            let cur = sel.value;
+            Array.from(sel.options).forEach(function (opt) {
+                let price = PARK_BLOCK_PRICE[opt.value];
+                let base = opt.textContent.replace(/（需解锁.*?）/, '');
+                opt.textContent = base + (price && !parkBlockUnlocked(opt.value) ? '（需解锁 ' + price + ' 猫盾币）' : '');
+            });
+            sel.value = cur;
+        }
         const PARK_BUILTIN = {
             easy: {
                 name: '鱼干捕手·简单', blocks: [
@@ -18727,6 +18979,22 @@
 
         function parkAddBlock() {
             let type = document.getElementById('park-add-type').value;
+            if (!parkBlockUnlocked(type)) {
+                let price = PARK_BLOCK_PRICE[type];
+                showSysModal('这块积木还没解锁', '解锁「' + (PARK_BLOCK_META[type] || {}).label + '」需要 ' + price + ' 猫盾币，你现在有 ' + coinsOf() + ' 个。解锁之后这块积木永久能用。', [
+                    { label: '解锁', color: '#e6a23c', onClick: function () {
+                        if (coinsOf() < price) { showSysModal('猫盾币不够', '还差 ' + (price - coinsOf()) + ' 个。', [{ label: '知道了' }]); return; }
+                        coinsAdd(null, -price);
+                        if (!gState.parkUnlocked) gState.parkUnlocked = {};
+                        gState.parkUnlocked[type] = true;
+                        saveProgress();
+                        parkRenderAddTypeOptions();
+                        blazeFlash('解锁成功！');
+                    } },
+                    { label: '算了' }
+                ]);
+                return;
+            }
             let d = {
                 spawn: { type: 'spawn', color: 'orange', every: 1.5 },
                 fall: { type: 'fall', color: 'orange', speed: 8 },
@@ -18882,7 +19150,7 @@
             if (park.program.creatorId && park.program.creatorId !== gState.id && roomPeers[park.program.creatorId]) {
                 bc.postMessage({ type: 'PARK_CREDIT', target: '*', to: park.program.creatorId, amount: Math.round(reward * 0.5) });
             }
-            showSysModal(won ? '🎉 通关！' : '没能达成目标', '获得 ' + reward + ' 猫盾乐园币' + (won ? '' : '（安慰奖）'),
+            showSysModal(won ? '通关！' : '没能达成目标', '获得 ' + reward + ' 猫盾币' + (won ? '' : '（安慰奖）'),
                 [{ label: '返回大厅', color: '#5cb85c', onClick: function () { parkExit(); } }]);
         }
         function parkTick(dt) {
@@ -18978,7 +19246,7 @@
             scene.background = new THREE.Color(0x81d4fa);
             scene.fog = new THREE.FogExp2(0x81d4fa, 0.002);
 
-            let mesh = raceMakeBody(0xffca28, 0);
+            let mesh = raceMakeBody(mySkinColor(0xffca28), 0);
             scene.add(mesh);
             let compiled = parkCompile(program.blocks);
             park = {
@@ -19017,29 +19285,426 @@
         }
 
         // ══════════════════════════════════════════════════════════
+        //  松饼大作战（原代号 "I'm a pancake"）：自由混战抓人，不分队伍——
+        //  面朝谁、又让谁进了你手的范围，谁就当场出局，最后剩下的人赢。
+        //  地图上会刷新几种短效增益，捡到能占点便宜。
+        //  这版先把玩法本身做完；猫的建模/手型换成松饼那批参考图留到下一步再做，
+        //  这里先照旧用猫盾的身体（raceMakeBody）。
+        // ══════════════════════════════════════════════════════════
+        const CAKE = {
+            playerCount: 8,       // 1 真人 + 7 个 AI 一起下场
+            matchTime: 210,       // 3 分半，时间到还没分出胜负就按拍出局数判
+            handRange: 9,         // 手的判定范围，常驻显示在脚下
+            tagConeDeg: 65,       // 朝向锥角：目标得在你面前这个夹角内，纯贴背后不算抓
+            jumpV: 44, gravity: 150,
+            moveSpeed: 40,
+            camBack: 30, camUp: 20,
+            buffEvery: 9, buffLifespan: 22, buffMaxOnField: 4,
+            buffSpeedMul: 1.35, buffSpeedT: 8,
+            buffReachAdd: 5, buffReachT: 8,
+            buffShieldT: 6,
+            aiVision: 60, aiPanicRange: 16
+        };
+        const CAKE_BUFF_KINDS = [
+            { key: 'speed', label: '加速', color: 0xffee58 },
+            { key: 'reach', label: '长手', color: 0x64b5f6 },
+            { key: 'shield', label: '护盾', color: 0x81c784 }
+        ];
+        const CAKE_LINES = {
+            catch: ['拍到一个！', '出局一个，稳了', '别想跑']
+        };
+
+        function cakeBuffMesh(kind) {
+            let g = new THREE.Group();
+            let m = new THREE.Mesh(new THREE.OctahedronGeometry(3.4, 0),
+                new THREE.MeshLambertMaterial({ color: kind.color, emissive: kind.color }));
+            m.position.y = 5; g.add(m);
+            g.userData.spin = m;
+            return g;
+        }
+        function cakeSpawnBuff() {
+            if (!cake) return;
+            let kind = CAKE_BUFF_KINDS[Math.floor(Math.random() * CAKE_BUFF_KINDS.length)];
+            let cx = Math.floor(mSize / 2 + (Math.random() - 0.5) * mSize * 0.7);
+            let cz = Math.floor(mSize / 2 + (Math.random() - 0.5) * mSize * 0.7);
+            let c = jailOpenCellsNear(cx, cz, 1)[0];
+            let mesh = cakeBuffMesh(kind);
+            mesh.position.set(c.x * TILE, 0, c.z * TILE);
+            scene.add(mesh);
+            cake.buffs.push({ mesh: mesh, kind: kind, x: c.x * TILE, z: c.z * TILE, life: CAKE.buffLifespan });
+        }
+        function cakeApplyBuff(a, kind) {
+            if (kind.key === 'speed') a.speedT = CAKE.buffSpeedT;
+            else if (kind.key === 'reach') a.reachT = CAKE.buffReachT;
+            else if (kind.key === 'shield') a.shieldT = CAKE.buffShieldT;
+            cakeBurst(a.p.x, a.p.z, kind.color);
+            if (a.isPlayer) blazeFlash('捡到增益：' + kind.label + '！');
+        }
+        function cakeBuffTick(dt) {
+            cake.buffTimer -= dt;
+            if (cake.buffTimer <= 0 && cake.buffs.length < CAKE.buffMaxOnField) {
+                cakeSpawnBuff(); cake.buffTimer = CAKE.buffEvery;
+            }
+            cake.buffs = cake.buffs.filter(function (b) {
+                b.mesh.userData.spin.rotation.y += dt * 2;
+                b.life -= dt;
+                if (b.life <= 0) { scene.remove(b.mesh); return false; }
+                let hit = cake.actors.find(function (a) { return !a.out && Math.hypot(a.p.x - b.x, a.p.z - b.z) < 6; });
+                if (hit) { cakeApplyBuff(hit, b.kind); scene.remove(b.mesh); return false; }
+                return true;
+            });
+        }
+        function cakeHandRange(a) { return CAKE.handRange + (a.reachT > 0 ? CAKE.buffReachAdd : 0); }
+        function cakeSpeedMul(a) { return a.speedT > 0 ? CAKE.buffSpeedMul : 1; }
+
+        function cakeBurst(x, z, color) {
+            if (!cake) return;
+            let mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+            let m = new THREE.Mesh(new THREE.RingGeometry(4, 5.5, 18), mat);
+            m.rotation.x = -Math.PI / 2; m.position.set(x, 1.2, z);
+            scene.add(m);
+            cake.fx.push({ o: m, mat: mat, t: 0.5, life: 0.5, r0: 5, r1: 22 });
+        }
+        function cakeFxTick(dt) {
+            cake.fx = cake.fx.filter(function (f) {
+                f.t -= dt;
+                if (f.t <= 0) { scene.remove(f.o); f.mat.dispose(); return false; }
+                let frac = 1 - f.t / f.life;
+                let r = f.r0 + (f.r1 - f.r0) * frac;
+                f.o.scale.set(r / f.r0, r / f.r0, 1);
+                f.mat.opacity = 0.85 * (1 - frac * frac);
+                return true;
+            });
+        }
+
+        // 玩家移动：跟监狱救援一套手感（camera 朝向 + WASD/摇杆 + 轻微惯性），
+        // 但「面朝」直接跟着镜头走、不等移动才转身——这游戏靠面朝谁判定抓人，
+        // 站着不动也得能瞄准。
+        function cakePlayerMove(a, dt) {
+            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
+            a.facing = Math.atan2(dir.x, dir.z);
+            let side = new THREE.Vector3(-dir.z, 0, dir.x);
+            let fwd = 0, strafe = 0;
+            if (keys['w']) fwd += 1; if (keys['s']) fwd -= 1;
+            if (keys['a']) strafe -= 1; if (keys['d']) strafe += 1;
+            if (fwd === 0 && strafe === 0) { fwd = -tMove.y; strafe = tMove.x; }
+            let wx = 0, wz = 0;
+            if (fwd || strafe) {
+                let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe, n = Math.hypot(mx, mz) || 1;
+                let sp = CAKE.moveSpeed * cakeSpeedMul(a) * DAILY_MOD.speedMul;
+                wx = mx / n * sp; wz = mz / n * sp;
+            }
+            let rate = (wx || wz) ? 1 / BLAZE.accel : 1 / BLAZE.brake;
+            let k = Math.min(1, rate * dt);
+            a.mvx = (a.mvx || 0) + (wx - (a.mvx || 0)) * k;
+            a.mvz = (a.mvz || 0) + (wz - (a.mvz || 0)) * k;
+            if (Math.abs(a.mvx) >= 0.4 || Math.abs(a.mvz) >= 0.4) blazeStep(a, a.mvx * dt, a.mvz * dt);
+            else { a.mvx = 0; a.mvz = 0; }
+
+            let onGround = a.p.y <= 0.01;
+            if ((keys[' '] || touchBtn.jump) && onGround) a.vy = CAKE.jumpV * DAILY_MOD.jumpMul;
+            keys[' '] = false; touchBtn.jump = false;
+            a.vy = (a.vy || 0) - CAKE.gravity * dt;
+            a.p.y += a.vy * dt;
+            if (a.p.y < 0) { a.p.y = 0; a.vy = 0; }
+        }
+
+        // 判断 from 是否面朝 (tx,tz)——跟 cakeTagCheck 用的同一套朝向锥判定，
+        // AI 拿它来分辨"那家伙是真要来抓我了"还是"只是恰好离得近"。
+        function cakeFacingAt(from, tx, tz) {
+            let dx = tx - from.p.x, dz = tz - from.p.z, n = Math.hypot(dx, dz) || 1;
+            let fx = Math.sin(from.facing || 0), fz = Math.cos(from.facing || 0);
+            return (dx / n) * fx + (dz / n) * fz > Math.cos(CAKE.tagConeDeg * Math.PI / 180);
+        }
+        // 没人真的要抓自己的时候就主动追最近的目标——不然大家都在安全距离外
+        // 互相盯着，永远不会有人真正凑近，一整局都抓不到人。
+        // 只有当最近的人已经贴到手范围附近、又正好面朝自己（真的要挨抓了）才会跑；
+        // 朝向直接用这一步真实挪动的方向算，不依赖 mvx/mvz（那两个只有玩家会更新）。
+        function cakeAi(a, dt) {
+            a.aiT -= dt;
+            if (a.aiT <= 0) a.aiT = 0.25 + Math.random() * 0.35;
+            let live = cake.actors.filter(function (x) { return !x.out; });
+            let threat = null, threatD = CAKE.aiVision;
+            live.forEach(function (b) {
+                if (b === a) return;
+                let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
+                if (d < threatD) { threatD = d; threat = b; }
+            });
+            let tx = a.p.x, tz = a.p.z;
+            let dangerous = threat && !(a.shieldT > 0) &&
+                threatD < cakeHandRange(threat) * 1.4 && cakeFacingAt(threat, a.p.x, a.p.z);
+            if (dangerous) {
+                let dx = a.p.x - threat.p.x, dz = a.p.z - threat.p.z, n = Math.hypot(dx, dz) || 1;
+                tx = a.p.x + dx / n * 40; tz = a.p.z + dz / n * 40;
+            } else if (threat) {
+                tx = threat.p.x; tz = threat.p.z;
+            } else {
+                let buff = null, bestD = 90;
+                cake.buffs.forEach(function (b) {
+                    let d = Math.hypot(a.p.x - b.x, a.p.z - b.z);
+                    if (d < bestD) { bestD = d; buff = b; }
+                });
+                if (buff) { tx = buff.x; tz = buff.z; }
+                else {
+                    if (!a.wanderT || a.wanderT <= 0) {
+                        a.wanderTx = a.p.x + (Math.random() - 0.5) * 120;
+                        a.wanderTz = a.p.z + (Math.random() - 0.5) * 120;
+                        a.wanderT = 1.5 + Math.random() * 2;
+                    }
+                    a.wanderT -= dt;
+                    tx = a.wanderTx; tz = a.wanderTz;
+                }
+            }
+            let px0 = a.p.x, pz0 = a.p.z;
+            blazeAdvance(a, tx, tz, dt);
+            let ddx = a.p.x - px0, ddz = a.p.z - pz0;
+            if (Math.hypot(ddx, ddz) > 0.01) a.facing = Math.atan2(ddx, ddz);
+
+            a.vy = (a.vy || 0) - CAKE.gravity * dt;
+            a.p.y += a.vy * dt;
+            if (a.p.y < 0) { a.p.y = 0; a.vy = 0; }
+        }
+
+        // 抓人：谁进了别人的手范围、又被那个人面朝着，就当场出局。
+        // live 是这一帧开始时的快照，但 a.out 是共享对象上的实时字段——
+        // 一旦被判出局，同一帧后面的检查会立刻看到，不会一帧内被两个人重复计一次。
+        function cakeTagCheck() {
+            let live = cake.actors.filter(function (a) { return !a.out; });
+            let coneCos = Math.cos(CAKE.tagConeDeg * Math.PI / 180);
+            live.forEach(function (b) {
+                if (b.out) return;
+                live.forEach(function (a) {
+                    if (a === b || a.out || b.out) return;
+                    let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
+                    if (d > cakeHandRange(b)) return;
+                    let dx = (a.p.x - b.p.x) / (d || 1), dz = (a.p.z - b.p.z) / (d || 1);
+                    let fx = Math.sin(b.facing || 0), fz = Math.cos(b.facing || 0);
+                    if (dx * fx + dz * fz < coneCos) return;
+                    cakeTagOut(a, b);
+                });
+            });
+        }
+        function cakeTagOut(victim, tagger) {
+            victim.out = true;
+            tagger.kills = (tagger.kills || 0) + 1;
+            victim.mesh.visible = false;
+            cakeBurst(victim.p.x, victim.p.z, 0xff7043);
+            if (victim.isPlayer) blazeFlash('你被 ' + tagger.name + ' 拍出局了！');
+            else if (tagger.isPlayer) blazeFlash('你把 ' + victim.name + ' 拍出局了！');
+            else aiSay(tagger, tagger.name, 'catch', CAKE_LINES.catch);
+            cakeCheckWin();
+        }
+        function cakeCheckWin() {
+            if (!cake || cake.over) return;
+            let live = cake.actors.filter(function (a) { return !a.out; });
+            if (live.length <= 1) cakeEndMatch(live[0] || null, '只剩一位没被拍出局。');
+        }
+        function cakeTimeUp() {
+            let best = null;
+            cake.actors.forEach(function (a) {
+                if (!best) { best = a; return; }
+                let ak = a.kills || 0, bk = best.kills || 0;
+                if (ak > bk || (ak === bk && !a.out && best.out)) best = a;
+            });
+            cakeEndMatch(best, '时间到，按拍出局数和存活情况判定。');
+        }
+        function cakeEndMatch(winner, reason) {
+            if (!cake || cake.over) return;
+            cake.over = true;
+            let me = cake.me;
+            let text = (reason ? reason + '<br>' : '') + '你一共拍出局 ' + (me.kills || 0) + ' 人。';
+            let title = !winner ? '平局' : (winner === me ? '你赢了！' : winner.name + ' 获胜');
+            showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { cakeExit(); } }]);
+        }
+
+        function cakeTouchUI(on) {
+            ['blaze-atk-btn', 'blaze-skill1-btn', 'blaze-skill2-btn', 'blaze-card-btn',
+                'race-dash-btn', 'race-skill-btn', 'race-item-btn', 'run-btn'].forEach(function (id) {
+                    let e = document.getElementById(id); if (e) e.style.display = 'none';
+                });
+            let pad = (gState.control === 'pad');
+            let jb = document.getElementById('race-jump-btn');
+            if (jb) jb.style.display = (on && pad) ? 'flex' : 'none';
+            let stats = document.getElementById('blaze-stats-btn'); if (stats) stats.style.display = 'none';
+            let skillbar = document.getElementById('blaze-skillbar'); if (skillbar) skillbar.innerHTML = '';
+            let skillTxt = document.getElementById('blaze-skill'); if (skillTxt) skillTxt.innerText = '';
+            document.getElementById('blaze-bottom').style.display = on ? '' : 'none';
+            let cross = document.getElementById('blaze-crosshair-anchor');
+            if (cross && cross.previousElementSibling) cross.previousElementSibling.style.display = on ? 'none' : '';
+            let ex = document.getElementById('blaze-exit-btn');
+            if (ex) ex.onclick = on ? cakeExit : blazeExit;
+            ['blaze-stats', 'blaze-perk', 'blaze-ffa-cards'].forEach(function (id) {
+                let e = document.getElementById(id); if (e && on) e.classList.add('hidden');
+            });
+        }
+        function cakeHud() {
+            let me = cake.me;
+            let live = cake.actors.filter(function (a) { return !a.out; }).length;
+            let remain = Math.max(0, CAKE.matchTime - cake.clock);
+            document.getElementById('blaze-score').innerText = '存活 ' + live + ' / ' + cake.actors.length + '　' + Math.ceil(remain) + 's';
+            document.getElementById('blaze-round').innerText =
+                '松饼大作战　面朝对方并进入手的范围即可拍出局，最后剩下的人赢　已拍出局 ' + (me.kills || 0) + ' 人' +
+                (me.out ? '　你已出局，正在观战' : '') +
+                (me.shieldT > 0 ? '　护盾 ' + me.shieldT.toFixed(1) + 's' : '') +
+                (me.speedT > 0 ? '　加速中' : '') +
+                (me.reachT > 0 ? '　长手中' : '');
+            document.getElementById('blaze-roster').innerHTML = '';
+            let bar = document.getElementById('blaze-hpbar');
+            bar.style.width = '100%'; bar.style.background = '#66bb6a';
+            document.getElementById('blaze-hptxt').innerText = '存活 ' + live + ' 人';
+        }
+        function cakeCameraPos(me) {
+            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
+            if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1); else dir.normalize();
+            let back = CAKE.camBack;
+            for (let t = 0.2; t <= 1; t += 0.2) {
+                let tx = me.p.x - dir.x * back * t, tz = me.p.z - dir.z * back * t;
+                if (blazeBlocked(tx, tz, 0)) { back = back * Math.max(0, t - 0.2); break; }
+            }
+            return { x: me.p.x - dir.x * back, y: me.p.y + CAKE.camUp, z: me.p.z - dir.z * back };
+        }
+        function cakeTick(dt) {
+            cake.clock += dt;
+            cake.actors.forEach(function (a) {
+                if (a.out) { a.spd = 0; return; }
+                let px0 = a.p.x, pz0 = a.p.z;
+                if (a.isPlayer) cakePlayerMove(a, dt); else cakeAi(a, dt);
+                a.spd = Math.hypot(a.p.x - px0, a.p.z - pz0) / dt;
+                if (a.speedT > 0) a.speedT -= dt;
+                if (a.reachT > 0) a.reachT -= dt;
+                if (a.shieldT > 0) a.shieldT -= dt;
+            });
+            cakeTagCheck();
+            cakeBuffTick(dt);
+            cakeFxTick(dt);
+            cake.actors.forEach(function (a) {
+                a.mesh.position.set(a.p.x, a.p.y, a.p.z);
+                if (a.out) return;
+                a.mesh.rotation.y = a.facing || 0;
+                let run = Math.min(1, (a.spd || 0) / CAKE.moveSpeed);
+                a.animT = (a.animT || 0) + dt * (2 + run * 16);
+                let u = a.mesh.userData;
+                if (u.legs) { u.legs[0].rotation.x = Math.sin(a.animT) * 0.9 * run; u.legs[1].rotation.x = -Math.sin(a.animT) * 0.9 * run; }
+                if (u.arms) {
+                    if (a.gestureT > 0) { a.gestureT -= dt; bodyGesture(u, a.gestureKind, Math.max(0, a.gestureT) / 0.35); }
+                    else { u.arms[0].rotation.x = -Math.sin(a.animT) * 0.7 * run; u.arms[1].rotation.x = Math.sin(a.animT) * 0.7 * run; }
+                }
+                if (u.reach) u.reach.material.opacity = a.reachT > 0 ? 0.7 : 0.35;
+                if (u.ring) u.ring.material.color.setHex(a.shieldT > 0 ? 0x81c784 : a.col);
+            });
+            let me = cake.me;
+            let camPos = cakeCameraPos(me);
+            camera.position.set(camPos.x, camPos.y, camPos.z);
+            if (!cake.over && cake.clock >= CAKE.matchTime) cakeTimeUp();
+            cakeHud();
+            renderer.render(scene, camera);
+        }
+        function cakeLoop() {
+            if (!cake) return;
+            let now = performance.now();
+            let dt = Math.min(0.05, (now - cake.last) / 1000);
+            cake.last = now;
+            if (!cake.over) cakeTick(dt);
+            cake.raf = requestAnimationFrame(cakeLoop);
+        }
+        function cakeBegin() {
+            nav('none');
+            document.getElementById('ui-layer').classList.add('hidden');
+            document.getElementById('night-hud').classList.add('hidden');
+            document.getElementById('blaze-hud').classList.remove('hidden');
+            let pe = document.getElementById('blaze-perk'); if (pe) pe.classList.add('hidden');
+            if (blaze) { try { blazeExit(); } catch (e) { } }
+            if (race) { try { raceExit(); } catch (e) { } }
+            if (jail) { try { jailExit(); } catch (e) { } }
+            if (dodge) { try { dodgeExit(); } catch (e) { } }
+            if (escapeRoom) { try { escapeExit(); } catch (e) { } }
+            if (park) { try { parkExit(); } catch (e) { } }
+            ensureScene();
+            scene.background = new THREE.Color(0xfff3cd);
+            scene.fog = new THREE.FogExp2(0xfff3cd, 0.0012);
+            blazeBuildArena(true, false, false);
+
+            let n = CAKE.playerCount;
+            let center = Math.floor(mSize / 2);
+            let spawns = jailOpenCellsNear(center, center, n);
+            cake = { over: false, clock: 0, actors: [], fx: [], buffs: [], buffTimer: CAKE.buffEvery * 0.4, last: performance.now(), raf: null };
+
+            let pool = HUB_BOT_NAMES.slice();
+            for (let i = 0; i < n; i++) {
+                let isP = (i === 0);
+                let col = isP ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
+                let mesh = raceMakeBody(col, CAKE.handRange);
+                scene.add(mesh);
+                let sp = spawns[i];
+                let name = isP ? (gState.id || '你') : (pool.length ? pool.splice(Math.floor(Math.random() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
+                let a = {
+                    idx: i, isPlayer: isP, col: col, name: name,
+                    p: new THREE.Vector3(sp.x * TILE, 0, sp.z * TILE), facing: Math.random() * Math.PI * 2,
+                    floor: 0, mvx: 0, mvz: 0, vy: 0, out: false, kills: 0,
+                    speedT: 0, reachT: 0, shieldT: 0, gestureT: 0, gestureKind: null,
+                    mesh: mesh, aiT: Math.random() * 0.5, animT: 0
+                };
+                cake.actors.push(a);
+            }
+            cake.me = cake.actors[0];
+            camera.rotation.set(0, Math.random() * Math.PI * 2, 0);
+
+            document.body.onmousedown = function (e) {
+                if (!cake || cake.over) return;
+                if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
+                if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } }
+            };
+            document.body.onmouseup = null;
+            cakeTouchUI(true);
+            bgmStart();
+            cakeLoop();
+        }
+        function cakeExit() {
+            if (!cake) return;
+            cake.over = true;
+            if (cake.raf) cancelAnimationFrame(cake.raf);
+            if (document.pointerLockElement) document.exitPointerLock();
+            cake.actors.forEach(function (a) { scene.remove(a.mesh); });
+            cake.buffs.forEach(function (b) { scene.remove(b.mesh); });
+            cake.fx.forEach(function (f) { scene.remove(f.o); f.mat.dispose(); });
+            cake = null;
+            cakeTouchUI(false);
+            bgmStop();
+            document.body.onmousedown = null;
+            document.getElementById('blaze-hud').classList.add('hidden');
+            nav('screen-lobby'); selectGameMode('cake');
+        }
+
+        // ══════════════════════════════════════════════════════════
         //  大厅广场：进游戏前的一个可以走来走去的 3D 空间，边上搭了一小段
         //  跑酷，还有几个 AI 路人在晃悠——凑近谁都会弹出「组队」，是真人
         //  好友（同房间里认识的）还能顺手「加好友」。没有服务器存不了全网
         //  在线玩家列表，所以"其他玩家"目前是本地模拟的路人，不是真人。
         // ══════════════════════════════════════════════════════════
         const HUB = {
-            plazaHalf: 76, moveSpeed: 30, jumpV: 48, gravity: 140,
-            wanderCount: 4, proximityRange: 14
+            plazaHalf: 650, moveSpeed: 44, jumpV: 48, gravity: 140,
+            wanderCount: 30, proximityRange: 14
         };
         function hubBuildWorld() {
             let floor = new THREE.Mesh(new THREE.PlaneGeometry(HUB.plazaHalf * 2, HUB.plazaHalf * 2),
                 new THREE.MeshLambertMaterial({ color: 0xc8e6c9 }));
             floor.rotation.x = -Math.PI / 2; scene.add(floor); hub.meshes.push(floor);
-            // 跑酷：一路垫高、一路拉开距离的小台阶，跳到最高那块算完成一轮。
-            // 台阶宽 10、间距（中心到中心）17，留出 7 格真空——够跳过去但不算宽松，
-            // 不然台阶紧贴在一起走过去就行，不用跳。
-            let steps = 4, w = 10, stepPitch = 17, stepRise = 5, baseZ = -14, baseY = 4;
+            // 跑酷：台阶越往后越窄、间隔留的空当也不小，还带左右之字拐——
+            // 逼着每一步都得瞄准了跳，不能低头一路直走过去。
+            let widths = [12, 11, 10, 9, 8, 7, 6];
+            let xOffsets = [0, 13, -9, 15, -13, 11, -6];
+            let gapVoid = 7.5, stepRise = 5, baseX = 30, baseZ = -14;
             hub.platforms = [];
-            for (let i = 0; i < steps; i++) {
-                let y = baseY + i * stepRise, z = baseZ - i * stepPitch;
-                let m = new THREE.Mesh(new THREE.BoxGeometry(w, 2, w), new THREE.MeshLambertMaterial({ color: i === steps - 1 ? 0xffd54f : 0x90a4ae }));
-                m.position.set(30, y, z); scene.add(m); hub.meshes.push(m);
-                hub.platforms.push({ x: 30, y: y + 1, z: z, half: w / 2 });
+            let z = baseZ, prevHalf = 0;
+            for (let i = 0; i < widths.length; i++) {
+                let half = widths[i] / 2;
+                z = (i === 0) ? baseZ : (z - prevHalf - half - gapVoid);
+                let x = baseX + xOffsets[i], y = 4 + i * stepRise;
+                let m = new THREE.Mesh(new THREE.BoxGeometry(widths[i], 2, widths[i]),
+                    new THREE.MeshLambertMaterial({ color: i === widths.length - 1 ? 0xffd54f : 0x90a4ae }));
+                m.position.set(x, y, z); scene.add(m); hub.meshes.push(m);
+                hub.platforms.push({ x: x, y: y + 1, z: z, half: half });
+                prevHalf = half;
             }
             // 场地边缘围一圈矮墙，好认出边界在哪
             function wall(x, z, w, d) {
@@ -19049,14 +19714,23 @@
             let half = HUB.plazaHalf;
             wall(0, -half, half * 2, 2); wall(0, half, half * 2, 2); wall(-half, 0, 2, half * 2); wall(half, 0, 2, half * 2);
         }
+        // 路人名字要像真玩家会取的 ID，不是"路人猫盾A"这种一看就是机器人的占位名；
+        // 同时尽量挑生僻/少见的组合，避免正好跟真玩家自己取的昵称撞名。
+        const HUB_BOT_NAMES = ['小鱼干', '摸鱼冠军', '深夜猫盾', '打工猫', '半糖去冰', '橘子汽水',
+            '一只咸鱼', '桃子罐头', '奶茶不加糖', '晚风', '路过的猫', '装睡大师', '柠檬味的风', '今天也很困',
+            '第九颗纽扣', '会漏电的猫', '过期薯片', '拖鞋去哪了', '猫盾守夜人', '芝士味叹气',
+            '掉线的云', '第三只手套', '硬币的反面', '发霉的勇气', '倒着走的钟', '半只耳朵',
+            '不想改名的猫', '塑料袋在飞', '错位的拼图', '偷懒的齿轮', '融化的雪糕棍', '生锈的闹钟'];
         function hubSpawnWanderers() {
-            let names = ['路人猫盾A', '路人猫盾B', '路人猫盾C', '路人猫盾D'];
+            let pool = HUB_BOT_NAMES.slice();
             for (let i = 0; i < HUB.wanderCount; i++) {
+                let idx = Math.floor(Math.random() * pool.length);
+                let name = pool.length ? pool.splice(idx, 1)[0] : ('路人' + (i + 1));
                 let mesh = raceMakeBody(0xb0bec5, 0);
                 scene.add(mesh);
                 let x = (Math.random() - 0.5) * HUB.plazaHalf, z = (Math.random() - 0.5) * HUB.plazaHalf;
                 hub.wanderers.push({
-                    name: names[i] || ('路人猫盾' + (i + 1)), isAI: true, mesh: mesh,
+                    name: name, isAI: true, mesh: mesh,
                     p: new THREE.Vector3(x, 0, z), faceDir: { x: 0, z: 1 }, animT: 0,
                     target: null, idleT: Math.random() * 2
                 });
@@ -19072,14 +19746,16 @@
             a.p.x += dx / n * HUB.moveSpeed * 0.5 * dt; a.p.z += dz / n * HUB.moveSpeed * 0.5 * dt;
             a.faceDir = { x: dx / n, z: dz / n };
         }
-        function hubGroundYAt(x, z) {
-            // 站在跑酷台阶上就用台阶的高度，不然就是地面 y=0——不用真的做物理碰撞，
-            // 平台够大，简单判一下在不在范围内就行。
+        function hubGroundYAt(x, z, curY) {
+            // curY 是这一帧之前的高度：平台只有在「玩家已经在它表面高度附近或更高」时才
+            // 算脚下的地——不然贴着台阶下方走过去，x/z 一进台阶范围就会被直接吸到台阶顶上，
+            // 变成不用跳、走两步就瞬移上去。台阶更高的时候只当墙看待，不当地面。
+            let best = 0;
             for (let i = 0; i < hub.platforms.length; i++) {
                 let p = hub.platforms[i];
-                if (Math.abs(x - p.x) < p.half && Math.abs(z - p.z) < p.half) return p.y;
+                if (Math.abs(x - p.x) < p.half && Math.abs(z - p.z) < p.half && p.y <= curY + 0.6 && p.y > best) best = p.y;
             }
-            return 0;
+            return best;
         }
         function hubPlayerMove(dt) {
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
@@ -19089,25 +19765,50 @@
             if (keys['a']) strafe -= 1; if (keys['d']) strafe += 1;
             if (fwd === 0 && strafe === 0) { fwd = -tMove.y; strafe = tMove.x; }
 
+            let prevY = hub.p.y;
             // 起跳判定要用「移动前」的脚下位置：不然贴着台阶边缘按跳的时候，
             // 这一帧正好走出台阶范围、地面高度瞬间归零，会被当成已经悬空、跳跃失败——
             // 变成边缘按跳没反应，得往回退一步才跳得动，助跑跳完全跳不起来。
-            let curGroundY = hubGroundYAt(hub.p.x, hub.p.z);
+            let curGroundY = hubGroundYAt(hub.p.x, hub.p.z, hub.p.y);
             let onGround = hub.p.y <= curGroundY + 0.5;
-            if ((keys[' '] || touchBtn.jump) && onGround) hub.vy = HUB.jumpV;
+            let now = performance.now();
+            if (onGround) hub.lastGroundedAt = now;
+            if (keys[' '] || touchBtn.jump) hub.lastJumpPressAt = now;
             keys[' '] = false; touchBtn.jump = false;
+            // 土狼时间 + 跳跃缓冲：不用卡着刚好落地/离台那一帧按空格才跳得起来——
+            // 边缘掉落后 120ms 内、或提前按了跳跃键 150ms 内落地，都算数，手感才不涩。
+            let canJump = (now - (hub.lastGroundedAt || -9999) <= 120) && (hub.vy || 0) <= 0;
+            let wantsJump = (now - (hub.lastJumpPressAt || -9999)) <= 150;
+            if (canJump && wantsJump) {
+                hub.vy = HUB.jumpV;
+                hub.lastJumpPressAt = -9999; hub.lastGroundedAt = -9999;
+            }
 
+            let newX = hub.p.x, newZ = hub.p.z;
             if (fwd || strafe) {
                 let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe, n = Math.hypot(mx, mz) || 1;
-                hub.p.x += mx / n * HUB.moveSpeed * dt; hub.p.z += mz / n * HUB.moveSpeed * dt;
+                newX = hub.p.x + mx / n * HUB.moveSpeed * dt; newZ = hub.p.z + mz / n * HUB.moveSpeed * dt;
                 hub.faceDir = { x: mx / n, z: mz / n };
             }
+            // 台子侧面要当墙挡住，不然朝台子横着走/半空中蹭到侧面会直接穿模过去——
+            // 只在人确实比台面矮一截时才挡（不是正要落到台子上那一下，留点余量避免误挡）。
+            // pad 得盖过猫盾模型自己的半宽（身体+耳朵大概 3~3.5 个单位），不然挡住的只是
+            // 中心点还没碰到边，但耳朵/身体的网格已经先一步露在台子里面，看着照样像穿模。
+            let blockedBySide = false;
+            for (let i = 0; i < hub.platforms.length; i++) {
+                let p = hub.platforms[i], pad = 3.5;
+                if (Math.abs(newX - p.x) < p.half + pad && Math.abs(newZ - p.z) < p.half + pad &&
+                    prevY < p.y - 1.2 && prevY > p.y - 6) { blockedBySide = true; break; }
+            }
+            if (!blockedBySide) { hub.p.x = newX; hub.p.z = newZ; }
             let half = HUB.plazaHalf - 2;
             hub.p.x = Math.max(-half, Math.min(half, hub.p.x));
             hub.p.z = Math.max(-half, Math.min(half, hub.p.z));
             hub.vy = (hub.vy || 0) - HUB.gravity * dt;
             hub.p.y += hub.vy * dt;
-            let groundY = hubGroundYAt(hub.p.x, hub.p.z);
+            // 落地判定要用「这一帧移动前」的高度来筛台子：不然摔得快、一帧就掉穿了整块台子时，
+            // 用摔完之后的新高度去筛，会发现台子早就在头顶上方而判定不算地面，直接穿模摔穿过去。
+            let groundY = hubGroundYAt(hub.p.x, hub.p.z, prevY);
             if (hub.p.y < groundY) { hub.p.y = groundY; hub.vy = 0; }
             if (hub.p.y < -10) { hub.p.set(0, 0, 0); hub.vy = 0; }   // 掉下去了，回广场中心重来
         }
@@ -19133,7 +19834,7 @@
                 let teamBtn = document.getElementById('hub-prompt-team');
                 teamBtn.style.display = already ? 'none' : '';
                 teamBtn.disabled = !!nearest.teamPending;
-                teamBtn.innerText = nearest.teamPending ? '等待同意…' : '🤝 组队';
+                teamBtn.innerText = nearest.teamPending ? '等待同意…' : '组队';
             } else {
                 el.style.display = 'none';
             }
@@ -19155,7 +19856,7 @@
                 let accept = Math.random() < 0.8;
                 if (accept) {
                     hub.party.push(w.name);
-                    blazeFlash('🤝 ' + w.name + ' 同意组队了！');
+                    blazeFlash(w.name + ' 同意组队了！');
                 } else {
                     blazeFlash(w.name + ' 说自己在忙，拒绝了组队邀请');
                 }
@@ -19173,15 +19874,23 @@
                 (hub.party.length ? hub.party.join('、') : '（还没组队）');
         }
         function hubTick(dt) {
+            let prevPx = hub.p.x, prevPz = hub.p.z;
             hubPlayerMove(dt);
-            hub.wanderers.forEach(function (w) { hubWandererTick(w, dt); });
-            [{ p: hub.p, faceDir: hub.faceDir, mesh: hub.mesh, animT: hub.animT }].concat(hub.wanderers).forEach(function (a, idx) {
-                let real = idx === 0 ? hub : a;
+            hub.spd = Math.hypot(hub.p.x - prevPx, hub.p.z - prevPz) / dt;
+            hub.wanderers.forEach(function (w) {
+                let px0 = w.p.x, pz0 = w.p.z;
+                hubWandererTick(w, dt);
+                w.spd = Math.hypot(w.p.x - px0, w.p.z - pz0) / dt;
+            });
+            // 站着不动的时候腿不该还在原地摆——之前不管有没有真的在移动都按固定频率甩腿，
+            // 看着就是「人没在动脚在动」。现在按这一步真实挪动的距离算摆动幅度，站定就归零。
+            [hub].concat(hub.wanderers).forEach(function (real) {
                 real.mesh.position.set(real.p.x, real.p.y, real.p.z);
                 if (real.faceDir) real.mesh.rotation.y = Math.atan2(real.faceDir.x, real.faceDir.z);
                 let u = real.mesh.userData;
-                real.animT = (real.animT || 0) + dt * 8;
-                if (u.legs) { u.legs[0].rotation.x = Math.sin(real.animT) * 0.6; u.legs[1].rotation.x = -Math.sin(real.animT) * 0.6; }
+                let run = Math.min(1, (real.spd || 0) / HUB.moveSpeed);
+                real.animT = (real.animT || 0) + dt * (2 + run * 14);
+                if (u.legs) { u.legs[0].rotation.x = Math.sin(real.animT) * 0.6 * run; u.legs[1].rotation.x = -Math.sin(real.animT) * 0.6 * run; }
             });
             hubProximityTick();
             let camPos = hubCameraPos();
@@ -19212,13 +19921,18 @@
             let cross = document.getElementById('blaze-crosshair-anchor');
             if (cross && cross.previousElementSibling) cross.previousElementSibling.style.display = on ? 'none' : '';
             let ex = document.getElementById('blaze-exit-btn');
-            if (ex) ex.onclick = on ? hubExit : blazeExit;
+            // 大厅现在是常驻的家，没有"退出"这回事了——想去玩哪个模式，
+            // 点大厅 UI 里的模式/开始游戏就行，所以这颗按钮直接藏起来。
+            if (ex) { if (on) ex.style.display = 'none'; else { ex.style.display = ''; ex.onclick = blazeExit; } }
             ['blaze-stats', 'blaze-perk', 'blaze-ffa-cards'].forEach(function (id) {
                 let e = document.getElementById(id); if (e && on) e.classList.add('hidden');
             });
         }
         function hubBegin() {
-            nav('none');
+            if (hub) return;   // 已经在大厅里了，不重复搭一遍（不然模型、路人会叠出重影）
+            // 大厅现在就是常驻的 3D 广场，屏幕上的大厅 UI（选模式/商店/好友…）
+            // 一直盖在上面，所以这里不再隐藏 screen-lobby，也不清屏——nav() 已经
+            // 处理了"离开大厅就关掉它"这件事，这里只管把 3D 世界搭起来。
             document.getElementById('ui-layer').classList.add('hidden');
             document.getElementById('night-hud').classList.add('hidden');
             document.getElementById('blaze-hud').classList.remove('hidden');
@@ -19229,11 +19943,12 @@
             if (dodge) { try { dodgeExit(); } catch (e) { } }
             if (escapeRoom) { try { escapeExit(); } catch (e) { } }
             if (park) { try { parkExit(); } catch (e) { } }
+            if (cake) { try { cakeExit(); } catch (e) { } }
             ensureScene();
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
 
-            let mesh = raceMakeBody(0x66bb6a, 0);
+            let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0);
             scene.add(mesh);
             hub = {
                 meshes: [], wanderers: [], party: [], nearby: null,
@@ -19267,7 +19982,8 @@
             bgmStop();
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
-            nav('screen-lobby');
+            // 不在这调 nav() —— hubExit 本来就是被 nav() 自己（离开大厅时）
+            // 或者某个模式的 Begin() 调用的，这里再调一次会互相递归。
         }
 
         let hudSlots = document.querySelectorAll('#hud-hotbar-container .slot');
