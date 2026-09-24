@@ -3050,9 +3050,9 @@
                 }
             } else {
                 if (isPlaying && !gState.isDead && dragSourceObj.container === 'inv') {
-                    let hudBox = document.getElementById('hud-hotbar-container'); let bpBox = document.getElementById('backpack-grid-box'); let garageBox = document.getElementById('garage-active-inv');
+                    let hudBox = document.getElementById('hud-hotbar-container'); let bpBox = document.getElementById('backpack-grid-box');
                     let inBox = function (box) { if (!box || box.offsetParent === null) return false; let rect = box.getBoundingClientRect(); return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom; };
-                    if (!inBox(hudBox) && !inBox(bpBox) && !inBox(garageBox)) { executeThrow(dragSourceObj.idx); }
+                    if (!inBox(hudBox) && !inBox(bpBox)) { executeThrow(dragSourceObj.idx); }
                 }
             }
             let allSlots = document.querySelectorAll('.slot'); allSlots.forEach(s => s.style.opacity = '1');
@@ -4566,6 +4566,13 @@
                     '修好大厅跑酷摔得快时会直接穿模摔穿台子的问题；加上了跳跃缓冲和土狼时间，不用再卡着刚好落地/离台那一帧按空格才跳得起来。',
                     '大厅跑酷台子的侧面现在会真的挡人，不会再直接穿过去。',
                     '大厅路人的名字换了一批更少见的，不容易跟真玩家自己取的昵称撞上。'
+                ]
+            },
+            {
+                id: '2026-09-21-nightly-fixes', date: '2026-09-21', title: '小修复', items: [
+                    '葬场模式修好了一个 bug：死亡光柱变成墓碑墙的时候，如果正好有活人站在那一格上，人不会再被直接封进墙里了。',
+                    '躲避球模式修好了：平板上按"跳"键不会再顺带打开接球判定了（以前跳一下等于顺手也接了一下球，现在跳和接球分开，得按各自的键）。',
+                    '清理了一处拖东西出背包时的死代码（引用了一个已经不存在的仓库格子，实际不影响游戏）。'
                 ]
             },
             {
@@ -7916,6 +7923,11 @@
             let cell = row && row[gx];
             if (!cell || cell.type !== 0) return false;
             // 有活人正踩在这格上就不封，不然人会被关进墙里
+            let occupied = blaze.actors.some(function (a) {
+                return a.alive && a.floor === 0 &&
+                    Math.round(a.p.x / TILE) === gx && Math.round(a.p.z / TILE) === gz;
+            });
+            if (occupied) return false;
             let g = new THREE.Group();
             // 一根碑一样的圆柱。原来是整整一格的方块，一死封一大片，
             // 打两轮场地就被切成迷宫了。
@@ -15689,7 +15701,9 @@
             if (night.side === 'hunter') nightHunterBreak();
         });
 
-        bindTouchTap('blaze-jump-btn', function () { touchBtn.jump = true; });
+        // 躲避球模式下这颗键被专门借去当「跳」，此时 touchBtn.jump 另有用途（接球），
+        // 不能被跳跃键顺带带上，不然一按跳就顺手打开接球判定窗口
+        bindTouchTap('blaze-jump-btn', function () { if (!(dodge && !dodge.over)) touchBtn.jump = true; });
         bindTouchTap('blaze-jump-btn', function () { touchBtn.dodgeJump = true; });   // 躲避球复用同一颗「跳」键，单独一个标记位
         bindTouchTap('race-jump-btn', function () { touchBtn.jump = true; });
         bindTouchTap('race-dash-btn', function () { touchBtn.ability = true; });
