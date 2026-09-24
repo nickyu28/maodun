@@ -835,6 +835,7 @@
             <button onclick="shopTab('pet')" id="shop-tab-pet">宠物</button>
             <button onclick="shopTab('face')" id="shop-tab-face">表情</button>
             <button onclick="shopTab('char')" id="shop-tab-char">角色</button>
+            <button onclick="shopTab('skin')" id="shop-tab-skin">皮肤</button>
         </div>
         <div id="shop-body" style="width:340px; max-height:60vh; overflow-y:auto; touch-action:pan-y;"></div>
         <button onclick="nav('screen-lobby')" style="margin-top:12px; background:#999; color:#fff; border:none;">返回</button>
@@ -982,7 +983,7 @@
             <div style="font-size:14px; color:#ad1457; font-weight:bold; margin-bottom:2px;">猫盾乐园</div>
             <div style="font-size:12px; color:#6d4c41; line-height:1.6; margin-bottom:8px;">
                 用积木拼你自己的小游戏——不用写代码，选积木、填参数、拼成一串就是一个能玩的游戏。
-                别人玩得越多，你赚的猫盾乐园币越多（得跟你同房间才会实时到账）。当前币：<span id="park-coin-disp">0</span>
+                别人玩得越多，你赚的猫盾币越多（得跟你同房间才会实时到账），跟其他模式、商店用的是同一份钱包。当前猫盾币：<span id="park-coin-disp">0</span>
             </div>
             <div style="display:flex; gap:6px; margin-bottom:8px;">
                 <button onclick="parkBegin(PARK_BUILTIN.easy)" style="flex:1; margin:0; background:#4fc3f7; color:#fff; border:none; padding:9px 0; font-size:13px;">鱼干捕手·简单</button>
@@ -1892,7 +1893,7 @@
         let initArr = new Array(6).fill(null); initArr[0] = { ...shopItems['鱼叉'] }; initArr[1] = { ...shopItems['地窖徽章'] };
         const gState = {
             control: 'laptop', char: 'green', id: '', money: 10000, team: [], aiFill: true, runCash: 0, aiSubmitted: 0, aiChestsTaken: 0, blazeChar: 'bow',
-            coins: { hunt: 0, night: 0, blaze: 0 }, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, inv: initArr, garage: new Array(200).fill(null),
+            mcoin: 0, skins: {}, skinColor: null, parkUnlocked: {}, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, inv: initArr, garage: new Array(200).fill(null),
             maxInv: 6, hp: 100, maxHp: 100, isDead: false, selectedContainer: 'inv', selectedSlot: 0, totalSubmitted: 0,
             backpackOpen: false, largeMapOpen: false, inSafeZone: true, needsLock: false, pAtkCd: 0, timeStop: 0, preGenSpawns: [],
             mapDifficulty: 'easy', extractTarget: 140000, gameMode: 'hunt',
@@ -1914,9 +1915,12 @@
 
         const MOB_WAVES_AT = [10 * 3600, 12 * 3600, 14 * 3600];
 
+        // 存档格式版本：改了货币结构（金币/通用币合并成猫盾币）之后老存档字段对不上号，
+        // 干脆整个当成没存过档处理，重新按新玩家初始化——反正现在还没人正经玩，不用做兼容迁移。
+        const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, coins: gState.coins, owned: gState.owned, streak: gState.streak, gems: gState.gems, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -1924,12 +1928,17 @@
             try {
                 const saved = localStorage.getItem('TH_save_' + pid);
                 if (saved) {
-                    const data = JSON.parse(saved); gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.coins = data.coins || { hunt: 0, night: 0, blaze: 0 }; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
-                    gState.gems = data.gems || 0; gState.shop = data.shop || null; gState.rank = data.rank || null;
-                    expandInventory(); grantBadgeIfMissing(); return;
+                    const data = JSON.parse(saved);
+                    if (data.ver === SAVE_VER) {
+                        gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
+                        gState.shop = data.shop || null; gState.rank = data.rank || null;
+                        expandInventory(); grantBadgeIfMissing(); return;
+                    }
+                    // 版本对不上：老存档，忽略，走下面全新初始化
                 }
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
+            gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 };
             expandInventory();
         }
 
@@ -2004,8 +2013,15 @@
                 if (msg.target === gState.id) teamOnInviteReceived(msg.sender);
             } else if (msg.type === 'TEAM_INVITE_ACK') {
                 if (msg.target === gState.id) teamOnInviteAck(msg.sender, msg.accept);
+            } else if (msg.type === 'TEAM_SYNC') {
+                let isLeader = (roomList.length === 0 || peerIsHost);
+                if (!isLeader && msg.team) {
+                    gState.team = msg.team;
+                    if (msg.map) gState.mapDifficulty = msg.map;
+                    updateTeamListUI();
+                }
             } else if (msg.type === 'PARK_CREDIT') {
-                if (msg.to === gState.id) { coinsAdd('park', msg.amount || 0); blazeFlash('有人玩了你设计的密室小游戏，+' + (msg.amount || 0) + ' 猫盾乐园币！'); }
+                if (msg.to === gState.id) { coinsAdd('park', msg.amount || 0); blazeFlash('有人玩了你设计的密室小游戏，+' + (msg.amount || 0) + ' 猫盾币！'); }
             } else if (msg.type === 'SPAWN_MOBS') {
                 let flag = 'wave' + (msg.wave || 1) + 'Spawned';
                 if (!gState[flag]) { gState[flag] = true; spawnMonstersWithData(msg.spawns); }
@@ -2030,6 +2046,30 @@
         }
 
         function broadcastTeam() { bc.postMessage({ type: 'TEAM_SYNC', target: '*', team: gState.team, map: gState.mapDifficulty }); updateTeamListUI(); }
+
+        // 寻宝队组队实验：以前"邀请组队"点了也没用——gState.team 从进大厅那一刻就
+        // 写死成"你 + 2 个固定名字的 AI"，从来没跟房间里的真人对上过。现在房主（单机时
+        // 就是自己）在开局前把真正组了队、又还在房间里的真人塞进队伍，AI 只补空位，
+        // 再把这份队伍广播给所有人——大家的 gState.team 统一之后，寻宝队已有的
+        // POS_SYNC（按名字找对应的队友模型）才第一次真的对得上号，能看见彼此。
+        const HUNT_TEAM_SIZE = 3;
+        function huntRebuildTeam() {
+            let isLeader = (roomList.length === 0 || peerIsHost);
+            if (!isLeader) return;   // 不是房主就等房主的 TEAM_SYNC，不要自己瞎组
+            let mates = lobbyParty.filter(function (id) {
+                return roomList.some(function (r) { return r.id === id; });
+            });
+            let team = [{ id: gState.id, isLeader: true, isReady: true, isAI: false }];
+            mates.slice(0, HUNT_TEAM_SIZE - 1).forEach(function (id) {
+                team.push({ id: id, isLeader: false, isReady: true, isAI: false });
+            });
+            if (huntAiOn()) {
+                let n = 1;
+                while (team.length < HUNT_TEAM_SIZE) { team.push({ id: gState.id + '_AI_' + n, isLeader: false, isReady: true, isAI: true }); n++; }
+            }
+            gState.team = team;
+            broadcastTeam();
+        }
 
         const CHAT_DEFAULT = ['救我！', '追捕在我这！', '去修机子', '我去救人', '好的'];
         let chatQuick = CHAT_DEFAULT.slice();
@@ -2203,6 +2243,7 @@
 
         function requestStartGame() {
             if (roomList.length > 1 && !peerIsHost) { showSysModal('提示', '等房主开局。', [{ label: '确定' }]); return; }
+            huntRebuildTeam();
             bc.postMessage({ type: 'START_GARAGE', target: '*' });
             nav('screen-garage'); initGarage();
         }
@@ -2272,7 +2313,7 @@
             let mbc = document.getElementById('mode-bar-current'); if (mbc) mbc.innerText = modeName;
             if (isNight) selectNightChar(gState.nightChar || 'cat');
             if (isBlaze) blazeRenderChars();
-            if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsOf('park'); parkRenderBlocks(); }
+            if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsOf(); parkRenderBlocks(); parkRenderAddTypeOptions(); }
             if (isRace) raceTestCardBtnSync();
             if (isJail || isDodge || isEscape) applyControlHints();
             let cb = document.getElementById('hunt-ai-fill');
@@ -4439,6 +4480,16 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-24-mcoin', date: '2026-09-24', title: '货币统一成猫盾币 + 皮肤系统 + 组队联机实验', items: [
+                    '寻宝队/惊魂夜/超燃各自的金币，还有商店宠物/表情用的通用币，合并成一份"猫盾币"，全模式通用（寻宝队自己的钱还是单独一套，不受影响）。',
+                    '因为货币结构变了，这次更新会把所有人的存档（寻宝队的钱、猫盾币、角色解锁）清零重来——现在还没人正式在玩，直接清干净比小心翼翼换算更省事。',
+                    '商店新增"皮肤"：50 猫盾币抽一次，15 种颜色 + 5 个"谢谢参与"，抽到的颜色能在大厅广场/竞速/密室/松饼大作战里换上（监狱救援/躲避球颜色代表队伍，不受影响）。',
+                    '猫盾乐园新增几块要花猫盾币解锁的进阶积木（变量/判断/随机转向），解锁一次永久能用。',
+                    '寻宝队的"邀请组队"第一次真的有用了：房主开局前会把已经组队、还在房间里的真人排进队伍（AI 补剩下的位置），大家能在同一局里看到彼此，不再是各玩各的。惊魂夜本来就是真联机，不用改。监狱救援等其他模式暂时还是本地模拟，看这次效果再考虑要不要跟进。',
+                    '反馈框里"模式"不再偷偷默认写成寻宝队——改成勾选框，可以自己选跟哪个/哪些模式有关。'
+                ]
+            },
+            {
                 id: '2026-09-24-lobby-cleanup', date: '2026-09-24', title: '大厅精简 + 跑酷再修一版 + 反馈简化', items: [
                     '右上角改成"选择模式"按钮 + 当前模式 + "开始游戏！"，选模式的详情面板不再自带各自的"开始"按钮（点开选、收起来再统一按"开始游戏！"）。',
                     '去掉了大厅正中间那个半透明猫脸水印。',
@@ -4509,10 +4560,38 @@
         // 用 GitHub 预填链接开一个新标签页，测试者自己确认提交——邮件/复制文字留着
         // 当备选，给没有 GitHub 账号的人用。
         const FEEDBACK_REPO = 'nickyu28/maodun';
+        // 反馈涉及哪个/哪些模式让用户自己勾，不再偷偷塞 gState.gameMode——
+        // 那个字段只是"选择模式面板里选中的是哪个"，在大厅里从来没真的进任何模式，
+        // 却一直默认显示寻宝队，反馈里"模式"那一栏全是错的。
+        const FEEDBACK_MODES = [
+            ['hunt', '寻宝队'], ['night', '惊魂夜'], ['blaze', '超燃'], ['race', '竞速'],
+            ['jail', '监狱救援'], ['dodge', '躲避球'], ['escape', '密室'], ['park', '猫盾乐园'],
+            ['cake', '松饼大作战'], ['hub', '大厅广场'], ['other', '其他/不确定']
+        ];
+        function feedbackActiveMode() {
+            if (typeof isPlaying !== 'undefined' && isPlaying) return 'hunt';
+            if (typeof night !== 'undefined' && night) return 'night';
+            if (typeof blaze !== 'undefined' && blaze) return 'blaze';
+            if (typeof race !== 'undefined' && race) return 'race';
+            if (typeof jail !== 'undefined' && jail) return 'jail';
+            if (typeof dodge !== 'undefined' && dodge) return 'dodge';
+            if (typeof escapeRoom !== 'undefined' && escapeRoom) return 'escape';
+            if (typeof park !== 'undefined' && park) return 'park';
+            if (typeof cake !== 'undefined' && cake) return 'cake';
+            if (typeof hub !== 'undefined' && hub) return 'hub';
+            return null;
+        }
         function openFeedback() {
+            let active = feedbackActiveMode();
+            let modesHtml = '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">' +
+                FEEDBACK_MODES.map(function (m) {
+                    return '<label style="font-size:12px; background:#f0f0f0; border-radius:4px; padding:4px 8px;">' +
+                        '<input type="checkbox" class="feedback-mode-cb" value="' + m[0] + '"' + (m[0] === active ? ' checked' : '') + '> ' + m[1] + '</label>';
+                }).join('') + '</div>';
             let html = '<div style="text-align:left;">' +
                 '<textarea id="feedback-text" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
-                '<div style="font-size:11px; color:#999; margin-top:6px;">会顺便带上你的 ID（' + gState.id + '）和当前模式，打开 GitHub 提交页（顺手也复制了一份，没有 GitHub 账号就直接粘贴发给开发者）。</div>' +
+                '<div style="font-size:11px; color:#999; margin-top:8px;">这条反馈跟哪个/哪些模式有关？（可多选）</div>' + modesHtml +
+                '<div style="font-size:11px; color:#999; margin-top:8px;">会顺便带上你的 ID（' + gState.id + '），打开 GitHub 提交页（顺手也复制了一份，没有 GitHub 账号就直接粘贴发给开发者）。</div>' +
                 '</div>';
             showSysModal('反馈', html, [
                 { label: '提交', color: '#24292e', onClick: function () { feedbackSend(); } },
@@ -4523,11 +4602,12 @@
             let box = document.getElementById('feedback-text');
             let text = box ? box.value.trim() : '';
             if (!text) { showSysModal('提示', '写点什么再发吧', [{ label: '确定' }]); return; }
-            let meta = 'ID: ' + gState.id + '\n模式: ' + (gState.gameMode || '') + '\n时间: ' + new Date().toLocaleString();
+            let modes = Array.from(document.querySelectorAll('.feedback-mode-cb:checked')).map(function (cb) { return cb.value; });
+            let meta = 'ID: ' + gState.id + '\n模式: ' + (modes.length ? modes.join('、') : '（没选）') + '\n时间: ' + new Date().toLocaleString();
             let body = text + '\n\n——\n' + meta;
             // 顺手复制一份：没有 GitHub 账号、懒得注册的人，GitHub 页面开着不管，
             // 直接把复制好的内容粘贴发给开发者（邮件/聊天都行）就算提交成功了。
-            try { navigator.clipboard.writeText(body); } catch (e) { }
+            try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
             let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
             let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
                 '&body=' + encodeURIComponent(body) + '&labels=feedback';
@@ -4991,7 +5071,7 @@
                 },
                 label: '排位：看一眼当前隐藏分'
             },
-            { get: function () { return TEST_INFINITE_COINS; }, set: function (v) { TEST_INFINITE_COINS = v; }, label: '通用：无限金币 / 全解锁' },
+            { get: function () { return TEST_INFINITE_COINS; }, set: function (v) { TEST_INFINITE_COINS = v; }, label: '通用：无限猫盾币 / 全解锁' },
             {
                 get: function () { return BGM_ENABLED; },
                 set: function (v) {
@@ -5058,9 +5138,13 @@
             if (e.key === 't' || e.key === 'T') testPanelShow();
         });
 
-        // ══════════════ 金币 / 角色解锁 ══════════════
-        // 三个模式各有各的金币，互不通用。免费角色：寻宝队全部；惊魂夜的 4 号和 1 号；
-        // 超燃的远程和剑。其余一律 20 金币。
+        // ══════════════ 猫盾币 / 角色解锁 ══════════════
+        // 全模式通用的一个钱包（寻宝队自己的钱是另一套，不通用）。免费角色：寻宝队全部；
+        // 惊魂夜的 4 号和 1 号；超燃的远程和剑。其余一律 20 猫盾币。
+        // 猫盾币是全模式通用的唯一货币（寻宝队的钱是单独一套，不通用）——
+        // 以前寻宝队/惊魂夜/超燃解锁角色的"金币"和商店宠物/表情用的"通用币"(gems)
+        // 其实一直都是同额度发放的两份重复记账，现在合并成一份，coinsOf/coinsAdd
+        // 不再区分 mode，谁存的都是同一个池子。
         const COIN_PRICE = 20;
         const COIN_FREE = {
             night: { mi: 1, cat: 1 },
@@ -5068,14 +5152,12 @@
         };
         let TEST_INFINITE_COINS = true;   // 测试用，可以在设置面板里关掉
 
-        function coinsOf(mode) {
+        function coinsOf() {
             if (TEST_INFINITE_COINS) return 99999;
-            if (!gState.coins) gState.coins = { hunt: 0, night: 0, blaze: 0 };
-            return gState.coins[mode] || 0;
+            return gState.mcoin || 0;
         }
         function coinsAdd(mode, n) {
-            if (!gState.coins) gState.coins = { hunt: 0, night: 0, blaze: 0 };
-            gState.coins[mode] = (gState.coins[mode] || 0) + n;
+            gState.mcoin = (gState.mcoin || 0) + n;
             saveProgress();
         }
         function charOwned(mode, key) {
@@ -5086,8 +5168,8 @@
         }
         function charBuy(mode, key) {
             if (charOwned(mode, key)) return true;
-            if (coinsOf(mode) < COIN_PRICE) {
-                showSysModal('金币不够', '解锁这个角色需要 ' + COIN_PRICE + ' 金币，你现在有 ' + coinsOf(mode) + ' 个。\n打一局 +2，赢了再 +2，连胜还有额外奖励。', [{ label: '知道了' }]);
+            if (coinsOf() < COIN_PRICE) {
+                showSysModal('猫盾币不够', '解锁这个角色需要 ' + COIN_PRICE + ' 猫盾币，你现在有 ' + coinsOf() + ' 个。\n打一局 +2，赢了再 +2，连胜还有额外奖励。', [{ label: '知道了' }]);
                 return false;
             }
             coinsAdd(mode, -COIN_PRICE);
@@ -5160,8 +5242,6 @@
                 gState.streak[mode] = 0;
             }
             coinsAdd(mode, gain);
-            // 商店那份通用币跟着一起给 —— 宠物和表情花的是它，不分模式
-            gState.gems = (gState.gems || 0) + gain;
             saveProgress();
             return gain;
         }
@@ -5232,7 +5312,7 @@
             return sh;
         }
 
-        function gemsOf() { return TEST_INFINITE_COINS ? 9999 : (gState.gems || 0); }
+        function gemsOf() { return coinsOf(); }   // 宠物/表情/皮肤用的也是猫盾币，跟别的花销共用一个池子
 
         // 每个自然日第一次开局，给当前带着的宠物记一天
         function shopTickDay() {
@@ -5264,15 +5344,16 @@
 
         function shopTab(t) {
             gState.shopTab = t;
-            ['pet', 'face', 'char'].forEach(function (k) {
+            ['pet', 'face', 'char', 'skin'].forEach(function (k) {
                 let b = document.getElementById('shop-tab-' + k);
                 if (b) { b.style.background = (k === t) ? '#e6a23c' : ''; b.style.color = (k === t) ? '#fff' : ''; }
             });
             let w = document.getElementById('shop-wallet');
-            if (w) w.innerText = '通用币 ' + gemsOf() + '　（打一局 +2，赢了再 +2，连胜还有额外）';
+            if (w) w.innerText = '猫盾币 ' + coinsOf() + '　（打一局 +2，赢了再 +2，连胜还有额外）';
             let el = document.getElementById('shop-body'); if (!el) return;
             if (t === 'pet') el.innerHTML = shopPetHtml();
             else if (t === 'face') el.innerHTML = shopFaceHtml();
+            else if (t === 'skin') el.innerHTML = shopSkinHtml();
             else el.innerHTML = shopCharHtml();
         }
 
@@ -5345,17 +5426,16 @@
         function shopCharHtml() {
             let modes = [{ m: 'blaze', n: '超燃', list: BLAZE_ORDER, def: BLAZE_CHARS }];
             let out = '<div style="font-size:12px; color:#888; margin-bottom:8px; text-align:left;">' +
-                '角色花的是各模式自己的金币，不是通用币。</div>';
+                '角色花的也是猫盾币，跟宠物/表情/皮肤是同一份钱包。</div>';
             modes.forEach(function (g) {
-                out += '<div style="font-weight:bold; margin:6px 0 4px; text-align:left;">' + g.n +
-                    '　金币 ' + coinsOf(g.m) + '</div>';
+                out += '<div style="font-weight:bold; margin:6px 0 4px; text-align:left;">' + g.n + '</div>';
                 g.list.forEach(function (k) {
                     let c = g.def[k], owned = charOwned(g.m, k);
                     out += shopRow(
                         '<div style="display:flex; justify-content:space-between; align-items:center;">' +
                         '<b style="color:' + c.css + ';">' + c.name + '</b>' +
                         (owned ? '<span style="font-size:12px; color:#5cb85c;">已拥有</span>'
-                            : '<button onclick="shopBuyChar(\'' + g.m + '\',\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:#e6a23c; color:#fff; border:none;">' + COIN_PRICE + ' 金币</button>') +
+                            : '<button onclick="shopBuyChar(\'' + g.m + '\',\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:#e6a23c; color:#fff; border:none;">' + COIN_PRICE + ' 猫盾币</button>') +
                         '</div>' +
                         '<div style="font-size:11px; color:#666; margin-top:3px;">' + c.pas + '</div>');
                 });
@@ -5365,11 +5445,11 @@
 
         function shopSpend(n) {
             if (TEST_INFINITE_COINS) return true;
-            if ((gState.gems || 0) < n) {
-                showSysModal('通用币不够', '还差 ' + (n - (gState.gems || 0)) + ' 个。打一局 +2，赢了再 +2。', [{ label: '知道了' }]);
+            if (coinsOf() < n) {
+                showSysModal('猫盾币不够', '还差 ' + (n - coinsOf()) + ' 个。打一局 +2，赢了再 +2。', [{ label: '知道了' }]);
                 return false;
             }
-            gState.gems -= n; return true;
+            gState.mcoin -= n; saveProgress(); return true;
         }
 
         function shopBuyPet(k) {
@@ -6441,10 +6521,10 @@
                 let c = BLAZE_CHARS[k], on = gState.blazeChar === k, owned = charOwned('blaze', k);
                 return '<button onclick="blazePick(\'' + k + '\')" style="margin:0; padding:8px 0; font-size:14px; border:2px solid ' +
                     (on ? c.css : '#ddd') + '; color:' + (on ? c.css : (owned ? '#777' : '#bbb')) + '; background:' + (on ? '#fff' : '#fafafa') + ';">' +
-                    c.name + (owned ? '' : '<br><span style="font-size:11px; color:#e6a23c;">' + COIN_PRICE + ' 金币</span>') + '</button>';
+                    c.name + (owned ? '' : '<br><span style="font-size:11px; color:#e6a23c;">' + COIN_PRICE + ' 猫盾币</span>') + '</button>';
             }).join('');
             let cw = document.getElementById('blaze-coins');
-            if (cw) cw.innerText = '金币 ' + coinsOf('blaze') + (gState.streak && gState.streak.blaze ? '　连胜 ' + gState.streak.blaze : '');
+            if (cw) cw.innerText = '猫盾币 ' + coinsOf() + (gState.streak && gState.streak.blaze ? '　连胜 ' + gState.streak.blaze : '');
             let c = BLAZE_CHARS[gState.blazeChar];
             document.getElementById('blaze-detail').innerHTML =
                 '<b style="color:' + c.css + ';">' + kTxt('空格', '普攻') + '</b>　' + c.atk +
@@ -9667,7 +9747,7 @@
             let gain = coinsSettle('blaze', place <= 3);
             // 结算就报一个名次，别再糊一屏数字
             let txt = '<div style="font-size:34px; font-weight:bold; color:#ff9800;">第 ' + place + ' 名</div>' +
-                '<div style="color:#888; margin-top:4px;">共 ' + list.length + ' 人　金币 +' + gain + '</div>';
+                '<div style="color:#888; margin-top:4px;">共 ' + list.length + ' 人　猫盾币 +' + gain + '</div>';
             showSysModal('乱斗结束', txt, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { blazeExit(); } }]);
         }
 
@@ -9679,7 +9759,7 @@
             let mvp = blazeFfaMvp();
             let who = (mvp === blaze.me) ? '你' : (mvp.team === mine ? mvp.name + '（你队友）' : mvp.name);
             let txt = '<div style="font-size:34px; font-weight:bold; color:#ff9800;">队伍第 ' + place + ' 名</div>' +
-                '<div style="color:#888; margin-top:4px;">共 ' + list.length + ' 队　金币 +' + gain + '</div>' +
+                '<div style="color:#888; margin-top:4px;">共 ' + list.length + ' 队　猫盾币 +' + gain + '</div>' +
                 '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #eee;">' +
                 '<b style="color:#ffb300;">MVP</b>　' + who + '　' + blazeFfaScore(mvp) + ' 分' +
                 '（' + mvp.kills + '/' + mvp.assists + '/' + mvp.deaths + '）</div>' +
@@ -9726,7 +9806,7 @@
                 let gain = coinsSettle('blaze', win);
                 showSysModal(win ? '超燃 · 你赢了' : '超燃 · 你输了',
                     '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +
-                    '　　金币 +' + gain + '（共 ' + coinsOf('blaze') + '）',
+                    '　　猫盾币 +' + gain + '（共 ' + coinsOf() + '）',
                     [{ label: '返回大厅', color: '#ff5722', onClick: blazeExit }]);
                 return;
             }
@@ -10531,7 +10611,7 @@
                     let gain2 = coinsSettle('blaze', m.w === blaze.me.team);
                     showSysModal(m.w === blaze.me.team ? '超燃 · 你赢了' : '超燃 · 你输了',
                         '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +
-                        '　　金币 +' + gain2 + '（共 ' + coinsOf('blaze') + '）',
+                        '　　猫盾币 +' + gain2 + '（共 ' + coinsOf() + '）',
                         [{ label: '返回大厅', color: '#ff5722', onClick: blazeExit }]);
                 }
             }
@@ -15895,6 +15975,52 @@
             0x26c6da, 0xd4e157, 0x8d6e63, 0xec407a, 0x5c6bc0, 0x9ccc65,
             0xffa726, 0x78909c, 0x26a69a, 0xba68c8
         ];
+        // 皮肤：15 种颜色抽奖，另外掺 5 个「谢谢参与」空签，一共 20 签，抽中颜色才进口袋。
+        // 只在没有队伍含义的地方（大厅广场/竞速/松饼大作战/密室，都是靠名字认人，不靠颜色分队）
+        // 才用玩家自己选的皮肤颜色覆盖默认色；监狱救援/躲避球这种颜色代表队伍的地方不能乱套。
+        const SKIN_COLORS = RACE_COLORS.slice(0, 15);
+        const SKIN_BLANKS = 5;
+        const SKIN_PRICE = 50;
+        function mySkinColor(defaultColor) { return (gState.skinColor !== null && gState.skinColor !== undefined) ? gState.skinColor : defaultColor; }
+        function skinDraw() {
+            if (!shopSpend(SKIN_PRICE)) return;
+            let roll = Math.floor(Math.random() * (SKIN_COLORS.length + SKIN_BLANKS));
+            if (roll < SKIN_COLORS.length) {
+                let col = SKIN_COLORS[roll];
+                let already = !!(gState.skins && gState.skins[col]);
+                if (!gState.skins) gState.skins = {};
+                gState.skins[col] = true;
+                saveProgress();
+                blazeFlash(already ? '又抽到了这个颜色（已拥有）' : '抽到新皮肤颜色！');
+            } else {
+                blazeFlash('谢谢参与，这次什么都没抽到');
+            }
+            shopTab('skin');
+        }
+        function shopEquipSkin(col) {
+            if (col !== null && !(gState.skins && gState.skins[col])) return;
+            gState.skinColor = col;
+            saveProgress();
+            shopTab('skin');
+        }
+        function shopSkinHtml() {
+            let out = '<div style="font-size:12px; color:#888; margin-bottom:8px; text-align:left;">' +
+                '抽一次 ' + SKIN_PRICE + ' 猫盾币，15 种颜色里随机抽一个，另外还有 ' + SKIN_BLANKS + ' 个"谢谢参与"（不保底，抽到算白抽）。' +
+                '只换颜色，不影响任何数值；作用于大厅广场、竞速、密室、松饼大作战——监狱救援/躲避球这些颜色代表队伍的模式不受影响。</div>' +
+                '<button onclick="skinDraw()" style="width:100%; margin:0 0 10px; background:#e6a23c; color:#fff; border:none; padding:9px 0; font-size:14px;">抽一次（' + SKIN_PRICE + ' 猫盾币）</button>' +
+                '<div style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px;">';
+            SKIN_COLORS.forEach(function (col) {
+                let owned = !!(gState.skins && gState.skins[col]);
+                let on = gState.skinColor === col;
+                let hex = '#' + col.toString(16).padStart(6, '0');
+                out += '<div onclick="' + (owned ? 'shopEquipSkin(' + col + ')' : '') + '" style="cursor:' + (owned ? 'pointer' : 'default') + '; aspect-ratio:1; border-radius:8px; background:' + hex +
+                    '; opacity:' + (owned ? '1' : '0.25') + '; border:3px solid ' + (on ? '#333' : 'transparent') + '; display:flex; align-items:flex-end; justify-content:center;">' +
+                    (owned ? '' : '<span style="font-size:10px; color:#fff; background:rgba(0,0,0,.4); border-radius:3px; padding:0 3px;">未解锁</span>') + '</div>';
+            });
+            out += '</div>' +
+                (gState.skinColor !== null ? '<button onclick="shopEquipSkin(null)" style="width:100%; margin-top:10px; background:#999; color:#fff; border:none; font-size:12px; padding:6px 0;">换回默认颜色</button>' : '');
+            return out;
+        }
         function raceMakeBody(col, handRange) {
             let g = new THREE.Group();
             let mat = new THREE.MeshLambertMaterial({ color: col });
@@ -15984,7 +16110,7 @@
         }
 
         function raceMakeRacer(i, isPlayer, key) {
-            let col = RACE_COLORS[i % RACE_COLORS.length];
+            let col = isPlayer ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
             let mesh = raceMakeBody(col);
             scene.add(mesh);
             return {
@@ -18602,7 +18728,7 @@
             let n = ESCAPE.teamSize;
             for (let i = 0; i < n; i++) {
                 let isP = i === 0;
-                let mesh = raceMakeBody(0x8d6e63, 0);
+                let mesh = raceMakeBody(isP ? mySkinColor(0x8d6e63) : 0x8d6e63, 0);
                 scene.add(mesh);
                 let x = (i - (n - 1) / 2) * 10;
                 let a = {
@@ -18674,6 +18800,24 @@
             arena: { bg: '#26a69a', label: '场地大小' },
             speed: { bg: '#78909c', label: '移动速度' }
         };
+        // 部分进阶积木要花猫盾币解锁一次，解锁之后永久能用——给猫盾币一个花的地方，
+        // 也让新手先从基础积木上手，不至于一上来就被"变量/判断"这种概念绕晕。
+        const PARK_BLOCK_PRICE = { var: 30, condition: 40, turnrandom: 20 };
+        function parkBlockUnlocked(type) {
+            if (TEST_INFINITE_COINS) return true;
+            if (!PARK_BLOCK_PRICE[type]) return true;
+            return !!(gState.parkUnlocked && gState.parkUnlocked[type]);
+        }
+        function parkRenderAddTypeOptions() {
+            let sel = document.getElementById('park-add-type'); if (!sel) return;
+            let cur = sel.value;
+            Array.from(sel.options).forEach(function (opt) {
+                let price = PARK_BLOCK_PRICE[opt.value];
+                let base = opt.textContent.replace(/（需解锁.*?）/, '');
+                opt.textContent = base + (price && !parkBlockUnlocked(opt.value) ? '（需解锁 ' + price + ' 猫盾币）' : '');
+            });
+            sel.value = cur;
+        }
         const PARK_BUILTIN = {
             easy: {
                 name: '鱼干捕手·简单', blocks: [
@@ -18755,6 +18899,22 @@
 
         function parkAddBlock() {
             let type = document.getElementById('park-add-type').value;
+            if (!parkBlockUnlocked(type)) {
+                let price = PARK_BLOCK_PRICE[type];
+                showSysModal('这块积木还没解锁', '解锁「' + (PARK_BLOCK_META[type] || {}).label + '」需要 ' + price + ' 猫盾币，你现在有 ' + coinsOf() + ' 个。解锁之后这块积木永久能用。', [
+                    { label: '解锁', color: '#e6a23c', onClick: function () {
+                        if (coinsOf() < price) { showSysModal('猫盾币不够', '还差 ' + (price - coinsOf()) + ' 个。', [{ label: '知道了' }]); return; }
+                        coinsAdd(null, -price);
+                        if (!gState.parkUnlocked) gState.parkUnlocked = {};
+                        gState.parkUnlocked[type] = true;
+                        saveProgress();
+                        parkRenderAddTypeOptions();
+                        blazeFlash('解锁成功！');
+                    } },
+                    { label: '算了' }
+                ]);
+                return;
+            }
             let d = {
                 spawn: { type: 'spawn', color: 'orange', every: 1.5 },
                 fall: { type: 'fall', color: 'orange', speed: 8 },
@@ -18910,7 +19070,7 @@
             if (park.program.creatorId && park.program.creatorId !== gState.id && roomPeers[park.program.creatorId]) {
                 bc.postMessage({ type: 'PARK_CREDIT', target: '*', to: park.program.creatorId, amount: Math.round(reward * 0.5) });
             }
-            showSysModal(won ? '通关！' : '没能达成目标', '获得 ' + reward + ' 猫盾乐园币' + (won ? '' : '（安慰奖）'),
+            showSysModal(won ? '通关！' : '没能达成目标', '获得 ' + reward + ' 猫盾币' + (won ? '' : '（安慰奖）'),
                 [{ label: '返回大厅', color: '#5cb85c', onClick: function () { parkExit(); } }]);
         }
         function parkTick(dt) {
@@ -19006,7 +19166,7 @@
             scene.background = new THREE.Color(0x81d4fa);
             scene.fog = new THREE.FogExp2(0x81d4fa, 0.002);
 
-            let mesh = raceMakeBody(0xffca28, 0);
+            let mesh = raceMakeBody(mySkinColor(0xffca28), 0);
             scene.add(mesh);
             let compiled = parkCompile(program.blocks);
             park = {
@@ -19392,7 +19552,7 @@
             let pool = HUB_BOT_NAMES.slice();
             for (let i = 0; i < n; i++) {
                 let isP = (i === 0);
-                let col = RACE_COLORS[i % RACE_COLORS.length];
+                let col = isP ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
                 let mesh = raceMakeBody(col, CAKE.handRange);
                 scene.add(mesh);
                 let sp = spawns[i];
@@ -19708,7 +19868,7 @@
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
 
-            let mesh = raceMakeBody(0x66bb6a, 0);
+            let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0);
             scene.add(mesh);
             hub = {
                 meshes: [], wanderers: [], party: [], nearby: null,
