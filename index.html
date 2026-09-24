@@ -885,6 +885,7 @@
                 <button id="btn-mode-dodge" onclick="selectGameMode('dodge')" style="margin:0; font-size:11px; padding:7px 2px;">躲避球</button>
                 <button id="btn-mode-escape" onclick="selectGameMode('escape')" style="margin:0; font-size:11px; padding:7px 2px;">密室</button>
                 <button id="btn-mode-park" onclick="selectGameMode('park')" style="margin:0; font-size:11px; padding:7px 2px;">猫盾乐园</button>
+                <button id="btn-mode-cake" onclick="selectGameMode('cake')" style="margin:0; font-size:11px; padding:7px 2px;">松饼大作战</button>
             </div>
 
         <div id="hunt-only">
@@ -1031,6 +1032,17 @@
                 <input id="park-import-code" placeholder="粘贴分享码" style="flex:1; margin:0; padding:6px; font-size:12px;">
                 <button onclick="parkImportPlay()" style="margin:0; background:#8d6e63; color:#fff; border:none; padding:6px 12px; font-size:13px;">玩</button>
             </div>
+        </div>
+
+        <div id="cake-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff8e1; border:1px solid #ffca28; border-radius:6px; padding:12px 14px; text-align:left;">
+            <div style="font-size:14px; color:#f57f17; font-weight:bold; margin-bottom:2px;">松饼大作战 · 自由混战</div>
+            <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
+                不分队伍，人人都能抓人：<b>面朝对方</b>又让对方进了你「手」的范围，对方就当场出局。<br>
+                最后剩下的那一个赢；捡到地上的增益能占点便宜——加速、伸长手的范围、或者一次护盾免疫被抓。<br>
+                时间到还没分胜负，比谁拍出局的人多。<br>
+                空格/触屏「跳」可以跳跃。
+            </div>
+            <button onclick="cakeBegin()" style="width:100%; margin:0; background:#f57f17; color:#fff; border:none; padding:10px 0; font-size:15px;">开始</button>
         </div>
 
         <div id="blaze-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff3e0; border:1px solid #ffcc80; border-radius:6px; padding:12px 14px; text-align:left;">
@@ -1723,6 +1735,7 @@
             else if (m === 'dodge') dodgeBegin(false);
             else if (m === 'escape') escapeBegin();
             else if (m === 'park') parkBegin(PARK_BUILTIN.easy);
+            else if (m === 'cake') cakeBegin();
         }
 
         let friends = [];
@@ -2113,6 +2126,7 @@
                 (typeof dodge !== 'undefined' && dodge && !dodge.over) ||
                 (typeof escapeRoom !== 'undefined' && escapeRoom && !escapeRoom.over) ||
                 (typeof park !== 'undefined' && park && !park.over) ||
+                (typeof cake !== 'undefined' && cake && !cake.over) ||
                 (typeof hub !== 'undefined' && hub));
         }
         function chatVisTick() {
@@ -2256,7 +2270,7 @@
             gState.gameMode = m;
             refreshRankUI();
             renderDailyModBanner();
-            let isHunt = m === 'hunt', isNight = m === 'night', isBlaze = m === 'blaze', isRace = m === 'race', isJail = m === 'jail', isDodge = m === 'dodge', isEscape = m === 'escape', isPark = m === 'park';
+            let isHunt = m === 'hunt', isNight = m === 'night', isBlaze = m === 'blaze', isRace = m === 'race', isJail = m === 'jail', isDodge = m === 'dodge', isEscape = m === 'escape', isPark = m === 'park', isCake = m === 'cake';
             document.getElementById('hunt-only').classList.toggle('hidden', !isHunt);
             document.getElementById('night-only').classList.toggle('hidden', !isNight);
             document.getElementById('blaze-only').classList.toggle('hidden', !isBlaze);
@@ -2265,7 +2279,8 @@
             document.getElementById('dodge-only').classList.toggle('hidden', !isDodge);
             document.getElementById('escape-only').classList.toggle('hidden', !isEscape);
             document.getElementById('park-only').classList.toggle('hidden', !isPark);
-            document.getElementById('lobby-title').innerText = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : '超燃');
+            document.getElementById('cake-only').classList.toggle('hidden', !isCake);
+            document.getElementById('lobby-title').innerText = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : '超燃');
             if (isNight) selectNightChar(gState.nightChar || 'cat');
             if (isBlaze) blazeRenderChars();
             if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsOf('park'); parkRenderBlocks(); }
@@ -2281,7 +2296,8 @@
             ['btn-mode-jail', isJail, '#4527a0'],
             ['btn-mode-dodge', isDodge, '#e65100'],
             ['btn-mode-escape', isEscape, '#2e7d32'],
-            ['btn-mode-park', isPark, '#ad1457']].forEach(function (e) {
+            ['btn-mode-park', isPark, '#ad1457'],
+            ['btn-mode-cake', isCake, '#f57f17']].forEach(function (e) {
                 let b = document.getElementById(e[0]); if (!b) return;
                 b.style.borderColor = e[1] ? e[2] : '#ccc';
                 b.style.color = e[1] ? e[2] : '#333';
@@ -4435,6 +4451,14 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-24-cake-mode', date: '2026-09-24', title: '新模式：松饼大作战（第一步） + 跑酷手感修复', items: [
+                    '新增"松饼大作战"：不分队伍的自由混战抓人，面朝对方并让对方进入你手的范围就能把他拍出局，最后剩下的人赢。地图上会刷新加速/长手/护盾三种短效增益。（这版先做玩法，猫的建模换成松饼形状留到下一步。）',
+                    '修好大厅跑酷摔得快时会直接穿模摔穿台子的问题；加上了跳跃缓冲和土狼时间，不用再卡着刚好落地/离台那一帧按空格才跳得起来。',
+                    '大厅跑酷台子的侧面现在会真的挡人，不会再直接穿过去。',
+                    '大厅路人的名字换了一批更少见的，不容易跟真玩家自己取的昵称撞上。'
+                ]
+            },
+            {
                 id: '2026-09-20-fixes', date: '2026-09-20', title: '小修复', items: [
                     '修好了一个会让大厅界面卡在最上面、退不出去的显示问题（四角布局引入的 CSS 优先级冲突）。',
                     '大厅广场的跑酷台阶原来紧贴在一起不用跳，现在改成真的有间隙要跳过去；助跑跳也修好了（原来贴着台阶边缘按跳会直接掉下去，现在能正常跳过空隙）。'
@@ -6229,6 +6253,7 @@
         let escapeRoom = null;  // 合作密室的状态（不叫 escape，那是浏览器自带的全局函数名）
         let park = null;        // 猫盾乐园当前在玩的小游戏
         let hub = null;         // 大厅广场（跑酷+遇到人组队）的状态
+        let cake = null;        // 松饼大作战（自由混战抓人）的状态
 
         // ── 竞速的轮间三选一 ──
         // 每轮开跑前抽三张，**只在这一轮生效**，下一轮重新抽。
@@ -19029,6 +19054,397 @@
         }
 
         // ══════════════════════════════════════════════════════════
+        //  松饼大作战（原代号 "I'm a pancake"）：自由混战抓人，不分队伍——
+        //  面朝谁、又让谁进了你手的范围，谁就当场出局，最后剩下的人赢。
+        //  地图上会刷新几种短效增益，捡到能占点便宜。
+        //  这版先把玩法本身做完；猫的建模/手型换成松饼那批参考图留到下一步再做，
+        //  这里先照旧用猫盾的身体（raceMakeBody）。
+        // ══════════════════════════════════════════════════════════
+        const CAKE = {
+            playerCount: 8,       // 1 真人 + 7 个 AI 一起下场
+            matchTime: 210,       // 3 分半，时间到还没分出胜负就按拍出局数判
+            handRange: 9,         // 手的判定范围，常驻显示在脚下
+            tagConeDeg: 65,       // 朝向锥角：目标得在你面前这个夹角内，纯贴背后不算抓
+            jumpV: 44, gravity: 150,
+            moveSpeed: 40,
+            camBack: 30, camUp: 20,
+            buffEvery: 9, buffLifespan: 22, buffMaxOnField: 4,
+            buffSpeedMul: 1.35, buffSpeedT: 8,
+            buffReachAdd: 5, buffReachT: 8,
+            buffShieldT: 6,
+            aiVision: 60, aiPanicRange: 16
+        };
+        const CAKE_BUFF_KINDS = [
+            { key: 'speed', label: '加速', color: 0xffee58 },
+            { key: 'reach', label: '长手', color: 0x64b5f6 },
+            { key: 'shield', label: '护盾', color: 0x81c784 }
+        ];
+        const CAKE_LINES = {
+            catch: ['拍到一个！', '出局一个，稳了', '别想跑']
+        };
+
+        function cakeBuffMesh(kind) {
+            let g = new THREE.Group();
+            let m = new THREE.Mesh(new THREE.OctahedronGeometry(3.4, 0),
+                new THREE.MeshLambertMaterial({ color: kind.color, emissive: kind.color }));
+            m.position.y = 5; g.add(m);
+            g.userData.spin = m;
+            return g;
+        }
+        function cakeSpawnBuff() {
+            if (!cake) return;
+            let kind = CAKE_BUFF_KINDS[Math.floor(Math.random() * CAKE_BUFF_KINDS.length)];
+            let cx = Math.floor(mSize / 2 + (Math.random() - 0.5) * mSize * 0.7);
+            let cz = Math.floor(mSize / 2 + (Math.random() - 0.5) * mSize * 0.7);
+            let c = jailOpenCellsNear(cx, cz, 1)[0];
+            let mesh = cakeBuffMesh(kind);
+            mesh.position.set(c.x * TILE, 0, c.z * TILE);
+            scene.add(mesh);
+            cake.buffs.push({ mesh: mesh, kind: kind, x: c.x * TILE, z: c.z * TILE, life: CAKE.buffLifespan });
+        }
+        function cakeApplyBuff(a, kind) {
+            if (kind.key === 'speed') a.speedT = CAKE.buffSpeedT;
+            else if (kind.key === 'reach') a.reachT = CAKE.buffReachT;
+            else if (kind.key === 'shield') a.shieldT = CAKE.buffShieldT;
+            cakeBurst(a.p.x, a.p.z, kind.color);
+            if (a.isPlayer) blazeFlash('捡到增益：' + kind.label + '！');
+        }
+        function cakeBuffTick(dt) {
+            cake.buffTimer -= dt;
+            if (cake.buffTimer <= 0 && cake.buffs.length < CAKE.buffMaxOnField) {
+                cakeSpawnBuff(); cake.buffTimer = CAKE.buffEvery;
+            }
+            cake.buffs = cake.buffs.filter(function (b) {
+                b.mesh.userData.spin.rotation.y += dt * 2;
+                b.life -= dt;
+                if (b.life <= 0) { scene.remove(b.mesh); return false; }
+                let hit = cake.actors.find(function (a) { return !a.out && Math.hypot(a.p.x - b.x, a.p.z - b.z) < 6; });
+                if (hit) { cakeApplyBuff(hit, b.kind); scene.remove(b.mesh); return false; }
+                return true;
+            });
+        }
+        function cakeHandRange(a) { return CAKE.handRange + (a.reachT > 0 ? CAKE.buffReachAdd : 0); }
+        function cakeSpeedMul(a) { return a.speedT > 0 ? CAKE.buffSpeedMul : 1; }
+
+        function cakeBurst(x, z, color) {
+            if (!cake) return;
+            let mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+            let m = new THREE.Mesh(new THREE.RingGeometry(4, 5.5, 18), mat);
+            m.rotation.x = -Math.PI / 2; m.position.set(x, 1.2, z);
+            scene.add(m);
+            cake.fx.push({ o: m, mat: mat, t: 0.5, life: 0.5, r0: 5, r1: 22 });
+        }
+        function cakeFxTick(dt) {
+            cake.fx = cake.fx.filter(function (f) {
+                f.t -= dt;
+                if (f.t <= 0) { scene.remove(f.o); f.mat.dispose(); return false; }
+                let frac = 1 - f.t / f.life;
+                let r = f.r0 + (f.r1 - f.r0) * frac;
+                f.o.scale.set(r / f.r0, r / f.r0, 1);
+                f.mat.opacity = 0.85 * (1 - frac * frac);
+                return true;
+            });
+        }
+
+        // 玩家移动：跟监狱救援一套手感（camera 朝向 + WASD/摇杆 + 轻微惯性），
+        // 但「面朝」直接跟着镜头走、不等移动才转身——这游戏靠面朝谁判定抓人，
+        // 站着不动也得能瞄准。
+        function cakePlayerMove(a, dt) {
+            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
+            a.facing = Math.atan2(dir.x, dir.z);
+            let side = new THREE.Vector3(-dir.z, 0, dir.x);
+            let fwd = 0, strafe = 0;
+            if (keys['w']) fwd += 1; if (keys['s']) fwd -= 1;
+            if (keys['a']) strafe -= 1; if (keys['d']) strafe += 1;
+            if (fwd === 0 && strafe === 0) { fwd = -tMove.y; strafe = tMove.x; }
+            let wx = 0, wz = 0;
+            if (fwd || strafe) {
+                let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe, n = Math.hypot(mx, mz) || 1;
+                let sp = CAKE.moveSpeed * cakeSpeedMul(a) * DAILY_MOD.speedMul;
+                wx = mx / n * sp; wz = mz / n * sp;
+            }
+            let rate = (wx || wz) ? 1 / BLAZE.accel : 1 / BLAZE.brake;
+            let k = Math.min(1, rate * dt);
+            a.mvx = (a.mvx || 0) + (wx - (a.mvx || 0)) * k;
+            a.mvz = (a.mvz || 0) + (wz - (a.mvz || 0)) * k;
+            if (Math.abs(a.mvx) >= 0.4 || Math.abs(a.mvz) >= 0.4) blazeStep(a, a.mvx * dt, a.mvz * dt);
+            else { a.mvx = 0; a.mvz = 0; }
+
+            let onGround = a.p.y <= 0.01;
+            if ((keys[' '] || touchBtn.jump) && onGround) a.vy = CAKE.jumpV * DAILY_MOD.jumpMul;
+            keys[' '] = false; touchBtn.jump = false;
+            a.vy = (a.vy || 0) - CAKE.gravity * dt;
+            a.p.y += a.vy * dt;
+            if (a.p.y < 0) { a.p.y = 0; a.vy = 0; }
+        }
+
+        // 判断 from 是否面朝 (tx,tz)——跟 cakeTagCheck 用的同一套朝向锥判定，
+        // AI 拿它来分辨"那家伙是真要来抓我了"还是"只是恰好离得近"。
+        function cakeFacingAt(from, tx, tz) {
+            let dx = tx - from.p.x, dz = tz - from.p.z, n = Math.hypot(dx, dz) || 1;
+            let fx = Math.sin(from.facing || 0), fz = Math.cos(from.facing || 0);
+            return (dx / n) * fx + (dz / n) * fz > Math.cos(CAKE.tagConeDeg * Math.PI / 180);
+        }
+        // 没人真的要抓自己的时候就主动追最近的目标——不然大家都在安全距离外
+        // 互相盯着，永远不会有人真正凑近，一整局都抓不到人。
+        // 只有当最近的人已经贴到手范围附近、又正好面朝自己（真的要挨抓了）才会跑；
+        // 朝向直接用这一步真实挪动的方向算，不依赖 mvx/mvz（那两个只有玩家会更新）。
+        function cakeAi(a, dt) {
+            a.aiT -= dt;
+            if (a.aiT <= 0) a.aiT = 0.25 + Math.random() * 0.35;
+            let live = cake.actors.filter(function (x) { return !x.out; });
+            let threat = null, threatD = CAKE.aiVision;
+            live.forEach(function (b) {
+                if (b === a) return;
+                let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
+                if (d < threatD) { threatD = d; threat = b; }
+            });
+            let tx = a.p.x, tz = a.p.z;
+            let dangerous = threat && !(a.shieldT > 0) &&
+                threatD < cakeHandRange(threat) * 1.4 && cakeFacingAt(threat, a.p.x, a.p.z);
+            if (dangerous) {
+                let dx = a.p.x - threat.p.x, dz = a.p.z - threat.p.z, n = Math.hypot(dx, dz) || 1;
+                tx = a.p.x + dx / n * 40; tz = a.p.z + dz / n * 40;
+            } else if (threat) {
+                tx = threat.p.x; tz = threat.p.z;
+            } else {
+                let buff = null, bestD = 90;
+                cake.buffs.forEach(function (b) {
+                    let d = Math.hypot(a.p.x - b.x, a.p.z - b.z);
+                    if (d < bestD) { bestD = d; buff = b; }
+                });
+                if (buff) { tx = buff.x; tz = buff.z; }
+                else {
+                    if (!a.wanderT || a.wanderT <= 0) {
+                        a.wanderTx = a.p.x + (Math.random() - 0.5) * 120;
+                        a.wanderTz = a.p.z + (Math.random() - 0.5) * 120;
+                        a.wanderT = 1.5 + Math.random() * 2;
+                    }
+                    a.wanderT -= dt;
+                    tx = a.wanderTx; tz = a.wanderTz;
+                }
+            }
+            let px0 = a.p.x, pz0 = a.p.z;
+            blazeAdvance(a, tx, tz, dt);
+            let ddx = a.p.x - px0, ddz = a.p.z - pz0;
+            if (Math.hypot(ddx, ddz) > 0.01) a.facing = Math.atan2(ddx, ddz);
+
+            a.vy = (a.vy || 0) - CAKE.gravity * dt;
+            a.p.y += a.vy * dt;
+            if (a.p.y < 0) { a.p.y = 0; a.vy = 0; }
+        }
+
+        // 抓人：谁进了别人的手范围、又被那个人面朝着，就当场出局。
+        // live 是这一帧开始时的快照，但 a.out 是共享对象上的实时字段——
+        // 一旦被判出局，同一帧后面的检查会立刻看到，不会一帧内被两个人重复计一次。
+        function cakeTagCheck() {
+            let live = cake.actors.filter(function (a) { return !a.out; });
+            let coneCos = Math.cos(CAKE.tagConeDeg * Math.PI / 180);
+            live.forEach(function (b) {
+                if (b.out) return;
+                live.forEach(function (a) {
+                    if (a === b || a.out || b.out) return;
+                    let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
+                    if (d > cakeHandRange(b)) return;
+                    let dx = (a.p.x - b.p.x) / (d || 1), dz = (a.p.z - b.p.z) / (d || 1);
+                    let fx = Math.sin(b.facing || 0), fz = Math.cos(b.facing || 0);
+                    if (dx * fx + dz * fz < coneCos) return;
+                    cakeTagOut(a, b);
+                });
+            });
+        }
+        function cakeTagOut(victim, tagger) {
+            victim.out = true;
+            tagger.kills = (tagger.kills || 0) + 1;
+            victim.mesh.visible = false;
+            cakeBurst(victim.p.x, victim.p.z, 0xff7043);
+            if (victim.isPlayer) blazeFlash('你被 ' + tagger.name + ' 拍出局了！');
+            else if (tagger.isPlayer) blazeFlash('你把 ' + victim.name + ' 拍出局了！');
+            else aiSay(tagger, tagger.name, 'catch', CAKE_LINES.catch);
+            cakeCheckWin();
+        }
+        function cakeCheckWin() {
+            if (!cake || cake.over) return;
+            let live = cake.actors.filter(function (a) { return !a.out; });
+            if (live.length <= 1) cakeEndMatch(live[0] || null, '只剩一位没被拍出局。');
+        }
+        function cakeTimeUp() {
+            let best = null;
+            cake.actors.forEach(function (a) {
+                if (!best) { best = a; return; }
+                let ak = a.kills || 0, bk = best.kills || 0;
+                if (ak > bk || (ak === bk && !a.out && best.out)) best = a;
+            });
+            cakeEndMatch(best, '时间到，按拍出局数和存活情况判定。');
+        }
+        function cakeEndMatch(winner, reason) {
+            if (!cake || cake.over) return;
+            cake.over = true;
+            let me = cake.me;
+            let text = (reason ? reason + '<br>' : '') + '你一共拍出局 ' + (me.kills || 0) + ' 人。';
+            let title = !winner ? '平局' : (winner === me ? '你赢了！' : winner.name + ' 获胜');
+            showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { cakeExit(); } }]);
+        }
+
+        function cakeTouchUI(on) {
+            ['blaze-atk-btn', 'blaze-skill1-btn', 'blaze-skill2-btn', 'blaze-card-btn',
+                'race-dash-btn', 'race-skill-btn', 'race-item-btn', 'run-btn'].forEach(function (id) {
+                    let e = document.getElementById(id); if (e) e.style.display = 'none';
+                });
+            let pad = (gState.control === 'pad');
+            let jb = document.getElementById('race-jump-btn');
+            if (jb) jb.style.display = (on && pad) ? 'flex' : 'none';
+            let stats = document.getElementById('blaze-stats-btn'); if (stats) stats.style.display = 'none';
+            let skillbar = document.getElementById('blaze-skillbar'); if (skillbar) skillbar.innerHTML = '';
+            let skillTxt = document.getElementById('blaze-skill'); if (skillTxt) skillTxt.innerText = '';
+            document.getElementById('blaze-bottom').style.display = on ? '' : 'none';
+            let cross = document.getElementById('blaze-crosshair-anchor');
+            if (cross && cross.previousElementSibling) cross.previousElementSibling.style.display = on ? 'none' : '';
+            let ex = document.getElementById('blaze-exit-btn');
+            if (ex) ex.onclick = on ? cakeExit : blazeExit;
+            ['blaze-stats', 'blaze-perk', 'blaze-ffa-cards'].forEach(function (id) {
+                let e = document.getElementById(id); if (e && on) e.classList.add('hidden');
+            });
+        }
+        function cakeHud() {
+            let me = cake.me;
+            let live = cake.actors.filter(function (a) { return !a.out; }).length;
+            let remain = Math.max(0, CAKE.matchTime - cake.clock);
+            document.getElementById('blaze-score').innerText = '存活 ' + live + ' / ' + cake.actors.length + '　' + Math.ceil(remain) + 's';
+            document.getElementById('blaze-round').innerText =
+                '松饼大作战　面朝对方并进入手的范围即可拍出局，最后剩下的人赢　已拍出局 ' + (me.kills || 0) + ' 人' +
+                (me.out ? '　你已出局，正在观战' : '') +
+                (me.shieldT > 0 ? '　护盾 ' + me.shieldT.toFixed(1) + 's' : '') +
+                (me.speedT > 0 ? '　加速中' : '') +
+                (me.reachT > 0 ? '　长手中' : '');
+            document.getElementById('blaze-roster').innerHTML = '';
+            let bar = document.getElementById('blaze-hpbar');
+            bar.style.width = '100%'; bar.style.background = '#66bb6a';
+            document.getElementById('blaze-hptxt').innerText = '存活 ' + live + ' 人';
+        }
+        function cakeCameraPos(me) {
+            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
+            if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1); else dir.normalize();
+            let back = CAKE.camBack;
+            for (let t = 0.2; t <= 1; t += 0.2) {
+                let tx = me.p.x - dir.x * back * t, tz = me.p.z - dir.z * back * t;
+                if (blazeBlocked(tx, tz, 0)) { back = back * Math.max(0, t - 0.2); break; }
+            }
+            return { x: me.p.x - dir.x * back, y: me.p.y + CAKE.camUp, z: me.p.z - dir.z * back };
+        }
+        function cakeTick(dt) {
+            cake.clock += dt;
+            cake.actors.forEach(function (a) {
+                if (a.out) { a.spd = 0; return; }
+                let px0 = a.p.x, pz0 = a.p.z;
+                if (a.isPlayer) cakePlayerMove(a, dt); else cakeAi(a, dt);
+                a.spd = Math.hypot(a.p.x - px0, a.p.z - pz0) / dt;
+                if (a.speedT > 0) a.speedT -= dt;
+                if (a.reachT > 0) a.reachT -= dt;
+                if (a.shieldT > 0) a.shieldT -= dt;
+            });
+            cakeTagCheck();
+            cakeBuffTick(dt);
+            cakeFxTick(dt);
+            cake.actors.forEach(function (a) {
+                a.mesh.position.set(a.p.x, a.p.y, a.p.z);
+                if (a.out) return;
+                a.mesh.rotation.y = a.facing || 0;
+                let run = Math.min(1, (a.spd || 0) / CAKE.moveSpeed);
+                a.animT = (a.animT || 0) + dt * (2 + run * 16);
+                let u = a.mesh.userData;
+                if (u.legs) { u.legs[0].rotation.x = Math.sin(a.animT) * 0.9 * run; u.legs[1].rotation.x = -Math.sin(a.animT) * 0.9 * run; }
+                if (u.arms) {
+                    if (a.gestureT > 0) { a.gestureT -= dt; bodyGesture(u, a.gestureKind, Math.max(0, a.gestureT) / 0.35); }
+                    else { u.arms[0].rotation.x = -Math.sin(a.animT) * 0.7 * run; u.arms[1].rotation.x = Math.sin(a.animT) * 0.7 * run; }
+                }
+                if (u.reach) u.reach.material.opacity = a.reachT > 0 ? 0.7 : 0.35;
+                if (u.ring) u.ring.material.color.setHex(a.shieldT > 0 ? 0x81c784 : a.col);
+            });
+            let me = cake.me;
+            let camPos = cakeCameraPos(me);
+            camera.position.set(camPos.x, camPos.y, camPos.z);
+            if (!cake.over && cake.clock >= CAKE.matchTime) cakeTimeUp();
+            cakeHud();
+            renderer.render(scene, camera);
+        }
+        function cakeLoop() {
+            if (!cake) return;
+            let now = performance.now();
+            let dt = Math.min(0.05, (now - cake.last) / 1000);
+            cake.last = now;
+            if (!cake.over) cakeTick(dt);
+            cake.raf = requestAnimationFrame(cakeLoop);
+        }
+        function cakeBegin() {
+            nav('none');
+            document.getElementById('ui-layer').classList.add('hidden');
+            document.getElementById('night-hud').classList.add('hidden');
+            document.getElementById('blaze-hud').classList.remove('hidden');
+            let pe = document.getElementById('blaze-perk'); if (pe) pe.classList.add('hidden');
+            if (blaze) { try { blazeExit(); } catch (e) { } }
+            if (race) { try { raceExit(); } catch (e) { } }
+            if (jail) { try { jailExit(); } catch (e) { } }
+            if (dodge) { try { dodgeExit(); } catch (e) { } }
+            if (escapeRoom) { try { escapeExit(); } catch (e) { } }
+            if (park) { try { parkExit(); } catch (e) { } }
+            ensureScene();
+            scene.background = new THREE.Color(0xfff3cd);
+            scene.fog = new THREE.FogExp2(0xfff3cd, 0.0012);
+            blazeBuildArena(true, false, false);
+
+            let n = CAKE.playerCount;
+            let center = Math.floor(mSize / 2);
+            let spawns = jailOpenCellsNear(center, center, n);
+            cake = { over: false, clock: 0, actors: [], fx: [], buffs: [], buffTimer: CAKE.buffEvery * 0.4, last: performance.now(), raf: null };
+
+            let pool = HUB_BOT_NAMES.slice();
+            for (let i = 0; i < n; i++) {
+                let isP = (i === 0);
+                let col = RACE_COLORS[i % RACE_COLORS.length];
+                let mesh = raceMakeBody(col, CAKE.handRange);
+                scene.add(mesh);
+                let sp = spawns[i];
+                let name = isP ? (gState.id || '你') : (pool.length ? pool.splice(Math.floor(Math.random() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
+                let a = {
+                    idx: i, isPlayer: isP, col: col, name: name,
+                    p: new THREE.Vector3(sp.x * TILE, 0, sp.z * TILE), facing: Math.random() * Math.PI * 2,
+                    floor: 0, mvx: 0, mvz: 0, vy: 0, out: false, kills: 0,
+                    speedT: 0, reachT: 0, shieldT: 0, gestureT: 0, gestureKind: null,
+                    mesh: mesh, aiT: Math.random() * 0.5, animT: 0
+                };
+                cake.actors.push(a);
+            }
+            cake.me = cake.actors[0];
+            camera.rotation.set(0, Math.random() * Math.PI * 2, 0);
+
+            document.body.onmousedown = function (e) {
+                if (!cake || cake.over) return;
+                if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
+                if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } }
+            };
+            document.body.onmouseup = null;
+            cakeTouchUI(true);
+            bgmStart();
+            cakeLoop();
+        }
+        function cakeExit() {
+            if (!cake) return;
+            cake.over = true;
+            if (cake.raf) cancelAnimationFrame(cake.raf);
+            if (document.pointerLockElement) document.exitPointerLock();
+            cake.actors.forEach(function (a) { scene.remove(a.mesh); });
+            cake.buffs.forEach(function (b) { scene.remove(b.mesh); });
+            cake.fx.forEach(function (f) { scene.remove(f.o); f.mat.dispose(); });
+            cake = null;
+            cakeTouchUI(false);
+            bgmStop();
+            document.body.onmousedown = null;
+            document.getElementById('blaze-hud').classList.add('hidden');
+            nav('screen-lobby'); selectGameMode('cake');
+        }
+
+        // ══════════════════════════════════════════════════════════
         //  大厅广场：进游戏前的一个可以走来走去的 3D 空间，边上搭了一小段
         //  跑酷，还有几个 AI 路人在晃悠——凑近谁都会弹出「组队」，是真人
         //  好友（同房间里认识的）还能顺手「加好友」。没有服务器存不了全网
@@ -19067,9 +19483,13 @@
             let half = HUB.plazaHalf;
             wall(0, -half, half * 2, 2); wall(0, half, half * 2, 2); wall(-half, 0, 2, half * 2); wall(half, 0, 2, half * 2);
         }
-        // 路人名字要像真玩家会取的 ID，不是"路人猫盾A"这种一看就是机器人的占位名。
+        // 路人名字要像真玩家会取的 ID，不是"路人猫盾A"这种一看就是机器人的占位名；
+        // 同时尽量挑生僻/少见的组合，避免正好跟真玩家自己取的昵称撞名。
         const HUB_BOT_NAMES = ['小鱼干', '摸鱼冠军', '深夜猫盾', '打工猫', '半糖去冰', '橘子汽水',
-            '一只咸鱼', '桃子罐头', '奶茶不加糖', '晚风', '路过的猫', '装睡大师', '柠檬味的风', '今天也很困'];
+            '一只咸鱼', '桃子罐头', '奶茶不加糖', '晚风', '路过的猫', '装睡大师', '柠檬味的风', '今天也很困',
+            '第九颗纽扣', '会漏电的猫', '过期薯片', '拖鞋去哪了', '猫盾守夜人', '芝士味叹气',
+            '掉线的云', '第三只手套', '硬币的反面', '发霉的勇气', '倒着走的钟', '半只耳朵',
+            '不想改名的猫', '塑料袋在飞', '错位的拼图', '偷懒的齿轮', '融化的雪糕棍', '生锈的闹钟'];
         function hubSpawnWanderers() {
             let pool = HUB_BOT_NAMES.slice();
             for (let i = 0; i < HUB.wanderCount; i++) {
@@ -19114,25 +19534,48 @@
             if (keys['a']) strafe -= 1; if (keys['d']) strafe += 1;
             if (fwd === 0 && strafe === 0) { fwd = -tMove.y; strafe = tMove.x; }
 
+            let prevY = hub.p.y;
             // 起跳判定要用「移动前」的脚下位置：不然贴着台阶边缘按跳的时候，
             // 这一帧正好走出台阶范围、地面高度瞬间归零，会被当成已经悬空、跳跃失败——
             // 变成边缘按跳没反应，得往回退一步才跳得动，助跑跳完全跳不起来。
             let curGroundY = hubGroundYAt(hub.p.x, hub.p.z, hub.p.y);
             let onGround = hub.p.y <= curGroundY + 0.5;
-            if ((keys[' '] || touchBtn.jump) && onGround) hub.vy = HUB.jumpV;
+            let now = performance.now();
+            if (onGround) hub.lastGroundedAt = now;
+            if (keys[' '] || touchBtn.jump) hub.lastJumpPressAt = now;
             keys[' '] = false; touchBtn.jump = false;
+            // 土狼时间 + 跳跃缓冲：不用卡着刚好落地/离台那一帧按空格才跳得起来——
+            // 边缘掉落后 120ms 内、或提前按了跳跃键 150ms 内落地，都算数，手感才不涩。
+            let canJump = (now - (hub.lastGroundedAt || -9999) <= 120) && (hub.vy || 0) <= 0;
+            let wantsJump = (now - (hub.lastJumpPressAt || -9999)) <= 150;
+            if (canJump && wantsJump) {
+                hub.vy = HUB.jumpV;
+                hub.lastJumpPressAt = -9999; hub.lastGroundedAt = -9999;
+            }
 
+            let newX = hub.p.x, newZ = hub.p.z;
             if (fwd || strafe) {
                 let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe, n = Math.hypot(mx, mz) || 1;
-                hub.p.x += mx / n * HUB.moveSpeed * dt; hub.p.z += mz / n * HUB.moveSpeed * dt;
+                newX = hub.p.x + mx / n * HUB.moveSpeed * dt; newZ = hub.p.z + mz / n * HUB.moveSpeed * dt;
                 hub.faceDir = { x: mx / n, z: mz / n };
             }
+            // 台子侧面要当墙挡住，不然朝台子横着走/半空中蹭到侧面会直接穿模过去——
+            // 只在人确实比台面矮一截时才挡（不是正要落到台子上那一下，留点余量避免误挡）。
+            let blockedBySide = false;
+            for (let i = 0; i < hub.platforms.length; i++) {
+                let p = hub.platforms[i], pad = 1.1;
+                if (Math.abs(newX - p.x) < p.half + pad && Math.abs(newZ - p.z) < p.half + pad &&
+                    prevY < p.y - 1.2 && prevY > p.y - 6) { blockedBySide = true; break; }
+            }
+            if (!blockedBySide) { hub.p.x = newX; hub.p.z = newZ; }
             let half = HUB.plazaHalf - 2;
             hub.p.x = Math.max(-half, Math.min(half, hub.p.x));
             hub.p.z = Math.max(-half, Math.min(half, hub.p.z));
             hub.vy = (hub.vy || 0) - HUB.gravity * dt;
             hub.p.y += hub.vy * dt;
-            let groundY = hubGroundYAt(hub.p.x, hub.p.z, hub.p.y);
+            // 落地判定要用「这一帧移动前」的高度来筛台子：不然摔得快、一帧就掉穿了整块台子时，
+            // 用摔完之后的新高度去筛，会发现台子早就在头顶上方而判定不算地面，直接穿模摔穿过去。
+            let groundY = hubGroundYAt(hub.p.x, hub.p.z, prevY);
             if (hub.p.y < groundY) { hub.p.y = groundY; hub.vy = 0; }
             if (hub.p.y < -10) { hub.p.set(0, 0, 0); hub.vy = 0; }   // 掉下去了，回广场中心重来
         }
@@ -19259,6 +19702,7 @@
             if (dodge) { try { dodgeExit(); } catch (e) { } }
             if (escapeRoom) { try { escapeExit(); } catch (e) { } }
             if (park) { try { parkExit(); } catch (e) { } }
+            if (cake) { try { cakeExit(); } catch (e) { } }
             ensureScene();
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
