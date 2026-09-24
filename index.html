@@ -1719,7 +1719,7 @@
             else if (m === 'dodge') dodgeBegin(false);
             else if (m === 'escape') escapeBegin();
             else if (m === 'park') parkBegin(PARK_BUILTIN.easy);
-            else if (m === 'cake') cakeBegin();
+            else if (m === 'cake') cakeStartGo();
         }
 
         let friends = [];
@@ -2025,6 +2025,15 @@
             } else if (msg.type === 'SPAWN_MOBS') {
                 let flag = 'wave' + (msg.wave || 1) + 'Spawned';
                 if (!gState[flag]) { gState[flag] = true; spawnMonstersWithData(msg.spawns); }
+            } else if (msg.type === 'CK_START') {
+                if (msg.sender !== gState.id && msg.plan && msg.plan.some(function (q) { return q.id === gState.id; })) {
+                    if (cake) { if (cake.raf) cancelAnimationFrame(cake.raf); cake = null; }
+                    cakeBegin(msg.plan, msg.host, msg.seed);
+                }
+            } else if (msg.type === 'CK_ME') {
+                cakeOnMe(msg);
+            } else if (msg.type === 'CK_W') {
+                cakeOnWorld(msg);
             } else {
                 if (msg.target !== '*' && msg.target !== gState.id) return;
                 if (msg.type === 'START_GARAGE') {
@@ -4533,6 +4542,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-24-cake-net', date: '2026-09-24', title: '松饼大作战上线真联机', items: [
+                    '松饼大作战现在是真联机了，跨设备也能玩：进大厅时房间里的其他真人会一起进同一局，人不够用 AI 补齐。',
+                    '护盾改成"挡一次就没了"，不再是永久无敌——帮你免掉一次被拍出局，但用掉之后就要重新捡。长手还是永久的。'
+                ]
+            },
             {
                 id: '2026-09-24-cake-buffs', date: '2026-09-24', title: '松饼大作战护盾/长手改成永久', items: [
                     '护盾、长手两种增益从捡到算限时（6/8 秒）改成捡到就是永久的，直到这局结束或你出局为止。加速还是限时的。',
@@ -19353,7 +19368,27 @@
             let mesh = cakeBuffMesh(kind);
             mesh.position.set(c.x * TILE, 0, c.z * TILE);
             scene.add(mesh);
-            cake.buffs.push({ mesh: mesh, kind: kind, x: c.x * TILE, z: c.z * TILE, life: CAKE.buffLifespan });
+            cake.buffs.push({ id: cake.buffSeq++, mesh: mesh, kind: kind, x: c.x * TILE, z: c.z * TILE, life: CAKE.buffLifespan });
+        }
+        // 联机时刷新/捡增益只归房主判定（不然同一个增益会被两边各判一次），
+        // 剩下的人靠 cakeOnWorld 里的 buffs 列表对齐，见下面 cakeSyncBuffs。
+        function cakeSyncBuffs(list) {
+            let seen = {};
+            (list || []).forEach(function (b) { seen[b.id] = 1; });
+            cake.buffs = cake.buffs.filter(function (b) {
+                if (seen[b.id]) return true;
+                scene.remove(b.mesh); return false;
+            });
+            let have = {};
+            cake.buffs.forEach(function (b) { have[b.id] = 1; });
+            (list || []).forEach(function (b) {
+                if (have[b.id]) return;
+                let kind = CAKE_BUFF_KINDS.filter(function (k) { return k.key === b.k; })[0]; if (!kind) return;
+                let mesh = cakeBuffMesh(kind);
+                mesh.position.set(b.x, 0, b.z);
+                scene.add(mesh);
+                cake.buffs.push({ id: b.id, mesh: mesh, kind: kind, x: b.x, z: b.z, life: CAKE.buffLifespan });
+            });
         }
         function cakeApplyBuff(a, kind) {
             // 长手/护盾捡到就是永久的（Infinity），只有加速还是限时的
@@ -19364,6 +19399,7 @@
             if (a.isPlayer) blazeFlash('捡到增益：' + kind.label + (kind.key === 'speed' ? '！' : '（永久）！'));
         }
         function cakeBuffTick(dt) {
+            if (cake.net && !cakeIsHost()) return;   // 联机时刷新/判定归房主，其他人靠世界同步对齐
             cake.buffTimer -= dt;
             if (cake.buffTimer <= 0 && cake.buffs.length < CAKE.buffMaxOnField) {
                 cakeSpawnBuff(); cake.buffTimer = CAKE.buffEvery;
@@ -19456,7 +19492,13 @@
         // 互相盯着，永远不会有人真正凑近，一整局都抓不到人。
         // 只有当最近的人已经贴到手范围附近、又正好面朝自己（真的要挨抓了）才会跑；
         // 朝向直接用这一步真实挪动的方向算，不依赖 mvx/mvz（那两个只有玩家会更新）。
+        // 联机时 AI 机器人只归房主模拟，其他人靠世界同步收位置——不然同一个机器人
+        // 在每个人屏幕上各走各的，早晚对不上。
+        function cakeIsHost() { return !cake || !cake.net || cake.host === gState.id; }
+        function cakeMine(a) { return a.isPlayer || (!a.netId && cakeIsHost()); }
+
         function cakeAi(a, dt) {
+            if (a.isPlayer || a.remote || !cakeMine(a)) return;
             a.aiT -= dt;
             if (a.aiT <= 0) a.aiT = 0.25 + Math.random() * 0.35;
             let live = cake.actors.filter(function (x) { return !x.out; });
@@ -19506,13 +19548,21 @@
         // live 是这一帧开始时的快照，但 a.out 是共享对象上的实时字段——
         // 一旦被判出局，同一帧后面的检查会立刻看到，不会一帧内被两个人重复计一次。
         function cakeTagCheck() {
+            if (cake.net && !cakeIsHost()) return;   // 联机时谁出局归房主判定，其他人靠世界同步对齐
             let live = cake.actors.filter(function (a) { return !a.out; });
             let coneCos = Math.cos(CAKE.tagConeDeg * Math.PI / 180);
             live.forEach(function (b) {
                 if (b.out) return;
                 live.forEach(function (a) {
                     if (a === b || a.out || b.out) return;
-                    if (a.shieldT > 0) return;   // 护盾期间不会被拍出局
+                    if (a.shieldT > 0) {
+                        // 护盾只挡一下：帮你免掉这次出局，但用一次就没了
+                        a.shieldT = 0;
+                        cakeBurst(a.p.x, a.p.z, 0x81c784);
+                        if (a.isPlayer) blazeFlash('护盾帮你挡了一下，但用掉了！');
+                        else if (b.isPlayer) blazeFlash(a.name + ' 的护盾帮TA挡了一下！');
+                        return;
+                    }
                     let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
                     if (d > cakeHandRange(b)) return;
                     let dx = (a.p.x - b.p.x) / (d || 1), dz = (a.p.z - b.p.z) / (d || 1);
@@ -19601,17 +19651,101 @@
             }
             return { x: me.p.x - dir.x * back, y: me.p.y + CAKE.camUp, z: me.p.z - dir.z * back };
         }
+        // ── 联机同步 ──
+        // 每个真人只广播自己那一份位置（15Hz）；房主额外广播一份"世界快照"（10Hz）：
+        // 机器人的位置 + 所有人的出局/连杀/增益状态 + 场上还剩哪些增益。
+        // 谁的角色归谁模拟：真人的移动永远是自己算自己发，机器人和出局判定/增益判定
+        // 只有房主算——不然同一件事会被两台设备各判一次，对不上。
+        function cakeNetTick(dt) {
+            if (!cake || !cake.net) return;
+            cake.sendSelf -= dt;
+            if (cake.sendSelf <= 0) {
+                cake.sendSelf = 1 / 15;
+                let me = cake.me;
+                bc.postMessage({
+                    type: 'CK_ME', target: '*', sender: gState.id, i: me.idx,
+                    x: Math.round(me.p.x), y: +me.p.y.toFixed(1), z: Math.round(me.p.z),
+                    facing: +me.facing.toFixed(2)
+                });
+            }
+            if (!cakeIsHost()) return;
+            cake.sendWorld -= dt;
+            if (cake.sendWorld > 0) return;
+            cake.sendWorld = 1 / 10;
+            bc.postMessage({
+                type: 'CK_W', target: '*', sender: gState.id,
+                a: cake.actors.map(function (a) {
+                    return {
+                        i: a.idx, x: Math.round(a.p.x), y: +a.p.y.toFixed(1), z: Math.round(a.p.z),
+                        facing: +(a.facing || 0).toFixed(2), out: a.out, kills: a.kills || 0,
+                        speedT: +Math.max(0, Math.min(999, a.speedT || 0)).toFixed(1),
+                        reachT: a.reachT > 0 ? 1 : 0, shieldT: a.shieldT > 0 ? 1 : 0
+                    };
+                }),
+                buffs: cake.buffs.map(function (b) { return { id: b.id, x: b.x, z: b.z, k: b.kind.key }; })
+            });
+        }
+        function cakeOnMe(m) {
+            if (!cake || m.sender === gState.id) return;
+            let a = cake.actors[m.i];
+            if (!a || a.netId !== m.sender) a = cake.actors.filter(function (o) { return o.netId === m.sender; })[0];
+            if (!a || a.isPlayer) return;
+            a.target = { x: m.x, y: m.y, z: m.z };
+            a.facing = m.facing;
+        }
+        function cakeOnWorld(m) {
+            if (!cake || cakeIsHost()) return;
+            (m.a || []).forEach(function (o) {
+                let a = cake.actors[o.i]; if (!a) return;
+                if (!a.netId) { a.target = { x: o.x, y: o.y, z: o.z }; a.facing = o.facing; }
+                let wasOut = a.out, hadShield = a.shieldT > 0;
+                a.kills = o.kills;
+                a.speedT = o.speedT; a.reachT = o.reachT ? Infinity : 0; a.shieldT = o.shieldT ? Infinity : 0;
+                a.out = o.out;
+                if (a.mesh) a.mesh.visible = !a.out;
+                if (!wasOut && a.out) {
+                    cakeBurst(a.p.x, a.p.z, 0xff7043);
+                    if (a.isPlayer) blazeFlash('你被拍出局了！');
+                } else if (hadShield && !a.shieldT) {
+                    cakeBurst(a.p.x, a.p.z, 0x81c784);
+                    if (a.isPlayer) blazeFlash('护盾帮你挡了一下，但用掉了！');
+                }
+            });
+            cakeSyncBuffs(m.buffs);
+            cakeCheckWin();
+        }
+        // 远端的人（真人队友 + 非房主视角下的机器人）按收到的坐标平滑过去，
+        // 不然 10~15Hz 的更新会看着一跳一跳的。
+        function cakeLerpRemotes(dt) {
+            if (!cake) return;
+            let k = Math.min(1, dt * 12);
+            cake.actors.forEach(function (a) {
+                if (!a.target || a.isPlayer) return;
+                a.p.x += (a.target.x - a.p.x) * k;
+                a.p.z += (a.target.z - a.p.z) * k;
+                a.p.y += (a.target.y - a.p.y) * k;
+            });
+        }
+
         function cakeTick(dt) {
             cake.clock += dt;
+            // 联机时别人/机器人的位置是网络给的（cakeLerpRemotes 挪过去），
+            // spd 得等挪完了再算，不然动画会看着像"人在滑步不动腿"。
+            let px0 = [], pz0 = [];
             cake.actors.forEach(function (a) {
+                px0[a.idx] = a.p.x; pz0[a.idx] = a.p.z;
                 if (a.out) { a.spd = 0; return; }
-                let px0 = a.p.x, pz0 = a.p.z;
                 if (a.isPlayer) cakePlayerMove(a, dt); else cakeAi(a, dt);
-                a.spd = Math.hypot(a.p.x - px0, a.p.z - pz0) / dt;
+            });
+            cakeLerpRemotes(dt);
+            cake.actors.forEach(function (a) {
+                if (a.out) return;
+                a.spd = Math.hypot(a.p.x - px0[a.idx], a.p.z - pz0[a.idx]) / dt;
                 if (a.speedT > 0) a.speedT -= dt;   // 长手/护盾捡到是永久的，不用倒计时
             });
             cakeTagCheck();
             cakeBuffTick(dt);
+            cakeNetTick(dt);
             cakeFxTick(dt);
             cake.actors.forEach(function (a) {
                 a.mesh.position.set(a.p.x, a.p.y, a.p.z);
@@ -19671,8 +19805,8 @@
             for (let i = 0; i < CAKE.buildingCount; i++) {
                 let x = 0, z = 0, ok = false;
                 for (let tries = 0; tries < 30; tries++) {
-                    x = 4 + Math.floor(Math.random() * (mSize - 8));
-                    z = 4 + Math.floor(Math.random() * (mSize - 8));
+                    x = 4 + Math.floor(seededRandom() * (mSize - 8));
+                    z = 4 + Math.floor(seededRandom() * (mSize - 8));
                     let row = maze[0] && maze[0][z];
                     if (row && row[x] && row[x].type === 0 && Math.hypot(x - mid, z - mid) > 5 && !tooClose(x, z, 6)) { ok = true; break; }
                 }
@@ -19680,7 +19814,7 @@
                 placed.push({ x: x, z: z });
                 let old = maze[0][z][x];
                 if (old && old.mesh) { scene.remove(old.mesh); let wi = walkableMeshes.indexOf(old.mesh); if (wi > -1) walkableMeshes.splice(wi, 1); }
-                let h = CAKE.buildingMinH + Math.random() * (CAKE.buildingMaxH - CAKE.buildingMinH);
+                let h = CAKE.buildingMinH + seededRandom() * (CAKE.buildingMaxH - CAKE.buildingMinH);
                 let col = cols[i % cols.length];
                 let g = new THREE.Group();
                 let body = new THREE.Mesh(new THREE.BoxGeometry(TILE * 0.92, h, TILE * 0.92),
@@ -19710,8 +19844,8 @@
             for (let i = 0; i < CAKE.platformCount; i++) {
                 let ok = false, x = 0, z = 0;
                 for (let tries = 0; tries < 30; tries++) {
-                    x = 6 + Math.floor(Math.random() * (mSize - 12));
-                    z = 6 + Math.floor(Math.random() * (mSize - 12));
+                    x = 6 + Math.floor(seededRandom() * (mSize - 12));
+                    z = 6 + Math.floor(seededRandom() * (mSize - 12));
                     let row = maze[0] && maze[0][z];
                     if (row && row[x] && row[x].type === 0 && Math.hypot(x - mid, z - mid) > 5) { ok = true; break; }
                 }
@@ -19739,8 +19873,29 @@
             return best;
         }
 
+        // blazeBuildArena 乱斗那份随机墙用的是普通 Math.random，跟种子对不上——
+        // 联机时每个人各自随机出来的墙都不一样，画面会对不上。这里先铲平，
+        // 只留边界，剩下的障碍物全部交给下面 cakeAddBuildings/cakeAddPlatforms
+        // （两个都用 seededRandom，同一个种子在谁的屏幕上都长一样）。
+        function cakeClearRandomWalls() {
+            const floorTex = createProceduralTexture('floor', '#cfe8a8', '#b7d98e');
+            for (let z = 1; z < mSize - 1; z++) {
+                for (let x = 1; x < mSize - 1; x++) {
+                    let c = maze[0][z][x];
+                    if (!c || c.type !== 1) continue;
+                    if (c.mesh) scene.remove(c.mesh);
+                    let f = new THREE.Mesh(new THREE.PlaneGeometry(TILE, TILE),
+                        new THREE.MeshLambertMaterial({ map: floorTex }));
+                    f.rotation.x = -Math.PI / 2; f.position.set(x * TILE, 0, z * TILE); scene.add(f);
+                    maze[0][z][x] = { type: 0, mesh: f };
+                    walkableMeshes.push(f);
+                }
+            }
+        }
+
         function cakeBuildArena() {
             blazeBuildArena(true, false, false);
+            cakeClearRandomWalls();
             cakeAddBuildings();
             cakeAddPlatforms();
         }
@@ -19806,7 +19961,23 @@
             return g;
         }
 
-        function cakeBegin() {
+        // 跟 blazeStartGo 一个思路：看当前房间里还有谁，凑一份名单（自己必在，
+        // 其余真人按 id 排序取前面几个，凑不满 CAKE.playerCount 就用 AI 补），
+        // 广播出去，大家各自用同一份名单 + 同一个种子开局。
+        function cakeStartGo() {
+            let others = roomList.filter(function (r) { return r.id !== gState.id; })
+                .map(function (r) { return r.id; }).sort().slice(0, CAKE.playerCount - 1);
+            let plan = [{ id: gState.id }].concat(others.map(function (id) { return { id: id }; }));
+            let seed = Math.floor(Math.random() * 1000000);
+            if (others.length) bc.postMessage({ type: 'CK_START', target: '*', sender: gState.id, plan: plan, host: gState.id, seed: seed });
+            cakeBegin(plan, gState.id, seed);
+        }
+        // plan：[{id}, {id}, ...]，真人的位置排前面，不够 CAKE.playerCount 个就用 AI 补满。
+        // 联机时 host/seed 由发起人决定，所有人用同一个 seed 生成地图，画面才能对上。
+        function cakeBegin(plan, hostId, seed) {
+            plan = plan || [{ id: gState.id }];
+            hostId = hostId || gState.id;
+            seed = seed || Math.floor(Math.random() * 1000000);
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
             document.getElementById('night-hud').classList.add('hidden');
@@ -19821,22 +19992,30 @@
             ensureScene();
             scene.background = new THREE.Color(0xfff3cd);
             scene.fog = new THREE.FogExp2(0xfff3cd, 0.0012);
+            gameSeed = seed;   // 建楼/建台子都用 seededRandom，全员种子一样地图就长一样
             cakeBuildArena();
 
             let n = CAKE.playerCount;
             let spawns = cakeEvenSpawns(n);
-            cake = { over: false, clock: 0, actors: [], fx: [], buffs: [], buffTimer: CAKE.buffEvery * 0.4, last: performance.now(), raf: null };
+            cake = {
+                over: false, clock: 0, actors: [], fx: [], buffs: [], buffSeq: 0,
+                buffTimer: CAKE.buffEvery * 0.4, last: performance.now(), raf: null,
+                host: hostId, net: plan.some(function (q) { return q.id && q.id !== gState.id; }),
+                sendSelf: 0, sendWorld: 0
+            };
 
             let pool = HUB_BOT_NAMES.slice();
             for (let i = 0; i < n; i++) {
-                let isP = (i === 0);
+                let q = plan[i] || {};
+                let isP = q.id === gState.id;
                 let col = isP ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
                 let mesh = cakeMakeBody(col, CAKE.handRange);
                 scene.add(mesh);
                 let sp = spawns[i];
-                let name = isP ? (gState.id || '你') : (pool.length ? pool.splice(Math.floor(Math.random() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
+                let name = q.id ? q.id : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
                 let a = {
                     idx: i, isPlayer: isP, col: col, name: name,
+                    netId: q.id || null, remote: !!(q.id && !isP), target: null,
                     p: new THREE.Vector3(sp.x * TILE, 0, sp.z * TILE), facing: Math.random() * Math.PI * 2,
                     floor: 0, mvx: 0, mvz: 0, vy: 0, out: false, kills: 0,
                     speedT: 0, reachT: 0, shieldT: 0, gestureT: 0, gestureKind: null,
@@ -19844,7 +20023,7 @@
                 };
                 cake.actors.push(a);
             }
-            cake.me = cake.actors[0];
+            cake.me = cake.actors.filter(function (a) { return a.isPlayer; })[0] || cake.actors[0];
             camera.rotation.set(0, Math.random() * Math.PI * 2, 0);
 
             document.body.onmousedown = function (e) {
