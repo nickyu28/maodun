@@ -49,17 +49,28 @@
         #screen-lobby:not(.hidden) {
             display: block !important;
             padding: 0 !important;
+            background: transparent !important;
+            /* 大厅现在是常驻的 3D 广场铺在底下，这层只负责摆角落的 UI——
+               中间空的地方要让鼠标事件穿透下去，不然人在里面走不动、也转不了镜头。 */
+            pointer-events: none;
+        }
+        #lobby-tl, #lobby-tr, #lobby-bottom {
+            pointer-events: auto;
         }
         #lobby-tl, #lobby-tr {
             position: absolute;
             top: 14px;
             box-sizing: border-box;
-            max-height: calc(100% - 190px);
+            /* 100% 减固定像素在矮屏幕上会算出负数，CSS 会把负的 max-height 当成 0——
+               整块内容直接消失、大厅一片空白。用 max() 兜个底，再矮也留一块能滚动的区域。 */
+            max-height: max(140px, calc(100% - 190px));
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
         }
-        #lobby-tl { left: 14px; width: 190px; }
-        #lobby-tr { right: 14px; width: 320px; text-align: left; }
+        /* 固定宽度 190px + 320px 在窄屏（手机竖屏）上会加起来超过屏幕宽度，两块内容
+           叠在一起——用 min() 在窄屏上按比例收窄，宽屏（平板/电脑）上还是原来的宽度。 */
+        #lobby-tl { left: 14px; width: min(190px, 42vw); }
+        #lobby-tr { right: 14px; width: min(320px, 50vw); text-align: left; }
         #lobby-bottom {
             position: absolute;
             left: 0; bottom: 0; width: 100%;
@@ -830,18 +841,34 @@
     </div>
 
     <div id="screen-lobby" class="screen hidden">
-        <h1 id="lobby-title" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); font-size:22px; color:#aaa; margin:0; pointer-events:none;">寻宝队</h1>
+        <!-- 中间大片空白看着像没做完——放一个跟猫盾角色同风格的简笔画小猫当水印，
+             比干巴巴一个字号顶到最大的"猫盾"看着更像有意为之的设计。 -->
+        <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden;">
+            <svg width="min(46vw, 380px)" height="min(46vw, 380px)" viewBox="0 0 200 200" style="opacity:0.1;">
+                <rect x="45" y="65" width="110" height="105" rx="26" fill="none" stroke="#999" stroke-width="5"/>
+                <path d="M62 68 L50 30 L84 58 Z" fill="none" stroke="#999" stroke-width="5" stroke-linejoin="round"/>
+                <path d="M138 68 L150 30 L116 58 Z" fill="none" stroke="#999" stroke-width="5" stroke-linejoin="round"/>
+                <circle cx="82" cy="112" r="4.5" fill="#999"/>
+                <circle cx="118" cy="112" r="4.5" fill="#999"/>
+                <path d="M92 128 L100 138 L108 128 Z" fill="none" stroke="#999" stroke-width="4" stroke-linejoin="round"/>
+                <path d="M45 118 Q22 122 27 142" fill="none" stroke="#999" stroke-width="5" stroke-linecap="round"/>
+                <path d="M155 118 Q178 122 173 142" fill="none" stroke="#999" stroke-width="5" stroke-linecap="round"/>
+                <path d="M78 170 L78 188" stroke="#999" stroke-width="5" stroke-linecap="round"/>
+                <path d="M122 170 L122 188" stroke="#999" stroke-width="5" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <!-- 当前模式已经在右上角的模式网格里高亮显示了，这行标题是多余的重复信息——
+             不删元素本身（selectGameMode 还在往里面写字），只是不显示。 -->
+        <h1 id="lobby-title" style="display:none;">寻宝队</h1>
 
         <!-- 左上角：商店 / 猫盾乐园 / 大厅广场等入口 -->
         <div id="lobby-tl">
             <div style="font-size:12px; color:#888; margin-bottom:4px;">入口</div>
-            <button onclick="openShop()" style="width:100%; margin:0 0 6px; background:#e6a23c; color:#fff; border:none; font-size:13px; padding:8px 4px;">🛒 商店</button>
-            <button onclick="selectGameMode('park')" style="width:100%; margin:0 0 6px; background:#ad1457; color:#fff; border:none; font-size:13px; padding:8px 4px;">🎨 猫盾乐园</button>
-            <button onclick="hubBegin()" style="width:100%; margin:0 0 6px; background:#00acc1; color:#fff; border:none; font-size:13px; padding:8px 4px; font-weight:bold;">🏃 大厅广场</button>
-            <button onclick="openChangelog()" style="width:100%; margin:0 0 6px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">📋 更新公告<span id="changelog-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
-            <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">🥚 彩蛋图鉴</button>
-            <button onclick="openChatSetup()" style="width:100%; margin:0 0 6px; background:#607d8b; color:#fff; border:none; font-size:12px; padding:7px 4px;">💬 发言设置</button>
-            <button onclick="openFeedback()" style="width:100%; margin:0 0 6px; background:#e91e63; color:#fff; border:none; font-size:12px; padding:7px 4px;">💌 反馈</button>
+            <button onclick="openShop()" style="width:100%; margin:0 0 6px; background:#e6a23c; color:#fff; border:none; font-size:13px; padding:8px 4px;">商店</button>
+            <button onclick="openChangelog()" style="width:100%; margin:0 0 6px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">更新公告<span id="changelog-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
+            <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">彩蛋图鉴</button>
+            <button onclick="openChatSetup()" style="width:100%; margin:0 0 6px; background:#607d8b; color:#fff; border:none; font-size:12px; padding:7px 4px;">发言设置</button>
+            <button onclick="openFeedback()" style="width:100%; margin:0 0 6px; background:#e91e63; color:#fff; border:none; font-size:12px; padding:7px 4px;">反馈</button>
             <div id="lobby-rank" style="font-size:11px; color:#888; margin-top:4px;"></div>
             <div id="daily-mod-banner" style="font-size:11px; color:#795548; background:#fff8e1; border:1px solid #ffe082; border-radius:5px; padding:5px 6px; margin-top:4px;"></div>
         </div>
@@ -858,6 +885,7 @@
                 <button id="btn-mode-dodge" onclick="selectGameMode('dodge')" style="margin:0; font-size:11px; padding:7px 2px;">躲避球</button>
                 <button id="btn-mode-escape" onclick="selectGameMode('escape')" style="margin:0; font-size:11px; padding:7px 2px;">密室</button>
                 <button id="btn-mode-park" onclick="selectGameMode('park')" style="margin:0; font-size:11px; padding:7px 2px;">猫盾乐园</button>
+                <button id="btn-mode-cake" onclick="selectGameMode('cake')" style="margin:0; font-size:11px; padding:7px 2px;">松饼大作战</button>
             </div>
 
         <div id="hunt-only">
@@ -1006,6 +1034,17 @@
             </div>
         </div>
 
+        <div id="cake-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff8e1; border:1px solid #ffca28; border-radius:6px; padding:12px 14px; text-align:left;">
+            <div style="font-size:14px; color:#f57f17; font-weight:bold; margin-bottom:2px;">松饼大作战 · 自由混战</div>
+            <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
+                不分队伍，人人都能抓人：<b>面朝对方</b>又让对方进了你「手」的范围，对方就当场出局。<br>
+                最后剩下的那一个赢；捡到地上的增益能占点便宜——加速、伸长手的范围、或者一次护盾免疫被抓。<br>
+                时间到还没分胜负，比谁拍出局的人多。<br>
+                空格/触屏「跳」可以跳跃。
+            </div>
+            <button onclick="cakeBegin()" style="width:100%; margin:0; background:#f57f17; color:#fff; border:none; padding:10px 0; font-size:15px;">开始</button>
+        </div>
+
         <div id="blaze-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff3e0; border:1px solid #ffcc80; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#e64a19; font-weight:bold; margin-bottom:2px;">超燃 · 2v2</div>
             <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
@@ -1031,7 +1070,7 @@
             </div>
         </div>
 
-        <button id="lobby-start-btn" onclick="lobbyPrimaryStart()" style="width:100%; box-sizing:border-box; margin:2px 0 4px; background:#4caf50; color:#fff; border:none; font-size:16px; padding:11px 0; font-weight:bold;">▶ 开始游戏！</button>
+        <button id="lobby-start-btn" onclick="lobbyPrimaryStart()" style="width:100%; box-sizing:border-box; margin:2px 0 4px; background:#4caf50; color:#fff; border:none; font-size:16px; padding:11px 0; font-weight:bold;">开始游戏！</button>
         </div>
 
         <!-- 下方：联机房间 / 好友 / 组队 / 麦克风 / 聊天 -->
@@ -1060,7 +1099,7 @@
             </div>
             <div>
                 <div style="font-size:12px; color:#666; margin-bottom:4px;">麦克风</div>
-                <button id="lobby-mic-btn" onclick="lobbyToggleMic()" style="width:100%; margin:0; font-size:12px; padding:7px 4px; background:#eceff1; border:1px solid #cfd8dc;">🎤 麦克风：关</button>
+                <button id="lobby-mic-btn" onclick="lobbyToggleMic()" style="width:100%; margin:0; font-size:12px; padding:7px 4px; background:#eceff1; border:1px solid #cfd8dc;">麦克风：关</button>
                 <div style="font-size:10px; color:#999; margin-top:4px;">占位开关，语音通话还没接通</div>
             </div>
             <div>
@@ -1300,8 +1339,8 @@
         <div id="hub-prompt" style="position:absolute; bottom:120px; left:50%; transform:translateX(-50%); display:none; flex-direction:column; align-items:center; gap:6px; pointer-events:auto;">
             <div id="hub-prompt-name" style="background:rgba(0,0,0,0.72); color:#fff; padding:4px 12px; border-radius:12px; font-size:13px;"></div>
             <div style="display:flex; gap:8px;">
-                <button id="hub-prompt-team" onclick="hubTeamUp()" style="margin:0; background:#00acc1; color:#fff; border:none; padding:8px 16px; font-size:14px;">🤝 组队</button>
-                <button id="hub-prompt-friend" onclick="hubAddFriend()" style="margin:0; background:#5cb85c; color:#fff; border:none; padding:8px 16px; font-size:14px;">➕ 加好友</button>
+                <button id="hub-prompt-team" onclick="hubTeamUp()" style="margin:0; background:#00acc1; color:#fff; border:none; padding:8px 16px; font-size:14px;">组队</button>
+                <button id="hub-prompt-friend" onclick="hubAddFriend()" style="margin:0; background:#5cb85c; color:#fff; border:none; padding:8px 16px; font-size:14px;">加好友</button>
             </div>
         </div>
         <div style="position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center;">
@@ -1409,6 +1448,9 @@
         function seededRandom() { gameSeed = (gameSeed * 9301 + 49297) % 233280; return gameSeed / 233280; }
 
         function showSysModal(title, text, buttons) {
+            // 大厅里鼠标一直是指针锁定状态（转视角用），弹窗一开还锁着的话，
+            // 想点弹窗按钮鼠标根本不会动，还一直在转镜头——弹窗前先解锁。
+            if (document.pointerLockElement) { try { document.exitPointerLock(); } catch (e) { } }
             document.getElementById('sys-modal-title').innerText = title;
             document.getElementById('sys-modal-text').innerHTML = text;
             let btnContainer = document.getElementById('sys-modal-btns'); btnContainer.innerHTML = '';
@@ -1681,7 +1723,7 @@
         function lobbyToggleMic() {
             gState.micOn = !gState.micOn;
             let b = document.getElementById('lobby-mic-btn');
-            if (b) { b.innerText = gState.micOn ? '🎤 麦克风：开' : '🎤 麦克风：关'; b.style.background = gState.micOn ? '#c8e6c9' : '#eceff1'; }
+            if (b) { b.innerText = gState.micOn ? '麦克风：开' : '麦克风：关'; b.style.background = gState.micOn ? '#c8e6c9' : '#eceff1'; }
         }
         function lobbyPrimaryStart() {
             let m = gState.gameMode;
@@ -1693,6 +1735,7 @@
             else if (m === 'dodge') dodgeBegin(false);
             else if (m === 'escape') escapeBegin();
             else if (m === 'park') parkBegin(PARK_BUILTIN.easy);
+            else if (m === 'cake') cakeBegin();
         }
 
         let friends = [];
@@ -2083,6 +2126,7 @@
                 (typeof dodge !== 'undefined' && dodge && !dodge.over) ||
                 (typeof escapeRoom !== 'undefined' && escapeRoom && !escapeRoom.over) ||
                 (typeof park !== 'undefined' && park && !park.over) ||
+                (typeof cake !== 'undefined' && cake && !cake.over) ||
                 (typeof hub !== 'undefined' && hub));
         }
         function chatVisTick() {
@@ -2125,7 +2169,14 @@
             ]);
         }
 
-        function nav(id) { document.querySelectorAll('.screen').forEach(function (s) { s.classList.add('hidden'); }); if (id !== 'none') { document.getElementById(id).classList.remove('hidden'); } }
+        function nav(id) {
+            document.querySelectorAll('.screen').forEach(function (s) { s.classList.add('hidden'); });
+            if (id !== 'none') { document.getElementById(id).classList.remove('hidden'); }
+            // 大厅现在就是那个能走动的 3D 广场——回大厅自动站在里面，离开大厅
+            // （进任何一个实际模式）就把它收起来，不用每个模式自己记得处理。
+            if (id === 'screen-lobby') { if (typeof hub !== 'undefined' && !hub) hubBegin(); }
+            else if (typeof hub !== 'undefined' && hub) { hubExit(); }
+        }
 
         function goToIdScreen(deviceStr) {
             gState.control = deviceStr; nav('screen-id');
@@ -2219,7 +2270,7 @@
             gState.gameMode = m;
             refreshRankUI();
             renderDailyModBanner();
-            let isHunt = m === 'hunt', isNight = m === 'night', isBlaze = m === 'blaze', isRace = m === 'race', isJail = m === 'jail', isDodge = m === 'dodge', isEscape = m === 'escape', isPark = m === 'park';
+            let isHunt = m === 'hunt', isNight = m === 'night', isBlaze = m === 'blaze', isRace = m === 'race', isJail = m === 'jail', isDodge = m === 'dodge', isEscape = m === 'escape', isPark = m === 'park', isCake = m === 'cake';
             document.getElementById('hunt-only').classList.toggle('hidden', !isHunt);
             document.getElementById('night-only').classList.toggle('hidden', !isNight);
             document.getElementById('blaze-only').classList.toggle('hidden', !isBlaze);
@@ -2228,7 +2279,8 @@
             document.getElementById('dodge-only').classList.toggle('hidden', !isDodge);
             document.getElementById('escape-only').classList.toggle('hidden', !isEscape);
             document.getElementById('park-only').classList.toggle('hidden', !isPark);
-            document.getElementById('lobby-title').innerText = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : '超燃');
+            document.getElementById('cake-only').classList.toggle('hidden', !isCake);
+            document.getElementById('lobby-title').innerText = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : '超燃');
             if (isNight) selectNightChar(gState.nightChar || 'cat');
             if (isBlaze) blazeRenderChars();
             if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsOf('park'); parkRenderBlocks(); }
@@ -2244,7 +2296,8 @@
             ['btn-mode-jail', isJail, '#4527a0'],
             ['btn-mode-dodge', isDodge, '#e65100'],
             ['btn-mode-escape', isEscape, '#2e7d32'],
-            ['btn-mode-park', isPark, '#ad1457']].forEach(function (e) {
+            ['btn-mode-park', isPark, '#ad1457'],
+            ['btn-mode-cake', isCake, '#f57f17']].forEach(function (e) {
                 let b = document.getElementById(e[0]); if (!b) return;
                 b.style.borderColor = e[1] ? e[2] : '#ccc';
                 b.style.color = e[1] ? e[2] : '#333';
@@ -4352,7 +4405,7 @@
                 return '<div style="margin:8px 0;"><b>' + e.name + '</b>' +
                     (how ? '<br><span style="color:#666; font-size:13px;">' + how + '</span>' : '') + '</div>';
             }).join('');
-            showSysModal('🥚 本局解锁 ' + ids.length + ' 个彩蛋', body,
+            showSysModal('本局解锁 ' + ids.length + ' 个彩蛋', body,
                 [{ label: '收下', color: '#9b59b6', onClick: function () { if (after) after(); } }]);
         }
 
@@ -4397,6 +4450,14 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-24-cake-mode', date: '2026-09-24', title: '新模式：松饼大作战（第一步） + 跑酷手感修复', items: [
+                    '新增"松饼大作战"：不分队伍的自由混战抓人，面朝对方并让对方进入你手的范围就能把他拍出局，最后剩下的人赢。地图上会刷新加速/长手/护盾三种短效增益。（这版先做玩法，猫的建模换成松饼形状留到下一步。）',
+                    '修好大厅跑酷摔得快时会直接穿模摔穿台子的问题；加上了跳跃缓冲和土狼时间，不用再卡着刚好落地/离台那一帧按空格才跳得起来。',
+                    '大厅跑酷台子的侧面现在会真的挡人，不会再直接穿过去。',
+                    '大厅路人的名字换了一批更少见的，不容易跟真玩家自己取的昵称撞上。'
+                ]
+            },
             {
                 id: '2026-09-20-pity-fix', date: '2026-09-20', title: '修复"保底"战利品箱一直不消失的问题', items: [
                     '之前连续输了好几局之后会触发一次"保底"（下一局必出高级战利品箱），但只要赢了一局，这个保底不会消失，导致后面每一局都会稳出高级箱子。',
@@ -4450,7 +4511,7 @@
             html += '</div>';
             try { localStorage.setItem('TH_changelog_seen', CHANGELOG[0].id); } catch (e) { }
             changelogBadgeSync();
-            showSysModal('📋 更新公告', html, [{ label: '关闭', color: '#666' }]);
+            showSysModal('更新公告', html, [{ label: '关闭', color: '#666' }]);
         }
 
         // 反馈：没有后端，收不到结构化数据，就走最土但最不会掉链子的路——
@@ -4466,7 +4527,7 @@
                 '<textarea id="feedback-text" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
                 '<div style="font-size:11px; color:#999; margin-top:6px;">会顺便带上你的 ID（' + gState.id + '）和当前模式。优先用 GitHub 提交——开发者每天会自动检查一遍，没有 GitHub 账号就用下面的备选。</div>' +
                 '</div>';
-            showSysModal('💌 反馈', html, [
+            showSysModal('反馈', html, [
                 { label: '提交（GitHub）', color: '#24292e', onClick: function () { feedbackSend('github'); } },
                 { label: '复制文字', color: '#607d8b', onClick: function () { feedbackSend('copy'); } },
                 { label: '发送邮件', onClick: function () { feedbackSend('mail'); } },
@@ -4529,12 +4590,12 @@
         // 只动"跑多快、跳多高"这两个最通用、最不容易搞坏平衡的维度，不碰球的物理、
         // 平台机关这些跟"公平/关卡设计"绑死的数值。换个日期就换一条，明天又不一样。
         const DAILY_MODIFIERS = [
-            { id: 'turbo', name: '⚡ 风驰电掣', desc: '所有人跑得更快', speedMul: 1.35, jumpMul: 1 },
-            { id: 'moon', name: '🌙 月球重力', desc: '跳得更高更远', speedMul: 1, jumpMul: 1.6 },
-            { id: 'slow', name: '🐌 举步维艰', desc: '所有人都变慢了，拼反应', speedMul: 0.75, jumpMul: 0.85 },
-            { id: 'hop', name: '🦘 弹簧腿', desc: '走路一般，但跳跃格外带劲', speedMul: 0.95, jumpMul: 1.8 },
-            { id: 'rush', name: '🏃 全员疾跑', desc: '速度和跳跃都往上提一提', speedMul: 1.2, jumpMul: 1.25 },
-            { id: 'normal', name: '📅 平常日子', desc: '今天没有特殊效果', speedMul: 1, jumpMul: 1 }
+            { id: 'turbo', name: '风驰电掣', desc: '所有人跑得更快', speedMul: 1.35, jumpMul: 1 },
+            { id: 'moon', name: '月球重力', desc: '跳得更高更远', speedMul: 1, jumpMul: 1.6 },
+            { id: 'slow', name: '举步维艰', desc: '所有人都变慢了，拼反应', speedMul: 0.75, jumpMul: 0.85 },
+            { id: 'hop', name: '弹簧腿', desc: '走路一般，但跳跃格外带劲', speedMul: 0.95, jumpMul: 1.8 },
+            { id: 'rush', name: '全员疾跑', desc: '速度和跳跃都往上提一提', speedMul: 1.2, jumpMul: 1.25 },
+            { id: 'normal', name: '平常日子', desc: '今天没有特殊效果', speedMul: 1, jumpMul: 1 }
         ];
         function computeDailyModifier() {
             let key = new Date().toDateString();
@@ -5313,7 +5374,7 @@
                     let c = g.def[k], owned = charOwned(g.m, k);
                     out += shopRow(
                         '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-                        '<b style="color:' + c.css + ';">' + c.icon + ' ' + c.name + '</b>' +
+                        '<b style="color:' + c.css + ';">' + c.name + '</b>' +
                         (owned ? '<span style="font-size:12px; color:#5cb85c;">已拥有</span>'
                             : '<button onclick="shopBuyChar(\'' + g.m + '\',\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:#e6a23c; color:#fff; border:none;">' + COIN_PRICE + ' 金币</button>') +
                         '</div>' +
@@ -6029,68 +6090,59 @@
         }
         const BLAZE_CHARS = {
             bow: {
-                name: '远程猫盾', color: 0x66bb6a, css: '#66bb6a', hp: 70, icon: '🏹',
-                atk: '普攻 cd 0.8s：射一箭，10 伤，基础射程 10 身位，会被墙挡住',
+                name: '远程猫盾', color: 0x66bb6a, css: '#66bb6a', hp: 70, atk: '普攻 cd 0.8s：射一箭，10 伤，基础射程 10 身位，会被墙挡住',
                 act: '穿墙狙 cd 5s：无视墙体锁定最近敌人，10 伤，射程固定 10 身位',
                 act2: '疾射 cd 15s：攻速 +10%，持续 7 秒',
                 pas: '每打中一次，普攻射程 +1 身位（最多 5 层），5 秒没打中就清空。血量 70'
             },
             sword: {
-                name: '剑猫盾', color: 0xef5350, css: '#ef5350', icon: '⚔',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '剑猫盾', color: 0xef5350, css: '#ef5350', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '突进 cd 10s：向前冲 5 身位，撞到的第一个敌人吃 20 伤并眩晕 1 秒',
                 act2: '击晕 cd 7s：面前一名敌人 10 伤并眩晕 1 秒（面前没人就放不出去）',
                 pas: '技能每命中一次，之后技能伤害 +2，最多 3 层（挨打不清空）'
             },
             heal: {
-                name: '回血猫盾', color: 0x42a5f5, css: '#42a5f5', icon: '✚',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '回血猫盾', color: 0x42a5f5, css: '#42a5f5', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '治疗 cd 7s：自己回 10% 最大生命；6 身位内的队友也各回各自 10% 上限',
                 act2: '汲取 cd 5s：6 身位内所有敌人各 10 伤，自己回 10% 上限（没敌人也照回）',
                 pas: '被你治疗的队友 5 秒内伤害 ×1.5'
             },
             tank: {
-                name: '抗伤猫盾', color: 0xffa726, css: '#ffa726', icon: '🛡',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '抗伤猫盾', color: 0xffa726, css: '#ffa726', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '震地 cd 5s：5 身位内所有敌人 10 伤并眩晕 1 秒，自己同时减伤 20% 持续 5 秒',
                 act2: '护盾 cd 20s：获得最大生命 50% 的护盾，10 秒匀速掉完（毒圈无视护盾）',
                 pas: '受到的伤害 −30%'
             },
             guard: {
-                name: '保命猫盾', color: 0xab47bc, css: '#ab47bc', icon: '⏱',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '保命猫盾', color: 0xab47bc, css: '#ab47bc', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '闪身 cd 10s：3 段位移，每段 2 身位；撞到敌人 15 伤，不管撞没撞到都回 10% 上限。' +
                     '每段之间只有 5 秒窗口，超时没接上就直接进冷却',
                 act2: '回溯 cd 20s：回到 5 秒前的位置和血量，并立刻刷新 1 技能',
                 pas: '每回合一次：受到致命伤害时免疫，血量拉回 5% 最大生命'
             },
             control: {
-                name: '控制猫盾', color: 0x26c6da, css: '#26c6da', icon: '⛓',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '控制猫盾', color: 0x26c6da, css: '#26c6da', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '钩锁 cd 10s：向前甩出钩子，命中造成 15 伤并把人拖向自己，' +
                     '拖拽期间对方放不出技能，撞到自己身上再定身 1 秒（钩空了不进冷却）',
                 act2: '震慑 cd 15s：5 身位内所有敌人 10 伤并眩晕 3 秒（范围内没人就放不出去）',
                 pas: '普攻和眩晕每命中一次，下一次眩晕再长 0.1 秒，最多叠 5 层'
             },
             mage: {
-                name: '法师猫盾', color: 0x7e57c2, css: '#7e57c2', hp: 70, icon: '✦',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '法师猫盾', color: 0x7e57c2, css: '#7e57c2', hp: 70, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '激光 cd 10s：向正前方射出一道贯穿激光，长度 21 身位（约地图边长 1/3），' +
                     '路径上的敌人全部命中，每个 15 伤',
                 act2: '瞬移 cd 10s：直接闪到面前 4 身位的位置，撞墙会停在墙前',
                 pas: '滚雪球：每过一局，伤害永久 +5（第 N 局就是 +5×(N−1)）。血量只有 70'
             },
             assassin: {
-                name: '刺客猫盾', color: 0x78909c, css: '#78909c', hp: 70, icon: '🗡',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '刺客猫盾', color: 0x78909c, css: '#78909c', hp: 70, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '隐身 cd 15s：隐身 7 秒，期间不会被锁定；范围技能照样打得到，' +
                     '普攻预判准了也能砍中。自己放技能或普攻会立刻现身',
                 act2: '爆发 cd 20s：前方 3 身位内的敌人各吃 20 伤（面前没人就放不出去）',
                 pas: '每回合一次：血量掉到 10% 以下时刷新全部冷却并立刻隐身。血量 70'
             },
             engineer: {
-                name: '工程猫盾', color: 0x6d4c41, css: '#6d4c41', hp: 90, icon: '🔧',
-                atk: '普攻 cd 0.8s：扳手近战，10 伤',
+                name: '工程猫盾', color: 0x6d4c41, css: '#6d4c41', hp: 90, atk: '普攻 cd 0.8s：扳手近战，10 伤',
                 act: '炮台 cd 12s：放一座炮台，存在 15 秒，自动打 8 身位内的敌人。' +
                     '炮台完全继承你的攻击力和你身上所有伤害卡，最多同时 2 座（40 血，能被打掉）',
                 act2: '立墙 cd 8s：面前 3 身位立一堵墙，挡视线和弹道，存在 8 秒（60 血）。' +
@@ -6098,8 +6150,7 @@
                 pas: '过载：场上每有一个你的建筑，你自己伤害 +15%、冷却缩减 +8%（最多算 3 个）。血量 90'
             },
             mirror: {
-                name: '镜猫盾', color: 0x3949ab, css: '#3949ab', hp: 85, icon: '🪞',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '镜猫盾', color: 0x3949ab, css: '#3949ab', hp: 85, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '格挡 cd 10s：架起 1.5 秒，期间受到的伤害 −70%。只要挡下至少一次攻击，' +
                     '所有打过你的人眩晕 0.5 秒并减速 15% 持续 2 秒，并立刻刷新 2 技能。挡空只走冷却',
                 act2: '换位 cd 14s：和 8 身位内最近的敌人交换位置，不造成伤害但眩晕对方 1 秒。' +
@@ -6108,8 +6159,7 @@
                     '完全免疫那一次，并让攻击者接下来 3 秒造成的伤害 −25%。血量 85'
             },
             shift: {
-                name: '位移猫盾', color: 0x26a69a, css: '#26a69a', hp: 80, icon: '💨',
-                atk: '普攻 cd 0.8s：近身挥砍，10 伤',
+                name: '位移猫盾', color: 0x26a69a, css: '#26a69a', hp: 80, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '贯影（要满充能）：向前冲 5 身位，穿过路径上所有敌人，每个 12 伤。撞墙就停',
                 act2: '跃击（要满充能）：闪到 8 身位内最近敌人的背后，落地造成 15 伤。附近没人就放不出去',
                 pas: '疾行：移速永久 +10%，之后每 20 秒再永久 +5%（最多 +100%），活得越久跑得越快。' +
@@ -6150,7 +6200,7 @@
                 offer.map(function (k) {
                     let c = BLAZE_CHARS[k];
                     return '<div style="margin:7px 0; text-align:left; border-left:3px solid ' + c.css + '; padding-left:7px;">' +
-                        '<b style="color:' + c.css + ';">' + c.icon + ' ' + c.name + '</b>' +
+                        '<b style="color:' + c.css + ';">' + c.name + '</b>' +
                         '<br><span style="font-size:12px; color:#666;">' + c.pas + '</span></div>';
                 }).join('');
             showSysModal('本局三选一', txt, offer.map(function (k) {
@@ -6215,6 +6265,7 @@
         let escapeRoom = null;  // 合作密室的状态（不叫 escape，那是浏览器自带的全局函数名）
         let park = null;        // 猫盾乐园当前在玩的小游戏
         let hub = null;         // 大厅广场（跑酷+遇到人组队）的状态
+        let cake = null;        // 松饼大作战（自由混战抓人）的状态
 
         // ── 竞速的轮间三选一 ──
         // 每轮开跑前抽三张，**只在这一轮生效**，下一轮重新抽。
@@ -6411,7 +6462,7 @@
                 let c = BLAZE_CHARS[k], on = gState.blazeChar === k, owned = charOwned('blaze', k);
                 return '<button onclick="blazePick(\'' + k + '\')" style="margin:0; padding:8px 0; font-size:14px; border:2px solid ' +
                     (on ? c.css : '#ddd') + '; color:' + (on ? c.css : (owned ? '#777' : '#bbb')) + '; background:' + (on ? '#fff' : '#fafafa') + ';">' +
-                    c.name + (owned ? '' : '<br><span style="font-size:11px; color:#e6a23c;">🔒 ' + COIN_PRICE + ' 金币</span>') + '</button>';
+                    c.name + (owned ? '' : '<br><span style="font-size:11px; color:#e6a23c;">' + COIN_PRICE + ' 金币</span>') + '</button>';
             }).join('');
             let cw = document.getElementById('blaze-coins');
             if (cw) cw.innerText = '金币 ' + coinsOf('blaze') + (gState.streak && gState.streak.blaze ? '　连胜 ' + gState.streak.blaze : '');
@@ -9740,7 +9791,7 @@
                 blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: 'lucky', r: rolled });
                 if (blazePerksSettled()) blazeStartNextRound();
                 // 开局那句「第 N 局」会把这条盖掉，所以稍微延后再弹
-                let luckyMsg = '🎁 ' + blazeLuckyLabel(rolled) + '　效果 ×' + BLAZE.perkLuckyMul;
+                let luckyMsg = '' + blazeLuckyLabel(rolled) + '　效果 ×' + BLAZE.perkLuckyMul;
                 setTimeout(function () { blazeFlash(luckyMsg); }, 80);
                 return;
             }
@@ -9935,7 +9986,7 @@
                     : '') +
                 (blaze.ffaFinal && !me.out ? '　决赛 ❤×' + Math.max(0, me.lives) : '') +
                 (!me.out && !me.alive ? '　复活 ' + Math.ceil(Math.max(0, me.respawnT)) + 's' : '') +
-                '　💰 ' + blaze.ffaMoney + '（' + kTxt('C', '点「商店」') + ' 开商店）';
+                '　' + blaze.ffaMoney + '（' + kTxt('C', '点「商店」') + ' 开商店）';
             document.getElementById('blaze-roster').innerHTML = '';
 
             let bd = document.getElementById('blaze-ffa-board');
@@ -10122,13 +10173,13 @@
             if (me.key === 'sword' && me.alive) sk += '　层数 ' + me.swordStacks + '/' + BLAZE.swordStackMax;
             if (me.key === 'bow' && me.alive) sk += '　射程 ' + Math.round(blazeBowMissileRange(me) / 8) + ' 身位';
             if (me.key === 'guard' && me.dashCharges > 0) sk += '　闪身剩 ' + me.dashCharges + ' 段（' + Math.max(0, me.dashWindow).toFixed(1) + 's）';
-            if (me.invulT > 0) sk += '　🛡 复活保护 ' + me.invulT.toFixed(1) + 's';
+            if (me.invulT > 0) sk += '　复活保护 ' + me.invulT.toFixed(1) + 's';
             if (me.key === 'shift') sk += '　充能 ' + Math.round((me.charge || 0) * 100) + '%' + (blazeShiftReady(me) ? '（满）' : '');
             if (me.invisT > 0) sk += '　隐身 ' + me.invisT.toFixed(1) + 's';
             if (me.buffT > 0) sk += '　增伤 ' + me.buffT.toFixed(1) + 's';
             if (me.shield > 0) sk += '　护盾 ' + Math.round(me.shield);
             if (me.tank2T > 0) sk += '　格挡 ' + me.tank2T.toFixed(1) + 's';
-            if (me.inPoison) sk += '　⚠ 圈外掉血';
+            if (me.inPoison) sk += '　圈外掉血';
             document.getElementById('blaze-skill').innerText = sk;
 
             let perkEl = document.getElementById('blaze-perk');
@@ -10142,7 +10193,7 @@
                                     'style="display:block; width:100%; margin:4px 0; padding:8px 0;">' + o.label + '</button>';
                             }).join('') +
                             ((me.perkRerollsLeft || 0) > 0
-                                ? '<button onclick="blazePerkReroll()" style="display:block; width:100%; margin:10px 0 0; padding:8px 0; background:#4a2b57; color:#ffd54f; border:1px solid #ffd54f;">🎲 换一批（剩 ' + me.perkRerollsLeft + ' 次）</button>'
+                                ? '<button onclick="blazePerkReroll()" style="display:block; width:100%; margin:10px 0 0; padding:8px 0; background:#4a2b57; color:#ffd54f; border:1px solid #ffd54f;">换一批（剩 ' + me.perkRerollsLeft + ' 次）</button>'
                                 : '');
                         blaze.perkUIActor = me;
                     }
@@ -16420,7 +16471,7 @@
             let line = (sk ? '【' + sk.name + '】（' + kTxt('右键 / E', '「技能」键') + '）' : '');
             if (bf) line += '　+【' + bf.name + '】';
             if (ev && ev.id !== 'none') {
-                line += '　' + (ev.good ? '✨' : '⚠') + ' 本轮：' + ev.name + ' —— ' + ev.desc;
+                line += '　' + '本轮：' + ev.name + ' —— ' + ev.desc;
             }
             blazeFlash(line);
         }
@@ -16453,7 +16504,7 @@
                 title = '你被淘汰了 · 第 ' + me.place + ' 名';
                 btn = { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } };
             } else if (next <= 1 || race.round + 1 >= RACE.ladder.length) {
-                title = '🏆 冠军';
+                title = '冠军';
                 btn = { label: '返回大厅', color: '#5cb85c', onClick: function () { raceExit(); } };
             }
             showSysModal(title, lines, [btn]);
@@ -16510,7 +16561,7 @@
                 title = '你的队伍被淘汰了';
                 btn = { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } };
             } else if (target <= 1 || race.round + 1 >= RACE_DUO.ladder.length) {
-                title = '🏆 冠军队伍';
+                title = '冠军队伍';
                 btn = { label: '返回大厅', color: '#5cb85c', onClick: function () { raceExit(); } };
             }
             showSysModal(title, lines, [btn]);
@@ -16716,10 +16767,10 @@
                     if (bf) out += '　+' + bf.name;
                     return out;
                 })() +
-                (me.item ? '　🎁 ' + raceItemDef(me.item).name + '（Q）' : '') +
+                (me.item ? '　' + raceItemDef(me.item).name + '（Q）' : '') +
                 (function () {
                     let ev = raceEventDef(race.event);
-                    return (ev && ev.id !== 'none') ? '　' + (ev.good ? '✨' : '⚠') + ev.name : '';
+                    return (ev && ev.id !== 'none') ? '　' + ev.name : '';
                 })();
             document.getElementById('blaze-roster').innerHTML = '';
             let bd = document.getElementById('blaze-ffa-board');
@@ -17187,7 +17238,7 @@
             let text = (reason ? reason + '<br>' : '') + '本队物品：' + ic[me.team] + ' 件　对面物品：' + ic[1 - me.team] + ' 件';
             let title;
             if (winTeam === null) { title = '平局'; text = '时间到，双方物品数量一样多。<br>' + text; }
-            else { title = (winTeam === me.team) ? '🏆 你的队伍获胜' : '你的队伍输了'; }
+            else { title = (winTeam === me.team) ? '你的队伍获胜' : '你的队伍输了'; }
             showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { jailExit(); } }]);
         }
 
@@ -17231,9 +17282,9 @@
             document.getElementById('blaze-round').innerText =
                 '监狱救援　我方物品 ' + ic[me.team] + '　对面物品 ' + ic[1 - me.team] +
                 '　我方被抓 ' + jc[me.team] + '　对面被抓 ' + jc[1 - me.team] +
-                (me.jailed ? '　你被关在监狱里，等队友来救' : inEnemy ? '　⚠ 你在敌方地盘，小心' : '　你在自己地盘，安全') +
+                (me.jailed ? '　你被关在监狱里，等队友来救' : inEnemy ? '　你在敌方地盘，小心' : '　你在自己地盘，安全') +
                 (me.invulT > 0 ? '　无敌 ' + me.invulT.toFixed(1) + 's' : '') +
-                (me.carrying ? '　🎁 扛着一件物品，快回家！' : '');
+                (me.carrying ? '　扛着一件物品，快回家！' : '');
             document.getElementById('blaze-roster').innerHTML = '';
             // 体力条：借超燃的血条槽位
             let pct = Math.max(0, me.stamina / JAIL.staminaMax * 100);
@@ -18076,7 +18127,7 @@
             let me = dodge.me;
             let title, text = '';
             if (winTeam === null) { title = '平局'; text = '时间到，双方存活人数一样多。'; }
-            else title = (winTeam === me.team) ? '🏆 你的队伍获胜' : '你的队伍输了';
+            else title = (winTeam === me.team) ? '你的队伍获胜' : '你的队伍输了';
             showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { dodgeExit(); } }]);
         }
 
@@ -18494,7 +18545,7 @@
             if (!escapeRoom || escapeRoom.over) return;
             escapeRoom.over = true;
             if (won) blazeFlash('通关了！');
-            showSysModal(won ? '🎉 通关成功' : '时间到，没能通关', '',
+            showSysModal(won ? '通关成功' : '时间到，没能通关', '',
                 [{ label: '返回大厅', color: '#5cb85c', onClick: function () { escapeExit(); } }]);
         }
 
@@ -18873,7 +18924,7 @@
             if (park.program.creatorId && park.program.creatorId !== gState.id && roomPeers[park.program.creatorId]) {
                 bc.postMessage({ type: 'PARK_CREDIT', target: '*', to: park.program.creatorId, amount: Math.round(reward * 0.5) });
             }
-            showSysModal(won ? '🎉 通关！' : '没能达成目标', '获得 ' + reward + ' 猫盾乐园币' + (won ? '' : '（安慰奖）'),
+            showSysModal(won ? '通关！' : '没能达成目标', '获得 ' + reward + ' 猫盾乐园币' + (won ? '' : '（安慰奖）'),
                 [{ label: '返回大厅', color: '#5cb85c', onClick: function () { parkExit(); } }]);
         }
         function parkTick(dt) {
@@ -19008,29 +19059,426 @@
         }
 
         // ══════════════════════════════════════════════════════════
+        //  松饼大作战（原代号 "I'm a pancake"）：自由混战抓人，不分队伍——
+        //  面朝谁、又让谁进了你手的范围，谁就当场出局，最后剩下的人赢。
+        //  地图上会刷新几种短效增益，捡到能占点便宜。
+        //  这版先把玩法本身做完；猫的建模/手型换成松饼那批参考图留到下一步再做，
+        //  这里先照旧用猫盾的身体（raceMakeBody）。
+        // ══════════════════════════════════════════════════════════
+        const CAKE = {
+            playerCount: 8,       // 1 真人 + 7 个 AI 一起下场
+            matchTime: 210,       // 3 分半，时间到还没分出胜负就按拍出局数判
+            handRange: 9,         // 手的判定范围，常驻显示在脚下
+            tagConeDeg: 65,       // 朝向锥角：目标得在你面前这个夹角内，纯贴背后不算抓
+            jumpV: 44, gravity: 150,
+            moveSpeed: 40,
+            camBack: 30, camUp: 20,
+            buffEvery: 9, buffLifespan: 22, buffMaxOnField: 4,
+            buffSpeedMul: 1.35, buffSpeedT: 8,
+            buffReachAdd: 5, buffReachT: 8,
+            buffShieldT: 6,
+            aiVision: 60, aiPanicRange: 16
+        };
+        const CAKE_BUFF_KINDS = [
+            { key: 'speed', label: '加速', color: 0xffee58 },
+            { key: 'reach', label: '长手', color: 0x64b5f6 },
+            { key: 'shield', label: '护盾', color: 0x81c784 }
+        ];
+        const CAKE_LINES = {
+            catch: ['拍到一个！', '出局一个，稳了', '别想跑']
+        };
+
+        function cakeBuffMesh(kind) {
+            let g = new THREE.Group();
+            let m = new THREE.Mesh(new THREE.OctahedronGeometry(3.4, 0),
+                new THREE.MeshLambertMaterial({ color: kind.color, emissive: kind.color }));
+            m.position.y = 5; g.add(m);
+            g.userData.spin = m;
+            return g;
+        }
+        function cakeSpawnBuff() {
+            if (!cake) return;
+            let kind = CAKE_BUFF_KINDS[Math.floor(Math.random() * CAKE_BUFF_KINDS.length)];
+            let cx = Math.floor(mSize / 2 + (Math.random() - 0.5) * mSize * 0.7);
+            let cz = Math.floor(mSize / 2 + (Math.random() - 0.5) * mSize * 0.7);
+            let c = jailOpenCellsNear(cx, cz, 1)[0];
+            let mesh = cakeBuffMesh(kind);
+            mesh.position.set(c.x * TILE, 0, c.z * TILE);
+            scene.add(mesh);
+            cake.buffs.push({ mesh: mesh, kind: kind, x: c.x * TILE, z: c.z * TILE, life: CAKE.buffLifespan });
+        }
+        function cakeApplyBuff(a, kind) {
+            if (kind.key === 'speed') a.speedT = CAKE.buffSpeedT;
+            else if (kind.key === 'reach') a.reachT = CAKE.buffReachT;
+            else if (kind.key === 'shield') a.shieldT = CAKE.buffShieldT;
+            cakeBurst(a.p.x, a.p.z, kind.color);
+            if (a.isPlayer) blazeFlash('捡到增益：' + kind.label + '！');
+        }
+        function cakeBuffTick(dt) {
+            cake.buffTimer -= dt;
+            if (cake.buffTimer <= 0 && cake.buffs.length < CAKE.buffMaxOnField) {
+                cakeSpawnBuff(); cake.buffTimer = CAKE.buffEvery;
+            }
+            cake.buffs = cake.buffs.filter(function (b) {
+                b.mesh.userData.spin.rotation.y += dt * 2;
+                b.life -= dt;
+                if (b.life <= 0) { scene.remove(b.mesh); return false; }
+                let hit = cake.actors.find(function (a) { return !a.out && Math.hypot(a.p.x - b.x, a.p.z - b.z) < 6; });
+                if (hit) { cakeApplyBuff(hit, b.kind); scene.remove(b.mesh); return false; }
+                return true;
+            });
+        }
+        function cakeHandRange(a) { return CAKE.handRange + (a.reachT > 0 ? CAKE.buffReachAdd : 0); }
+        function cakeSpeedMul(a) { return a.speedT > 0 ? CAKE.buffSpeedMul : 1; }
+
+        function cakeBurst(x, z, color) {
+            if (!cake) return;
+            let mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+            let m = new THREE.Mesh(new THREE.RingGeometry(4, 5.5, 18), mat);
+            m.rotation.x = -Math.PI / 2; m.position.set(x, 1.2, z);
+            scene.add(m);
+            cake.fx.push({ o: m, mat: mat, t: 0.5, life: 0.5, r0: 5, r1: 22 });
+        }
+        function cakeFxTick(dt) {
+            cake.fx = cake.fx.filter(function (f) {
+                f.t -= dt;
+                if (f.t <= 0) { scene.remove(f.o); f.mat.dispose(); return false; }
+                let frac = 1 - f.t / f.life;
+                let r = f.r0 + (f.r1 - f.r0) * frac;
+                f.o.scale.set(r / f.r0, r / f.r0, 1);
+                f.mat.opacity = 0.85 * (1 - frac * frac);
+                return true;
+            });
+        }
+
+        // 玩家移动：跟监狱救援一套手感（camera 朝向 + WASD/摇杆 + 轻微惯性），
+        // 但「面朝」直接跟着镜头走、不等移动才转身——这游戏靠面朝谁判定抓人，
+        // 站着不动也得能瞄准。
+        function cakePlayerMove(a, dt) {
+            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
+            a.facing = Math.atan2(dir.x, dir.z);
+            let side = new THREE.Vector3(-dir.z, 0, dir.x);
+            let fwd = 0, strafe = 0;
+            if (keys['w']) fwd += 1; if (keys['s']) fwd -= 1;
+            if (keys['a']) strafe -= 1; if (keys['d']) strafe += 1;
+            if (fwd === 0 && strafe === 0) { fwd = -tMove.y; strafe = tMove.x; }
+            let wx = 0, wz = 0;
+            if (fwd || strafe) {
+                let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe, n = Math.hypot(mx, mz) || 1;
+                let sp = CAKE.moveSpeed * cakeSpeedMul(a) * DAILY_MOD.speedMul;
+                wx = mx / n * sp; wz = mz / n * sp;
+            }
+            let rate = (wx || wz) ? 1 / BLAZE.accel : 1 / BLAZE.brake;
+            let k = Math.min(1, rate * dt);
+            a.mvx = (a.mvx || 0) + (wx - (a.mvx || 0)) * k;
+            a.mvz = (a.mvz || 0) + (wz - (a.mvz || 0)) * k;
+            if (Math.abs(a.mvx) >= 0.4 || Math.abs(a.mvz) >= 0.4) blazeStep(a, a.mvx * dt, a.mvz * dt);
+            else { a.mvx = 0; a.mvz = 0; }
+
+            let onGround = a.p.y <= 0.01;
+            if ((keys[' '] || touchBtn.jump) && onGround) a.vy = CAKE.jumpV * DAILY_MOD.jumpMul;
+            keys[' '] = false; touchBtn.jump = false;
+            a.vy = (a.vy || 0) - CAKE.gravity * dt;
+            a.p.y += a.vy * dt;
+            if (a.p.y < 0) { a.p.y = 0; a.vy = 0; }
+        }
+
+        // 判断 from 是否面朝 (tx,tz)——跟 cakeTagCheck 用的同一套朝向锥判定，
+        // AI 拿它来分辨"那家伙是真要来抓我了"还是"只是恰好离得近"。
+        function cakeFacingAt(from, tx, tz) {
+            let dx = tx - from.p.x, dz = tz - from.p.z, n = Math.hypot(dx, dz) || 1;
+            let fx = Math.sin(from.facing || 0), fz = Math.cos(from.facing || 0);
+            return (dx / n) * fx + (dz / n) * fz > Math.cos(CAKE.tagConeDeg * Math.PI / 180);
+        }
+        // 没人真的要抓自己的时候就主动追最近的目标——不然大家都在安全距离外
+        // 互相盯着，永远不会有人真正凑近，一整局都抓不到人。
+        // 只有当最近的人已经贴到手范围附近、又正好面朝自己（真的要挨抓了）才会跑；
+        // 朝向直接用这一步真实挪动的方向算，不依赖 mvx/mvz（那两个只有玩家会更新）。
+        function cakeAi(a, dt) {
+            a.aiT -= dt;
+            if (a.aiT <= 0) a.aiT = 0.25 + Math.random() * 0.35;
+            let live = cake.actors.filter(function (x) { return !x.out; });
+            let threat = null, threatD = CAKE.aiVision;
+            live.forEach(function (b) {
+                if (b === a) return;
+                let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
+                if (d < threatD) { threatD = d; threat = b; }
+            });
+            let tx = a.p.x, tz = a.p.z;
+            let dangerous = threat && !(a.shieldT > 0) &&
+                threatD < cakeHandRange(threat) * 1.4 && cakeFacingAt(threat, a.p.x, a.p.z);
+            if (dangerous) {
+                let dx = a.p.x - threat.p.x, dz = a.p.z - threat.p.z, n = Math.hypot(dx, dz) || 1;
+                tx = a.p.x + dx / n * 40; tz = a.p.z + dz / n * 40;
+            } else if (threat) {
+                tx = threat.p.x; tz = threat.p.z;
+            } else {
+                let buff = null, bestD = 90;
+                cake.buffs.forEach(function (b) {
+                    let d = Math.hypot(a.p.x - b.x, a.p.z - b.z);
+                    if (d < bestD) { bestD = d; buff = b; }
+                });
+                if (buff) { tx = buff.x; tz = buff.z; }
+                else {
+                    if (!a.wanderT || a.wanderT <= 0) {
+                        a.wanderTx = a.p.x + (Math.random() - 0.5) * 120;
+                        a.wanderTz = a.p.z + (Math.random() - 0.5) * 120;
+                        a.wanderT = 1.5 + Math.random() * 2;
+                    }
+                    a.wanderT -= dt;
+                    tx = a.wanderTx; tz = a.wanderTz;
+                }
+            }
+            let px0 = a.p.x, pz0 = a.p.z;
+            blazeAdvance(a, tx, tz, dt);
+            let ddx = a.p.x - px0, ddz = a.p.z - pz0;
+            if (Math.hypot(ddx, ddz) > 0.01) a.facing = Math.atan2(ddx, ddz);
+
+            a.vy = (a.vy || 0) - CAKE.gravity * dt;
+            a.p.y += a.vy * dt;
+            if (a.p.y < 0) { a.p.y = 0; a.vy = 0; }
+        }
+
+        // 抓人：谁进了别人的手范围、又被那个人面朝着，就当场出局。
+        // live 是这一帧开始时的快照，但 a.out 是共享对象上的实时字段——
+        // 一旦被判出局，同一帧后面的检查会立刻看到，不会一帧内被两个人重复计一次。
+        function cakeTagCheck() {
+            let live = cake.actors.filter(function (a) { return !a.out; });
+            let coneCos = Math.cos(CAKE.tagConeDeg * Math.PI / 180);
+            live.forEach(function (b) {
+                if (b.out) return;
+                live.forEach(function (a) {
+                    if (a === b || a.out || b.out) return;
+                    let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
+                    if (d > cakeHandRange(b)) return;
+                    let dx = (a.p.x - b.p.x) / (d || 1), dz = (a.p.z - b.p.z) / (d || 1);
+                    let fx = Math.sin(b.facing || 0), fz = Math.cos(b.facing || 0);
+                    if (dx * fx + dz * fz < coneCos) return;
+                    cakeTagOut(a, b);
+                });
+            });
+        }
+        function cakeTagOut(victim, tagger) {
+            victim.out = true;
+            tagger.kills = (tagger.kills || 0) + 1;
+            victim.mesh.visible = false;
+            cakeBurst(victim.p.x, victim.p.z, 0xff7043);
+            if (victim.isPlayer) blazeFlash('你被 ' + tagger.name + ' 拍出局了！');
+            else if (tagger.isPlayer) blazeFlash('你把 ' + victim.name + ' 拍出局了！');
+            else aiSay(tagger, tagger.name, 'catch', CAKE_LINES.catch);
+            cakeCheckWin();
+        }
+        function cakeCheckWin() {
+            if (!cake || cake.over) return;
+            let live = cake.actors.filter(function (a) { return !a.out; });
+            if (live.length <= 1) cakeEndMatch(live[0] || null, '只剩一位没被拍出局。');
+        }
+        function cakeTimeUp() {
+            let best = null;
+            cake.actors.forEach(function (a) {
+                if (!best) { best = a; return; }
+                let ak = a.kills || 0, bk = best.kills || 0;
+                if (ak > bk || (ak === bk && !a.out && best.out)) best = a;
+            });
+            cakeEndMatch(best, '时间到，按拍出局数和存活情况判定。');
+        }
+        function cakeEndMatch(winner, reason) {
+            if (!cake || cake.over) return;
+            cake.over = true;
+            let me = cake.me;
+            let text = (reason ? reason + '<br>' : '') + '你一共拍出局 ' + (me.kills || 0) + ' 人。';
+            let title = !winner ? '平局' : (winner === me ? '你赢了！' : winner.name + ' 获胜');
+            showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { cakeExit(); } }]);
+        }
+
+        function cakeTouchUI(on) {
+            ['blaze-atk-btn', 'blaze-skill1-btn', 'blaze-skill2-btn', 'blaze-card-btn',
+                'race-dash-btn', 'race-skill-btn', 'race-item-btn', 'run-btn'].forEach(function (id) {
+                    let e = document.getElementById(id); if (e) e.style.display = 'none';
+                });
+            let pad = (gState.control === 'pad');
+            let jb = document.getElementById('race-jump-btn');
+            if (jb) jb.style.display = (on && pad) ? 'flex' : 'none';
+            let stats = document.getElementById('blaze-stats-btn'); if (stats) stats.style.display = 'none';
+            let skillbar = document.getElementById('blaze-skillbar'); if (skillbar) skillbar.innerHTML = '';
+            let skillTxt = document.getElementById('blaze-skill'); if (skillTxt) skillTxt.innerText = '';
+            document.getElementById('blaze-bottom').style.display = on ? '' : 'none';
+            let cross = document.getElementById('blaze-crosshair-anchor');
+            if (cross && cross.previousElementSibling) cross.previousElementSibling.style.display = on ? 'none' : '';
+            let ex = document.getElementById('blaze-exit-btn');
+            if (ex) ex.onclick = on ? cakeExit : blazeExit;
+            ['blaze-stats', 'blaze-perk', 'blaze-ffa-cards'].forEach(function (id) {
+                let e = document.getElementById(id); if (e && on) e.classList.add('hidden');
+            });
+        }
+        function cakeHud() {
+            let me = cake.me;
+            let live = cake.actors.filter(function (a) { return !a.out; }).length;
+            let remain = Math.max(0, CAKE.matchTime - cake.clock);
+            document.getElementById('blaze-score').innerText = '存活 ' + live + ' / ' + cake.actors.length + '　' + Math.ceil(remain) + 's';
+            document.getElementById('blaze-round').innerText =
+                '松饼大作战　面朝对方并进入手的范围即可拍出局，最后剩下的人赢　已拍出局 ' + (me.kills || 0) + ' 人' +
+                (me.out ? '　你已出局，正在观战' : '') +
+                (me.shieldT > 0 ? '　护盾 ' + me.shieldT.toFixed(1) + 's' : '') +
+                (me.speedT > 0 ? '　加速中' : '') +
+                (me.reachT > 0 ? '　长手中' : '');
+            document.getElementById('blaze-roster').innerHTML = '';
+            let bar = document.getElementById('blaze-hpbar');
+            bar.style.width = '100%'; bar.style.background = '#66bb6a';
+            document.getElementById('blaze-hptxt').innerText = '存活 ' + live + ' 人';
+        }
+        function cakeCameraPos(me) {
+            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
+            if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1); else dir.normalize();
+            let back = CAKE.camBack;
+            for (let t = 0.2; t <= 1; t += 0.2) {
+                let tx = me.p.x - dir.x * back * t, tz = me.p.z - dir.z * back * t;
+                if (blazeBlocked(tx, tz, 0)) { back = back * Math.max(0, t - 0.2); break; }
+            }
+            return { x: me.p.x - dir.x * back, y: me.p.y + CAKE.camUp, z: me.p.z - dir.z * back };
+        }
+        function cakeTick(dt) {
+            cake.clock += dt;
+            cake.actors.forEach(function (a) {
+                if (a.out) { a.spd = 0; return; }
+                let px0 = a.p.x, pz0 = a.p.z;
+                if (a.isPlayer) cakePlayerMove(a, dt); else cakeAi(a, dt);
+                a.spd = Math.hypot(a.p.x - px0, a.p.z - pz0) / dt;
+                if (a.speedT > 0) a.speedT -= dt;
+                if (a.reachT > 0) a.reachT -= dt;
+                if (a.shieldT > 0) a.shieldT -= dt;
+            });
+            cakeTagCheck();
+            cakeBuffTick(dt);
+            cakeFxTick(dt);
+            cake.actors.forEach(function (a) {
+                a.mesh.position.set(a.p.x, a.p.y, a.p.z);
+                if (a.out) return;
+                a.mesh.rotation.y = a.facing || 0;
+                let run = Math.min(1, (a.spd || 0) / CAKE.moveSpeed);
+                a.animT = (a.animT || 0) + dt * (2 + run * 16);
+                let u = a.mesh.userData;
+                if (u.legs) { u.legs[0].rotation.x = Math.sin(a.animT) * 0.9 * run; u.legs[1].rotation.x = -Math.sin(a.animT) * 0.9 * run; }
+                if (u.arms) {
+                    if (a.gestureT > 0) { a.gestureT -= dt; bodyGesture(u, a.gestureKind, Math.max(0, a.gestureT) / 0.35); }
+                    else { u.arms[0].rotation.x = -Math.sin(a.animT) * 0.7 * run; u.arms[1].rotation.x = Math.sin(a.animT) * 0.7 * run; }
+                }
+                if (u.reach) u.reach.material.opacity = a.reachT > 0 ? 0.7 : 0.35;
+                if (u.ring) u.ring.material.color.setHex(a.shieldT > 0 ? 0x81c784 : a.col);
+            });
+            let me = cake.me;
+            let camPos = cakeCameraPos(me);
+            camera.position.set(camPos.x, camPos.y, camPos.z);
+            if (!cake.over && cake.clock >= CAKE.matchTime) cakeTimeUp();
+            cakeHud();
+            renderer.render(scene, camera);
+        }
+        function cakeLoop() {
+            if (!cake) return;
+            let now = performance.now();
+            let dt = Math.min(0.05, (now - cake.last) / 1000);
+            cake.last = now;
+            if (!cake.over) cakeTick(dt);
+            cake.raf = requestAnimationFrame(cakeLoop);
+        }
+        function cakeBegin() {
+            nav('none');
+            document.getElementById('ui-layer').classList.add('hidden');
+            document.getElementById('night-hud').classList.add('hidden');
+            document.getElementById('blaze-hud').classList.remove('hidden');
+            let pe = document.getElementById('blaze-perk'); if (pe) pe.classList.add('hidden');
+            if (blaze) { try { blazeExit(); } catch (e) { } }
+            if (race) { try { raceExit(); } catch (e) { } }
+            if (jail) { try { jailExit(); } catch (e) { } }
+            if (dodge) { try { dodgeExit(); } catch (e) { } }
+            if (escapeRoom) { try { escapeExit(); } catch (e) { } }
+            if (park) { try { parkExit(); } catch (e) { } }
+            ensureScene();
+            scene.background = new THREE.Color(0xfff3cd);
+            scene.fog = new THREE.FogExp2(0xfff3cd, 0.0012);
+            blazeBuildArena(true, false, false);
+
+            let n = CAKE.playerCount;
+            let center = Math.floor(mSize / 2);
+            let spawns = jailOpenCellsNear(center, center, n);
+            cake = { over: false, clock: 0, actors: [], fx: [], buffs: [], buffTimer: CAKE.buffEvery * 0.4, last: performance.now(), raf: null };
+
+            let pool = HUB_BOT_NAMES.slice();
+            for (let i = 0; i < n; i++) {
+                let isP = (i === 0);
+                let col = RACE_COLORS[i % RACE_COLORS.length];
+                let mesh = raceMakeBody(col, CAKE.handRange);
+                scene.add(mesh);
+                let sp = spawns[i];
+                let name = isP ? (gState.id || '你') : (pool.length ? pool.splice(Math.floor(Math.random() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
+                let a = {
+                    idx: i, isPlayer: isP, col: col, name: name,
+                    p: new THREE.Vector3(sp.x * TILE, 0, sp.z * TILE), facing: Math.random() * Math.PI * 2,
+                    floor: 0, mvx: 0, mvz: 0, vy: 0, out: false, kills: 0,
+                    speedT: 0, reachT: 0, shieldT: 0, gestureT: 0, gestureKind: null,
+                    mesh: mesh, aiT: Math.random() * 0.5, animT: 0
+                };
+                cake.actors.push(a);
+            }
+            cake.me = cake.actors[0];
+            camera.rotation.set(0, Math.random() * Math.PI * 2, 0);
+
+            document.body.onmousedown = function (e) {
+                if (!cake || cake.over) return;
+                if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
+                if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } }
+            };
+            document.body.onmouseup = null;
+            cakeTouchUI(true);
+            bgmStart();
+            cakeLoop();
+        }
+        function cakeExit() {
+            if (!cake) return;
+            cake.over = true;
+            if (cake.raf) cancelAnimationFrame(cake.raf);
+            if (document.pointerLockElement) document.exitPointerLock();
+            cake.actors.forEach(function (a) { scene.remove(a.mesh); });
+            cake.buffs.forEach(function (b) { scene.remove(b.mesh); });
+            cake.fx.forEach(function (f) { scene.remove(f.o); f.mat.dispose(); });
+            cake = null;
+            cakeTouchUI(false);
+            bgmStop();
+            document.body.onmousedown = null;
+            document.getElementById('blaze-hud').classList.add('hidden');
+            nav('screen-lobby'); selectGameMode('cake');
+        }
+
+        // ══════════════════════════════════════════════════════════
         //  大厅广场：进游戏前的一个可以走来走去的 3D 空间，边上搭了一小段
         //  跑酷，还有几个 AI 路人在晃悠——凑近谁都会弹出「组队」，是真人
         //  好友（同房间里认识的）还能顺手「加好友」。没有服务器存不了全网
         //  在线玩家列表，所以"其他玩家"目前是本地模拟的路人，不是真人。
         // ══════════════════════════════════════════════════════════
         const HUB = {
-            plazaHalf: 76, moveSpeed: 30, jumpV: 48, gravity: 140,
-            wanderCount: 4, proximityRange: 14
+            plazaHalf: 130, moveSpeed: 30, jumpV: 48, gravity: 140,
+            wanderCount: 8, proximityRange: 14
         };
         function hubBuildWorld() {
             let floor = new THREE.Mesh(new THREE.PlaneGeometry(HUB.plazaHalf * 2, HUB.plazaHalf * 2),
                 new THREE.MeshLambertMaterial({ color: 0xc8e6c9 }));
             floor.rotation.x = -Math.PI / 2; scene.add(floor); hub.meshes.push(floor);
-            // 跑酷：一路垫高、一路拉开距离的小台阶，跳到最高那块算完成一轮。
-            // 台阶宽 10、间距（中心到中心）17，留出 7 格真空——够跳过去但不算宽松，
-            // 不然台阶紧贴在一起走过去就行，不用跳。
-            let steps = 4, w = 10, stepPitch = 17, stepRise = 5, baseZ = -14, baseY = 4;
+            // 跑酷：台阶越往后越窄、间隔留的空当也不小，还带左右之字拐——
+            // 逼着每一步都得瞄准了跳，不能低头一路直走过去。
+            let widths = [12, 11, 10, 9, 8, 7, 6];
+            let xOffsets = [0, 13, -9, 15, -13, 11, -6];
+            let gapVoid = 7.5, stepRise = 5, baseX = 30, baseZ = -14;
             hub.platforms = [];
-            for (let i = 0; i < steps; i++) {
-                let y = baseY + i * stepRise, z = baseZ - i * stepPitch;
-                let m = new THREE.Mesh(new THREE.BoxGeometry(w, 2, w), new THREE.MeshLambertMaterial({ color: i === steps - 1 ? 0xffd54f : 0x90a4ae }));
-                m.position.set(30, y, z); scene.add(m); hub.meshes.push(m);
-                hub.platforms.push({ x: 30, y: y + 1, z: z, half: w / 2 });
+            let z = baseZ, prevHalf = 0;
+            for (let i = 0; i < widths.length; i++) {
+                let half = widths[i] / 2;
+                z = (i === 0) ? baseZ : (z - prevHalf - half - gapVoid);
+                let x = baseX + xOffsets[i], y = 4 + i * stepRise;
+                let m = new THREE.Mesh(new THREE.BoxGeometry(widths[i], 2, widths[i]),
+                    new THREE.MeshLambertMaterial({ color: i === widths.length - 1 ? 0xffd54f : 0x90a4ae }));
+                m.position.set(x, y, z); scene.add(m); hub.meshes.push(m);
+                hub.platforms.push({ x: x, y: y + 1, z: z, half: half });
+                prevHalf = half;
             }
             // 场地边缘围一圈矮墙，好认出边界在哪
             function wall(x, z, w, d) {
@@ -19040,14 +19488,23 @@
             let half = HUB.plazaHalf;
             wall(0, -half, half * 2, 2); wall(0, half, half * 2, 2); wall(-half, 0, 2, half * 2); wall(half, 0, 2, half * 2);
         }
+        // 路人名字要像真玩家会取的 ID，不是"路人猫盾A"这种一看就是机器人的占位名；
+        // 同时尽量挑生僻/少见的组合，避免正好跟真玩家自己取的昵称撞名。
+        const HUB_BOT_NAMES = ['小鱼干', '摸鱼冠军', '深夜猫盾', '打工猫', '半糖去冰', '橘子汽水',
+            '一只咸鱼', '桃子罐头', '奶茶不加糖', '晚风', '路过的猫', '装睡大师', '柠檬味的风', '今天也很困',
+            '第九颗纽扣', '会漏电的猫', '过期薯片', '拖鞋去哪了', '猫盾守夜人', '芝士味叹气',
+            '掉线的云', '第三只手套', '硬币的反面', '发霉的勇气', '倒着走的钟', '半只耳朵',
+            '不想改名的猫', '塑料袋在飞', '错位的拼图', '偷懒的齿轮', '融化的雪糕棍', '生锈的闹钟'];
         function hubSpawnWanderers() {
-            let names = ['路人猫盾A', '路人猫盾B', '路人猫盾C', '路人猫盾D'];
+            let pool = HUB_BOT_NAMES.slice();
             for (let i = 0; i < HUB.wanderCount; i++) {
+                let idx = Math.floor(Math.random() * pool.length);
+                let name = pool.length ? pool.splice(idx, 1)[0] : ('路人' + (i + 1));
                 let mesh = raceMakeBody(0xb0bec5, 0);
                 scene.add(mesh);
                 let x = (Math.random() - 0.5) * HUB.plazaHalf, z = (Math.random() - 0.5) * HUB.plazaHalf;
                 hub.wanderers.push({
-                    name: names[i] || ('路人猫盾' + (i + 1)), isAI: true, mesh: mesh,
+                    name: name, isAI: true, mesh: mesh,
                     p: new THREE.Vector3(x, 0, z), faceDir: { x: 0, z: 1 }, animT: 0,
                     target: null, idleT: Math.random() * 2
                 });
@@ -19063,14 +19520,16 @@
             a.p.x += dx / n * HUB.moveSpeed * 0.5 * dt; a.p.z += dz / n * HUB.moveSpeed * 0.5 * dt;
             a.faceDir = { x: dx / n, z: dz / n };
         }
-        function hubGroundYAt(x, z) {
-            // 站在跑酷台阶上就用台阶的高度，不然就是地面 y=0——不用真的做物理碰撞，
-            // 平台够大，简单判一下在不在范围内就行。
+        function hubGroundYAt(x, z, curY) {
+            // curY 是这一帧之前的高度：平台只有在「玩家已经在它表面高度附近或更高」时才
+            // 算脚下的地——不然贴着台阶下方走过去，x/z 一进台阶范围就会被直接吸到台阶顶上，
+            // 变成不用跳、走两步就瞬移上去。台阶更高的时候只当墙看待，不当地面。
+            let best = 0;
             for (let i = 0; i < hub.platforms.length; i++) {
                 let p = hub.platforms[i];
-                if (Math.abs(x - p.x) < p.half && Math.abs(z - p.z) < p.half) return p.y;
+                if (Math.abs(x - p.x) < p.half && Math.abs(z - p.z) < p.half && p.y <= curY + 0.6 && p.y > best) best = p.y;
             }
-            return 0;
+            return best;
         }
         function hubPlayerMove(dt) {
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
@@ -19080,25 +19539,48 @@
             if (keys['a']) strafe -= 1; if (keys['d']) strafe += 1;
             if (fwd === 0 && strafe === 0) { fwd = -tMove.y; strafe = tMove.x; }
 
+            let prevY = hub.p.y;
             // 起跳判定要用「移动前」的脚下位置：不然贴着台阶边缘按跳的时候，
             // 这一帧正好走出台阶范围、地面高度瞬间归零，会被当成已经悬空、跳跃失败——
             // 变成边缘按跳没反应，得往回退一步才跳得动，助跑跳完全跳不起来。
-            let curGroundY = hubGroundYAt(hub.p.x, hub.p.z);
+            let curGroundY = hubGroundYAt(hub.p.x, hub.p.z, hub.p.y);
             let onGround = hub.p.y <= curGroundY + 0.5;
-            if ((keys[' '] || touchBtn.jump) && onGround) hub.vy = HUB.jumpV;
+            let now = performance.now();
+            if (onGround) hub.lastGroundedAt = now;
+            if (keys[' '] || touchBtn.jump) hub.lastJumpPressAt = now;
             keys[' '] = false; touchBtn.jump = false;
+            // 土狼时间 + 跳跃缓冲：不用卡着刚好落地/离台那一帧按空格才跳得起来——
+            // 边缘掉落后 120ms 内、或提前按了跳跃键 150ms 内落地，都算数，手感才不涩。
+            let canJump = (now - (hub.lastGroundedAt || -9999) <= 120) && (hub.vy || 0) <= 0;
+            let wantsJump = (now - (hub.lastJumpPressAt || -9999)) <= 150;
+            if (canJump && wantsJump) {
+                hub.vy = HUB.jumpV;
+                hub.lastJumpPressAt = -9999; hub.lastGroundedAt = -9999;
+            }
 
+            let newX = hub.p.x, newZ = hub.p.z;
             if (fwd || strafe) {
                 let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe, n = Math.hypot(mx, mz) || 1;
-                hub.p.x += mx / n * HUB.moveSpeed * dt; hub.p.z += mz / n * HUB.moveSpeed * dt;
+                newX = hub.p.x + mx / n * HUB.moveSpeed * dt; newZ = hub.p.z + mz / n * HUB.moveSpeed * dt;
                 hub.faceDir = { x: mx / n, z: mz / n };
             }
+            // 台子侧面要当墙挡住，不然朝台子横着走/半空中蹭到侧面会直接穿模过去——
+            // 只在人确实比台面矮一截时才挡（不是正要落到台子上那一下，留点余量避免误挡）。
+            let blockedBySide = false;
+            for (let i = 0; i < hub.platforms.length; i++) {
+                let p = hub.platforms[i], pad = 1.1;
+                if (Math.abs(newX - p.x) < p.half + pad && Math.abs(newZ - p.z) < p.half + pad &&
+                    prevY < p.y - 1.2 && prevY > p.y - 6) { blockedBySide = true; break; }
+            }
+            if (!blockedBySide) { hub.p.x = newX; hub.p.z = newZ; }
             let half = HUB.plazaHalf - 2;
             hub.p.x = Math.max(-half, Math.min(half, hub.p.x));
             hub.p.z = Math.max(-half, Math.min(half, hub.p.z));
             hub.vy = (hub.vy || 0) - HUB.gravity * dt;
             hub.p.y += hub.vy * dt;
-            let groundY = hubGroundYAt(hub.p.x, hub.p.z);
+            // 落地判定要用「这一帧移动前」的高度来筛台子：不然摔得快、一帧就掉穿了整块台子时，
+            // 用摔完之后的新高度去筛，会发现台子早就在头顶上方而判定不算地面，直接穿模摔穿过去。
+            let groundY = hubGroundYAt(hub.p.x, hub.p.z, prevY);
             if (hub.p.y < groundY) { hub.p.y = groundY; hub.vy = 0; }
             if (hub.p.y < -10) { hub.p.set(0, 0, 0); hub.vy = 0; }   // 掉下去了，回广场中心重来
         }
@@ -19124,7 +19606,7 @@
                 let teamBtn = document.getElementById('hub-prompt-team');
                 teamBtn.style.display = already ? 'none' : '';
                 teamBtn.disabled = !!nearest.teamPending;
-                teamBtn.innerText = nearest.teamPending ? '等待同意…' : '🤝 组队';
+                teamBtn.innerText = nearest.teamPending ? '等待同意…' : '组队';
             } else {
                 el.style.display = 'none';
             }
@@ -19146,7 +19628,7 @@
                 let accept = Math.random() < 0.8;
                 if (accept) {
                     hub.party.push(w.name);
-                    blazeFlash('🤝 ' + w.name + ' 同意组队了！');
+                    blazeFlash(w.name + ' 同意组队了！');
                 } else {
                     blazeFlash(w.name + ' 说自己在忙，拒绝了组队邀请');
                 }
@@ -19203,13 +19685,18 @@
             let cross = document.getElementById('blaze-crosshair-anchor');
             if (cross && cross.previousElementSibling) cross.previousElementSibling.style.display = on ? 'none' : '';
             let ex = document.getElementById('blaze-exit-btn');
-            if (ex) ex.onclick = on ? hubExit : blazeExit;
+            // 大厅现在是常驻的家，没有"退出"这回事了——想去玩哪个模式，
+            // 点大厅 UI 里的模式/开始游戏就行，所以这颗按钮直接藏起来。
+            if (ex) { if (on) ex.style.display = 'none'; else { ex.style.display = ''; ex.onclick = blazeExit; } }
             ['blaze-stats', 'blaze-perk', 'blaze-ffa-cards'].forEach(function (id) {
                 let e = document.getElementById(id); if (e && on) e.classList.add('hidden');
             });
         }
         function hubBegin() {
-            nav('none');
+            if (hub) return;   // 已经在大厅里了，不重复搭一遍（不然模型、路人会叠出重影）
+            // 大厅现在就是常驻的 3D 广场，屏幕上的大厅 UI（选模式/商店/好友…）
+            // 一直盖在上面，所以这里不再隐藏 screen-lobby，也不清屏——nav() 已经
+            // 处理了"离开大厅就关掉它"这件事，这里只管把 3D 世界搭起来。
             document.getElementById('ui-layer').classList.add('hidden');
             document.getElementById('night-hud').classList.add('hidden');
             document.getElementById('blaze-hud').classList.remove('hidden');
@@ -19220,6 +19707,7 @@
             if (dodge) { try { dodgeExit(); } catch (e) { } }
             if (escapeRoom) { try { escapeExit(); } catch (e) { } }
             if (park) { try { parkExit(); } catch (e) { } }
+            if (cake) { try { cakeExit(); } catch (e) { } }
             ensureScene();
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
@@ -19258,7 +19746,8 @@
             bgmStop();
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
-            nav('screen-lobby');
+            // 不在这调 nav() —— hubExit 本来就是被 nav() 自己（离开大厅时）
+            // 或者某个模式的 Begin() 调用的，这里再调一次会互相递归。
         }
 
         let hudSlots = document.querySelectorAll('#hud-hotbar-container .slot');
