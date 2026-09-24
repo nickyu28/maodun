@@ -3365,7 +3365,9 @@
         function buildProceduralMaze() {
             mSize = HUNT_SIZE;
             chests.forEach(function (c) { scene.remove(c); }); groundItems.forEach(function (g) { scene.remove(g); }); entities.forEach(function (e) { scene.remove(e); }); clearFootprints3D();
-            maze.forEach(function (fRows) { if (fRows) fRows.forEach(function (row) { if (row) row.forEach(function (m) { if (m && m.mesh) scene.remove(m.mesh); }); }); }); chests = []; groundItems = []; entities = []; maze = []; walkableMeshes = [];
+            huntDropMerged();
+            // 从躲猫猫/火拼图切过来时，上一张图的屋顶(roof…roof6)也得一起拿掉，不然留在场景里白白多画几百个 mesh
+            maze.forEach(function (fRows) { if (fRows) fRows.forEach(function (row) { if (row) row.forEach(function (m) { if (m) ['mesh', 'roof', 'roof2', 'roof3', 'roof4', 'roof5', 'roof6'].forEach(function (k) { if (m[k]) scene.remove(m[k]); }); }); }); }); chests = []; groundItems = []; entities = []; maze = []; walkableMeshes = [];
 
             const wallTex = createProceduralTexture('wall', '#e5e5ea', '#cccccc'); const floorTex = createProceduralTexture('floor', '#ffffff', '#e5e5ea');
             const safeFloorTex = createProceduralTexture('safe_floor', '#a8e6cf', '#dcedc1'); const safeWallTex = createProceduralTexture('safe_wall', '#1abc9c', '#16a085');
@@ -3629,7 +3631,58 @@
                 }
             }
 
+            huntMergeStatic();
             camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
+        }
+
+        // 反馈「游戏有点卡」：寻宝图每一格墙/地板/台阶都是单独一个 mesh + 单独一个材质，
+        // 三层加起来一千四百多个，一帧平均四百次、最多一千一百次 draw call，低配机器直接掉帧。
+        // 地图建好以后就不会再变，所以按贴图把它们合成几块大 mesh 来画。
+        // 原来那些小 mesh 从场景里拿掉，但对象留着：walkableMeshes 往下打射线还用它们，
+        // 各处清图的代码 scene.remove 它们也照样不出错。
+        let huntMerged = [];
+        function huntDropMerged() {
+            huntMerged.forEach(function (m) { scene.remove(m); m.geometry.dispose(); m.material.dispose(); });
+            huntMerged = [];
+        }
+        function huntMergeStatic() {
+            huntDropMerged();
+            let set = new Set(walkableMeshes);
+            maze.forEach(function (rows) { rows.forEach(function (row) { row.forEach(function (c) { if (c && c.mesh) set.add(c.mesh); }); }); });
+            let byTex = new Map();
+            set.forEach(function (m) {
+                if (!m.parent || !m.material || !m.material.map) return;
+                m.updateMatrixWorld(true);
+                let g = m.geometry.clone();
+                g.applyMatrix4(m.matrixWorld);
+                let k = m.material.map;
+                if (!byTex.has(k)) byTex.set(k, []);
+                byTex.get(k).push(g);
+                scene.remove(m);
+            });
+            byTex.forEach(function (geos, tex) {
+                let nv = 0, ni = 0;
+                geos.forEach(function (g) { nv += g.attributes.position.count; ni += g.index ? g.index.count : g.attributes.position.count; });
+                let pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), idx = new Uint32Array(ni);
+                let vo = 0, io = 0;
+                geos.forEach(function (g) {
+                    let n = g.attributes.position.count;
+                    pos.set(g.attributes.position.array, vo * 3);
+                    nor.set(g.attributes.normal.array, vo * 3);
+                    uv.set(g.attributes.uv.array, vo * 2);
+                    if (g.index) { let a = g.index.array; for (let i = 0; i < a.length; i++) idx[io++] = a[i] + vo; }
+                    else { for (let i = 0; i < n; i++) idx[io++] = vo + i; }
+                    vo += n; g.dispose();
+                });
+                let geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+                geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+                geo.setIndex(new THREE.BufferAttribute(idx, 1));
+                geo.computeBoundingSphere();
+                let mm = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex }));
+                scene.add(mm); huntMerged.push(mm);
+            });
         }
 
         // 惊魂夜的 AI 强度：反应快慢、追捕视野、队友修机效率，三样跟着隐藏分走。
@@ -3687,6 +3740,7 @@
             mSize = NIGHT_SIZE;
             chests.forEach(function (c) { scene.remove(c); }); groundItems.forEach(function (g) { scene.remove(g); });
             entities.forEach(function (e) { scene.remove(e); }); clearFootprints3D();
+            huntDropMerged();
             maze.forEach(function (fRows) {
                 if (fRows) fRows.forEach(function (row) {
                     if (row) row.forEach(function (m) {
@@ -4450,6 +4504,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-24-hunt-perf', date: '2026-09-24', title: '寻宝队不卡了', items: [
+                    '根据反馈"游戏有点卡"：寻宝队地图原来每一块墙、地板、台阶都单独画一次，一帧要画几百到一千多次；现在地图建好后合并成几块一起画，每帧只画十次左右，画面一模一样，低配电脑也应该流畅很多。',
+                    '玩过躲猫猫再进寻宝队时，上一张图的屋顶不会再残留在场景里拖慢速度。'
+                ]
+            },
             {
                 id: '2026-09-24-cake-mode', date: '2026-09-24', title: '新模式：松饼大作战（第一步） + 跑酷手感修复', items: [
                     '新增"松饼大作战"：不分队伍的自由混战抓人，面朝对方并让对方进入你手的范围就能把他拍出局，最后剩下的人赢。地图上会刷新加速/长手/护盾三种短效增益。（这版先做玩法，猫的建模换成松饼形状留到下一步。）',
@@ -6481,6 +6541,7 @@
             groundItems.forEach(function (g) { scene.remove(g); });
             entities.forEach(function (e) { scene.remove(e); });
             clearFootprints3D();
+            huntDropMerged();
             maze.forEach(function (fRows) {
                 if (fRows) fRows.forEach(function (row) {
                     if (row) row.forEach(function (m) {
