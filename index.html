@@ -4534,6 +4534,13 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-24-nightly', date: '2026-09-24', title: '夜间修复：护盾失效、连败保底、每日效果漏用', items: [
+                    '松饼大作战里的"护盾"增益之前只是让 AI 自以为安全，实际碰到抓人的还是照样出局——现在护盾真的能挡住被抓一次。',
+                    '队友撤离但你倒下的那一局，之前不会计入连败保底判定，导致这条路径下可能一直连败也等不到保底安全箱——现在会正常累计了。',
+                    '"今日效果"（加速/减速等）之前在合作密室和猫盾乐园里不生效，跟大厅提示的"全模式生效"不符——现在这两个模式也会应用今日效果。'
+                ]
+            },
+            {
                 id: '2026-09-24-mcoin', date: '2026-09-24', title: '货币统一成猫盾币 + 皮肤系统 + 组队联机实验', items: [
                     '寻宝队/惊魂夜/超燃各自的金币，还有商店宠物/表情用的通用币，合并成一份"猫盾币"，全模式通用（寻宝队自己的钱还是单独一套，不受影响）。',
                     '因为货币结构变了，这次更新会把所有人的存档（寻宝队的钱、猫盾币、角色解锁）清零重来——现在还没人正式在玩，直接清干净比小心翼翼换算更省事。',
@@ -15532,6 +15539,7 @@
 
         function teamExtractWithoutYou() {
             gState.matchHistory.push(false); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
+            if (gState.matchHistory.filter(w => !w).length >= 5) gState.pityGuaranteed = true;
             tidyGarage();
             let saved = (gState.submittedItems || []).slice();
             gState.submittedItems = [];
@@ -18684,7 +18692,7 @@
             if (fwd || strafe) {
                 let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe;
                 let n = Math.hypot(mx, mz) || 1;
-                a.p.x += mx / n * ESCAPE.moveSpeed * dt; a.p.z += mz / n * ESCAPE.moveSpeed * dt;
+                a.p.x += mx / n * ESCAPE.moveSpeed * DAILY_MOD.speedMul * dt; a.p.z += mz / n * ESCAPE.moveSpeed * DAILY_MOD.speedMul * dt;
                 a.faceDir = { x: mx / n, z: mz / n };
             }
             escapeClampRoom(a);
@@ -18718,7 +18726,7 @@
             }
             let dx = target.x - a.p.x, dz = target.z - a.p.z, d = Math.hypot(dx, dz);
             if (d > 1) {
-                a.p.x += dx / d * ESCAPE.moveSpeed * dt; a.p.z += dz / d * ESCAPE.moveSpeed * dt;
+                a.p.x += dx / d * ESCAPE.moveSpeed * DAILY_MOD.speedMul * dt; a.p.z += dz / d * ESCAPE.moveSpeed * DAILY_MOD.speedMul * dt;
                 a.faceDir = { x: dx / d, z: dz / d };
             }
             escapeClampRoom(a);
@@ -19124,7 +19132,7 @@
             if (fwd === 0 && strafe === 0) { fwd = -tMove.y; strafe = tMove.x; }
             if (fwd || strafe) {
                 let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe, n = Math.hypot(mx, mz) || 1;
-                let sp = park.compiled.playerSpeed;
+                let sp = park.compiled.playerSpeed * DAILY_MOD.speedMul;
                 park.p.x += mx / n * sp * dt; park.p.z += mz / n * sp * dt;
                 park.faceDir = { x: mx / n, z: mz / n };
             }
@@ -19475,6 +19483,7 @@
                 if (b.out) return;
                 live.forEach(function (a) {
                     if (a === b || a.out || b.out) return;
+                    if (a.shieldT > 0) return;
                     let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
                     if (d > cakeHandRange(b)) return;
                     let dx = (a.p.x - b.p.x) / (d || 1), dz = (a.p.z - b.p.z) / (d || 1);
