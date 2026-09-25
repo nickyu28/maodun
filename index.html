@@ -1087,7 +1087,7 @@
             <div>
                 <div style="font-size:12px; color:#666; margin-bottom:4px;">麦克风</div>
                 <button id="lobby-mic-btn" onclick="lobbyToggleMic()" style="width:100%; margin:0; font-size:12px; padding:7px 4px; background:#eceff1; border:1px solid #cfd8dc;">麦克风：关</button>
-                <div style="font-size:10px; color:#999; margin-top:4px;">占位开关，语音通话还没接通</div>
+                <div style="font-size:10px; color:#999; margin-top:4px;">第一次点会要麦克风权限，房间里其他开了麦的人能互相听见</div>
             </div>
             <div>
                 <div style="font-size:12px; color:#666; margin-bottom:4px;">聊天</div>
@@ -1473,9 +1473,87 @@
             });
         }
 
+        // ── 麦克风：房间里两两之间直接建语音通话，不经过房主转发/混音——
+        // 房主的 PeerJS id 是固定公式能算出来（NET_PREFIX+peerRoom），非房主的
+        // id 是随机生成的，靠房主在 netDeliver 里认出新连接时广播出来
+        // （见上面的 VOICE_PEER）。人少的小房间够用，别指望几十个人一起开麦。
+        let localMicStream = null;
+        let voiceOptedIn = false;      // 有没有主动点过一次麦克风——没点过就不参与，连别人的都不接
+        let voiceCalls = {};           // 游戏 ID -> MediaConnection
+        let voicePeerIds = {};         // 游戏 ID -> 真实 PeerJS id（非房主的，靠房主转告）
+        let voiceAudioEls = {};        // 游戏 ID -> 播放对方声音的 <audio>
+
+        function voiceRealPeerId(id) {
+            let entry = roomList.filter(function (r) { return r.id === id; })[0];
+            if (entry && entry.host) return NET_PREFIX + peerRoom;
+            return voicePeerIds[id] || null;
+        }
+        function voicePlayStream(id, stream) {
+            let el = voiceAudioEls[id];
+            if (!el) {
+                el = document.createElement('audio');
+                el.autoplay = true;
+                document.body.appendChild(el);
+                voiceAudioEls[id] = el;
+            }
+            el.srcObject = stream;
+        }
+        function voiceCleanupPeer(id) {
+            if (voiceCalls[id]) { try { voiceCalls[id].close(); } catch (e) { } delete voiceCalls[id]; }
+            if (voiceAudioEls[id]) { voiceAudioEls[id].remove(); delete voiceAudioEls[id]; }
+        }
+        function voiceCleanupAll() { Object.keys(voiceCalls).forEach(voiceCleanupPeer); }
+        function voiceAcceptCall(call) {
+            let fromId = call.metadata && call.metadata.id;
+            call.answer(localMicStream || undefined);
+            call.on('stream', function (remoteStream) { if (fromId) voicePlayStream(fromId, remoteStream); });
+            call.on('close', function () { if (fromId) voiceCleanupPeer(fromId); });
+            call.on('error', function () { if (fromId) voiceCleanupPeer(fromId); });
+            if (fromId) voiceCalls[fromId] = call;
+        }
+        function voiceDial(id) {
+            if (!peer || !peer.open || voiceCalls[id]) return;
+            let pid = voiceRealPeerId(id);
+            if (!pid) return;
+            let call;
+            try { call = peer.call(pid, localMicStream || undefined, { metadata: { id: gState.id } }); }
+            catch (e) { return; }
+            if (!call) return;
+            voiceCalls[id] = call;
+            call.on('stream', function (remoteStream) { voicePlayStream(id, remoteStream); });
+            call.on('close', function () { voiceCleanupPeer(id); });
+            call.on('error', function () { voiceCleanupPeer(id); });
+        }
+        // 谁拨给谁：游戏 ID 字典序小的那个负责拨号，两边各自算都是同一个结果，
+        // 不会两头同时拨出重复的两条线。房间成员一变化、拿到新的真实 id 就补拨一次。
+        function voiceMeshSync() {
+            if (!voiceOptedIn || !peerWant) return;
+            roomList.forEach(function (r) {
+                if (r.self || voiceCalls[r.id]) return;
+                if (gState.id >= r.id) return;
+                voiceDial(r.id);
+            });
+        }
+        function voiceHookPeer(p) {
+            p.on('call', function (call) {
+                if (!voiceOptedIn) { try { call.close(); } catch (e) { } return; }
+                voiceAcceptCall(call);
+            });
+        }
+
         function netDeliver(m, from) {
 
-            if (from && m && m.sender) from._who = m.sender;
+            if (from && m && m.sender) {
+                // 房主这边第一次认出这条连接对应哪个游戏 ID，顺手记下它真实的
+                // PeerJS id、告诉房间里所有人——语音通话拨号靠的就是这个真实 id，
+                // 不是游戏里显示的那个名字。
+                let isNewWho = !from._who;
+                from._who = m.sender;
+                if (isNewWho && peerIsHost) {
+                    voicePeerIds[m.sender] = from.peer;
+                    bc.postMessage({ type: 'VOICE_PEER', target: '*', id: m.sender, peerId: from.peer });
+                }
+            }
             if (peerIsHost) netSend(m, from);
             if (bc.onmessage) bc.onmessage({ data: m });
         }
@@ -1534,6 +1612,7 @@
         function netDropPeer() {
             peerConns.forEach(function (c) { try { c.close(); } catch (e) { } });
             peerConns = [];
+            voiceCleanupAll(); voicePeerIds = {};
             try { if (peer) peer.destroy(); } catch (e) { }
             peer = null;
         }
@@ -1541,6 +1620,7 @@
         function netTryHost() {
             netDropPeer();
             try { peer = new Peer(NET_PREFIX + peerRoom); } catch (e) { netSetStatus('联机初始化失败', '#d9534f'); return; }
+            voiceHookPeer(peer);
             peer.on('open', function () {
                 peerIsHost = true;
                 roomPeers = {}; roomSync(); netRefreshCount();
@@ -1558,6 +1638,7 @@
         function netTryGuest() {
             netDropPeer();
             try { peer = new Peer(); } catch (e) { netSetStatus('联机初始化失败', '#d9534f'); return; }
+            voiceHookPeer(peer);
             peer.on('open', function () {
                 peerIsHost = false;
                 // 这里只是自己的 peer 对象连上了信令服务器，跟房主之间的连接还没打开——
@@ -1680,7 +1761,7 @@
         function roomSync() {
             let now = performance.now();
             Object.keys(roomPeers).forEach(function (id) {
-                if (now - roomPeers[id].at > ROOM_STALE) delete roomPeers[id];
+                if (now - roomPeers[id].at > ROOM_STALE) { delete roomPeers[id]; voiceCleanupPeer(id); }
             });
             let ids = Object.keys(roomPeers).sort();
             roomList = ids.length
@@ -1698,6 +1779,7 @@
             });
             roomRender();
             if (nightMatch) nightMatchTick();
+            voiceMeshSync();
         }
 
         function roomRender() {
@@ -1774,10 +1856,30 @@
                 return '<li>' + id + ' <a href="javascript:void(0)" onclick="teamLeaveMember(\'' + id + '\')" style="color:#d9534f; font-size:11px;">离队</a></li>';
             }).join('') : '<li style="color:#999;">还没组队</li>';
         }
+        // 第一次点：要一次麦克风权限，权限给了才真的接入语音（voiceOptedIn）。
+        // 之后再点就是单纯静音/取消静音，不用重新要权限、也不用断线重连——
+        // 静音只是把本地音轨关掉，通话还开着，照样听得见别人。
         function lobbyToggleMic() {
-            gState.micOn = !gState.micOn;
             let b = document.getElementById('lobby-mic-btn');
-            if (b) { b.innerText = gState.micOn ? '麦克风：开' : '麦克风：关'; b.style.background = gState.micOn ? '#c8e6c9' : '#eceff1'; }
+            if (localMicStream) {
+                gState.micOn = !gState.micOn;
+                localMicStream.getAudioTracks().forEach(function (t) { t.enabled = gState.micOn; });
+                if (b) { b.innerText = gState.micOn ? '麦克风：开' : '麦克风：关'; b.style.background = gState.micOn ? '#c8e6c9' : '#eceff1'; }
+                return;
+            }
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showSysModal('提示', '这个设备/浏览器不支持麦克风', [{ label: '知道了' }]);
+                return;
+            }
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+                localMicStream = stream;
+                voiceOptedIn = true;
+                gState.micOn = true;
+                if (b) { b.innerText = '麦克风：开'; b.style.background = '#c8e6c9'; }
+                voiceMeshSync();
+            }).catch(function () {
+                showSysModal('提示', '没拿到麦克风权限，检查一下浏览器/系统设置', [{ label: '知道了' }]);
+            });
         }
         // 松饼大作战、惊魂夜自己已经有"大家一起"的联机流程（邀请全票通过 / 排队匹配），
         // 不用房主批准。剩下这几个模式还是各玩各的本地对局，房间里有房主的话就该
@@ -2132,6 +2234,8 @@
                 cakeOnWorld(msg);
             } else if (msg.type === 'MODE_SUGGEST') {
                 lobbyOnModeSuggest(msg);
+            } else if (msg.type === 'VOICE_PEER') {
+                if (msg.id && msg.peerId && msg.id !== gState.id) { voicePeerIds[msg.id] = msg.peerId; voiceMeshSync(); }
             } else {
                 if (msg.target !== '*' && msg.target !== gState.id) return;
                 if (msg.type === 'START_GARAGE') {
@@ -4656,6 +4760,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-25-mic', date: '2026-09-25', title: '麦克风真的能用了', items: [
+                    '大厅的"麦克风"从占位开关变成真的语音通话：第一次点会问你要麦克风权限，之后房间里其他开了麦的人能互相听见，再点一下是静音/取消静音（通话不断，只是暂时不发声）。',
+                    '房间人少的时候能用，别指望塞几十个人一起开麦——是大家两两之间直接连线，不是通过房主转发。'
+                ]
+            },
             {
                 id: '2026-09-25-mode-suggest', date: '2026-09-25', title: '非房主点开始游戏改成推荐给房主', items: [
                     '寻宝队/超燃/竞速/监狱救援/躲避球/密室/猫盾乐园这几个模式，房间里有房主的时候，不是房主的人点"开始游戏"不会自己直接开局了，会把"想玩这个模式"告诉房主，房主那边会弹提示，可以直接切过去。惊魂夜、松饼大作战已经有自己的"大家一起"流程，不受影响。'
