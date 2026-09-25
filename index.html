@@ -1564,8 +1564,12 @@
         }
 
         function netCount() { return peerConns.filter(function (c) { return c && c.open; }).length + 1; }
+        // 显示"在线几人"不能用 netCount——星形拓扑下非房主只跟房主有一条直连，
+        // netCount 在客人这边永远是 2，看不出真实房间人数。roomList 是靠
+        // ROOM_HELLO 经房主转发汇总出来的，房主/客人两边看到的都是真实总数。
+        function roomOnlineCount() { return Math.max(1, roomList.length); }
         function netRefreshCount() {
-            netSetStatus((peerIsHost ? '房主' : '已加入') + '　房间 ' + peerRoom + '　在线 ' + netCount() + ' 人', '#5cb85c');
+            netSetStatus((peerIsHost ? '房主' : '已加入') + '　房间 ' + peerRoom + '　在线 ' + roomOnlineCount() + ' 人', '#5cb85c');
         }
 
         function netHookConn(c) {
@@ -2253,6 +2257,8 @@
                 lobbyOnModeSuggest(msg);
             } else if (msg.type === 'VOICE_PEER') {
                 if (msg.id && msg.peerId && msg.id !== gState.id) { voicePeerIds[msg.id] = msg.peerId; voiceMeshSync(); }
+            } else if (msg.type === 'HUB_ME') {
+                hubOnMe(msg);
             } else {
                 if (msg.target !== '*' && msg.target !== gState.id) return;
                 if (msg.type === 'START_GARAGE') {
@@ -4790,6 +4796,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-25-hub-real', date: '2026-09-25', title: '大厅广场真的能看见对方了', items: [
+                    '之前"大厅广场"里走来走去的路人全是本地模拟的假机器人，两台设备各玩各的，谁也看不见谁；顶上"在线 X 人"其实是路人数量+1，两边永远显示一样的数字，跟真实在不在线毫无关系。现在真人玩家会真的同步到 3D 大厅广场里（橙色描边、头顶有名字），走近了能组队/加好友——组队会走正式邀请，对方要真的同意，不是路人那套随手答应。',
+                    '"在线 X 人"这行也改成看真实房间人数（不是本地连接数——房主和其他人各自看到的连接数不一样，之前用错了那个数字，客人这边会一直卡在固定值不变）。'
+                ]
+            },
             {
                 id: '2026-09-25-autojoin', date: '2026-09-25', title: '大厅默认自动联机', items: [
                     '以前得自己敲房间号、点"进入"才算联机——两台设备各自打开游戏，谁都没点那一下，大厅里当然看不到对方、在线人数也不会变。现在进大厅会自动联机（默认都进同一个房间），不用再手动这一步；想单独开小房间还是可以自己把房间号改掉再点"进入"。',
@@ -20639,7 +20651,7 @@
         }
         function hubProximityTick() {
             let nearest = null, bestD = HUB.proximityRange;
-            hub.wanderers.forEach(function (w) {
+            hub.wanderers.concat(Object.keys(hub.realPlayers).map(function (id) { return hub.realPlayers[id]; })).forEach(function (w) {
                 let d = Math.hypot(w.p.x - hub.p.x, w.p.z - hub.p.z);
                 if (d < bestD) { bestD = d; nearest = w; }
             });
@@ -20648,7 +20660,8 @@
             if (!el) return;
             if (nearest) {
                 el.style.display = 'flex';
-                let already = hub.party.indexOf(nearest.name) >= 0;
+                // 真人走正式组队（lobbyParty，对方要真的同意），AI 路人还是原来那套哄一下的假流程
+                let already = nearest.isAI ? (hub.party.indexOf(nearest.name) >= 0) : (lobbyParty.indexOf(nearest.name) >= 0);
                 document.getElementById('hub-prompt-name').innerText = nearest.name + (already ? '（已组队）' : '');
                 document.getElementById('hub-prompt-friend').style.display = nearest.isAI ? 'none' : '';
                 let teamBtn = document.getElementById('hub-prompt-team');
@@ -20664,6 +20677,12 @@
         function hubTeamUp() {
             if (!hub || !hub.nearby) return;
             let w = hub.nearby;
+            if (!w.isAI) {
+                // 真人：走正式组队邀请（跟大厅下方"组队"面板是同一套 lobbyParty，
+                // 对方要真的点同意——碰到的是真朋友，不该用假路人那套随机答复哄你）
+                teamInvite(w.name);
+                return;
+            }
             if (hub.party.indexOf(w.name) >= 0) { blazeFlash(w.name + ' 已经在队伍里了'); return; }
             if (hub.party.length >= 3) { blazeFlash('队伍已经满了（最多 3 人）'); return; }
             if (w.teamPending) return;
@@ -20689,9 +20708,45 @@
             blazeFlash('已经加 ' + hub.nearby.name + ' 为好友');
         }
         function hubHud() {
-            document.getElementById('blaze-score').innerText = '在线 ' + (hub.wanderers.length + 1) + ' 人';
+            // 在线人数看真实房间人数（roomOnlineCount），不是路人机器人数量——
+            // 路人是本地模拟的，之前这里写的是 hub.wanderers.length+1，
+            // 两台设备各自算各自的路人，数字永远一样、永远不变，看着就跟假的一样。
+            document.getElementById('blaze-score').innerText = '在线 ' + roomOnlineCount() + ' 人';
+            let team = lobbyParty.concat(hub.party);
             document.getElementById('blaze-round').innerText = '大厅广场　WASD 走动，空格跳，靠近人可以组队　当前队伍：' +
-                (hub.party.length ? hub.party.join('、') : '（还没组队）');
+                (team.length ? team.join('、') : '（还没组队）');
+        }
+        // ── 大厅广场联机：跟房间里其他真人互相广播位置，不经过房主转发。
+        // 频率比正式对局低一些（8Hz）——大厅是常驻空间，没必要那么密。
+        function hubNetTick(dt) {
+            if (!hub || !peerWant) return;
+            hub.netSelfT = (hub.netSelfT || 0) + dt;
+            if (hub.netSelfT < 1 / 8) return;
+            hub.netSelfT = 0;
+            bc.postMessage({
+                type: 'HUB_ME', target: '*', sender: gState.id,
+                x: Math.round(hub.p.x), y: +hub.p.y.toFixed(1), z: Math.round(hub.p.z),
+                fx: +hub.faceDir.x.toFixed(2), fz: +hub.faceDir.z.toFixed(2)
+            });
+        }
+        const HUB_REAL_STALE = 6000;   // 这么久没收到更新就当对方离开大厅了
+        function hubOnMe(m) {
+            if (!hub || !m.sender || m.sender === gState.id) return;
+            let w = hub.realPlayers[m.sender];
+            if (!w) {
+                let mesh = raceMakeBody(0xff8a65, 0);
+                let label = nightMakeLabel(m.sender, 0xff8a65, false);
+                label.position.y = 13.5; mesh.add(label);
+                scene.add(mesh);
+                w = hub.realPlayers[m.sender] = {
+                    name: m.sender, isAI: false, mesh: mesh,
+                    p: new THREE.Vector3(m.x, m.y || 0, m.z), target: null,
+                    faceDir: { x: m.fx || 0, z: m.fz || 1 }, animT: 0, spd: 0
+                };
+            }
+            w.target = { x: m.x, y: m.y || 0, z: m.z };
+            if (m.fx !== undefined) w.faceDir = { x: m.fx, z: m.fz };
+            w.lastSeen = performance.now();
         }
         function hubTick(dt) {
             let prevPx = hub.p.x, prevPz = hub.p.z;
@@ -20702,9 +20757,25 @@
                 hubWandererTick(w, dt);
                 w.spd = Math.hypot(w.p.x - px0, w.p.z - pz0) / dt;
             });
+            hubNetTick(dt);
+            // 联机来的真人路人：位置是网络给的坐标，插值挪过去，离线太久就撤掉模型
+            let now = performance.now();
+            Object.keys(hub.realPlayers).forEach(function (id) {
+                let w = hub.realPlayers[id];
+                if (now - (w.lastSeen || 0) > HUB_REAL_STALE) {
+                    scene.remove(w.mesh); delete hub.realPlayers[id]; return;
+                }
+                if (w.target) {
+                    let px0 = w.p.x, pz0 = w.p.z, k = Math.min(1, dt * 10);
+                    w.p.x += (w.target.x - w.p.x) * k; w.p.z += (w.target.z - w.p.z) * k;
+                    w.p.y += (w.target.y - w.p.y) * k;
+                    w.spd = Math.hypot(w.p.x - px0, w.p.z - pz0) / dt;
+                }
+            });
+            let realList = Object.keys(hub.realPlayers).map(function (id) { return hub.realPlayers[id]; });
             // 站着不动的时候腿不该还在原地摆——之前不管有没有真的在移动都按固定频率甩腿，
             // 看着就是「人没在动脚在动」。现在按这一步真实挪动的距离算摆动幅度，站定就归零。
-            [hub].concat(hub.wanderers).forEach(function (real) {
+            [hub].concat(hub.wanderers).concat(realList).forEach(function (real) {
                 real.mesh.position.set(real.p.x, real.p.y, real.p.z);
                 if (real.faceDir) real.mesh.rotation.y = Math.atan2(real.faceDir.x, real.faceDir.z);
                 let u = real.mesh.userData;
@@ -20771,9 +20842,9 @@
             let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0);
             scene.add(mesh);
             hub = {
-                meshes: [], wanderers: [], party: [], nearby: null,
+                meshes: [], wanderers: [], realPlayers: {}, party: [], nearby: null,
                 p: new THREE.Vector3(0, 0, 20), vy: 0, faceDir: { x: 0, z: -1 }, mesh: mesh, animT: 0,
-                last: performance.now(), raf: null
+                last: performance.now(), raf: null, netSelfT: 0
             };
             hubBuildWorld();
             hubSpawnWanderers();
@@ -20795,6 +20866,7 @@
             if (document.pointerLockElement) document.exitPointerLock();
             (hub.meshes || []).forEach(function (m) { scene.remove(m); });
             hub.wanderers.forEach(function (w) { scene.remove(w.mesh); });
+            Object.keys(hub.realPlayers).forEach(function (id) { scene.remove(hub.realPlayers[id].mesh); });
             scene.remove(hub.mesh);
             hub = null;
             hubTouchUI(false);
