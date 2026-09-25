@@ -1779,8 +1779,15 @@
             let b = document.getElementById('lobby-mic-btn');
             if (b) { b.innerText = gState.micOn ? '麦克风：开' : '麦克风：关'; b.style.background = gState.micOn ? '#c8e6c9' : '#eceff1'; }
         }
+        // 松饼大作战、惊魂夜自己已经有"大家一起"的联机流程（邀请全票通过 / 排队匹配），
+        // 不用房主批准。剩下这几个模式还是各玩各的本地对局，房间里有房主的话就该
+        // 房主说了算——非房主点"开始游戏"不直接开局，只是把想玩什么告诉房主。
         function lobbyPrimaryStart() {
             let m = gState.gameMode;
+            if (m !== 'night' && m !== 'cake' && roomList.length > 1 && !peerIsHost) {
+                lobbySuggestModeToHost(m);
+                return;
+            }
             if (m === 'hunt') requestStartGame();
             else if (m === 'night') enterNightMatch('survivor');
             else if (m === 'blaze') blazeStart();
@@ -1790,6 +1797,21 @@
             else if (m === 'escape') escapeBegin();
             else if (m === 'park') parkBegin(PARK_BUILTIN.easy);
             else if (m === 'cake') cakeStartGo();
+        }
+
+        function lobbySuggestModeToHost(mode) {
+            let hostEntry = roomList.filter(function (r) { return r.host; })[0];
+            let modeName = (FEEDBACK_MODES.filter(function (p) { return p[0] === mode; })[0] || [mode, mode])[1];
+            bc.postMessage({ type: 'MODE_SUGGEST', target: hostEntry ? hostEntry.id : '*', sender: gState.id, mode: mode, modeName: modeName });
+            blazeFlash('已经告诉房主你想玩"' + modeName + '"了');
+        }
+        function lobbyOnModeSuggest(m) {
+            if (!peerIsHost || !m.sender || m.sender === gState.id) return;
+            if (m.target !== '*' && m.target !== gState.id) return;
+            showSysModal('模式推荐', m.sender + ' 推荐游戏模式：' + (m.modeName || m.mode), [
+                { label: '切换到这个模式', color: '#5cb85c', onClick: function () { selectGameMode(m.mode); } },
+                { label: '知道了' }
+            ]);
         }
 
         let friends = [];
@@ -2108,6 +2130,8 @@
                 cakeOnMe(msg);
             } else if (msg.type === 'CK_W') {
                 cakeOnWorld(msg);
+            } else if (msg.type === 'MODE_SUGGEST') {
+                lobbyOnModeSuggest(msg);
             } else {
                 if (msg.target !== '*' && msg.target !== gState.id) return;
                 if (msg.type === 'START_GARAGE') {
@@ -4632,6 +4656,11 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-25-mode-suggest', date: '2026-09-25', title: '非房主点开始游戏改成推荐给房主', items: [
+                    '寻宝队/超燃/竞速/监狱救援/躲避球/密室/猫盾乐园这几个模式，房间里有房主的时候，不是房主的人点"开始游戏"不会自己直接开局了，会把"想玩这个模式"告诉房主，房主那边会弹提示，可以直接切过去。惊魂夜、松饼大作战已经有自己的"大家一起"流程，不受影响。'
+                ]
+            },
             {
                 id: '2026-09-25-id-invite', date: '2026-09-25', title: 'ID 防撞车 + 松饼大作战开局要所有人同意', items: [
                     '新设备第一次起名会悄悄带上一小段专属尾巴，跟别的设备基本不会撞出一模一样的最终 ID（已经有存档的老 ID 不受影响，还是原来那个）。',
