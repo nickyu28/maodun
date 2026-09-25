@@ -1060,8 +1060,13 @@
             </div>
         </div>
 
-        <!-- 下方：联机房间 / 好友 / 组队 / 麦克风 / 聊天 -->
+        <!-- 下方：组队 / 联机房间 / 好友 / 麦克风 / 聊天（组队挪到最左边，更显眼） -->
         <div id="lobby-bottom">
+            <div>
+                <div style="font-size:12px; color:#666; margin-bottom:4px;">组队（需对方同意，最多 4 人）</div>
+                <ul id="lobby-team-list" style="text-align:left; font-size:12px; color:#333; margin:0; padding-left:16px; max-height:104px; overflow-y:auto;"></ul>
+                <div style="font-size:10px; color:#999; margin-top:4px;">在右边房间列表里点「邀请组队」发邀请。超燃：1 人乱斗单排、2 人乱斗双人、3/4 人开 2v2（3 人自动补一个 AI）</div>
+            </div>
             <div>
                 <div style="font-size:12px; color:#666; margin-bottom:4px;">联机　<span id="net-status" style="color:#999;">未连接</span></div>
                 <div style="display:flex; gap:4px;">
@@ -1078,11 +1083,6 @@
                     <button onclick="friendAdd()" style="background:#5cb85c; color:#fff; margin:0; padding:5px 10px; font-size:12px;">加</button>
                 </div>
                 <ul id="friend-list" style="text-align:left; font-size:12px; color:#333; margin:6px 0 0; padding-left:16px; max-height:80px; overflow-y:auto;"></ul>
-            </div>
-            <div>
-                <div style="font-size:12px; color:#666; margin-bottom:4px;">组队（需对方同意，最多 4 人）</div>
-                <ul id="lobby-team-list" style="text-align:left; font-size:12px; color:#333; margin:0; padding-left:16px; max-height:104px; overflow-y:auto;"></ul>
-                <div style="font-size:10px; color:#999; margin-top:4px;">在上面房间列表里点「邀请组队」发邀请。超燃：1 人乱斗单排、2 人乱斗双人、3/4 人开 2v2（3 人自动补一个 AI）</div>
             </div>
             <div>
                 <div style="font-size:12px; color:#666; margin-bottom:4px;">麦克风</div>
@@ -1583,7 +1583,7 @@
                 clearTimeout(openTimeout);
                 let wasOpen = c.open;
                 peerConns = peerConns.filter(function (x) { return x !== c; });
-                if (c._who) { delete roomPeers[c._who]; roomSync(); }
+                if (c._who) { delete roomPeers[c._who]; voiceCleanupPeer(c._who); roomSync(); }
                 if (!peerIsHost && !wasOpen && peerWant) {
                     netSetStatus('连不上房间 ' + peerRoom + '，重试中…', '#d9534f');
                     if (peerRetry) clearTimeout(peerRetry);
@@ -1803,7 +1803,11 @@
                         let team = (!r.self && lobbyParty.indexOf(r.id) < 0)
                             ? ' <a href="javascript:void(0)" onclick="teamInvite(\'' + r.id + '\')" style="color:#00acc1; font-size:12px;">邀请组队</a>'
                             : '';
-                        return '<li>' + r.id + (r.self ? ' （你）' : '') + hb + add + team + '</li>';
+                        // 语音状态：自己看是否已经开麦参与语音，别人看跟你有没有连上通话
+                        let mic = r.self
+                            ? (voiceOptedIn ? ' <span style="color:#5cb85c; font-size:11px;">[语音]</span>' : '')
+                            : (voiceCalls[r.id] ? ' <span style="color:#5cb85c; font-size:11px;">[语音]</span>' : '');
+                        return '<li>' + r.id + (r.self ? ' （你）' : '') + mic + hb + add + team + '</li>';
                     }).join('');
                     if (roomDupId && performance.now() - roomDupId < 8000) {
                         el.innerHTML += '<li style="color:#d9534f;">该 ID 已被占用</li>';
@@ -4769,6 +4773,14 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-25-fixes2', date: '2026-09-25', title: '跑酷穿模修复 + 头顶名字 + 语音补漏', items: [
+                    '修好大厅跑酷台阶穿模：之前台子侧面的"免判定"余量比台子本身还厚，贴着边一走会直接从台子里穿过去，第二块台阶最容易踩中。松饼大作战的跳台也有同样的问题，一起修了。',
+                    '松饼大作战、超燃里每个角色头顶现在会显示名字（真人显示 ID），混战/联机的时候不再靠猜哪个是真人朋友。',
+                    '组队面板挪到大厅下方最左边，更显眼。房间列表里加了个[语音]标记，看得出谁跟你语音连上了。',
+                    '补了个语音的漏洞：有人断线时语音通话没有跟着关掉，会一直挂在那儿。'
+                ]
+            },
             {
                 id: '2026-09-25-party-tier', date: '2026-09-25', title: '组队上限 4 人 + 超燃按人数自动选玩法', items: [
                     '大厅"组队"现在最多 4 个人，满了会自动拒绝新邀请。',
@@ -7891,6 +7903,9 @@
                     mesh: blazeMakeBody(q.key, q.team)
                 };
                 scene.add(a.mesh);
+                // 头顶名字：混战/联机的时候光看剪影分不出谁是真人朋友、谁是 AI
+                let lbl = nightMakeLabel(a.name, blazeTeamCol(q.team), false);
+                lbl.position.y = 20; a.mesh.add(lbl);
                 blaze.actors.push(a);
                 if (mine) blaze.me = a;
             });
@@ -19788,10 +19803,14 @@
                 let dx = a.mvx * dt, dz = a.mvz * dt;
                 // 跳台侧面要当墙挡住，不然贴着台子横着走会直接穿模过去——
                 // 只在人确实比台面矮一截时才挡（人已经站上去、正要落地那一下不算）。
+                // 台子实体厚度是 2（从 p.y-2 到 p.y），之前留 1.2 的"免判定"余量
+                // 比实体还厚，等于台子上半截根本没挡——贴着台子边跳起来，脚正好落在
+                // 那 1.2 的空当里，横着走一步直接穿过去。缩到 0.3，够盖住起跳/落地那一帧
+                // 又不会跟实体范围重叠。
                 let blockedBySide = cakePlatforms.some(function (p) {
                     let pad = 3.5, nx = a.p.x + dx, nz = a.p.z + dz;
                     return Math.abs(nx - p.x) < p.half + pad && Math.abs(nz - p.z) < p.half + pad &&
-                        prevY < p.y - 1.2 && prevY > p.y - 6;
+                        prevY < p.y - 0.3 && prevY > p.y - 6;
                 });
                 if (!blockedBySide) blazeStep(a, dx, dz);
             }
@@ -20409,6 +20428,9 @@
                 scene.add(mesh);
                 let sp = spawns[i];
                 let name = q.id ? q.id : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
+                // 头顶名字：联机的时候一堆猫盾身体长得一样，不然根本分不清谁是真人朋友
+                let label = nightMakeLabel(name, col, false);
+                label.position.y = 13.5; mesh.add(label);
                 let a = {
                     idx: i, isPlayer: isP, col: col, name: name,
                     netId: q.id || null, remote: !!(q.id && !isP), target: null,
@@ -20567,11 +20589,14 @@
             // 只在人确实比台面矮一截时才挡（不是正要落到台子上那一下，留点余量避免误挡）。
             // pad 得盖过猫盾模型自己的半宽（身体+耳朵大概 3~3.5 个单位），不然挡住的只是
             // 中心点还没碰到边，但耳朵/身体的网格已经先一步露在台子里面，看着照样像穿模。
+            // 台子实体厚度是 2（从 p.y-2 到 p.y），之前 1.2 的余量比实体还厚，等于台子
+            // 上半截完全没挡——第二块台阶最先撞上这个（往上跳的落点正好卡在那段空当里），
+            // 贴着边一走就直接穿过去了。缩到 0.3，落地那一帧还是留得住，实体范围不再重叠。
             let blockedBySide = false;
             for (let i = 0; i < hub.platforms.length; i++) {
                 let p = hub.platforms[i], pad = 3.5;
                 if (Math.abs(newX - p.x) < p.half + pad && Math.abs(newZ - p.z) < p.half + pad &&
-                    prevY < p.y - 1.2 && prevY > p.y - 6) { blockedBySide = true; break; }
+                    prevY < p.y - 0.3 && prevY > p.y - 6) { blockedBySide = true; break; }
             }
             if (!blockedBySide) { hub.p.x = newX; hub.p.z = newZ; }
             let half = HUB.plazaHalf - 2;
