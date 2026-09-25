@@ -854,6 +854,7 @@
             <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">彩蛋图鉴</button>
             <button onclick="openChatSetup()" style="width:100%; margin:0 0 6px; background:#607d8b; color:#fff; border:none; font-size:12px; padding:7px 4px;">发言设置</button>
             <button onclick="openFeedback()" style="width:100%; margin:0 0 6px; background:#e91e63; color:#fff; border:none; font-size:12px; padding:7px 4px;">反馈</button>
+            <button onclick="openPlayLog()" style="width:100%; margin:0 0 6px; background:#795548; color:#fff; border:none; font-size:12px; padding:7px 4px;">游玩记录</button>
             <div id="lobby-rank" style="font-size:11px; color:#888; margin-top:4px;"></div>
             <div id="daily-mod-banner" style="font-size:11px; color:#795548; background:#fff8e1; border:1px solid #ffe082; border-radius:5px; padding:5px 6px; margin-top:4px;"></div>
         </div>
@@ -1590,7 +1591,39 @@
 
         const ROOM_BEAT = 1200, ROOM_STALE = 5000;
 
+        // 游玩记录：只记你自己联机时真正同房间遇到过的人（没有后端，
+        // 没法知道全网谁在玩），存在本地，"游玩记录"按钮里能看、能提交给开发者。
+        const PLAYLOG_SESSION_GAP = 120000;   // 断线超过这么久再见面，算重新"来玩了一次"
+        let playLog = {};
+        function playLogLoad() {
+            try { playLog = JSON.parse(localStorage.getItem('TH_playlog') || '{}') || {}; }
+            catch (e) { playLog = {}; }
+        }
+        function playLogSave() { try { localStorage.setItem('TH_playlog', JSON.stringify(playLog)); } catch (e) { } }
+        function playLogSeen(id, stats) {
+            if (!id || id === gState.id) return;
+            let now = Date.now();
+            let e = playLog[id];
+            if (!e) { e = playLog[id] = { firstSeen: now, lastSeen: now, timesSeen: 0, stats: null }; }
+            if (now - e.lastSeen > PLAYLOG_SESSION_GAP) e.timesSeen++;
+            e.lastSeen = now;
+            if (stats) e.stats = stats;
+            playLogSave();
+        }
+
         function roomMe() { return roomList.find(function (r) { return r.id === gState.id; }); }
+
+        // 游玩记录：自己这份存档的小摘要，随心跳一起广播出去，让房间里的人
+        // 顺手记一笔"谁玩到什么程度了"。不是完整存档，就几个数，量很小。
+        function playStatsDigest() {
+            return {
+                mcoin: coinsOf(),
+                skins: Object.keys(gState.skins || {}).length,
+                eggs: eggCount(),
+                nightRank: rankTierName('night'),
+                blazeRank: rankTierName('blaze')
+            };
+        }
 
         function roomSelfMsg() {
 
@@ -1605,7 +1638,8 @@
                 matching: !!nightMatch,
                 side: nightMatch ? nightMatch.side : null,
                 left: left,
-                bz: gState.blazeChar || 'bow'
+                bz: gState.blazeChar || 'bow',
+                stats: playStatsDigest()
             };
         }
 
@@ -1632,6 +1666,7 @@
                 return;
             }
             friendSeen(m.sender);
+            playLogSeen(m.sender, m.stats);
             roomPeers[m.sender] = {
                 host: !!m.host, matching: !!m.matching,
                 side: m.side || null,
@@ -2065,6 +2100,10 @@
                     if (cake) { if (cake.raf) cancelAnimationFrame(cake.raf); cake = null; }
                     cakeBegin(msg.plan, msg.host, msg.seed);
                 }
+            } else if (msg.type === 'CK_INVITE') {
+                cakeOnInvite(msg);
+            } else if (msg.type === 'CK_INVITE_ACK') {
+                if (msg.target === gState.id) cakeOnInviteAck(msg);
             } else if (msg.type === 'CK_ME') {
                 cakeOnMe(msg);
             } else if (msg.type === 'CK_W') {
@@ -2266,9 +2305,25 @@
             set('calib-help-keys', kTxt('按 <b>空格</b> 校准。', '点屏幕任意处校准。'));
         }
 
+        // 起名撞车是真正的问题根源（联机全靠 ID 认人）——单靠事后踢人治标不治本，
+        // 从根上让不同设备基本不会撞出同一个最终 ID：每台设备第一次用的时候
+        // 生成一段专属小尾巴、永久存在本地，新建的 ID 都带上它。已经有存档的老 ID
+        // （没带尾巴）原样放过，不然现有玩家进来就找不到自己存档了。
+        function deviceSuffix() {
+            try {
+                let s = localStorage.getItem('TH_device_suffix');
+                if (!s) { s = Math.random().toString(36).slice(2, 6); localStorage.setItem('TH_device_suffix', s); }
+                return s;
+            } catch (e) { return Math.random().toString(36).slice(2, 6); }
+        }
+        function resolvePlayerId(raw) {
+            try { if (localStorage.getItem('TH_save_' + raw)) return raw; } catch (e) { }
+            return raw + '#' + deviceSuffix();
+        }
         function requestLobbyAccess() {
-            let pid = document.getElementById('player-id').value.trim();
-            if (!pid) { showSysModal('错误', '请输入ID', [{ label: '确定' }]); return; }
+            let raw = document.getElementById('player-id').value.trim();
+            if (!raw) { showSysModal('错误', '请输入ID', [{ label: '确定' }]); return; }
+            let pid = resolvePlayerId(raw);
             pendingIdCheck = pid; bc.postMessage({ type: 'CHECK_ID', target: '*', id: pid });
             idCheckTimeout = setTimeout(() => { if (pendingIdCheck === pid) { pendingIdCheck = ''; proceedToLobby(pid); } }, 300);
         }
@@ -2276,7 +2331,7 @@
         function proceedToLobby(pid) {
             let ai1Name = pid + "_AI_1"; let ai2Name = pid + "_AI_2"; gState.id = pid;
             gState.team = [{ id: pid, isLeader: true, isReady: true, isAI: false }, { id: ai1Name, isLeader: false, isReady: true, isAI: true }, { id: ai2Name, isLeader: false, isReady: true, isAI: true }];
-            loadProgress(pid); loadEggs(); friendLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
+            loadProgress(pid); loadEggs(); friendLoad(); playLogLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
             chatLoad();
             try { let r = localStorage.getItem('TH_room'); if (r) document.getElementById('net-room').value = r; } catch (e) { }
             let eb = document.getElementById('btn-egg-book');
@@ -4578,6 +4633,18 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-25-id-invite', date: '2026-09-25', title: 'ID 防撞车 + 松饼大作战开局要所有人同意', items: [
+                    '新设备第一次起名会悄悄带上一小段专属尾巴，跟别的设备基本不会撞出一模一样的最终 ID（已经有存档的老 ID 不受影响，还是原来那个）。',
+                    '松饼大作战开局改成要问过房间里所有人：发起人点"开始游戏"后大家会收到邀请，全部同意才真的开局，有人拒绝或者没反应就不开，不会把人偷偷换成 AI。'
+                ]
+            },
+            {
+                id: '2026-09-25-playlog', date: '2026-09-25', title: '新增"游玩记录"', items: [
+                    '左上角新增"游玩记录"：记下你联机时遇到过的人（ID、第一次/最近一次见面、见面次数、上次看到的猫盾币/皮肤/彩蛋/段位），点"提交给开发者"能跟反馈一样发给我看。',
+                    '只记你自己亲身联机遇到过的人，不是全网玩家名单——这游戏没有后端服务器，没法知道谁没跟你联机过就在玩。'
+                ]
+            },
+            {
                 id: '2026-09-24-net-fixes', date: '2026-09-24', title: '联机稳定性修复', items: [
                     '修好了一个 bug：以前"加入房间"点下去马上就显示"已加入"，但跟房主的连接其实还没建好——房间号打错、房主已经下线的时候，你会一直以为自己在房间里，其实谁都联不上。现在会显示"连接房主中…"，真的连上了才算数，连不上会自动重试。',
                     '起名默认不再是"玩家"了——如果两个人在同一个房间里用了一模一样的 ID，联机的位置同步、组队全靠 ID 认人，会互相顶掉，谁都收不到对方消息。现在检测到撞 ID 会直接把你请出房间，弹窗提示换个 ID 再进来。',
@@ -4765,6 +4832,55 @@
             let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
             let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
                 '&body=' + encodeURIComponent(body) + '&labels=feedback';
+            window.open(url, '_blank');
+            blazeFlash('已复制内容，也打开了 GitHub 提交页');
+        }
+
+        // 游玩记录：只是你自己遇到过的人的本地小名单，不是全网玩家统计——
+        // 没有后端，没法知道谁没跟你联机过就在玩。跟反馈一个套路，
+        // 想真的交给开发者看就点"提交"，走同一条 GitHub issue 预填链接。
+        function openPlayLog() {
+            let ids = Object.keys(playLog).sort(function (a, b) { return playLog[b].lastSeen - playLog[a].lastSeen; });
+            let rows = ids.length ? ids.map(function (id) {
+                let e = playLog[id], s = e.stats || {};
+                let statsTxt = s.mcoin === undefined ? '（还没收到数据）' :
+                    (s.mcoin + ' 猫盾币　皮肤 ' + s.skins + '　彩蛋 ' + s.eggs +
+                        '　惊魂夜 ' + s.nightRank + '　超燃 ' + s.blazeRank);
+                return '<tr><td style="padding:4px 8px; border-top:1px solid #eee;">' + id + '</td>' +
+                    '<td style="padding:4px 8px; border-top:1px solid #eee; color:#888; font-size:11px;">' +
+                    new Date(e.firstSeen).toLocaleDateString() + '</td>' +
+                    '<td style="padding:4px 8px; border-top:1px solid #eee; color:#888; font-size:11px;">' +
+                    new Date(e.lastSeen).toLocaleString() + '</td>' +
+                    '<td style="padding:4px 8px; border-top:1px solid #eee; text-align:center;">' + e.timesSeen + '</td>' +
+                    '<td style="padding:4px 8px; border-top:1px solid #eee; font-size:11px;">' + statsTxt + '</td></tr>';
+            }).join('') : '<tr><td colspan="5" style="padding:14px; color:#999; text-align:center;">还没记录到任何人——得先跟别人联机进同一个房间才会记下来。</td></tr>';
+            let html = '<div style="text-align:left;">' +
+                '<div style="font-size:11px; color:#999; margin-bottom:8px;">只记你自己联机遇到过的人，不是全网玩家名单——没有后端存不了那种东西。</div>' +
+                '<div style="max-height:320px; overflow:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px;">' +
+                '<tr style="color:#888; text-align:left;"><th style="padding:4px 8px;">ID</th><th style="padding:4px 8px;">第一次</th>' +
+                '<th style="padding:4px 8px;">最近一次</th><th style="padding:4px 8px;">次数</th><th style="padding:4px 8px;">上次看到的数据</th></tr>' +
+                rows + '</table></div></div>';
+            showSysModal('游玩记录　共 ' + ids.length + ' 人', html, [
+                { label: '提交给开发者', color: '#24292e', onClick: function () { playLogSubmit(); } },
+                { label: '关闭' }
+            ]);
+        }
+        function playLogSubmit() {
+            let ids = Object.keys(playLog);
+            if (!ids.length) { showSysModal('提示', '还没记录到任何人，先联机玩一会儿再提交', [{ label: '确定' }]); return; }
+            let lines = ids.sort().map(function (id) {
+                let e = playLog[id], s = e.stats || {};
+                return id + '　首次 ' + new Date(e.firstSeen).toLocaleDateString() +
+                    '　最近 ' + new Date(e.lastSeen).toLocaleString() + '　次数 ' + e.timesSeen +
+                    '　币 ' + (s.mcoin === undefined ? '?' : s.mcoin) + '　皮肤 ' + (s.skins === undefined ? '?' : s.skins) +
+                    '　彩蛋 ' + (s.eggs === undefined ? '?' : s.eggs) +
+                    '　惊魂夜 ' + (s.nightRank || '?') + '　超燃 ' + (s.blazeRank || '?');
+            });
+            let body = '提交者: ' + gState.id + '\n时间: ' + new Date().toLocaleString() + '\n记录到 ' + ids.length + ' 人\n\n' + lines.join('\n');
+            try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
+            let title = '[游玩记录] ' + gState.id + ' 提交，共 ' + ids.length + ' 人';
+            let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
+                '&body=' + encodeURIComponent(body) + '&labels=playlog';
             window.open(url, '_blank');
             blazeFlash('已复制内容，也打开了 GitHub 提交页');
         }
@@ -20002,16 +20118,86 @@
             return g;
         }
 
-        // 跟 blazeStartGo 一个思路：看当前房间里还有谁，凑一份名单（自己必在，
-        // 其余真人按 id 排序取前面几个，凑不满 CAKE.playerCount 就用 AI 补），
-        // 广播出去，大家各自用同一份名单 + 同一个种子开局。
+        // 看当前房间里还有谁，凑一份候选名单（自己必在，其余真人按 id 排序取
+        // 前面几个，凑不满 CAKE.playerCount 就用 AI 补）。跟房间里其他人没有关系时
+        // （只有自己）直接开局；有其他真人的话得先问过所有人，全部同意才真的开局——
+        // 谁不同意（或者半天没反应）这次就不开，不悄悄把人踢成 AI 替上。
+        let cakeInvite = null, cakeInviteTimer = null;
+        const CAKE_INVITE_TIMEOUT = 15000;
         function cakeStartGo() {
             let others = roomList.filter(function (r) { return r.id !== gState.id; })
                 .map(function (r) { return r.id; }).sort().slice(0, CAKE.playerCount - 1);
-            let plan = [{ id: gState.id }].concat(others.map(function (id) { return { id: id }; }));
-            let seed = Math.floor(Math.random() * 1000000);
-            if (others.length) bc.postMessage({ type: 'CK_START', target: '*', sender: gState.id, plan: plan, host: gState.id, seed: seed });
-            cakeBegin(plan, gState.id, seed);
+            if (!others.length) {
+                cakeBegin([{ id: gState.id }], gState.id, Math.floor(Math.random() * 1000000));
+                return;
+            }
+            let reqId = 'ck' + Date.now() + Math.floor(Math.random() * 1000);
+            cakeInvite = { reqId: reqId, others: others.slice(), pending: others.slice(), declined: [], t0: performance.now() };
+            bc.postMessage({ type: 'CK_INVITE', target: '*', sender: gState.id, ids: others, reqId: reqId });
+            cakeInviteRender();
+            if (cakeInviteTimer) clearInterval(cakeInviteTimer);
+            cakeInviteTimer = setInterval(cakeInviteTick, 300);
+        }
+        function cakeInviteRender() {
+            if (!cakeInvite) return;
+            let waiting = cakeInvite.pending.length ? '还在等同意：' + cakeInvite.pending.join('、') : '';
+            let declined = cakeInvite.declined.length ? '　已拒绝：' + cakeInvite.declined.join('、') : '';
+            showSysModal('等待同意　松饼大作战', '已经邀请房间里的其他人一起玩——得所有人都同意才会真的开局。' +
+                (waiting || declined ? '<br><span style="font-size:12px; color:#888;">' + waiting + declined + '</span>' : ''),
+                [{ label: '取消', color: '#999', onClick: function () { cakeInviteCancel(); } }]);
+        }
+        function cakeInviteCancel() {
+            if (cakeInviteTimer) { clearInterval(cakeInviteTimer); cakeInviteTimer = null; }
+            cakeInvite = null;
+        }
+        function cakeInviteTick() {
+            if (!cakeInvite) { clearInterval(cakeInviteTimer); cakeInviteTimer = null; return; }
+            if (cakeInvite.declined.length) {
+                clearInterval(cakeInviteTimer); cakeInviteTimer = null;
+                let who = cakeInvite.declined.join('、'); cakeInvite = null;
+                showSysModal('没法开局', who + ' 拒绝了，这次先不开松饼大作战。', [{ label: '知道了' }]);
+                return;
+            }
+            if (cakeInvite.pending.length === 0) {
+                clearInterval(cakeInviteTimer); cakeInviteTimer = null;
+                let plan = [{ id: gState.id }].concat(cakeInvite.others.map(function (id) { return { id: id }; }));
+                let seed = Math.floor(Math.random() * 1000000);
+                cakeInvite = null;
+                document.getElementById('sys-modal').classList.add('hidden');   // 全票通过，自动开局，不用等你点关闭
+                bc.postMessage({ type: 'CK_START', target: '*', sender: gState.id, plan: plan, host: gState.id, seed: seed });
+                cakeBegin(plan, gState.id, seed);
+                return;
+            }
+            if (performance.now() - cakeInvite.t0 > CAKE_INVITE_TIMEOUT) {
+                clearInterval(cakeInviteTimer); cakeInviteTimer = null;
+                let who = cakeInvite.pending.join('、'); cakeInvite = null;
+                showSysModal('没法开局', who + ' 没有回应（可能不在了），这次先不开松饼大作战。', [{ label: '知道了' }]);
+            }
+        }
+        // 收到别人发来的开局邀请：不是自己身上的邀请就无视，是的话弹窗问同意不同意，
+        // 把结果发回给发起人。
+        function cakeOnInvite(m) {
+            if (!m.ids || m.ids.indexOf(gState.id) < 0) return;
+            showSysModal('邀请　松饼大作战', (m.sender || '有人') + ' 想现在开始松饼大作战，同意一起玩吗？', [
+                {
+                    label: '同意', color: '#5cb85c', onClick: function () {
+                        bc.postMessage({ type: 'CK_INVITE_ACK', target: m.sender, sender: gState.id, reqId: m.reqId, accept: true });
+                    }
+                },
+                {
+                    label: '拒绝', color: '#d9534f', onClick: function () {
+                        bc.postMessage({ type: 'CK_INVITE_ACK', target: m.sender, sender: gState.id, reqId: m.reqId, accept: false });
+                    }
+                }
+            ]);
+        }
+        function cakeOnInviteAck(m) {
+            if (!cakeInvite || m.reqId !== cakeInvite.reqId) return;
+            let i = cakeInvite.pending.indexOf(m.sender);
+            if (i < 0) return;
+            cakeInvite.pending.splice(i, 1);
+            if (!m.accept) cakeInvite.declined.push(m.sender);
+            cakeInviteRender();
         }
         // plan：[{id}, {id}, ...]，真人的位置排前面，不够 CAKE.playerCount 个就用 AI 补满。
         // 联机时 host/seed 由发起人决定，所有人用同一个 seed 生成地图，画面才能对上。
