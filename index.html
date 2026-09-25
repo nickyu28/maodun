@@ -823,7 +823,7 @@
         <h1 style="font-size: 36px; color: #666;">猫盾の游戏</h1>
         <h2 style="font-size: 24px; color: #666; font-weight:normal;">选择id</h2>
         <div style="margin: 20px; display: flex; align-items: center; justify-content: center;">
-            <input type="text" id="player-id" value="" placeholder="给自己起个 ID" style="border: none; border-bottom: 1px solid #999; border-radius: 0; background: transparent; font-size: 24px; text-align: center; width: 200px;">
+            <input type="text" id="player-id" value="" placeholder="ID" style="border: none; border-bottom: 1px solid #999; border-radius: 0; background: transparent; font-size: 24px; text-align: center; width: 200px;">
         </div>
         <button onclick="requestLobbyAccess()" style="background:#5cb85c; color:#fff; font-size: 18px; padding: 10px 40px;">确定</button>
     </div>
@@ -1812,7 +1812,7 @@
                         let mic = r.self
                             ? (voiceOptedIn ? ' <span style="color:#5cb85c; font-size:11px;">[语音]</span>' : '')
                             : (voiceCalls[r.id] ? ' <span style="color:#5cb85c; font-size:11px;">[语音]</span>' : '');
-                        return '<li>' + r.id + (r.self ? ' （你）' : '') + mic + hb + add + team + '</li>';
+                        return '<li>' + dispName(r.id) + (r.self ? ' （你）' : '') + mic + hb + add + team + '</li>';
                     }).join('');
                     if (roomDupId && performance.now() - roomDupId < 8000) {
                         el.innerHTML += '<li style="color:#d9534f;">该 ID 已被占用</li>';
@@ -1827,23 +1827,23 @@
         const PARTY_CAP = 4;   // 算上自己最多 4 个人
         function teamInvite(id) {
             if (!id || id === gState.id) return;
-            if (lobbyParty.indexOf(id) >= 0) { blazeFlash('已经和 ' + id + ' 组队了'); return; }
+            if (lobbyParty.indexOf(id) >= 0) { blazeFlash('已经和 ' + dispName(id) + ' 组队了'); return; }
             if (lobbyParty.length >= PARTY_CAP - 1) { blazeFlash('队伍最多 ' + PARTY_CAP + ' 人，满了'); return; }
             bc.postMessage({ type: 'TEAM_INVITE', target: id, sender: gState.id });
-            blazeFlash('已经向 ' + id + ' 发出组队邀请，等 TA 同意');
+            blazeFlash('已经向 ' + dispName(id) + ' 发出组队邀请，等 TA 同意');
         }
         function teamOnInviteReceived(fromId) {
             if (lobbyParty.length >= PARTY_CAP - 1) {
                 bc.postMessage({ type: 'TEAM_INVITE_ACK', target: fromId, sender: gState.id, accept: false });
-                showSysModal('组队邀请', fromId + ' 邀请你组队，但你的队伍已经满了（最多 ' + PARTY_CAP + ' 人），自动拒绝了。', [{ label: '知道了' }]);
+                showSysModal('组队邀请', dispName(fromId) + ' 邀请你组队，但你的队伍已经满了（最多 ' + PARTY_CAP + ' 人），自动拒绝了。', [{ label: '知道了' }]);
                 return;
             }
-            showSysModal('组队邀请', fromId + ' 邀请你组队', [
+            showSysModal('组队邀请', dispName(fromId) + ' 邀请你组队', [
                 {
                     label: '同意', color: '#5cb85c', onClick: function () {
                         bc.postMessage({ type: 'TEAM_INVITE_ACK', target: fromId, sender: gState.id, accept: true });
                         teamAddMember(fromId);
-                        blazeFlash('已经和 ' + fromId + ' 组队');
+                        blazeFlash('已经和 ' + dispName(fromId) + ' 组队');
                     }
                 },
                 {
@@ -1854,8 +1854,8 @@
             ]);
         }
         function teamOnInviteAck(fromId, accept) {
-            if (accept) { teamAddMember(fromId); blazeFlash(fromId + ' 同意组队了！'); }
-            else blazeFlash(fromId + ' 拒绝了组队邀请');
+            if (accept) { teamAddMember(fromId); blazeFlash(dispName(fromId) + ' 同意组队了！'); }
+            else blazeFlash(dispName(fromId) + ' 拒绝了组队邀请');
         }
         function teamAddMember(id) {
             if (lobbyParty.indexOf(id) >= 0) return;
@@ -1871,7 +1871,7 @@
             let el = document.getElementById('lobby-team-list');
             if (!el) return;
             el.innerHTML = lobbyParty.length ? lobbyParty.map(function (id) {
-                return '<li>' + id + ' <a href="javascript:void(0)" onclick="teamLeaveMember(\'' + id + '\')" style="color:#d9534f; font-size:11px;">离队</a></li>';
+                return '<li>' + dispName(id) + ' <a href="javascript:void(0)" onclick="teamLeaveMember(\'' + id + '\')" style="color:#d9534f; font-size:11px;">离队</a></li>';
             }).join('') : '<li style="color:#999;">还没组队</li>';
         }
         // 第一次点：要一次麦克风权限，权限给了才真的接入语音（voiceOptedIn）。
@@ -1929,7 +1929,7 @@
         function lobbyOnModeSuggest(m) {
             if (!peerIsHost || !m.sender || m.sender === gState.id) return;
             if (m.target !== '*' && m.target !== gState.id) return;
-            showSysModal('模式推荐', m.sender + ' 推荐游戏模式：' + (m.modeName || m.mode), [
+            showSysModal('模式推荐', dispName(m.sender) + ' 推荐游戏模式：' + (m.modeName || m.mode), [
                 { label: '切换到这个模式', color: '#5cb85c', onClick: function () { selectGameMode(m.mode); } },
                 { label: '知道了' }
             ]);
@@ -2008,7 +2008,7 @@
                 let join = f.room
                     ? '<a href="javascript:void(0)" onclick="friendJoin(\'' + f.id + '\')" style="color:#337ab7;">进房间 ' + f.room + '</a>　'
                     : '<span style="color:#999;">房间未知　</span>';
-                return '<li>' + bond + f.id + ' ' + here + '<br>' + join +
+                return '<li>' + bond + dispName(f.id) + ' ' + here + '<br>' + join +
                     '<a href="javascript:void(0)" onclick="friendRemove(\'' + f.id + '\')" style="color:#d9534f;">删除</a></li>';
             }).join('');
         }
@@ -2355,7 +2355,7 @@
             if (!log) return;
             let row = document.createElement('div');
             row.style.cssText = 'background:rgba(0,0,0,0.62); color:#fff; font-size:12px; padding:4px 8px; border-radius:4px; max-width:100%;';
-            row.innerHTML = '<span style="color:' + (mine ? '#7fd1ff' : '#ffd54f') + ';">' + chatEscape(who) + '</span>：' + chatEscape(text);
+            row.innerHTML = '<span style="color:' + (mine ? '#7fd1ff' : '#ffd54f') + ';">' + chatEscape(dispName(who)) + '</span>：' + chatEscape(text);
             log.appendChild(row);
             while (log.children.length > 6) log.removeChild(log.firstChild);
 
@@ -2472,6 +2472,11 @@
         function resolvePlayerId(raw) {
             try { if (localStorage.getItem('TH_save_' + raw)) return raw; } catch (e) { }
             return raw + '#' + deviceSuffix();
+        }
+        // resolvePlayerId 加的 #xxxx 小尾巴只是为了后台防撞车，玩家不需要看到它——
+        // 显示的时候统一用这个把尾巴去掉（AI 名字是 "本名#xxxx_AI_1" 这种，也要连着摘掉）。
+        function dispName(id) {
+            return (id || '').replace(/#[0-9a-z]{4}(?=(_AI_\d+)?$)/, '');
         }
         function requestLobbyAccess() {
             let raw = document.getElementById('player-id').value.trim();
@@ -2722,7 +2727,7 @@
             Object.keys(matchPool).sort().forEach(function (id) {
                 let l = matchPool[id].left;
                 rows.push('<div style="color:' + (id === gState.id ? '#7fd1ff' : '#cfe8ff') + ';">' +
-                    id + '　' + (matchPool[id].side === 'hunter' ? '追捕' : '逃生') +
+                    dispName(id) + '　' + (matchPool[id].side === 'hunter' ? '追捕' : '逃生') +
                     (id === gState.id ? '（你）' : '') +
                     (typeof l === 'number' ? ' <span style="color:#888;">' + Math.ceil(l) + 's</span>' : '') +
                     '</div>');
@@ -2810,7 +2815,7 @@
             let have = need.filter(function (id) { return gState.netChars[id]; });
             document.getElementById('night-wait-list').innerHTML = need.map(function (id) {
                 let c = gState.netChars[id];
-                return '<div style="color:' + (c ? '#7fd1ff' : '#888') + ';">' + id + '　' +
+                return '<div style="color:' + (c ? '#7fd1ff' : '#888') + ';">' + dispName(id) + '　' +
                     (c ? (NIGHT_CHARS[c] ? NIGHT_CHARS[c].name : c) : '选择中…') + '</div>';
             }).join('');
 
@@ -3062,11 +3067,11 @@
             }
 
             let team = document.getElementById('night-pick-team');
-            let rows = ['<div style="color:#7fd1ff;">' + gState.id + '（你）<br><span style="color:#fff;">' +
+            let rows = ['<div style="color:#7fd1ff;">' + dispName(gState.id) + '（你）<br><span style="color:#fff;">' +
                 (nightPickSel ? NIGHT_CHARS[nightPickSel].name : '未选') + '</span></div>'];
             let others = roomList.filter(function (r) { return r.id !== gState.id; });
             if (others.length) {
-                others.forEach(function (r) { rows.push('<div>' + r.id + '<br><span style="color:#999;">真人</span></div>'); });
+                others.forEach(function (r) { rows.push('<div>' + dispName(r.id) + '<br><span style="color:#999;">真人</span></div>'); });
             }
             let aiSlots = (gState.nightSide === 'hunter') ? 4 : 3;
             for (let i = others.length; i < aiSlots; i++) rows.push('<div style="color:#888;">AI 队友</div>');
@@ -4797,6 +4802,12 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-25-idsuffix', date: '2026-09-25', title: '在线人数加AI + ID 小尾巴不再显示', items: [
+                    '大厅"在线 X 人"加回了广场路人 AI 的数量，不然真人少的时候显得太冷清。',
+                    '之前为了防止不同设备起了同一个 ID 而互相顶掉存档，新起的 ID 会偷偷带一段随机小尾巴（比如"小明#a1b2"），但这段尾巴一直显示在名字后面，头顶名字、队伍列表、聊天、好友列表到处都是，看着很乱。现在这段尾巴只在后台用来防撞车，所有显示的地方都不再露出来了。'
+                ]
+            },
+            {
                 id: '2026-09-25-hub-real', date: '2026-09-25', title: '大厅广场真的能看见对方了', items: [
                     '之前"大厅广场"里走来走去的路人全是本地模拟的假机器人，两台设备各玩各的，谁也看不见谁；顶上"在线 X 人"其实是路人数量+1，两边永远显示一样的数字，跟真实在不在线毫无关系。现在真人玩家会真的同步到 3D 大厅广场里（橙色描边、头顶有名字），走近了能组队/加好友——组队会走正式邀请，对方要真的同意，不是路人那套随手答应。',
                     '"在线 X 人"这行也改成看真实房间人数（不是本地连接数——房主和其他人各自看到的连接数不一样，之前用错了那个数字，客人这边会一直卡在固定值不变）。'
@@ -5047,7 +5058,7 @@
                 let statsTxt = s.mcoin === undefined ? '（还没收到数据）' :
                     (s.mcoin + ' 猫盾币　皮肤 ' + s.skins + '　彩蛋 ' + s.eggs +
                         '　惊魂夜 ' + s.nightRank + '　超燃 ' + s.blazeRank);
-                return '<tr><td style="padding:4px 8px; border-top:1px solid #eee;">' + id + '</td>' +
+                return '<tr><td style="padding:4px 8px; border-top:1px solid #eee;">' + dispName(id) + '</td>' +
                     '<td style="padding:4px 8px; border-top:1px solid #eee; color:#888; font-size:11px;">' +
                     new Date(e.firstSeen).toLocaleDateString() + '</td>' +
                     '<td style="padding:4px 8px; border-top:1px solid #eee; color:#888; font-size:11px;">' +
@@ -11351,7 +11362,7 @@
             ctx.font = 'bold 38px "Microsoft YaHei", sans-serif';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(text, 160, 42);
+            ctx.fillText(dispName(text), 160, 42);
             let tex = new THREE.CanvasTexture(cv);
             let sp = new THREE.Sprite(new THREE.SpriteMaterial({
                 map: tex, transparent: true, depthTest: !through
@@ -20705,7 +20716,7 @@
         function hubAddFriend() {
             if (!hub || !hub.nearby || hub.nearby.isAI) return;
             friendAdd(hub.nearby.name);
-            blazeFlash('已经加 ' + hub.nearby.name + ' 为好友');
+            blazeFlash('已经加 ' + dispName(hub.nearby.name) + ' 为好友');
         }
         function hubHud() {
             // 在线人数 = 真实房间人数（roomOnlineCount）+ 大厅广场路人机器人数量。
@@ -20715,7 +20726,7 @@
             document.getElementById('blaze-score').innerText = '在线 ' + (roomOnlineCount() + hub.wanderers.length) + ' 人';
             let team = lobbyParty.concat(hub.party);
             document.getElementById('blaze-round').innerText = '大厅广场　WASD 走动，空格跳，靠近人可以组队　当前队伍：' +
-                (team.length ? team.join('、') : '（还没组队）');
+                (team.length ? team.map(dispName).join('、') : '（还没组队）');
         }
         // ── 大厅广场联机：跟房间里其他真人互相广播位置，不经过房主转发。
         // 频率比正式对局低一些（8Hz）——大厅是常驻空间，没必要那么密。
