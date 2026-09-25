@@ -1596,6 +1596,7 @@
         }
 
         const NET_PREFIX = 'maodun-';
+        const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
         let NIGHT_MATCH_WAIT = 0;
 
         function netJoinRoom(code) {
@@ -1895,11 +1896,12 @@
             });
         }
         // 松饼大作战、惊魂夜自己已经有"大家一起"的联机流程（邀请全票通过 / 排队匹配），
-        // 不用房主批准。剩下这几个模式还是各玩各的本地对局，房间里有房主的话就该
-        // 房主说了算——非房主点"开始游戏"不直接开局，只是把想玩什么告诉房主。
+        // 不用房主批准。剩下这几个模式还是各玩各的本地对局：只有真组了队才要看房主
+        // 脸色——大厅默认自动进同一个房间，"房间里有人"不代表在跟你一队，不能只因为
+        // 房间里有别人（可能完全不相干）就不让你自己开一局。
         function lobbyPrimaryStart() {
             let m = gState.gameMode;
-            if (m !== 'night' && m !== 'cake' && roomList.length > 1 && !peerIsHost) {
+            if (m !== 'night' && m !== 'cake' && lobbyParty.length > 0 && !peerIsHost) {
                 lobbySuggestModeToHost(m);
                 return;
             }
@@ -2221,7 +2223,9 @@
             } else if (msg.type === 'TEAM_INVITE_ACK') {
                 if (msg.target === gState.id) teamOnInviteAck(msg.sender, msg.accept);
             } else if (msg.type === 'TEAM_SYNC') {
-                let isLeader = (roomList.length === 0 || peerIsHost);
+                // 只有真组队了才接受同步——不然大厅里随便一个不相干的人广播的队伍
+                // 会把你自己单机的 gState.team 顶掉。
+                let isLeader = (lobbyParty.length === 0 || peerIsHost);
                 if (!isLeader && msg.team) {
                     gState.team = msg.team;
                     if (msg.map) gState.mapDifficulty = msg.map;
@@ -2261,7 +2265,7 @@
         };
 
         function broadcastMapDiff() {
-            let me = { isLeader: (roomList.length === 0 || peerIsHost) };
+            let me = { isLeader: (lobbyParty.length === 0 || peerIsHost) };
             if (me && me.isLeader) {
                 let radios = document.querySelector('input[name="map_diff"]:checked');
                 if (radios) gState.mapDifficulty = radios.value;
@@ -2278,8 +2282,10 @@
         // POS_SYNC（按名字找对应的队友模型）才第一次真的对得上号，能看见彼此。
         const HUNT_TEAM_SIZE = 3;
         function huntRebuildTeam() {
-            let isLeader = (roomList.length === 0 || peerIsHost);
-            if (!isLeader) return;   // 不是房主就等房主的 TEAM_SYNC，不要自己瞎组
+            // 大厅现在默认自动进同一个房间，"房间里有人"不再等于"我在跟谁一队"——
+            // 没组队的话永远自己管自己的队伍，不用看房主脸色；真组队了才跟房主同步。
+            let isLeader = (lobbyParty.length === 0 || peerIsHost);
+            if (!isLeader) return;   // 组队了但不是房主，等房主的 TEAM_SYNC，不要自己瞎组
             let mates = lobbyParty.filter(function (id) {
                 return roomList.some(function (r) { return r.id === id; });
             });
@@ -2474,7 +2480,15 @@
             gState.team = [{ id: pid, isLeader: true, isReady: true, isAI: false }, { id: ai1Name, isLeader: false, isReady: true, isAI: true }, { id: ai2Name, isLeader: false, isReady: true, isAI: true }];
             loadProgress(pid); loadEggs(); friendLoad(); playLogLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
             chatLoad();
-            try { let r = localStorage.getItem('TH_room'); if (r) document.getElementById('net-room').value = r; } catch (e) { }
+            // 之前得自己敲房间号、点"进入"才算联机——两台设备各自打开游戏，
+            // 谁都没点那一下，大厅里当然看不到对方，跟单机一样。现在默认自动
+            // 进一个大家都一样的房间号，不用手动这一步；想私下开小房间的话
+            // 还是可以自己在输入框里改成别的号再点"进入"。
+            try {
+                let r = localStorage.getItem('TH_room') || DEFAULT_ROOM_CODE;
+                document.getElementById('net-room').value = r;
+                netJoinRoom(r);
+            } catch (e) { }
             let eb = document.getElementById('btn-egg-book');
             if (eb) eb.innerText = '彩蛋图鉴 ' + eggCount() + ' / ' + Object.keys(EGGS).length;
         }
@@ -2482,14 +2496,17 @@
         function updateTeamListUI() { roomRender(); }
 
         function requestStartGame() {
-            if (roomList.length > 1 && !peerIsHost) { showSysModal('提示', '等房主开局。', [{ label: '确定' }]); return; }
+            // 大厅现在默认自动进同一个房间，"房间里还有别人"不等于"跟我一队"——
+            // 只有真的组了队（lobbyParty 非空）才需要等房主，单纯房间里有陌生人
+            // 不该拦你自己开寻宝队。
+            if (lobbyParty.length && !peerIsHost) { showSysModal('提示', '等房主开局。', [{ label: '确定' }]); return; }
             huntRebuildTeam();
             bc.postMessage({ type: 'START_GARAGE', target: '*' });
             nav('screen-garage'); initGarage();
         }
 
         function requestEnterMap() {
-            if (roomList.length > 1 && !peerIsHost) { showSysModal('提示', '等房主开局。', [{ label: '确定' }]); return; }
+            if (lobbyParty.length && !peerIsHost) { showSysModal('提示', '等房主开局。', [{ label: '确定' }]); return; }
             mSize = HUNT_SIZE;
             {
                 let s = Math.floor(Math.random() * 1000000);
@@ -4773,6 +4790,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-25-autojoin', date: '2026-09-25', title: '大厅默认自动联机', items: [
+                    '以前得自己敲房间号、点"进入"才算联机——两台设备各自打开游戏，谁都没点那一下，大厅里当然看不到对方、在线人数也不会变。现在进大厅会自动联机（默认都进同一个房间），不用再手动这一步；想单独开小房间还是可以自己把房间号改掉再点"进入"。',
+                    '顺手修了几处"房间里有人"被错当成"跟我一队"的地方（寻宝队组队同步、松饼大作战邀请名单等）——现在默认大厅人多了，这几处改成只看真正组队（队伍面板里同意过的人），不会莫名其妙被不相干的人的队伍信息顶掉，也不会见谁都拉去邀请。'
+                ]
+            },
             {
                 id: '2026-09-25-fixes2', date: '2026-09-25', title: '跑酷穿模修复 + 头顶名字 + 语音补漏', items: [
                     '修好大厅跑酷台阶穿模：之前台子侧面的"免判定"余量比台子本身还厚，贴着边一走会直接从台子里穿过去，第二块台阶最容易踩中。松饼大作战的跳台也有同样的问题，一起修了。',
@@ -20306,15 +20329,14 @@
             return g;
         }
 
-        // 看当前房间里还有谁，凑一份候选名单（自己必在，其余真人按 id 排序取
-        // 前面几个，凑不满 CAKE.playerCount 就用 AI 补）。跟房间里其他人没有关系时
-        // （只有自己）直接开局；有其他真人的话得先问过所有人，全部同意才真的开局——
-        // 谁不同意（或者半天没反应）这次就不开，不悄悄把人踢成 AI 替上。
+        // 邀请对象看 lobbyParty（组队面板里双方都同意过的人），不是大厅里随便谁——
+        // 大厅现在默认自动进同一个房间，roomList 里一堆互不相干的人，不能见谁都拉去
+        // 松饼大作战。没组队就直接自己开局（AI 补满）；组了队才发邀请，得所有人都
+        // 同意才真的开局——谁不同意（或者半天没反应）这次就不开，不悄悄换成 AI。
         let cakeInvite = null, cakeInviteTimer = null;
         const CAKE_INVITE_TIMEOUT = 15000;
         function cakeStartGo() {
-            let others = roomList.filter(function (r) { return r.id !== gState.id; })
-                .map(function (r) { return r.id; }).sort().slice(0, CAKE.playerCount - 1);
+            let others = lobbyParty.slice(0, CAKE.playerCount - 1);
             if (!others.length) {
                 cakeBegin([{ id: gState.id }], gState.id, Math.floor(Math.random() * 1000000));
                 return;
