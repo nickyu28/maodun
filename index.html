@@ -3607,10 +3607,16 @@
         const MAX_STEP_UP = 4;
 
         let isPlaying = false, timeSecs = 8 * 3600, endTime = 24 * 3600;
-        let pVel = new THREE.Vector3(), onGround = true;
+        // pVel/viewFrustum/viewProjMatrix 之前是顶层代码一加载就 new THREE.xxx()——
+        // 如果 three.min.js 那个 CDN 没连上（网络问题/被墙/CDN 抽风），THREE 是 undefined，
+        // 这两行直接抛异常，会让这份 <script> 后面几千行代码（包括 hub/blaze 这些用 let
+        // 声明的模式状态）全部停在"暂时性死区"，之后随便什么地方一碰这些变量就报
+        // "Cannot access 'x' before initialization"，界面看着还在但到处是坏的。
+        // 挪到 ensureScene() 里跟 camera/scene 一起建，真正进图之前才需要，不影响别的。
+        let pVel = null, onGround = true;
         let actionTimer = 0, actionTarget = null, abilityCd = 0, abilityActive = 0, gHpRegenAcc = 0, stamina = 100;
 
-        const viewFrustum = new THREE.Frustum(); const viewProjMatrix = new THREE.Matrix4();
+        let viewFrustum = null, viewProjMatrix = null;
 
         function playerFloor() { let f = Math.floor((camera.position.y - 9) / TILE); if (f < 0) f = 0; if (f > FLOORS - 1) f = FLOORS - 1; return f; }
 
@@ -3766,6 +3772,8 @@
             let canvas = document.getElementById('gameCanvas'); renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true }); renderer.setSize(window.innerWidth, window.innerHeight);
             window.addEventListener('resize', function () { if (camera && renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); } });
             clock = new THREE.Clock(); raycaster = new THREE.Raycaster();
+            pVel = new THREE.Vector3();
+            viewFrustum = new THREE.Frustum(); viewProjMatrix = new THREE.Matrix4();
             const amb = new THREE.AmbientLight(0xffffff, 0.95); scene.add(amb);
             const sunLight = new THREE.DirectionalLight(0xffffff, 0.4); sunLight.position.set(30, 60, 30); scene.add(sunLight); scene.add(camera);
 
