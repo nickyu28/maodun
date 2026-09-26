@@ -4921,8 +4921,8 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
-                id: '2026-09-26-hand-fix', date: '2026-09-26', title: '爪子改成实心圆球', items: [
-                    '之前爪子是个贴着身体正面/背面的扁平半圆片，侧面看几乎是一条线，完全不像"手"。改成实心圆球，往手臂外侧偏一点，从手臂旁边鼓出来，任何角度看都是圆的。'
+                id: '2026-09-26-hand-fix2', date: '2026-09-26', title: '爪子改回 2D 半圆片', items: [
+                    '上一版把爪子改成了实心圆球，结果太圆太鼓、跟身体融不到一块。改回平的半圆片——直径那条直边贴着手臂底部，圆弧鼓在下面，是个扁扁的爪子形状，不是球。'
                 ]
             },
             {
@@ -16751,11 +16751,10 @@
                 shoulder.position.set(sdir * 3.1, 9.1, 0);
                 let arm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.2, 1.6), mat);
                 arm.position.y = -1.1; shoulder.add(arm);
-                // 爪子之前是个贴脸方向的扁平半圆片，侧面看几乎是一条线，跟"手臂上鼓出来
-                // 一坨圆爪子"的效果差很远。改成实心圆球，往外侧偏一点——手臂细细一条，
-                // 爪子从旁边鼓出来，像字母 d 那个圆点贴在竖线旁边。
-                let hand = new THREE.Mesh(new THREE.SphereGeometry(1.5, 10, 8), mat);
-                hand.position.set(sdir * 1.3, -1.8, 0); shoulder.add(hand);
+                // 爪子是一个平的半圆片（不是球）——直径那条直边贴着手臂底部，圆弧鼓在下面。
+                let hand = new THREE.Mesh(new THREE.CircleGeometry(1.7, 12, 0, Math.PI),
+                    new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide }));
+                hand.position.y = -2.2; hand.rotation.z = Math.PI; shoulder.add(hand);
                 g.add(shoulder); arms.push(shoulder);
             });
             g.userData.arms = arms;
@@ -20519,10 +20518,10 @@
                 shoulder.position.set(sdir * 3.4, 6.4, 0);
                 let arm = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 2.2, 10), mat);
                 arm.position.y = -1.1; shoulder.add(arm);
-                // 实心圆球爪子，往外侧偏一点鼓出来——跟大厅/竞速那身体统一手感，
-                // 之前扁平半圆片侧面看是条线，不像"手"。
-                let hand = new THREE.Mesh(new THREE.SphereGeometry(1.4, 10, 8), mat);
-                hand.position.set(sdir * 1.2, -1.8, 0); shoulder.add(hand);
+                // 爪子是一个平的半圆片（不是球）——直径那条直边贴着手臂底部，圆弧鼓在下面。
+                let hand = new THREE.Mesh(new THREE.CircleGeometry(1.7, 12, 0, Math.PI),
+                    new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide }));
+                hand.position.y = -2.2; hand.rotation.z = Math.PI; shoulder.add(hand);
                 g.add(shoulder); arms.push(shoulder);
             });
             g.userData.arms = arms;
