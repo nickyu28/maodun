@@ -900,6 +900,7 @@
             <label><input type="radio" name="map_diff" value="med" onchange="broadcastMapDiff()"> 中等模式</label>
             <label><input type="radio" name="map_diff" value="hard" onchange="broadcastMapDiff()"> 困难模式</label>
         </div>
+        <div id="hunt-pity-hint" style="display:none; font-size:11px; color:#e65100; background:#fff3e0; border:1px solid #ffcc80; border-radius:5px; padding:5px 6px; margin-top:6px;"></div>
         </div>
 
         <div id="night-only" class="hidden" style="text-align:center; margin:0 0 8px;">
@@ -2679,6 +2680,15 @@
             document.getElementById('escape-only').classList.toggle('hidden', !isEscape);
             document.getElementById('park-only').classList.toggle('hidden', !isPark);
             document.getElementById('cake-only').classList.toggle('hidden', !isCake);
+            // 保底之前完全是黑箱，连续输几把之后悄悄给你保底，玩家自己感觉不到，
+            // 只会觉得"这把运气真好"或者怀疑概率是不是假的——露出来一点，让人知道
+            // 这不是纯随机，是系统在补偿连续没出货的人。
+            let pityHint = document.getElementById('hunt-pity-hint');
+            if (pityHint) {
+                let showPity = isHunt && (gState.pityGuaranteed || gState.isFirstRound);
+                pityHint.style.display = showPity ? 'block' : 'none';
+                if (showPity) pityHint.innerText = gState.isFirstRound ? '首次进图必出高级战利品箱。' : '连续几把没出货了，这把保底必出高级战利品箱。';
+            }
             let modeName = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : '超燃');
             document.getElementById('lobby-title').innerText = modeName;
             let mbc = document.getElementById('mode-bar-current'); if (mbc) mbc.innerText = modeName;
@@ -3779,6 +3789,14 @@
 
             if (gState.control === 'laptop') { document.body.onclick = function (e) { if (isPlaying && !gState.backpackOpen && !gState.largeMapOpen && !e.target.closest('.action-btn') && !e.target.closest('button')) { try { document.body.requestPointerLock(); gState.needsLock = false; } catch (e) { } } }; }
             updateHUD(); bgmStart(); animate();
+            // 第一次进寻宝队才弹——新手不知道"捡了东西不代表到手"，得回安全区按上交才真的变现，
+            // 死了/没上交就白捡了，这个规则不解释一下容易被当成 bug。
+            if (!gState.huntTutorialShown) {
+                gState.huntTutorialShown = true; saveProgress();
+                setTimeout(function () {
+                    showSysModal('新手提示', '捡到的东西不会自动变现——得回到出生点的安全区，站进去按"上交"才算数。死了或者没上交就带出去，东西就没了。', [{ label: '知道了' }]);
+                }, 400);
+            }
         }
 
         // 各模式退出时该拿掉的场景残留统一走这——之前 cakeExit() 只删了角色/增益/特效，
@@ -4920,6 +4938,15 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-26-face-batch', date: '2026-09-26', title: '猫盾加脸 + 公告板/爪子/圆圈修好 + 新手引导', items: [
+                    '猫盾角色（大厅路人/真人、竞速、松饼……）加了张脸——两个圆点眼睛 + 一个椭圆嘴巴。',
+                    '公告板之前背面也能看到镜像反字，现在只有正面能看；位置挪到广场正中间、出生点正前方，一进大厅就能看见。',
+                    '爪子缩小了一圈，之前跟手臂差不多粗，糊成一坨；脚下那圈"本人颜色"的圆环在大厅广场关掉了（监狱救援/躲避球/松饼这些真正用得上它当状态指示的模式不受影响，只是关了大厅这一处）。',
+                    '大厅路人现在偶尔会自己去爬跑酷（不是真的物理跳跃，是简化模拟），不再只在地上瞎逛。',
+                    '寻宝队加了几个新手提示：第一次负重超过 10、第一次进图、还有保底/首次必出高级道具的小提示，都会露出来，不用自己瞎猜规则。'
+                ]
+            },
             {
                 id: '2026-09-26-clip-sweep', date: '2026-09-26', title: '跑酷台子穿模再修一版 + 路人换色', items: [
                     '大厅/松饼跑酷台子的侧面碰撞判定之前只查"这一步的目的地"一个点，横着快速斜穿台子边角的时候，起点终点可能都不在判定框里，但中间那段路其实是穿过去的。改成沿着这段位移多采几个点一起查，判定范围也放宽了一点，尽量把这类"抄近道"穿模堵住。',
@@ -15422,6 +15449,12 @@
             }
             if (abilityCd > 0) abilityCd -= dt;
 
+            // 第一次背到超过 10 负重的时候弹一次提示——不然新手只会觉得"怎么突然变慢了"，
+            // 得自己瞎猜半天才想到是负重的事，只提示一次，不会每局都弹。
+            if (w > 10 && !gState.weightWarnShown) {
+                gState.weightWarnShown = true; saveProgress();
+                showSysModal('负重过高', '你现在背的东西超过 10 点负重，移动会变慢——把不需要的东西放回仓库/丢掉能恢复正常速度。', [{ label: '知道了' }]);
+            }
             let f_w = w <= 10 ? 0 : Math.min(90, w - 10); let speedMult = (100 - f_w) / 100; let wMod = 1 * speedMult;
 
             if (gState.char === 'yellow') {
@@ -16726,11 +16759,36 @@
                 (gState.skinColor !== null ? '<button onclick="shopEquipSkin(null)" style="width:100%; margin-top:10px; background:#999; color:#fff; border:none; font-size:12px; padding:6px 0;">换回默认颜色</button>' : '');
             return out;
         }
-        function raceMakeBody(col, handRange) {
+        // 猫盾脸——两个不对称的圆点眼睛 + 一个椭圆嘴巴带个小卷边，照着手绘参考图画的。
+        // 贴图只画一次缓存起来，所有猫盾角色（大厅路人/真人、竞速、松饼……）共用同一张，
+        // 不用每建一个身体就重新画一次 canvas。
+        let catFaceTex = null;
+        function catFaceTexture() {
+            if (catFaceTex) return catFaceTex;
+            let cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+            let g2 = cv.getContext('2d');
+            g2.fillStyle = '#222';
+            g2.beginPath(); g2.arc(22, 20, 2.6, 0, Math.PI * 2); g2.fill();
+            g2.beginPath(); g2.arc(41, 18, 2.6, 0, Math.PI * 2); g2.fill();
+            g2.strokeStyle = '#222'; g2.lineWidth = 3; g2.lineCap = 'round';
+            g2.beginPath(); g2.ellipse(31, 36, 15, 9, 0, 0, Math.PI * 2); g2.stroke();
+            g2.beginPath(); g2.moveTo(33, 27); g2.quadraticCurveTo(38, 33, 33, 43); g2.stroke();
+            catFaceTex = new THREE.CanvasTexture(cv);
+            return catFaceTex;
+        }
+        // 脸贴在身体正面（+Z，跟 faceDir 的朝向公式对上），是个普通 Mesh 不是 Sprite——
+        // 要跟着身体一起转向移动方向，不能像宠物表情那样永远正对镜头。
+        function addCatFace(g, y, z) {
+            let face = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2),
+                new THREE.MeshBasicMaterial({ map: catFaceTexture(), transparent: true, depthWrite: false }));
+            face.position.set(0, y, z); g.add(face);
+        }
+        function raceMakeBody(col, handRange, hideRing) {
             let g = new THREE.Group();
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.BoxGeometry(6, 11, 4), mat);
             body.position.y = 5.5; g.add(body);
+            addCatFace(g, 8, 2.02);
             // 身体半宽 3，耳朵半径 1.6，偏移收到 1.2 避免外沿(2.8)超出身体边缘（大厅/竞速/
             // 监狱救援/躲避球全用这个身体，之前 1.8 的偏移会让耳朵支棱到身体外面去）。
             let earGeo = new THREE.ConeGeometry(1.6, 3.4, 8);
@@ -16758,9 +16816,11 @@
                 let arm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.2, 1.6), mat);
                 arm.position.y = -1.1; shoulder.add(arm);
                 // 爪子是一个平的半圆片（不是球）——直径那条直边贴着手臂底部，圆弧鼓在下面。
-                let hand = new THREE.Mesh(new THREE.CircleGeometry(1.7, 12, 0, Math.PI),
+                // 半径之前是 1.7，比手臂本身（半宽 0.8）还宽一倍多，看着像块融在一起的
+                // 大圆饼；缩到 1.0，比手臂窄，才像是手臂末端一个小爪子，不是主体。
+                let hand = new THREE.Mesh(new THREE.CircleGeometry(1.0, 12, 0, Math.PI),
                     new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide }));
-                hand.position.y = -2.2; hand.rotation.z = Math.PI; shoulder.add(hand);
+                hand.position.y = -1.9; hand.rotation.z = Math.PI; shoulder.add(hand);
                 g.add(shoulder); arms.push(shoulder);
             });
             g.userData.arms = arms;
@@ -16774,10 +16834,11 @@
                 o.renderOrder = -1;
                 (m.parent || g).add(o);
             });
-            // 脚下一圈本人颜色，混战时看得出自己站哪儿
+            // 脚下一圈本人颜色，混战时看得出自己站哪儿——大厅广场没有"混战"这回事，
+            // 一堆人站一起圈子密密麻麻反而是视觉噪音，hub 那几处调用传 hideRing 关掉它。
             let ring = new THREE.Mesh(new THREE.TorusGeometry(4.6, 0.8, 6, 20),
                 new THREE.MeshBasicMaterial({ color: col }));
-            ring.rotation.x = -Math.PI / 2; ring.position.y = 0.6; g.add(ring);
+            ring.rotation.x = -Math.PI / 2; ring.position.y = 0.6; ring.visible = !hideRing; g.add(ring);
             g.userData.ring = ring;
             // 手能摸到多远——常驻显示，不用等你伸手才知道范围
             if (handRange) {
@@ -20502,6 +20563,7 @@
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10, 18), mat);
             body.position.y = 5; g.add(body);
+            addCatFace(g, 7, 4.05);
             let earGeo = new THREE.ConeGeometry(1.6, 3.2, 8);
             [-1, 1].forEach(function (sdir) {
                 let ear = new THREE.Mesh(earGeo, mat);
@@ -20525,10 +20587,10 @@
                 shoulder.position.set(sdir * 3.4, 6.4, 0);
                 let arm = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 2.2, 10), mat);
                 arm.position.y = -1.1; shoulder.add(arm);
-                // 爪子是一个平的半圆片（不是球）——直径那条直边贴着手臂底部，圆弧鼓在下面。
-                let hand = new THREE.Mesh(new THREE.CircleGeometry(1.7, 12, 0, Math.PI),
+                // 爪子缩小到比手臂（半径 1.3）略窄，别再喧宾夺主。
+                let hand = new THREE.Mesh(new THREE.CircleGeometry(1.2, 12, 0, Math.PI),
                     new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide }));
-                hand.position.y = -2.2; hand.rotation.z = Math.PI; shoulder.add(hand);
+                hand.position.y = -1.9; hand.rotation.z = Math.PI; shoulder.add(hand);
                 g.add(shoulder); arms.push(shoulder);
             });
             g.userData.arms = arms;
@@ -20542,10 +20604,11 @@
                 o.renderOrder = -1;
                 (m.parent || g).add(o);
             });
-            // 脚下一圈本人颜色，混战时看得出自己站哪儿
+            // 脚下一圈本人颜色，混战时看得出自己站哪儿——大厅广场没有"混战"这回事，
+            // 一堆人站一起圈子密密麻麻反而是视觉噪音，hub 那几处调用传 hideRing 关掉它。
             let ring = new THREE.Mesh(new THREE.TorusGeometry(4.6, 0.8, 6, 20),
                 new THREE.MeshBasicMaterial({ color: col }));
-            ring.rotation.x = -Math.PI / 2; ring.position.y = 0.6; g.add(ring);
+            ring.rotation.x = -Math.PI / 2; ring.position.y = 0.6; ring.visible = !hideRing; g.add(ring);
             g.userData.ring = ring;
             // 手能摸到多远——常驻显示，不用等你伸手才知道范围
             if (handRange) {
@@ -20771,10 +20834,12 @@
             bctx.fillStyle = '#5d4037'; bctx.font = 'bold 40px "Microsoft YaHei", sans-serif';
             bctx.textAlign = 'center'; bctx.textBaseline = 'middle'; bctx.fillText('公告板', 128, 64);
             let boardTex = new THREE.CanvasTexture(boardCv);
-            HUB.board = { x: -60, z: 40 };
+            // 放在广场正中间、出生点正前方——一进大厅抬头就能看见，不用到处找。
+            // 只用正面（去掉 DoubleSide）：之前背面也贴着同一张贴图，绕到背后看字是镜像反的。
+            HUB.board = { x: 0, z: -30 };
             let post = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 14, 8), new THREE.MeshLambertMaterial({ color: 0x8d6e63 }));
             post.position.set(HUB.board.x, 7, HUB.board.z); scene.add(post); hub.meshes.push(post);
-            let board = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshBasicMaterial({ map: boardTex, side: THREE.DoubleSide }));
+            let board = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshBasicMaterial({ map: boardTex }));
             board.position.set(HUB.board.x, 13, HUB.board.z); scene.add(board); hub.meshes.push(board);
 
             // 顺手加几个长椅/路灯凑个热闹，纯装饰不参与任何判定
@@ -20806,7 +20871,7 @@
                 let idx = Math.floor(Math.random() * pool.length);
                 let name = pool.length ? pool.splice(idx, 1)[0] : ('路人' + (i + 1));
                 let col = HUB_WANDER_COLORS[Math.floor(Math.random() * HUB_WANDER_COLORS.length)];
-                let mesh = raceMakeBody(col, 0);
+                let mesh = raceMakeBody(col, 0, true);
                 scene.add(mesh);
                 let x = (Math.random() - 0.5) * HUB.plazaHalf, z = (Math.random() - 0.5) * HUB.plazaHalf;
                 hub.wanderers.push({
@@ -20816,9 +20881,29 @@
                 });
             }
         }
+        // 路人偶尔会去挑战跑酷——不是真的物理跳跃（路人没有重力/起跳系统，另外
+        // 搭一套太重），而是按顺序把每一块台子当"点"直接飘过去，蹭到顶了再传送回
+        // 地面接着瞎逛。不完美但至少看着广场是"有人在玩"，不是纯摆设的空气墙。
         function hubWandererTick(a, dt) {
+            if (a.climbing) {
+                let plat = hub.platforms[a.climbIdx || 0];
+                if (!plat) {
+                    a.climbing = false;
+                    a.p.set((Math.random() - 0.5) * HUB.plazaHalf, 0, (Math.random() - 0.5) * HUB.plazaHalf);
+                    a.idleT = 1 + Math.random();
+                    return;
+                }
+                let dx = plat.x - a.p.x, dz = plat.z - a.p.z, dy = plat.y - a.p.y;
+                if (Math.hypot(dx, dz, dy) < 1.5) { a.climbIdx = (a.climbIdx || 0) + 1; return; }
+                let n = Math.hypot(dx, dz) || 1, spd = HUB.moveSpeed * 0.4;
+                a.p.x += dx / n * spd * dt; a.p.z += dz / n * spd * dt;
+                a.p.y += Math.sign(dy) * spd * 0.7 * dt;
+                a.faceDir = { x: dx / n, z: dz / n };
+                return;
+            }
             if (a.idleT > 0) { a.idleT -= dt; return; }
             if (!a.target || Math.hypot(a.target.x - a.p.x, a.target.z - a.p.z) < 2) {
+                if (Math.random() < 0.08) { a.climbing = true; a.climbIdx = 0; return; }
                 a.target = { x: (Math.random() - 0.5) * HUB.plazaHalf, z: (Math.random() - 0.5) * HUB.plazaHalf };
                 if (Math.random() < 0.3) { a.idleT = 1 + Math.random() * 2; return; }
             }
@@ -21040,7 +21125,7 @@
             if (!hub || !m.sender || m.sender === gState.id) return;
             let w = hub.realPlayers[m.sender];
             if (!w) {
-                let mesh = raceMakeBody(0xff8a65, 0);
+                let mesh = raceMakeBody(0xff8a65, 0, true);
                 let label = nightMakeLabel(m.sender, 0xff8a65, false);
                 label.position.y = 13.5; mesh.add(label);
                 scene.add(mesh);
@@ -21178,7 +21263,7 @@
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
 
-            let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0);
+            let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0, true);
             scene.add(mesh);
             hub = {
                 meshes: [], wanderers: [], realPlayers: {}, party: [], nearby: null,
