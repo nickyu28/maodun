@@ -2402,6 +2402,10 @@
             if (!text) return;
             chatPush(gState.id || '我', text, true);
             nightApplyChatOrder(text);
+            // 彩蛋：公共聊天里打"67"给点猫盾币——不用管什么梗，纯粹好玩，解锁过一次就不再重复发钱。
+            if (text === '67' && !(gState.eggs && gState.eggs['chat_67'])) {
+                unlockEgg('chat_67'); coinsAdd('chat', 67); blazeFlash('彩蛋！「67」 +67 猫盾币');
+            }
 
             bc.postMessage({ type: 'CHAT', target: '*', sender: gState.id, text: text, side: night ? night.side : null });
             chatSetMode(0);
@@ -3529,7 +3533,8 @@
 
         let isDraggingCamera = false; let camTouchId = null; let lastCamX = 0, lastCamY = 0;
 
-        // 三个模式各有各的「在局内」标志：寻宝队看 isPlaying，惊魂夜看 night，超燃看 blaze
+        // 各模式各有各的「在局内」标志：寻宝队看 isPlaying，惊魂夜看 night，超燃看 blaze……
+        // 大厅广场（hub）、松饼大作战（cake）当时加的时候漏加了，导致触屏在这两个模式里转不动视角。
         function touchLookActive() {
             if (gState.backpackOpen || gState.largeMapOpen) return false;
             if (blaze && !blaze.over) return true;
@@ -3537,6 +3542,8 @@
             if (race && !race.over) return true;
             if (jail && !jail.over) return true;
             if (dodge && !dodge.over) return true;
+            if (hub) return true;
+            if (cake && !cake.over) return true;
             return isPlaying && !gState.isDead;
         }
         function touchLookSkip(t) {
@@ -3630,7 +3637,7 @@
         function startGameMap(seed, syncSpawns) {
             stashLootBeforeRun();   // 宝物留在仓库，只带工具进图
             mSize = HUNT_SIZE;
-            gameSeed = seed || 1; nav('none'); document.getElementById('ui-layer').classList.remove('hidden'); document.getElementById('ui-id').innerText = gState.id;
+            gameSeed = seed || 1; nav('none'); document.getElementById('ui-layer').classList.remove('hidden'); document.getElementById('ui-id').innerText = dispName(gState.id);
             isPlaying = true; gState.isDead = false; gState.submittedItems = []; gState.hp = 100; timeSecs = 8 * 3600; gState.totalSubmitted = 0; gState.runCash = 0; gState.aiSubmitted = 0; gState.aiChestsTaken = 0; stamina = 100;
             gState.safeOpenedThisGame = false; gState.backpackOpen = false; gState.largeMapOpen = false; gState.monstersSpawned = false; gState.inSafeZone = true; gState.needsLock = false; gState.pAtkCd = 0; gState.timeStop = 0;
             gState.debuff = { type: 0, timer: 0, cooldown: 0 };
@@ -4706,6 +4713,10 @@
                 name: '无人来救', kind: '成就', hidden: true,
                 text: '椅子很高。你数着秒，听见远处矿机的声音一直没停。'
             };
+            list['chat_67'] = {
+                name: '67', kind: '彩蛋', hidden: true,
+                text: '你在公共聊天里打出了「67」。没人知道为什么，但猫盾币到账了。'
+            };
 
             GOLD_EGG_NAMES.forEach(function (n) {
                 list['gold_' + n] = {
@@ -4801,6 +4812,14 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-26-batch', date: '2026-09-26', title: '触屏转视角 + 反馈邮件兜底 + 彩蛋', items: [
+                    '大厅广场、松饼大作战里触屏没法转视角——加新模式的时候漏把它们加进"允许转视角"的名单，现在补上了。',
+                    '反馈 / 游玩记录提交多了"用邮件发"这个选项：没有 GitHub 账号、不想注册的人可以直接调起自己邮箱发给开发者，不用再卡在 GitHub 登录那一步。',
+                    '游戏内几处还是漏了的 ID 小尾巴（HUD 上"ID: xxx"、观战标签、超燃/松饼击杀播报里的名字）也一起清干净了。',
+                    '公共聊天框加了个彩蛋，自己找找看。'
+                ]
+            },
             {
                 id: '2026-09-25-idsuffix', date: '2026-09-25', title: '在线人数加AI + ID 小尾巴不再显示', items: [
                     '大厅"在线 X 人"加回了广场路人 AI 的数量，不然真人少的时候显得太冷清。',
@@ -4993,6 +5012,13 @@
         // 用 GitHub 预填链接开一个新标签页，测试者自己确认提交——邮件/复制文字留着
         // 当备选，给没有 GitHub 账号的人用。
         const FEEDBACK_REPO = 'nickyu28/maodun';
+        const FEEDBACK_EMAIL = 'iway.yu@gmail.com';
+        // 没有 GitHub 账号（或者不想注册）的人，GitHub 那条预填链接根本打不开新建页——
+        // 用 mailto 兜底：调起测试者自己手机/电脑上已经登录的邮箱客户端，标题正文都填好，
+        // 点发送就行，不用注册任何新账号。缺点是得设备上真的配了邮箱客户端才弹得出来。
+        function feedbackMailto(subject, body) {
+            location.href = 'mailto:' + FEEDBACK_EMAIL + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+        }
         // 反馈涉及哪个/哪些模式让用户自己勾，不再偷偷塞 gState.gameMode——
         // 那个字段只是"选择模式面板里选中的是哪个"，在大厅里从来没真的进任何模式，
         // 却一直默认显示寻宝队，反馈里"模式"那一栏全是错的。
@@ -5024,24 +5050,29 @@
             let html = '<div style="text-align:left;">' +
                 '<textarea id="feedback-text" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
                 '<div style="font-size:11px; color:#999; margin-top:8px;">这条反馈跟哪个/哪些模式有关？（可多选）</div>' + modesHtml +
-                '<div style="font-size:11px; color:#999; margin-top:8px;">会顺便带上你的 ID（' + gState.id + '），打开 GitHub 提交页（顺手也复制了一份，没有 GitHub 账号就直接粘贴发给开发者）。</div>' +
+                '<div style="font-size:11px; color:#999; margin-top:8px;">会顺便带上你的 ID（' + dispName(gState.id) + '）。有 GitHub 账号就直接提交；没有的话点"用邮件发"，调起你自己的邮箱发给开发者，不用注册。</div>' +
                 '</div>';
             showSysModal('反馈', html, [
-                { label: '提交', color: '#24292e', onClick: function () { feedbackSend(); } },
+                { label: '提交到 GitHub', color: '#24292e', onClick: function () { feedbackSend(); } },
+                { label: '用邮件发', color: '#5cb85c', onClick: function () { feedbackSend(true); } },
                 { label: '取消' }
             ]);
         }
-        function feedbackSend() {
+        function feedbackBuildBody(text, modes) {
+            let meta = 'ID: ' + dispName(gState.id) + '\n模式: ' + (modes.length ? modes.join('、') : '（没选）') + '\n时间: ' + new Date().toLocaleString();
+            return text + '\n\n——\n' + meta;
+        }
+        function feedbackSend(viaEmail) {
             let box = document.getElementById('feedback-text');
             let text = box ? box.value.trim() : '';
             if (!text) { showSysModal('提示', '写点什么再发吧', [{ label: '确定' }]); return; }
             let modes = Array.from(document.querySelectorAll('.feedback-mode-cb:checked')).map(function (cb) { return cb.value; });
-            let meta = 'ID: ' + gState.id + '\n模式: ' + (modes.length ? modes.join('、') : '（没选）') + '\n时间: ' + new Date().toLocaleString();
-            let body = text + '\n\n——\n' + meta;
+            let body = feedbackBuildBody(text, modes);
+            let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
+            if (viaEmail) { feedbackMailto(title, body); return; }
             // 顺手复制一份：没有 GitHub 账号、懒得注册的人，GitHub 页面开着不管，
             // 直接把复制好的内容粘贴发给开发者（邮件/聊天都行）就算提交成功了。
             try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
-            let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
             let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
                 '&body=' + encodeURIComponent(body) + '&labels=feedback';
             window.open(url, '_blank');
@@ -5074,23 +5105,25 @@
                 rows + '</table></div></div>';
             showSysModal('游玩记录　共 ' + ids.length + ' 人', html, [
                 { label: '提交给开发者', color: '#24292e', onClick: function () { playLogSubmit(); } },
+                { label: '用邮件发', color: '#5cb85c', onClick: function () { playLogSubmit(true); } },
                 { label: '关闭' }
             ]);
         }
-        function playLogSubmit() {
+        function playLogSubmit(viaEmail) {
             let ids = Object.keys(playLog);
             if (!ids.length) { showSysModal('提示', '还没记录到任何人，先联机玩一会儿再提交', [{ label: '确定' }]); return; }
             let lines = ids.sort().map(function (id) {
                 let e = playLog[id], s = e.stats || {};
-                return id + '　首次 ' + new Date(e.firstSeen).toLocaleDateString() +
+                return dispName(id) + '　首次 ' + new Date(e.firstSeen).toLocaleDateString() +
                     '　最近 ' + new Date(e.lastSeen).toLocaleString() + '　次数 ' + e.timesSeen +
                     '　币 ' + (s.mcoin === undefined ? '?' : s.mcoin) + '　皮肤 ' + (s.skins === undefined ? '?' : s.skins) +
                     '　彩蛋 ' + (s.eggs === undefined ? '?' : s.eggs) +
                     '　惊魂夜 ' + (s.nightRank || '?') + '　超燃 ' + (s.blazeRank || '?');
             });
-            let body = '提交者: ' + gState.id + '\n时间: ' + new Date().toLocaleString() + '\n记录到 ' + ids.length + ' 人\n\n' + lines.join('\n');
+            let body = '提交者: ' + dispName(gState.id) + '\n时间: ' + new Date().toLocaleString() + '\n记录到 ' + ids.length + ' 人\n\n' + lines.join('\n');
+            let title = '[游玩记录] ' + dispName(gState.id) + ' 提交，共 ' + ids.length + ' 人';
+            if (viaEmail) { feedbackMailto(title, body); return; }
             try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
-            let title = '[游玩记录] ' + gState.id + ' 提交，共 ' + ids.length + ' 人';
             let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
                 '&body=' + encodeURIComponent(body) + '&labels=playlog';
             window.open(url, '_blank');
@@ -7898,7 +7931,7 @@
                 let a = {
                     idx: i, team: q.team, key: q.key, isPlayer: mine, netId: q.id || null,
                     remote: !!(q.id && !mine),
-                    name: q.id ? q.id : BLAZE_CHARS[q.key].name,
+                    name: q.id ? dispName(q.id) : BLAZE_CHARS[q.key].name,
                     home: { x: sp.x * TILE, z: sp.z * TILE },
                     p: new THREE.Vector3(sp.x * TILE, 0, sp.z * TILE),
                     hp: (BLAZE_CHARS[q.key].hp || BLAZE.hp), maxHp: (BLAZE_CHARS[q.key].hp || BLAZE.hp),
@@ -15930,7 +15963,7 @@
             let list = spectateTargets();
             gState.spectating = (gState.spectateIdx >= 0 && gState.spectateIdx < list.length) ? list[gState.spectateIdx] : null;
             let label = document.getElementById('spectate-target');
-            if (label) label.innerText = gState.spectating ? gState.spectating.userData.name : '自己（原地）';
+            if (label) label.innerText = gState.spectating ? dispName(gState.spectating.userData.name) : '自己（原地）';
         }
 
         function hideDeathUI() {
@@ -20472,7 +20505,7 @@
                 let mesh = cakeMakeBody(col, CAKE.handRange);
                 scene.add(mesh);
                 let sp = spawns[i];
-                let name = q.id ? q.id : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
+                let name = q.id ? dispName(q.id) : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
                 // 头顶名字：联机的时候一堆猫盾身体长得一样，不然根本分不清谁是真人朋友
                 let label = nightMakeLabel(name, col, false);
                 label.position.y = 13.5; mesh.add(label);
