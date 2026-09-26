@@ -852,6 +852,7 @@
             <button onclick="openChangelog()" style="width:100%; margin:0 0 6px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">更新公告<span id="changelog-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
             <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">彩蛋图鉴</button>
             <button onclick="openChatSetup()" style="width:100%; margin:0 0 6px; background:#607d8b; color:#fff; border:none; font-size:12px; padding:7px 4px;">发言设置</button>
+            <button onclick="openSensSetup()" style="width:100%; margin:0 0 6px; background:#546e7a; color:#fff; border:none; font-size:12px; padding:7px 4px;">灵敏度设置</button>
             <button onclick="openFeedback()" style="width:100%; margin:0 0 6px; background:#e91e63; color:#fff; border:none; font-size:12px; padding:7px 4px;">反馈</button>
             <button onclick="openPlayLog()" style="width:100%; margin:0 0 6px; background:#795548; color:#fff; border:none; font-size:12px; padding:7px 4px;">游玩记录</button>
             <div id="lobby-rank" style="font-size:11px; color:#888; margin-top:4px;"></div>
@@ -2105,7 +2106,7 @@
 
         let initArr = new Array(6).fill(null); initArr[0] = { ...shopItems['鱼叉'] }; initArr[1] = { ...shopItems['地窖徽章'] };
         const gState = {
-            control: 'laptop', char: 'green', id: '', money: 10000, team: [], aiFill: false, runCash: 0, aiSubmitted: 0, aiChestsTaken: 0, blazeChar: 'bow',
+            control: 'laptop', char: 'green', id: '', money: 10000, team: [], aiFill: false, runCash: 0, aiSubmitted: 0, aiChestsTaken: 0, blazeChar: 'bow', mouseSensitivity: 1,
             mcoin: 0, skins: {}, skinColor: null, parkUnlocked: {}, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, inv: initArr, garage: new Array(200).fill(null),
             maxInv: 6, hp: 100, maxHp: 100, isDead: false, selectedContainer: 'inv', selectedSlot: 0, totalSubmitted: 0,
             backpackOpen: false, largeMapOpen: false, inSafeZone: true, needsLock: false, pAtkCd: 0, timeStop: 0, preGenSpawns: [],
@@ -2455,6 +2456,28 @@
             chatSetMode(0);
         }
 
+        // 鼠标/触屏转视角灵敏度——之前写死 0.005/0.01 这两个系数，快慢只能改代码。
+        // 现在乘一个可调倍率，1 就是原来的手感，数值存 gState 里跟着存档走。
+        function mouseSens() { return gState.mouseSensitivity || 1; }
+        function openSensSetup() {
+            let v = gState.mouseSensitivity || 1;
+            let body = '<div style="text-align:center;">' +
+                '<input type="range" id="sens-slider" min="0.3" max="2.5" step="0.05" value="' + v + '" style="width:100%;" ' +
+                'oninput="document.getElementById(\'sens-val\').innerText = parseFloat(this.value).toFixed(2)">' +
+                '<div style="margin-top:8px; font-size:14px;">当前倍率：<span id="sens-val">' + v.toFixed(2) + '</span> ×</div>' +
+                '<div style="font-size:11px; color:#999; margin-top:8px;">调的是转视角的快慢（鼠标和触屏拖动都算），数值越大转得越快，1 是默认手感。</div>' +
+                '</div>';
+            showSysModal('灵敏度设置', body, [
+                {
+                    label: '保存', color: '#5cb85c', onClick: function () {
+                        let el = document.getElementById('sens-slider');
+                        gState.mouseSensitivity = el ? (parseFloat(el.value) || 1) : 1;
+                        saveProgress();
+                    }
+                },
+                { label: '取消' }
+            ]);
+        }
         function openChatSetup() {
             chatLoad();
             let body = chatQuick.map(function (t, i) {
@@ -3626,7 +3649,7 @@
                 let t = e.changedTouches[i];
                 if (t.identifier === camTouchId) {
                     let dx = t.clientX - lastCamX; let dy = t.clientY - lastCamY;
-                    if (camera) { camera.rotation.y -= dx * 0.01; camera.rotation.x -= dy * 0.01; camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x)); }
+                    if (camera) { let s = mouseSens(); camera.rotation.y -= dx * 0.01 * s; camera.rotation.x -= dy * 0.01 * s; camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x)); }
                     lastCamX = t.clientX; lastCamY = t.clientY;
                 }
             }
@@ -3649,7 +3672,8 @@
             if (!mouseLook || document.pointerLockElement || !camera) return;
             if (gState.backpackOpen || gState.largeMapOpen) return;
             let mx = Math.max(-100, Math.min(100, e.movementX || 0)); let my = Math.max(-100, Math.min(100, e.movementY || 0));
-            camera.rotation.y -= mx * 0.005; camera.rotation.x -= my * 0.005;
+            let s = mouseSens();
+            camera.rotation.y -= mx * 0.005 * s; camera.rotation.x -= my * 0.005 * s;
             camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x));
         });
 
@@ -3681,7 +3705,8 @@
             document.addEventListener('mousemove', function (e) {
                 if (document.pointerLockElement && !gState.backpackOpen && !gState.largeMapOpen) {
                     let mx = Math.max(-100, Math.min(100, e.movementX)); let my = Math.max(-100, Math.min(100, e.movementY));
-                    camera.rotation.y -= mx * 0.005; camera.rotation.x -= my * 0.005; camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x));
+                    let s = mouseSens();
+                    camera.rotation.y -= mx * 0.005 * s; camera.rotation.x -= my * 0.005 * s; camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x));
                 }
             });
 
@@ -3728,6 +3753,12 @@
             maze.forEach(function (fRows) { if (fRows) fRows.forEach(function (row) { if (row) row.forEach(function (m) { if (m) ['mesh', 'roof', 'roof2', 'roof3', 'roof4', 'roof5', 'roof6'].forEach(function (k) { if (m[k]) scene.remove(m[k]); }); }); }); });
             chests.forEach(function (c) { scene.remove(c); }); groundItems.forEach(function (g) { scene.remove(g); }); entities.forEach(function (e) { scene.remove(e); });
             cakePlatformMeshes.forEach(function (m) { scene.remove(m); }); cakePlatformMeshes = []; cakePlatforms = [];
+            // 惊魂夜的椅子/机子/门/板子——之前只在"开新的一局"时清（buildNightMap/buildProceduralMaze
+            // 开头那份一样的逻辑），退出到大厅这条路完全没走到，椅子会一直杵在场景里。
+            [gState.machines, gState.chairs, gState.doors, gState.pallets].forEach(function (list) {
+                (list || []).forEach(function (o) { if (o.mesh) scene.remove(o.mesh); if (o.lintel) scene.remove(o.lintel); });
+            });
+            gState.machines = []; gState.chairs = []; gState.doors = []; gState.pallets = [];
             chests = []; groundItems = []; entities = []; maze = []; walkableMeshes = [];
         }
         function buildProceduralMaze() {
@@ -4107,36 +4138,13 @@
 
         function buildNightMap() {
             mSize = NIGHT_SIZE;
-            chests.forEach(function (c) { scene.remove(c); }); groundItems.forEach(function (g) { scene.remove(g); });
-            entities.forEach(function (e) { scene.remove(e); }); clearFootprints3D();
+            clearFootprints3D();
             huntDropMerged();
-            maze.forEach(function (fRows) {
-                if (fRows) fRows.forEach(function (row) {
-                    if (row) row.forEach(function (m) {
-                        if (!m) return;
-                        if (m.mesh) scene.remove(m.mesh);
-                        if (m.roof) scene.remove(m.roof);
-                        if (m.roof2) scene.remove(m.roof2);
-                        if (m.roof3) scene.remove(m.roof3);
-                        if (m.roof4) scene.remove(m.roof4);
-                        if (m.roof5) scene.remove(m.roof5);
-                        if (m.roof6) scene.remove(m.roof6);
-                    });
-                });
-            });
-            [gState.machines, gState.chairs, gState.doors, gState.pallets].forEach(function (list) {
-                (list || []).forEach(function (o) {
-                    if (o.mesh) scene.remove(o.mesh);
-                    if (o.lintel) scene.remove(o.lintel);
-                });
-            });
-            gState.pallets = [];
+            clearMazeMeshes();
             if (night) {
                 (night.survivors || []).forEach(function (a) { if (a.mesh) scene.remove(a.mesh); });
                 if (night.hunter && night.hunter.mesh) scene.remove(night.hunter.mesh);
             }
-            chests = []; groundItems = []; entities = []; maze = []; walkableMeshes = [];
-            gState.machines = []; gState.chairs = []; gState.doors = [];
 
             const wallTex = createProceduralTexture('wall', '#e5e5ea', '#cccccc');
             const floorTex = createProceduralTexture('floor', '#ffffff', '#e5e5ea');
@@ -4877,6 +4885,13 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-26-cleanup2', date: '2026-09-26', title: '地图残留问题彻底修好 + 灵敏度设置', items: [
+                    '之前那个"清理场景残留"的修复漏了一大块——惊魂夜的椅子/机子/门/木板只在"开新一局"时清，退到大厅这条路完全没走到，之前看到的白色地板碎块、莫名其妙的"椅子"，其实都是上一局惊魂夜/寻宝队/超燃留下的东西。现在统一走同一套清理，退到哪个模式都不会再留了。',
+                    '猫盾角色的耳朵（还有猎人的角）之前是 4 段的圆锥，凑近或者贴脸角度看会像一块扁扁的三角形，改成 8 段，看着才是个正常的圆锥。',
+                    '左上角加了"灵敏度设置"，能调转视角的快慢（鼠标和触屏都算），不用再将就默认手感。'
+                ]
+            },
             {
                 id: '2026-09-26-parkour2', date: '2026-09-26', title: '跑酷加机关 + 修好松饼地图留在大厅的问题', items: [
                     '根源修好了退出松饼大作战之后，上一局的楼房/跳台一直杵在大厅广场里的问题——之前 cakeExit() 只删了角色/增益/特效，松饼地图自己搭的东西压根没清，现在统一清理，进大厅前也会兜底扫一遍场景。',
@@ -7151,31 +7166,14 @@
         function blazeBuildArena(ffa, tomb, law) {
             mSize = tomb ? BLAZE.tombSize : law ? BLAZE.lawSize : ffa ? BLAZE.ffaSize : BLAZE.size;
             blazeLayout(mSize);
-            chests.forEach(function (c) { scene.remove(c); });
-            groundItems.forEach(function (g) { scene.remove(g); });
-            entities.forEach(function (e) { scene.remove(e); });
             clearFootprints3D();
             huntDropMerged();
-            maze.forEach(function (fRows) {
-                if (fRows) fRows.forEach(function (row) {
-                    if (row) row.forEach(function (m) {
-                        if (!m) return;
-                        ['mesh', 'roof', 'roof2', 'roof3', 'roof4', 'roof5', 'roof6'].forEach(function (k) {
-                            if (m[k]) scene.remove(m[k]);
-                        });
-                    });
-                });
-            });
-            [gState.machines, gState.chairs, gState.doors, gState.pallets].forEach(function (list) {
-                (list || []).forEach(function (o) { if (o.mesh) scene.remove(o.mesh); if (o.lintel) scene.remove(o.lintel); });
-            });
-            gState.machines = []; gState.chairs = []; gState.doors = []; gState.pallets = [];
+            clearMazeMeshes();
             if (night) {
                 (night.survivors || []).forEach(function (a) { if (a.mesh) scene.remove(a.mesh); });
                 if (night.hunter && night.hunter.mesh) scene.remove(night.hunter.mesh);
                 night = null;
             }
-            chests = []; groundItems = []; entities = []; maze = []; walkableMeshes = [];
 
             if (tomb) {
                 // 葬场：几乎全黑 + 极浓的雾。3 身位以外什么都看不见，
@@ -7406,7 +7404,9 @@
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.BoxGeometry(6, 11, 4), mat);
             body.position.y = 5.5; g.add(body);
-            let earGeo = new THREE.ConeGeometry(1.6, 3.4, 4);
+            // 圆锥段数从 4 提到 8——4 段是个尖顶四棱锥，贴脸/侧着看某些角度会显得
+            // 像一块扁扁的三角形（跟贴图似的），8 段看着才是个正常的圆锥耳朵。
+            let earGeo = new THREE.ConeGeometry(1.6, 3.4, 8);
             [-1, 1].forEach(function (sdir) {
                 let ear = new THREE.Mesh(earGeo, mat);
                 ear.position.set(sdir * 1.8, 12.5, 0); g.add(ear);
@@ -11416,7 +11416,7 @@
                 color: isHunter ? (HUNTER_HORN[charKey] || 0xa1671b) : col, emissive: 0x000000
             });
             if (!isHunter) {
-                let hornGeo = new THREE.ConeGeometry(1.6, 3.4, 4);
+                let hornGeo = new THREE.ConeGeometry(1.6, 3.4, 8);
                 [-1, 1].forEach(function (s) {
                     let horn = new THREE.Mesh(hornGeo, hornMat);
                     horn.position.set(s * 1.8, h + 1.5, 0);
@@ -16657,7 +16657,7 @@
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.BoxGeometry(6, 11, 4), mat);
             body.position.y = 5.5; g.add(body);
-            let earGeo = new THREE.ConeGeometry(1.6, 3.4, 4);
+            let earGeo = new THREE.ConeGeometry(1.6, 3.4, 8);
             [-1, 1].forEach(function (sdir) {
                 let ear = new THREE.Mesh(earGeo, mat);
                 ear.position.set(sdir * 1.8, 12.5, 0); g.add(ear);
@@ -20414,7 +20414,7 @@
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10, 18), mat);
             body.position.y = 5; g.add(body);
-            let earGeo = new THREE.ConeGeometry(1.6, 3.2, 4);
+            let earGeo = new THREE.ConeGeometry(1.6, 3.2, 8);
             [-1, 1].forEach(function (sdir) {
                 let ear = new THREE.Mesh(earGeo, mat);
                 ear.position.set(sdir * 2.1, 11.2, 0); g.add(ear);
