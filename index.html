@@ -1362,7 +1362,7 @@
         <div id="hub-board-prompt" style="position:absolute; bottom:190px; left:50%; transform:translateX(-50%); display:none; pointer-events:auto;">
             <button onclick="openChangelog()" style="margin:0; background:#2c5d8f; color:#fff; border:none; padding:8px 16px; font-size:14px;">查看公告板</button>
         </div>
-        <div style="position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center;">
+        <div id="blaze-score-wrap" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center;">
             <div id="blaze-score" style="font-size:26px; font-weight:bold; color:#fff; text-shadow:0 2px 6px #000;"></div>
             <div id="blaze-round" style="font-size:13px; color:#ffe0b2; text-shadow:0 1px 4px #000;"></div>
         </div>
@@ -4973,6 +4973,13 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-26-hub-overlap-fix', date: '2026-09-26', title: '大厅顶部文字重叠修好了（不是随机的，是真的会撞）', items: [
+                    '找到了"选择模式面板压住在线人数"的真实原因：大厅那行"在线 XX 人"是整屏水平居中的，右上角选模式面板是贴着右边固定的——屏幕越窄这两块就越容易撞在一起，用 800×1067 这种尺寸复现了 100% 会撞。现在这行改成卡在两块面板中间真正空着的缝里，不再整屏居中。',
+                    '还找到一个联动的：从"超燃"对局退出回大厅，上一局的排位表没人清过，会一直糊在左上角，正好压在"商店"那一列菜单上——退出超燃和进大厅两处都加了清空。',
+                    '大厅底部"组队/联机/好友/麦克风/聊天"那一整条在 800px 宽度下确实会出现横向滚动条——这个是设计内的（5 块内容放不下就横向滚动，不是内容丢了），先不改，如果想要改成换行布局告诉我。'
+                ]
+            },
+            {
                 id: '2026-09-26-hud-gacha-fix', date: '2026-09-26', title: '寻宝队体力值显示 + 皮肤抽卡保底 + 缺钱弹窗加直达入口', items: [
                     '寻宝队 HUD 里"体力值"一直没数字：文字和进度条压根没绑在一起，进度条会走但数字没写过——补上了。',
                     '皮肤抽卡加保底：连续 12 次没抽到新颜色，下一抽必出一个新颜色。',
@@ -8341,6 +8348,10 @@
             if (statsElExit) { statsElExit.classList.add('hidden'); statsElExit.innerHTML = ''; }
             let perkElExit = document.getElementById('blaze-perk');
             if (perkElExit) { perkElExit.classList.add('hidden'); perkElExit.innerHTML = ''; }
+            // 其它模式的 tick 循环每帧都会把 blaze-roster 清空再按需重写，退出超燃
+            // 却唯独没人清过它——这行以前没加，回大厅后上一局的排位表会一直糊在左上角。
+            let rosterExit = document.getElementById('blaze-roster');
+            if (rosterExit) rosterExit.innerHTML = '';
             if (scene) {
                 scene.background = new THREE.Color(0xf0f0f5);
                 scene.fog = new THREE.FogExp2(0xf0f0f5, 0.004);
@@ -21305,6 +21316,18 @@
             document.getElementById('night-hud').classList.add('hidden');
             document.getElementById('blaze-hud').classList.remove('hidden');
             let pe = document.getElementById('blaze-perk'); if (pe) pe.classList.add('hidden');
+            // blaze-roster 是超燃对局专用的，大厅从来不写它——但退出超燃时没人清过它，
+            // 上一局的排位表就一直糊在左上角，正好压在 lobby-tl 那块菜单上。
+            let rosterHub = document.getElementById('blaze-roster'); if (rosterHub) rosterHub.innerHTML = '';
+            // 在线人数/大厅提示这行本来是屏幕水平居中的，套用到大厅里就会跟右上角
+            // lobby-tr 那块选模式面板撞在一起——按跟 lobby-tl/tr 同样的断点公式，
+            // 把它的左右边界卡在两块面板中间那条真正空着的缝里，不再整屏居中。
+            let scoreWrap = document.getElementById('blaze-score-wrap');
+            if (scoreWrap) {
+                scoreWrap.style.left = 'calc(14px + min(190px, 42vw) + 12px)';
+                scoreWrap.style.right = 'calc(14px + min(320px, 50vw) + 12px)';
+                scoreWrap.style.transform = 'none';
+            }
             if (blaze) { try { blazeExit(); } catch (e) { } }
             if (race) { try { raceExit(); } catch (e) { } }
             if (jail) { try { jailExit(); } catch (e) { } }
@@ -21349,6 +21372,10 @@
             hub = null;
             hubTouchUI(false);
             let hp = document.getElementById('hub-prompt'); if (hp) hp.style.display = 'none';
+            // 大厅专用的窄化定位只对大厅有意义——其它模式没有 lobby-tl/tr 那两块面板，
+            // 离开大厅要把这行改回原来的整屏水平居中，不然进了正式对局这行会一直偏在中间偏左。
+            let scoreWrapExit = document.getElementById('blaze-score-wrap');
+            if (scoreWrapExit) { scoreWrapExit.style.left = '50%'; scoreWrapExit.style.right = ''; scoreWrapExit.style.transform = 'translateX(-50%)'; }
             bgmStop();
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
