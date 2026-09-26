@@ -1312,6 +1312,7 @@
              display:flex; flex-direction:column; justify-content:flex-end; gap:3px; pointer-events:none;"></div>
 
         <div id="chat-panel" style="position:absolute; right:12px; bottom:14px; width:250px; pointer-events:auto;">
+            <div id="chat-channels" style="display:none; gap:4px; margin-bottom:4px;"></div>
             <div id="chat-quick" style="display:none; flex-direction:column; gap:4px; margin-bottom:6px;"></div>
             <input id="chat-input" style="display:none; width:100%; box-sizing:border-box; font-size:13px; padding:6px 8px;
                    border:1px solid #888; border-radius:5px; background:rgba(255,255,255,0.95);" placeholder="回车发送，Esc 取消">
@@ -2217,9 +2218,14 @@
                 if (msg.sender !== gState.id) {
 
                     let mySide = night ? night.side : null;
-                    if (!msg.side || !mySide || msg.side === mySide) {
-                        chatPush(msg.sender, msg.text, false);
-                        nightApplyChatOrder(msg.text || '');
+                    let sideOk = !msg.side || !mySide || msg.side === mySide;
+                    let chanOk = msg.channel === 'friend' ? (msg.target === gState.id)
+                        : msg.channel === 'team' ? (lobbyParty.indexOf(msg.sender) >= 0)
+                            : true;
+                    if (sideOk && chanOk) {
+                        let tag = msg.channel === 'friend' ? '[私信] ' : (msg.channel === 'team' ? '[队伍] ' : '');
+                        chatPush(msg.sender, tag + (msg.text || ''), false);
+                        if (msg.channel !== 'friend') nightApplyChatOrder(msg.text || '');
                     }
                 }
             } else if (msg.type === 'TEAM_INVITE') {
@@ -2324,12 +2330,46 @@
             let quick = document.getElementById('chat-quick');
             let input = document.getElementById('chat-input');
             let toggle = document.getElementById('chat-toggle');
+            let chans = document.getElementById('chat-channels');
             if (!quick) return;
             quick.style.display = (m === 1) ? 'flex' : 'none';
             input.style.display = (m === 2) ? 'block' : 'none';
+            if (chans) chans.style.display = (m === 0) ? 'none' : 'flex';
             toggle.innerText = m === 0 ? '发言' : (m === 1 ? '再点一下手动输入' : '收起');
             if (m === 1) chatRenderQuick();
             if (m === 2) { input.value = ''; input.focus(); }
+            if (m !== 0) chatRenderChannels();
+        }
+
+        // 聊天频道：公共（房间所有人）/ 队伍（只有 lobbyParty 里的人看得到）/ 好友（私信单独一个人）。
+        // 之前只有一个频道，说话全房间都看得到；现在发之前先选一下发给谁。
+        let chatChannel = 'public'; let chatDMTarget = '';
+        const CHAT_CHANNELS = [['public', '公共'], ['team', '队伍'], ['friend', '好友']];
+        function chatRenderChannels() {
+            let el = document.getElementById('chat-channels');
+            if (!el) return;
+            el.innerHTML = CHAT_CHANNELS.map(function (c) {
+                let on = chatChannel === c[0];
+                let label = c[1] + (c[0] === 'friend' && chatChannel === 'friend' && chatDMTarget ? '：' + dispName(chatDMTarget) : '');
+                return '<div onclick="chatSetChannel(\'' + c[0] + '\'); event.stopPropagation();" style="flex:1; text-align:center; cursor:pointer; font-size:11px; padding:4px 2px; border-radius:4px; background:' +
+                    (on ? 'rgba(92,184,92,0.9)' : 'rgba(0,0,0,0.55)') + '; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + label + '</div>';
+            }).join('');
+        }
+        function chatSetChannel(c) {
+            if (c === 'friend') { chatPickFriendTarget(); return; }
+            chatChannel = c; chatRenderChannels();
+        }
+        function chatPickFriendDone(id) {
+            chatChannel = 'friend'; chatDMTarget = id;
+            document.getElementById('sys-modal').classList.add('hidden');
+            chatRenderChannels();
+        }
+        function chatPickFriendTarget() {
+            if (!friends.length) { showSysModal('提示', '还没有好友，先在好友列表里加一个再私信', [{ label: '确定' }]); return; }
+            let html = '<div style="text-align:left;">' + friends.map(function (f) {
+                return '<div onclick="chatPickFriendDone(\'' + f.id + '\')" style="padding:8px; cursor:pointer; border-bottom:1px solid #eee;">' + dispName(f.id) + '</div>';
+            }).join('') + '</div>';
+            showSysModal('私信给谁', html, [{ label: '取消' }]);
         }
 
         function chatRenderQuick() {
@@ -2400,14 +2440,19 @@
         function chatSend(text) {
             text = String(text || '').trim().slice(0, 40);
             if (!text) return;
-            chatPush(gState.id || '我', text, true);
-            nightApplyChatOrder(text);
-            // 彩蛋：公共聊天里打"67"给点猫盾币——不用管什么梗，纯粹好玩，解锁过一次就不再重复发钱。
-            if (text === '67' && !(gState.eggs && gState.eggs['chat_67'])) {
+            if (chatChannel === 'friend' && !chatDMTarget) { chatPickFriendTarget(); return; }
+            let tag = chatChannel === 'friend' ? '[私信] ' : (chatChannel === 'team' ? '[队伍] ' : '');
+            chatPush(gState.id || '我', tag + text, true);
+            if (chatChannel === 'public') nightApplyChatOrder(text);
+            // 彩蛋：只有公共频道打"67"才给钱——私信/队伍频道刷屏没人看得见，没意义也不该给钱。
+            if (chatChannel === 'public' && text === '67' && !(gState.eggs && gState.eggs['chat_67'])) {
                 unlockEgg('chat_67'); coinsAdd('chat', 67); blazeFlash('彩蛋！「67」 +67 猫盾币');
             }
 
-            bc.postMessage({ type: 'CHAT', target: '*', sender: gState.id, text: text, side: night ? night.side : null });
+            bc.postMessage({
+                type: 'CHAT', target: chatChannel === 'friend' ? chatDMTarget : '*', sender: gState.id, text: text,
+                channel: chatChannel, side: night ? night.side : null
+            });
             chatSetMode(0);
         }
 
@@ -4823,6 +4868,13 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-26-chat-parkour', date: '2026-09-26', title: '聊天分了三个频道 + 跑酷通关有奖励', items: [
+                    '聊天框以前只有一个频道，说什么全房间都看得到。现在发言前能选"公共/队伍/好友"——队伍只有跟你组队的人看得到，好友是私信单独一个人，选好友会先弹列表挑一个。',
+                    '"67"彩蛋只在公共频道里打才算数，队伍/私信里刷不出金币。',
+                    '大厅广场跑酷第一次踩上最后一块（金色）台阶，+5 猫盾币。'
+                ]
+            },
             {
                 id: '2026-09-26-camera-ai', date: '2026-09-26', title: '第三人称镜头修手感 + 寻宝队默认不补AI', items: [
                     '大厅广场/松饼大作战/监狱救援/躲避球/竞速/合作密室共用的第三人称镜头：抬头低头到接近正上正下的时候，之前会因为水平朝向瞬间归零而"猛跳"一下位置，现在改成沿用上一帧的朝向，是平滑过渡。',
@@ -20701,6 +20753,19 @@
             let groundY = hubGroundYAt(hub.p.x, hub.p.z, prevY);
             if (hub.p.y < groundY) { hub.p.y = groundY; hub.vy = 0; }
             if (hub.p.y < -10) { hub.p.set(0, 0, 0); hub.vy = 0; }   // 掉下去了，回广场中心重来
+            hubParkourCheck();
+        }
+        // 跑酷通关奖励：踩上最后一块（金色）台阶就算通关，一次大厅会话只给一次——
+        // 不然贴着最后一块台阶反复上下跳，几秒钟就能刷无限猫盾币。
+        function hubParkourCheck() {
+            if (hub.parkourDone) return;
+            let top = hub.platforms[hub.platforms.length - 1];
+            if (!top) return;
+            if (Math.abs(hub.p.x - top.x) < top.half && Math.abs(hub.p.z - top.z) < top.half && Math.abs(hub.p.y - top.y) < 0.5) {
+                hub.parkourDone = true;
+                coinsAdd('hub', 5);
+                blazeFlash('跑酷通关！+5 猫盾币');
+            }
         }
         function hubCameraPos() {
             let dir = chaseCamDir();
@@ -20914,7 +20979,7 @@
             hub = {
                 meshes: [], wanderers: [], realPlayers: {}, party: [], nearby: null,
                 p: new THREE.Vector3(0, 0, 20), vy: 0, faceDir: { x: 0, z: -1 }, mesh: mesh, animT: 0,
-                last: performance.now(), raf: null, netSelfT: 0
+                last: performance.now(), raf: null, netSelfT: 0, parkourDone: false
             };
             hubBuildWorld();
             hubSpawnWanderers();
