@@ -848,7 +848,6 @@
 
         <!-- 左上角：商店 / 猫盾乐园 / 大厅广场等入口 -->
         <div id="lobby-tl">
-            <div style="font-size:12px; color:#888; margin-bottom:4px;">入口</div>
             <button onclick="openShop()" style="width:100%; margin:0 0 6px; background:#e6a23c; color:#fff; border:none; font-size:13px; padding:8px 4px;">商店</button>
             <button onclick="openChangelog()" style="width:100%; margin:0 0 6px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">更新公告<span id="changelog-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
             <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">彩蛋图鉴</button>
@@ -3722,12 +3721,22 @@
             updateHUD(); bgmStart(); animate();
         }
 
+        // 各模式退出时该拿掉的场景残留统一走这——之前 cakeExit() 只删了角色/增益/特效，
+        // 松饼地图自己搭的建筑（塞进 maze 网格里）跟跳台完全没清，回大厅之后这些楼房/台子
+        // 一直杵在场景里没人管，谁都看得见（大厅明明没有 maze，看到的却是上一局松饼的楼）。
+        function clearMazeMeshes() {
+            maze.forEach(function (fRows) { if (fRows) fRows.forEach(function (row) { if (row) row.forEach(function (m) { if (m) ['mesh', 'roof', 'roof2', 'roof3', 'roof4', 'roof5', 'roof6'].forEach(function (k) { if (m[k]) scene.remove(m[k]); }); }); }); });
+            chests.forEach(function (c) { scene.remove(c); }); groundItems.forEach(function (g) { scene.remove(g); }); entities.forEach(function (e) { scene.remove(e); });
+            cakePlatformMeshes.forEach(function (m) { scene.remove(m); }); cakePlatformMeshes = []; cakePlatforms = [];
+            chests = []; groundItems = []; entities = []; maze = []; walkableMeshes = [];
+        }
         function buildProceduralMaze() {
             mSize = HUNT_SIZE;
-            chests.forEach(function (c) { scene.remove(c); }); groundItems.forEach(function (g) { scene.remove(g); }); entities.forEach(function (e) { scene.remove(e); }); clearFootprints3D();
+            clearFootprints3D();
             huntDropMerged();
-            // 从躲猫猫/火拼图切过来时，上一张图的屋顶(roof…roof6)也得一起拿掉，不然留在场景里白白多画几百个 mesh
-            maze.forEach(function (fRows) { if (fRows) fRows.forEach(function (row) { if (row) row.forEach(function (m) { if (m) ['mesh', 'roof', 'roof2', 'roof3', 'roof4', 'roof5', 'roof6'].forEach(function (k) { if (m[k]) scene.remove(m[k]); }); }); }); }); chests = []; groundItems = []; entities = []; maze = []; walkableMeshes = [];
+            // 从躲猫猫/火拼图/松饼切过来时，上一张图的屋顶(roof…roof6)、松饼的楼房/跳台
+            // 也得一起拿掉，不然留在场景里白白多画几百个 mesh。
+            clearMazeMeshes();
 
             const wallTex = createProceduralTexture('wall', '#e5e5ea', '#cccccc'); const floorTex = createProceduralTexture('floor', '#ffffff', '#e5e5ea');
             const safeFloorTex = createProceduralTexture('safe_floor', '#a8e6cf', '#dcedc1'); const safeWallTex = createProceduralTexture('safe_wall', '#1abc9c', '#16a085');
@@ -4868,6 +4877,14 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-26-parkour2', date: '2026-09-26', title: '跑酷加机关 + 修好松饼地图留在大厅的问题', items: [
+                    '根源修好了退出松饼大作战之后，上一局的楼房/跳台一直杵在大厅广场里的问题——之前 cakeExit() 只删了角色/增益/特效，松饼地图自己搭的东西压根没清，现在统一清理，进大厅前也会兜底扫一遍场景。',
+                    '大厅跑酷难度提高：台阶更窄、间隔更大、之字拐更狠，中间几块换成了移动平台（蓝色，会左右/前后来回摆）和销毁平台（红色，站久了会塌，塌一会儿自己长回来）。',
+                    '踩到顶端金色台子直接瞬移回起点，不用自己找路走下去。',
+                    '左上角"入口"那行没用的标签删掉了。'
+                ]
+            },
             {
                 id: '2026-09-26-chat-parkour', date: '2026-09-26', title: '聊天分了三个频道 + 跑酷通关有奖励', items: [
                     '聊天框以前只有一个频道，说什么全房间都看得到。现在发言前能选"公共/队伍/好友"——队伍只有跟你组队的人看得到，好友是私信单独一个人，选好友会先弹列表挑一个。',
@@ -20606,6 +20623,7 @@
             cake.actors.forEach(function (a) { scene.remove(a.mesh); });
             cake.buffs.forEach(function (b) { scene.remove(b.mesh); });
             cake.fx.forEach(function (f) { scene.remove(f.o); f.mat.dispose(); });
+            clearMazeMeshes();   // 松饼地图自己搭的楼房/跳台也在这一并清掉，不然回大厅还看得见
             cake = null;
             cakeTouchUI(false);
             bgmStop();
@@ -20628,21 +20646,31 @@
             let floor = new THREE.Mesh(new THREE.PlaneGeometry(HUB.plazaHalf * 2, HUB.plazaHalf * 2),
                 new THREE.MeshLambertMaterial({ color: 0xc8e6c9 }));
             floor.rotation.x = -Math.PI / 2; scene.add(floor); hub.meshes.push(floor);
-            // 跑酷：台阶越往后越窄、间隔留的空当也不小，还带左右之字拐——
-            // 逼着每一步都得瞄准了跳，不能低头一路直走过去。
-            let widths = [12, 11, 10, 9, 8, 7, 6];
-            let xOffsets = [0, 13, -9, 15, -13, 11, -6];
-            let gapVoid = 7.5, stepRise = 5, baseX = 30, baseZ = -14;
+            // 跑酷：台阶越往后越窄、间隔越来越大、之字拐更狠——逼着每一步都得瞄准了跳。
+            // 中段几块台子还加了机关：会左右/前后来回移动的"移动平台"，踩久了会塌的
+            // "销毁平台"（塌了几秒后会重新长回来，不是永久没了）——比原来纯静态的难不少。
+            let widths = [11, 9, 7, 6, 5, 4.5, 5];
+            let xOffsets = [0, 14, -11, 17, -15, 13, -8];
+            let gapVoid = 8.5, stepRise = 5, baseX = 30, baseZ = -14;
+            // 第几块是移动/销毁平台——最后一块（终点）跟第一块（起跳）留安全，不加机关
+            let MOVER_IDX = { 2: { axis: 'x', range: 7, speed: 1.3 }, 4: { axis: 'z', range: 6, speed: 1.6 } };
+            let CRUMBLE_IDX = { 3: true, 5: true };
             hub.platforms = [];
             let z = baseZ, prevHalf = 0;
             for (let i = 0; i < widths.length; i++) {
                 let half = widths[i] / 2;
                 z = (i === 0) ? baseZ : (z - prevHalf - half - gapVoid);
                 let x = baseX + xOffsets[i], y = 4 + i * stepRise;
+                let isLast = i === widths.length - 1;
+                let mover = MOVER_IDX[i], crumbly = !!CRUMBLE_IDX[i];
+                let col = isLast ? 0xffd54f : (mover ? 0x64b5f6 : (crumbly ? 0xe57373 : 0x90a4ae));
                 let m = new THREE.Mesh(new THREE.BoxGeometry(widths[i], 2, widths[i]),
-                    new THREE.MeshLambertMaterial({ color: i === widths.length - 1 ? 0xffd54f : 0x90a4ae }));
+                    new THREE.MeshLambertMaterial({ color: col }));
                 m.position.set(x, y, z); scene.add(m); hub.meshes.push(m);
-                hub.platforms.push({ x: x, y: y + 1, z: z, half: half });
+                let p = { x: x, y: y + 1, z: z, half: half, mesh: m, meshBaseY: y, solid: true };
+                if (mover) { p.mover = { axis: mover.axis, range: mover.range, speed: mover.speed, base: mover.axis === 'x' ? x : z, phase: i * 1.7 }; }
+                if (crumbly) { p.crumble = { standT: 0, gone: false, respawnAt: 0 }; }
+                hub.platforms.push(p);
                 prevHalf = half;
             }
             // 场地边缘围一圈矮墙，好认出边界在哪
@@ -20692,6 +20720,7 @@
             let best = 0;
             for (let i = 0; i < hub.platforms.length; i++) {
                 let p = hub.platforms[i];
+                if (p.solid === false) continue;   // 塌掉的销毁平台暂时不算地面，直接踩空
                 if (Math.abs(x - p.x) < p.half && Math.abs(z - p.z) < p.half && p.y <= curY + 0.6 && p.y > best) best = p.y;
             }
             return best;
@@ -20739,6 +20768,7 @@
             let blockedBySide = false;
             for (let i = 0; i < hub.platforms.length; i++) {
                 let p = hub.platforms[i], pad = 3.5;
+                if (p.solid === false) continue;   // 塌掉的销毁平台没有实体，不挡人
                 if (Math.abs(newX - p.x) < p.half + pad && Math.abs(newZ - p.z) < p.half + pad &&
                     prevY < p.y - 0.3 && prevY > p.y - 6) { blockedBySide = true; break; }
             }
@@ -20758,13 +20788,19 @@
         // 跑酷通关奖励：踩上最后一块（金色）台阶就算通关，一次大厅会话只给一次——
         // 不然贴着最后一块台阶反复上下跳，几秒钟就能刷无限猫盾币。
         function hubParkourCheck() {
-            if (hub.parkourDone) return;
             let top = hub.platforms[hub.platforms.length - 1];
             if (!top) return;
-            if (Math.abs(hub.p.x - top.x) < top.half && Math.abs(hub.p.z - top.z) < top.half && Math.abs(hub.p.y - top.y) < 0.5) {
-                hub.parkourDone = true;
-                coinsAdd('hub', 5);
-                blazeFlash('跑酷通关！+5 猫盾币');
+            // vy===0 是刚落地那一帧的信号（hubPlayerMove 贴地会把它归零）——只在真正
+            // 站稳的时候才算数，不然跳跃弧线正好掠过顶台高度那一下也会被误判成通关。
+            if (hub.vy === 0 && Math.abs(hub.p.x - top.x) < top.half && Math.abs(hub.p.z - top.z) < top.half && Math.abs(hub.p.y - top.y) < 0.5) {
+                if (!hub.parkourDone) {
+                    hub.parkourDone = true;
+                    coinsAdd('hub', 5);
+                    blazeFlash('跑酷通关！+5 猫盾币');
+                }
+                // 到顶直接瞬移回起点，不用自己找路走下去——省事，也顺便清出金色台子
+                // 让别人接着挑战（人不用非得留在台顶上）。
+                hub.p.set(0, 0, 20); hub.vy = 0;
             }
         }
         function hubCameraPos() {
@@ -20776,7 +20812,7 @@
             for (let i = 0; i < 6; i++) {
                 let cx = hub.p.x - dir.x * back, cz = hub.p.z - dir.z * back, cy = hub.p.y + up;
                 let hit = hub.platforms.some(function (p) {
-                    return Math.abs(cx - p.x) < p.half && Math.abs(cz - p.z) < p.half && cy < p.y && cy > p.y - 6;
+                    return p.solid !== false && Math.abs(cx - p.x) < p.half && Math.abs(cz - p.z) < p.half && cy < p.y && cy > p.y - 6;
                 });
                 if (!hit) break;
                 back *= 0.7;
@@ -20883,8 +20919,40 @@
             if (m.fx !== undefined) w.faceDir = { x: m.fx, z: m.fz };
             w.lastSeen = performance.now();
         }
+        // 移动平台：沿一根轴做正弦来回摆动，数据(p.x/p.z)和网格位置一起动——碰撞判定
+        // 直接读 p.x/p.z，动了就是动了，不用额外同步。
+        // 销毁平台：人站上去攒够时间会先抖一下再塌掉（solid=false，判定/落地都跳过它），
+        // 塌一段时间后自动长回来，不是永久消失。
+        function hubPlatformsTick(dt) {
+            hub.clock = (hub.clock || 0) + dt;
+            let now = performance.now();
+            hub.platforms.forEach(function (p) {
+                if (p.mover) {
+                    let off = Math.sin(hub.clock * p.mover.speed + p.mover.phase) * p.mover.range;
+                    if (p.mover.axis === 'x') p.x = p.mover.base + off; else p.z = p.mover.base + off;
+                    p.mesh.position.x = p.x; p.mesh.position.z = p.z;
+                }
+                if (p.crumble) {
+                    if (p.crumble.gone) {
+                        if (now >= p.crumble.respawnAt) { p.crumble.gone = false; p.solid = true; p.mesh.visible = true; p.crumble.standT = 0; }
+                        return;
+                    }
+                    let standing = Math.abs(hub.p.x - p.x) < p.half && Math.abs(hub.p.z - p.z) < p.half && Math.abs(hub.p.y - p.y) < 0.6;
+                    p.crumble.standT = standing ? p.crumble.standT + dt : 0;
+                    if (p.crumble.standT > 1.2) {
+                        p.crumble.gone = true; p.solid = false; p.mesh.visible = false;
+                        p.crumble.respawnAt = now + 3000;
+                    } else if (p.crumble.standT > 0.8) {
+                        p.mesh.position.y = p.meshBaseY + Math.sin(now * 0.05) * 0.3;
+                    } else {
+                        p.mesh.position.y = p.meshBaseY;
+                    }
+                }
+            });
+        }
         function hubTick(dt) {
             let prevPx = hub.p.x, prevPz = hub.p.z;
+            hubPlatformsTick(dt);
             hubPlayerMove(dt);
             hub.spd = Math.hypot(hub.p.x - prevPx, hub.p.z - prevPz) / dt;
             hub.wanderers.forEach(function (w) {
@@ -20971,6 +21039,7 @@
             if (park) { try { parkExit(); } catch (e) { } }
             if (cake) { try { cakeExit(); } catch (e) { } }
             ensureScene();
+            clearMazeMeshes();   // 保险：万一某个模式退出时没清干净，进大厅前兜底扫一遍
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
 
