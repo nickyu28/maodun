@@ -886,7 +886,7 @@
         </div>
 
         <div style="margin:6px 0; font-size:12px; color:#666; width:100%; text-align:left; box-sizing:border-box;">
-            <label><input type="checkbox" id="hunt-ai-fill" checked onchange="setAiFill(this.checked)"> AI 补齐队友</label>
+            <label><input type="checkbox" id="hunt-ai-fill" onchange="setAiFill(this.checked)"> AI 补齐队友</label>
             <div style="font-size:11px; color:#999; line-height:1.6; margin-top:4px;">
                 开：两名 AI 队友。他们会把你救起来，也会自己满图搜刮、开箱、上交，撤离进度涨得更快 ——
                 代价是他们开走的箱子你就开不到了，能进你自己口袋的钱变少。<br>
@@ -2105,7 +2105,7 @@
 
         let initArr = new Array(6).fill(null); initArr[0] = { ...shopItems['鱼叉'] }; initArr[1] = { ...shopItems['地窖徽章'] };
         const gState = {
-            control: 'laptop', char: 'green', id: '', money: 10000, team: [], aiFill: true, runCash: 0, aiSubmitted: 0, aiChestsTaken: 0, blazeChar: 'bow',
+            control: 'laptop', char: 'green', id: '', money: 10000, team: [], aiFill: false, runCash: 0, aiSubmitted: 0, aiChestsTaken: 0, blazeChar: 'bow',
             mcoin: 0, skins: {}, skinColor: null, parkUnlocked: {}, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, inv: initArr, garage: new Array(200).fill(null),
             maxInv: 6, hp: 100, maxHp: 100, isDead: false, selectedContainer: 'inv', selectedSlot: 0, totalSubmitted: 0,
             backpackOpen: false, largeMapOpen: false, inSafeZone: true, needsLock: false, pAtkCd: 0, timeStop: 0, preGenSpawns: [],
@@ -3532,6 +3532,17 @@
         }
 
         let isDraggingCamera = false; let camTouchId = null; let lastCamX = 0, lastCamY = 0;
+        // 第三人称吊镜（hub/cake/jail 共用这套）抬头/低头看到接近正上正下时，水平方向的
+        // 分量会缩到接近 0——之前这时候直接甩回固定的"面朝 -Z"，人物在屏幕上会跟着猛地
+        // 跳一下位置。现在改成沿用上一帧还有效的水平朝向，看起来是平滑过渡，不会跳镜头。
+        let chaseCamLastDir = { x: 0, z: -1 };
+        function chaseCamDir() {
+            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
+            if (dir.lengthSq() < 0.0001) return chaseCamLastDir;
+            dir.normalize();
+            chaseCamLastDir = { x: dir.x, z: dir.z };
+            return chaseCamLastDir;
+        }
 
         // 各模式各有各的「在局内」标志：寻宝队看 isPlaying，惊魂夜看 night，超燃看 blaze……
         // 大厅广场（hub）、松饼大作战（cake）当时加的时候漏加了，导致触屏在这两个模式里转不动视角。
@@ -4812,6 +4823,13 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-26-camera-ai', date: '2026-09-26', title: '第三人称镜头修手感 + 寻宝队默认不补AI', items: [
+                    '大厅广场/松饼大作战/监狱救援/躲避球/竞速/合作密室共用的第三人称镜头：抬头低头到接近正上正下的时候，之前会因为水平朝向瞬间归零而"猛跳"一下位置，现在改成沿用上一帧的朝向，是平滑过渡。',
+                    '大厅广场的镜头之前贴着跑酷台子站的时候会怼进台子实体里（一片灰），现在跟松饼/监狱救援一样会自动收短距离躲开。',
+                    '寻宝队"AI 补齐队友"默认改成关——大厅现在都是真人自动联机，不缺人凑数了，想要 AI 队友自己去队伍设置里勾。'
+                ]
+            },
             {
                 id: '2026-09-26-batch', date: '2026-09-26', title: '触屏转视角 + 反馈邮件兜底 + 彩蛋', items: [
                     '大厅广场、松饼大作战里触屏没法转视角——加新模式的时候漏把它们加进"允许转视角"的名单，现在补上了。',
@@ -16660,7 +16678,7 @@
             scene.add(mesh);
             return {
                 idx: i, isPlayer: isPlayer, key: key,
-                name: isPlayer ? (gState.id || '你') : '猫盾' + (i + 1), col: col,
+                name: isPlayer ? (dispName(gState.id) || '你') : '猫盾' + (i + 1), col: col,
                 p: new THREE.Vector3(0, 4, 0), vel: new THREE.Vector3(),
                 onGround: false, mesh: mesh, cp: 0, best: 0,
                 dashCd: 0, dashT: 0, stunT: 0, respawnT: 0,
@@ -17379,7 +17397,7 @@
             });
             let me = race.racers[0];
             let look = me.out ? (race.racers.find(function (r) { return !r.out; }) || me) : me;
-            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
+            let dir = chaseCamDir();
             camera.position.set(look.p.x - dir.x * RACE.camBack, look.p.y + RACE.camUp, look.p.z - dir.z * RACE.camBack);
 
             raceHud();
@@ -17947,8 +17965,7 @@
         // 镜头直接按固定距离摆在身后会穿墙，所以先沿着「人物→镜头」这条线
         // 探几个点，撞墙就把距离缩短，不会出现镜头卡进墙里一片黑的情况。
         function jailCameraPos(me) {
-            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
-            if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1); else dir.normalize();
+            let dir = chaseCamDir();
             let back = JAIL.camBack;
             for (let t = 0.2; t <= 1; t += 0.2) {
                 let tx = me.p.x - dir.x * back * t, tz = me.p.z - dir.z * back * t;
@@ -18077,7 +18094,7 @@
                     let sp = sps[i];
                     let a = {
                         idx: jail.actors.length, team: t, isPlayer: isP, col: col,
-                        name: isP ? (gState.id || '你') : ('队员' + (jail.actors.length + 1)),
+                        name: isP ? (dispName(gState.id) || '你') : ('队员' + (jail.actors.length + 1)),
                         p: new THREE.Vector3(sp.x * TILE, 0, sp.z * TILE),
                         home: { x: sp.x * TILE, z: sp.z * TILE },
                         floor: 0, mvx: 0, mvz: 0, jailed: 0, invulT: 0, raiding: 0,
@@ -18708,7 +18725,7 @@
             let label = document.getElementById('dodge-spectate-target');
             if (list.length === 0) { if (label) label.innerText = '无人可观战'; return; }
             if (dodge.spectateIdx >= list.length) dodge.spectateIdx = 0;
-            if (label) label.innerText = list[dodge.spectateIdx].name;
+            if (label) label.innerText = dispName(list[dodge.spectateIdx].name);
         }
         function dodgeLeaveSpectate() {
             if (!dodge) return;
@@ -18717,8 +18734,7 @@
         }
 
         function dodgeCameraPos(me) {
-            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
-            if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1); else dir.normalize();
+            let dir = chaseCamDir();
             return { x: me.p.x - dir.x * DODGE.camBack, y: me.p.y + DODGE.camUp, z: me.p.z - dir.z * DODGE.camBack };
         }
 
@@ -18930,7 +18946,7 @@
                     let x = (i - (n - 1) / 2) * (DODGE.courtW / (n + 1));
                     let a = {
                         idx: dodge.actors.length, team: t, isPlayer: isP, col: col,
-                        name: isP ? (gState.id || '你') : ('队员' + (dodge.actors.length + 1)),
+                        name: isP ? (dispName(gState.id) || '你') : ('队员' + (dodge.actors.length + 1)),
                         p: new THREE.Vector3(x, 0, zEdge), home: { x: x, z: zEdge },
                         mvx: 0, mvz: 0, vy: 0, out: false, holding: null, throwCd: 0,
                         stamina: DODGE.staminaMax, aiT: Math.random() * 0.3, animT: 0,
@@ -19089,8 +19105,7 @@
         }
 
         function escapeCameraPos(me) {
-            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
-            if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1); else dir.normalize();
+            let dir = chaseCamDir();
             return { x: me.p.x - dir.x * 24, y: me.p.y + 15, z: me.p.z - dir.z * 24 };
         }
 
@@ -20066,8 +20081,7 @@
             document.getElementById('blaze-hptxt').innerText = '存活 ' + live + ' 人';
         }
         function cakeCameraPos(me) {
-            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
-            if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1); else dir.normalize();
+            let dir = chaseCamDir();
             let back = CAKE.camBack;
             for (let t = 0.2; t <= 1; t += 0.2) {
                 let tx = me.p.x - dir.x * back * t, tz = me.p.z - dir.z * back * t;
@@ -20689,9 +20703,20 @@
             if (hub.p.y < -10) { hub.p.set(0, 0, 0); hub.vy = 0; }   // 掉下去了，回广场中心重来
         }
         function hubCameraPos() {
-            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
-            if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1); else dir.normalize();
-            return { x: hub.p.x - dir.x * 24, y: hub.p.y + 16, z: hub.p.z - dir.z * 24 };
+            let dir = chaseCamDir();
+            let back = 24, up = 16;
+            // 跑酷台子挡镜头：贴着台子站的时候，镜头吊在身后可能正好落在台子实体里面
+            // （一片贴脸的灰色）——跟 cake/jail 那套一样，沿"人→镜头"这条线探几步，
+            // 撞进台子范围就把距离收短，退到台子外面。
+            for (let i = 0; i < 6; i++) {
+                let cx = hub.p.x - dir.x * back, cz = hub.p.z - dir.z * back, cy = hub.p.y + up;
+                let hit = hub.platforms.some(function (p) {
+                    return Math.abs(cx - p.x) < p.half && Math.abs(cz - p.z) < p.half && cy < p.y && cy > p.y - 6;
+                });
+                if (!hit) break;
+                back *= 0.7;
+            }
+            return { x: hub.p.x - dir.x * back, y: hub.p.y + up, z: hub.p.z - dir.z * back };
         }
         function hubProximityTick() {
             let nearest = null, bestD = HUB.proximityRange;
