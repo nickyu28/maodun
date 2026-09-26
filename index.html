@@ -1200,7 +1200,7 @@
                 <div>时间: <span id="time-txt">08:00 AM</span></div>
                 <div>当前层: <span id="floor-txt">1层</span></div>
                 <div>生命值: <span id="hp-txt">100</span>/<span id="hp-max-txt">100</span></div>
-                <div>体力值:</div>
+                <div>体力值: <span id="stamina-txt">100</span></div>
                 <div>总负重: <span id="weight-txt">0</span></div>
             </div>
             <div id="bars-center">
@@ -15531,6 +15531,7 @@
             let isRunning = (keys['shift'] || padRun) && isMoving && stamina > 0;
             let drainMult = gState.debuff.type === 2 ? 2.5 : 1.0;
             if (isRunning) { baseMoveSpeed *= staminaBoostMul(stamina, 1.6); stamina = Math.max(0, stamina - 28 * drainMult * dt); } else { stamina = Math.min(100, stamina + 16 * dt); } document.getElementById('stamina-fill').style.width = stamina + '%';
+            let staminaTxt = document.getElementById('stamina-txt'); if (staminaTxt) staminaTxt.innerText = Math.floor(stamina);
 
             let isMovingAllowed = (actionTarget !== 'med' && actionTarget !== 'time_stop');
 
