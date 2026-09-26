@@ -855,6 +855,7 @@
             <button onclick="openSensSetup()" style="width:100%; margin:0 0 6px; background:#546e7a; color:#fff; border:none; font-size:12px; padding:7px 4px;">灵敏度设置</button>
             <button onclick="openFeedback()" style="width:100%; margin:0 0 6px; background:#e91e63; color:#fff; border:none; font-size:12px; padding:7px 4px;">反馈</button>
             <button onclick="openPlayLog()" style="width:100%; margin:0 0 6px; background:#795548; color:#fff; border:none; font-size:12px; padding:7px 4px;">游玩记录</button>
+            <button onclick="clearLocalCache()" style="width:100%; margin:0 0 6px; background:#999; color:#fff; border:none; font-size:12px; padding:7px 4px;">清空本地数据</button>
             <div id="lobby-rank" style="font-size:11px; color:#888; margin-top:4px;"></div>
             <div id="daily-mod-banner" style="font-size:11px; color:#795548; background:#fff8e1; border:1px solid #ffe082; border-radius:5px; padding:5px 6px; margin-top:4px;"></div>
         </div>
@@ -1255,12 +1256,16 @@
             <button id="btn-spectate-leave" onclick="chooseLeave()" style="background:#d9534f; color:#fff; border:none;">离开本局</button>
         </div>
 
-        <div class="joystick-zone" id="joystick-left"><div class="knob" id="knob-left"></div></div>
         <div class="action-btn" id="interact-btn">互动</div>
         <div class="action-btn" id="jump-btn">跳</div>
         <div class="action-btn" id="ability-btn">道具</div>
         <div class="action-btn" id="run-btn" style="bottom:170px; right:130px;">跑</div>
     </div>
+
+    <!-- 移动摇杆挪到 ui-layer 外面单独放——ui-layer 只在寻宝队里显示，之前摇杆塞在
+         里面导致其它模式（大厅/松饼/超燃/竞速/监狱救援/躲避球/密室/乐园）pad 用户
+         压根摇不动人。显示逻辑在 chatVisTick 里统一管，跟"是不是在局内"走。 -->
+    <div class="joystick-zone" id="joystick-left" style="display:none;"><div class="knob" id="knob-left"></div></div>
 
     <div id="night-hud" class="hidden" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:12;">
         <div id="night-danger" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; opacity:0; background:radial-gradient(ellipse farthest-side at center, rgba(190,0,0,0) 54%, rgba(205,12,12,0.34) 78%, rgba(150,0,0,0.96) 100%);"></div>
@@ -1330,6 +1335,9 @@
                 <button id="hub-prompt-team" onclick="hubTeamUp()" style="margin:0; background:#00acc1; color:#fff; border:none; padding:8px 16px; font-size:14px;">组队</button>
                 <button id="hub-prompt-friend" onclick="hubAddFriend()" style="margin:0; background:#5cb85c; color:#fff; border:none; padding:8px 16px; font-size:14px;">加好友</button>
             </div>
+        </div>
+        <div id="hub-board-prompt" style="position:absolute; bottom:190px; left:50%; transform:translateX(-50%); display:none; pointer-events:auto;">
+            <button onclick="openChangelog()" style="margin:0; background:#2c5d8f; color:#fff; border:none; padding:8px 16px; font-size:14px;">查看公告板</button>
         </div>
         <div style="position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center;">
             <div id="blaze-score" style="font-size:26px; font-weight:bold; color:#fff; text-shadow:0 2px 6px #000;"></div>
@@ -2434,6 +2442,12 @@
             let on = chatIsActive();
             ov.style.display = on ? '' : 'none';
             if (!on && chatMode !== 0) chatSetMode(0);   // 局结束了，输入框也一起收起来
+            // 移动摇杆之前是塞在 ui-layer 里的，只有寻宝队会显示 ui-layer——
+            // 大厅/松饼/超燃/竞速/监狱救援/躲避球/密室/乐园这些模式都会把 ui-layer 藏起来，
+            // 摇杆跟着一起被藏了，pad 用户在这些模式里根本摇不动人。挪到 ui-layer 外面
+            // 之后单独用这个 tick 管显示，跟聊天面板一样跟着"是不是在局内"走。
+            let joy = document.getElementById('joystick-left');
+            if (joy) joy.style.display = (on && gState.control === 'pad') ? 'flex' : 'none';
         }
         setInterval(chatVisTick, 300);
 
@@ -2539,6 +2553,24 @@
                 if (!s) { s = Math.random().toString(36).slice(2, 6); localStorage.setItem('TH_device_suffix', s); }
                 return s;
             } catch (e) { return Math.random().toString(36).slice(2, 6); }
+        }
+        // 清空本地数据：测试的时候经常想拿个"全新号"重来，手动一个个清 localStorage
+        // 太麻烦——这游戏所有本地存储的 key 都用 TH_ 开头，直接扫一遍全删掉，
+        // 删完刷新页面，跟真的第一次打开一样。
+        function clearLocalCache() {
+            showSysModal('清空本地数据', '会清掉这台设备上保存的所有东西——存档、猫盾币、皮肤、好友、彩蛋图鉴、聊天设置、灵敏度设置……相当于换一台全新设备。操作清完就刷新页面，不可撤销，确定要清空吗？', [
+                {
+                    label: '确定清空', color: '#d9534f', onClick: function () {
+                        try {
+                            let keys = [];
+                            for (let i = 0; i < localStorage.length; i++) { let k = localStorage.key(i); if (k && k.indexOf('TH_') === 0) keys.push(k); }
+                            keys.forEach(function (k) { localStorage.removeItem(k); });
+                        } catch (e) { }
+                        location.reload();
+                    }
+                },
+                { label: '取消' }
+            ]);
         }
         function resolvePlayerId(raw) {
             try { if (localStorage.getItem('TH_save_' + raw)) return raw; } catch (e) { }
@@ -4888,6 +4920,15 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-26-batch3', date: '2026-09-26', title: '移动摇杆修好了 + 跑酷改回好跳难度 + 公告板', items: [
+                    '重要修复：移动摇杆之前塞在 ui-layer 里，而 ui-layer 只有寻宝队会显示——大厅/松饼大作战/超燃/竞速/监狱救援/躲避球/合作密室/猫盾乐园这些模式，pad 用户其实一直摇不动人（只能靠键盘）。挪到外面单独控制显示，现在所有模式都能用摇杆走动了。',
+                    '大厅跑酷的移动/销毁平台试下来太难，退回原来的静态台阶手感，course 从 7 块加长到 9 块（不是加难，只是加长）。',
+                    '找到了那个"看到角色模型内部白色描边"的花屏原因：抬头/低头到接近垂直时，镜头躲避台子的判定会把自己脚下站的台子当成"挡路的墙"，把镜头一路收到贴脸。现在只在水平朝向足够大的时候才做躲避判定。',
+                    '广场加了个公告板（走近了能直接看更新公告）和几个长椅/路灯装饰，不再是光秃秃一片空地。',
+                    '左上角加了"清空本地数据"，测试起小号方便点。'
+                ]
+            },
             {
                 id: '2026-09-26-pitch-center', date: '2026-09-26', title: '抬头低头人物也不再偏出屏幕中间了', items: [
                     '大厅/松饼大作战/监狱救援/躲避球/竞速/合作密室/超燃这些第三人称模式，之前镜头位置只按"左右转"（yaw）算，人物左右转的时候确实一直在正中间，但一抬头或低头（pitch）人物就会偏出去——镜头的俯仰角度没跟镜头位置联动。现在改成用完整的三维朝向算镜头位置，不管怎么转、抬头低头多少度，人物都精确落在屏幕正中间。'
@@ -11020,10 +11061,12 @@
                 let baseY = BLAZE.eye + t.floor * BLAZE.floorH + (t.jy || 0);
                 let ay = baseY + BLAZE.camUp;
                 let back = BLAZE.camBack;
-                for (let i = 0; i < 6; i++) {
-                    let cx = t.p.x - dir.x * back, cz = t.p.z - dir.z * back;
-                    if (!blazeBlocked(cx, cz, t.floor)) break;
-                    back *= 0.7;
+                if (Math.hypot(dir.x, dir.z) > 0.3) {
+                    for (let i = 0; i < 6; i++) {
+                        let cx = t.p.x - dir.x * back, cz = t.p.z - dir.z * back;
+                        if (!blazeBlocked(cx, cz, t.floor)) break;
+                        back *= 0.7;
+                    }
                 }
                 camera.position.set(t.p.x - dir.x * back, ay - dir.y * back, t.p.z - dir.z * back);
             })();
@@ -18060,9 +18103,11 @@
             let dir = chaseCamDir();
             let back = JAIL.camBack;
             let ax = me.p.x, ay = me.p.y + JAIL.camUp, az = me.p.z;
-            for (let t = 0.2; t <= 1; t += 0.2) {
-                let tx = ax - dir.x * back * t, tz = az - dir.z * back * t;
-                if (blazeBlocked(tx, tz, 0)) { back = back * Math.max(0, t - 0.2); break; }
+            if (Math.hypot(dir.x, dir.z) > 0.3) {
+                for (let t = 0.2; t <= 1; t += 0.2) {
+                    let tx = ax - dir.x * back * t, tz = az - dir.z * back * t;
+                    if (blazeBlocked(tx, tz, 0)) { back = back * Math.max(0, t - 0.2); break; }
+                }
             }
             return { x: ax - dir.x * back, y: ay - dir.y * back, z: az - dir.z * back };
         }
@@ -20179,9 +20224,13 @@
             let dir = chaseCamDir();
             let back = CAKE.camBack;
             let ax = me.p.x, ay = me.p.y + CAKE.camUp, az = me.p.z;
-            for (let t = 0.2; t <= 1; t += 0.2) {
-                let tx = ax - dir.x * back * t, tz = az - dir.z * back * t;
-                if (blazeBlocked(tx, tz, 0)) { back = back * Math.max(0, t - 0.2); break; }
+            // 接近抬头/低头 90° 时水平分量趋近 0，横向探墙没意义（这时候镜头是几乎
+            // 垂直摆动），跳过去避免拿自己脚下的东西当成挡路的墙，把镜头收到贴脸。
+            if (Math.hypot(dir.x, dir.z) > 0.3) {
+                for (let t = 0.2; t <= 1; t += 0.2) {
+                    let tx = ax - dir.x * back * t, tz = az - dir.z * back * t;
+                    if (blazeBlocked(tx, tz, 0)) { back = back * Math.max(0, t - 0.2); break; }
+                }
             }
             return { x: ax - dir.x * back, y: ay - dir.y * back, z: az - dir.z * back };
         }
@@ -20673,15 +20722,12 @@
             let floor = new THREE.Mesh(new THREE.PlaneGeometry(HUB.plazaHalf * 2, HUB.plazaHalf * 2),
                 new THREE.MeshLambertMaterial({ color: 0xc8e6c9 }));
             floor.rotation.x = -Math.PI / 2; scene.add(floor); hub.meshes.push(floor);
-            // 跑酷：台阶越往后越窄、间隔越来越大、之字拐更狠——逼着每一步都得瞄准了跳。
-            // 中段几块台子还加了机关：会左右/前后来回移动的"移动平台"，踩久了会塌的
-            // "销毁平台"（塌了几秒后会重新长回来，不是永久没了）——比原来纯静态的难不少。
-            let widths = [11, 9, 7, 6, 5, 4.5, 5];
-            let xOffsets = [0, 14, -11, 17, -15, 13, -8];
-            let gapVoid = 8.5, stepRise = 5, baseX = 30, baseZ = -14;
-            // 第几块是移动/销毁平台——最后一块（终点）跟第一块（起跳）留安全，不加机关
-            let MOVER_IDX = { 2: { axis: 'x', range: 7, speed: 1.3 }, 4: { axis: 'z', range: 6, speed: 1.6 } };
-            let CRUMBLE_IDX = { 3: true, 5: true };
+            // 跑酷：加过一版移动/销毁平台+更窄间隔，试了下太难了，退回原来的静态台阶——
+            // 每一步都跳得到，不用死记机关规律。台阶数从 7 块加到 9 块，course 更长一点，
+            // 但每一步的宽度/间隔还是原来那套好跳的参数，不是"更长更难"。
+            let widths = [12, 11, 10, 9, 8, 7, 7, 6, 6];
+            let xOffsets = [0, 13, -9, 15, -13, 11, -6, 10, -7];
+            let gapVoid = 7.5, stepRise = 5, baseX = 30, baseZ = -14;
             hub.platforms = [];
             let z = baseZ, prevHalf = 0;
             for (let i = 0; i < widths.length; i++) {
@@ -20689,15 +20735,10 @@
                 z = (i === 0) ? baseZ : (z - prevHalf - half - gapVoid);
                 let x = baseX + xOffsets[i], y = 4 + i * stepRise;
                 let isLast = i === widths.length - 1;
-                let mover = MOVER_IDX[i], crumbly = !!CRUMBLE_IDX[i];
-                let col = isLast ? 0xffd54f : (mover ? 0x64b5f6 : (crumbly ? 0xe57373 : 0x90a4ae));
                 let m = new THREE.Mesh(new THREE.BoxGeometry(widths[i], 2, widths[i]),
-                    new THREE.MeshLambertMaterial({ color: col }));
+                    new THREE.MeshLambertMaterial({ color: isLast ? 0xffd54f : 0x90a4ae }));
                 m.position.set(x, y, z); scene.add(m); hub.meshes.push(m);
-                let p = { x: x, y: y + 1, z: z, half: half, mesh: m, meshBaseY: y, solid: true };
-                if (mover) { p.mover = { axis: mover.axis, range: mover.range, speed: mover.speed, base: mover.axis === 'x' ? x : z, phase: i * 1.7 }; }
-                if (crumbly) { p.crumble = { standT: 0, gone: false, respawnAt: 0 }; }
-                hub.platforms.push(p);
+                hub.platforms.push({ x: x, y: y + 1, z: z, half: half, mesh: m, meshBaseY: y, solid: true });
                 prevHalf = half;
             }
             // 场地边缘围一圈矮墙，好认出边界在哪
@@ -20707,6 +20748,34 @@
             }
             let half = HUB.plazaHalf;
             wall(0, -half, half * 2, 2); wall(0, half, half * 2, 2); wall(-half, 0, 2, half * 2); wall(half, 0, 2, half * 2);
+
+            // 公告板：走近了能直接看更新公告，顺便让广场不那么空——之前除了跑酷/路人
+            // 什么装饰都没有，站在原地看四周全是空地。
+            let boardCv = document.createElement('canvas'); boardCv.width = 256; boardCv.height = 128;
+            let bctx = boardCv.getContext('2d');
+            bctx.fillStyle = '#fff8e1'; bctx.fillRect(0, 0, 256, 128);
+            bctx.strokeStyle = '#8d6e63'; bctx.lineWidth = 8; bctx.strokeRect(4, 4, 248, 120);
+            bctx.fillStyle = '#5d4037'; bctx.font = 'bold 40px "Microsoft YaHei", sans-serif';
+            bctx.textAlign = 'center'; bctx.textBaseline = 'middle'; bctx.fillText('公告板', 128, 64);
+            let boardTex = new THREE.CanvasTexture(boardCv);
+            HUB.board = { x: -60, z: 40 };
+            let post = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 14, 8), new THREE.MeshLambertMaterial({ color: 0x8d6e63 }));
+            post.position.set(HUB.board.x, 7, HUB.board.z); scene.add(post); hub.meshes.push(post);
+            let board = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshBasicMaterial({ map: boardTex, side: THREE.DoubleSide }));
+            board.position.set(HUB.board.x, 13, HUB.board.z); scene.add(board); hub.meshes.push(board);
+
+            // 顺手加几个长椅/路灯凑个热闹，纯装饰不参与任何判定
+            [[50, 60], [-50, -60], [70, -40]].forEach(function (pos) {
+                let bench = new THREE.Mesh(new THREE.BoxGeometry(10, 2, 4), new THREE.MeshLambertMaterial({ color: 0x8d6e63 }));
+                bench.position.set(pos[0], 1, pos[1]); scene.add(bench); hub.meshes.push(bench);
+            });
+            [[80, 80], [-80, 80], [80, -80], [-80, -80]].forEach(function (pos) {
+                let poleMat = new THREE.MeshLambertMaterial({ color: 0x616161 });
+                let pole = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 16, 8), poleMat);
+                pole.position.set(pos[0], 8, pos[1]); scene.add(pole); hub.meshes.push(pole);
+                let lamp = new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 10), new THREE.MeshBasicMaterial({ color: 0xfff59d }));
+                lamp.position.set(pos[0], 16.5, pos[1]); scene.add(lamp); hub.meshes.push(lamp);
+            });
         }
         // 路人名字要像真玩家会取的 ID，不是"路人猫盾A"这种一看就是机器人的占位名；
         // 同时尽量挑生僻/少见的组合，避免正好跟真玩家自己取的昵称撞名。
@@ -20839,13 +20908,19 @@
             // 跑酷台子挡镜头：贴着台子站的时候，镜头吊在身后可能正好落在台子实体里面
             // （一片贴脸的灰色）——跟 cake/jail 那套一样，沿"人→镜头"这条线探几步，
             // 撞进台子范围就把距离收短，退到台子外面。
-            for (let i = 0; i < 6; i++) {
-                let cx = ax - dir.x * back, cz = az - dir.z * back, cy = ay - dir.y * back;
-                let hit = hub.platforms.some(function (p) {
-                    return p.solid !== false && Math.abs(cx - p.x) < p.half && Math.abs(cz - p.z) < p.half && cy < p.y && cy > p.y - 6;
-                });
-                if (!hit) break;
-                back *= 0.7;
+            // 只在水平朝向分量够大的时候才探——接近抬头/低头 90° 时水平分量趋近 0，
+            // cx/cz 会几乎等于人物自己的位置，这时候人正好站在自己脚下这块台子上，
+            // 会被误判成"撞到前面的台子"，把镜头一路收到贴脸（看到的就是角色模型内部
+            // 那圈白色描边）。这时候镜头是几乎垂直摆动，本来就不会横向撞穿台子，不用探。
+            if (Math.hypot(dir.x, dir.z) > 0.3) {
+                for (let i = 0; i < 6; i++) {
+                    let cx = ax - dir.x * back, cz = az - dir.z * back, cy = ay - dir.y * back;
+                    let hit = hub.platforms.some(function (p) {
+                        return p.solid !== false && Math.abs(cx - p.x) < p.half && Math.abs(cz - p.z) < p.half && cy < p.y && cy > p.y - 6;
+                    });
+                    if (!hit) break;
+                    back *= 0.7;
+                }
             }
             return { x: ax - dir.x * back, y: ay - dir.y * back, z: az - dir.z * back };
         }
@@ -20870,6 +20945,11 @@
                 teamBtn.innerText = nearest.teamPending ? '等待同意…' : '组队';
             } else {
                 el.style.display = 'none';
+            }
+            let boardEl = document.getElementById('hub-board-prompt');
+            if (boardEl && HUB.board) {
+                let bd = Math.hypot(HUB.board.x - hub.p.x, HUB.board.z - hub.p.z);
+                boardEl.style.display = bd < HUB.proximityRange ? 'block' : 'none';
             }
         }
         // 组队现在要「对方同意」才算数：点一下是发邀请，AI 会有个短暂的"考虑"延迟再答复，
