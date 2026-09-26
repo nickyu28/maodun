@@ -3764,6 +3764,10 @@
             mSize = HUNT_SIZE;
             gameSeed = seed || 1; nav('none'); document.getElementById('ui-layer').classList.remove('hidden'); document.getElementById('ui-id').innerText = dispName(gState.id);
             isPlaying = true; gState.isDead = false; gState.submittedItems = []; gState.hp = 100; timeSecs = 8 * 3600; gState.totalSubmitted = 0; gState.runCash = 0; gState.aiSubmitted = 0; gState.aiChestsTaken = 0; stamina = 100;
+            // abilityCd/abilityActive 之前是全局变量，从来没在开新一局的时候清零过——
+            // 上一局技能刚用完、冷却还没走完就退出，下一局技能会一直显示"还在冷却"，
+            // 看着就跟坏掉了一样，实际是上一局的残留状态。
+            abilityCd = 0; abilityActive = 0; gHpRegenAcc = 0;
             gState.safeOpenedThisGame = false; gState.backpackOpen = false; gState.largeMapOpen = false; gState.monstersSpawned = false; gState.inSafeZone = true; gState.needsLock = false; gState.pAtkCd = 0; gState.timeStop = 0;
             gState.debuff = { type: 0, timer: 0, cooldown: 0 };
             gState.maxHp = 100;
@@ -4938,6 +4942,14 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-26-face-fix2', date: '2026-09-26', title: '脸修正 + 撤掉AI跑酷 + 技能冷却残留修好', items: [
+                    '脸型修正：眼睛改成水平对齐（之前故意做的不对称是理解错参考图了），嘴巴中间那条线改成真的竖直，右半边涂实了。',
+                    'AI 跑酷是"飘"着挪过去的假动作，看着很怪，直接撤掉了，路人恢复成原来只在地上逛。',
+                    '手臂那截长方体删掉了，爪子直接从肩膀伸出来。',
+                    '找到"技能好像没用"的原因：技能冷却是个全局变量，之前退出一局重开从来没清零过，上一局技能刚用完冷却没走完就退出的话，下一局会一直显示冷却中——现在开新一局会清零。'
+                ]
+            },
             {
                 id: '2026-09-26-face-batch', date: '2026-09-26', title: '猫盾加脸 + 公告板/爪子/圆圈修好 + 新手引导', items: [
                     '猫盾角色（大厅路人/真人、竞速、松饼……）加了张脸——两个圆点眼睛 + 一个椭圆嘴巴。',
@@ -16759,20 +16771,25 @@
                 (gState.skinColor !== null ? '<button onclick="shopEquipSkin(null)" style="width:100%; margin-top:10px; background:#999; color:#fff; border:none; font-size:12px; padding:6px 0;">换回默认颜色</button>' : '');
             return out;
         }
-        // 猫盾脸——两个不对称的圆点眼睛 + 一个椭圆嘴巴带个小卷边，照着手绘参考图画的。
-        // 贴图只画一次缓存起来，所有猫盾角色（大厅路人/真人、竞速、松饼……）共用同一张，
-        // 不用每建一个身体就重新画一次 canvas。
+        // 猫盾脸——两个水平对齐的圆点眼睛 + 一个椭圆嘴巴，中间一条竖直线分两半，
+        // 右半边涂实。贴图只画一次缓存起来，所有猫盾角色共用同一张。
         let catFaceTex = null;
         function catFaceTexture() {
             if (catFaceTex) return catFaceTex;
             let cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
             let g2 = cv.getContext('2d');
             g2.fillStyle = '#222';
-            g2.beginPath(); g2.arc(22, 20, 2.6, 0, Math.PI * 2); g2.fill();
-            g2.beginPath(); g2.arc(41, 18, 2.6, 0, Math.PI * 2); g2.fill();
+            g2.beginPath(); g2.arc(22, 19, 2.6, 0, Math.PI * 2); g2.fill();
+            g2.beginPath(); g2.arc(41, 19, 2.6, 0, Math.PI * 2); g2.fill();
+            let cx = 31, cy = 36, rx = 15, ry = 9;
+            // 右半边涂实：裁切到右半边区域再填椭圆，左半边保持空心
+            g2.save();
+            g2.beginPath(); g2.rect(cx, cy - ry - 2, rx + 2, (ry + 2) * 2); g2.clip();
+            g2.beginPath(); g2.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g2.fill();
+            g2.restore();
             g2.strokeStyle = '#222'; g2.lineWidth = 3; g2.lineCap = 'round';
-            g2.beginPath(); g2.ellipse(31, 36, 15, 9, 0, 0, Math.PI * 2); g2.stroke();
-            g2.beginPath(); g2.moveTo(33, 27); g2.quadraticCurveTo(38, 33, 33, 43); g2.stroke();
+            g2.beginPath(); g2.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g2.stroke();
+            g2.beginPath(); g2.moveTo(cx, cy - ry); g2.lineTo(cx, cy + ry); g2.stroke();
             catFaceTex = new THREE.CanvasTexture(cv);
             return catFaceTex;
         }
@@ -16813,14 +16830,10 @@
             [-1, 1].forEach(function (sdir) {
                 let shoulder = new THREE.Group();
                 shoulder.position.set(sdir * 3.1, 9.1, 0);
-                let arm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.2, 1.6), mat);
-                arm.position.y = -1.1; shoulder.add(arm);
-                // 爪子是一个平的半圆片（不是球）——直径那条直边贴着手臂底部，圆弧鼓在下面。
-                // 半径之前是 1.7，比手臂本身（半宽 0.8）还宽一倍多，看着像块融在一起的
-                // 大圆饼；缩到 1.0，比手臂窄，才像是手臂末端一个小爪子，不是主体。
+                // 手臂那截长方体删掉了，直接从肩膀伸出爪子——半圆片，直径贴着肩膀。
                 let hand = new THREE.Mesh(new THREE.CircleGeometry(1.0, 12, 0, Math.PI),
                     new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide }));
-                hand.position.y = -1.9; hand.rotation.z = Math.PI; shoulder.add(hand);
+                hand.position.y = -1.0; hand.rotation.z = Math.PI; shoulder.add(hand);
                 g.add(shoulder); arms.push(shoulder);
             });
             g.userData.arms = arms;
@@ -20881,29 +20894,9 @@
                 });
             }
         }
-        // 路人偶尔会去挑战跑酷——不是真的物理跳跃（路人没有重力/起跳系统，另外
-        // 搭一套太重），而是按顺序把每一块台子当"点"直接飘过去，蹭到顶了再传送回
-        // 地面接着瞎逛。不完美但至少看着广场是"有人在玩"，不是纯摆设的空气墙。
         function hubWandererTick(a, dt) {
-            if (a.climbing) {
-                let plat = hub.platforms[a.climbIdx || 0];
-                if (!plat) {
-                    a.climbing = false;
-                    a.p.set((Math.random() - 0.5) * HUB.plazaHalf, 0, (Math.random() - 0.5) * HUB.plazaHalf);
-                    a.idleT = 1 + Math.random();
-                    return;
-                }
-                let dx = plat.x - a.p.x, dz = plat.z - a.p.z, dy = plat.y - a.p.y;
-                if (Math.hypot(dx, dz, dy) < 1.5) { a.climbIdx = (a.climbIdx || 0) + 1; return; }
-                let n = Math.hypot(dx, dz) || 1, spd = HUB.moveSpeed * 0.4;
-                a.p.x += dx / n * spd * dt; a.p.z += dz / n * spd * dt;
-                a.p.y += Math.sign(dy) * spd * 0.7 * dt;
-                a.faceDir = { x: dx / n, z: dz / n };
-                return;
-            }
             if (a.idleT > 0) { a.idleT -= dt; return; }
             if (!a.target || Math.hypot(a.target.x - a.p.x, a.target.z - a.p.z) < 2) {
-                if (Math.random() < 0.08) { a.climbing = true; a.climbIdx = 0; return; }
                 a.target = { x: (Math.random() - 0.5) * HUB.plazaHalf, z: (Math.random() - 0.5) * HUB.plazaHalf };
                 if (Math.random() < 0.3) { a.idleT = 1 + Math.random() * 2; return; }
             }
