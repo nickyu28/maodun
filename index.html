@@ -819,13 +819,24 @@
         <button onclick="goToIdScreen('pad')">平板</button>
     </div>
 
-    <div id="screen-id" class="screen hidden">
-        <h1 style="font-size: 36px; color: #666;">猫盾の游戏</h1>
-        <h2 style="font-size: 24px; color: #666; font-weight:normal;">选择id</h2>
-        <div style="margin: 20px; display: flex; align-items: center; justify-content: center;">
-            <input type="text" id="player-id" value="" placeholder="ID" style="border: none; border-bottom: 1px solid #999; border-radius: 0; background: transparent; font-size: 24px; text-align: center; width: 200px;">
+    <div id="screen-id" class="screen hidden" style="background:linear-gradient(160deg,#8fd3f4 0%,#c8e6c9 55%,#fff8e1 100%); justify-content:center;">
+        <!-- 之前这屏纯灰白背景+一个输入框，跟游戏实际内容（8 种模式+联机+编辑器）完全
+             不匹配，陌生玩家第一眼看到会觉得这是个没做完的东西。加个渐变背景 + CSS 画的
+             小猫盾图标 + 一行卖点，不用真的美术资源也能让第一屏不那么"半成品"。 -->
+        <div style="display:flex; flex-direction:column; align-items:center;">
+            <div style="position:relative; width:84px; height:66px; margin-bottom:8px;">
+                <div style="position:absolute; bottom:0; left:8px; width:68px; height:52px; background:#66bb6a; border-radius:16px; box-shadow:0 4px 10px rgba(0,0,0,0.15);"></div>
+                <div style="position:absolute; top:0; left:14px; width:0; height:0; border-left:11px solid transparent; border-right:11px solid transparent; border-bottom:20px solid #66bb6a;"></div>
+                <div style="position:absolute; top:0; right:14px; width:0; height:0; border-left:11px solid transparent; border-right:11px solid transparent; border-bottom:20px solid #66bb6a;"></div>
+            </div>
+            <h1 style="font-size: 38px; color: #33691e; margin:0; text-shadow:0 2px 0 rgba(255,255,255,0.6);">猫盾の游戏</h1>
+            <div style="font-size:13px; color:#558b2f; margin-top:4px;">8 种玩法 · 实时联机 · UGC 编辑器</div>
         </div>
-        <button onclick="requestLobbyAccess()" style="background:#5cb85c; color:#fff; font-size: 18px; padding: 10px 40px;">确定</button>
+        <h2 style="font-size: 20px; color: #555; font-weight:normal; margin:22px 0 6px;">给自己起个 ID</h2>
+        <div style="margin: 10px; display: flex; align-items: center; justify-content: center;">
+            <input type="text" id="player-id" value="" placeholder="ID" style="border: none; border-bottom: 2px solid #66bb6a; border-radius: 0; background: transparent; font-size: 24px; text-align: center; width: 200px; padding:4px 0;">
+        </div>
+        <button onclick="requestLobbyAccess()" style="background:#5cb85c; color:#fff; font-size: 18px; padding: 10px 40px; border:none; border-radius:8px; box-shadow:0 3px 0 #4a9c4a; cursor:pointer;">确定</button>
     </div>
 
     <div id="screen-shop" class="screen hidden">
@@ -855,7 +866,11 @@
             <button onclick="openSensSetup()" style="width:100%; margin:0 0 6px; background:#546e7a; color:#fff; border:none; font-size:12px; padding:7px 4px;">灵敏度设置</button>
             <button onclick="openFeedback()" style="width:100%; margin:0 0 6px; background:#e91e63; color:#fff; border:none; font-size:12px; padding:7px 4px;">反馈</button>
             <button onclick="openPlayLog()" style="width:100%; margin:0 0 6px; background:#795548; color:#fff; border:none; font-size:12px; padding:7px 4px;">游玩记录</button>
-            <button onclick="clearLocalCache()" style="width:100%; margin:0 0 6px; background:#999; color:#fff; border:none; font-size:12px; padding:7px 4px;">清空本地数据</button>
+            <!-- 清空本地数据是破坏性操作（清掉存档），跟"商店"这种核心功能视觉权重不该一样——
+                 降级成小字文字链接，放最下面，弹窗二次确认还保留着（clearLocalCache 里）。 -->
+            <div style="text-align:center; margin-top:8px; padding-top:6px; border-top:1px solid #ddd;">
+                <a href="javascript:void(0)" onclick="clearLocalCache()" style="font-size:11px; color:#999; text-decoration:underline;">清空本地数据</a>
+            </div>
             <div id="lobby-rank" style="font-size:11px; color:#888; margin-top:4px;"></div>
             <div id="daily-mod-banner" style="font-size:11px; color:#795548; background:#fff8e1; border:1px solid #ffe082; border-radius:5px; padding:5px 6px; margin-top:4px;"></div>
         </div>
@@ -11600,7 +11615,18 @@
             let sp = new THREE.Sprite(new THREE.SpriteMaterial({
                 map: tex, transparent: true, depthTest: !through
             }));
-            sp.scale.set(22, 5.5, 1);
+            // 之前是固定世界坐标大小(22x5.5)，两个真人贴脸站在一起的时候，名字牌
+            // 完全不会跟着变小，糊满大半个屏幕，看着像个渲染出错的黑色方块——
+            // 用 onBeforeRender 按跟镜头的距离动态缩放，远处保持原大小，贴近了收小，
+            // 但留个下限（35%）不会完全缩没。
+            let ntBaseW = 22, ntBaseH = 5.5, ntWorldPos = new THREE.Vector3();
+            sp.scale.set(ntBaseW, ntBaseH, 1);
+            sp.onBeforeRender = function (renderer, sc, cam) {
+                sp.getWorldPosition(ntWorldPos);
+                let d = cam.position.distanceTo(ntWorldPos);
+                let s = Math.min(1, Math.max(0.35, d / 30));
+                sp.scale.set(ntBaseW * s, ntBaseH * s, 1);
+            };
             if (through) sp.renderOrder = 999;
             return sp;
         }
@@ -20571,7 +20597,7 @@
 
         // 松饼大作战专属身体：躯干换成圆柱（卷起来的松饼），耳朵不变，
         // 胳膊腿都改成贴着身体的矮圆墩——不再是伸得老远的细长方块。
-        function cakeMakeBody(col, handRange) {
+        function cakeMakeBody(col, handRange, hideRing) {
             let g = new THREE.Group();
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10, 18), mat);
