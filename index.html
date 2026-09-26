@@ -3599,15 +3599,18 @@
         }
 
         let isDraggingCamera = false; let camTouchId = null; let lastCamX = 0, lastCamY = 0;
-        // 第三人称吊镜（hub/cake/jail 共用这套）抬头/低头看到接近正上正下时，水平方向的
-        // 分量会缩到接近 0——之前这时候直接甩回固定的"面朝 -Z"，人物在屏幕上会跟着猛地
-        // 跳一下位置。现在改成沿用上一帧还有效的水平朝向，看起来是平滑过渡，不会跳镜头。
-        let chaseCamLastDir = { x: 0, z: -1 };
+        // 第三人称吊镜（hub/cake/jail/dodge/escape/race/blaze 共用这套）——之前这里把
+        // dir.y 直接归零，只用水平朝向算镜头位置，垂直偏移量('up' 参数)是个固定值。
+        // 结果是：左右转（yaw）人物确实一直在正中间，但一抬头/低头（pitch）人物就会
+        // 偏出正中间——镜头的俯仰角变了，但镜头跟人物的相对位置没跟着抬头低头调整。
+        // 现在改成用完整的 3D 朝向（pitch 也算进去）算镜头位置：人物在"镜头位置 + 朝向×距离"
+        // 这条线上，不管怎么转（yaw 还是 pitch）人物永远精确落在屏幕正中间。
+        let chaseCamLastDir = { x: 0, y: 0, z: -1 };
         function chaseCamDir() {
-            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0;
+            let dir = new THREE.Vector3(); camera.getWorldDirection(dir);
             if (dir.lengthSq() < 0.0001) return chaseCamLastDir;
             dir.normalize();
-            chaseCamLastDir = { x: dir.x, z: dir.z };
+            chaseCamLastDir = { x: dir.x, y: dir.y, z: dir.z };
             return chaseCamLastDir;
         }
 
@@ -4885,6 +4888,11 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-26-pitch-center', date: '2026-09-26', title: '抬头低头人物也不再偏出屏幕中间了', items: [
+                    '大厅/松饼大作战/监狱救援/躲避球/竞速/合作密室/超燃这些第三人称模式，之前镜头位置只按"左右转"（yaw）算，人物左右转的时候确实一直在正中间，但一抬头或低头（pitch）人物就会偏出去——镜头的俯仰角度没跟镜头位置联动。现在改成用完整的三维朝向算镜头位置，不管怎么转、抬头低头多少度，人物都精确落在屏幕正中间。'
+                ]
+            },
             {
                 id: '2026-09-26-ear-overhang', date: '2026-09-26', title: '耳朵不再支棱到身体外面', items: [
                     '大厅/竞速/监狱救援/躲避球/超燃/惊魂夜共用的箱体身体，耳朵（或角）之前的横向偏移量比"身体半宽 − 耳朵半径"还大，耳朵外沿会超出身体边缘一截，看着像支棱出去了。缩小偏移量之后耳朵老老实实待在身体轮廓以内。',
@@ -11002,19 +11010,22 @@
             blazeNetTick(dt);
             blazeLerpRemotes(dt);
 
-            // 第三人称：相机挂在自己身后上方，撞墙就把距离收短，免得穿进墙里
+            // 第三人称：相机挂在自己身后上方，撞墙就把距离收短，免得穿进墙里。
+            // 用完整 3D 朝向（含俯仰）算位置——只看 blazeDirOf 那套纯水平朝向的话，
+            // 抬头低头时人物会偏出屏幕中心，跟其他模式的镜头不一致。
             (function () {
                 let t = blaze.me;
                 if (!t.alive) { let ally = blazeAllies(blaze.me)[0]; if (ally) t = ally; }
-                let dir = blazeDirOf(blaze.me);
+                let dir = chaseCamDir();
                 let baseY = BLAZE.eye + t.floor * BLAZE.floorH + (t.jy || 0);
-                let back = BLAZE.camBack, up = BLAZE.camUp;
+                let ay = baseY + BLAZE.camUp;
+                let back = BLAZE.camBack;
                 for (let i = 0; i < 6; i++) {
                     let cx = t.p.x - dir.x * back, cz = t.p.z - dir.z * back;
                     if (!blazeBlocked(cx, cz, t.floor)) break;
                     back *= 0.7;
                 }
-                camera.position.set(t.p.x - dir.x * back, baseY + up, t.p.z - dir.z * back);
+                camera.position.set(t.p.x - dir.x * back, ay - dir.y * back, t.p.z - dir.z * back);
             })();
 
             blaze.actors.forEach(function (a) {
@@ -17478,7 +17489,8 @@
             let me = race.racers[0];
             let look = me.out ? (race.racers.find(function (r) { return !r.out; }) || me) : me;
             let dir = chaseCamDir();
-            camera.position.set(look.p.x - dir.x * RACE.camBack, look.p.y + RACE.camUp, look.p.z - dir.z * RACE.camBack);
+            let ay = look.p.y + RACE.camUp;
+            camera.position.set(look.p.x - dir.x * RACE.camBack, ay - dir.y * RACE.camBack, look.p.z - dir.z * RACE.camBack);
 
             raceHud();
             renderer.render(scene, camera);
@@ -18047,11 +18059,12 @@
         function jailCameraPos(me) {
             let dir = chaseCamDir();
             let back = JAIL.camBack;
+            let ax = me.p.x, ay = me.p.y + JAIL.camUp, az = me.p.z;
             for (let t = 0.2; t <= 1; t += 0.2) {
-                let tx = me.p.x - dir.x * back * t, tz = me.p.z - dir.z * back * t;
+                let tx = ax - dir.x * back * t, tz = az - dir.z * back * t;
                 if (blazeBlocked(tx, tz, 0)) { back = back * Math.max(0, t - 0.2); break; }
             }
-            return { x: me.p.x - dir.x * back, y: me.p.y + JAIL.camUp, z: me.p.z - dir.z * back };
+            return { x: ax - dir.x * back, y: ay - dir.y * back, z: az - dir.z * back };
         }
 
         function jailTick(dt) {
@@ -18815,7 +18828,8 @@
 
         function dodgeCameraPos(me) {
             let dir = chaseCamDir();
-            return { x: me.p.x - dir.x * DODGE.camBack, y: me.p.y + DODGE.camUp, z: me.p.z - dir.z * DODGE.camBack };
+            let ay = me.p.y + DODGE.camUp;
+            return { x: me.p.x - dir.x * DODGE.camBack, y: ay - dir.y * DODGE.camBack, z: me.p.z - dir.z * DODGE.camBack };
         }
 
         // 瞄准辅助：按住左键（还没松手）那段时间，模拟当前视角丢出去的抛物线——
@@ -19186,7 +19200,8 @@
 
         function escapeCameraPos(me) {
             let dir = chaseCamDir();
-            return { x: me.p.x - dir.x * 24, y: me.p.y + 15, z: me.p.z - dir.z * 24 };
+            let ay = me.p.y + 15;
+            return { x: me.p.x - dir.x * 24, y: ay - dir.y * 24, z: me.p.z - dir.z * 24 };
         }
 
         // 每一帧重判一次机关状态——谁站在板上就算数，不用按键
@@ -20163,11 +20178,12 @@
         function cakeCameraPos(me) {
             let dir = chaseCamDir();
             let back = CAKE.camBack;
+            let ax = me.p.x, ay = me.p.y + CAKE.camUp, az = me.p.z;
             for (let t = 0.2; t <= 1; t += 0.2) {
-                let tx = me.p.x - dir.x * back * t, tz = me.p.z - dir.z * back * t;
+                let tx = ax - dir.x * back * t, tz = az - dir.z * back * t;
                 if (blazeBlocked(tx, tz, 0)) { back = back * Math.max(0, t - 0.2); break; }
             }
-            return { x: me.p.x - dir.x * back, y: me.p.y + CAKE.camUp, z: me.p.z - dir.z * back };
+            return { x: ax - dir.x * back, y: ay - dir.y * back, z: az - dir.z * back };
         }
         // ── 联机同步 ──
         // 每个真人只广播自己那一份位置（15Hz）；房主额外广播一份"世界快照"（10Hz）：
@@ -20817,18 +20833,21 @@
         function hubCameraPos() {
             let dir = chaseCamDir();
             let back = 24, up = 16;
+            // 锚点是人物头顶上方那一点，镜头从锚点沿完整 3D 朝向（含俯仰）退开 back——
+            // 这样不管抬头低头，人物都精确落在锚点上，也就是屏幕正中间。
+            let ax = hub.p.x, ay = hub.p.y + up, az = hub.p.z;
             // 跑酷台子挡镜头：贴着台子站的时候，镜头吊在身后可能正好落在台子实体里面
             // （一片贴脸的灰色）——跟 cake/jail 那套一样，沿"人→镜头"这条线探几步，
             // 撞进台子范围就把距离收短，退到台子外面。
             for (let i = 0; i < 6; i++) {
-                let cx = hub.p.x - dir.x * back, cz = hub.p.z - dir.z * back, cy = hub.p.y + up;
+                let cx = ax - dir.x * back, cz = az - dir.z * back, cy = ay - dir.y * back;
                 let hit = hub.platforms.some(function (p) {
                     return p.solid !== false && Math.abs(cx - p.x) < p.half && Math.abs(cz - p.z) < p.half && cy < p.y && cy > p.y - 6;
                 });
                 if (!hit) break;
                 back *= 0.7;
             }
-            return { x: hub.p.x - dir.x * back, y: hub.p.y + up, z: hub.p.z - dir.z * back };
+            return { x: ax - dir.x * back, y: ay - dir.y * back, z: az - dir.z * back };
         }
         function hubProximityTick() {
             let nearest = null, bestD = HUB.proximityRange;
