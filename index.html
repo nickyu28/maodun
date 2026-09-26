@@ -4973,6 +4973,13 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-26-hud-gacha-fix', date: '2026-09-26', title: '寻宝队体力值显示 + 皮肤抽卡保底 + 缺钱弹窗加直达入口', items: [
+                    '寻宝队 HUD 里"体力值"一直没数字：文字和进度条压根没绑在一起，进度条会走但数字没写过——补上了。',
+                    '皮肤抽卡加保底：连续 12 次没抽到新颜色，下一抽必出一个新颜色。',
+                    '所有"猫盾币不够"的弹窗都加了"去打一局赚钱"按钮，点了直接跳大厅并选好寻宝队模式，不用自己找。'
+                ]
+            },
+            {
                 id: '2026-09-26-face-fix2', date: '2026-09-26', title: '脸修正 + 撤掉AI跑酷 + 技能冷却残留修好', items: [
                     '脸型修正：眼睛改成水平对齐（之前故意做的不对称是理解错参考图了），嘴巴中间那条线改成真的竖直，右半边涂实了。',
                     'AI 跑酷是"飘"着挪过去的假动作，看着很怪，直接撤掉了，路人恢复成原来只在地上逛。',
@@ -5920,7 +5927,7 @@
         function charBuy(mode, key) {
             if (charOwned(mode, key)) return true;
             if (coinsOf() < COIN_PRICE) {
-                showSysModal('猫盾币不够', '解锁这个角色需要 ' + COIN_PRICE + ' 猫盾币，你现在有 ' + coinsOf() + ' 个。\n打一局 +2，赢了再 +2，连胜还有额外奖励。', [{ label: '知道了' }]);
+                showSysModal('猫盾币不够', '解锁这个角色需要 ' + COIN_PRICE + ' 猫盾币，你现在有 ' + coinsOf() + ' 个。\n打一局 +2，赢了再 +2，连胜还有额外奖励。', [{ label: '去打一局赚钱', color: '#5cb85c', onClick: function () { nav('screen-lobby'); selectGameMode('hunt'); } }, { label: '知道了' }]);
                 return false;
             }
             coinsAdd(mode, -COIN_PRICE);
@@ -6197,7 +6204,7 @@
         function shopSpend(n) {
             if (TEST_INFINITE_COINS) return true;
             if (coinsOf() < n) {
-                showSysModal('猫盾币不够', '还差 ' + (n - coinsOf()) + ' 个。打一局 +2，赢了再 +2。', [{ label: '知道了' }]);
+                showSysModal('猫盾币不够', '还差 ' + (n - coinsOf()) + ' 个。打一局 +2，赢了再 +2。', [{ label: '去打一局赚钱', color: '#5cb85c', onClick: function () { nav('screen-lobby'); selectGameMode('hunt'); } }, { label: '知道了' }]);
                 return false;
             }
             gState.mcoin -= n; saveProgress(); return true;
@@ -16773,18 +16780,28 @@
         const SKIN_COLORS = RACE_COLORS.slice(0, 15);
         const SKIN_BLANKS = 5;
         const SKIN_PRICE = 50;
+        const SKIN_PITY_LIMIT = 12;
         function mySkinColor(defaultColor) { return (gState.skinColor !== null && gState.skinColor !== undefined) ? gState.skinColor : defaultColor; }
         function skinDraw() {
             if (!shopSpend(SKIN_PRICE)) return;
-            let roll = Math.floor(Math.random() * (SKIN_COLORS.length + SKIN_BLANKS));
-            if (roll < SKIN_COLORS.length) {
-                let col = SKIN_COLORS[roll];
-                let already = !!(gState.skins && gState.skins[col]);
-                if (!gState.skins) gState.skins = {};
+            if (!gState.skins) gState.skins = {};
+            let pity = gState.skinPity || 0;
+            let unowned = SKIN_COLORS.filter(function (c) { return !gState.skins[c]; });
+            let forcedNew = pity >= SKIN_PITY_LIMIT && unowned.length > 0;
+            let col = forcedNew ? unowned[Math.floor(Math.random() * unowned.length)] : null;
+            if (col === null && !forcedNew) {
+                let roll = Math.floor(Math.random() * (SKIN_COLORS.length + SKIN_BLANKS));
+                if (roll < SKIN_COLORS.length) col = SKIN_COLORS[roll];
+            }
+            if (col !== null) {
+                let already = !!gState.skins[col];
                 gState.skins[col] = true;
+                gState.skinPity = already ? pity + 1 : 0;
                 saveProgress();
-                blazeFlash(already ? '又抽到了这个颜色（已拥有）' : '抽到新皮肤颜色！');
+                blazeFlash(forcedNew ? '保底触发，送你一个新颜色！' : (already ? '又抽到了这个颜色（已拥有）' : '抽到新皮肤颜色！'));
             } else {
+                gState.skinPity = pity + 1;
+                saveProgress();
                 blazeFlash('谢谢参与，这次什么都没抽到');
             }
             shopTab('skin');
@@ -16796,8 +16813,10 @@
             shopTab('skin');
         }
         function shopSkinHtml() {
+            let pityLeft = Math.max(0, SKIN_PITY_LIMIT - (gState.skinPity || 0));
             let out = '<div style="font-size:12px; color:#888; margin-bottom:8px; text-align:left;">' +
-                '抽一次 ' + SKIN_PRICE + ' 猫盾币，15 种颜色里随机抽一个，另外还有 ' + SKIN_BLANKS + ' 个"谢谢参与"（不保底，抽到算白抽）。' +
+                '抽一次 ' + SKIN_PRICE + ' 猫盾币，15 种颜色里随机抽一个，另外还有 ' + SKIN_BLANKS + ' 个"谢谢参与"。' +
+                '连续 ' + SKIN_PITY_LIMIT + ' 次没抽到新颜色的话，下一抽必出一个新颜色（保底，还差 ' + pityLeft + ' 次触发）。' +
                 '只换颜色，不影响任何数值；作用于大厅广场、竞速、密室、松饼大作战——监狱救援/躲避球这些颜色代表队伍的模式不受影响。</div>' +
                 '<button onclick="skinDraw()" style="width:100%; margin:0 0 10px; background:#e6a23c; color:#fff; border:none; padding:9px 0; font-size:14px;">抽一次（' + SKIN_PRICE + ' 猫盾币）</button>' +
                 '<div style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px;">';
@@ -19721,7 +19740,7 @@
                 let price = PARK_BLOCK_PRICE[type];
                 showSysModal('这块积木还没解锁', '解锁「' + (PARK_BLOCK_META[type] || {}).label + '」需要 ' + price + ' 猫盾币，你现在有 ' + coinsOf() + ' 个。解锁之后这块积木永久能用。', [
                     { label: '解锁', color: '#e6a23c', onClick: function () {
-                        if (coinsOf() < price) { showSysModal('猫盾币不够', '还差 ' + (price - coinsOf()) + ' 个。', [{ label: '知道了' }]); return; }
+                        if (coinsOf() < price) { showSysModal('猫盾币不够', '还差 ' + (price - coinsOf()) + ' 个。', [{ label: '去打一局赚钱', color: '#5cb85c', onClick: function () { nav('screen-lobby'); selectGameMode('hunt'); } }, { label: '知道了' }]); return; }
                         coinsAdd(null, -price);
                         if (!gState.parkUnlocked) gState.parkUnlocked = {};
                         gState.parkUnlocked[type] = true;
