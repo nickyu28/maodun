@@ -3005,7 +3005,7 @@
                 }
             } else {
                 if (isPlaying && !gState.isDead && dragSourceObj.container === 'inv') {
-                    let hudBox = document.getElementById('hud-hotbar-container'); let bpBox = document.getElementById('backpack-grid-box'); let garageBox = document.getElementById('garage-inventory-container');
+                    let hudBox = document.getElementById('hud-hotbar-container'); let bpBox = document.getElementById('backpack-grid-box'); let garageBox = document.getElementById('garage-active-inv');
                     let inBox = function (box) { if (!box || box.offsetParent === null) return false; let rect = box.getBoundingClientRect(); return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom; };
                     if (!inBox(hudBox) && !inBox(bpBox) && !inBox(garageBox)) { executeThrow(dragSourceObj.idx); }
                 }
@@ -4434,6 +4434,11 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-26-drag-fix', date: '2026-09-26', title: '小修复', items: [
+                    '修好了游戏中把道具拖出背包扔出去时，仓库格子的排除区域一直失效的问题。'
+                ]
+            },
             {
                 id: '2026-09-20-fixes', date: '2026-09-20', title: '小修复', items: [
                     '修好了一个会让大厅界面卡在最上面、退不出去的显示问题（四角布局引入的 CSS 优先级冲突）。',
