@@ -4921,6 +4921,12 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-26-clip-sweep', date: '2026-09-26', title: '跑酷台子穿模再修一版 + 路人换色', items: [
+                    '大厅/松饼跑酷台子的侧面碰撞判定之前只查"这一步的目的地"一个点，横着快速斜穿台子边角的时候，起点终点可能都不在判定框里，但中间那段路其实是穿过去的。改成沿着这段位移多采几个点一起查，判定范围也放宽了一点，尽量把这类"抄近道"穿模堵住。',
+                    '大厅广场的路人之前全是统一灰色，现在从一个色板里随机换色，一眼能分清是好几个人。'
+                ]
+            },
+            {
                 id: '2026-09-26-hand-fix2', date: '2026-09-26', title: '爪子改回 2D 半圆片', items: [
                     '上一版把爪子改成了实心圆球，结果太圆太鼓、跟身体融不到一块。改回平的半圆片——直径那条直边贴着手臂底部，圆弧鼓在下面，是个扁扁的爪子形状，不是球。'
                 ]
@@ -20042,15 +20048,16 @@
                 let dx = a.mvx * dt, dz = a.mvz * dt;
                 // 跳台侧面要当墙挡住，不然贴着台子横着走会直接穿模过去——
                 // 只在人确实比台面矮一截时才挡（人已经站上去、正要落地那一下不算）。
-                // 台子实体厚度是 2（从 p.y-2 到 p.y），之前留 1.2 的"免判定"余量
-                // 比实体还厚，等于台子上半截根本没挡——贴着台子边跳起来，脚正好落在
-                // 那 1.2 的空当里，横着走一步直接穿过去。缩到 0.3，够盖住起跳/落地那一帧
-                // 又不会跟实体范围重叠。
-                let blockedBySide = cakePlatforms.some(function (p) {
-                    let pad = 3.5, nx = a.p.x + dx, nz = a.p.z + dz;
-                    return Math.abs(nx - p.x) < p.half + pad && Math.abs(nz - p.z) < p.half + pad &&
-                        prevY < p.y - 0.3 && prevY > p.y - 6;
-                });
+                // 之前只查目的地这一个点，横着快速斜穿台子边角时中间那段路可能真的穿过去
+                // 但起点终点都不在判定框里——沿位移多采几个点一起查，堵住这种"抄近道"。
+                let blockedBySide = false;
+                for (let s = 1; s <= 4 && !blockedBySide; s++) {
+                    let t = s / 4, sx = a.p.x + dx * t, sz = a.p.z + dz * t;
+                    blockedBySide = cakePlatforms.some(function (p) {
+                        return Math.abs(sx - p.x) < p.half + 3.5 && Math.abs(sz - p.z) < p.half + 3.5 &&
+                            prevY < p.y - 0.2 && prevY > p.y - 7;
+                    });
+                }
                 if (!blockedBySide) blazeStep(a, dx, dz);
             }
             else { a.mvx = 0; a.mvz = 0; }
@@ -20790,12 +20797,16 @@
             '第九颗纽扣', '会漏电的猫', '过期薯片', '拖鞋去哪了', '猫盾守夜人', '芝士味叹气',
             '掉线的云', '第三只手套', '硬币的反面', '发霉的勇气', '倒着走的钟', '半只耳朵',
             '不想改名的猫', '塑料袋在飞', '错位的拼图', '偷懒的齿轮', '融化的雪糕棍', '生锈的闹钟'];
+        // 路人颜色池——之前全员统一灰色（0xb0bec5），一群路人挤在一起完全分不清谁是谁，
+        // 远处看就是一片灰扑扑的东西。换成从这个色板里随机挑，一眼能看出是好几个人。
+        const HUB_WANDER_COLORS = [0xef9a9a, 0x90caf9, 0xa5d6a7, 0xffe082, 0xce93d8, 0xffab91, 0x80cbc4, 0xf48fb1, 0xbcaaa4, 0x9fa8da];
         function hubSpawnWanderers() {
             let pool = HUB_BOT_NAMES.slice();
             for (let i = 0; i < HUB.wanderCount; i++) {
                 let idx = Math.floor(Math.random() * pool.length);
                 let name = pool.length ? pool.splice(idx, 1)[0] : ('路人' + (i + 1));
-                let mesh = raceMakeBody(0xb0bec5, 0);
+                let col = HUB_WANDER_COLORS[Math.floor(Math.random() * HUB_WANDER_COLORS.length)];
+                let mesh = raceMakeBody(col, 0);
                 scene.add(mesh);
                 let x = (Math.random() - 0.5) * HUB.plazaHalf, z = (Math.random() - 0.5) * HUB.plazaHalf;
                 hub.wanderers.push({
@@ -20867,12 +20878,20 @@
             // 台子实体厚度是 2（从 p.y-2 到 p.y），之前 1.2 的余量比实体还厚，等于台子
             // 上半截完全没挡——第二块台阶最先撞上这个（往上跳的落点正好卡在那段空当里），
             // 贴着边一走就直接穿过去了。缩到 0.3，落地那一帧还是留得住，实体范围不再重叠。
+            // 之前只查"这一帧的目的地"这一个点，横着快速斜穿台子边角的时候，起点和终点
+            // 可能都不在台子的判定框里，但中间那段路其实是穿过去的——沿着这段位移多采
+            // 几个点一起查，不会再从边角"抄近道"穿过去。
             let blockedBySide = false;
-            for (let i = 0; i < hub.platforms.length; i++) {
-                let p = hub.platforms[i], pad = 3.5;
-                if (p.solid === false) continue;   // 塌掉的销毁平台没有实体，不挡人
-                if (Math.abs(newX - p.x) < p.half + pad && Math.abs(newZ - p.z) < p.half + pad &&
-                    prevY < p.y - 0.3 && prevY > p.y - 6) { blockedBySide = true; break; }
+            outer:
+            for (let s = 1; s <= 4; s++) {
+                let t = s / 4;
+                let sx = hub.p.x + (newX - hub.p.x) * t, sz = hub.p.z + (newZ - hub.p.z) * t;
+                for (let i = 0; i < hub.platforms.length; i++) {
+                    let p = hub.platforms[i], pad = 3.5;
+                    if (p.solid === false) continue;   // 塌掉的销毁平台没有实体，不挡人
+                    if (Math.abs(sx - p.x) < p.half + pad && Math.abs(sz - p.z) < p.half + pad &&
+                        prevY < p.y - 0.2 && prevY > p.y - 7) { blockedBySide = true; break outer; }
+                }
             }
             if (!blockedBySide) { hub.p.x = newX; hub.p.z = newZ; }
             let half = HUB.plazaHalf - 2;
