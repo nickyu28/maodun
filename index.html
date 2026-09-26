@@ -4886,6 +4886,12 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-26-ear-overhang', date: '2026-09-26', title: '耳朵不再支棱到身体外面', items: [
+                    '大厅/竞速/监狱救援/躲避球/超燃/惊魂夜共用的箱体身体，耳朵（或角）之前的横向偏移量比"身体半宽 − 耳朵半径"还大，耳朵外沿会超出身体边缘一截，看着像支棱出去了。缩小偏移量之后耳朵老老实实待在身体轮廓以内。',
+                    '松饼大作战的身体本来就是竖着的圆柱体，没有改动。'
+                ]
+            },
+            {
                 id: '2026-09-26-cleanup2', date: '2026-09-26', title: '地图残留问题彻底修好 + 灵敏度设置', items: [
                     '之前那个"清理场景残留"的修复漏了一大块——惊魂夜的椅子/机子/门/木板只在"开新一局"时清，退到大厅这条路完全没走到，之前看到的白色地板碎块、莫名其妙的"椅子"，其实都是上一局惊魂夜/寻宝队/超燃留下的东西。现在统一走同一套清理，退到哪个模式都不会再留了。',
                     '猫盾角色的耳朵（还有猎人的角）之前是 4 段的圆锥，凑近或者贴脸角度看会像一块扁扁的三角形，改成 8 段，看着才是个正常的圆锥。',
@@ -7406,10 +7412,12 @@
             body.position.y = 5.5; g.add(body);
             // 圆锥段数从 4 提到 8——4 段是个尖顶四棱锥，贴脸/侧着看某些角度会显得
             // 像一块扁扁的三角形（跟贴图似的），8 段看着才是个正常的圆锥耳朵。
+            // 身体箱体半宽是 3，耳朵半径 1.6——之前偏移 1.8 会让耳朵外沿到 3.4，
+            // 超出身体边缘 0.4，看着像耳朵支棱到头外面去了。收到 1.2，外沿到 2.8，缩进去一点。
             let earGeo = new THREE.ConeGeometry(1.6, 3.4, 8);
             [-1, 1].forEach(function (sdir) {
                 let ear = new THREE.Mesh(earGeo, mat);
-                ear.position.set(sdir * 1.8, 12.5, 0); g.add(ear);
+                ear.position.set(sdir * 1.2, 12.5, 0); g.add(ear);
             });
 
             // 四个角色除了颜色不一样，剪影完全一样，混战里根本认不出谁是谁。
@@ -11419,7 +11427,8 @@
                 let hornGeo = new THREE.ConeGeometry(1.6, 3.4, 8);
                 [-1, 1].forEach(function (s) {
                     let horn = new THREE.Mesh(hornGeo, hornMat);
-                    horn.position.set(s * 1.8, h + 1.5, 0);
+                    // 身体半宽 3，角/耳朵半径 1.6，偏移收到 1.2 避免外沿(2.8)超出身体边缘。
+                    horn.position.set(s * 1.2, h + 1.5, 0);
                     g.add(horn);
                 });
             } else if (charKey === 'hmi') {
@@ -16657,10 +16666,12 @@
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.BoxGeometry(6, 11, 4), mat);
             body.position.y = 5.5; g.add(body);
+            // 身体半宽 3，耳朵半径 1.6，偏移收到 1.2 避免外沿(2.8)超出身体边缘（大厅/竞速/
+            // 监狱救援/躲避球全用这个身体，之前 1.8 的偏移会让耳朵支棱到身体外面去）。
             let earGeo = new THREE.ConeGeometry(1.6, 3.4, 8);
             [-1, 1].forEach(function (sdir) {
                 let ear = new THREE.Mesh(earGeo, mat);
-                ear.position.set(sdir * 1.8, 12.5, 0); g.add(ear);
+                ear.position.set(sdir * 1.2, 12.5, 0); g.add(ear);
             });
             let legs = [];
             [-1, 1].forEach(function (sdir) {
