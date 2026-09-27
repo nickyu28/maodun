@@ -2545,6 +2545,42 @@
                 if (p && p.catch) p.catch(function () { });
             } catch (e) { }
         }
+        // 大厅选模式面板里每个模式都已经有一块完整的规则说明（xxx-only 那些 div），
+        // 但那是选模式的时候才看得到的——真进了局，尤其是没细看就点了开始的人，
+        // 完全没有任何提醒。第一次进某个模式的时候，把那块面板的文字原样弹出来
+        // 当一次性教程：不重复维护一份文案，面板改了这里也跟着改。
+        const MODE_INTRO = {
+            night: { panel: 'night-only', title: '惊魂夜规则' },
+            blaze: { panel: 'blaze-only', title: '超燃规则' },
+            race: { panel: 'race-only', title: '竞速规则' },
+            jail: { panel: 'jail-only', title: '监狱救援规则' },
+            dodge: { panel: 'dodge-only', title: '躲避球规则' },
+            escape: { panel: 'escape-only', title: '密室规则' },
+            park: { panel: 'park-only', title: '猫盾乐园规则' },
+            cake: { panel: 'cake-only', title: '松饼大作战规则' }
+        };
+        function modeIntroHtml(panelId) {
+            let panel = document.getElementById(panelId);
+            if (!panel) return '';
+            let html = '';
+            // querySelector 只找子孙节点，裸的 <button> 直接子元素（没套在 div 里）会漏检——
+            // 竞速/超燃面板里就有这种独立按钮（"记录榜"、"开打"），得单独判它自己是不是 button。
+            Array.from(panel.children).forEach(function (child) {
+                if (child.tagName !== 'BUTTON' && child.tagName !== 'SELECT' && child.tagName !== 'INPUT' && !child.querySelector('button')) html += child.outerHTML;
+            });
+            return html;
+        }
+        function showModeIntroIfFirstTime(key) {
+            if (!gState.modeIntroShown) gState.modeIntroShown = {};
+            if (gState.modeIntroShown[key]) return;
+            gState.modeIntroShown[key] = true; saveProgress();
+            let cfg = MODE_INTRO[key]; if (!cfg) return;
+            setTimeout(function () {
+                let html = modeIntroHtml(cfg.panel);
+                if (!html) return;
+                showSysModal(cfg.title, '<div style="text-align:left; max-height:60vh; overflow-y:auto;">' + html + '</div>', [{ label: '知道了' }]);
+            }, 400);
+        }
         function nav(id) {
             document.querySelectorAll('.screen').forEach(function (s) { s.classList.add('hidden'); });
             if (id !== 'none') { document.getElementById(id).classList.remove('hidden'); }
@@ -4981,6 +5017,11 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-27-mode-intro', date: '2026-09-27', title: '8 个模式第一次进都会弹一遍完整规则', items: [
+                    '之前只有大厅选模式那块面板写着规则，很多人开局前不细看直接点开始。现在惊魂夜/超燃/竞速/监狱救援/躲避球/密室/猫盾乐园/松饼大作战这 8 个模式，第一次真正进去都会弹一次完整规则，跟大厅面板内容一样，不用来回切screen 找。'
+                ]
+            },
             {
                 id: '2026-09-27-pointerlock-fix', date: '2026-09-27', title: '修了一个后台报错（不影响实际游玩）', items: [
                     '锁定鼠标那步（进任何一个用视角的模式都会触发）以前偶尔会在浏览器控制台炸出一条没人接住的报错，玩家看不到，但确实是个代码缺陷。统一收口修掉了。'
@@ -8146,6 +8187,7 @@
         }
 
         function blazeBegin(plan, hostId, ffa, tomb, law) {
+            showModeIntroIfFirstTime('blaze');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
             document.getElementById('night-hud').classList.add('hidden');
@@ -11450,6 +11492,7 @@
         let nightMapReady = false;
 
         function startNightGame(side, charKey) {
+            showModeIntroIfFirstTime('night');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
             document.getElementById('night-hud').classList.remove('hidden');
@@ -17819,6 +17862,7 @@
         function raceDuoStart() { raceStart(true); }
 
         function raceStart(duo) {
+            showModeIntroIfFirstTime('race');
             ensureScene();
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
@@ -18366,6 +18410,7 @@
         }
 
         function jailBegin() {
+            showModeIntroIfFirstTime('jail');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
             document.getElementById('night-hud').classList.add('hidden');
@@ -19253,6 +19298,7 @@
         }
 
         function dodgeBegin(crazy) {
+            showModeIntroIfFirstTime('dodge');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
             document.getElementById('night-hud').classList.add('hidden');
@@ -19598,6 +19644,7 @@
         }
 
         function escapeBegin() {
+            showModeIntroIfFirstTime('escape');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
             document.getElementById('night-hud').classList.add('hidden');
@@ -20042,6 +20089,7 @@
             });
         }
         function parkBegin(program) {
+            showModeIntroIfFirstTime('park');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
             document.getElementById('night-hud').classList.add('hidden');
@@ -20830,6 +20878,7 @@
         // plan：[{id}, {id}, ...]，真人的位置排前面，不够 CAKE.playerCount 个就用 AI 补满。
         // 联机时 host/seed 由发起人决定，所有人用同一个 seed 生成地图，画面才能对上。
         function cakeBegin(plan, hostId, seed) {
+            showModeIntroIfFirstTime('cake');
             plan = plan || [{ id: gState.id }];
             hostId = hostId || gState.id;
             seed = seed || Math.floor(Math.random() * 1000000);
