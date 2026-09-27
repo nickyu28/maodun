@@ -4973,6 +4973,11 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-27-hub-ai-nametag', date: '2026-09-27', title: '大厅广场路人 AI 头顶也显示名字了', items: [
+                    '之前只有真人玩家头顶有名字，路人 AI 光看身体颜色分不出谁是谁——现在路人也一样顶着名字牌，颜色跟身体色一致。'
+                ]
+            },
+            {
                 id: '2026-09-27-recipe-tune', date: '2026-09-27', title: '寻宝队配方调整：删了 3 个，猫盾骑士剑加强', items: [
                     '下掉了 3 条合成配方：星象仪、预言之书、不死鸟圣树（对应的材料还在，只是不能合这几样了）。',
                     '猫盾骑士剑（骑士团圣剑 + 至臻猫盾）现在装备着的时候，除了攻击力，还会跑得更快、生命上限更高。'
@@ -20980,6 +20985,10 @@
                 let name = pool.length ? pool.splice(idx, 1)[0] : ('路人' + (i + 1));
                 let col = HUB_WANDER_COLORS[Math.floor(Math.random() * HUB_WANDER_COLORS.length)];
                 let mesh = raceMakeBody(col, 0, true);
+                // 真人头顶有名字，路人却没有——一群猫盾凑一起，光看身体颜色根本分不出
+                // 谁是真人朋友、谁是凑数的路人，得靠头顶名字才能看清爽。
+                let label = nightMakeLabel(name, col, false);
+                label.position.y = 13.5; mesh.add(label);
                 scene.add(mesh);
                 let x = (Math.random() - 0.5) * HUB.plazaHalf, z = (Math.random() - 0.5) * HUB.plazaHalf;
                 hub.wanderers.push({
