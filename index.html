@@ -4973,6 +4973,12 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-27-feedback-no-login', date: '2026-09-27', title: '提交反馈不用再登录 GitHub 账号了', items: [
+                    '"反馈"和"游玩记录"按钮以前是直接打开一个 GitHub 新建 issue 的页面——GitHub 从来不允许匿名开 issue，没账号的玩家这条路根本走不通。现在改成后台自动提交，点一下就好，不用登录任何东西。',
+                    '开发者那边收反馈的方式不变，还是走 GitHub issue，夜间自动检查 bug 的流程不用改。'
+                ]
+            },
+            {
                 id: '2026-09-26-hub-overlap-fix', date: '2026-09-26', title: '大厅顶部文字重叠修好了（不是随机的，是真的会撞）', items: [
                     '找到了"选择模式面板压住在线人数"的真实原因：大厅那行"在线 XX 人"是整屏水平居中的，右上角选模式面板是贴着右边固定的——屏幕越窄这两块就越容易撞在一起，用 800×1067 这种尺寸复现了 100% 会撞。现在这行改成卡在两块面板中间真正空着的缝里，不再整屏居中。',
                     '还找到一个联动的：从"超燃"对局退出回大厅，上一局的排位表没人清过，会一直糊在左上角，正好压在"商店"那一列菜单上——退出超燃和进大厅两处都加了清空。',
@@ -5258,17 +5264,34 @@
         // 反馈：没有后端，收不到结构化数据，就走最土但最不会掉链子的路——
         // 拼一封邮件，带上测试者的 ID/模式方便我对上号，发不出邮件就退化成复制文本。
         // 反馈走 GitHub issue（仓库：nickyu28/maodun），不是随便存个本地文本——
-        // 这样夜里那个自动检查 bug 的云端任务才能真的读到，跟它读代码一样，同一次
-        // 运行里顺手看一眼有没有新反馈。本地没法直接建 issue（没有后端、不能带 token），
-        // 用 GitHub 预填链接开一个新标签页，测试者自己确认提交——邮件/复制文字留着
-        // 当备选，给没有 GitHub 账号的人用。
+        // 这样夜里那个自动检查 bug 的云端任务才能真的读到。以前是直接开一个 GitHub
+        // 预填链接让玩家自己提交——但 GitHub 从来不允许匿名开 issue，没账号的玩家
+        // 这条路根本走不通。现在改成打一个 Netlify Function（/.netlify/functions/feedback），
+        // 后端拿开发者自己存的 token 建 issue，玩家不用登录任何东西。那个接口没配好
+        // 或者请求失败的话，自动退回旧的"打开 GitHub 预填页面"方案，反馈不会丢。
         const FEEDBACK_REPO = 'nickyu28/maodun';
         const FEEDBACK_EMAIL = 'iway.yu@gmail.com';
-        // 没有 GitHub 账号（或者不想注册）的人，GitHub 那条预填链接根本打不开新建页——
         // 用 mailto 兜底：调起测试者自己手机/电脑上已经登录的邮箱客户端，标题正文都填好，
         // 点发送就行，不用注册任何新账号。缺点是得设备上真的配了邮箱客户端才弹得出来。
         function feedbackMailto(subject, body) {
             location.href = 'mailto:' + FEEDBACK_EMAIL + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+        }
+        // 提交到后端建 issue；失败（没配 token/网络问题）就退回旧的复制内容 + 打开
+        // GitHub 预填页面那套，至少反馈还能送到——只是又变成需要 GitHub 账号那条路了。
+        function feedbackSubmit(title, body, label, onOk, onFallback) {
+            fetch('/.netlify/functions/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title, body: body, label: label })
+            }).then(function (res) { if (!res.ok) throw new Error('bad status'); return res.json(); })
+                .then(function () { onOk(); })
+                .catch(function () {
+                    try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
+                    let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
+                        '&body=' + encodeURIComponent(body) + '&labels=' + label;
+                    window.open(url, '_blank');
+                    onFallback();
+                });
         }
         // 反馈涉及哪个/哪些模式让用户自己勾，不再偷偷塞 gState.gameMode——
         // 那个字段只是"选择模式面板里选中的是哪个"，在大厅里从来没真的进任何模式，
@@ -5301,10 +5324,10 @@
             let html = '<div style="text-align:left;">' +
                 '<textarea id="feedback-text" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
                 '<div style="font-size:11px; color:#999; margin-top:8px;">这条反馈跟哪个/哪些模式有关？（可多选）</div>' + modesHtml +
-                '<div style="font-size:11px; color:#999; margin-top:8px;">会顺便带上你的 ID（' + dispName(gState.id) + '）。有 GitHub 账号就直接提交；没有的话点"用邮件发"，调起你自己的邮箱发给开发者，不用注册。</div>' +
+                '<div style="font-size:11px; color:#999; margin-top:8px;">会顺便带上你的 ID（' + dispName(gState.id) + '）。直接提交就行，不用注册任何账号；也可以选"用邮件发"。</div>' +
                 '</div>';
             showSysModal('反馈', html, [
-                { label: '提交到 GitHub', color: '#24292e', onClick: function () { feedbackSend(); } },
+                { label: '提交反馈', color: '#24292e', onClick: function () { feedbackSend(); } },
                 { label: '用邮件发', color: '#5cb85c', onClick: function () { feedbackSend(true); } },
                 { label: '取消' }
             ]);
@@ -5321,13 +5344,9 @@
             let body = feedbackBuildBody(text, modes);
             let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
             if (viaEmail) { feedbackMailto(title, body); return; }
-            // 顺手复制一份：没有 GitHub 账号、懒得注册的人，GitHub 页面开着不管，
-            // 直接把复制好的内容粘贴发给开发者（邮件/聊天都行）就算提交成功了。
-            try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
-            let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
-                '&body=' + encodeURIComponent(body) + '&labels=feedback';
-            window.open(url, '_blank');
-            blazeFlash('已复制内容，也打开了 GitHub 提交页');
+            feedbackSubmit(title, body, 'feedback',
+                function () { blazeFlash('反馈已提交，谢谢！'); },
+                function () { blazeFlash('自动提交失败，已复制内容并打开 GitHub 页面'); });
         }
 
         // 游玩记录：只是你自己遇到过的人的本地小名单，不是全网玩家统计——
@@ -5374,11 +5393,9 @@
             let body = '提交者: ' + dispName(gState.id) + '\n时间: ' + new Date().toLocaleString() + '\n记录到 ' + ids.length + ' 人\n\n' + lines.join('\n');
             let title = '[游玩记录] ' + dispName(gState.id) + ' 提交，共 ' + ids.length + ' 人';
             if (viaEmail) { feedbackMailto(title, body); return; }
-            try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
-            let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
-                '&body=' + encodeURIComponent(body) + '&labels=playlog';
-            window.open(url, '_blank');
-            blazeFlash('已复制内容，也打开了 GitHub 提交页');
+            feedbackSubmit(title, body, 'playlog',
+                function () { blazeFlash('游玩记录已提交，谢谢！'); },
+                function () { blazeFlash('自动提交失败，已复制内容并打开 GitHub 页面'); });
         }
 
         function openEggBook() {
