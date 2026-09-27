@@ -1439,7 +1439,7 @@
         <div id="night-wait-sub" style="color:#aaa; font-size:14px; margin-bottom:16px;"></div>
         <div id="night-wait-count" style="color:#7fd1ff; font-size:52px; font-weight:bold; line-height:1;">15</div>
         <div id="night-wait-list" style="color:#eee; font-size:13px; line-height:1.9; margin:16px 0; min-height:60px; text-align:center;"></div>
-        <button onclick="nightCancelMatch()" style="background:#666; color:#fff; border:none; padding:8px 24px;">取消</button>
+        <button onclick="nightOrMmCancel()" style="background:#666; color:#fff; border:none; padding:8px 24px;">取消</button>
     </div>
 
     <div id="night-pick" class="hidden" style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(15,15,20,0.86); z-index:30; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto;">
@@ -1754,12 +1754,14 @@
                 left = Math.max(0, NIGHT_MATCH_WAIT - (performance.now() - nightMatch.t0) / 1000);
                 nightMatch.left = left;
             }
+            if (mmActive) mmActive.left = Math.max(0, MM_WAIT - (performance.now() - mmActive.t0) / 1000);
             return {
                 type: 'ROOM_HELLO', target: '*', sender: gState.id,
                 host: peerIsHost,
                 matching: !!nightMatch,
                 side: nightMatch ? nightMatch.side : null,
                 left: left,
+                mm: mmActive ? { mode: mmActive.mode, left: mmActive.left } : null,
                 bz: gState.blazeChar || 'bow',
                 stats: playStatsDigest()
             };
@@ -1793,6 +1795,7 @@
                 host: !!m.host, matching: !!m.matching,
                 side: m.side || null,
                 left: (typeof m.left === 'number') ? m.left : null,
+                mm: m.mm || null,
                 at: performance.now()
             };
             if (m.bz) blazePeerChar[m.sender] = m.bz;
@@ -1818,8 +1821,17 @@
                 let q = roomPeers[id];
                 if (q.matching && q.side) matchPool[id] = { side: q.side, left: q.left };
             });
+            // 超燃/松饼/竞速这几个通用匹配用的池子，跟上面 matchPool 是同一个思路，
+            // 只是"边"（追捕/逃生）换成"模式名"——同一份房间心跳，两套匹配各取各的。
+            mmRoomPool = {};
+            if (mmActive) mmRoomPool[gState.id] = { mode: mmActive.mode, left: mmActive.left };
+            ids.forEach(function (id) {
+                let q = roomPeers[id];
+                if (q.mm && q.mm.mode) mmRoomPool[id] = { mode: q.mm.mode, left: q.mm.left };
+            });
             roomRender();
             if (nightMatch) nightMatchTick();
+            if (mmActive) mmTick();
             voiceMeshSync();
         }
 
@@ -2251,8 +2263,6 @@
                 raceOnFinish(msg);
             } else if (msg.type === 'RACE_RESULT') {
                 raceOnResult(msg);
-            } else if (msg.type === 'MM_JOIN') {
-                mmOnJoin(msg);
             } else if (msg.type === 'NCHAR') {
                 netOnChar(msg);
             } else if (msg.type === 'NS_ME') {
@@ -2598,79 +2608,91 @@
             }, 400);
         }
 
-        // ── 通用匹配等待：给没组队直接点"开始"的人用——先等 15 秒看房间里还有没有
-        // 陌生人也想玩这个模式，凑到人就真联机，凑不到就跟以前一样自己配 AI。
-        // 参考的是惊魂夜本来就写好的那一套（matchPool/matchLeader），这里给超燃/
-        // 松饼大作战/竞速这几个共用一份通用版，不用各自再抄一遍。
+        // ── 通用匹配等待：给没组队直接点"开始"的人用——先等最多 15 秒看房间里还有
+        // 没有陌生人也想玩这个模式，凑到人就真联机，凑不到就跟以前一样自己配 AI。
+        // 跟惊魂夜本来就写好的那套（nightMatch/matchPool/matchLeader）走的是同一条
+        // 心跳（roomSelfMsg/roomOnHello/roomSync 里的 mm 字段），UI 也直接复用
+        // #night-wait 那个浮层——不单独起一份、不跟玩家报"15秒"这种绝对数字，
+        // 显示的是"这一屋子里等得最久的人还剩多少秒"（mmMinLeft），跟惊魂夜一个逻辑：
+        // 谁先开始等，倒计时就以谁为准，晚进来的人不会让别人多等。
         const MM_WAIT = 15;
-        let mmPool = null;   // { mode, cap, entries: {id:true}, t0, timer, onResolve }
+        let mmActive = null;      // 我自己在等：{ mode, cap, t0, left, onResolve, timer }
+        let mmRoomPool = {};      // roomSync() 每次心跳都重新算一遍：{ id: { mode, left } }
         const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速' };
-        // cap：这个模式满编要多少人——凑够了就不用傻等 15 秒，跟惊魂夜那套一样提前开局。
-        function mmStart(mode, cap, onResolve) {
-            if (mmPool) return;   // 已经在排队，别重复点
-            mmPool = { mode: mode, cap: cap || 99, entries: {}, t0: performance.now(), onResolve: onResolve };
-            mmPool.entries[gState.id] = true;
-            bc.postMessage({ type: 'MM_JOIN', target: '*', sender: gState.id, mode: mode });
-            mmRender();
-            mmPool.timer = setInterval(mmTick, 250);
+        function mmMinLeft() {
+            let v = mmActive ? mmActive.left : Infinity;
+            Object.keys(mmRoomPool).forEach(function (id) {
+                if (id === gState.id) return;
+                let l = mmRoomPool[id].left;
+                if (typeof l === 'number' && l < v) v = l;
+            });
+            return v;
         }
-        function mmRender() {
-            if (!mmPool) return;
-            let left = Math.max(0, MM_WAIT - (performance.now() - mmPool.t0) / 1000);
-            let n = Object.keys(mmPool.entries).length;
-            showSysModal('匹配中 · ' + (MM_MODE_LABEL[mmPool.mode] || mmPool.mode),
-                '正在等真人一起玩（' + Math.ceil(left) + 's）——已经有 ' + n + ' 人。等不到就自动配 AI。',
-                [{ label: '取消', color: '#999', onClick: mmCancel }]);
+        // 跟惊魂夜 matchLeader() 一模一样的思路：剩得最少的人排最前，
+        // 一样的话按 ID 字典序兜底——两边都能各自独立算出同一个结果。
+        function mmLeader() {
+            let ids = Object.keys(mmRoomPool);
+            if (!ids.length) return gState.id;
+            ids.sort(function (a, b) {
+                let la = mmRoomPool[a].left, lb = mmRoomPool[b].left;
+                la = (typeof la === 'number') ? Math.round(la * 2) : 99999;
+                lb = (typeof lb === 'number') ? Math.round(lb * 2) : 99999;
+                if (la !== lb) return la - lb;
+                return a < b ? -1 : (a > b ? 1 : 0);
+            });
+            return ids[0];
+        }
+        function mmStart(mode, cap, onResolve) {
+            if (mmActive || nightMatch) return;   // 已经在排队（这个或惊魂夜那个），别重复点
+            mmActive = { mode: mode, cap: cap || 99, t0: performance.now(), left: MM_WAIT, onResolve: onResolve };
+            document.getElementById('night-wait').classList.remove('hidden');
+            bc.postMessage(roomSelfMsg());
+            mmActive.timer = setInterval(mmTick, 250);
+            mmTick();
         }
         function mmTick() {
-            if (!mmPool) return;
-            let left = MM_WAIT - (performance.now() - mmPool.t0) / 1000;
-            let modal = document.getElementById('sys-modal');
-            if (modal && !modal.classList.contains('hidden')) {
-                let el = document.getElementById('sys-modal-text');
-                if (el) {
-                    let n = Object.keys(mmPool.entries).length;
-                    el.innerText = '正在等真人一起玩（' + Math.ceil(Math.max(0, left)) + 's）——已经有 ' + n + ' 人。等不到就自动配 AI。';
-                }
-            }
-            if (left <= 0 || Object.keys(mmPool.entries).length >= mmPool.cap) mmFinish();
-        }
-        function mmOnJoin(m) {
-            if (!mmPool || m.mode !== mmPool.mode || m.sender === gState.id) return;
-            if (!mmPool.entries[m.sender]) {
-                mmPool.entries[m.sender] = true;
-                // 让刚发现我的这个人也知道我在——不然要是他先广播、我后开始排队，
-                // 我这边永远收不到他那条最早的 MM_JOIN。
-                bc.postMessage({ type: 'MM_JOIN', target: '*', sender: gState.id, mode: mmPool.mode });
-                if (Object.keys(mmPool.entries).length >= mmPool.cap) { mmFinish(); return; }
-                mmRender();
+            if (!mmActive) return;
+            let elapsed = (performance.now() - mmActive.t0) / 1000;
+            mmActive.left = Math.max(0, MM_WAIT - elapsed);
+            let n = Object.keys(mmRoomPool).length || 1;
+            document.getElementById('night-wait-sub').innerText =
+                '正在匹配 ' + (MM_MODE_LABEL[mmActive.mode] || mmActive.mode) + '　等真人进来，等不到就用 AI 补';
+            let shown = mmMinLeft();
+            document.getElementById('night-wait-count').innerText = Math.ceil(Math.max(0, shown));
+            let ids = Object.keys(mmRoomPool).sort();
+            document.getElementById('night-wait-list').innerHTML = ids.map(function (id) {
+                return '<div style="color:' + (id === gState.id ? '#7fd1ff' : '#cfe8ff') + ';">' +
+                    dispName(id) + (id === gState.id ? '（你）' : '') + '</div>';
+            }).join('') || '<div style="color:#888;">还没人加入</div>';
+            let full = n >= mmActive.cap;
+            if (mmLeader() === gState.id) {
+                if (full || shown <= 0) mmGo();
+            } else if (elapsed >= MM_WAIT + 2) {
+                mmGo();   // 保险：发起人万一半路出问题，别的人也别卡死等一辈子
             }
         }
         function mmCancel() {
-            if (!mmPool) return;
-            clearInterval(mmPool.timer);
-            document.getElementById('sys-modal').classList.add('hidden');
-            mmPool = null;
+            if (!mmActive) return;
+            clearInterval(mmActive.timer);
+            mmActive = null;
+            document.getElementById('night-wait').classList.add('hidden');
+            bc.postMessage(roomSelfMsg());
         }
-        function mmFinish() {
-            if (!mmPool) return;
-            clearInterval(mmPool.timer);
-            document.getElementById('sys-modal').classList.add('hidden');
-            let ids = Object.keys(mmPool.entries).sort();
-            let onResolve = mmPool.onResolve;
-            mmPool = null;
-            onResolve(ids, ids[0] === gState.id);
+        function mmGo() {
+            if (!mmActive) return;
+            clearInterval(mmActive.timer);
+            let onResolve = mmActive.onResolve;
+            let ids = Object.keys(mmRoomPool).sort();
+            if (ids.indexOf(gState.id) < 0) ids.unshift(gState.id);
+            mmActive = null;
+            document.getElementById('night-wait').classList.add('hidden');
+            bc.postMessage(roomSelfMsg());
+            onResolve(ids);
         }
-        // 匹配到了人但我不是"发起人"（ID 字典序不是最小）：真正的联机开局广播由发起人
-        // 那边去发，我这边等着接收就行；但发起人万一半路掉线/出错，不能让我卡死等一辈子，
-        // 多等几秒还没等到真的开局，就自己退回配 AI 单机玩。
-        function mmWaitForStart(checkStarted, onFallback) {
-            let waited = 0;
-            let iv = setInterval(function () {
-                waited += 0.5;
-                if (checkStarted()) { clearInterval(iv); return; }
-                if (waited >= 3) { clearInterval(iv); onFallback(); }
-            }, 500);
+        // 大厅那个浮层的"取消"按钮惊魂夜/这套通用匹配共用，谁在等就取消谁。
+        function nightOrMmCancel() {
+            if (nightMatch) { nightCancelMatch(); return; }
+            if (mmActive) { mmCancel(); return; }
         }
 
         function nav(id) {
@@ -5110,9 +5132,9 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
-                id: '2026-09-27-matchmaking', date: '2026-09-27', title: '没组队直接开始，现在会先等 15 秒匹配真人', items: [
-                    '超燃（2v2/乱斗）、松饼大作战、竞速（单排）：以前没组队点"开始"是立刻配 AI；现在会先弹个可取消的倒计时，等 15 秒看房间里还有没有别人也想玩，凑够人数还会提前开始，凑不到才照旧配 AI。',
-                    '惊魂夜其实一直有这套（等真人/AI 补位），只是一直被一个测试开关默认关掉了，这次顺手打开——算是修复，不是新功能。',
+                id: '2026-09-27-matchmaking', date: '2026-09-27', title: '没组队直接开始，现在会先等真人来匹配', items: [
+                    '超燃（2v2/乱斗）、松饼大作战、竞速（单排）：以前没组队点"开始"是立刻配 AI；现在会弹个可取消的倒计时界面，等房间里还有没有别人也想玩，凑够人数还会提前开始，等太久（最多 15 秒）就照旧配 AI。倒计时跟着"这屋子里等得最久的那个人"走，不是每个人各算各的，谁先等谁说了算，后来的人不会让别人多等。',
+                    '这套跟惊魂夜共用同一份界面和同一条心跳消息——惊魂夜其实一直有这个功能，只是被一个测试开关默认关掉了，这次顺手打开，算是修复不是新功能。',
                     '寻宝队没做这个：它是常驻共享世界，不是一局一局配对的，"匹配"这个概念本身就不适用。监狱救援/躲避球/密室还没有真联机，这个也用不上。'
                 ]
             },
@@ -8092,19 +8114,13 @@
                 blazeBegin(plan, gState.id);
                 return;
             }
-            // 没组队：先等 15 秒看房间里有没有陌生人也想打这个模式，凑到人就真联机
-            mmStart('blaze', 4, function (ids, iAmLeader) {
-                if (ids.length <= 1) { blazeBegin(blazePlan([{ id: gState.id, key: gState.blazeChar }]), gState.id); return; }
-                if (!iAmLeader) {
-                    mmWaitForStart(function () { return !!blaze; },
-                        function () { blazeBegin(blazePlan([{ id: gState.id, key: gState.blazeChar }]), gState.id); });
-                    return;
-                }
+            // 没组队：先等最多 15 秒看房间里有没有陌生人也想打这个模式，凑到人就真联机
+            mmStart('blaze', 4, function (ids) {
                 let humans = ids.map(function (id) {
                     return { id: id, key: id === gState.id ? gState.blazeChar : (blazePeerChar[id] || 'bow') };
                 });
                 let plan = blazePlan(humans);
-                bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+                if (ids.length > 1) bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
                 blazeBegin(plan, gState.id);
             });
         }
@@ -8325,17 +8341,11 @@
                 blaze.ffaDuo = true;
                 return;
             }
-            // 单排乱斗，没组队：这是没组队时"开始游戏！"按钮真正会走到的路——先等 15 秒
-            // 看房间里有没有陌生人也想上乱斗，凑到人就真联机，凑不到照旧自己配 AI。
-            mmStart('blazeffa', BLAZE.ffaCount, function (ids, iAmLeader) {
-                if (ids.length <= 1) { blazeBegin(blazeFfaBuildSolo([gState.id]), gState.id, true); blaze.ffaDuo = false; return; }
-                if (!iAmLeader) {
-                    mmWaitForStart(function () { return !!blaze; },
-                        function () { blazeBegin(blazeFfaBuildSolo([gState.id]), gState.id, true); blaze.ffaDuo = false; });
-                    return;
-                }
+            // 单排乱斗，没组队：这是没组队时"开始游戏！"按钮真正会走到的路——先等最多
+            // 15 秒看房间里有没有陌生人也想上乱斗，凑到人就真联机，凑不到照旧自己配 AI。
+            mmStart('blazeffa', BLAZE.ffaCount, function (ids) {
                 let plan = blazeFfaBuildSolo(ids);
-                bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id, ffa: true, duo: false });
+                if (ids.length > 1) bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id, ffa: true, duo: false });
                 blazeBegin(plan, gState.id, true);
                 blaze.ffaDuo = false;
             });
@@ -18083,17 +18093,11 @@
                 raceStart(false, plan, gState.id);
                 return;
             }
-            // 没组队：先等 15 秒看房间里有没有陌生人也想跑，凑到人就真联机
-            mmStart('race', RACE.count, function (ids, iAmLeader) {
-                if (ids.length <= 1) { raceStart(false, racePlan([{ id: gState.id }]), gState.id); return; }
-                if (!iAmLeader) {
-                    mmWaitForStart(function () { return !!race; },
-                        function () { raceStart(false, racePlan([{ id: gState.id }]), gState.id); });
-                    return;
-                }
+            // 没组队：先等最多 15 秒看房间里有没有陌生人也想跑，凑到人就真联机
+            mmStart('race', RACE.count, function (ids) {
                 let humans = ids.map(function (id) { return { id: id }; });
                 let plan = racePlan(humans);
-                bc.postMessage({ type: 'RACE_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+                if (ids.length > 1) bc.postMessage({ type: 'RACE_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
                 raceStart(false, plan, gState.id);
             });
         }
@@ -21110,17 +21114,11 @@
         function cakeStartGo() {
             let others = lobbyParty.slice(0, CAKE.playerCount - 1);
             if (!others.length) {
-                // 没组队：先等 15 秒看房间里有没有陌生人也想玩，凑到人就真联机
-                mmStart('cake', CAKE.playerCount, function (ids, iAmLeader) {
-                    if (ids.length <= 1) { cakeBegin([{ id: gState.id }], gState.id, Math.floor(Math.random() * 1000000)); return; }
-                    if (!iAmLeader) {
-                        mmWaitForStart(function () { return !!cake; },
-                            function () { cakeBegin([{ id: gState.id }], gState.id, Math.floor(Math.random() * 1000000)); });
-                        return;
-                    }
+                // 没组队：先等最多 15 秒看房间里有没有陌生人也想玩，凑到人就真联机
+                mmStart('cake', CAKE.playerCount, function (ids) {
                     let plan = ids.map(function (id) { return { id: id }; });
                     let seed = Math.floor(Math.random() * 1000000);
-                    bc.postMessage({ type: 'CK_START', target: '*', sender: gState.id, plan: plan, host: gState.id, seed: seed });
+                    if (ids.length > 1) bc.postMessage({ type: 'CK_START', target: '*', sender: gState.id, plan: plan, host: gState.id, seed: seed });
                     cakeBegin(plan, gState.id, seed);
                 });
                 return;
