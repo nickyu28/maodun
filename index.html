@@ -4973,6 +4973,12 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-27-recipe-tune', date: '2026-09-27', title: '寻宝队配方调整：删了 3 个，猫盾骑士剑加强', items: [
+                    '下掉了 3 条合成配方：星象仪、预言之书、不死鸟圣树（对应的材料还在，只是不能合这几样了）。',
+                    '猫盾骑士剑（骑士团圣剑 + 至臻猫盾）现在装备着的时候，除了攻击力，还会跑得更快、生命上限更高。'
+                ]
+            },
+            {
                 id: '2026-09-27-feedback-no-login', date: '2026-09-27', title: '提交反馈不用再登录 GitHub 账号了', items: [
                     '"反馈"和"游玩记录"按钮以前是直接打开一个 GitHub 新建 issue 的页面——GitHub 从来不允许匿名开 issue，没账号的玩家这条路根本走不通。现在改成后台自动提交，点一下就好，不用登录任何东西。',
                     '开发者那边收反馈的方式不变，还是走 GitHub issue，夜间自动检查 bug 的流程不用改。'
@@ -15160,27 +15166,27 @@
                 out: { n: '至臻猫盾', v: 800000, w: 2, tex: 'cat_shield', c: 0xe056fd, main: '#e056fd', detail: '#9b59b6' }
             },
             {
-                id: 'orrery', a: '彩窗圆盘', b: '镀金怀表',
-                out: { n: '星象仪', v: 60000, w: 4, tex: 'disc', c: 0x4dd0e1, main: '#4dd0e1', detail: '#00838f' }
-            },
-            {
-                id: 'prophecy', a: '水晶沙漏', b: '黄金书',
-                out: { n: '预言之书', v: 120000, w: 5, tex: 'book', c: 0x7e57c2, main: '#7e57c2', detail: '#4527a0' }
-            },
-            {
                 id: 'feast', a: '金苹果', b: '黄金圣杯',
                 out: { n: '丰饶圣餐', v: 250000, w: 5, tex: 'cup', c: 0xffb300, main: '#ffb300', detail: '#e65100' }
             },
             {
-                id: 'phoenixtree', a: '凤凰金雕', b: '星光圣诞树',
-                out: { n: '不死鸟圣树', v: 1000000, w: 8, tex: 'tree', c: 0xff7043, main: '#ff7043', detail: '#bf360c' }
-            },
-            {
                 id: 'catblade', a: '骑士团圣剑', b: '至臻猫盾',
-                out: { n: '猫盾骑士剑', v: 1000000, w: 5, tex: 'sword', c: 0xff4081, main: '#ff4081', detail: '#880e4f', type: 'wep', dmg: 150 }
+                // spd/hp 是装备这把剑时的加成（移动速度倍率、额外生命上限）——
+                // 不是随便加在这就生效的，ground-merge 生成物、捡进背包两处都是
+                // 显式一个个字段复制过去的，两边都要照着加，不然装备了也没用。
+                out: { n: '猫盾骑士剑', v: 1000000, w: 5, tex: 'sword', c: 0xff4081, main: '#ff4081', detail: '#880e4f', type: 'wep', dmg: 150, spd: 1.15, hp: 40 }
             }
         ];
         const GROUND_MERGE_RANGE = 8;
+        // 装备栏里 type 为 wep 的东西，除了攻击力，也可能带跑得更快 / 生命上限加成
+        // （目前只有猫盾骑士剑有）。没装备/装备的不是武器就都是 0（速度倍率是 1）。
+        function huntEquippedWeapon() {
+            let w = gState.inv && gState.inv[gState.selectedSlot];
+            return (w && w.type === 'wep') ? w : null;
+        }
+        function weaponSpeedMul() { let w = huntEquippedWeapon(); return (w && w.spd) || 1; }
+        function weaponHpBonus() { let w = huntEquippedWeapon(); return (w && w.hp) || 0; }
+        function effectiveMaxHp() { return (gState.maxHp || 100) + weaponHpBonus(); }
 
         // ── 配方图鉴 ──
         // 一条配方都不预先告诉你。你把两样东西扔到一块儿、真合出来了，
@@ -15293,7 +15299,7 @@
                             new THREE.MeshLambertMaterial({ map: createProceduralTexture('gold_chest', up.main, up.detail) }));
                         ns.position.copy(ai.position);
                         ns.userData = { n: up.n, v: up.v, w: up.w, tex: up.tex, c: up.c, isItem: true, feeds: 0 };
-                        if (up.type) { ns.userData.type = up.type; ns.userData.dmg = up.dmg; }
+                        if (up.type) { ns.userData.type = up.type; ns.userData.dmg = up.dmg; ns.userData.spd = up.spd; ns.userData.hp = up.hp; }
                         scene.add(ns); groundItems.push(ns);
                         huntFindRecipe(rec.id);
                         huntMergeBoom(ns.position, up.v, up.n);
@@ -15464,7 +15470,7 @@
                 document.getElementById('time-txt').innerText = `${dh.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
             }
 
-            if (HUNT_TEST_GOD) { gState.hp = gState.maxHp; stamina = 100; }
+            if (HUNT_TEST_GOD) { gState.hp = effectiveMaxHp(); stamina = 100; }
 
             let cf = playerFloor();
             let pcx = Math.floor((camera.position.x + TILE / 2) / TILE), pcz = Math.floor((camera.position.z + TILE / 2) / TILE);
@@ -15550,10 +15556,10 @@
                 if (abilityActive > 0) { abilityActive -= dt; wMod = 1; }
             } else {
                 if (abilityTrigger && abilityCd <= 0) { abilityActive = 15.0; abilityCd = 40; }
-                if (abilityActive > 0) { abilityActive -= dt; gHpRegenAcc += 8 * dt; if (gHpRegenAcc >= 1) { gState.hp = Math.min(gState.maxHp, gState.hp + Math.floor(gHpRegenAcc)); gHpRegenAcc -= Math.floor(gHpRegenAcc); } updateHUD(); }
+                if (abilityActive > 0) { abilityActive -= dt; gHpRegenAcc += 8 * dt; if (gHpRegenAcc >= 1) { gState.hp = Math.min(effectiveMaxHp(), gState.hp + Math.floor(gHpRegenAcc)); gHpRegenAcc -= Math.floor(gHpRegenAcc); } updateHUD(); }
             }
 
-            let baseMoveSpeed = 42 * wMod * DAILY_MOD.speedMul * bondSpeedMul();
+            let baseMoveSpeed = 42 * wMod * DAILY_MOD.speedMul * bondSpeedMul() * weaponSpeedMul();
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); let side = new THREE.Vector3(-dir.z, 0, dir.x); let moveX = 0, moveZ = 0;
 
             let fwd = 0; let strafe = 0;
@@ -15575,7 +15581,7 @@
                     actionTimer += dt; document.getElementById('progress-bg').style.display = 'block';
                     let needed = actionTarget === 'med' ? 4 : 1.5; document.getElementById('progress-fill').style.width = (actionTimer / needed) * 100 + '%';
                     if (actionTimer >= needed) {
-                        if (actionTarget === 'med') gState.hp = Math.min(gState.maxHp, gState.hp + 40);
+                        if (actionTarget === 'med') gState.hp = Math.min(effectiveMaxHp(), gState.hp + 40);
                         if (actionTarget === 'time_stop') { gState.timeStop = 30.0; document.getElementById('time-stop-overlay').style.display = 'block'; }
                         let currentItem = gState.inv[gState.selectedSlot]; if (currentItem) { currentItem.uses--; if (currentItem.uses <= 0) gState.inv[gState.selectedSlot] = null; }
                         actionTimer = 0; actionTarget = null; document.getElementById('progress-bg').style.display = 'none'; updateHUD();
@@ -15665,7 +15671,7 @@
                     else if (activeObj.userData.isItem) {
                         expandInventory(); let emptyIdx = gState.inv.findIndex(function (item, idx) { return item === null && idx < gState.maxInv; });
                         if (emptyIdx !== -1) {
-                            gState.inv[emptyIdx] = { n: activeObj.userData.n, v: activeObj.userData.v, w: activeObj.userData.w, tex: activeObj.userData.tex, type: activeObj.userData.type, c: activeObj.userData.c, dmg: activeObj.userData.dmg, uses: activeObj.userData.uses, maxUses: activeObj.userData.maxUses };
+                            gState.inv[emptyIdx] = { n: activeObj.userData.n, v: activeObj.userData.v, w: activeObj.userData.w, tex: activeObj.userData.tex, type: activeObj.userData.type, c: activeObj.userData.c, dmg: activeObj.userData.dmg, spd: activeObj.userData.spd, hp: activeObj.userData.hp, uses: activeObj.userData.uses, maxUses: activeObj.userData.maxUses };
 
                             if (activeObj.userData.fromSignal || activeObj === gState.signal.mesh) {
                                 let recv = gState.inv.find(function (i) { return i && i.type === 'signal'; });
@@ -15768,7 +15774,7 @@
                         let dType = Math.floor(Math.random() * 3) + 1;
                         gState.debuff = { type: dType, timer: 20, cooldown: 40 };
                         if (dType === 3) gState.maxHp = 75; else gState.maxHp = 100;
-                        if (gState.hp > gState.maxHp) gState.hp = gState.maxHp;
+                        if (gState.hp > effectiveMaxHp()) gState.hp = effectiveMaxHp();
                         updateHUD();
 
                         let msg = dType === 1 ? "地图被干扰！" : (dType === 2 ? "体力加速流失！" : "生命上限受损！");
@@ -15832,8 +15838,8 @@
             pouchViewTick();
             document.getElementById('hp-txt').innerText = Math.floor(gState.hp);
             let hpMaxEl = document.getElementById('hp-max-txt');
-            if (hpMaxEl) hpMaxEl.innerText = gState.maxHp;
-            document.getElementById('health-fill').style.width = Math.max(0, Math.min(100, gState.hp / (gState.maxHp || 100) * 100)) + '%';
+            if (hpMaxEl) hpMaxEl.innerText = effectiveMaxHp();
+            document.getElementById('health-fill').style.width = Math.max(0, Math.min(100, gState.hp / (effectiveMaxHp() || 100) * 100)) + '%';
             let currentWeight = gState.inv.reduce(function (s, i) { return s + (i ? i.w : 0); }, 0);
             document.getElementById('weight-txt').innerText = currentWeight;
 
