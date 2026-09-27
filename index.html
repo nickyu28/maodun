@@ -1633,7 +1633,11 @@
 
         const NET_PREFIX = 'maodun-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
-        let NIGHT_MATCH_WAIT = 0;
+        // 这一整套匹配等待（matchPool/matchLeader/night-wait 那个浮层）早就写好了，
+        // 只是默认值一直是"跳过"（0），测试面板里的"惊魂夜：跳过匹配等待"开关反而是默认生效的
+        // 那一档——等于真玩家这么久以来进惊魂夜其实从没真的等过匹配，一直是秒配 AI。
+        // 改成 15 秒是把这功能真的打开，不是新写的。
+        let NIGHT_MATCH_WAIT = 15;
 
         function netJoinRoom(code) {
             code = (code || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
@@ -2247,6 +2251,8 @@
                 raceOnFinish(msg);
             } else if (msg.type === 'RACE_RESULT') {
                 raceOnResult(msg);
+            } else if (msg.type === 'MM_JOIN') {
+                mmOnJoin(msg);
             } else if (msg.type === 'NCHAR') {
                 netOnChar(msg);
             } else if (msg.type === 'NS_ME') {
@@ -2591,6 +2597,82 @@
                 showSysModal(cfg.title, '<div style="text-align:left; max-height:60vh; overflow-y:auto;">' + html + '</div>', [{ label: '知道了' }]);
             }, 400);
         }
+
+        // ── 通用匹配等待：给没组队直接点"开始"的人用——先等 15 秒看房间里还有没有
+        // 陌生人也想玩这个模式，凑到人就真联机，凑不到就跟以前一样自己配 AI。
+        // 参考的是惊魂夜本来就写好的那一套（matchPool/matchLeader），这里给超燃/
+        // 松饼大作战/竞速这几个共用一份通用版，不用各自再抄一遍。
+        const MM_WAIT = 15;
+        let mmPool = null;   // { mode, cap, entries: {id:true}, t0, timer, onResolve }
+        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速' };
+        // cap：这个模式满编要多少人——凑够了就不用傻等 15 秒，跟惊魂夜那套一样提前开局。
+        function mmStart(mode, cap, onResolve) {
+            if (mmPool) return;   // 已经在排队，别重复点
+            mmPool = { mode: mode, cap: cap || 99, entries: {}, t0: performance.now(), onResolve: onResolve };
+            mmPool.entries[gState.id] = true;
+            bc.postMessage({ type: 'MM_JOIN', target: '*', sender: gState.id, mode: mode });
+            mmRender();
+            mmPool.timer = setInterval(mmTick, 250);
+        }
+        function mmRender() {
+            if (!mmPool) return;
+            let left = Math.max(0, MM_WAIT - (performance.now() - mmPool.t0) / 1000);
+            let n = Object.keys(mmPool.entries).length;
+            showSysModal('匹配中 · ' + (MM_MODE_LABEL[mmPool.mode] || mmPool.mode),
+                '正在等真人一起玩（' + Math.ceil(left) + 's）——已经有 ' + n + ' 人。等不到就自动配 AI。',
+                [{ label: '取消', color: '#999', onClick: mmCancel }]);
+        }
+        function mmTick() {
+            if (!mmPool) return;
+            let left = MM_WAIT - (performance.now() - mmPool.t0) / 1000;
+            let modal = document.getElementById('sys-modal');
+            if (modal && !modal.classList.contains('hidden')) {
+                let el = document.getElementById('sys-modal-text');
+                if (el) {
+                    let n = Object.keys(mmPool.entries).length;
+                    el.innerText = '正在等真人一起玩（' + Math.ceil(Math.max(0, left)) + 's）——已经有 ' + n + ' 人。等不到就自动配 AI。';
+                }
+            }
+            if (left <= 0 || Object.keys(mmPool.entries).length >= mmPool.cap) mmFinish();
+        }
+        function mmOnJoin(m) {
+            if (!mmPool || m.mode !== mmPool.mode || m.sender === gState.id) return;
+            if (!mmPool.entries[m.sender]) {
+                mmPool.entries[m.sender] = true;
+                // 让刚发现我的这个人也知道我在——不然要是他先广播、我后开始排队，
+                // 我这边永远收不到他那条最早的 MM_JOIN。
+                bc.postMessage({ type: 'MM_JOIN', target: '*', sender: gState.id, mode: mmPool.mode });
+                if (Object.keys(mmPool.entries).length >= mmPool.cap) { mmFinish(); return; }
+                mmRender();
+            }
+        }
+        function mmCancel() {
+            if (!mmPool) return;
+            clearInterval(mmPool.timer);
+            document.getElementById('sys-modal').classList.add('hidden');
+            mmPool = null;
+        }
+        function mmFinish() {
+            if (!mmPool) return;
+            clearInterval(mmPool.timer);
+            document.getElementById('sys-modal').classList.add('hidden');
+            let ids = Object.keys(mmPool.entries).sort();
+            let onResolve = mmPool.onResolve;
+            mmPool = null;
+            onResolve(ids, ids[0] === gState.id);
+        }
+        // 匹配到了人但我不是"发起人"（ID 字典序不是最小）：真正的联机开局广播由发起人
+        // 那边去发，我这边等着接收就行；但发起人万一半路掉线/出错，不能让我卡死等一辈子，
+        // 多等几秒还没等到真的开局，就自己退回配 AI 单机玩。
+        function mmWaitForStart(checkStarted, onFallback) {
+            let waited = 0;
+            let iv = setInterval(function () {
+                waited += 0.5;
+                if (checkStarted()) { clearInterval(iv); return; }
+                if (waited >= 3) { clearInterval(iv); onFallback(); }
+            }, 500);
+        }
+
         function nav(id) {
             document.querySelectorAll('.screen').forEach(function (s) { s.classList.add('hidden'); });
             if (id !== 'none') { document.getElementById(id).classList.remove('hidden'); }
@@ -5027,6 +5109,13 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-27-matchmaking', date: '2026-09-27', title: '没组队直接开始，现在会先等 15 秒匹配真人', items: [
+                    '超燃（2v2/乱斗）、松饼大作战、竞速（单排）：以前没组队点"开始"是立刻配 AI；现在会先弹个可取消的倒计时，等 15 秒看房间里还有没有别人也想玩，凑够人数还会提前开始，凑不到才照旧配 AI。',
+                    '惊魂夜其实一直有这套（等真人/AI 补位），只是一直被一个测试开关默认关掉了，这次顺手打开——算是修复，不是新功能。',
+                    '寻宝队没做这个：它是常驻共享世界，不是一局一局配对的，"匹配"这个概念本身就不适用。监狱救援/躲避球/密室还没有真联机，这个也用不上。'
+                ]
+            },
             {
                 id: '2026-09-27-race-network', date: '2026-09-27', title: '竞速（单排）接上真联机——测试性质，可能有问题', items: [
                     '组队面板里确认过的真人现在会一起进同一条赛道（之前是各玩各的本地模拟），赛道、这轮加成事件都跟房主同步，能看见对方实时跑动、撞线名次也是真的。',
@@ -7993,13 +8082,31 @@
         // 之前是抓 roomList，房间里随便一个不相干的人也会被拉进 2v2。
         function blazeStartGo() {
             if (!gState.blazeChar) gState.blazeChar = 'bow';
-            let ids = [gState.id].concat(lobbyParty.slice(0, PARTY_CAP - 1));
-            let humans = ids.map(function (id) {
-                return { id: id, key: id === gState.id ? gState.blazeChar : (blazePeerChar[id] || 'bow') };
+            if (lobbyParty.length > 0) {
+                let ids = [gState.id].concat(lobbyParty.slice(0, PARTY_CAP - 1));
+                let humans = ids.map(function (id) {
+                    return { id: id, key: id === gState.id ? gState.blazeChar : (blazePeerChar[id] || 'bow') };
+                });
+                let plan = blazePlan(humans);
+                if (ids.length > 1) bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+                blazeBegin(plan, gState.id);
+                return;
+            }
+            // 没组队：先等 15 秒看房间里有没有陌生人也想打这个模式，凑到人就真联机
+            mmStart('blaze', 4, function (ids, iAmLeader) {
+                if (ids.length <= 1) { blazeBegin(blazePlan([{ id: gState.id, key: gState.blazeChar }]), gState.id); return; }
+                if (!iAmLeader) {
+                    mmWaitForStart(function () { return !!blaze; },
+                        function () { blazeBegin(blazePlan([{ id: gState.id, key: gState.blazeChar }]), gState.id); });
+                    return;
+                }
+                let humans = ids.map(function (id) {
+                    return { id: id, key: id === gState.id ? gState.blazeChar : (blazePeerChar[id] || 'bow') };
+                });
+                let plan = blazePlan(humans);
+                bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+                blazeBegin(plan, gState.id);
             });
-            let plan = blazePlan(humans);
-            if (ids.length > 1) bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
-            blazeBegin(plan, gState.id);
         }
         // 组队人数自动挑玩法：1 人乱斗单排，2 人乱斗双人（跟组队的那个人一队），
         // 3/4 人开 2v2（3 人的话 blazePlan 自动补一个 AI 凑成 4）。
@@ -8178,29 +8285,60 @@
             blazeBegin(plan, gState.id, true, true);
         }
 
-        function blazeFfaStartGo(duo) {
-            if (!gState.blazeChar) gState.blazeChar = 'bow';
+        // 角色轮流发：整份名单洗一次牌依次发，发完再洗一次——以前是纯随机，
+        // 16 个人里能刷出五六个控制猫盾，从头被控到尾；这样每种猫盾最多比别人多出现一次。
+        function blazeFfaBuildSolo(realIds) {
             let n = BLAZE.ffaCount;
             let plan = [];
-            // duo：相邻两个位置一队，正好 8 队 ×2 人
-            for (let i = 0; i < n; i++) plan.push({ team: duo ? Math.floor(i / 2) : i, id: null, key: null });
-            plan[0].id = gState.id; plan[0].key = gState.blazeChar;
-            // 双人的话，组队面板里那个人（真人）顶替 1 号位，跟你一队；
-            // 不是随便发个 AI 上去凑数
-            let partnerId = duo ? lobbyParty[0] : null;
-            if (partnerId) { plan[1].id = partnerId; plan[1].key = blazePeerChar[partnerId] || 'bow'; }
-            // 角色轮流发：整份名单洗一次牌依次发，发完再洗一次。
-            // 以前是纯随机，16 个人里能刷出五六个控制猫盾，从头被控到尾。
-            // 这样每种猫盾最多比别人多出现一次。
+            for (let i = 0; i < n; i++) plan.push({ team: i, id: null, key: null });
+            realIds.slice(0, n).forEach(function (id, i) {
+                plan[i].id = id;
+                plan[i].key = id === gState.id ? gState.blazeChar : (blazePeerChar[id] || 'bow');
+            });
             let bag = [];
-            for (let i = 1; i < n; i++) {
-                if (plan[i].id) continue;   // 已经是真人队友了，不用发 AI 角色
+            for (let i = 0; i < n; i++) {
+                if (plan[i].id) continue;
                 if (!bag.length) bag = blazeShuffle(BLAZE_ORDER.slice());
                 plan[i].key = bag.shift();
             }
-            if (partnerId) bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id, ffa: true, duo: !!duo });
-            blazeBegin(plan, gState.id, true);
-            blaze.ffaDuo = !!duo;
+            return plan;
+        }
+        function blazeFfaStartGo(duo) {
+            if (!gState.blazeChar) gState.blazeChar = 'bow';
+            if (duo) {
+                let n = BLAZE.ffaCount;
+                let plan = [];
+                // duo：相邻两个位置一队，正好 8 队 ×2 人
+                for (let i = 0; i < n; i++) plan.push({ team: Math.floor(i / 2), id: null, key: null });
+                plan[0].id = gState.id; plan[0].key = gState.blazeChar;
+                // 组队面板里那个人（真人）顶替 1 号位，跟你一队；不是随便发个 AI 上去凑数
+                let partnerId = lobbyParty[0];
+                if (partnerId) { plan[1].id = partnerId; plan[1].key = blazePeerChar[partnerId] || 'bow'; }
+                let bag = [];
+                for (let i = 1; i < n; i++) {
+                    if (plan[i].id) continue;
+                    if (!bag.length) bag = blazeShuffle(BLAZE_ORDER.slice());
+                    plan[i].key = bag.shift();
+                }
+                if (partnerId) bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id, ffa: true, duo: true });
+                blazeBegin(plan, gState.id, true);
+                blaze.ffaDuo = true;
+                return;
+            }
+            // 单排乱斗，没组队：这是没组队时"开始游戏！"按钮真正会走到的路——先等 15 秒
+            // 看房间里有没有陌生人也想上乱斗，凑到人就真联机，凑不到照旧自己配 AI。
+            mmStart('blazeffa', BLAZE.ffaCount, function (ids, iAmLeader) {
+                if (ids.length <= 1) { blazeBegin(blazeFfaBuildSolo([gState.id]), gState.id, true); blaze.ffaDuo = false; return; }
+                if (!iAmLeader) {
+                    mmWaitForStart(function () { return !!blaze; },
+                        function () { blazeBegin(blazeFfaBuildSolo([gState.id]), gState.id, true); blaze.ffaDuo = false; });
+                    return;
+                }
+                let plan = blazeFfaBuildSolo(ids);
+                bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id, ffa: true, duo: false });
+                blazeBegin(plan, gState.id, true);
+                blaze.ffaDuo = false;
+            });
         }
 
         function blazeBegin(plan, hostId, ffa, tomb, law) {
@@ -17937,11 +18075,27 @@
             return plan;
         }
         function raceStartGo() {
-            let ids = [gState.id].concat(lobbyParty.slice(0, RACE.count - 1));
-            let humans = ids.map(function (id) { return { id: id }; });
-            let plan = racePlan(humans);
-            if (ids.length > 1) bc.postMessage({ type: 'RACE_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
-            raceStart(false, plan, gState.id);
+            if (lobbyParty.length > 0) {
+                let ids = [gState.id].concat(lobbyParty.slice(0, RACE.count - 1));
+                let humans = ids.map(function (id) { return { id: id }; });
+                let plan = racePlan(humans);
+                bc.postMessage({ type: 'RACE_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+                raceStart(false, plan, gState.id);
+                return;
+            }
+            // 没组队：先等 15 秒看房间里有没有陌生人也想跑，凑到人就真联机
+            mmStart('race', RACE.count, function (ids, iAmLeader) {
+                if (ids.length <= 1) { raceStart(false, racePlan([{ id: gState.id }]), gState.id); return; }
+                if (!iAmLeader) {
+                    mmWaitForStart(function () { return !!race; },
+                        function () { raceStart(false, racePlan([{ id: gState.id }]), gState.id); });
+                    return;
+                }
+                let humans = ids.map(function (id) { return { id: id }; });
+                let plan = racePlan(humans);
+                bc.postMessage({ type: 'RACE_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+                raceStart(false, plan, gState.id);
+            });
         }
         function raceOnStart(m) {
             if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
@@ -20956,7 +21110,19 @@
         function cakeStartGo() {
             let others = lobbyParty.slice(0, CAKE.playerCount - 1);
             if (!others.length) {
-                cakeBegin([{ id: gState.id }], gState.id, Math.floor(Math.random() * 1000000));
+                // 没组队：先等 15 秒看房间里有没有陌生人也想玩，凑到人就真联机
+                mmStart('cake', CAKE.playerCount, function (ids, iAmLeader) {
+                    if (ids.length <= 1) { cakeBegin([{ id: gState.id }], gState.id, Math.floor(Math.random() * 1000000)); return; }
+                    if (!iAmLeader) {
+                        mmWaitForStart(function () { return !!cake; },
+                            function () { cakeBegin([{ id: gState.id }], gState.id, Math.floor(Math.random() * 1000000)); });
+                        return;
+                    }
+                    let plan = ids.map(function (id) { return { id: id }; });
+                    let seed = Math.floor(Math.random() * 1000000);
+                    bc.postMessage({ type: 'CK_START', target: '*', sender: gState.id, plan: plan, host: gState.id, seed: seed });
+                    cakeBegin(plan, gState.id, seed);
+                });
                 return;
             }
             let reqId = 'ck' + Date.now() + Math.floor(Math.random() * 1000);
