@@ -4534,6 +4534,12 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-27-nightlyfix', date: '2026-09-27', title: '修复超燃"奇遇"卡和松饼大作战护盾失效', items: [
+                    '超燃乱斗商店/金箱/任选/AI 买到"奇遇"卡时不再是白抽——现在会正确随机重抽一张效果 ×1.5。',
+                    '松饼大作战的"护盾"道具现在真的能防止被拍出局，不再是摆设（AI 也因此敢在护盾期间正常走位了）。'
+                ]
+            },
+            {
                 id: '2026-09-24-mcoin', date: '2026-09-24', title: '货币统一成猫盾币 + 皮肤系统 + 组队联机实验', items: [
                     '寻宝队/惊魂夜/超燃各自的金币，还有商店宠物/表情用的通用币，合并成一份"猫盾币"，全模式通用（寻宝队自己的钱还是单独一套，不受影响）。',
                     '因为货币结构变了，这次更新会把所有人的存档（寻宝队的钱、猫盾币、角色解锁）清零重来——现在还没人正式在玩，直接清干净比小心翼翼换算更省事。',
@@ -5792,8 +5798,14 @@
             if (!blaze || !blaze.ffa || (blaze.ffaFreeN || 0) <= 0) return;
             blaze.ffaFreeN--;
             blaze.ffaFree = null;
-            blazeApplyPerk(blaze.me, id);
-            blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: id });
+            if (id === 'lucky') {
+                let rolled = blazeRollLucky(blaze.me);
+                blazeTakeLucky(blaze.me, rolled);
+                blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: 'lucky', r: rolled });
+            } else {
+                blazeApplyPerk(blaze.me, id);
+                blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: id });
+            }
             blazeFfaCardRender();
         }
 
@@ -5811,8 +5823,14 @@
             blaze.ffaMoney -= BLAZE.ffaCustomPrice;
             blaze.ffaCustom = false;
             blaze.ffaDraw = null;
-            blazeApplyPerk(blaze.me, id);
-            blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: id });
+            if (id === 'lucky') {
+                let rolled = blazeRollLucky(blaze.me);
+                blazeTakeLucky(blaze.me, rolled);
+                blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: 'lucky', r: rolled });
+            } else {
+                blazeApplyPerk(blaze.me, id);
+                blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: id });
+            }
             blazeFfaCardRender();
         }
 
@@ -5981,8 +5999,14 @@
             let price = blazeFfaPrice(o);
             if (blaze.ffaMoney < price) { blazeFlash('钱不够（要 ' + price + '）'); return; }
             blaze.ffaMoney -= price;
-            blazeApplyPerk(blaze.me, id);
-            blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: id });
+            if (id === 'lucky') {
+                let rolled = blazeRollLucky(blaze.me);
+                blazeTakeLucky(blaze.me, rolled);
+                blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: 'lucky', r: rolled });
+            } else {
+                blazeApplyPerk(blaze.me, id);
+                blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: id });
+            }
             // 买完整架刷新，并且换成另一种卡
             blaze.ffaShopKind = (blazeFfaKind() === 'func') ? 'stat' : 'func';
             blaze.ffaDraw = null;
@@ -6127,8 +6151,14 @@
                 });
                 if (!best) return;
                 a.money -= blazeFfaPrice(best);
-                blazeApplyPerk(a, best.id);
-                blazeNetEv({ ev: 'perk', i: a.idx, id: best.id });
+                if (best.id === 'lucky') {
+                    let rolled = blazeRollLucky(a);
+                    blazeTakeLucky(a, rolled);
+                    blazeNetEv({ ev: 'perk', i: a.idx, id: 'lucky', r: rolled });
+                } else {
+                    blazeApplyPerk(a, best.id);
+                    blazeNetEv({ ev: 'perk', i: a.idx, id: best.id });
+                }
             });
         }
 
@@ -19480,6 +19510,7 @@
                     let dx = (a.p.x - b.p.x) / (d || 1), dz = (a.p.z - b.p.z) / (d || 1);
                     let fx = Math.sin(b.facing || 0), fz = Math.cos(b.facing || 0);
                     if (dx * fx + dz * fz < coneCos) return;
+                    if (a.shieldT > 0) return;
                     cakeTagOut(a, b);
                 });
             });
