@@ -2640,10 +2640,17 @@
         function mmLeader() {
             let ids = Object.keys(mmRoomPool);
             if (!ids.length) return gState.id;
+            // 每个人对"别人还剩多少"的了解都是上一次心跳时的快照（心跳 1.2 秒一次，
+            // 房间里超过 5 秒没消息才会被清出池子——最坏也就差这么多），只有自己这份
+            // 是随时最新的——這一步差距一旦比桶粒度还大，两边各自算出来的"谁最少"就
+            // 可能不一样，导致两边同时以为自己该发起，都各自广播了一次开局。桶跟"多久
+            // 没消息就算掉线"用同一个 5 秒，只要大家剩的时间差不多，就统一交给 ID 字典序
+            // 兜底——两边用的是完全一样的字符串，肯定算出同一个人，不会因为心跳没到齐就
+            // 各算各的。
             ids.sort(function (a, b) {
                 let la = mmRoomPool[a].left, lb = mmRoomPool[b].left;
-                la = (typeof la === 'number') ? Math.round(la * 2) : 99999;
-                lb = (typeof lb === 'number') ? Math.round(lb * 2) : 99999;
+                la = (typeof la === 'number') ? Math.round(la / 5) : 99999;
+                lb = (typeof lb === 'number') ? Math.round(lb / 5) : 99999;
                 if (la !== lb) return la - lb;
                 return a < b ? -1 : (a > b ? 1 : 0);
             });
@@ -2672,10 +2679,14 @@
                     dispName(id) + (id === gState.id ? '（你）' : '') + '</div>';
             }).join('') || '<div style="color:#888;">还没人加入</div>';
             let full = n >= mmActive.cap;
+            // 兜底交给"发起人的心跳掉线了"来判断（roomSync 每次心跳都会把 5 秒没
+            // 消息的人清出 mmRoomPool），不能光看自己这边的钟走到多少——发起人其实
+            // 好好地活着、消息就是差那零点几秒还没到，自己这边计时一到就抢着替他
+            // 广播开局，两边各开一次，虽然最后会被真消息盖过去，但会闪一下、还会
+            // 白白多发一条错的开局广播。只要发起人还在 mmRoomPool 里（没被判定掉线），
+            // 就说明他还没消失，稳稳等他自己发，而不是抢跑。
             if (mmLeader() === gState.id) {
                 if (full || shown <= 0) mmGo();
-            } else if (elapsed >= MM_WAIT + 2) {
-                mmGo();   // 保险：发起人万一半路出问题，别的人也别卡死等一辈子
             }
         }
         function mmCancel() {
@@ -2693,8 +2704,13 @@
             if (ids.indexOf(gState.id) < 0) ids.unshift(gState.id);
             mmActive = null;
             document.getElementById('night-wait').classList.add('hidden');
-            bc.postMessage(roomSelfMsg());
+            // 先让 onResolve 把真正的开局广播（BZ_START 之类）发出去，"我不等了"这条
+            // 心跳最后再发——顺序不能反，反了的话，另一个人如果刚好也卡在自己的
+            // 截止点上，会先收到"发起人从池子里消失了"，赶在真开局消息到之前，
+            // 误以为发起人挂了，自己抢着广播了一次（等真消息到了才被盖过去，但已经
+            // 白白多开了一次局，人眼能看到画面闪一下）。
             onResolve(ids);
+            bc.postMessage(roomSelfMsg());
         }
         // 大厅那个浮层的"取消"按钮惊魂夜/这套通用匹配共用，谁在等就取消谁。
         function nightOrMmCancel() {
@@ -2984,10 +3000,14 @@
         function matchLeader() {
             let ids = Object.keys(matchPool);
             if (!ids.length) return gState.id;
+            // 跟通用匹配 mmLeader() 一样的道理：别人剩多少时间对我来说只是上一次心跳的
+            // 快照（最坏能差到 5 秒），桶跟"多久没消息算掉线"用同一个 5 秒，让大家在
+            // "差不多"的情况下都统一交给 ID 字典序兜底，不然两边可能各自以为自己剩得
+            // 最少，都抢着广播。
             ids.sort(function (a, b) {
                 let la = matchPool[a].left, lb = matchPool[b].left;
-                la = (typeof la === 'number') ? Math.round(la * 2) : 99999;
-                lb = (typeof lb === 'number') ? Math.round(lb * 2) : 99999;
+                la = (typeof la === 'number') ? Math.round(la / 5) : 99999;
+                lb = (typeof lb === 'number') ? Math.round(lb / 5) : 99999;
                 if (la !== lb) return la - lb;
                 return a < b ? -1 : (a > b ? 1 : 0);
             });
@@ -3038,10 +3058,13 @@
             document.getElementById('night-wait-list').innerHTML = rows.join('');
 
             let full = (hn >= 1 && sn >= 4);
+            // 跟通用匹配 mmTick() 一样的道理：兜底要看发起人是不是真掉线（心跳 5 秒
+            // 没消息才会被清出 matchPool），不能只看自己这边的钟——发起人明明还在，
+            // 只是消息还没到，自己这边一到点就抢着广播开局，会跟发起人真正的广播
+            // 撞在一起，各开一次局，虽然最后真消息会盖过去，但会白白闪一下、多发
+            // 一条错的开局。
             if (matchLeader() === gState.id) {
                 if (full || shown <= 0) nightMatchGo();
-            } else if (elapsed >= NIGHT_MATCH_WAIT + 2) {
-                nightMatchGo();
             }
         }
 
@@ -5138,6 +5161,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-27-matchmaking-race', date: '2026-09-27', title: '真机测出来的匹配 bug：两人几乎同时匹配到会各开一次局', items: [
+                    '不是靠脑内推演，是真的开了两个共享同一个浏览器 profile 的无头浏览器分页，跑真实代码互相联机测出来的：两个人几乎同时等到匹配成功时，发起人在广播"真开局"之前，会先发一条"我不等了"的心跳——另一个人如果刚好也卡在自己的截止点上，收到这条心跳后会以为发起人消失了，赶在真开局消息到之前抢先自己广播了一次开局（虽然几毫秒后真消息一到就被盖过去，但画面会白白闪一下、多开一次局）。改成先广播真开局、"我不等了"的心跳放最后发，顺序反过来就不会抢跑了。用两台、三台模拟设备各跑了十几次没再复现。',
+                    '顺手把"猜谁该发起"的算法也改健壮了一点：以前只要两人剩余时间差 0.5 秒以上就各自按数字算谁该发，可对方剩多少时间只是上一次心跳的快照（可能已经过时几秒），数字稍微一偏两边就可能算出不同答案。现在只要差距在 5 秒以内，统一交给 ID 字典序说了算——两边看到的 ID 字符串永远一样，不会算岔。'
+                ]
+            },
             {
                 id: '2026-09-27-matchmaking-fix', date: '2026-09-27', title: '修了一个真联机匹配的 bug：有人可能卡在选技能界面', items: [
                     '两人同时匹配到同一局时，收到对面开局广播的那个人如果自己的匹配倒计时没停，几秒后会自己再触发一次，把刚建好的对局重来一遍——人正好卡在选技能选一半的画面上就动不了了。用两个模拟客户端头对头测过（收到对面开局广播时把自己这边的匹配计时一起停掉），确认不会再出现。',
