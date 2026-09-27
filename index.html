@@ -944,7 +944,7 @@
                 赛道每轮随机拼，背不了图。每轮 <b>三选一个技能</b>，另外 <b>70% 概率再摇到一个加成</b>，都只管这一轮。<br>路上有道具箱，<b>开出什么完全看运气</b>。
             </div>
             <div style="display:flex; gap:6px;">
-                <button onclick="raceStart()" style="flex:1; margin:0; background:#00897b; color:#fff; border:none; padding:10px 0; font-size:15px;">开跑</button>
+                <button onclick="raceStartGo()" style="flex:1; margin:0; background:#00897b; color:#fff; border:none; padding:10px 0; font-size:15px;">开跑</button>
                 <button onclick="raceDuoStart()" style="flex:1; margin:0; background:#00695c; color:#fff; border:none; padding:10px 0; font-size:15px;">双人</button>
             </div>
             <div style="font-size:11px; color:#00796b; margin:4px 0 0;">双人：8 队 16 人，两人一队，每轮按名次给分（跑得越靠前分越高），两人分数相加，垫底的队伍淘汰。</div>
@@ -1944,7 +1944,7 @@
             if (m === 'hunt') requestStartGame();
             else if (m === 'night') enterNightMatch('survivor');
             else if (m === 'blaze') blazeUnifiedStart();
-            else if (m === 'race') raceStart();
+            else if (m === 'race') raceStartGo();
             else if (m === 'jail') jailBegin();
             else if (m === 'dodge') dodgeBegin(false);
             else if (m === 'escape') escapeBegin();
@@ -2237,6 +2237,16 @@
                 blazeOnWorld(msg);
             } else if (msg.type === 'BZ_EV') {
                 blazeOnEv(msg);
+            } else if (msg.type === 'RACE_START') {
+                if (msg.sender !== gState.id) raceOnStart(msg);
+            } else if (msg.type === 'RACE_ROUND') {
+                raceOnRound(msg);
+            } else if (msg.type === 'RACE_ME') {
+                raceOnMe(msg);
+            } else if (msg.type === 'RACE_FINISH') {
+                raceOnFinish(msg);
+            } else if (msg.type === 'RACE_RESULT') {
+                raceOnResult(msg);
             } else if (msg.type === 'NCHAR') {
                 netOnChar(msg);
             } else if (msg.type === 'NS_ME') {
@@ -5017,6 +5027,13 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-27-race-network', date: '2026-09-27', title: '竞速（单排）接上真联机——测试性质，可能有问题', items: [
+                    '组队面板里确认过的真人现在会一起进同一条赛道（之前是各玩各的本地模拟），赛道、这轮加成事件都跟房主同步，能看见对方实时跑动、撞线名次也是真的。',
+                    '双人（团队）模式这次没动，还是纯本地——跨设备配对是另一块工程。',
+                    '这块因为环境限制没法在真实两台设备上测过，如果碰到跟朋友一起跑赛道时卡住/看不见对方/名次不对之类的问题，麻烦告诉我。'
+                ]
+            },
             {
                 id: '2026-09-27-mode-intro', date: '2026-09-27', title: '8 个模式第一次进都会弹一遍完整规则', items: [
                     '之前只有大厅选模式那块面板写着规则，很多人开局前不细看直接点开始。现在惊魂夜/超燃/竞速/监狱救援/躲避球/密室/猫盾乐园/松饼大作战这 8 个模式，第一次真正进去都会弹一次完整规则，跟大厅面板内容一样，不用来回切screen 找。'
@@ -16783,9 +16800,9 @@
             race.crumbles = []; race.lifts = []; race.checkpoints = []; race.savePads = []; race.boxes = [];
         }
 
-        function raceBuildTrack(nSeg) {
+        function raceBuildTrack(nSeg, presetSegs) {
             raceClearTrack();
-            let segs = racePickSegs(nSeg);
+            let segs = presetSegs || racePickSegs(nSeg);
             race.boxes = [];
             race.segs = segs;
             let z = 0;
@@ -17136,6 +17153,21 @@
         function raceTickRacer(r, dt) {
             if (r.finished || r.out) return;
 
+            // 联机里别人的真身：不在本机模拟物理（没有对方的按键输入），
+            // 只朝网络位置平滑靠过去；这具身体的终点判定/淘汰都由对方自己那台机器
+            // 检测后广播过来（raceOnFinish），不靠这具本地假身体自己撞线。
+            if (r.netId && r.netId !== gState.id) {
+                if (r.target) {
+                    let dx = r.target.x - r.p.x, dy = (r.target.y || 0) - r.p.y, dz = r.target.z - r.p.z;
+                    let k = Math.min(1, dt * 12);
+                    // 合成一个"速度"喂给外层的走路动画/朝向计算（外层是按 r.vel 算腿摆动和转身的），
+                    // 不然联机对手的身体会看起来在原地滑步，不会转身、也不会摆手摆腿。
+                    r.vel.set(dx * k / dt, dy * k / dt, dz * k / dt);
+                    r.p.x += dx * k; r.p.y += dy * k; r.p.z += dz * k;
+                }
+                return;
+            }
+
             if (r.respawnT > 0) {
                 r.respawnT -= dt;
                 r.mesh.visible = false;
@@ -17223,6 +17255,9 @@
                 r.finished = true; r.time = race.clock;
                 race.finishOrder.push(r);
                 r.place = race.finishOrder.length;
+                // 联机时我自己撞线得广播出去——对面那具"我"的假身体是靠网络位置摆着的，
+                // 不会自己触发这段撞线判定，得靠这条消息让大家的本地状态都知道我冲线了。
+                if (race.net && r.isPlayer) bc.postMessage({ type: 'RACE_FINISH', target: '*', sender: gState.id, time: r.time });
                 if (r.isPlayer) blazeFlash('第 ' + r.place + ' 名冲线！' + r.time.toFixed(2) + 's');
                 else if (race.finishOrder.length <= 3) blazeFlash(r.name + ' 第 ' + r.place + ' 名冲线');
                 if (!r.isPlayer) {
@@ -17439,17 +17474,33 @@
         }
 
         // ── 一轮的流程：选卡(暂缺) → 3 秒准备 → 跑 → 结算淘汰 ──
+        // 联机时赛道是随机拼的，各自摇一次就会摇出不一样的赛道——非房主这一轮不自己
+        // 摇，等房主摇完广播（RACE_ROUND）再照着建，两边看到的赛道保证一样。
         function raceStartRound() {
             let idx = race.round;
+            if (race.net && race.host !== gState.id) {
+                race.phase = 'waitRound';   // 等 raceOnRound 收到房主这一轮的赛道数据
+                return;
+            }
             let segLenArr = race.duo ? RACE_DUO.segLen : RACE.segLen;
-            raceBuildTrack(segLenArr[Math.min(idx, segLenArr.length - 1)]);
+            let eventId = race.round === 0 ? 'none'
+                : RACE_EVENTS[1 + Math.floor(Math.random() * (RACE_EVENTS.length - 1))].id;
+            raceBuildTrack(segLenArr[Math.min(idx, segLenArr.length - 1)], null);
+            if (race.net) bc.postMessage({ type: 'RACE_ROUND', target: '*', sender: gState.id, round: idx, segs: race.segs, event: eventId });
+            raceApplyRoundCommon(eventId);
+        }
+        function raceOnRound(m) {
+            if (!race || !race.net || race.host === gState.id) return;
+            if (m.round !== race.round) return;   // 不是当前这一轮的广播（旧消息/顺序问题），忽略
+            raceBuildTrack(0, m.segs);
+            raceApplyRoundCommon(m.event);
+        }
+        function raceApplyRoundCommon(eventId) {
+            race.event = eventId;
             raceLineUp();
             camera.rotation.set(-0.22, Math.PI, 0);   // 赛道往 +Z 铺，开局得面朝它，并且略微俯视
             race.finishOrder = [];
             race.clock = 0;
-            // 本轮事件：第一轮永远风平浪静，让人先熟悉一下
-            race.event = race.round === 0 ? 'none'
-                : RACE_EVENTS[1 + Math.floor(Math.random() * (RACE_EVENTS.length - 1))].id;
             // 每轮两件事：技能你自己三选一，buff 各人 70% 概率单独摇。
             // 两样都只管这一轮，下一轮重来。
             race.racers.forEach(function (r) {
@@ -17530,6 +17581,16 @@
             let next = RACE.ladder[race.round + 1] || 1;
             let cut = order.slice(next);
             cut.forEach(function (r) { r.out = true; r.mesh.visible = false; });
+            let isChampionRound = next <= 1 || race.round + 1 >= RACE.ladder.length;
+            // 联机时房主是唯一算数的结果来源——各自本地摇的 AI 分身跑出来的名次可能不一样，
+            // 只广播真人的淘汰名单，对面收到后照着标记，不用重新算一遍。
+            if (race.net && race.host === gState.id) {
+                bc.postMessage({
+                    type: 'RACE_RESULT', target: '*', sender: gState.id, round: race.round,
+                    outIds: cut.filter(function (r) { return r.netId; }).map(function (r) { return r.netId; }),
+                    champion: isChampionRound
+                });
+            }
 
             // 记录：这一轮跑完的时间，按段数分栏
             let me = race.racers[0];
@@ -17720,6 +17781,7 @@
             let now = performance.now();
             let dt = Math.min(0.05, (now - race.last) / 1000);
             race.last = now;
+            raceNetTick(dt);
 
             if (race.phase === 'pick') {
                 if (!RACE_TEST_NO_PICK_TIMER) race.pickT -= dt;
@@ -17740,12 +17802,16 @@
                 raceBoxTick(dt);
                 race.racers.forEach(function (r) { raceTickRacer(r, dt); });
                 raceSeparate(dt);
-                let alive = race.racers.filter(function (r) { return !r.out; });
-                if (race.duo) {
-                    if (race.finishOrder.length >= alive.length || race.clock > RACE.roundLimit) raceRoundOverDuo();
-                } else {
-                    let need = RACE.ladder[race.round + 1] || 1;
-                    if (race.finishOrder.length >= Math.min(need, alive.length) || race.clock > RACE.roundLimit) raceRoundOver();
+                // 联机时只有房主判定"这一轮结束了没"——非房主自己那份 finishOrder 可能
+                // 因为网络延迟不完整（对面的撞线消息还没到），提前判定会跟房主结果对不上。
+                if (!race.net || race.host === gState.id) {
+                    let alive = race.racers.filter(function (r) { return !r.out; });
+                    if (race.duo) {
+                        if (race.finishOrder.length >= alive.length || race.clock > RACE.roundLimit) raceRoundOverDuo();
+                    } else {
+                        let need = RACE.ladder[race.round + 1] || 1;
+                        if (race.finishOrder.length >= Math.min(need, alive.length) || race.clock > RACE.roundLimit) raceRoundOver();
+                    }
                 }
             }
 
@@ -17861,7 +17927,79 @@
         // ── 进出 ──
         function raceDuoStart() { raceStart(true); }
 
-        function raceStart(duo) {
+        // 单排竞速真联机：跟超燃一个套路——组队面板里确认过的人（lobbyParty）+ 自己
+        // 组成真人名单，剩下的位置照旧用 AI 填满 16 人。只有单排（raceStartGo）联机，
+        // 双人（raceDuoStart）暂时还是纯本地，双人的跨设备配对是另一块工程，先不做。
+        function racePlan(humans) {
+            let plan = [];
+            for (let i = 0; i < RACE.count; i++) plan.push({ id: null });
+            humans.slice(0, RACE.count).forEach(function (h, i) { plan[i].id = h.id; });
+            return plan;
+        }
+        function raceStartGo() {
+            let ids = [gState.id].concat(lobbyParty.slice(0, RACE.count - 1));
+            let humans = ids.map(function (id) { return { id: id }; });
+            let plan = racePlan(humans);
+            if (ids.length > 1) bc.postMessage({ type: 'RACE_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+            raceStart(false, plan, gState.id);
+        }
+        function raceOnStart(m) {
+            if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            if (race) { if (race.raf) cancelAnimationFrame(race.raf); race = null; }
+            raceStart(!!m.duo, m.plan, m.host);
+        }
+        function raceRacerByNetId(id) { return race ? race.racers.filter(function (r) { return r.netId === id; })[0] : null; }
+        // 15Hz 广播自己的位置，跟大厅/超燃一个频率——太快占带宽，太慢对面看着会一卡一卡。
+        function raceNetTick(dt) {
+            if (!race || !race.net) return;
+            race.sendSelf -= dt;
+            if (race.sendSelf > 0) return;
+            race.sendSelf = 1 / 15;
+            let me = race.racers[0];
+            bc.postMessage({
+                type: 'RACE_ME', target: '*', sender: gState.id,
+                x: Math.round(me.p.x), y: Math.round(me.p.y), z: Math.round(me.p.z)
+            });
+        }
+        function raceOnMe(m) {
+            if (!race || m.sender === gState.id) return;
+            let r = raceRacerByNetId(m.sender);
+            if (!r) return;
+            r.target = { x: m.x, y: m.y, z: m.z };
+        }
+        // 对面自己检测到撞线了，广播过来——本机这具对面的假身体不会自己触发终点判定。
+        function raceOnFinish(m) {
+            if (!race || m.sender === gState.id) return;
+            let r = raceRacerByNetId(m.sender);
+            if (!r || r.finished || r.out) return;
+            r.finished = true; r.time = m.time;
+            race.finishOrder.push(r);
+            r.place = race.finishOrder.length;
+        }
+        // 房主结算这一轮谁淘汰、谁进下一轮，广播出来——非房主不自己算，
+        // 各自本地摇的 AI 分身跑出来的名次可能不一样，只有房主这份是数的。
+        function raceOnResult(m) {
+            if (!race || !race.net || race.host === gState.id) return;
+            if (m.round !== race.round) return;
+            race.phase = 'result';   // 跟 raceRoundOver() 一样先停住本地这具身体的 tick，不然结算modal开着人还在场上晃
+            (m.outIds || []).forEach(function (id) {
+                let r = raceRacerByNetId(id); if (r) { r.out = true; r.mesh.visible = false; }
+            });
+            let me = race.racers[0];
+            // 非房主自己走 raceRoundOver() 那条本地路径（已经被 host-only 的判定挡住了），
+            // 记录榜的提交得在这单独补一次，不然联机跑分永远进不了自己的榜。
+            if (me.finished) raceSubmitRecord(race.round + 1, me.time);
+            let title = me.out ? '你被淘汰了' : ('第 ' + (race.round + 1) + ' 轮结束');
+            race.round++;   // 跟房主的 raceAfterResult() 保持一致，不然下一轮 raceOnRound 的轮次号对不上
+            let ended = me.out || m.champion;
+            showSysModal(title,
+                m.champion ? '恭喜跑完全部轮次！' : (me.out ? '这次先到这——回大厅再来一把。' : '房主结算完了，点继续进下一轮。'),
+                [ended
+                    ? { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } }
+                    : { label: '继续', color: '#5cb85c', onClick: function () { race.phase = 'waitRound'; } }]);
+        }
+
+        function raceStart(duo, plan, hostId) {
             showModeIntroIfFirstTime('race');
             ensureScene();
             nav('none');
@@ -17877,9 +18015,23 @@
                 round: 0, phase: 'ready', wait: RACE.readyT, clock: 0, over: false,
                 racers: [], meshes: [], ground: [], spinners: [], sweeps: [], crumbles: [], lifts: [],
                 checkpoints: [], finishOrder: [], segs: [], segSeen: {}, fx: [], savePads: [], boxes: [], draw: null, event: 'none',
-                last: performance.now(), raf: null, finishZ: 0
+                last: performance.now(), raf: null, finishZ: 0,
+                net: plan ? plan.some(function (q) { return q.id && q.id !== gState.id; }) : false,
+                host: hostId || gState.id, sendSelf: 0
             };
-            for (let i = 0; i < RACE.count; i++) race.racers.push(raceMakeRacer(i, i === 0));
+            if (plan) {
+                // 联机：其它地方到处硬编码 race.racers[0] 就是"我"，所以不管 plan 里
+                // 我排第几个，本地数组永远把我摆在 0 号，其他真人跟着排，AI（没有 id）照旧垫后。
+                let mine = plan.filter(function (q) { return q.id === gState.id; })[0] || { id: gState.id };
+                let others = plan.filter(function (q) { return q !== mine; });
+                [mine].concat(others).forEach(function (q, i) {
+                    let r = raceMakeRacer(i, q.id === gState.id);
+                    r.netId = q.id || null;
+                    race.racers.push(r);
+                });
+            } else {
+                for (let i = 0; i < RACE.count; i++) race.racers.push(raceMakeRacer(i, i === 0));
+            }
             race.duo = !!duo;
             if (duo) {
                 // 相邻两个编号配一队：0 号是玩家，1 号就是玩家的队友
