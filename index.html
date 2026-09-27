@@ -2536,6 +2536,15 @@
             ]);
         }
 
+        // requestPointerLock() 在现代浏览器里返回一个 Promise，reject 是异步的——
+        // 同步的 try/catch 根本挡不住，之前全仓库 13 处调用都是那个写法，随手就能在
+        // 控制台炸出一条 Uncaught (in promise) 报错。统一走这一个函数，reject 了就吞掉。
+        function safeLockPointer() {
+            try {
+                let p = document.body.requestPointerLock();
+                if (p && p.catch) p.catch(function () { });
+            } catch (e) { }
+        }
         function nav(id) {
             document.querySelectorAll('.screen').forEach(function (s) { s.classList.add('hidden'); });
             if (id !== 'none') { document.getElementById(id).classList.remove('hidden'); }
@@ -3821,7 +3830,7 @@
 
             if (syncSpawns) gState.preGenSpawns = syncSpawns;
 
-            if (gState.control === 'laptop') { document.body.onclick = function (e) { if (isPlaying && !gState.backpackOpen && !gState.largeMapOpen && !e.target.closest('.action-btn') && !e.target.closest('button')) { try { document.body.requestPointerLock(); gState.needsLock = false; } catch (e) { } } }; }
+            if (gState.control === 'laptop') { document.body.onclick = function (e) { if (isPlaying && !gState.backpackOpen && !gState.largeMapOpen && !e.target.closest('.action-btn') && !e.target.closest('button')) { safeLockPointer(); gState.needsLock = false; } }; }
             updateHUD(); bgmStart(); animate();
             // 第一次进寻宝队才弹——新手不知道"捡了东西不代表到手"，得回安全区按上交才真的变现，
             // 死了/没上交就白捡了，这个规则不解释一下容易被当成 bug。
@@ -4972,6 +4981,11 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-27-pointerlock-fix', date: '2026-09-27', title: '修了一个后台报错（不影响实际游玩）', items: [
+                    '锁定鼠标那步（进任何一个用视角的模式都会触发）以前偶尔会在浏览器控制台炸出一条没人接住的报错，玩家看不到，但确实是个代码缺陷。统一收口修掉了。'
+                ]
+            },
             {
                 id: '2026-09-27-hub-ai-nametag', date: '2026-09-27', title: '大厅广场路人 AI 头顶也显示名字了', items: [
                     '之前只有真人玩家头顶有名字，路人 AI 光看身体颜色分不出谁是谁——现在路人也一样顶着名字牌，颜色跟身体色一致。'
@@ -8162,7 +8176,7 @@
                     if (e.target.closest && e.target.closest('button')) return;
                     // 鼠标没锁住（按了 Esc、或者刚从面板里出来）：顺手锁回去，
                     // 但不要把这次操作吞掉，不然「退出鼠标」会白白打断一次出招
-                    if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } }
+                    if (!document.pointerLockElement) { safeLockPointer(); }
                     if (e.button === 0) blazeAimStart(1);
                     else if (e.button === 2) blazeAimStart(2);
                 };
@@ -11442,7 +11456,7 @@
             ensureScene();
             if (gState.control === 'laptop') {
                 document.body.onclick = function (e) {
-                    if (night && !night.over && !e.target.closest('button')) { try { document.body.requestPointerLock(); } catch (err) { } }
+                    if (night && !night.over && !e.target.closest('button')) { safeLockPointer(); }
                 };
             }
 
@@ -15392,7 +15406,7 @@
                     if (code >= 49 && code <= 53 && pouchOpen()) pouchTake(code - 49);
                     else if (code >= 49 && code <= 51) selectSlot(code - 49);
                 }
-                if (gState.needsLock && !gState.backpackOpen && !gState.largeMapOpen && ['w', 'a', 's', 'd', ' '].includes(keyStr)) { try { document.body.requestPointerLock(); gState.needsLock = false; } catch (e) { } }
+                if (gState.needsLock && !gState.backpackOpen && !gState.largeMapOpen && ['w', 'a', 's', 'd', ' '].includes(keyStr)) { safeLockPointer(); gState.needsLock = false; }
             }
             else if (isPlaying && gState.isDead && !gState.hasLeft && !document.getElementById('spectate-bar').classList.contains('hidden')) {
                 if (keyStr === 'a' || keyStr === 'arrowleft') cycleSpectate(-1);
@@ -15405,7 +15419,7 @@
             if (night && !night.over) {
 
                 if (!document.pointerLockElement) {
-                    try { document.body.requestPointerLock(); } catch (err) { }
+                    safeLockPointer();
                     return;
                 }
 
@@ -15419,7 +15433,7 @@
                 return;
             }
             if (!gState.backpackOpen) { if (e.button === 0) keys['lmb'] = true; if (e.button === 2) keys['rmb'] = true; }
-            if (gState.needsLock && !gState.backpackOpen && !gState.largeMapOpen && isPlaying) { try { document.body.requestPointerLock(); gState.needsLock = false; } catch (e) { } }
+            if (gState.needsLock && !gState.backpackOpen && !gState.largeMapOpen && isPlaying) { safeLockPointer(); gState.needsLock = false; }
         });
         window.addEventListener('mouseup', function (e) { if (e.button === 0) keys['lmb'] = false; if (e.button === 2) keys['rmb'] = false; });
         window.addEventListener('contextmenu', function (e) { e.preventDefault(); });
@@ -17840,7 +17854,7 @@
                 // 弹窗和按钮上的点击归它们自己
                 if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
                 // 鼠标还没锁住：这一下先用来锁指针
-                if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } return; }
+                if (!document.pointerLockElement) { safeLockPointer(); return; }
                 if (e.button === 0) raceDash(race.racers[0]);        // 左键 = 冲刺（同 Shift）
                 else if (e.button === 2) raceSkill(race.racers[0]);  // 右键 = 技能（同 E）
                 else if (e.button === 1) raceUseItem(race.racers[0]); // 中键 = 道具（同 Q）
@@ -18433,7 +18447,7 @@
             document.body.onmousedown = function (e) {
                 if (!jail || jail.over) return;
                 if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
-                if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } }
+                if (!document.pointerLockElement) { safeLockPointer(); }
             };
             document.body.onmouseup = null;
             jailTouchUI(true);
@@ -19324,7 +19338,7 @@
             document.body.onmousedown = function (e) {
                 if (!dodge || dodge.over) return;
                 if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
-                if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } return; }
+                if (!document.pointerLockElement) { safeLockPointer(); return; }
                 let me = dodge.me;
                 if (e.button === 0 && !me.out) { me.aiming = true; me.aimDownAt = performance.now(); }
                 else if (e.button === 2) dodgeOpenCatch(me);
@@ -19620,7 +19634,7 @@
             document.body.onmousedown = function (e) {
                 if (!escapeRoom || escapeRoom.over) return;
                 if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
-                if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } }
+                if (!document.pointerLockElement) { safeLockPointer(); }
             };
             document.body.onmouseup = null;
             escapeTouchUI(true);
@@ -20057,7 +20071,7 @@
             document.body.onmousedown = function (e) {
                 if (!park || park.over) return;
                 if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
-                if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } }
+                if (!document.pointerLockElement) { safeLockPointer(); }
             };
             document.body.onmouseup = null;
             parkTouchUI(true);
@@ -20873,7 +20887,7 @@
             document.body.onmousedown = function (e) {
                 if (!cake || cake.over) return;
                 if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
-                if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } }
+                if (!document.pointerLockElement) { safeLockPointer(); }
             };
             document.body.onmouseup = null;
             cakeTouchUI(true);
@@ -21386,7 +21400,7 @@
             document.body.onmousedown = function (e) {
                 if (!hub) return;
                 if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
-                if (!document.pointerLockElement) { try { document.body.requestPointerLock(); } catch (err) { } }
+                if (!document.pointerLockElement) { safeLockPointer(); }
             };
             document.body.onmouseup = null;
             hubTouchUI(true);
