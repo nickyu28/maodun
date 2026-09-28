@@ -988,8 +988,8 @@
                 场上会持续随机空投新球。
             </div>
             <div style="display:flex; gap:6px;">
-                <button onclick="dodgeBegin(false)" style="flex:1; margin:0; background:#fb8c00; color:#fff; border:none; padding:10px 0; font-size:14px;">经典模式</button>
-                <button onclick="dodgeBegin(true)" style="flex:1; margin:0; background:#d84315; color:#fff; border:none; padding:10px 0; font-size:14px;">疯狂模式</button>
+                <button onclick="dodgeStartGo(false)" style="flex:1; margin:0; background:#fb8c00; color:#fff; border:none; padding:10px 0; font-size:14px;">经典模式</button>
+                <button onclick="dodgeStartGo(true)" style="flex:1; margin:0; background:#d84315; color:#fff; border:none; padding:10px 0; font-size:14px;">疯狂模式</button>
             </div>
         </div>
 
@@ -1962,7 +1962,7 @@
             else if (m === 'blaze') blazeUnifiedStart();
             else if (m === 'race') raceStartGo();
             else if (m === 'jail') jailStartGo();
-            else if (m === 'dodge') dodgeBegin(false);
+            else if (m === 'dodge') dodgeStartGo(false);
             else if (m === 'escape') escapeStartGo();
             else if (m === 'park') parkBegin(PARK_BUILTIN.easy);
             else if (m === 'cake') cakeStartGo();
@@ -2277,6 +2277,14 @@
                 jailOnW(msg);
             } else if (msg.type === 'JAIL_EV') {
                 jailOnEv(msg);
+            } else if (msg.type === 'DODGE_START') {
+                if (msg.sender !== gState.id) dodgeOnStart(msg);
+            } else if (msg.type === 'DODGE_ME') {
+                dodgeOnMe(msg);
+            } else if (msg.type === 'DODGE_W') {
+                dodgeOnW(msg);
+            } else if (msg.type === 'DODGE_EV') {
+                dodgeOnEv(msg);
             } else if (msg.type === 'NCHAR') {
                 netOnChar(msg);
             } else if (msg.type === 'NS_ME') {
@@ -2723,7 +2731,7 @@
         }
         let mmActive = null;      // 我自己在等：{ mode, cap, t0, left, onResolve, timer }
         let mmRoomPool = {};      // roomSync() 每次心跳都重新算一遍：{ id: { mode, left } }
-        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速', escape: '合作密室', jail: '监狱救援' };
+        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速', escape: '合作密室', jail: '监狱救援', dodge: '躲避球' };
         function mmMinLeft() {
             let v = mmActive ? mmActive.left : Infinity;
             Object.keys(mmRoomPool).forEach(function (id) {
@@ -5267,6 +5275,13 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-28-dodge-network', date: '2026-09-28', title: '躲避球接上真联机——三个模式全部做完了，测试性质，可能有问题', items: [
+                    '组队面板里确认过的真人都会坐到队伍0，队伍1 照旧全是 AI。位置、捡球/放球是真的；球的飞行物理和命中判定（接住/被砸中/复活）统一交给发起人算，别人扔球时自己这边先放手、弹道线照常画，真正让球飞起来那一下要发给发起人处理，一个来回的功夫，本地网络下基本感觉不到延迟。疯狂模式空投的新球也会实时同步给队友，不是只有自己这边看得见。',
+                    '这样设计是因为球这东西飞得快、命中判定必须两边看法完全一致——跟超燃的技能伤害判定同一个道理，不能各算各的。没组队的话跟其它几个模式一样，先等最多 15 秒看看有没有陌生人也想玩，凑不到就照旧配 AI。',
+                    '至此监狱救援/躲避球/密室三个模式都接上真联机了，加上早前做完的超燃/竞速/松饼/惊魂夜，全部九个模式（不算常驻的寻宝、没有对抗概念的猫盾乐园）都能真联机了。因为环境限制没法在真实设备上测，如果碰到球对不上、卡住、看不见新球之类的问题，麻烦告诉我。'
+                ]
+            },
             {
                 id: '2026-09-28-jail-network', date: '2026-09-28', title: '监狱救援接上真联机——测试性质，可能有问题', items: [
                     '组队面板里确认过的真人现在都会坐到队伍0（跟你是队友，不是被随机分到敌对两队），队伍1 照旧全是 AI。位置、抓人、救援、抢物品/送物品这几件事都是真的：谁抓到谁、谁救的人、谁捡的谁送回家，都会同步给队友看。没组队的话跟其它几个模式一样，先等最多 15 秒看看有没有陌生人也想玩，凑不到就照旧配 AI。',
@@ -16867,7 +16882,7 @@
                 if (dodge && !dodge.over && dodge.me.aiming) {
                     dodge.me.aiming = false;
                     let quick = performance.now() - downAt < 220;
-                    if (quick) { if (dodge.me.holding) dodgeDropBall(dodge.me); else dodgePickupNearby(dodge.me); }
+                    if (quick) { if (dodge.me.holding) dodgeDoDrop(dodge.me.idx); else dodgePickupNearby(dodge.me); }
                     else if (dodge.me.holding) dodgeTryThrow(dodge.me);
                 }
             };
@@ -19233,7 +19248,7 @@
             let mesh = dodgeMakeBallMesh(kind);
             mesh.position.set(x, y, z);
             scene.add(mesh);
-            let b = { mesh: mesh, kind: kind, state: 'idle', holder: null, thrownBy: null, thrownTeam: null, airT: 0,
+            let b = { idx: dodge.balls.length, mesh: mesh, kind: kind, state: 'idle', holder: null, thrownBy: null, thrownTeam: null, airT: 0,
                 claimedBy: null, claimAge: 0,
                 p: new THREE.Vector3(x, y, z), vel: new THREE.Vector3() };
             dodge.balls.push(b);
@@ -19328,8 +19343,15 @@
             });
         }
 
-        // 右键把手上的球放下——拿着球没法再接（伸手要空的），这是唯一能腾出手的办法
-        function dodgeDropBall(a) {
+        // 右键把手上的球放下——拿着球没法再接（伸手要空的），这是唯一能腾出手的办法。
+        // 捡/放这两下是"空闲的球"，没有正在飞的物理要抢，谁的角色谁拍板就行——
+        // 跟监狱救援的捡物品/交物品一个道理，不用像球的飞行/命中那样非得走房主。
+        function dodgeDoDrop(actorIdx) {
+            dodgeApplyDrop(actorIdx);
+            if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'drop', a: actorIdx });
+        }
+        function dodgeApplyDrop(actorIdx) {
+            let a = dodge.actors[actorIdx];
             if (!a || !a.holding) return;
             let b = a.holding;
             b.state = 'idle'; b.holder = null; b.p.set(a.p.x, 3.5, a.p.z); b.vel.set(0, 0, 0);
@@ -19347,10 +19369,16 @@
             return dir;
         }
 
+        // 弹道线/放手动作/冷却是纯本地表现，谁扔的这边直接算，不用等联机那一趟；
+        // 真正让球飞起来（球的位置/速度这份"世界状态"，后续命中判定也靠它）
+        // 只有房主能动手——跟球的飞行物理归房主管是同一个道理，不然两边各算一份
+        // 物理，球到底飞到哪、打没打中谁就可能对不上。非房主自己扔球时，把这个
+        // 意图（谁、哪颗球、往哪个方向）发给房主，房主收到了才真的让球飞出去，
+        // 房主随后按老规矩广播世界状态，这边球的画面跟着同步过来。
         function dodgeTryThrow(a) {
             if (!a || a.out || !a.holding || (a.throwCd || 0) > 0) return;
             if (a.mustReturn) { if (a.isPlayer) blazeFlash('这是中线球，先跑回本方边线再出手！'); return; }
-            let b = a.holding;
+            let ballIdx = a.holding.idx;
             let dir;
             if (a.isPlayer) dir = dodgePlayerAimDir(a);
             else if (a.aimHoop) {
@@ -19366,13 +19394,22 @@
             // 每次出手都画弹道线——投篮拼命那一下用金色特别标出来，其它就是投手的队伍色
             let arcColor = a.aimHoop ? 0xe65100 : (a.team === 0 ? 0x0d47a1 : 0xb71c1c);   // 深色，不要浅色
             dodgeSpawnArcLine(new THREE.Vector3(a.p.x, a.p.y + 8, a.p.z), dir, arcColor);
-            b.vel.set(dir.x * DODGE.ballSpeed, dir.y * DODGE.ballSpeed, dir.z * DODGE.ballSpeed);
-            b.p.set(a.p.x, a.p.y + 8, a.p.z);
-            b.state = 'flying'; b.holder = null; b.thrownBy = a; b.thrownTeam = a.team; b.airT = 0;
             a.holding = null;
             a.throwCd = DODGE.throwCd;
             a.gestureT = 0.3; a.gestureKind = 'throw';
             if (!a.isPlayer && a.team === dodge.me.team) aiSay(a, a.name, 'throw', DODGE_LINES.throw);
+            let amHost = !dodge.hostId || dodge.hostId === gState.id;
+            let dirObj = { x: dir.x, y: dir.y, z: dir.z };
+            if (amHost) dodgeApplyThrow(a.idx, ballIdx, dirObj);
+            else if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'throwReq', a: a.idx, b: ballIdx, dir: dirObj });
+        }
+        function dodgeApplyThrow(actorIdx, ballIdx, dir) {
+            let a = dodge.actors[actorIdx], b = dodge.balls[ballIdx];
+            if (!a || !b || b.state === 'flying') return;   // 已经在飞了，别重复扔一遍
+            b.vel.set(dir.x * DODGE.ballSpeed, dir.y * DODGE.ballSpeed, dir.z * DODGE.ballSpeed);
+            b.p.set(a.p.x, a.p.y + 8, a.p.z);
+            b.state = 'flying'; b.holder = null; b.thrownBy = a; b.thrownTeam = a.team; b.airT = 0;
+            if (a.holding === b) a.holding = null;
         }
 
         function dodgeReviveAll(team) {
@@ -19425,14 +19462,49 @@
             revive: ['复活了，冲！', '谢了，我们还能打'],
             claim: ['这颗我来捡，你们找别的', '分开找球，别都挤一块', '我来捡这颗，别跟我抢']
         };
+        // 球的飞行/命中只有房主在跑（dodgeBallTick 由 amHost 控制），这里判出来的
+        // 结果（淘汰/接住/复活）要影响到所有人的画面，走跟捡球一样的"算完就广播"，
+        // 让每台机器上受影响的那个人（不管真人还是 AI）都做同一件事。
+        function dodgeDoEliminate(actorIdx) {
+            dodgeApplyEliminate(actorIdx);
+            if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'eliminate', a: actorIdx });
+        }
+        function dodgeApplyEliminate(actorIdx) {
+            let a = dodge.actors[actorIdx];
+            if (a) dodgeEliminate(a);
+        }
+        function dodgeDoCatch(actorIdx, ballIdx) {
+            dodgeApplyCatch(actorIdx, ballIdx);
+            if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'catch', a: actorIdx, b: ballIdx });
+        }
+        function dodgeApplyCatch(actorIdx, ballIdx) {
+            let a = dodge.actors[actorIdx], b = dodge.balls[ballIdx];
+            if (!a || !b) return;
+            b.state = 'held'; b.holder = a; a.holding = b;
+            dodgeBurst(a.p, 0x81d4fa);
+            if (a.isPlayer) blazeFlash('接住了！');
+            else if (a.team === dodge.me.team) aiSay(a, a.name, 'catch', DODGE_LINES.catch);
+            dodgeCatchRevive(a);
+        }
+        function dodgeDoReviveN(team) {
+            dodgeApplyReviveN(team);
+            if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'reviveN', team: team });
+        }
+        function dodgeApplyReviveN(team) { dodgeReviveN(team, DODGE.reviveN); }
+        function dodgeDoReviveAll(team) {
+            dodgeApplyReviveAll(team);
+            if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'reviveAll', team: team });
+        }
+        function dodgeApplyReviveAll(team) { dodgeReviveAll(team); }
+
         function dodgeResolveHit(b, a) {
             // 先记下真正被砸中的地方——dodgeEliminate 会把 a.p 挪去场边，
             // 球要是等挪完了再抄 a.p，就会跟着传送到场边，看着像「人被淘汰后变成了一颗球」。
             let hitPos = a.p.clone();
             if (b.kind === 'kill') {
                 dodgeBurst(a.p, 0x212121);
-                dodgeEliminate(a);
                 b.state = 'idle'; b.holder = null; b.p.copy(hitPos); b.p.y = 3.5; b.vel.set(0, 0, 0);
+                dodgeDoEliminate(a.idx);
                 return;
             }
             // 接不接得住看这一下有没有在「按空格」的接球窗口内——不看朝向。
@@ -19441,20 +19513,16 @@
             // 换成主动按键：空手时按一下空格开一小段接球窗口，按早按晚都接不住。
             let caught = (a.catchWindow || 0) > 0 && !a.holding;
             if (b.kind === 'revival') {
-                if (caught) dodgeReviveN(a.team, DODGE.reviveN);
+                if (caught) dodgeDoReviveN(a.team);
                 b.state = 'idle'; b.holder = null; b.p.copy(a.p); b.p.y = 3.5; b.vel.set(0, 0, 0);
                 return;
             }
             // 普通球：接住不反杀，接住就是安全 + 球到手上；没接住就出局
             if (caught) {
-                b.state = 'held'; b.holder = a; a.holding = b;
-                dodgeBurst(a.p, 0x81d4fa);
-                if (a.isPlayer) blazeFlash('接住了！');
-                else if (a.team === dodge.me.team) aiSay(a, a.name, 'catch', DODGE_LINES.catch);
-                dodgeCatchRevive(a);
+                dodgeDoCatch(a.idx, b.idx);
             } else {
-                dodgeEliminate(a);
                 b.state = 'idle'; b.holder = null; b.p.copy(hitPos); b.p.y = 3.5; b.vel.set(0, 0, 0);
+                dodgeDoEliminate(a.idx);
             }
         }
 
@@ -19477,7 +19545,7 @@
                 // 篮筐：任何球投进都直接复活投手全队
                 let dHoop = Math.hypot(b.p.x - DODGE.hoopPos.x, b.p.y - DODGE.hoopPos.y, b.p.z - DODGE.hoopPos.z);
                 if (dHoop < DODGE.hoopR) {
-                    dodgeReviveAll(b.thrownTeam);
+                    dodgeDoReviveAll(b.thrownTeam);
                     b.state = 'idle'; b.p.y = 3.5; b.vel.set(0, 0, 0); return;
                 }
                 // 复活球碰到篮板，一样复活全队（比投进宽松，不用真的空心入网）——
@@ -19488,7 +19556,7 @@
                         return Math.hypot(b.p.x - DODGE.hoopPos.x, b.p.y - DODGE.hoopPos.y, b.p.z - bz) < DODGE.boardR;
                     });
                     if (hitBoard) {
-                        dodgeReviveAll(b.thrownTeam);
+                        dodgeDoReviveAll(b.thrownTeam);
                         b.state = 'idle'; b.p.y = 3.5; b.vel.set(0, 0, 0); return;
                     }
                 }
@@ -19513,7 +19581,13 @@
         // 「想接球」，开一个短暂的接球窗口。玩家和 AI 共用这一个判断。
         // 捡起来：中线球（centerBall）第一次被捡走要打上「必须先回本方边线」的标——
         // 一次性的，捡到手就把球身上那个标摘掉，球再被扔出去、被别人捡走就不再管这条规则了。
-        function dodgePickupBall(a, ball) {
+        function dodgeDoPickup(actorIdx, ballIdx) {
+            dodgeApplyPickup(actorIdx, ballIdx);
+            if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'pickup', a: actorIdx, b: ballIdx });
+        }
+        function dodgeApplyPickup(actorIdx, ballIdx) {
+            let a = dodge.actors[actorIdx], ball = dodge.balls[ballIdx];
+            if (!a || !ball || ball.state !== 'idle' || a.holding) return;   // 已经处理过了，别重复捡一遍
             ball.state = 'held'; ball.holder = a; a.holding = ball; a.gestureT = 0.3; a.gestureKind = 'pickup';
             ball.claimedBy = null;
             if (a.ballTarget === ball) a.ballTarget = null;
@@ -19528,7 +19602,7 @@
             let ball = dodge.balls.find(function (b) {
                 return b.state === 'idle' && Math.hypot(b.p.x - a.p.x, b.p.z - a.p.z) < DODGE.pickupRange;
             });
-            if (ball) dodgePickupBall(a, ball);
+            if (ball) dodgeDoPickup(a.idx, ball.idx);
         }
         function dodgeOpenCatch(a) {
             if (a.out || a.holding) return;
@@ -19543,7 +19617,7 @@
                 let ball = dodge.balls.find(function (b) {
                     return b.state === 'idle' && Math.hypot(b.p.x - a.p.x, b.p.z - a.p.z) < DODGE.pickupRange;
                 });
-                if (ball) dodgePickupBall(a, ball);
+                if (ball) dodgeDoPickup(a.idx, ball.idx);
             });
         }
 
@@ -19822,17 +19896,22 @@
                     if (a.isPlayer) blazeFlash('到线了，可以出手了！');
                 }
             });
+            let amHost = !dodge.hostId || dodge.hostId === gState.id;
             dodge.actors.forEach(function (a) {
                 if (a.out) return;
-                if (a.isPlayer) dodgePlayerMove(a, dt); else dodgeAi(a, dt);
+                if (a.isPlayer) dodgePlayerMove(a, dt);
+                else if (!a.netId && amHost) dodgeAi(a, dt);
+                // 联机的真人队友（netId 有值）跟非房主这边的 AI：位置全靠 DODGE_ME/DODGE_W
+                // 网络同步过来，这里不本地再跑一遍逻辑。
             });
-            dodgePickupTick();
-            dodgeBallTick(dt);
-            dodgeDropTick(dt);
+            if (amHost) dodgePickupTick();   // AI 的捡球是自动行为，不管哪队都归房主拍板
+            if (amHost) dodgeBallTick(dt);   // 球的飞行/命中判定全归房主——跟世界状态一个道理
+            if (amHost) dodgeDropTick(dt);   // 疯狂模式空投球，也是房主一个人生成，不然两边各生成一遍就重复了
             dodgeSeparate();
             dodgeFxTick(dt);
             dodgeArcTick(dt);
             dodgeAimAssistTick();
+            if (dodge.netOn) dodgeNetTick(dt);
             dodge.actors.forEach(function (a) {
                 a.mesh.position.set(a.p.x, a.p.y, a.p.z);
                 a.mesh.visible = !a.out;
@@ -19929,7 +20008,17 @@
             });
         }
 
-        function dodgeBegin(crazy) {
+        // 20 个位置：0~9 队伍0，10~19 队伍1。真人一律坐队伍0（跟组队的人是队友），
+        // 队伍1 从头到尾是 AI——跟监狱救援一个思路。
+        function dodgePlan(humans) {
+            let plan = [];
+            for (let i = 0; i < DODGE.teamSize * 2; i++) plan.push({ idx: i, team: i < DODGE.teamSize ? 0 : 1, id: null });
+            humans.slice(0, DODGE.teamSize).forEach(function (h, i) { plan[i].id = h.id; });
+            return plan;
+        }
+        function dodgeBegin(crazy, plan, hostId) {
+            plan = plan || dodgePlan([{ id: gState.id }]);
+            hostId = hostId || gState.id;
             showModeIntroIfFirstTime('dodge');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
@@ -19943,9 +20032,10 @@
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0009);
 
+            let netOn = plan.filter(function (q) { return q.id; }).length > 1;
             dodge = {
                 over: false, crazy: !!crazy, clock: 0, actors: [], balls: [], fx: [], meshes: [], arcs: [],
-                benchCount: [0, 0], spectating: false, spectateIdx: 0,
+                benchCount: [0, 0], spectating: false, spectateIdx: 0, hostId: hostId, netOn: netOn,
                 dropT: DODGE.dropEvery, last: performance.now(), raf: null
             };
             let dsb = document.getElementById('dodge-spectate-bar'); if (dsb) dsb.style.display = 'none';
@@ -19956,13 +20046,14 @@
                 let col = t === 0 ? 0x42a5f5 : 0xef5350;
                 let zEdge = (t === 0 ? -1 : 1) * (DODGE.courtL / 2 - 12);
                 for (let i = 0; i < n; i++) {
-                    let isP = (t === 0 && i === 0);
+                    let slot = plan[dodge.actors.length];
+                    let isP = slot.id === gState.id;
                     let mesh = raceMakeBody(col, DODGE.pickupRange);
                     scene.add(mesh);
                     let x = (i - (n - 1) / 2) * (DODGE.courtW / (n + 1));
                     let a = {
-                        idx: dodge.actors.length, team: t, isPlayer: isP, col: col,
-                        name: isP ? (dispName(gState.id) || '你') : ('队员' + (dodge.actors.length + 1)),
+                        idx: dodge.actors.length, team: t, isPlayer: isP, netId: slot.id || null, col: col,
+                        name: slot.id ? (dispName(slot.id) || '你') : ('队员' + (dodge.actors.length + 1)),
                         p: new THREE.Vector3(x, 0, zEdge), home: { x: x, z: zEdge },
                         mvx: 0, mvz: 0, vy: 0, out: false, holding: null, throwCd: 0,
                         stamina: DODGE.staminaMax, aiT: Math.random() * 0.3, animT: 0,
@@ -19974,7 +20065,7 @@
                     dodge.actors.push(a);
                 }
             });
-            dodge.me = dodge.actors[0];
+            dodge.me = dodge.actors.filter(function (a) { return a.isPlayer; })[0] || dodge.actors[0];
 
             // 中线上摆一排球：人多了、场地也大了，球跟着翻倍。经典 12 个普通球；
             // 疯狂再加复活球/秒杀球各 2 个，之后还会持续空投。
@@ -20027,7 +20118,7 @@
                 if (e.button === 0 && me.aiming) {
                     me.aiming = false;
                     let quick = performance.now() - (me.aimDownAt || 0) < 220;
-                    if (quick) { if (me.holding) dodgeDropBall(me); else dodgePickupNearby(me); }
+                    if (quick) { if (me.holding) dodgeDoDrop(me.idx); else dodgePickupNearby(me); }
                     else if (me.holding) dodgeTryThrow(me);
                 }
             };
@@ -20054,6 +20145,107 @@
             document.getElementById('blaze-hud').classList.add('hidden');
             let bd = document.getElementById('blaze-ffa-board'); if (bd) bd.classList.add('hidden');
             nav('screen-lobby'); selectGameMode('dodge');
+        }
+
+        // 组了队直接带队友进（全部坐队伍0，队伍1 从头到尾是 AI）；没组队先等最多
+        // 15 秒看房间里有没有人也想玩，凑不到就照旧配 AI——跟其它几个模式是同一套。
+        function dodgeStartGo(crazy) {
+            if (lobbyParty.length > 0) {
+                let ids = [gState.id].concat(lobbyParty.slice(0, DODGE.teamSize - 1));
+                let plan = dodgePlan(ids.map(function (id) { return { id: id }; }));
+                if (ids.length > 1) bc.postMessage({ type: 'DODGE_START', target: '*', sender: gState.id, crazy: !!crazy, plan: plan, host: gState.id });
+                dodgeBegin(crazy, plan, gState.id);
+                return;
+            }
+            mmStart('dodge', DODGE.teamSize, function (ids) {
+                let plan = dodgePlan(ids.map(function (id) { return { id: id }; }));
+                if (ids.length > 1) bc.postMessage({ type: 'DODGE_START', target: '*', sender: gState.id, crazy: !!crazy, plan: plan, host: gState.id });
+                dodgeBegin(crazy, plan, gState.id);
+            });
+        }
+        function dodgeOnStart(m) {
+            if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            mmCancel();
+            if (dodge) { if (dodge.raf) cancelAnimationFrame(dodge.raf); dodge = null; }
+            dodgeBegin(m.crazy, m.plan, m.host);
+        }
+        const DODGE_ME_HZ = 15, DODGE_W_HZ = 12;
+        function dodgeNetTick(dt) {
+            dodge._meT = (dodge._meT || 0) + dt;
+            if (dodge._meT >= 1 / DODGE_ME_HZ) {
+                dodge._meT = 0;
+                let me = dodge.me;
+                bc.postMessage({
+                    type: 'DODGE_ME', target: '*', sender: gState.id,
+                    x: me.p.x, z: me.p.z, yaw: me.mesh.rotation.y,
+                    catchWindow: me.catchWindow, holding: me.holding ? me.holding.idx : -1,
+                    out: me.out, mustReturn: me.mustReturn
+                });
+            }
+            if (dodge.hostId !== gState.id) return;
+            dodge._wT = (dodge._wT || 0) + dt;
+            if (dodge._wT < 1 / DODGE_W_HZ) return;
+            dodge._wT = 0;
+            let ai = dodge.actors.filter(function (a) { return !a.netId; }).map(function (a) {
+                return {
+                    i: a.idx, x: a.p.x, z: a.p.z, yaw: a.mesh.rotation.y,
+                    catchWindow: a.catchWindow, holding: a.holding ? a.holding.idx : -1,
+                    out: a.out, mustReturn: a.mustReturn
+                };
+            });
+            // 球（不管谁扔的）全归房主算物理，这里把所有球的状态一起广播出去——
+            // 飞行中的位置、被谁拿着、是哪种球，跟超燃的 AI 世界状态走的是同一条路。
+            let balls = dodge.balls.map(function (b) {
+                return { i: b.idx, x: b.p.x, y: b.p.y, z: b.p.z, state: b.state, kind: b.kind, holder: b.holder ? b.holder.idx : -1 };
+            });
+            bc.postMessage({ type: 'DODGE_W', target: '*', sender: gState.id, ai: ai, balls: balls });
+        }
+        function dodgeOnMe(m) {
+            if (!dodge || m.sender === gState.id) return;
+            let a = dodge.actors.filter(function (o) { return o.netId === m.sender; })[0];
+            if (!a) return;
+            a.p.x = m.x; a.p.z = m.z; a.mesh.rotation.y = m.yaw;
+            a.catchWindow = m.catchWindow; a.mustReturn = m.mustReturn;
+            a.holding = (m.holding >= 0) ? dodge.balls[m.holding] : null;
+            a.out = m.out;
+        }
+        // 非房主这边：AI 的位置/接球窗口/淘汰状态，跟所有球的状态，直接套用房主广播的——
+        // 淘汰/接住/复活这些已经靠事件同步过一遍了，这里只是多一层保险，
+        // 万一哪次事件没接上，下一条世界状态广播也能把状态掰回来。
+        // 疯狂模式房主会陆续空投新球，其它人本地压根没有这颗球，先补一个再套状态。
+        function dodgeOnW(m) {
+            if (!dodge || m.sender === gState.id || dodge.hostId !== m.sender) return;
+            (m.ai || []).forEach(function (q) {
+                let a = dodge.actors[q.i];
+                if (!a || a.isPlayer || a.netId) return;
+                a.p.x = q.x; a.p.z = q.z; a.mesh.rotation.y = q.yaw;
+                a.catchWindow = q.catchWindow; a.mustReturn = q.mustReturn;
+                a.holding = (q.holding >= 0) ? dodge.balls[q.holding] : null;
+                a.out = q.out;
+            });
+            (m.balls || []).forEach(function (q) {
+                let b = dodge.balls[q.i];
+                if (!b) b = dodgeSpawnBall(q.kind, q.x, q.y, q.z);
+                b.p.x = q.x; b.p.y = q.y; b.p.z = q.z;
+                b.state = q.state; b.kind = q.kind;
+                b.holder = (q.holder >= 0) ? dodge.actors[q.holder] : null;
+            });
+        }
+        function dodgeOnEv(m) {
+            if (!dodge) return;
+            if (m.ev === 'throwReq') {
+                // 别人求着房主帮忙让球飞起来——只有房主处理这条，别的旁观者不用管
+                let amHost = !dodge.hostId || dodge.hostId === gState.id;
+                if (amHost && m.sender !== gState.id) dodgeApplyThrow(m.a, m.b, m.dir);
+                return;
+            }
+            if (m.sender === gState.id) return;
+            if (m.ev === 'pickup') dodgeApplyPickup(m.a, m.b);
+            else if (m.ev === 'drop') dodgeApplyDrop(m.a);
+            else if (m.ev === 'eliminate') dodgeApplyEliminate(m.a);
+            else if (m.ev === 'catch') dodgeApplyCatch(m.a, m.b);
+            else if (m.ev === 'reviveN') dodgeApplyReviveN(m.team);
+            else if (m.ev === 'reviveAll') dodgeApplyReviveAll(m.team);
         }
 
         // ══════════════════════════════════════════════════════════
