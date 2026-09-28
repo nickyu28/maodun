@@ -2371,17 +2371,51 @@
             broadcastTeam();
         }
 
-        const CHAT_DEFAULT = ['救我！', '追捕在我这！', '去修机子', '我去救人', '好的'];
-        let chatQuick = CHAT_DEFAULT.slice();
+        // 快捷发言以前全模式共用一份、内容还是照着惊魂夜写的（"追捕在我这"这种），
+        // 拿去玩超燃/竞速之类完全不搭。现在按模式各存一份，设置面板里能切换着改。
+        const CHAT_MODES = [
+            ['hunt', '寻宝'], ['night', '惊魂夜'], ['blaze', '超燃'], ['race', '竞速'],
+            ['jail', '监狱救援'], ['dodge', '躲避球'], ['escape', '密室'], ['park', '猫盾乐园'],
+            ['cake', '松饼大作战'], ['hub', '大厅闲逛']
+        ];
+        const CHAT_DEFAULTS = {
+            hunt: ['这里有宝箱', '东西在这', '一起去交', '小心点', '好的'],
+            night: ['救我！', '追捕在我这！', '去修机子', '我去救人', '好的'],
+            blaze: ['集火这个！', '我没了', '掩护我', '先撤', '好的'],
+            race: ['加油！', '让一下', '这有道具', '慢了慢了', '好的'],
+            jail: ['来救我！', '守好家里', '东西被抢了', '一起去劫', '好的'],
+            dodge: ['传球！', '接住！', '快投！', '救队友', '好的'],
+            escape: ['都站好板子', '我按着拉杆', '这边过来', '找到线索了', '好的'],
+            park: ['一起来玩！', '这个真好玩', '等等我', '走了', '好的'],
+            cake: ['别抓我！', '小心后面', '抢到加成了', '就剩我们了', '好的'],
+            hub: ['你好', '一起玩吗', '等我一下', '走了', '好的']
+        };
+        let chatQuickByMode = {};   // 模式 -> 自定义的 5 条（没改过的模式不进这里，用默认值）
+        let chatQuick = CHAT_DEFAULTS.night.slice();   // 当前显示的那一份，chatVisTick 会跟着模式自动换
         let chatMode = 0;
 
+        function chatQuickFor(key) {
+            let custom = chatQuickByMode[key];
+            if (Array.isArray(custom) && custom.length === 5) return custom;
+            return (CHAT_DEFAULTS[key] || CHAT_DEFAULTS.hub).slice();
+        }
         function chatLoad() {
             try {
-                let v = JSON.parse(localStorage.getItem('TH_chat') || 'null');
-                if (Array.isArray(v) && v.length === 5) chatQuick = v.map(function (t, i) { return String(t || CHAT_DEFAULT[i]).slice(0, 20); });
+                let v = JSON.parse(localStorage.getItem('TH_chat_v2') || 'null');
+                if (v && typeof v === 'object') chatQuickByMode = v;
             } catch (e) { }
+            // 老版本存的是一份全局共用的，没有分模式——搬到"惊魂夜"名下（原来的默认词条
+            // 本来就是照着这个模式写的），其它模式各自留着自己那套默认，不跟着老设置走。
+            if (!Object.keys(chatQuickByMode).length) {
+                try {
+                    let old = JSON.parse(localStorage.getItem('TH_chat') || 'null');
+                    if (Array.isArray(old) && old.length === 5) {
+                        chatQuickByMode.night = old.map(function (t, i) { return String(t || CHAT_DEFAULTS.night[i]).slice(0, 20); });
+                    }
+                } catch (e) { }
+            }
         }
-        function chatSave() { try { localStorage.setItem('TH_chat', JSON.stringify(chatQuick)); } catch (e) { } }
+        function chatSave() { try { localStorage.setItem('TH_chat_v2', JSON.stringify(chatQuickByMode)); } catch (e) { } }
 
         function chatSetMode(m) {
             chatMode = m;
@@ -2474,23 +2508,28 @@
         }
 
         // 聊天框只在真的有一局在进行时才露出来，回大厅/选人界面就该收起。
-        function chatIsActive() {
-            return !!((typeof isPlaying !== 'undefined' && isPlaying && !gState.isDead) ||
-                (typeof blaze !== 'undefined' && blaze && !blaze.over) ||
-                (typeof night !== 'undefined' && night && !night.over) ||
-                (typeof race !== 'undefined' && race && !race.over) ||
-                (typeof jail !== 'undefined' && jail && !jail.over) ||
-                (typeof dodge !== 'undefined' && dodge && !dodge.over) ||
-                (typeof escapeRoom !== 'undefined' && escapeRoom && !escapeRoom.over) ||
-                (typeof park !== 'undefined' && park && !park.over) ||
-                (typeof cake !== 'undefined' && cake && !cake.over) ||
-                (typeof hub !== 'undefined' && hub));
+        // 顺便告诉调用方"在哪个模式"，快捷发言要跟着换成对应模式那一份。
+        function chatActiveModeKey() {
+            if (typeof blaze !== 'undefined' && blaze && !blaze.over) return 'blaze';
+            if (typeof night !== 'undefined' && night && !night.over) return 'night';
+            if (typeof race !== 'undefined' && race && !race.over) return 'race';
+            if (typeof jail !== 'undefined' && jail && !jail.over) return 'jail';
+            if (typeof dodge !== 'undefined' && dodge && !dodge.over) return 'dodge';
+            if (typeof escapeRoom !== 'undefined' && escapeRoom && !escapeRoom.over) return 'escape';
+            if (typeof park !== 'undefined' && park && !park.over) return 'park';
+            if (typeof cake !== 'undefined' && cake && !cake.over) return 'cake';
+            if (typeof isPlaying !== 'undefined' && isPlaying && !gState.isDead) return 'hunt';
+            if (typeof hub !== 'undefined' && hub) return 'hub';
+            return null;
         }
+        function chatIsActive() { return !!chatActiveModeKey(); }
         function chatVisTick() {
             let ov = document.getElementById('chat-overlay');
             if (!ov) return;
-            let on = chatIsActive();
+            let key = chatActiveModeKey();
+            let on = !!key;
             ov.style.display = on ? '' : 'none';
+            if (on) chatQuick = chatQuickFor(key);
             if (!on && chatMode !== 0) chatSetMode(0);   // 局结束了，输入框也一起收起来
             // 移动摇杆之前是塞在 ui-layer 里的，只有寻宝队会显示 ui-layer——
             // 大厅/松饼/超燃/竞速/监狱救援/躲避球/密室/乐园这些模式都会把 ui-layer 藏起来，
@@ -2542,25 +2581,61 @@
                 { label: '取消' }
             ]);
         }
-        function openChatSetup() {
-            chatLoad();
-            let body = chatQuick.map(function (t, i) {
+        // 设置面板里可以切模式改——每次切换先把当前这份输入框的内容收进草稿，保存时
+        // 才一次性写回 chatQuickByMode；不点保存直接关掉的话，草稿跟以前"恢复默认"
+        // 那颗按钮一样，不落地。
+        let chatSetupDraft = null, chatSetupKey = 'night';
+        function chatSetupCollect() {
+            if (!chatSetupDraft || !chatSetupDraft[chatSetupKey]) return;
+            for (let i = 0; i < 5; i++) {
+                let el = document.getElementById('cs-' + i);
+                if (el) chatSetupDraft[chatSetupKey][i] = (el.value || '').trim().slice(0, 20) || CHAT_DEFAULTS[chatSetupKey][i];
+            }
+        }
+        function chatSetupSwitch(key) { chatSetupCollect(); chatSetupKey = key; chatSetupRender(); }
+        function chatSetupReset() {
+            chatSetupCollect();
+            chatSetupDraft[chatSetupKey] = CHAT_DEFAULTS[chatSetupKey].slice();
+            chatSetupRender();
+        }
+        function chatSetupRender() {
+            if (!chatSetupDraft[chatSetupKey]) chatSetupDraft[chatSetupKey] = chatQuickFor(chatSetupKey).slice();
+            let tabs = '<div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px;">' +
+                CHAT_MODES.map(function (m) {
+                    let on = m[0] === chatSetupKey;
+                    return '<div onclick="chatSetupSwitch(\'' + m[0] + '\'); event.stopPropagation();" style="padding:4px 9px; border-radius:4px; cursor:pointer; font-size:12px; ' +
+                        (on ? 'background:#5cb85c; color:#fff;' : 'background:#eceff1; color:#555;') + '">' + m[1] + '</div>';
+                }).join('') + '</div>';
+            let rows = chatSetupDraft[chatSetupKey].map(function (t, i) {
                 return '<div style="display:flex; align-items:center; gap:8px; margin:6px 0;">' +
                     '<span style="color:#999; width:16px;">' + (i + 1) + '</span>' +
                     '<input id="cs-' + i + '" maxlength="20" value="' + chatEscape(t) + '" ' +
                     'style="flex:1; font-size:13px; padding:5px 7px; border:1px solid #bbb; border-radius:4px;">' +
                     '</div>';
             }).join('');
-            showSysModal('快捷发言设置', body, [
+            showSysModal('快捷发言设置', tabs + rows, [
                 { label: '保存', color: '#5cb85c', onClick: function () {
-                    for (let i = 0; i < 5; i++) {
-                        let el = document.getElementById('cs-' + i);
-                        if (el) chatQuick[i] = (el.value || '').trim().slice(0, 20) || CHAT_DEFAULT[i];
-                    }
+                    chatSetupCollect();
+                    // 只把真的跟默认值不一样的模式写进存档——光切过去看一眼但没改字的
+                    // 那些模式，不该被这一份"当时的默认值"焊死，以后要是改了默认词条，
+                    // 没动过的人还是能吃到新默认，不会被旧快照卡住。
+                    Object.keys(chatSetupDraft).forEach(function (k) {
+                        let same = JSON.stringify(chatSetupDraft[k]) === JSON.stringify(CHAT_DEFAULTS[k]);
+                        if (same) delete chatQuickByMode[k]; else chatQuickByMode[k] = chatSetupDraft[k];
+                    });
                     chatSave();
+                    let active = chatActiveModeKey();
+                    if (active) chatQuick = chatQuickFor(active);
                 } },
-                { label: '恢复默认', color: '#999', onClick: function () { chatQuick = CHAT_DEFAULT.slice(); chatSave(); } }
+                { label: '本页恢复默认', color: '#999', onClick: chatSetupReset },
+                { label: '取消' }
             ]);
+        }
+        function openChatSetup(initialKey) {
+            chatLoad();
+            chatSetupDraft = {};
+            chatSetupKey = initialKey || chatActiveModeKey() || 'night';
+            chatSetupRender();
         }
 
         // requestPointerLock() 在现代浏览器里返回一个 Promise，reject 是异步的——
@@ -5161,6 +5236,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-28-chat-per-mode', date: '2026-09-28', title: '快捷发言改成每个模式一份，设置面板能切换', items: [
+                    '以前 5 条快捷发言全模式共用一份，内容还是照着惊魂夜写的（"追捕在我这"），拿去玩超燃/竞速之类完全不搭。现在每个模式（寻宝/惊魂夜/超燃/竞速/监狱救援/躲避球/密室/猫盾乐园/松饼大作战/大厅闲逛）各有一份贴合自己场景的默认词条，游戏内右下角那五条会跟着你正在玩的模式自动切换。',
+                    '"快捷发言设置"面板里加了模式切换的标签，点哪个改哪个，互不影响；只有真改过字的模式会存下来，没点开看过或者看了没改的模式，以后改了默认词条还是能吃到新的，不会被焊死。原来那份全局设置自动搬到"惊魂夜"名下，不会丢。'
+                ]
+            },
             {
                 id: '2026-09-27-matchmaking-race', date: '2026-09-27', title: '真机测出来的匹配 bug：两人几乎同时匹配到会各开一次局', items: [
                     '不是靠脑内推演，是真的开了两个共享同一个浏览器 profile 的无头浏览器分页，跑真实代码互相联机测出来的：两个人几乎同时等到匹配成功时，发起人在广播"真开局"之前，会先发一条"我不等了"的心跳——另一个人如果刚好也卡在自己的截止点上，收到这条心跳后会以为发起人消失了，赶在真开局消息到之前抢先自己广播了一次开局（虽然几毫秒后真消息一到就被盖过去，但画面会白白闪一下、多开一次局）。改成先广播真开局、"我不等了"的心跳放最后发，顺序反过来就不会抢跑了。用两台、三台模拟设备各跑了十几次没再复现。',
