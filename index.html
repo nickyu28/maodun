@@ -820,16 +820,12 @@
         </div>
     </div>
 
-    <div id="screen-controls" class="screen">
-        <h1 style="font-size: 48px; color: #999; font-weight: lighter;">猫盾の游戏</h1>
-        <button onclick="goToIdScreen('laptop')">电脑</button>
-        <button onclick="goToIdScreen('pad')">平板</button>
-    </div>
-
-    <div id="screen-id" class="screen hidden" style="background:linear-gradient(160deg,#8fd3f4 0%,#c8e6c9 55%,#fff8e1 100%); justify-content:center;">
+    <div id="screen-id" class="screen" style="background:linear-gradient(160deg,#8fd3f4 0%,#c8e6c9 55%,#fff8e1 100%); justify-content:center;">
         <!-- 之前这屏纯灰白背景+一个输入框，跟游戏实际内容（8 种模式+联机+编辑器）完全
              不匹配，陌生玩家第一眼看到会觉得这是个没做完的东西。加个渐变背景 + CSS 画的
-             小猫盾图标 + 一行卖点，不用真的美术资源也能让第一屏不那么"半成品"。 -->
+             小猫盾图标 + 一行卖点，不用真的美术资源也能让第一屏不那么"半成品"。
+             选设备（电脑/平板）原来是单独一屏、点完才跳到这屏填 ID——两步合成一步，
+             选完设备接着往下填 ID、点确定直接进游戏，不用来回跳转。 -->
         <div style="display:flex; flex-direction:column; align-items:center;">
             <div style="position:relative; width:84px; height:66px; margin-bottom:8px;">
                 <div style="position:absolute; bottom:0; left:8px; width:68px; height:52px; background:#66bb6a; border-radius:16px; box-shadow:0 4px 10px rgba(0,0,0,0.15);"></div>
@@ -839,7 +835,12 @@
             <h1 style="font-size: 38px; color: #33691e; margin:0; text-shadow:0 2px 0 rgba(255,255,255,0.6);">猫盾の游戏</h1>
             <div style="font-size:13px; color:#558b2f; margin-top:4px;">8 种玩法 · 实时联机 · UGC 编辑器</div>
         </div>
-        <h2 style="font-size: 20px; color: #555; font-weight:normal; margin:22px 0 6px;">给自己起个 ID</h2>
+        <h2 style="font-size: 16px; color: #555; font-weight:normal; margin:20px 0 6px;">你在用什么设备</h2>
+        <div style="display:flex; gap:8px;">
+            <button id="ctrl-btn-laptop" onclick="selectControl('laptop')" style="background:#5cb85c; color:#fff; font-size:14px; padding:8px 20px; border:none; border-radius:6px; cursor:pointer;">电脑</button>
+            <button id="ctrl-btn-pad" onclick="selectControl('pad')" style="background:#eceff1; color:#555; font-size:14px; padding:8px 20px; border:none; border-radius:6px; cursor:pointer;">平板</button>
+        </div>
+        <h2 style="font-size: 20px; color: #555; font-weight:normal; margin:20px 0 6px;">给自己起个 ID</h2>
         <div style="margin: 10px; display: flex; align-items: center; justify-content: center;">
             <input type="text" id="player-id" value="" placeholder="ID" style="border: none; border-bottom: 2px solid #66bb6a; border-radius: 0; background: transparent; font-size: 24px; text-align: center; width: 200px; padding:4px 0;">
         </div>
@@ -2833,12 +2834,18 @@
             else if (typeof hub !== 'undefined' && hub) { hubExit(); }
         }
 
-        function goToIdScreen(deviceStr) {
-            gState.control = deviceStr; nav('screen-id');
+        // 选设备/填 ID 合并成一屏之后，选设备不用再跳转，原地切换 + 高亮按钮就行。
+        // gState.control 默认就是 'laptop'（跟两个按钮的初始样式对应），就算谁都没点，
+        // 点"确定"的时候 requestLobbyAccess 也会补一次，不会漏设成默认值。
+        function selectControl(deviceStr) {
+            gState.control = deviceStr;
             applyControlHints();
             let padUI = document.querySelectorAll('.joystick-zone, .action-btn, #phone-backpack-toggle');
             if (deviceStr === 'pad') { padUI.forEach(function (e) { e.style.display = 'flex'; }); document.getElementById('crosshair').style.display = 'none'; }
             else { padUI.forEach(function (e) { e.style.display = 'none'; }); document.getElementById('crosshair').style.display = 'block'; }
+            let bl = document.getElementById('ctrl-btn-laptop'), bp = document.getElementById('ctrl-btn-pad');
+            if (bl) { bl.style.background = deviceStr === 'laptop' ? '#5cb85c' : '#eceff1'; bl.style.color = deviceStr === 'laptop' ? '#fff' : '#555'; }
+            if (bp) { bp.style.background = deviceStr === 'pad' ? '#5cb85c' : '#eceff1'; bp.style.color = deviceStr === 'pad' ? '#fff' : '#555'; }
         }
 
         // 大厅里那几段静态说明，选完设备再按设备填进去
@@ -2901,6 +2908,9 @@
             return String(raw || '').replace(/[<>&"']/g, '');
         }
         function requestLobbyAccess() {
+            // 没点过设备按钮（默认就是电脑）也要走一遍——不然摇杆/十字准星那些
+            // 跟设备挂钩的 UI 状态就没套上过，直接照默认值补一次。
+            selectControl(gState.control);
             let raw = sanitizeId(document.getElementById('player-id').value.trim());
             if (!raw) { showSysModal('错误', '请输入ID', [{ label: '确定' }]); return; }
             let pid = resolvePlayerId(raw);
@@ -5275,6 +5285,11 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-28-merge-id-screen', date: '2026-09-28', title: '选设备（电脑/平板）跟起 ID 合并成一屏', items: [
+                    '以前是先选电脑还是平板、点了才跳到下一屏填 ID，两步；现在合并成一屏，选完设备接着往下填 ID，点"确定"直接进游戏。设备按钮点哪个哪个高亮，默认选中"电脑"，就算没点也会按这个默认值走。'
+                ]
+            },
             {
                 id: '2026-09-28-sfx-expand', date: '2026-09-28', title: '音效大幅扩充——扔球、抓到人、放技能这些以前基本没声音', items: [
                     '以前全程序合成音效只有超燃（开箱子/击杀/出局）和寻宝队诱饵这几处，其它模式基本是哑的。新加了几种音色（呼啸声扔东西、闷响命中、上扬琶音表示成功、下滑音表示失败、"嗞"一下表示放技能、低沉一声表示机关/开门），比原来清一色的"叮"声更好分辨是哪种事发生了。',
