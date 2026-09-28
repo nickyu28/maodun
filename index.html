@@ -1961,7 +1961,7 @@
             else if (m === 'night') enterNightMatch('survivor');
             else if (m === 'blaze') blazeUnifiedStart();
             else if (m === 'race') raceStartGo();
-            else if (m === 'jail') jailBegin();
+            else if (m === 'jail') jailStartGo();
             else if (m === 'dodge') dodgeBegin(false);
             else if (m === 'escape') escapeStartGo();
             else if (m === 'park') parkBegin(PARK_BUILTIN.easy);
@@ -2269,6 +2269,14 @@
                 escapeOnMe(msg);
             } else if (msg.type === 'ESC_AI') {
                 escapeOnAi(msg);
+            } else if (msg.type === 'JAIL_START') {
+                if (msg.sender !== gState.id) jailOnStart(msg);
+            } else if (msg.type === 'JAIL_ME') {
+                jailOnMe(msg);
+            } else if (msg.type === 'JAIL_W') {
+                jailOnW(msg);
+            } else if (msg.type === 'JAIL_EV') {
+                jailOnEv(msg);
             } else if (msg.type === 'NCHAR') {
                 netOnChar(msg);
             } else if (msg.type === 'NS_ME') {
@@ -2715,7 +2723,7 @@
         }
         let mmActive = null;      // 我自己在等：{ mode, cap, t0, left, onResolve, timer }
         let mmRoomPool = {};      // roomSync() 每次心跳都重新算一遍：{ id: { mode, left } }
-        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速', escape: '合作密室' };
+        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速', escape: '合作密室', jail: '监狱救援' };
         function mmMinLeft() {
             let v = mmActive ? mmActive.left : Infinity;
             Object.keys(mmRoomPool).forEach(function (id) {
@@ -5259,6 +5267,13 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-28-jail-network', date: '2026-09-28', title: '监狱救援接上真联机——测试性质，可能有问题', items: [
+                    '组队面板里确认过的真人现在都会坐到队伍0（跟你是队友，不是被随机分到敌对两队），队伍1 照旧全是 AI。位置、抓人、救援、抢物品/送物品这几件事都是真的：谁抓到谁、谁救的人、谁捡的谁送回家，都会同步给队友看。没组队的话跟其它几个模式一样，先等最多 15 秒看看有没有陌生人也想玩，凑不到就照旧配 AI。',
+                    '抓人/救援/捡送物品这几件"必须两边看法一致"的判定，谁的角色谁拍板——自己的角色自己说了算，AI（不管哪队）统一由发起人拍板，不然网络稍微卡一下，可能这边看着已经抓到人了，那边还没抓到。用两台模拟设备测过位置同步和这四种判定，没问题；因为环境限制没法在真实两台设备上测，如果碰到抓人/救援/捡送东西对不上、卡住的问题，麻烦告诉我。',
+                    '躲避球还没接，接完才算这一批做完。'
+                ]
+            },
             {
                 id: '2026-09-28-escape-network', date: '2026-09-28', title: '合作密室接上真联机——测试性质，可能有问题', items: [
                     '组队面板里确认过的真人现在会一起进同一个密室（之前是各玩各的本地模拟），压力板、拉杆门谁踩住/按住了都是真的，能看见对方实时跑动。没组队的话跟超燃/竞速/松饼一样，先等最多 15 秒看看有没有陌生人也想玩，凑不到就照旧配 AI。',
@@ -18512,22 +18527,50 @@
                     it.mesh.position.set(it.carrier.p.x + fx * 3, 7.5, it.carrier.p.z + fz * 3);
                 }
             });
+            // 捡/交这两下谁来拍板，跟抓人/救援一个道理：只轮到"我自己拍板得了"的角色。
+            let amHost = !jail.hostId || jail.hostId === gState.id;
             let live = jail.actors.filter(function (a) { return !a.jailed; });
             live.forEach(function (a) {
+                let mine = a.isPlayer || (!a.netId && amHost);
+                if (!mine) return;
                 if (a.carrying) return;
                 if (jailHome(a.p) === a.team) return;
-                jail.items.forEach(function (it) {
-                    if (it.carrier || it.team === a.team) return;
+                for (let i = 0; i < jail.items.length; i++) {
+                    let it = jail.items[i];
+                    if (it.carrier || it.team === a.team) continue;
                     let d = Math.hypot(a.p.x - it.mesh.position.x, a.p.z - it.mesh.position.z);
-                    if (d < JAIL.itemRange) jailPickupItem(it, a);
-                });
+                    if (d < JAIL.itemRange) { jailDoPickup(it.idx, a.idx); break; }
+                }
             });
             live.forEach(function (a) {
+                let mine = a.isPlayer || (!a.netId && amHost);
+                if (!mine) return;
                 if (!a.carrying) return;
                 if (jailHome(a.p) !== a.team) return;
-                jailDeliverItem(a.carrying, a.team, a);
-                a.carrying = null;
+                jailDoDeliver(a.carrying.idx, a.idx);
             });
+        }
+        function jailDoPickup(itemIdx, byIdx) {
+            jailApplyPickup(itemIdx, byIdx);
+            if (jail.netOn) bc.postMessage({ type: 'JAIL_EV', target: '*', sender: gState.id, ev: 'pickup', i: itemIdx, by: byIdx });
+        }
+        function jailApplyPickup(itemIdx, byIdx) {
+            let it = jail.items[itemIdx], a = jail.actors[byIdx];
+            if (!it || !a || it.carrier || a.carrying) return;   // 已经处理过了，别重复捡一遍
+            jailPickupItem(it, a);
+        }
+        function jailDoDeliver(itemIdx, byIdx) {
+            let it = jail.items[itemIdx], a = jail.actors[byIdx];
+            if (!it || !a) return;
+            let team = a.team;
+            jailApplyDeliver(itemIdx, team, byIdx);
+            if (jail.netOn) bc.postMessage({ type: 'JAIL_EV', target: '*', sender: gState.id, ev: 'deliver', i: itemIdx, team: team, by: byIdx });
+        }
+        function jailApplyDeliver(itemIdx, team, byIdx) {
+            let it = jail.items[itemIdx], a = jail.actors[byIdx];
+            if (!it) return;
+            jailDeliverItem(it, team, a);
+            if (a) a.carrying = null;
         }
         const JAIL_LINES = {
             pickup: ['抢到一件，我往回跑了', '拿到东西了，掩护我'],
@@ -18675,24 +18718,39 @@
             }
         }
 
-        // 抓人：全自动，谁在敌方地盘又落进对方的手范围，直接送监狱
+        // 抓人：全自动，谁在敌方地盘又落进对方的手范围，直接送监狱。
+        // 联机的话"谁抓到谁"这个判定谁来拍板得分清楚：本机真人自己的角色自己拍板，
+        // AI（不管哪队）统一由房主拍板——房主本来就在本地跑所有 AI 的位置，别的
+        // 机器看到的 AI 位置是同步过来的、天然会有一点延迟，各自独立判定的话
+        // 两边可能判出不一样的结果（这边抓到了，那边还没抓到）。
         function jailCaptureTick(dt) {
             jail.actors.forEach(function (a) { if (a.invulT > 0) a.invulT = Math.max(0, a.invulT - dt); });
+            let amHost = !jail.hostId || jail.hostId === gState.id;
             let live = jail.actors.filter(function (a) { return !a.jailed; });
-            live.forEach(function (a) {
-                if (a.invulT > 0) return;
-                if (jailHome(a.p) === a.team) return;
+            live.forEach(function (b) {
+                let mine = b.isPlayer || (!b.netId && amHost);
+                if (!mine) return;
                 for (let i = 0; i < live.length; i++) {
-                    let b = live[i];
-                    if (b.team === a.team) continue;
+                    let a = live[i];
+                    if (a.team === b.team || a.invulT > 0) continue;
+                    if (jailHome(a.p) === a.team) continue;
                     let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
-                    if (d < JAIL.handRange) {
-                        b.gestureT = 0.35; b.gestureKind = 'pickup';
-                        if (!b.isPlayer && b.team === jail.me.team) aiSay(b, b.name, 'catch', JAIL_LINES.catch);
-                        jailCapture(a); return;
-                    }
+                    if (d < JAIL.handRange) { jailDoCapture(b.idx, a.idx); break; }
                 }
             });
+        }
+        function jailDoCapture(byIdx, targetIdx) {
+            jailApplyCapture(byIdx, targetIdx);
+            if (jail.netOn) bc.postMessage({ type: 'JAIL_EV', target: '*', sender: gState.id, ev: 'capture', by: byIdx, i: targetIdx });
+        }
+        function jailApplyCapture(byIdx, targetIdx) {
+            let b = jail.actors[byIdx], a = jail.actors[targetIdx];
+            if (!a || a.jailed) return;   // 已经处理过了（比如事件晚到），别重复抓一遍
+            if (b) {
+                b.gestureT = 0.35; b.gestureKind = 'pickup';
+                if (!b.isPlayer && b.team === jail.me.team) aiSay(b, b.name, 'catch', JAIL_LINES.catch);
+            }
+            jailCapture(a);
         }
         function jailCapture(a) {
             // 扛着东西的人被抓：物品就地掉落（还是原来那队的，谁都能再捡）——
@@ -18718,28 +18776,42 @@
             }
         }
 
-        // 救援：本队还有一个自由身的人摸到自己队伍的监狱，被关的队友一次性全放出来
+        // 救援：本队还有一个自由身的人摸到自己队伍的监狱，被关的队友一次性全放出来。
+        // 跟抓人一个道理：只挑"我自己拍板得了"的角色当候选救援人。
         function jailRescueTick(dt) {
+            let amHost = !jail.hostId || jail.hostId === gState.id;
             [0, 1].forEach(function (myTeam) {
                 let j = jail.jails[myTeam];
                 let jx = j.x * TILE, jz = j.z * TILE;
                 let hasJailed = jail.actors.some(function (a) { return a.team === myTeam && a.jailed; });
                 if (!hasJailed) return;
                 let rescuer = jail.actors.find(function (a) {
-                    return a.team === myTeam && !a.jailed &&
-                        Math.hypot(a.p.x - jx, a.p.z - jz) < JAIL.rescueRange;
+                    if (a.team !== myTeam || a.jailed) return false;
+                    let mine = a.isPlayer || (!a.netId && amHost);
+                    if (!mine) return false;
+                    return Math.hypot(a.p.x - jx, a.p.z - jz) < JAIL.rescueRange;
                 });
                 if (!rescuer) return;
-                jail.actors.forEach(function (a) {
-                    if (a.team === myTeam && a.jailed) {
-                        a.jailed = 0; a.invulT = JAIL.freeInvulT;
-                        a.p.set(jx + (Math.random() - 0.5) * 14, 0, jz + (Math.random() - 0.5) * 14);
-                    }
-                });
-                jailBurst(jx, jz, 0x66bb6a);
-                if (jail.me.team === myTeam) blazeFlash('队伍越狱成功！');
-                if (!rescuer.isPlayer && rescuer.team === jail.me.team) aiSay(rescuer, rescuer.name, 'rescue', JAIL_LINES.rescue);
+                jailDoRescue(myTeam, rescuer.idx);
             });
+        }
+        function jailDoRescue(team, byIdx) {
+            jailApplyRescue(team, byIdx);
+            if (jail.netOn) bc.postMessage({ type: 'JAIL_EV', target: '*', sender: gState.id, ev: 'rescue', team: team, by: byIdx });
+        }
+        function jailApplyRescue(team, byIdx) {
+            let j = jail.jails[team];
+            let jx = j.x * TILE, jz = j.z * TILE;
+            let rescuer = jail.actors[byIdx];
+            jail.actors.forEach(function (a) {
+                if (a.team === team && a.jailed) {
+                    a.jailed = 0; a.invulT = JAIL.freeInvulT;
+                    a.p.set(jx + (Math.random() - 0.5) * 14, 0, jz + (Math.random() - 0.5) * 14);
+                }
+            });
+            jailBurst(jx, jz, 0x66bb6a);
+            if (jail.me.team === team) blazeFlash('队伍越狱成功！');
+            if (rescuer && !rescuer.isPlayer && rescuer.team === jail.me.team) aiSay(rescuer, rescuer.name, 'rescue', JAIL_LINES.rescue);
         }
 
         function jailEndMatch(winTeam, reason) {
@@ -18826,14 +18898,19 @@
 
         function jailTick(dt) {
             jail.clock += dt;
+            let amHost = !jail.hostId || jail.hostId === gState.id;
             jail.actors.forEach(function (a) {
                 if (a.jailed) { a.mvx = 0; a.mvz = 0; return; }
-                if (a.isPlayer) jailPlayerMove(a, dt); else jailAi(a, dt);
+                if (a.isPlayer) jailPlayerMove(a, dt);
+                else if (!a.netId && amHost) jailAi(a, dt);
+                // 联机的真人队友（netId 有值）跟非房主这边的 AI：位置全靠 JAIL_ME/JAIL_W
+                // 网络同步过来，这里不本地再跑一遍逻辑。
             });
             jailCaptureTick(dt);
             jailRescueTick(dt);
             jailItemTick();
             jailFxTick(dt);
+            if (jail.netOn) jailNetTick(dt);
             jail.actors.forEach(function (a) {
                 a.mesh.position.set(a.p.x, a.p.y, a.p.z);
                 a.mesh.visible = true;   // 第三人称，自己也要看得见自己
@@ -18878,7 +18955,19 @@
             jail.raf = requestAnimationFrame(jailLoop);
         }
 
-        function jailBegin() {
+        // 10 个位置：0~4 是队伍0，5~9 是队伍1。真人一律坐队伍0（跟组队的人是队友，
+        // 不是拿真人互相对抗），队伍1 从头到尾都是 AI——跟超燃 2v2 真人配成一队、
+        // 对面用 AI 补的思路一样，避免"随便两个匹配到的陌生人被分到敌对两队"这种
+        // 更难保证公平、也更难联机同步的设计。
+        function jailPlan(humans) {
+            let plan = [];
+            for (let i = 0; i < JAIL.teamSize * 2; i++) plan.push({ idx: i, team: i < JAIL.teamSize ? 0 : 1, id: null });
+            humans.slice(0, JAIL.teamSize).forEach(function (h, i) { plan[i].id = h.id; });
+            return plan;
+        }
+        function jailBegin(plan, hostId) {
+            plan = plan || jailPlan([{ id: gState.id }]);
+            hostId = hostId || gState.id;
             showModeIntroIfFirstTime('jail');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
@@ -18916,12 +19005,13 @@
                 }
             }
 
+            let netOn = plan.filter(function (q) { return q.id; }).length > 1;
             jail = {
                 over: false, clock: 0, actors: [], fx: [], items: [],
                 jails: [jailPosA, jailPosB],
                 homeCorner: [cornerA, cornerB],
                 markers: [jailMakeMarker(jailPosA.x, jailPosA.z, 0x42a5f5), jailMakeMarker(jailPosB.x, jailPosB.z, 0xef5350)],
-                last: performance.now(), raf: null
+                last: performance.now(), raf: null, hostId: hostId, netOn: netOn
             };
 
             // 每队 5 件物品，摆在自己家门口的空地上，起手各归各队
@@ -18931,7 +19021,7 @@
                     let mesh = jailItemMesh(col);
                     mesh.position.set(slot.x * TILE, 0, slot.z * TILE);
                     scene.add(mesh);
-                    jail.items.push({ mesh: mesh, team: t });
+                    jail.items.push({ idx: jail.items.length, mesh: mesh, team: t, carrier: null });
                 });
             });
 
@@ -18939,13 +19029,14 @@
                 let sps = t === 0 ? spawnsA : spawnsB;
                 let col = t === 0 ? 0x42a5f5 : 0xef5350;
                 for (let i = 0; i < n; i++) {
-                    let isP = (t === 0 && i === 0);
+                    let slot = plan[jail.actors.length];
+                    let isP = slot.id === gState.id;
                     let mesh = raceMakeBody(col, JAIL.handRange);
                     scene.add(mesh);
                     let sp = sps[i];
                     let a = {
-                        idx: jail.actors.length, team: t, isPlayer: isP, col: col,
-                        name: isP ? (dispName(gState.id) || '你') : ('队员' + (jail.actors.length + 1)),
+                        idx: jail.actors.length, team: t, isPlayer: isP, netId: slot.id || null, col: col,
+                        name: slot.id ? (dispName(slot.id) || '你') : ('队员' + (jail.actors.length + 1)),
                         p: new THREE.Vector3(sp.x * TILE, 0, sp.z * TILE),
                         home: { x: sp.x * TILE, z: sp.z * TILE },
                         floor: 0, mvx: 0, mvz: 0, jailed: 0, invulT: 0, raiding: 0,
@@ -18955,7 +19046,7 @@
                     jail.actors.push(a);
                 }
             });
-            jail.me = jail.actors[0];
+            jail.me = jail.actors.filter(function (a) { return a.isPlayer; })[0] || jail.actors[0];
             camera.rotation.set(0, Math.PI * 0.75, 0);   // 从队伍0 的角落大致朝对角线中心看
 
             document.body.onmousedown = function (e) {
@@ -18985,6 +19076,78 @@
             document.getElementById('blaze-hud').classList.add('hidden');
             let bd = document.getElementById('blaze-ffa-board'); if (bd) bd.classList.add('hidden');
             nav('screen-lobby'); selectGameMode('jail');
+        }
+
+        // 组了队直接带队友进（全部坐队伍0，队伍1 从头到尾是 AI）；没组队先等最多
+        // 15 秒看房间里有没有人也想玩，凑不到就照旧配 AI——跟超燃/竞速/密室是同一套。
+        function jailStartGo() {
+            if (lobbyParty.length > 0) {
+                let ids = [gState.id].concat(lobbyParty.slice(0, JAIL.teamSize - 1));
+                let plan = jailPlan(ids.map(function (id) { return { id: id }; }));
+                if (ids.length > 1) bc.postMessage({ type: 'JAIL_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+                jailBegin(plan, gState.id);
+                return;
+            }
+            mmStart('jail', JAIL.teamSize, function (ids) {
+                let plan = jailPlan(ids.map(function (id) { return { id: id }; }));
+                if (ids.length > 1) bc.postMessage({ type: 'JAIL_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+                jailBegin(plan, gState.id);
+            });
+        }
+        function jailOnStart(m) {
+            if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            mmCancel();
+            if (jail) { if (jail.raf) cancelAnimationFrame(jail.raf); jail = null; }
+            jailBegin(m.plan, m.host);
+        }
+        const JAIL_ME_HZ = 15, JAIL_W_HZ = 10;
+        function jailNetTick(dt) {
+            jail._meT = (jail._meT || 0) + dt;
+            if (jail._meT >= 1 / JAIL_ME_HZ) {
+                jail._meT = 0;
+                let me = jail.me;
+                bc.postMessage({
+                    type: 'JAIL_ME', target: '*', sender: gState.id,
+                    x: me.p.x, z: me.p.z, yaw: me.mesh.rotation.y
+                });
+            }
+            if (jail.hostId === gState.id) {
+                jail._wT = (jail._wT || 0) + dt;
+                if (jail._wT >= 1 / JAIL_W_HZ) {
+                    jail._wT = 0;
+                    let list = jail.actors.filter(function (a) { return !a.netId; }).map(function (a) {
+                        return { i: a.idx, x: a.p.x, z: a.p.z, yaw: a.mesh.rotation.y, jailed: a.jailed, invulT: a.invulT };
+                    });
+                    bc.postMessage({ type: 'JAIL_W', target: '*', sender: gState.id, ai: list });
+                }
+            }
+        }
+        function jailOnMe(m) {
+            if (!jail || m.sender === gState.id) return;
+            let a = jail.actors.filter(function (o) { return o.netId === m.sender; })[0];
+            if (!a) return;
+            a.p.x = m.x; a.p.z = m.z; a.mesh.rotation.y = m.yaw;
+        }
+        // 非房主这边：AI 的位置、被抓/无敌状态直接套用房主广播的，跟超燃的 BZ_W 一个思路——
+        // 抓人/捡东西这些判定已经靠事件（JAIL_EV）同步过一遍了，这里的 jailed/invulT
+        // 只是多一层保险，万一事件哪次没接上，下一条世界状态广播也能把状态掰回来。
+        function jailOnW(m) {
+            if (!jail || m.sender === gState.id || jail.hostId !== m.sender) return;
+            (m.ai || []).forEach(function (q) {
+                let a = jail.actors[q.i];
+                if (!a || a.isPlayer || a.netId) return;
+                a.p.x = q.x; a.p.z = q.z; a.mesh.rotation.y = q.yaw;
+                a.jailed = q.jailed; a.invulT = q.invulT;
+            });
+        }
+        // 抓人/救援/捡物/交物这四种事件，谁广播的就是谁拍的板（本机真人自己，或者
+        // 房主替所有 AI 拍板），收到别人的广播直接照单应用，不用再自己判一遍。
+        function jailOnEv(m) {
+            if (!jail || m.sender === gState.id) return;
+            if (m.ev === 'capture') jailApplyCapture(m.by, m.i);
+            else if (m.ev === 'rescue') jailApplyRescue(m.team, m.by);
+            else if (m.ev === 'pickup') jailApplyPickup(m.i, m.by);
+            else if (m.ev === 'deliver') jailApplyDeliver(m.i, m.team, m.by);
         }
 
         // ══════════════════════════════════════════════════════════
