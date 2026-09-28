@@ -1765,6 +1765,7 @@
                 left: left,
                 mm: mmActive ? { mode: mmActive.mode, left: mmActive.left } : null,
                 bz: gState.blazeChar || 'bow',
+                acc: gState.acc || null,
                 stats: playStatsDigest()
             };
         }
@@ -1798,10 +1799,18 @@
                 side: m.side || null,
                 left: (typeof m.left === 'number') ? m.left : null,
                 mm: m.mm || null,
+                acc: m.acc || null,
                 at: performance.now()
             };
             if (m.bz) blazePeerChar[m.sender] = m.bz;
             roomSync();
+        }
+        // 配饰联机：跟着房间心跳（roomTick 每 1.2s 一次 roomSelfMsg）走，不用另外开消息通道——
+        // 换配饰不是每帧都变的东西，几秒内同步到位就够了。查不到（对方还没发过心跳/不在房间里）
+        // 就当没戴，跟本地没联机时的默认表现一致。
+        function peerAccOf(id) {
+            let p = roomPeers[id];
+            return (p && p.acc) || null;
         }
 
         function roomSync() {
@@ -2156,7 +2165,7 @@
         let initArr = new Array(6).fill(null); initArr[0] = { ...shopItems['鱼叉'] }; initArr[1] = { ...shopItems['地窖徽章'] };
         const gState = {
             control: 'laptop', char: 'green', id: '', money: 10000, team: [], aiFill: false, runCash: 0, aiSubmitted: 0, aiChestsTaken: 0, blazeChar: 'bow', mouseSensitivity: 1,
-            mcoin: 0, skins: {}, skinColor: null, acc: { hat: null, eye: null, neck: null }, ownedAcc: {}, parkUnlocked: {}, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, checkinStreak: 0, checkinLastDay: -1, inv: initArr, garage: new Array(200).fill(null),
+            mcoin: 0, skins: {}, skinColor: null, acc: { head: null, waist: null }, ownedAcc: {}, parkUnlocked: {}, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, checkinStreak: 0, checkinLastDay: -1, inv: initArr, garage: new Array(200).fill(null),
             maxInv: 6, hp: 100, maxHp: 100, isDead: false, selectedContainer: 'inv', selectedSlot: 0, totalSubmitted: 0,
             backpackOpen: false, largeMapOpen: false, inSafeZone: true, needsLock: false, pAtkCd: 0, timeStop: 0, preGenSpawns: [],
             mapDifficulty: 'easy', extractTarget: 140000, gameMode: 'hunt',
@@ -2193,7 +2202,7 @@
                 if (saved) {
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
-                        gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = data.acc || { hat: null, eye: null, neck: null }; gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
+                        gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; if (gState.ownedAcc.bowtie) gState.ownedAcc.bowsash = true; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); grantBadgeIfMissing(); return;
                     }
@@ -2201,7 +2210,7 @@
                 }
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
-            gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { hat: null, eye: null, neck: null }; gState.ownedAcc = {}; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
+            gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { head: null, waist: null }; gState.ownedAcc = {}; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
             expandInventory();
         }
 
@@ -5289,7 +5298,8 @@
             {
                 id: '2026-09-28-skin-accessory', date: '2026-09-28', title: '皮肤抽奖降价 + 新增配饰自由 DIY', items: [
                     '皮肤颜色抽一次从 50 猫盾币降到 10。',
-                    '商店"皮肤"页新增"配饰"：帽子（鸭舌帽/生日帽/皇冠）、眼镜（墨镜/圆框）、脖子（领结/围巾）三个部位，每件直接花钱买断（不是抽奖），买完永久拥有，三个部位各自独立装备、随便搭配组合。作用范围跟皮肤颜色一样——大厅广场/竞速/密室/松饼大作战，监狱救援/躲避球颜色代表队伍不受影响；也跟皮肤颜色一样只有自己能看到自己的搭配。'
+                    '商店"皮肤/配饰"页新增"配饰"：头饰（普通帽子/生日帽/皇冠/眼镜/墨镜/星星）、腰饰（小鱼干/猫盾币挂件/铃铛/毛线球/蝴蝶结腰带）两个部位，每件直接花钱买断（不是抽奖），买完永久拥有，两个部位各自独立装备、随便搭配组合。作用范围跟皮肤颜色一样——大厅广场/竞速/密室/松饼大作战，监狱救援/躲避球颜色代表队伍不受影响；但配饰是联机同步的，房间里其他真人能看到你戴的搭配（这点跟只有自己能看见的皮肤颜色不一样）。',
+                    'AI/路人现在也会随机戴点配饰活跃画面，按概率抽、大多数时候什么都不戴；要是同屏人多卡了，"测试开关"面板里有个"AI/路人不戴配饰"一键关掉。'
                 ]
             },
             {
@@ -6300,6 +6310,7 @@
                 label: '排位：看一眼当前隐藏分'
             },
             { get: function () { return TEST_INFINITE_COINS; }, set: function (v) { TEST_INFINITE_COINS = v; }, label: '通用：无限猫盾币 / 全解锁' },
+            { get: function () { return AI_ACC_CHANCE <= 0; }, set: function (v) { AI_ACC_CHANCE = v ? 0 : 0.3; }, label: '通用：AI/路人不戴配饰（卡的话开这个）' },
             {
                 get: function () { return BGM_ENABLED; },
                 set: function (v) {
@@ -17387,25 +17398,28 @@
         const SKIN_BLANKS = 5;
         const SKIN_PRICE = 10;
         const SKIN_PITY_LIMIT = 12;
-        // 配饰：不走抽奖，直接花钱买断，买完永久拥有，三个部位（帽子/眼镜/脖子）各自独立
+        // 配饰：不走抽奖，直接花钱买断，买完永久拥有，两个部位（头饰/腰饰）各自独立
         // 装备互不影响，随便搭——真正的"自由 DIY"，不是开箱子看运气。跟皮肤颜色一样，
-        // 只在没有队伍色含义的地方生效，且只有自己能看见自己戴的（跟皮肤颜色现有规则一致，不联机同步）。
+        // 只在没有队伍色含义的地方生效；但配饰是联机同步的（见 roomSelfMsg 的 acc 字段/
+        // peerAccOf），房间里其他真人能看到你戴的，这点跟只有自己能看见的皮肤颜色不一样。
         const ACCESSORY_DEFS = {
-            hat: [
-                { id: 'cap', n: '鸭舌帽', price: 10 },
+            head: [
+                { id: 'cap', n: '普通帽子', price: 10 },
                 { id: 'party', n: '生日帽', price: 10 },
-                { id: 'crown', n: '皇冠', price: 20 }
-            ],
-            eye: [
+                { id: 'crown', n: '皇冠', price: 20 },
+                { id: 'glasses', n: '眼镜', price: 10 },
                 { id: 'shades', n: '墨镜', price: 10 },
-                { id: 'glasses', n: '圆框眼镜', price: 10 }
+                { id: 'star', n: '星星', price: 15 }
             ],
-            neck: [
-                { id: 'bowtie', n: '领结', price: 8 },
-                { id: 'scarf', n: '围巾', price: 10 }
+            waist: [
+                { id: 'fish', n: '小鱼干', price: 10 },
+                { id: 'coin', n: '猫盾币挂件', price: 10 },
+                { id: 'bell', n: '铃铛', price: 8 },
+                { id: 'yarn', n: '毛线球', price: 10 },
+                { id: 'bowsash', n: '蝴蝶结腰带', price: 8 }
             ]
         };
-        const ACC_SLOT_NAME = { hat: '帽子', eye: '眼镜', neck: '脖子' };
+        const ACC_SLOT_NAME = { head: '头饰', waist: '腰饰' };
         function accDefOf(id) {
             for (let slot in ACCESSORY_DEFS) {
                 let hit = ACCESSORY_DEFS[slot].find(function (a) { return a.id === id; });
@@ -17414,7 +17428,7 @@
             return null;
         }
         function accEquip(slot, id) {
-            if (!gState.acc) gState.acc = { hat: null, eye: null, neck: null };
+            if (!gState.acc) gState.acc = { head: null, waist: null };
             if (id !== null && !(gState.ownedAcc && gState.ownedAcc[id])) return;
             gState.acc[slot] = (gState.acc[slot] === id) ? null : id;
             saveProgress();
@@ -17428,6 +17442,25 @@
             if (!gState.ownedAcc) gState.ownedAcc = {};
             gState.ownedAcc[id] = true;
             accEquip(slot, id);
+        }
+        // 配饰部位从帽子/眼镜/脖子三槽改成头饰/腰饰两槽那天存下的老存档，acc 字段还是
+        // 旧形状——帽子/眼镜的选择直接搬进头饰（id 没变，兼容），脖子直接扔（新方案没有
+        // 对应部位），领结顺手换算成腰饰的蝴蝶结腰带，别白买一场。
+        function migrateAccData(rawAcc) {
+            rawAcc = rawAcc || {};
+            if ('head' in rawAcc || 'waist' in rawAcc) return { head: rawAcc.head || null, waist: rawAcc.waist || null };
+            return { head: rawAcc.hat || rawAcc.eye || null, waist: rawAcc.neck === 'bowtie' ? 'bowsash' : null };
+        }
+        // AI/路人配饰：给同屏的电脑角色也随机戴点东西活跃画面，但按概率抽、多数时候
+        // 什么都不戴——同屏一堆人全戴满配饰会多出很多网格，卡的话把 AI_ACC_CHANCE
+        // 调低（0 就是 AI 全不戴），下面"测试开关"面板里也能直接勾。
+        let AI_ACC_CHANCE = 0.3;
+        function aiRandomAcc() {
+            if (Math.random() > AI_ACC_CHANCE) return null;
+            let acc = {};
+            if (Math.random() < 0.6) acc.head = ACCESSORY_DEFS.head[Math.floor(Math.random() * ACCESSORY_DEFS.head.length)].id;
+            if (Math.random() < 0.35) acc.waist = ACCESSORY_DEFS.waist[Math.floor(Math.random() * ACCESSORY_DEFS.waist.length)].id;
+            return (acc.head || acc.waist) ? acc : null;
         }
         function mySkinColor(defaultColor) { return (gState.skinColor !== null && gState.skinColor !== undefined) ? gState.skinColor : defaultColor; }
         function skinDraw() {
@@ -17480,8 +17513,8 @@
                 (gState.skinColor !== null ? '<button onclick="shopEquipSkin(null)" style="width:100%; margin-top:10px; background:#999; color:#fff; border:none; font-size:12px; padding:6px 0;">换回默认颜色</button>' : '');
             out += '<div style="margin-top:16px; padding-top:12px; border-top:1px solid #eee; text-align:left;">' +
                 '<div style="font-size:13px; color:#555; font-weight:bold; margin-bottom:4px;">配饰 · 自由 DIY</div>' +
-                '<div style="font-size:11px; color:#888; margin-bottom:8px;">每件直接买断，买完永久拥有；帽子/眼镜/脖子三个部位各自独立装备，随便搭配组合，不是抽奖。</div>';
-            ['hat', 'eye', 'neck'].forEach(function (slot) {
+                '<div style="font-size:11px; color:#888; margin-bottom:8px;">每件直接买断，买完永久拥有；头饰/腰饰两个部位各自独立装备，随便搭配组合，不是抽奖。房间里其他真人能看到你戴的配饰（跟皮肤颜色不同，皮肤颜色只有自己能看见）。</div>';
+            ['head', 'waist'].forEach(function (slot) {
                 out += '<div style="font-size:12px; color:#666; margin:8px 0 4px;">' + ACC_SLOT_NAME[slot] + '</div>' +
                     '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px;">';
                 ACCESSORY_DEFS[slot].forEach(function (a) {
@@ -17525,58 +17558,73 @@
                 new THREE.MeshBasicMaterial({ map: catFaceTexture(), transparent: true, depthWrite: false }));
             face.position.set(0, y, z); g.add(face);
         }
-        // 配饰渲染：只在 withAcc（本人）时挂，几个部位各是几个基础几何体拼的小组件，
+        // 配饰渲染：acc 是调用方传进来的 {head, waist} 数据（本人传 gState.acc，联机对面
+        // 真人传 peerAccOf(id) 从房间心跳里查来的，AI/路人传 aiRandomAcc() 随机抽的，都不传
+        // 就是没配饰）——不读全局 gState.acc，这样同一份代码才能既画自己也画别人。
         // 固定配色（不跟随皮肤色），挂在 addCatFace 定的脸高度/朝向坐标系上，
         // 两种身体（raceMakeBody 的方盒子/cakeMakeBody 的圆柱）分别传各自的高度参数就行。
-        function addAccHat(g, id, y) {
-            let grp = new THREE.Group(); grp.position.y = y;
-            if (id === 'cap') {
-                let mat = new THREE.MeshLambertMaterial({ color: 0xe53935 });
-                let top = new THREE.Mesh(new THREE.SphereGeometry(2.1, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
-                grp.add(top);
-                let brim = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.3, 10), mat);
-                brim.position.set(0, -0.05, 1.8); brim.rotation.x = 0.2; grp.add(brim);
-            } else if (id === 'party') {
-                let mat = new THREE.MeshLambertMaterial({ color: 0xab47bc });
-                let cone = new THREE.Mesh(new THREE.ConeGeometry(1.8, 3.2, 10), mat);
-                cone.position.y = 1.4; grp.add(cone);
-                let pom = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), new THREE.MeshLambertMaterial({ color: 0xffeb3b }));
-                pom.position.y = 3.1; grp.add(pom);
-            } else if (id === 'crown') {
-                let mat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
-                let band = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 1.0, 8), mat);
-                grp.add(band);
-                for (let i = 0; i < 5; i++) {
-                    let spike = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.2, 4), mat);
-                    let ang = (i / 5) * Math.PI * 2;
-                    spike.position.set(Math.cos(ang) * 1.8, 1.0, Math.sin(ang) * 1.8);
-                    grp.add(spike);
+        function addAccHead(g, id, hatY, faceY, faceZ) {
+            if (id === 'cap' || id === 'party' || id === 'crown' || id === 'star') {
+                let grp = new THREE.Group(); grp.position.y = hatY;
+                if (id === 'cap') {
+                    let mat = new THREE.MeshLambertMaterial({ color: 0xe53935 });
+                    let top = new THREE.Mesh(new THREE.SphereGeometry(2.1, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+                    grp.add(top);
+                    let brim = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.3, 10), mat);
+                    brim.position.set(0, -0.05, 1.8); brim.rotation.x = 0.2; grp.add(brim);
+                } else if (id === 'party') {
+                    let mat = new THREE.MeshLambertMaterial({ color: 0xab47bc });
+                    let cone = new THREE.Mesh(new THREE.ConeGeometry(1.8, 3.2, 10), mat);
+                    cone.position.y = 1.4; grp.add(cone);
+                    let pom = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), new THREE.MeshLambertMaterial({ color: 0xffeb3b }));
+                    pom.position.y = 3.1; grp.add(pom);
+                } else if (id === 'crown') {
+                    let mat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
+                    let band = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 1.0, 8), mat);
+                    grp.add(band);
+                    for (let i = 0; i < 5; i++) {
+                        let spike = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.2, 4), mat);
+                        let ang = (i / 5) * Math.PI * 2;
+                        spike.position.set(Math.cos(ang) * 1.8, 1.0, Math.sin(ang) * 1.8);
+                        grp.add(spike);
+                    }
+                } else if (id === 'star') {
+                    let mat = new THREE.MeshBasicMaterial({ color: 0xffee58 });
+                    let core = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), mat);
+                    core.position.y = 1.0; grp.add(core);
+                    for (let i = 0; i < 5; i++) {
+                        let spike = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9, 4), mat);
+                        let ang = (i / 5) * Math.PI * 2;
+                        spike.position.set(Math.cos(ang) * 0.7, 1.0 + Math.sin(ang) * 0.35, Math.sin(ang) * 0.7);
+                        spike.rotation.z = ang;
+                        grp.add(spike);
+                    }
+                }
+                g.add(grp);
+            } else if (id === 'glasses' || id === 'shades') {
+                let mat = new THREE.MeshBasicMaterial({ color: id === 'shades' ? 0x111111 : 0x333333 });
+                if (id === 'shades') {
+                    [-1, 1].forEach(function (sdir) {
+                        let lens = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.9, 0.3), mat);
+                        lens.position.set(sdir * 1.1, faceY + 0.2, faceZ + 0.2); g.add(lens);
+                    });
+                    let bridge = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.25, 0.25), mat);
+                    bridge.position.set(0, faceY + 0.2, faceZ + 0.2); g.add(bridge);
+                } else {
+                    [-1, 1].forEach(function (sdir) {
+                        let ring = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.12, 6, 12), mat);
+                        ring.position.set(sdir * 1.1, faceY + 0.2, faceZ + 0.2); g.add(ring);
+                    });
+                    let bridge = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.12), mat);
+                    bridge.position.set(0, faceY + 0.2, faceZ + 0.2); g.add(bridge);
                 }
             }
-            g.add(grp);
         }
-        function addAccEye(g, id, y, z) {
-            if (id === 'shades') {
-                let mat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-                [-1, 1].forEach(function (sdir) {
-                    let lens = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.9, 0.3), mat);
-                    lens.position.set(sdir * 1.1, y + 0.2, z + 0.2); g.add(lens);
-                });
-                let bridge = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.25, 0.25), mat);
-                bridge.position.set(0, y + 0.2, z + 0.2); g.add(bridge);
-            } else if (id === 'glasses') {
-                let mat = new THREE.MeshBasicMaterial({ color: 0x333333 });
-                [-1, 1].forEach(function (sdir) {
-                    let ring = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.12, 6, 12), mat);
-                    ring.position.set(sdir * 1.1, y + 0.2, z + 0.2); g.add(ring);
-                });
-                let bridge = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.12), mat);
-                bridge.position.set(0, y + 0.2, z + 0.2); g.add(bridge);
-            }
-        }
-        function addAccNeck(g, id, y, z) {
-            if (id === 'bowtie') {
+        function addAccWaist(g, id, y, z) {
+            if (id === 'bowsash') {
                 let mat = new THREE.MeshLambertMaterial({ color: 0xd32f2f });
+                let band = new THREE.Mesh(new THREE.TorusGeometry(3.0, 0.3, 6, 16), mat);
+                band.rotation.x = Math.PI / 2; band.position.y = y; g.add(band);
                 [-1, 1].forEach(function (sdir) {
                     let wing = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.4, 4), mat);
                     wing.rotation.z = sdir * Math.PI / 2; wing.position.set(sdir * 0.7, y, z);
@@ -17584,21 +17632,39 @@
                 });
                 let knot = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), mat);
                 knot.position.set(0, y, z); g.add(knot);
-            } else if (id === 'scarf') {
-                let mat = new THREE.MeshLambertMaterial({ color: 0xff7043 });
-                let ring = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.7, 6, 16), mat);
-                ring.rotation.x = Math.PI / 2; ring.position.y = y; g.add(ring);
-                let tail = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.4, 0.3), mat);
-                tail.position.set(1.4, y - 1.8, z); g.add(tail);
+            } else if (id === 'fish') {
+                let mat = new THREE.MeshLambertMaterial({ color: 0xf0b48c });
+                let body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.1, 1.8, 8), mat);
+                body.rotation.x = Math.PI / 2; body.position.set(1.6, y - 0.6, z * 0.6); g.add(body);
+                let tail = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.6, 6), mat);
+                tail.rotation.x = -Math.PI / 2; tail.position.set(1.6, y - 1.5, z * 0.6); g.add(tail);
+            } else if (id === 'coin') {
+                let mat = new THREE.MeshLambertMaterial({ color: 0xffd54f });
+                let coin = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.18, 14), mat);
+                coin.rotation.z = Math.PI / 2; coin.position.set(1.6, y - 0.8, z * 0.6); g.add(coin);
+            } else if (id === 'bell') {
+                let mat = new THREE.MeshLambertMaterial({ color: 0xffca28 });
+                let bell = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), mat);
+                bell.position.set(0, y - 0.6, z); g.add(bell);
+                let slit = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: 0x5d4037 }));
+                slit.position.set(0, y - 1.0, z + 0.4); g.add(slit);
+            } else if (id === 'yarn') {
+                let mat = new THREE.MeshLambertMaterial({ color: 0xef5350 });
+                let ball = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 8), mat);
+                ball.position.set(1.3, y - 1.0, z * 0.5); g.add(ball);
+                let strMat = new THREE.MeshBasicMaterial({ color: 0xffcdd2 });
+                [0, Math.PI / 3, -Math.PI / 3].forEach(function (rot) {
+                    let strand = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.05, 4, 12), strMat);
+                    strand.rotation.set(Math.PI / 2, 0, rot); strand.position.copy(ball.position); g.add(strand);
+                });
             }
         }
-        function addAccessories(g, faceY, faceZ, hatY) {
-            let acc = gState.acc; if (!acc) return;
-            if (acc.hat) addAccHat(g, acc.hat, hatY);
-            if (acc.eye) addAccEye(g, acc.eye, faceY, faceZ);
-            if (acc.neck) addAccNeck(g, acc.neck, faceY - 4.5, faceZ);
+        function addAccessories(g, faceY, faceZ, hatY, waistY, acc) {
+            if (!acc) return;
+            if (acc.head) addAccHead(g, acc.head, hatY, faceY, faceZ);
+            if (acc.waist) addAccWaist(g, acc.waist, waistY, faceZ);
         }
-        function raceMakeBody(col, handRange, hideRing, withAcc) {
+        function raceMakeBody(col, handRange, hideRing, acc) {
             let g = new THREE.Group();
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.BoxGeometry(6, 11, 4), mat);
@@ -17658,7 +17724,7 @@
                 reach.rotation.x = -Math.PI / 2; reach.position.y = 0.4; g.add(reach);
                 g.userData.reach = reach;
             }
-            if (withAcc) addAccessories(g, 8, 2.02, 12.9);
+            if (acc) addAccessories(g, 8, 2.02, 12.9, 4.2, acc);
             return g;
         }
 
@@ -17690,9 +17756,10 @@
             return race.racers[otherIdx];
         }
 
-        function raceMakeRacer(i, isPlayer, key) {
+        function raceMakeRacer(i, isPlayer, key, netId) {
             let col = isPlayer ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
-            let mesh = raceMakeBody(col, null, false, isPlayer);
+            let acc = isPlayer ? gState.acc : (netId ? peerAccOf(netId) : aiRandomAcc());
+            let mesh = raceMakeBody(col, null, false, acc);
             scene.add(mesh);
             return {
                 idx: i, isPlayer: isPlayer, key: key,
@@ -18662,7 +18729,7 @@
                 let mine = plan.filter(function (q) { return q.id === gState.id; })[0] || { id: gState.id };
                 let others = plan.filter(function (q) { return q !== mine; });
                 [mine].concat(others).forEach(function (q, i) {
-                    let r = raceMakeRacer(i, q.id === gState.id);
+                    let r = raceMakeRacer(i, q.id === gState.id, undefined, q.id);
                     r.netId = q.id || null;
                     race.racers.push(r);
                 });
@@ -20839,7 +20906,7 @@
             for (let i = 0; i < n; i++) {
                 let slot = plan[i];
                 let isP = slot.id === gState.id;
-                let mesh = raceMakeBody(isP ? mySkinColor(0x8d6e63) : 0x8d6e63, 0, false, isP);
+                let mesh = raceMakeBody(isP ? mySkinColor(0x8d6e63) : 0x8d6e63, 0, false, isP ? gState.acc : (slot.id ? peerAccOf(slot.id) : aiRandomAcc()));
                 scene.add(mesh);
                 let x = (i - (n - 1) / 2) * 10;
                 let a = {
@@ -21351,7 +21418,7 @@
             scene.background = new THREE.Color(0x81d4fa);
             scene.fog = new THREE.FogExp2(0x81d4fa, 0.002);
 
-            let mesh = raceMakeBody(mySkinColor(0xffca28), 0, false, true);
+            let mesh = raceMakeBody(mySkinColor(0xffca28), 0, false, gState.acc);
             scene.add(mesh);
             let compiled = parkCompile(program.blocks);
             park = {
@@ -21980,7 +22047,7 @@
 
         // 松饼大作战专属身体：躯干换成圆柱（卷起来的松饼），耳朵不变，
         // 胳膊腿都改成贴着身体的矮圆墩——不再是伸得老远的细长方块。
-        function cakeMakeBody(col, handRange, hideRing, withAcc) {
+        function cakeMakeBody(col, handRange, hideRing, acc) {
             let g = new THREE.Group();
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10, 18), mat);
@@ -22039,7 +22106,7 @@
                 reach.rotation.x = -Math.PI / 2; reach.position.y = 0.4; g.add(reach);
                 g.userData.reach = reach;
             }
-            if (withAcc) addAccessories(g, 7, 4.05, 11.6);
+            if (acc) addAccessories(g, 7, 4.05, 11.6, 3.6, acc);
             return g;
         }
 
@@ -22167,7 +22234,7 @@
                 let q = plan[i] || {};
                 let isP = q.id === gState.id;
                 let col = isP ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
-                let mesh = cakeMakeBody(col, CAKE.handRange, false, isP);
+                let mesh = cakeMakeBody(col, CAKE.handRange, false, isP ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()));
                 scene.add(mesh);
                 let sp = spawns[i];
                 let name = q.id ? dispName(q.id) : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
@@ -22301,7 +22368,7 @@
                 let idx = Math.floor(Math.random() * pool.length);
                 let name = pool.length ? pool.splice(idx, 1)[0] : ('路人' + (i + 1));
                 let col = HUB_WANDER_COLORS[Math.floor(Math.random() * HUB_WANDER_COLORS.length)];
-                let mesh = raceMakeBody(col, 0, true);
+                let mesh = raceMakeBody(col, 0, true, aiRandomAcc());
                 // 真人头顶有名字，路人却没有——一群猫盾凑一起，光看身体颜色根本分不出
                 // 谁是真人朋友、谁是凑数的路人，得靠头顶名字才能看清爽。
                 let label = nightMakeLabel(name, col, false);
@@ -22539,7 +22606,7 @@
             if (!hub || !m.sender || m.sender === gState.id) return;
             let w = hub.realPlayers[m.sender];
             if (!w) {
-                let mesh = raceMakeBody(0xff8a65, 0, true);
+                let mesh = raceMakeBody(0xff8a65, 0, true, peerAccOf(m.sender));
                 let label = nightMakeLabel(m.sender, 0xff8a65, false);
                 label.position.y = 13.5; mesh.add(label);
                 scene.add(mesh);
@@ -22689,7 +22756,7 @@
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
 
-            let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0, true, true);
+            let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0, true, gState.acc);
             scene.add(mesh);
             hub = {
                 meshes: [], wanderers: [], realPlayers: {}, party: [], nearby: null,
