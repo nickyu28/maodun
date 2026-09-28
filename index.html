@@ -5276,6 +5276,13 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-28-sfx-expand', date: '2026-09-28', title: '音效大幅扩充——扔球、抓到人、放技能这些以前基本没声音', items: [
+                    '以前全程序合成音效只有超燃（开箱子/击杀/出局）和寻宝队诱饵这几处，其它模式基本是哑的。新加了几种音色（呼啸声扔东西、闷响命中、上扬琶音表示成功、下滑音表示失败、"嗞"一下表示放技能、低沉一声表示机关/开门），比原来清一色的"叮"声更好分辨是哪种事发生了。',
+                    '超燃：11 个角色 22 条技能分支现在放技能都有声音（不管是自己放的还是敌人放的），自己打人/被打也有闷响。监狱救援：抓到人、被抓、救援成功、抢到/送到物品都有声音。躲避球：自己扔球、接住球、被打中/淘汰、复活都有声音。竞速：冲线（前三名声音不一样）、被淘汰、拿冠军。松饼大作战：拍中对面/被拍出局。合作密室：压力板/拉杆开门。惊魂夜：矿机修好、逃生门打开、被猎人打倒。',
+                    '为了不吵：跟自己没关系的事情（比如超燃里两个 AI 隔老远互砍、监狱救援里对面两个人自己抓自己救）基本不出声，只有自己参与的（自己打/自己被打/自己抓/自己被抓）才响，不然满场混战会吵得没法听。'
+                ]
+            },
+            {
                 id: '2026-09-28-dodge-network', date: '2026-09-28', title: '躲避球接上真联机——三个模式全部做完了，测试性质，可能有问题', items: [
                     '组队面板里确认过的真人都会坐到队伍0，队伍1 照旧全是 AI。位置、捡球/放球是真的；球的飞行物理和命中判定（接住/被砸中/复活）统一交给发起人算，别人扔球时自己这边先放手、弹道线照常画，真正让球飞起来那一下要发给发起人处理，一个来回的功夫，本地网络下基本感觉不到延迟。疯狂模式空投的新球也会实时同步给队友，不是只有自己这边看得见。',
                     '这样设计是因为球这东西飞得快、命中判定必须两边看法完全一致——跟超燃的技能伤害判定同一个道理，不能各算各的。没组队的话跟其它几个模式一样，先等最多 15 秒看看有没有陌生人也想玩，凑不到就照旧配 AI。',
@@ -9615,6 +9622,9 @@
                 if (dmg > 0 && src !== tgt && blazeCanKnock(kind)) {
                     if (!immune) blazeKnock(src, tgt, crit);
                     blazeHitFx(src, tgt, crit, immune);
+                    // 只有自己打人/被打才出声——AI 之间满场对砍要都出声，
+                    // 吵得没法听，而且大部分时候压根不在你屏幕附近。
+                    if (blaze.me && (src === blaze.me || tgt === blaze.me)) sfxThud(crit);
                 }
                 if (dmg > 0 && !immune) tgt.hurtT = BLAZE.hurtAnimT;
                 // 葬场：打起来两边都会亮 —— 挨打的亮，出手的也亮。
@@ -10189,6 +10199,27 @@
                 return;
             }
         }
+
+        // 技能音效：11 个角色 22 条技能分支各自判"放没放出去"太琐碎，干脆包一层——
+        // 放之前记一下冷却/连突次数/护盾/格挡这几个"技能真的生效了"才会变的字段，
+        // 放完了比一下，只要有一个变了就说明真打出去了（放空/冷却没到直接 return
+        // 的分支不会碰这些字段，不会误触发），不用挨个分支手动加声音。
+        function blazeSkillFired(a, snap) {
+            return a.skillCd > snap.cd || a.skill2Cd > snap.cd2 || a.dash !== snap.dash ||
+                a.dashCharges !== snap.dc || a.shield !== snap.shield || a.blockT !== snap.blockT;
+        }
+        let blazeSkill1Raw = blazeSkill1;
+        blazeSkill1 = function (a) {
+            let snap = { cd: a.skillCd, cd2: a.skill2Cd, dash: a.dash, dc: a.dashCharges, shield: a.shield, blockT: a.blockT };
+            blazeSkill1Raw(a);
+            if (blazeSkillFired(a, snap)) sfxZap(1);
+        };
+        let blazeSkill2Raw = blazeSkill2;
+        blazeSkill2 = function (a) {
+            let snap = { cd: a.skillCd, cd2: a.skill2Cd, dash: a.dash, dc: a.dashCharges, shield: a.shield, blockT: a.blockT };
+            blazeSkill2Raw(a);
+            if (blazeSkillFired(a, snap)) sfxZap(2);
+        };
 
         // 攻速影响的是普攻的冷却，弓每次普攻打完就用这个刷新
         // bowStacks 现在管的是穿墙狙的射程，不再管攻速了——攻速只看疾射和加成
@@ -12800,7 +12831,11 @@
                 night.throwCd = Math.max(0, night.throwCd - SKILL.hmeowDownCut);
                 if (night.side === 'hunter') nightFlashHunter('击倒 —— 投矛冷却 ' + night.throwCd.toFixed(0) + 's');
             }
-            if (a.hp <= 0) { a.downed = true; a.bleed = 0; a.healProg = 0; a.repairing = null; nightAISay(a, 'down'); if (a.isPlayer) { night.repairing = null; night.calib = null; nightFlash('你被击倒了'); } }
+            if (a.hp <= 0) {
+                a.downed = true; a.bleed = 0; a.healProg = 0; a.repairing = null; nightAISay(a, 'down');
+                if (a.isPlayer) { night.repairing = null; night.calib = null; nightFlash('你被击倒了'); sfxBuzz(); }
+                else if (night.side === 'hunter') sfxThud(true);
+            }
             else if (a.isPlayer) nightFlash('受伤！剩 1 滴血');
         }
 
@@ -13788,8 +13823,8 @@
             if (night.done >= NIGHT.needed) {
 
                 gState.machines.forEach(function (o) { if (!o.done) o.mesh.material.color.setHex(0x555555); });
-                nightFlash('逃生门已开启！');
-            } else nightFlash('矿机修好了！' + night.done + ' / ' + NIGHT.needed);
+                nightFlash('逃生门已开启！'); sfxMechanism();
+            } else { nightFlash('矿机修好了！' + night.done + ' / ' + NIGHT.needed); sfxChime(2); }
         }
 
         function nightMachinesLocked() { return night.done >= NIGHT.needed; }
@@ -13799,7 +13834,7 @@
             d.open = true;
             d.mesh.material.color.setHex(0x2ecc71);
             if (d.lintel) { d.lintel.material.color.setHex(0x69f0ae); d.lintel.material.emissive.setHex(0x00391c); }
-            nightFlash('逃生门已开启！走进去撤离');
+            nightFlash('逃生门已开启！走进去撤离'); sfxMechanism();
         }
 
         function nightCalibPress() {
@@ -14856,6 +14891,66 @@
                 });
             } catch (e) { }
         }
+
+        // sfxPlay 只有振荡器，音色全是"叮"——扔球的呼啸声、砸中人的闷响这种，
+        // 振荡器怎么调都不像。加一路白噪声过滤波器，配合 sfxPlay 一起用，
+        // 音色能明显分开（呼啸=噪声扫频，闷响=噪声+低频振荡器叠一下）。
+        let sfxNoiseBuf = null;
+        function sfxNoiseBuffer(ctx) {
+            if (sfxNoiseBuf && sfxNoiseBuf.ctx === ctx) return sfxNoiseBuf.buf;
+            let n = ctx.sampleRate * 1.0;
+            let buf = ctx.createBuffer(1, n, ctx.sampleRate);
+            let d = buf.getChannelData(0);
+            for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+            sfxNoiseBuf = { ctx: ctx, buf: buf };
+            return buf;
+        }
+        // filterFrom/filterTo：滤波器中心频率随时间滑动，做"呼啸而过"这种扫频感；
+        // 只给一个数字就是不滑动，固定音色。
+        function sfxNoise(len, peak, filterFrom, filterTo, q) {
+            if (!SFX_ENABLED) return;
+            try {
+                if (!sfxCtx) sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (sfxCtx.state === 'suspended') sfxCtx.resume();
+                let ctx = sfxCtx, now = ctx.currentTime;
+                let src = ctx.createBufferSource();
+                src.buffer = sfxNoiseBuffer(ctx); src.loop = true;
+                let filt = ctx.createBiquadFilter();
+                filt.type = 'bandpass'; filt.Q.value = q || 1;
+                filt.frequency.setValueAtTime(filterFrom, now);
+                filt.frequency.exponentialRampToValueAtTime(Math.max(40, filterTo || filterFrom), now + len);
+                let g = ctx.createGain();
+                g.gain.setValueAtTime(0.0001, now);
+                g.gain.linearRampToValueAtTime(peak, now + Math.min(0.03, len * 0.3));
+                g.gain.exponentialRampToValueAtTime(0.0005, now + len);
+                src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+                src.start(now); src.stop(now + len + 0.05);
+            } catch (e) { }
+        }
+        // ── 下面这几个是给各个模式复用的"语义化"音效，不用每处自己调参数 ──
+        // 扔出去：噪声从高频往低频快速扫一下，像东西"嗖"地飞出去
+        function sfxThrow() { sfxNoise(0.22, 0.05, 2600, 500, 1.2); }
+        // 砸中/命中/抓到：短促闷响——噪声炸一下 + 一个低音振荡器托底，扎实但不刺耳
+        function sfxThud(big) {
+            sfxNoise(big ? 0.18 : 0.12, big ? 0.09 : 0.06, big ? 900 : 1400, big ? 120 : 220, 0.9);
+            sfxPlay([big ? 90 : 130], 0.18, 0.045, 'sine');
+        }
+        // 接住/捡到/救到/送达这类"成功"反馈：音阶往上走的一小串琶音，tier 越大听着越振奋
+        function sfxChime(tier) {
+            let base = 587.33;
+            let freqs = [base, base * 1.26, base * 1.5, base * 2];
+            sfxPlay(freqs.slice(0, Math.max(2, Math.min(4, tier || 2))), 0.22, 0.055, 'triangle');
+        }
+        // 被抓/被淘汰/没接住这类"失败"反馈：短促下滑的两个音
+        function sfxBuzz() { sfxPlay([246, 174.6], 0.3, 0.05, 'sawtooth'); }
+        // 技能施放：滑音"嗞"一下，1 技能音调比 2 技能亮一点，两个技能听感不一样
+        function sfxZap(slot) {
+            if (slot === 2) sfxNoise(0.16, 0.05, 700, 1900, 2.2);
+            else sfxNoise(0.14, 0.05, 1200, 2800, 2.2);
+            sfxPlay([slot === 2 ? 220 : 440], 0.14, 0.03, 'square');
+        }
+        // 机关/开门这类"世界状态变化"：低沉的一声，跟"成功"琶音区分开
+        function sfxMechanism() { sfxPlay([220, 293.66], 0.55, 0.05, 'sine'); sfxNoise(0.3, 0.04, 300, 150, 1); }
 
         let bgm = null;
         let BGM_ENABLED = false;   // 暂时关掉背景音乐；改回 true 或在设置面板里点开就恢复
@@ -17594,7 +17689,7 @@
                 // 联机时我自己撞线得广播出去——对面那具"我"的假身体是靠网络位置摆着的，
                 // 不会自己触发这段撞线判定，得靠这条消息让大家的本地状态都知道我冲线了。
                 if (race.net && r.isPlayer) bc.postMessage({ type: 'RACE_FINISH', target: '*', sender: gState.id, time: r.time });
-                if (r.isPlayer) blazeFlash('第 ' + r.place + ' 名冲线！' + r.time.toFixed(2) + 's');
+                if (r.isPlayer) { blazeFlash('第 ' + r.place + ' 名冲线！' + r.time.toFixed(2) + 's'); sfxChime(r.place <= 3 ? 4 : 2); }
                 else if (race.finishOrder.length <= 3) blazeFlash(r.name + ' 第 ' + r.place + ' 名冲线');
                 if (!r.isPlayer) {
                     let mate = raceTeammateOf(r);
@@ -17946,6 +18041,7 @@
                 title = '冠军';
                 btn = { label: '返回大厅', color: '#5cb85c', onClick: function () { raceExit(); } };
             }
+            if (title === '冠军') sfxChime(4); else if (me.out) sfxBuzz();
             showSysModal(title, lines, [btn]);
         }
 
@@ -18598,7 +18694,7 @@
             it.carrier = a; a.carrying = it;
             a.gestureT = 0.35; a.gestureKind = 'pickup';
             jailBurst(it.mesh.position.x, it.mesh.position.z, 0xffee58);
-            if (a.isPlayer) blazeFlash('拿到一件物品，赶紧带回家！');
+            if (a.isPlayer) { blazeFlash('拿到一件物品，赶紧带回家！'); sfxChime(1); }
             else if (a.team === jail.me.team) aiSay(a, a.name, 'pickup', JAIL_LINES.pickup);
         }
         function jailDeliverItem(it, newTeam, byActor) {
@@ -18607,7 +18703,7 @@
             if (byActor) { byActor.gestureT = 0.35; byActor.gestureKind = 'pickup'; }
             let col = newTeam === 0 ? 0x42a5f5 : 0xef5350;
             jailBurst(it.mesh.position.x, it.mesh.position.z, col);
-            if (jail.me.team === newTeam) blazeFlash('成功把物品带回了家！');
+            if (jail.me.team === newTeam) { blazeFlash('成功把物品带回了家！'); sfxChime(3); }
             else blazeFlash('对面把我们的物品抢回家了！');
             if (byActor && !byActor.isPlayer && byActor.team === jail.me.team) aiSay(byActor, byActor.name, 'deliver', JAIL_LINES.deliver);
             jailCheckItemWin();
@@ -18765,6 +18861,9 @@
                 b.gestureT = 0.35; b.gestureKind = 'pickup';
                 if (!b.isPlayer && b.team === jail.me.team) aiSay(b, b.name, 'catch', JAIL_LINES.catch);
             }
+            // 自己抓到人、或者自己被抓，都值得出声；别的队伍/别人抓别人太远太频繁，不响
+            if (a === jail.me) sfxBuzz();
+            else if (b === jail.me) sfxThud(true);
             jailCapture(a);
         }
         function jailCapture(a) {
@@ -18825,7 +18924,7 @@
                 }
             });
             jailBurst(jx, jz, 0x66bb6a);
-            if (jail.me.team === team) blazeFlash('队伍越狱成功！');
+            if (jail.me.team === team) { blazeFlash('队伍越狱成功！'); sfxChime(3); }
             if (rescuer && !rescuer.isPlayer && rescuer.team === jail.me.team) aiSay(rescuer, rescuer.name, 'rescue', JAIL_LINES.rescue);
         }
 
@@ -19397,6 +19496,7 @@
             a.holding = null;
             a.throwCd = DODGE.throwCd;
             a.gestureT = 0.3; a.gestureKind = 'throw';
+            if (a.isPlayer) sfxThrow();   // 只给自己扔的这一下出声，AI 满场扔球不用都响
             if (!a.isPlayer && a.team === dodge.me.team) aiSay(a, a.name, 'throw', DODGE_LINES.throw);
             let amHost = !dodge.hostId || dodge.hostId === gState.id;
             let dirObj = { x: dir.x, y: dir.y, z: dir.z };
@@ -19471,7 +19571,10 @@
         }
         function dodgeApplyEliminate(actorIdx) {
             let a = dodge.actors[actorIdx];
-            if (a) dodgeEliminate(a);
+            if (!a || a.out) return;
+            let wasMe = (a === dodge.me);
+            dodgeEliminate(a);
+            if (wasMe) sfxBuzz(); else if (a.team !== dodge.me.team) sfxThud(true);
         }
         function dodgeDoCatch(actorIdx, ballIdx) {
             dodgeApplyCatch(actorIdx, ballIdx);
@@ -19482,7 +19585,7 @@
             if (!a || !b) return;
             b.state = 'held'; b.holder = a; a.holding = b;
             dodgeBurst(a.p, 0x81d4fa);
-            if (a.isPlayer) blazeFlash('接住了！');
+            if (a.isPlayer) { blazeFlash('接住了！'); sfxChime(2); }
             else if (a.team === dodge.me.team) aiSay(a, a.name, 'catch', DODGE_LINES.catch);
             dodgeCatchRevive(a);
         }
@@ -19490,12 +19593,20 @@
             dodgeApplyReviveN(team);
             if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'reviveN', team: team });
         }
-        function dodgeApplyReviveN(team) { dodgeReviveN(team, DODGE.reviveN); }
+        function dodgeApplyReviveN(team) {
+            let wasOut = dodge.me.out;
+            dodgeReviveN(team, DODGE.reviveN);
+            if (wasOut && !dodge.me.out) sfxChime(3);
+        }
         function dodgeDoReviveAll(team) {
             dodgeApplyReviveAll(team);
             if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'reviveAll', team: team });
         }
-        function dodgeApplyReviveAll(team) { dodgeReviveAll(team); }
+        function dodgeApplyReviveAll(team) {
+            let wasOut = dodge.me.out;
+            dodgeReviveAll(team);
+            if (wasOut && !dodge.me.out) sfxChime(3);
+        }
 
         function dodgeResolveHit(b, a) {
             // 先记下真正被砸中的地方——dodgeEliminate 会把 a.p 挪去场边，
@@ -20346,7 +20457,7 @@
                         if (escapeRoom.sustainT >= ESCAPE.sustainNeed) {
                             escapeRoom.gate1Open = true;
                             escapeRoom.gate1Mesh.position.y = -20;
-                            blazeFlash('三块板都踩住了，一号门打开了！');
+                            blazeFlash('三块板都踩住了，一号门打开了！'); sfxMechanism();
                             let a = live.find(function (o) { return !o.isPlayer; });
                             if (a) aiSay(a, a.name, 'gate1', ESCAPE_LINES.gate1);
                         }
@@ -20354,7 +20465,10 @@
                 }
                 if (escapeRoom.gate1Open) {
                     let held = live.some(function (a) { return Math.hypot(a.p.x - ESCAPE.plate2.x, a.p.z - ESCAPE.plate2.z) < ESCAPE.plateR; });
-                    if (held) { escapeRoom.gate2Held = true; escapeRoom.gate2CloseT = ESCAPE.gateGrace; escapeRoom.gate2Mesh.position.y = -20; }
+                    if (held) {
+                        if (!escapeRoom.gate2Held) sfxMechanism();   // 只在从关到开这一下响，不然踩着不动会一直响
+                        escapeRoom.gate2Held = true; escapeRoom.gate2CloseT = ESCAPE.gateGrace; escapeRoom.gate2Mesh.position.y = -20;
+                    }
                     else if (escapeRoom.gate2Held) {
                         escapeRoom.gate2CloseT -= dt;
                         if (escapeRoom.gate2CloseT <= 0) { escapeRoom.gate2Held = false; escapeRoom.gate2Mesh.position.y = 10; }
@@ -20634,7 +20748,7 @@
             escapeRoom.gate2Open = !!m.gate2Held;
             if (escapeRoom.gate1Mesh) escapeRoom.gate1Mesh.position.y = escapeRoom.gate1Open ? -20 : 10;
             if (escapeRoom.gate2Mesh) escapeRoom.gate2Mesh.position.y = escapeRoom.gate2Held ? -20 : 10;
-            if (!wasOpen1 && escapeRoom.gate1Open) blazeFlash('三块板都踩住了，一号门打开了！');
+            if (!wasOpen1 && escapeRoom.gate1Open) { blazeFlash('三块板都踩住了，一号门打开了！'); sfxMechanism(); }
         }
 
         // ══════════════════════════════════════════════════════════
@@ -21337,8 +21451,8 @@
             tagger.kills = (tagger.kills || 0) + 1;
             victim.mesh.visible = false;
             cakeBurst(victim.p.x, victim.p.z, 0xff7043);
-            if (victim.isPlayer) blazeFlash('你被 ' + tagger.name + ' 拍出局了！');
-            else if (tagger.isPlayer) blazeFlash('你把 ' + victim.name + ' 拍出局了！');
+            if (victim.isPlayer) { blazeFlash('你被 ' + tagger.name + ' 拍出局了！'); sfxBuzz(); }
+            else if (tagger.isPlayer) { blazeFlash('你把 ' + victim.name + ' 拍出局了！'); sfxThud(true); }
             else aiSay(tagger, tagger.name, 'catch', CAKE_LINES.catch);
             cakeCheckWin();
         }
