@@ -2406,14 +2406,20 @@
             } catch (e) { }
             // 老版本存的是一份全局共用的，没有分模式——搬到"惊魂夜"名下（原来的默认词条
             // 本来就是照着这个模式写的），其它模式各自留着自己那套默认，不跟着老设置走。
+            // 老 key 迁完立刻删掉、新结果立刻落盘：不然万一之后哪次不管什么原因
+            // chatQuickByMode 又变回空的（比如手动把惊魂夜那份"恢复默认"存回去，
+            // 存的时候整份都跟默认一样会被清空），这段迁移逻辑会一直在，把老 key
+            // 里那份过时的自定义内容重新灌回来，用户手动清掉的默认值又被悄悄改回去。
             if (!Object.keys(chatQuickByMode).length) {
                 try {
                     let old = JSON.parse(localStorage.getItem('TH_chat') || 'null');
                     if (Array.isArray(old) && old.length === 5) {
                         chatQuickByMode.night = old.map(function (t, i) { return String(t || CHAT_DEFAULTS.night[i]).slice(0, 20); });
+                        chatSave();
                     }
                 } catch (e) { }
             }
+            try { localStorage.removeItem('TH_chat'); } catch (e) { }
         }
         function chatSave() { try { localStorage.setItem('TH_chat_v2', JSON.stringify(chatQuickByMode)); } catch (e) { } }
 
@@ -2479,7 +2485,10 @@
         }
 
         function chatEscape(t) {
-            return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // 快捷发言设置面板把这个结果直接塞进 value="..." 属性里，光转义 &<> 不够——
+            // 存的文字里如果带双引号，会提前把属性值闭合掉，后面的内容变成能执行的
+            // 属性（比如 onfocus=...），得把引号也转义掉。
+            return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
         function chatPush(who, text, mine) {
