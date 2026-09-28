@@ -1995,7 +1995,7 @@
         }
         function friendAdd(id) {
             let el = document.getElementById('friend-name');
-            let name = (id || (el ? el.value : '')).trim();
+            let name = sanitizeId((id || (el ? el.value : '')).trim());
             if (!name) { showSysModal('提示', '先填对方的 ID', [{ label: '确定' }]); return; }
             if (name === gState.id) { showSysModal('提示', '不用加自己', [{ label: '确定' }]); return; }
             let f = friends.find(function (x) { return x.id === name; });
@@ -2870,8 +2870,16 @@
         function dispName(id) {
             return (id || '').replace(/#[0-9a-z]{4}(?=(_AI_\d+)?$)/, '');
         }
+        // ID 会原样广播给房间里所有人，好多地方（房间列表、好友列表、组队邀请弹窗、
+        // 匹配等待名单……）是直接把它拼进 innerHTML 里显示的，不是当纯文本塞进
+        // innerText——不过滤的话，随便什么人把自己 ID 起成带 <img onerror=...> 这种，
+        // 就能在所有看到这个 ID 的人的浏览器里跑代码。只挡真正有危险的几个 HTML
+        // 特殊字符，中文/emoji/别的标点都不受影响，正常起名基本感觉不到。
+        function sanitizeId(raw) {
+            return String(raw || '').replace(/[<>&"']/g, '');
+        }
         function requestLobbyAccess() {
-            let raw = document.getElementById('player-id').value.trim();
+            let raw = sanitizeId(document.getElementById('player-id').value.trim());
             if (!raw) { showSysModal('错误', '请输入ID', [{ label: '确定' }]); return; }
             let pid = resolvePlayerId(raw);
             pendingIdCheck = pid; bc.postMessage({ type: 'CHECK_ID', target: '*', id: pid });
