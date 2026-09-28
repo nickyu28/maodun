@@ -4534,6 +4534,14 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-28-debug-flags', date: '2026-09-28', title: '修复几个误开的测试开关', items: [
+                    '寻宝队之前默认无限金钱、打不死、地图上没有怪——现在恢复正常难度（想作弊可以自己在设置面板里开）。',
+                    '超燃模式之前默认技能无冷却、按Q能直接跳过整局——现在恢复正常，冷却和判负都正常了。',
+                    '商店之前默认所有猫盾币无限、皮肤全解锁——现在需要正常攒币购买。',
+                    '惊魂夜之前默认显示一个开发用的相机诊断信息，现在关掉了。'
+                ]
+            },
+            {
                 id: '2026-09-24-mcoin', date: '2026-09-24', title: '货币统一成猫盾币 + 皮肤系统 + 组队联机实验', items: [
                     '寻宝队/惊魂夜/超燃各自的金币，还有商店宠物/表情用的通用币，合并成一份"猫盾币"，全模式通用（寻宝队自己的钱还是单独一套，不受影响）。',
                     '因为货币结构变了，这次更新会把所有人的存档（寻宝队的钱、猫盾币、角色解锁）清零重来——现在还没人正式在玩，直接清干净比小心翼翼换算更省事。',
@@ -4717,11 +4725,11 @@
 
         // 测试用：只有你自己的技能没有冷却（AI 照常吃冷却，不然对面无限放技能没法打）。
         // 正式发布改回 false。
-        let BLAZE_TEST_NO_CD = true;
+        let BLAZE_TEST_NO_CD = false;
         // 测试用：按 Q 直接跳过这一局，判给目前赢得少的那一方。正式发布改回 false。
-        let BLAZE_TEST_SKIP_KEY = true;
+        let BLAZE_TEST_SKIP_KEY = false;
         // 测试用：选卡不计时，想看多久看多久。正式发布改回 false。
-        let BLAZE_TEST_NO_PERK_TIMER = true;
+        let BLAZE_TEST_NO_PERK_TIMER = false;
 
         // ══════════════ 超燃：2v2 一条命，先赢 5 局 ══════════════
         // 每日效果：按当天日期定一条全局手感修正，所有模式共用同一份——
@@ -5229,7 +5237,7 @@
             night: { mi: 1, cat: 1 },
             blaze: { bow: 1, sword: 1 }
         };
-        let TEST_INFINITE_COINS = true;   // 测试用，可以在设置面板里关掉
+        let TEST_INFINITE_COINS = false;   // 测试用，可以在设置面板里关掉
 
         function coinsOf() {
             if (TEST_INFINITE_COINS) return 99999;
@@ -11072,11 +11080,11 @@
         let RACE_TEST_NO_PICK_TIMER = false; // 选技能不计时，慢慢挑
         let HUNT_TEST_AI_NOLOOT = false;   // AI 队友不去抢箱子，全场的箱子都留给你
         let HUNT_TEST_NOWEIGHT = false;    // 负重不减速
-        let HUNT_TEST_MONEY = true;
-        let HUNT_TEST_GOD = true;
-        let HUNT_TEST_NOMOB = true;
-        let NIGHT_DEBUG_CAM = true;
-        let NIGHT_NO_CD = true;
+        let HUNT_TEST_MONEY = false;
+        let HUNT_TEST_GOD = false;
+        let HUNT_TEST_NOMOB = false;
+        let NIGHT_DEBUG_CAM = false;
+        let NIGHT_NO_CD = false;
         const NIGHT_SKELETON_SEED = 424242;
         function nightCellKey(wx, wz) {
             return Math.floor((wx + TILE / 2) / TILE) + ',' + Math.floor((wz + TILE / 2) / TILE);
