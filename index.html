@@ -1963,7 +1963,7 @@
             else if (m === 'race') raceStartGo();
             else if (m === 'jail') jailBegin();
             else if (m === 'dodge') dodgeBegin(false);
-            else if (m === 'escape') escapeBegin();
+            else if (m === 'escape') escapeStartGo();
             else if (m === 'park') parkBegin(PARK_BUILTIN.easy);
             else if (m === 'cake') cakeStartGo();
         }
@@ -2263,6 +2263,12 @@
                 raceOnFinish(msg);
             } else if (msg.type === 'RACE_RESULT') {
                 raceOnResult(msg);
+            } else if (msg.type === 'ESC_START') {
+                if (msg.sender !== gState.id) escapeOnStart(msg);
+            } else if (msg.type === 'ESC_ME') {
+                escapeOnMe(msg);
+            } else if (msg.type === 'ESC_AI') {
+                escapeOnAi(msg);
             } else if (msg.type === 'NCHAR') {
                 netOnChar(msg);
             } else if (msg.type === 'NS_ME') {
@@ -2709,7 +2715,7 @@
         }
         let mmActive = null;      // 我自己在等：{ mode, cap, t0, left, onResolve, timer }
         let mmRoomPool = {};      // roomSync() 每次心跳都重新算一遍：{ id: { mode, left } }
-        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速' };
+        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速', escape: '合作密室' };
         function mmMinLeft() {
             let v = mmActive ? mmActive.left : Infinity;
             Object.keys(mmRoomPool).forEach(function (id) {
@@ -5253,6 +5259,13 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-28-escape-network', date: '2026-09-28', title: '合作密室接上真联机——测试性质，可能有问题', items: [
+                    '组队面板里确认过的真人现在会一起进同一个密室（之前是各玩各的本地模拟），压力板、拉杆门谁踩住/按住了都是真的，能看见对方实时跑动。没组队的话跟超燃/竞速/松饼一样，先等最多 15 秒看看有没有陌生人也想玩，凑不到就照旧配 AI。',
+                    '门开没开这种"必须全队看法一致"的判定交给发起人一个人算，别人跟着信，不然网络稍微卡一下就可能有人这边门开了、那边没开。用两台、三台模拟设备测过位置同步和机关状态，没问题；因为环境限制没法在真实两台设备上测，如果碰到卡住/看不见队友/门状态不对的问题，麻烦告诉我。',
+                    '躲避球、监狱救援还没接，这两个接完才算这一批做完。'
+                ]
+            },
             {
                 id: '2026-09-28-chat-per-mode', date: '2026-09-28', title: '快捷发言改成每个模式一份，设置面板能切换', items: [
                     '以前 5 条快捷发言全模式共用一份，内容还是照着惊魂夜写的（"追捕在我这"），拿去玩超燃/竞速之类完全不搭。现在每个模式（寻宝/惊魂夜/超燃/竞速/监狱救援/躲避球/密室/猫盾乐园/松饼大作战/大厅闲逛）各有一份贴合自己场景的默认词条，游戏内右下角那五条会跟着你正在玩的模式自动切换。',
@@ -19950,38 +19963,52 @@
             return { x: me.p.x - dir.x * 24, y: ay - dir.y * 24, z: me.p.z - dir.z * 24 };
         }
 
-        // 每一帧重判一次机关状态——谁站在板上就算数，不用按键
+        // 每一帧重判一次机关状态——谁站在板上就算数，不用按键。
+        // 联机的话机关开没开这种"必须全队看法一致"的判定交给房主一个人算，
+        // 跟超燃的 AI/世界状态走 host 广播是一个道理——不然每个人自己算一遍，
+        // 位置同步哪怕差个几十毫秒，都可能有人这边门开了、那边还没开。
+        // 单机（没有真联机）的时候房主恒等于自己，这段跟原来完全一样。
         function escapeMechanicTick(dt) {
             let live = escapeRoom.actors;
-            if (!escapeRoom.gate1Open) {
-                let allHeld = ESCAPE.plates1.every(function (p) {
-                    return live.some(function (a) { return Math.hypot(a.p.x - p.x, a.p.z - p.z) < ESCAPE.plateR; });
-                });
-                escapeRoom.plate1Meshes.forEach(function (m, i) {
-                    let held = live.some(function (a) { return Math.hypot(a.p.x - ESCAPE.plates1[i].x, a.p.z - ESCAPE.plates1[i].z) < ESCAPE.plateR; });
-                    m.material.color.setHex(held ? 0x66bb6a : 0x90a4ae);
-                });
-                if (allHeld) {
-                    escapeRoom.sustainT = (escapeRoom.sustainT || 0) + dt;
-                    if (escapeRoom.sustainT >= ESCAPE.sustainNeed) {
-                        escapeRoom.gate1Open = true;
-                        escapeRoom.gate1Mesh.position.y = -20;
-                        blazeFlash('三块板都踩住了，一号门打开了！');
-                        let a = live.find(function (o) { return !o.isPlayer; });
-                        if (a) aiSay(a, a.name, 'gate1', ESCAPE_LINES.gate1);
-                    }
-                } else escapeRoom.sustainT = 0;
-            }
+            let amHost = !escapeRoom.hostId || escapeRoom.hostId === gState.id;
+            // 板子/拉杆亮不亮纯粹是视觉反馈，谁都可以按自己看到的位置直接算，
+            // 不需要跟权威判定绑在一起。
+            escapeRoom.plate1Meshes.forEach(function (m, i) {
+                let held = live.some(function (a) { return Math.hypot(a.p.x - ESCAPE.plates1[i].x, a.p.z - ESCAPE.plates1[i].z) < ESCAPE.plateR; });
+                m.material.color.setHex(held ? 0x66bb6a : 0x90a4ae);
+            });
             if (escapeRoom.gate1Open) {
                 let held = live.some(function (a) { return Math.hypot(a.p.x - ESCAPE.plate2.x, a.p.z - ESCAPE.plate2.z) < ESCAPE.plateR; });
                 escapeRoom.plate2Mesh.material.color.setHex(held ? 0x66bb6a : 0x90a4ae);
-                if (held) { escapeRoom.gate2Held = true; escapeRoom.gate2CloseT = ESCAPE.gateGrace; escapeRoom.gate2Mesh.position.y = -20; }
-                else if (escapeRoom.gate2Held) {
-                    escapeRoom.gate2CloseT -= dt;
-                    if (escapeRoom.gate2CloseT <= 0) { escapeRoom.gate2Held = false; escapeRoom.gate2Mesh.position.y = 10; }
-                }
             }
-            escapeRoom.gate2Open = !!escapeRoom.gate2Held;
+            if (amHost) {
+                if (!escapeRoom.gate1Open) {
+                    let allHeld = ESCAPE.plates1.every(function (p) {
+                        return live.some(function (a) { return Math.hypot(a.p.x - p.x, a.p.z - p.z) < ESCAPE.plateR; });
+                    });
+                    if (allHeld) {
+                        escapeRoom.sustainT = (escapeRoom.sustainT || 0) + dt;
+                        if (escapeRoom.sustainT >= ESCAPE.sustainNeed) {
+                            escapeRoom.gate1Open = true;
+                            escapeRoom.gate1Mesh.position.y = -20;
+                            blazeFlash('三块板都踩住了，一号门打开了！');
+                            let a = live.find(function (o) { return !o.isPlayer; });
+                            if (a) aiSay(a, a.name, 'gate1', ESCAPE_LINES.gate1);
+                        }
+                    } else escapeRoom.sustainT = 0;
+                }
+                if (escapeRoom.gate1Open) {
+                    let held = live.some(function (a) { return Math.hypot(a.p.x - ESCAPE.plate2.x, a.p.z - ESCAPE.plate2.z) < ESCAPE.plateR; });
+                    if (held) { escapeRoom.gate2Held = true; escapeRoom.gate2CloseT = ESCAPE.gateGrace; escapeRoom.gate2Mesh.position.y = -20; }
+                    else if (escapeRoom.gate2Held) {
+                        escapeRoom.gate2CloseT -= dt;
+                        if (escapeRoom.gate2CloseT <= 0) { escapeRoom.gate2Held = false; escapeRoom.gate2Mesh.position.y = 10; }
+                    }
+                }
+                escapeRoom.gate2Open = !!escapeRoom.gate2Held;
+            }
+            // 非房主这两扇门的开关状态是从 ESC_AI 广播里直接套用的（见 escapeOnAi），
+            // 这里不用自己再算一遍。
             if (!escapeRoom.over && live.every(function (a) { return a.p.z >= ESCAPE.finishZ; })) escapeEndMatch(true);
             if (!escapeRoom.over && escapeRoom.clock >= ESCAPE.matchTime) escapeEndMatch(false);
         }
@@ -20055,8 +20082,15 @@
 
         function escapeTick(dt) {
             escapeRoom.clock += dt;
-            escapeRoom.actors.forEach(function (a) { if (a.isPlayer) escapePlayerMove(a, dt); else escapeAi(a, dt); });
+            let amHost = !escapeRoom.hostId || escapeRoom.hostId === gState.id;
+            escapeRoom.actors.forEach(function (a) {
+                if (a.isPlayer) escapePlayerMove(a, dt);
+                else if (!a.netId && amHost) escapeAi(a, dt);
+                // 联机的队友（netId 有值）跟非房主这边的 AI：位置全靠 ESC_ME/ESC_AI
+                // 网络同步过来，这里不本地再跑一遍逻辑，不然会跟对方自己算出来的位置岔开。
+            });
             escapeMechanicTick(dt);
+            if (escapeRoom.netOn) escapeNetTick(dt);
             escapeRoom.actors.forEach(function (a) {
                 a.mesh.position.set(a.p.x, a.p.y, a.p.z);
                 if (a.faceDir) a.mesh.rotation.y = Math.atan2(a.faceDir.x, a.faceDir.z);
@@ -20099,7 +20133,17 @@
             });
         }
 
-        function escapeBegin() {
+        // 4 个位置：真人先坐，剩下发 AI——跟超燃 blazePlan 一个思路，密室没有队伍/
+        // 角色区分，不用配平，直接按顺序坐就行。
+        function escapePlan(humans) {
+            let plan = [];
+            for (let i = 0; i < ESCAPE.teamSize; i++) plan.push({ idx: i, id: null });
+            humans.slice(0, ESCAPE.teamSize).forEach(function (h, i) { plan[i].id = h.id; });
+            return plan;
+        }
+        function escapeBegin(plan, hostId) {
+            plan = plan || escapePlan([{ id: gState.id }]);
+            hostId = hostId || gState.id;
             showModeIntroIfFirstTime('escape');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
@@ -20115,23 +20159,29 @@
             scene.background = new THREE.Color(0xefebe9);
             scene.fog = new THREE.FogExp2(0xefebe9, 0.0025);
 
-            escapeRoom = { over: false, clock: 0, actors: [], meshes: [], gate1Open: false, gate2Open: false, gate2Held: false, sustainT: 0, last: performance.now(), raf: null };
+            let netOn = plan.filter(function (q) { return q.id; }).length > 1;
+            escapeRoom = {
+                over: false, clock: 0, actors: [], meshes: [], gate1Open: false, gate2Open: false, gate2Held: false,
+                sustainT: 0, last: performance.now(), raf: null, hostId: hostId, netOn: netOn
+            };
             escapeBuildRoom();
 
             let n = ESCAPE.teamSize;
             for (let i = 0; i < n; i++) {
-                let isP = i === 0;
+                let slot = plan[i];
+                let isP = slot.id === gState.id;
                 let mesh = raceMakeBody(isP ? mySkinColor(0x8d6e63) : 0x8d6e63, 0);
                 scene.add(mesh);
                 let x = (i - (n - 1) / 2) * 10;
                 let a = {
-                    idx: i, isPlayer: isP, name: isP ? (gState.id || '你') : ('队员' + (i + 1)),
+                    idx: i, isPlayer: isP, netId: slot.id || null,
+                    name: slot.id ? (dispName(slot.id) || '你') : ('队员' + (i + 1)),
                     p: new THREE.Vector3(x, 0, 0), faceDir: { x: 0, z: 1 }, animT: 0, plateTarget: null,
                     mesh: mesh
                 };
                 escapeRoom.actors.push(a);
             }
-            escapeRoom.me = escapeRoom.actors[0];
+            escapeRoom.me = escapeRoom.actors.filter(function (a) { return a.isPlayer; })[0] || escapeRoom.actors[0];
             camera.rotation.set(0, Math.PI, 0);   // 默认朝向是 -Z，得转 180° 才是面朝 +Z，正对着密室往里走
 
             document.body.onmousedown = function (e) {
@@ -20158,6 +20208,78 @@
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
             nav('screen-lobby'); selectGameMode('escape');
+        }
+
+        // 组了队直接带队友进；没组队先等最多 15 秒看房间里有没有人也想玩，
+        // 凑不到就照旧配 AI——跟超燃/竞速/松饼是同一套（mmStart）。
+        function escapeStartGo() {
+            if (lobbyParty.length > 0) {
+                let ids = [gState.id].concat(lobbyParty.slice(0, ESCAPE.teamSize - 1));
+                let plan = escapePlan(ids.map(function (id) { return { id: id }; }));
+                if (ids.length > 1) bc.postMessage({ type: 'ESC_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+                escapeBegin(plan, gState.id);
+                return;
+            }
+            mmStart('escape', ESCAPE.teamSize, function (ids) {
+                let plan = escapePlan(ids.map(function (id) { return { id: id }; }));
+                if (ids.length > 1) bc.postMessage({ type: 'ESC_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
+                escapeBegin(plan, gState.id);
+            });
+        }
+        function escapeOnStart(m) {
+            if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            // 真人对局是别人那边先广播成的——本机万一还在自己那套匹配计时里挂着，
+            // 不清掉的话它几秒后会自己再触发一次。跟超燃收到 BZ_START 一个道理。
+            mmCancel();
+            if (escapeRoom) { if (escapeRoom.raf) cancelAnimationFrame(escapeRoom.raf); escapeRoom = null; }
+            escapeBegin(m.plan, m.host);
+        }
+        const ESC_ME_HZ = 15, ESC_AI_HZ = 10;
+        function escapeNetTick(dt) {
+            escapeRoom._meT = (escapeRoom._meT || 0) + dt;
+            if (escapeRoom._meT >= 1 / ESC_ME_HZ) {
+                escapeRoom._meT = 0;
+                let me = escapeRoom.me;
+                bc.postMessage({
+                    type: 'ESC_ME', target: '*', sender: gState.id,
+                    x: me.p.x, z: me.p.z, fx: me.faceDir.x, fz: me.faceDir.z
+                });
+            }
+            if (escapeRoom.hostId === gState.id) {
+                escapeRoom._aiT = (escapeRoom._aiT || 0) + dt;
+                if (escapeRoom._aiT >= 1 / ESC_AI_HZ) {
+                    escapeRoom._aiT = 0;
+                    let list = escapeRoom.actors.filter(function (a) { return !a.netId; })
+                        .map(function (a) { return { idx: a.idx, x: a.p.x, z: a.p.z, fx: a.faceDir.x, fz: a.faceDir.z }; });
+                    bc.postMessage({
+                        type: 'ESC_AI', target: '*', sender: gState.id, ai: list,
+                        gate1Open: escapeRoom.gate1Open, gate2Held: escapeRoom.gate2Held
+                    });
+                }
+            }
+        }
+        function escapeOnMe(m) {
+            if (!escapeRoom || m.sender === gState.id) return;
+            let a = escapeRoom.actors.filter(function (o) { return o.netId === m.sender; })[0];
+            if (!a) return;
+            a.p.x = m.x; a.p.z = m.z; a.faceDir = { x: m.fx, z: m.fz };
+        }
+        // 非房主这边：AI 位置直接套用房主广播的，门开没开也直接信房主的判定——
+        // 不然每个人自己跑一遍 AI/机关逻辑，位置同步一有延迟就可能有人这边门开了、
+        // 那边还没开，两边画面对不上。
+        function escapeOnAi(m) {
+            if (!escapeRoom || m.sender === gState.id || escapeRoom.hostId !== m.sender) return;
+            (m.ai || []).forEach(function (q) {
+                let a = escapeRoom.actors[q.idx];
+                if (a && !a.isPlayer && !a.netId) { a.p.x = q.x; a.p.z = q.z; a.faceDir = { x: q.fx, z: q.fz }; }
+            });
+            let wasOpen1 = escapeRoom.gate1Open;
+            escapeRoom.gate1Open = !!m.gate1Open;
+            escapeRoom.gate2Held = !!m.gate2Held;
+            escapeRoom.gate2Open = !!m.gate2Held;
+            if (escapeRoom.gate1Mesh) escapeRoom.gate1Mesh.position.y = escapeRoom.gate1Open ? -20 : 10;
+            if (escapeRoom.gate2Mesh) escapeRoom.gate2Mesh.position.y = escapeRoom.gate2Held ? -20 : 10;
+            if (!wasOpen1 && escapeRoom.gate1Open) blazeFlash('三块板都踩住了，一号门打开了！');
         }
 
         // ══════════════════════════════════════════════════════════
