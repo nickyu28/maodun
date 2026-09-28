@@ -854,7 +854,7 @@
             <button onclick="shopTab('pet')" id="shop-tab-pet">宠物</button>
             <button onclick="shopTab('face')" id="shop-tab-face">表情</button>
             <button onclick="shopTab('char')" id="shop-tab-char">角色</button>
-            <button onclick="shopTab('skin')" id="shop-tab-skin">皮肤</button>
+            <button onclick="shopTab('skin')" id="shop-tab-skin">皮肤/配饰</button>
         </div>
         <div id="shop-body" style="width:340px; max-height:60vh; overflow-y:auto; touch-action:pan-y;"></div>
         <button onclick="nav('screen-lobby')" style="margin-top:12px; background:#999; color:#fff; border:none;">返回</button>
@@ -2156,7 +2156,7 @@
         let initArr = new Array(6).fill(null); initArr[0] = { ...shopItems['鱼叉'] }; initArr[1] = { ...shopItems['地窖徽章'] };
         const gState = {
             control: 'laptop', char: 'green', id: '', money: 10000, team: [], aiFill: false, runCash: 0, aiSubmitted: 0, aiChestsTaken: 0, blazeChar: 'bow', mouseSensitivity: 1,
-            mcoin: 0, skins: {}, skinColor: null, parkUnlocked: {}, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, checkinStreak: 0, checkinLastDay: -1, inv: initArr, garage: new Array(200).fill(null),
+            mcoin: 0, skins: {}, skinColor: null, acc: { hat: null, eye: null, neck: null }, ownedAcc: {}, parkUnlocked: {}, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, checkinStreak: 0, checkinLastDay: -1, inv: initArr, garage: new Array(200).fill(null),
             maxInv: 6, hp: 100, maxHp: 100, isDead: false, selectedContainer: 'inv', selectedSlot: 0, totalSubmitted: 0,
             backpackOpen: false, largeMapOpen: false, inSafeZone: true, needsLock: false, pAtkCd: 0, timeStop: 0, preGenSpawns: [],
             mapDifficulty: 'easy', extractTarget: 140000, gameMode: 'hunt',
@@ -2183,7 +2183,7 @@
         const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -2193,7 +2193,7 @@
                 if (saved) {
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
-                        gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
+                        gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = data.acc || { hat: null, eye: null, neck: null }; gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); grantBadgeIfMissing(); return;
                     }
@@ -2201,7 +2201,7 @@
                 }
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
-            gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
+            gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { hat: null, eye: null, neck: null }; gState.ownedAcc = {}; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
             expandInventory();
         }
 
@@ -5286,6 +5286,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-28-skin-accessory', date: '2026-09-28', title: '皮肤抽奖降价 + 新增配饰自由 DIY', items: [
+                    '皮肤颜色抽一次从 50 猫盾币降到 10。',
+                    '商店"皮肤"页新增"配饰"：帽子（鸭舌帽/生日帽/皇冠）、眼镜（墨镜/圆框）、脖子（领结/围巾）三个部位，每件直接花钱买断（不是抽奖），买完永久拥有，三个部位各自独立装备、随便搭配组合。作用范围跟皮肤颜色一样——大厅广场/竞速/密室/松饼大作战，监狱救援/躲避球颜色代表队伍不受影响；也跟皮肤颜色一样只有自己能看到自己的搭配。'
+                ]
+            },
             {
                 id: '2026-09-28-daily-checkin', date: '2026-09-28', title: '新增每日签到', items: [
                     '大厅左上角新增"每日签到"，每天第一次点可以领猫盾币，连续签到奖励递增（第 7 天最多、之后循环），断签一天就从第 1 天重新开始。没签到过的时候按钮上有个小红点提醒。'
@@ -17379,8 +17385,50 @@
         // 才用玩家自己选的皮肤颜色覆盖默认色；监狱救援/躲避球这种颜色代表队伍的地方不能乱套。
         const SKIN_COLORS = RACE_COLORS.slice(0, 15);
         const SKIN_BLANKS = 5;
-        const SKIN_PRICE = 50;
+        const SKIN_PRICE = 10;
         const SKIN_PITY_LIMIT = 12;
+        // 配饰：不走抽奖，直接花钱买断，买完永久拥有，三个部位（帽子/眼镜/脖子）各自独立
+        // 装备互不影响，随便搭——真正的"自由 DIY"，不是开箱子看运气。跟皮肤颜色一样，
+        // 只在没有队伍色含义的地方生效，且只有自己能看见自己戴的（跟皮肤颜色现有规则一致，不联机同步）。
+        const ACCESSORY_DEFS = {
+            hat: [
+                { id: 'cap', n: '鸭舌帽', price: 10 },
+                { id: 'party', n: '生日帽', price: 10 },
+                { id: 'crown', n: '皇冠', price: 20 }
+            ],
+            eye: [
+                { id: 'shades', n: '墨镜', price: 10 },
+                { id: 'glasses', n: '圆框眼镜', price: 10 }
+            ],
+            neck: [
+                { id: 'bowtie', n: '领结', price: 8 },
+                { id: 'scarf', n: '围巾', price: 10 }
+            ]
+        };
+        const ACC_SLOT_NAME = { hat: '帽子', eye: '眼镜', neck: '脖子' };
+        function accDefOf(id) {
+            for (let slot in ACCESSORY_DEFS) {
+                let hit = ACCESSORY_DEFS[slot].find(function (a) { return a.id === id; });
+                if (hit) return hit;
+            }
+            return null;
+        }
+        function accEquip(slot, id) {
+            if (!gState.acc) gState.acc = { hat: null, eye: null, neck: null };
+            if (id !== null && !(gState.ownedAcc && gState.ownedAcc[id])) return;
+            gState.acc[slot] = (gState.acc[slot] === id) ? null : id;
+            saveProgress();
+            shopTab('skin');
+        }
+        function accBuy(slot, id) {
+            if (gState.ownedAcc && gState.ownedAcc[id]) { accEquip(slot, id); return; }
+            let def = accDefOf(id);
+            if (!def) return;
+            if (!shopSpend(def.price)) return;
+            if (!gState.ownedAcc) gState.ownedAcc = {};
+            gState.ownedAcc[id] = true;
+            accEquip(slot, id);
+        }
         function mySkinColor(defaultColor) { return (gState.skinColor !== null && gState.skinColor !== undefined) ? gState.skinColor : defaultColor; }
         function skinDraw() {
             if (!shopSpend(SKIN_PRICE)) return;
@@ -17430,6 +17478,22 @@
             });
             out += '</div>' +
                 (gState.skinColor !== null ? '<button onclick="shopEquipSkin(null)" style="width:100%; margin-top:10px; background:#999; color:#fff; border:none; font-size:12px; padding:6px 0;">换回默认颜色</button>' : '');
+            out += '<div style="margin-top:16px; padding-top:12px; border-top:1px solid #eee; text-align:left;">' +
+                '<div style="font-size:13px; color:#555; font-weight:bold; margin-bottom:4px;">配饰 · 自由 DIY</div>' +
+                '<div style="font-size:11px; color:#888; margin-bottom:8px;">每件直接买断，买完永久拥有；帽子/眼镜/脖子三个部位各自独立装备，随便搭配组合，不是抽奖。</div>';
+            ['hat', 'eye', 'neck'].forEach(function (slot) {
+                out += '<div style="font-size:12px; color:#666; margin:8px 0 4px;">' + ACC_SLOT_NAME[slot] + '</div>' +
+                    '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px;">';
+                ACCESSORY_DEFS[slot].forEach(function (a) {
+                    let owned = !!(gState.ownedAcc && gState.ownedAcc[a.id]);
+                    let on = gState.acc && gState.acc[slot] === a.id;
+                    out += '<button onclick="accBuy(\'' + slot + '\',\'' + a.id + '\')" style="margin:0; font-size:11px; padding:8px 2px; background:' +
+                        (on ? '#5cb85c' : (owned ? '#eceff1' : '#fff')) + '; color:' + (on ? '#fff' : '#555') + '; border:1px solid ' + (on ? '#4a9c4a' : '#ddd') + ';">' +
+                        a.n + '<br>' + (owned ? (on ? '已装备' : '点击装备') : (a.price + ' 猫盾币')) + '</button>';
+                });
+                out += '</div>';
+            });
+            out += '</div>';
             return out;
         }
         // 猫盾脸——两个水平对齐的圆点眼睛 + 一个椭圆嘴巴，中间一条竖直线分两半，
@@ -17461,7 +17525,80 @@
                 new THREE.MeshBasicMaterial({ map: catFaceTexture(), transparent: true, depthWrite: false }));
             face.position.set(0, y, z); g.add(face);
         }
-        function raceMakeBody(col, handRange, hideRing) {
+        // 配饰渲染：只在 withAcc（本人）时挂，几个部位各是几个基础几何体拼的小组件，
+        // 固定配色（不跟随皮肤色），挂在 addCatFace 定的脸高度/朝向坐标系上，
+        // 两种身体（raceMakeBody 的方盒子/cakeMakeBody 的圆柱）分别传各自的高度参数就行。
+        function addAccHat(g, id, y) {
+            let grp = new THREE.Group(); grp.position.y = y;
+            if (id === 'cap') {
+                let mat = new THREE.MeshLambertMaterial({ color: 0xe53935 });
+                let top = new THREE.Mesh(new THREE.SphereGeometry(2.1, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+                grp.add(top);
+                let brim = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.3, 10), mat);
+                brim.position.set(0, -0.05, 1.8); brim.rotation.x = 0.2; grp.add(brim);
+            } else if (id === 'party') {
+                let mat = new THREE.MeshLambertMaterial({ color: 0xab47bc });
+                let cone = new THREE.Mesh(new THREE.ConeGeometry(1.8, 3.2, 10), mat);
+                cone.position.y = 1.4; grp.add(cone);
+                let pom = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), new THREE.MeshLambertMaterial({ color: 0xffeb3b }));
+                pom.position.y = 3.1; grp.add(pom);
+            } else if (id === 'crown') {
+                let mat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
+                let band = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 1.0, 8), mat);
+                grp.add(band);
+                for (let i = 0; i < 5; i++) {
+                    let spike = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.2, 4), mat);
+                    let ang = (i / 5) * Math.PI * 2;
+                    spike.position.set(Math.cos(ang) * 1.8, 1.0, Math.sin(ang) * 1.8);
+                    grp.add(spike);
+                }
+            }
+            g.add(grp);
+        }
+        function addAccEye(g, id, y, z) {
+            if (id === 'shades') {
+                let mat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+                [-1, 1].forEach(function (sdir) {
+                    let lens = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.9, 0.3), mat);
+                    lens.position.set(sdir * 1.1, y + 0.2, z + 0.2); g.add(lens);
+                });
+                let bridge = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.25, 0.25), mat);
+                bridge.position.set(0, y + 0.2, z + 0.2); g.add(bridge);
+            } else if (id === 'glasses') {
+                let mat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+                [-1, 1].forEach(function (sdir) {
+                    let ring = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.12, 6, 12), mat);
+                    ring.position.set(sdir * 1.1, y + 0.2, z + 0.2); g.add(ring);
+                });
+                let bridge = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.12), mat);
+                bridge.position.set(0, y + 0.2, z + 0.2); g.add(bridge);
+            }
+        }
+        function addAccNeck(g, id, y, z) {
+            if (id === 'bowtie') {
+                let mat = new THREE.MeshLambertMaterial({ color: 0xd32f2f });
+                [-1, 1].forEach(function (sdir) {
+                    let wing = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.4, 4), mat);
+                    wing.rotation.z = sdir * Math.PI / 2; wing.position.set(sdir * 0.7, y, z);
+                    g.add(wing);
+                });
+                let knot = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), mat);
+                knot.position.set(0, y, z); g.add(knot);
+            } else if (id === 'scarf') {
+                let mat = new THREE.MeshLambertMaterial({ color: 0xff7043 });
+                let ring = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.7, 6, 16), mat);
+                ring.rotation.x = Math.PI / 2; ring.position.y = y; g.add(ring);
+                let tail = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.4, 0.3), mat);
+                tail.position.set(1.4, y - 1.8, z); g.add(tail);
+            }
+        }
+        function addAccessories(g, faceY, faceZ, hatY) {
+            let acc = gState.acc; if (!acc) return;
+            if (acc.hat) addAccHat(g, acc.hat, hatY);
+            if (acc.eye) addAccEye(g, acc.eye, faceY, faceZ);
+            if (acc.neck) addAccNeck(g, acc.neck, faceY - 4.5, faceZ);
+        }
+        function raceMakeBody(col, handRange, hideRing, withAcc) {
             let g = new THREE.Group();
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.BoxGeometry(6, 11, 4), mat);
@@ -17521,6 +17658,7 @@
                 reach.rotation.x = -Math.PI / 2; reach.position.y = 0.4; g.add(reach);
                 g.userData.reach = reach;
             }
+            if (withAcc) addAccessories(g, 8, 2.02, 12.9);
             return g;
         }
 
@@ -17554,7 +17692,7 @@
 
         function raceMakeRacer(i, isPlayer, key) {
             let col = isPlayer ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
-            let mesh = raceMakeBody(col);
+            let mesh = raceMakeBody(col, null, false, isPlayer);
             scene.add(mesh);
             return {
                 idx: i, isPlayer: isPlayer, key: key,
@@ -20701,7 +20839,7 @@
             for (let i = 0; i < n; i++) {
                 let slot = plan[i];
                 let isP = slot.id === gState.id;
-                let mesh = raceMakeBody(isP ? mySkinColor(0x8d6e63) : 0x8d6e63, 0);
+                let mesh = raceMakeBody(isP ? mySkinColor(0x8d6e63) : 0x8d6e63, 0, false, isP);
                 scene.add(mesh);
                 let x = (i - (n - 1) / 2) * 10;
                 let a = {
@@ -21213,7 +21351,7 @@
             scene.background = new THREE.Color(0x81d4fa);
             scene.fog = new THREE.FogExp2(0x81d4fa, 0.002);
 
-            let mesh = raceMakeBody(mySkinColor(0xffca28), 0);
+            let mesh = raceMakeBody(mySkinColor(0xffca28), 0, false, true);
             scene.add(mesh);
             let compiled = parkCompile(program.blocks);
             park = {
@@ -21842,7 +21980,7 @@
 
         // 松饼大作战专属身体：躯干换成圆柱（卷起来的松饼），耳朵不变，
         // 胳膊腿都改成贴着身体的矮圆墩——不再是伸得老远的细长方块。
-        function cakeMakeBody(col, handRange, hideRing) {
+        function cakeMakeBody(col, handRange, hideRing, withAcc) {
             let g = new THREE.Group();
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10, 18), mat);
@@ -21901,6 +22039,7 @@
                 reach.rotation.x = -Math.PI / 2; reach.position.y = 0.4; g.add(reach);
                 g.userData.reach = reach;
             }
+            if (withAcc) addAccessories(g, 7, 4.05, 11.6);
             return g;
         }
 
@@ -22028,7 +22167,7 @@
                 let q = plan[i] || {};
                 let isP = q.id === gState.id;
                 let col = isP ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
-                let mesh = cakeMakeBody(col, CAKE.handRange);
+                let mesh = cakeMakeBody(col, CAKE.handRange, false, isP);
                 scene.add(mesh);
                 let sp = spawns[i];
                 let name = q.id ? dispName(q.id) : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
@@ -22550,7 +22689,7 @@
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
 
-            let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0, true);
+            let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0, true, true);
             scene.add(mesh);
             hub = {
                 meshes: [], wanderers: [], realPlayers: {}, party: [], nearby: null,
