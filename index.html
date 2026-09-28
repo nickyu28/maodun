@@ -869,6 +869,7 @@
         <div id="lobby-tl">
             <button onclick="openShop()" style="width:100%; margin:0 0 6px; background:#e6a23c; color:#fff; border:none; font-size:13px; padding:8px 4px;">商店</button>
             <button onclick="openChangelog()" style="width:100%; margin:0 0 6px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">更新公告<span id="changelog-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
+            <button onclick="openCheckin()" style="width:100%; margin:0 0 6px; background:#ff9800; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">每日签到<span id="checkin-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
             <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">彩蛋图鉴</button>
             <button onclick="openChatSetup()" style="width:100%; margin:0 0 6px; background:#607d8b; color:#fff; border:none; font-size:12px; padding:7px 4px;">发言设置</button>
             <button onclick="openSensSetup()" style="width:100%; margin:0 0 6px; background:#546e7a; color:#fff; border:none; font-size:12px; padding:7px 4px;">灵敏度设置</button>
@@ -2155,7 +2156,7 @@
         let initArr = new Array(6).fill(null); initArr[0] = { ...shopItems['鱼叉'] }; initArr[1] = { ...shopItems['地窖徽章'] };
         const gState = {
             control: 'laptop', char: 'green', id: '', money: 10000, team: [], aiFill: false, runCash: 0, aiSubmitted: 0, aiChestsTaken: 0, blazeChar: 'bow', mouseSensitivity: 1,
-            mcoin: 0, skins: {}, skinColor: null, parkUnlocked: {}, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, inv: initArr, garage: new Array(200).fill(null),
+            mcoin: 0, skins: {}, skinColor: null, parkUnlocked: {}, owned: {}, streak: { hunt: 0, night: 0, blaze: 0 }, checkinStreak: 0, checkinLastDay: -1, inv: initArr, garage: new Array(200).fill(null),
             maxInv: 6, hp: 100, maxHp: 100, isDead: false, selectedContainer: 'inv', selectedSlot: 0, totalSubmitted: 0,
             backpackOpen: false, largeMapOpen: false, inSafeZone: true, needsLock: false, pAtkCd: 0, timeStop: 0, preGenSpawns: [],
             mapDifficulty: 'easy', extractTarget: 140000, gameMode: 'hunt',
@@ -2182,7 +2183,7 @@
         const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -2192,7 +2193,7 @@
                 if (saved) {
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
-                        gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
+                        gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); grantBadgeIfMissing(); return;
                     }
@@ -2200,7 +2201,7 @@
                 }
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
-            gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 };
+            gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
             expandInventory();
         }
 
@@ -2921,7 +2922,7 @@
         function proceedToLobby(pid) {
             let ai1Name = pid + "_AI_1"; let ai2Name = pid + "_AI_2"; gState.id = pid;
             gState.team = [{ id: pid, isLeader: true, isReady: true, isAI: false }, { id: ai1Name, isLeader: false, isReady: true, isAI: true }, { id: ai2Name, isLeader: false, isReady: true, isAI: true }];
-            loadProgress(pid); loadEggs(); friendLoad(); playLogLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
+            loadProgress(pid); loadEggs(); friendLoad(); playLogLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); checkinBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
             chatLoad();
             // 之前得自己敲房间号、点"进入"才算联机——两台设备各自打开游戏，
             // 谁都没点那一下，大厅里当然看不到对方，跟单机一样。现在默认自动
@@ -5286,6 +5287,11 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-28-daily-checkin', date: '2026-09-28', title: '新增每日签到', items: [
+                    '大厅左上角新增"每日签到"，每天第一次点可以领猫盾币，连续签到奖励递增（第 7 天最多、之后循环），断签一天就从第 1 天重新开始。没签到过的时候按钮上有个小红点提醒。'
+                ]
+            },
+            {
                 id: '2026-09-28-merge-id-screen', date: '2026-09-28', title: '选设备（电脑/平板）跟起 ID 合并成一屏', items: [
                     '以前是先选电脑还是平板、点了才跳到下一屏填 ID，两步；现在合并成一屏，选完设备接着往下填 ID，点"确定"直接进游戏。设备按钮点哪个哪个高亮，默认选中"电脑"，就算没点也会按这个默认值走。'
                 ]
@@ -5658,6 +5664,41 @@
             try { localStorage.setItem('TH_changelog_seen', CHANGELOG[0].id); } catch (e) { }
             changelogBadgeSync();
             showSysModal('更新公告', html, [{ label: '关闭', color: '#666' }]);
+        }
+
+        // 每日签到：7 天一循环，连续签到奖励递增；断签（隔了不止一天没签）从第 1 天重来。
+        // 用本地时区的"第几天"整数判断是不是新的一天，比存时间戳再算时差简单也不怕跨天误判。
+        const CHECKIN_REWARDS = [5, 8, 10, 12, 15, 20, 30];
+        function localDayNum() {
+            let d = new Date();
+            return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
+        }
+        function checkinAvailable() {
+            return gState.checkinLastDay !== localDayNum();
+        }
+        function checkinBadgeSync() {
+            let b = document.getElementById('checkin-badge');
+            if (b) b.style.display = checkinAvailable() ? 'inline-block' : 'none';
+        }
+        function openCheckin() {
+            let today = localDayNum();
+            if (gState.checkinLastDay === today) {
+                let next = CHECKIN_REWARDS[gState.checkinStreak % 7];
+                showSysModal('每日签到', '今天已经签到过啦，当前连续签到 <b>' + gState.checkinStreak + '</b> 天。<br>明天签到 +' + next + ' 猫盾币。', [{ label: '知道了' }]);
+                return;
+            }
+            let hadPrev = gState.checkinLastDay !== -1;
+            let continuing = gState.checkinLastDay === today - 1;
+            let broke = hadPrev && !continuing && gState.checkinStreak > 1;
+            let streak = continuing ? (gState.checkinStreak + 1) : 1;
+            let reward = CHECKIN_REWARDS[(streak - 1) % 7];
+            gState.checkinStreak = streak; gState.checkinLastDay = today;
+            coinsAdd('checkin', reward);
+            checkinBadgeSync();
+            let nextReward = CHECKIN_REWARDS[streak % 7];
+            showSysModal('每日签到', (broke ? '断签啦，从第 1 天重新开始～<br>' : '') +
+                '签到成功！连续签到 <b>' + streak + '</b> 天，获得 <b>' + reward + '</b> 猫盾币（当前共 ' + coinsOf() + ' 个）。<br>' +
+                '明天继续签到 +' + nextReward + ' 猫盾币。', [{ label: '太好了' }]);
         }
 
         // 反馈：没有后端，收不到结构化数据，就走最土但最不会掉链子的路——
