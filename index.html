@@ -19565,16 +19565,18 @@
         // 球的飞行/命中只有房主在跑（dodgeBallTick 由 amHost 控制），这里判出来的
         // 结果（淘汰/接住/复活）要影响到所有人的画面，走跟捡球一样的"算完就广播"，
         // 让每台机器上受影响的那个人（不管真人还是 AI）都做同一件事。
-        function dodgeDoEliminate(actorIdx) {
-            dodgeApplyEliminate(actorIdx);
-            if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'eliminate', a: actorIdx });
+        function dodgeDoEliminate(actorIdx, byIdx) {
+            dodgeApplyEliminate(actorIdx, byIdx);
+            if (dodge.netOn) bc.postMessage({ type: 'DODGE_EV', target: '*', sender: gState.id, ev: 'eliminate', a: actorIdx, by: byIdx });
         }
-        function dodgeApplyEliminate(actorIdx) {
+        function dodgeApplyEliminate(actorIdx, byIdx) {
             let a = dodge.actors[actorIdx];
             if (!a || a.out) return;
             let wasMe = (a === dodge.me);
+            let byMe = (typeof byIdx === 'number' && dodge.actors[byIdx] === dodge.me);
             dodgeEliminate(a);
-            if (wasMe) sfxBuzz(); else if (a.team !== dodge.me.team) sfxThud(true);
+            // 只有自己被砸、或者自己砸中人，才出声——不然满场 AI 互相淘汰的声音会连成一片。
+            if (wasMe) sfxBuzz(); else if (byMe) sfxThud(true);
         }
         function dodgeDoCatch(actorIdx, ballIdx) {
             dodgeApplyCatch(actorIdx, ballIdx);
@@ -19612,10 +19614,11 @@
             // 先记下真正被砸中的地方——dodgeEliminate 会把 a.p 挪去场边，
             // 球要是等挪完了再抄 a.p，就会跟着传送到场边，看着像「人被淘汰后变成了一颗球」。
             let hitPos = a.p.clone();
+            let byIdx = b.thrownBy ? b.thrownBy.idx : -1;
             if (b.kind === 'kill') {
                 dodgeBurst(a.p, 0x212121);
                 b.state = 'idle'; b.holder = null; b.p.copy(hitPos); b.p.y = 3.5; b.vel.set(0, 0, 0);
-                dodgeDoEliminate(a.idx);
+                dodgeDoEliminate(a.idx, byIdx);
                 return;
             }
             // 接不接得住看这一下有没有在「按空格」的接球窗口内——不看朝向。
@@ -19633,7 +19636,7 @@
                 dodgeDoCatch(a.idx, b.idx);
             } else {
                 b.state = 'idle'; b.holder = null; b.p.copy(hitPos); b.p.y = 3.5; b.vel.set(0, 0, 0);
-                dodgeDoEliminate(a.idx);
+                dodgeDoEliminate(a.idx, byIdx);
             }
         }
 
@@ -19722,9 +19725,12 @@
 
         // AI 的「捡球」还是自动的——没有按键这回事，纯粹是行为决策；
         // 玩家的捡球/接球全部改成显式按空格，在 dodgePlayerMove 里单独处理。
+        // 这个 tick 只有房主在跑，之前漏判了 netId——联机的真人队友在房主眼里
+        // isPlayer 是 false（isPlayer 只在"自己"那台机器上才是 true），不排除的话
+        // 房主这边会把真人队友当 AI，人站在球边上就替他自动捡起来，手感全乱了。
         function dodgePickupTick() {
             dodge.actors.forEach(function (a) {
-                if (a.isPlayer || a.out || a.holding) return;
+                if (a.isPlayer || a.netId || a.out || a.holding) return;
                 let ball = dodge.balls.find(function (b) {
                     return b.state === 'idle' && Math.hypot(b.p.x - a.p.x, b.p.z - a.p.z) < DODGE.pickupRange;
                 });
@@ -20353,7 +20359,7 @@
             if (m.sender === gState.id) return;
             if (m.ev === 'pickup') dodgeApplyPickup(m.a, m.b);
             else if (m.ev === 'drop') dodgeApplyDrop(m.a);
-            else if (m.ev === 'eliminate') dodgeApplyEliminate(m.a);
+            else if (m.ev === 'eliminate') dodgeApplyEliminate(m.a, m.by);
             else if (m.ev === 'catch') dodgeApplyCatch(m.a, m.b);
             else if (m.ev === 'reviveN') dodgeApplyReviveN(m.team);
             else if (m.ev === 'reviveAll') dodgeApplyReviveAll(m.team);
