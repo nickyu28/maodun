@@ -4456,7 +4456,10 @@
                 let c = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 4), new THREE.MeshLambertMaterial({ map: goldChestTex })); c.position.set(goldShopLoc.x * TILE - 8, 2, goldShopLoc.z * TILE + 8); c.userData = { isChest: true, type: 'gold', opened: false }; scene.add(c); chests.push(c);
             }
 
-            if (gState.mapDifficulty !== 'easy' && (conf.hasSafe || gState.isFirstRound || gState.pityGuaranteed)) {
+            // 之前这里多加了一层 mapDifficulty !== 'easy'，导致选 Easy 的人（新手默认
+            // 难度）首次进图/连续没出货的保底承诺全部落空——保险柜压根不会生成，
+            // 但提示文案照样在显示"必出"。保底不该看难度，去掉这层限制。
+            if (conf.hasSafe || gState.isFirstRound || gState.pityGuaranteed) {
                 let prob = (gState.isFirstRound || gState.pityGuaranteed) ? 1.0 : 0.1;
                 let roll = seededRandom();
                 let l = roll < prob ? takeSpreadLeaf() : null;
@@ -5319,6 +5322,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-29-misc-fixes', date: '2026-09-29', title: '寻宝队小修复 + 背景音乐默认开启', items: [
+                    '寻宝队修了个战利品箱生成相关的小问题，跟地图难度选择有关，现在应该更稳定了。',
+                    '背景音乐默认改成开启（之前默认是关的），不想听可以自己去设置面板关掉。'
+                ]
+            },
             {
                 id: '2026-09-29-gold-cat-loot-fix', date: '2026-09-29', title: '寻宝队修复：黄金猫盾不再宝箱直接开出', items: [
                     '反馈"一局合出 5 个黄金猫盾，一个黄金小鱼干都没见到"：黄金猫盾之前既在金色战利品池子里能直接开出来，又能靠猫盾+小鱼干（紫色池子里最常见的两样东西）合成，等于两条路都能拿；黄金小鱼干却只有宝箱这一条路，天然吃亏。把黄金猫盾从金色战利品池子里删掉——跟至臻猫盾/丰饶圣餐/猫盾骑士剑/皇冠一样，只能合成，宝箱和保险柜都不会直接开出来了。'
@@ -15094,7 +15103,7 @@
         function sfxMechanism() { sfxPlay([220, 293.66], 0.55, 0.05, 'sine'); sfxNoise(0.3, 0.04, 300, 150, 1); }
 
         let bgm = null;
-        let BGM_ENABLED = false;   // 暂时关掉背景音乐；改回 true 或在设置面板里点开就恢复
+        let BGM_ENABLED = true;   // 各模式的背景乐都写好了，默认打开，不想听的人自己去设置里关
         const BGM_CALM = [329.63, 392.00, 440.00, 587.33];
         const BGM_TENSE = [220.00, 261.63, 220.00, 174.61];
 
