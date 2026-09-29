@@ -5335,6 +5335,12 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-29-walk-anim-fix', date: '2026-09-29', title: '三处走路动画修复：原地跑步 / 滑步不摆腿', items: [
+                    '合作密室里角色腿部动画之前没跟"有没有在动"挂钩，不管站着还是走着，腿都在一直摆——站定不动的时候看着像原地跑步。现在改成按真实移动速度算摆动幅度，站着腿就是直的。',
+                    '监狱救援、躲避球联机对局里，队友/机器人的走路动画只认本地算出来的速度，但联机同步过来的位置更新压根没算过这个速度——别人在你屏幕上看起来是贴地滑过去的，腿不摆、也不怎么转身。现在网络位置同步的时候会顺带算一个速度喂给走路动画，跟竞速联机对手（早就修过这个问题）一个套路。'
+                ]
+            },
+            {
                 id: '2026-09-29-night-flash-fix', date: '2026-09-29', title: '惊魂夜提示文字闪烁修复', items: [
                     '惊魂夜屏幕中间那行黄字提示（矿机进度、校准反馈等）之前是"先显示，1.2 秒后自动隐藏"，但每次新消息都会另起一个隐藏计时器，不会取消上一个——连续修机器的时候，新提示字刚出来没多久，上一条消息的计时器先到点了，直接把还在看的新提示藏起来，看着就是一闪一闪的。现在改成共用一个计时器，每次显示新消息都先取消上一个，不会再被提前藏起来。'
                 ]
@@ -19775,6 +19781,11 @@
             if (!jail || m.sender === gState.id) return;
             let a = jail.actors.filter(function (o) { return o.netId === m.sender; })[0];
             if (!a) return;
+            // 之前直接拿网络坐标覆盖 a.p，没算过 mvx/mvz——腿摆动画看的正是这两个值，
+            // 结果联机队友的身体在别人屏幕上是"贴地滑过去"，腿不摆、转身也卡帧。
+            // 按收包间隔（1/JAIL_ME_HZ）把这次位移换算成一个速度，喂给走路动画用，
+            // 跟竞速联机对手同一个思路（raceTickRacer 里那段"合成速度"）。
+            a.mvx = (m.x - a.p.x) * JAIL_ME_HZ; a.mvz = (m.z - a.p.z) * JAIL_ME_HZ;
             a.p.x = m.x; a.p.z = m.z; a.mesh.rotation.y = m.yaw;
         }
         // 非房主这边：AI 的位置、被抓/无敌状态直接套用房主广播的，跟超燃的 BZ_W 一个思路——
@@ -19785,6 +19796,7 @@
             (m.ai || []).forEach(function (q) {
                 let a = jail.actors[q.i];
                 if (!a || a.isPlayer || a.netId) return;
+                a.mvx = (q.x - a.p.x) * JAIL_W_HZ; a.mvz = (q.z - a.p.z) * JAIL_W_HZ;
                 a.p.x = q.x; a.p.z = q.z; a.mesh.rotation.y = q.yaw;
                 a.jailed = q.jailed; a.invulT = q.invulT;
             });
@@ -20856,6 +20868,10 @@
             if (!dodge || m.sender === gState.id) return;
             let a = dodge.actors.filter(function (o) { return o.netId === m.sender; })[0];
             if (!a) return;
+            // 走路动画看的是 mvx/mvz（见下面 tick 里的 sp），网络位置之前只有 a.p 被
+            // 更新，联机队友的腿一直是静止的——跟竞速联机对手同一个坑（raceTickRacer
+            // 里"合成速度"那段），按收包间隔把这次位移换算成速度。
+            a.mvx = (m.x - a.p.x) * DODGE_ME_HZ; a.mvz = (m.z - a.p.z) * DODGE_ME_HZ;
             a.p.x = m.x; a.p.z = m.z; a.mesh.rotation.y = m.yaw;
             a.catchWindow = m.catchWindow; a.mustReturn = m.mustReturn;
             a.holding = (m.holding >= 0) ? dodge.balls[m.holding] : null;
@@ -20870,6 +20886,7 @@
             (m.ai || []).forEach(function (q) {
                 let a = dodge.actors[q.i];
                 if (!a || a.isPlayer || a.netId) return;
+                a.mvx = (q.x - a.p.x) * DODGE_W_HZ; a.mvz = (q.z - a.p.z) * DODGE_W_HZ;
                 a.p.x = q.x; a.p.z = q.z; a.mesh.rotation.y = q.yaw;
                 a.catchWindow = q.catchWindow; a.mustReturn = q.mustReturn;
                 a.holding = (q.holding >= 0) ? dodge.balls[q.holding] : null;
@@ -21035,7 +21052,8 @@
                 let n = Math.hypot(mx, mz) || 1;
                 a.p.x += mx / n * ESCAPE.moveSpeed * dt; a.p.z += mz / n * ESCAPE.moveSpeed * dt;
                 a.faceDir = { x: mx / n, z: mz / n };
-            }
+                a.mvx = mx / n * ESCAPE.moveSpeed; a.mvz = mz / n * ESCAPE.moveSpeed;
+            } else { a.mvx = 0; a.mvz = 0; }
             escapeClampRoom(a);
         }
 
@@ -21069,7 +21087,8 @@
             if (d > 1) {
                 a.p.x += dx / d * ESCAPE.moveSpeed * dt; a.p.z += dz / d * ESCAPE.moveSpeed * dt;
                 a.faceDir = { x: dx / d, z: dz / d };
-            }
+                a.mvx = dx / d * ESCAPE.moveSpeed; a.mvz = dz / d * ESCAPE.moveSpeed;
+            } else { a.mvx = 0; a.mvz = 0; }
             escapeClampRoom(a);
         }
 
@@ -21104,10 +21123,13 @@
             escapeRoom.actors.forEach(function (a) {
                 a.mesh.position.set(a.p.x, a.p.y, a.p.z);
                 if (a.faceDir) a.mesh.rotation.y = Math.atan2(a.faceDir.x, a.faceDir.z);
-                let sp = ESCAPE.moveSpeed;
-                a.animT = (a.animT || 0) + dt * 10;
+                // 之前 sp 拿的是 ESCAPE.moveSpeed 这个常量（永远等于满速），腿摆幅度也没
+                // 乘 run——不管人有没有在走，腿都在原地一直甩，站着不动也在"原地跑步"。
+                // 改成用 mvx/mvz 算真实速度，跟其它模式（竞速/超燃/监狱救援）一个套路。
+                let sp = Math.hypot(a.mvx || 0, a.mvz || 0), run = Math.min(1, sp / ESCAPE.moveSpeed);
+                a.animT = (a.animT || 0) + dt * (2 + run * 16);
                 let u = a.mesh.userData;
-                if (u.legs) { u.legs[0].rotation.x = Math.sin(a.animT) * 0.7; u.legs[1].rotation.x = -Math.sin(a.animT) * 0.7; }
+                if (u.legs) { u.legs[0].rotation.x = Math.sin(a.animT) * 0.7 * run; u.legs[1].rotation.x = -Math.sin(a.animT) * 0.7 * run; }
                 tickAccStarOrbit(u, dt);
             });
             let me = escapeRoom.me;
