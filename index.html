@@ -2291,6 +2291,8 @@
                 raceOnFinish(msg);
             } else if (msg.type === 'RACE_RESULT') {
                 raceOnResult(msg);
+            } else if (msg.type === 'RACE_RESULT_DUO') {
+                raceOnResultDuo(msg);
             } else if (msg.type === 'ESC_START') {
                 if (msg.sender !== gState.id) escapeOnStart(msg);
             } else if (msg.type === 'ESC_ME') {
@@ -5312,6 +5314,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-29-race-duo-net', date: '2026-09-29', title: '竞速"双人"模式接上真联机 + 联机稳定性修复', items: [
+                    '竞速里"双人"按钮之前一直是纯本地模拟——组队邀请了朋友一起点"双人"，看到的其实是朋友的 AI 替身，不是真人。现在跟"开跑"一样接上真联机了：组队面板里的人会被分到同一队一起跑，每轮谁赢谁淘汰的结算也会正确同步给队友，不会两边看到不一样的结果。',
+                    '修了一个更底层的联机问题：之前联机组件没配 TURN 中继，只有 STUN，两台设备不在同一个网络（比如一个 WiFi 一个用流量）的时候经常直接连不上，卡在"连接中"。现在加了免费的公共 TURN 中继兜底，直连打得通照样走直连，打不通就转发。'
+                ]
+            },
             {
                 id: '2026-09-28-skin-accessory', date: '2026-09-28', title: '皮肤抽奖降价 + 新增配饰自由 DIY', items: [
                     '皮肤颜色抽一次从 50 猫盾币降到 10。',
@@ -18413,6 +18421,16 @@
                     r.out = true; r.mesh.visible = false;
                 });
             });
+            let isChampionRound = target <= 1 || race.round + 1 >= RACE_DUO.ladder.length;
+            // 跟 raceRoundOver() 的单排版一个道理：AI 的位置每边各跑各的、不联机同步，
+            // 分数和淘汰名单只有房主这份数得数，广播出去，对面直接照抄，不自己重算——
+            // 不然两边同一轮结果可能对不上号。
+            if (race.net && race.host === gState.id) {
+                bc.postMessage({
+                    type: 'RACE_RESULT_DUO', target: '*', sender: gState.id, round: race.round,
+                    teamScore: teamScore, cutTeams: cutTeams, champion: isChampionRound
+                });
+            }
 
             let me = race.racers[0];
             if (me.finished) raceSubmitRecord(race.round + 1, me.time);
@@ -18693,11 +18711,25 @@
         }
 
         // ── 进出 ──
-        function raceDuoStart() { raceStart(true); }
+        // 双人现在也真联机了：组队面板里的人（lobbyParty）+ 自己按 racePlan 挨个填进
+        // plan 数组（0/1 号、2/3 号……），duo 模式配队逻辑本来就是"相邻两个编号一队"
+        // （见 raceStart 里 race.teams 的生成），所以只要组队邀请的人恰好排在你紧挨着
+        // 的位置，就天然会被分到同一队——不用另外写"配对"逻辑。没组队的话还是跟以前
+        // 一样纯本地练习（队友是 AI），没有陌生人自动匹配双人搭档，这个先不做。
+        function raceDuoStart() {
+            if (lobbyParty.length > 0) {
+                let ids = [gState.id].concat(lobbyParty.slice(0, RACE.count - 1));
+                let humans = ids.map(function (id) { return { id: id }; });
+                let plan = racePlan(humans);
+                bc.postMessage({ type: 'RACE_START', target: '*', sender: gState.id, plan: plan, host: gState.id, duo: true });
+                raceStart(true, plan, gState.id);
+                return;
+            }
+            raceStart(true);
+        }
 
         // 单排竞速真联机：跟超燃一个套路——组队面板里确认过的人（lobbyParty）+ 自己
-        // 组成真人名单，剩下的位置照旧用 AI 填满 16 人。只有单排（raceStartGo）联机，
-        // 双人（raceDuoStart）暂时还是纯本地，双人的跨设备配对是另一块工程，先不做。
+        // 组成真人名单，剩下的位置照旧用 AI 填满 16 人。
         function racePlan(humans) {
             let plan = [];
             for (let i = 0; i < RACE.count; i++) plan.push({ id: null });
@@ -18773,6 +18805,38 @@
             let ended = me.out || m.champion;
             showSysModal(title,
                 m.champion ? '恭喜跑完全部轮次！' : (me.out ? '这次先到这——回大厅再来一把。' : '房主结算完了，点继续进下一轮。'),
+                [ended
+                    ? { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } }
+                    : { label: '继续', color: '#5cb85c', onClick: function () { race.phase = 'waitRound'; } }]);
+        }
+        // 双人版的非房主结算——跟 raceOnResult 一个套路，只是按队伍展示比分/淘汰，
+        // 而不是单人名次。teamScore/cutTeams 完全信房主广播过来的这份，自己不重算
+        // （AI 的跑位两边不同步，各自算出来的分数对不上号）。
+        function raceOnResultDuo(m) {
+            if (!race || !race.net || race.host === gState.id) return;
+            if (m.round !== race.round) return;
+            race.phase = 'result';
+            let cutTeams = m.cutTeams || [];
+            cutTeams.forEach(function (ti) {
+                (race.teams[ti] || []).forEach(function (idx) {
+                    let r = race.racers[idx]; if (r) { r.out = true; r.mesh.visible = false; }
+                });
+            });
+            let me = race.racers[0];
+            if (me.finished) raceSubmitRecord(race.round + 1, me.time);
+            let teamScore = m.teamScore || {};
+            let activeTeams = Object.keys(teamScore).map(Number);
+            let lines = activeTeams.slice().sort(function (a, b) { return teamScore[b] - teamScore[a]; })
+                .map(function (ti, i) {
+                    let names = (race.teams[ti] || []).map(function (idx) { return race.racers[idx].name; }).join(' & ');
+                    return (i + 1) + '. ' + names + '　' + teamScore[ti] + ' 分' +
+                        (ti === me.teamIdx ? '　← 你' : '') +
+                        (cutTeams.indexOf(ti) >= 0 ? '　<span style="color:#e57373;">淘汰</span>' : '');
+                }).join('<br>');
+            let title = me.out ? '你的队伍被淘汰了' : (m.champion ? '冠军队伍' : ('第 ' + (race.round + 1) + ' 轮结束'));
+            race.round++;
+            let ended = me.out || m.champion;
+            showSysModal(title, lines,
                 [ended
                     ? { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } }
                     : { label: '继续', color: '#5cb85c', onClick: function () { race.phase = 'waitRound'; } }]);
