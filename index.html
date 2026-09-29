@@ -1652,6 +1652,23 @@
             netTryHost();
         }
 
+        // 联机一直卡"连接房主中"连不上——PeerJS 默认只带 STUN，没配 TURN 中继。
+        // STUN 只能帮忙穿透一部分 NAT，两边不在同一个网络、或者任一边是运营商级 NAT
+        // （常见于手机流量）/严格防火墙的时候，直连路径根本找不出来，WebRTC 连接会
+        // 卡在"协商中"永远打不开，表现就是信令层（peer.on('open')）正常，但两边真正
+        // 的 DataConnection 一直不触发 open。加一段免费的公共 TURN 中继（Open Relay
+        // Project，无需注册，专门给这种小项目用）当兜底：直连打得通就还走直连（TURN
+        // 只在真的需要中继时才会被 ICE 选中，不会让所有流量都绕道），打不通就走它转发。
+        // 免费额度有限，真到了要撑大量并发语音/联机还得换成付费 TURN，但先把"根本连不上"
+        // 这个死结解开。
+        const PEER_ICE_CONFIG = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+            ]
+        };
         function netDropPeer() {
             peerConns.forEach(function (c) { try { c.close(); } catch (e) { } });
             peerConns = [];
@@ -1662,7 +1679,7 @@
 
         function netTryHost() {
             netDropPeer();
-            try { peer = new Peer(NET_PREFIX + peerRoom); } catch (e) { netSetStatus('联机初始化失败', '#d9534f'); return; }
+            try { peer = new Peer(NET_PREFIX + peerRoom, { config: PEER_ICE_CONFIG }); } catch (e) { netSetStatus('联机初始化失败', '#d9534f'); return; }
             voiceHookPeer(peer);
             peer.on('open', function () {
                 peerIsHost = true;
@@ -1680,7 +1697,7 @@
 
         function netTryGuest() {
             netDropPeer();
-            try { peer = new Peer(); } catch (e) { netSetStatus('联机初始化失败', '#d9534f'); return; }
+            try { peer = new Peer({ config: PEER_ICE_CONFIG }); } catch (e) { netSetStatus('联机初始化失败', '#d9534f'); return; }
             voiceHookPeer(peer);
             peer.on('open', function () {
                 peerIsHost = false;
@@ -17608,11 +17625,16 @@
             if (id === 'cap' || id === 'party' || id === 'crown' || id === 'star') {
                 let grp = new THREE.Group(); grp.position.y = hatY;
                 if (id === 'cap') {
+                    // 真要"遮住耳朵"，靠调大小/位置去刚好包住两只圆锥耳朵太碰运气——
+                    // 直接把耳朵网格藏起来最可靠，跟戴帽子压住耳朵的实际效果一样。
+                    // 耳朵一藏，帽子就能放心往下放（更贴近头顶原本的位置），不用再
+                    // 为了不穿模而故意往上抬一截。
+                    if (g.userData.ears) g.userData.ears.forEach(function (e) { e.visible = false; });
                     let mat = new THREE.MeshLambertMaterial({ color: 0xe53935 });
-                    let top = new THREE.Mesh(new THREE.SphereGeometry(2.1, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
-                    grp.add(top);
-                    let brim = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.3, 10), mat);
-                    brim.position.set(0, -0.05, 1.8); brim.rotation.x = 0.2; grp.add(brim);
+                    let top = new THREE.Mesh(new THREE.SphereGeometry(2.3, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+                    top.position.y = -0.7; grp.add(top);
+                    let brim = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.3, 10), mat);
+                    brim.position.set(0, -0.75, 1.9); brim.rotation.x = 0.2; grp.add(brim);
                 } else if (id === 'party') {
                     let mat = new THREE.MeshLambertMaterial({ color: 0xab47bc });
                     let cone = new THREE.Mesh(new THREE.ConeGeometry(1.8, 3.2, 10), mat);
@@ -17645,21 +17667,26 @@
                 }
                 g.add(grp);
             } else if (id === 'glasses' || id === 'shades') {
+                // 眼镜要跟脸贴图上画的那两个黑眼珠对上，不能瞎猜位置——catFaceTexture()
+                // 里眼珠画在 64x64 画布的 (22,19)/(41,19)，换算到 addCatFace 那张 4.2x4.2
+                // 的脸片上：x = -2.1+(px/64)*4.2，y = faceY+2.1-(py/64)*4.2，算出来大概是
+                // x=∓0.62，y=faceY+0.85——眼镜挂这两个点上才是真的"对着眼睛"。
+                let ex = 0.62, ey = faceY + 0.85, ez = faceZ + 0.15;
                 let mat = new THREE.MeshBasicMaterial({ color: id === 'shades' ? 0x111111 : 0x333333 });
                 if (id === 'shades') {
                     [-1, 1].forEach(function (sdir) {
-                        let lens = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.9, 0.3), mat);
-                        lens.position.set(sdir * 1.1, faceY + 0.2, faceZ + 0.2); g.add(lens);
+                        let lens = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.6, 0.2), mat);
+                        lens.position.set(sdir * ex, ey, ez); g.add(lens);
                     });
-                    let bridge = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.25, 0.25), mat);
-                    bridge.position.set(0, faceY + 0.2, faceZ + 0.2); g.add(bridge);
+                    let bridge = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.15, 0.15), mat);
+                    bridge.position.set(0, ey, ez); g.add(bridge);
                 } else {
                     [-1, 1].forEach(function (sdir) {
-                        let ring = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.12, 6, 12), mat);
-                        ring.position.set(sdir * 1.1, faceY + 0.2, faceZ + 0.2); g.add(ring);
+                        let ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.08, 6, 12), mat);
+                        ring.position.set(sdir * ex, ey, ez); g.add(ring);
                     });
-                    let bridge = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.12), mat);
-                    bridge.position.set(0, faceY + 0.2, faceZ + 0.2); g.add(bridge);
+                    let bridge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.08), mat);
+                    bridge.position.set(0, ey, ez); g.add(bridge);
                 }
             }
         }
@@ -17675,11 +17702,14 @@
                 // 圆柱+圆锥拼出来的实际效果是根尖头小棍/箭头，完全看不出是条鱼——鱼真正
                 // 好认的地方是侧面轮廓：一个扁扁的椭圆身子 + 一个扁扁的三角尾巴。往 Z 方向
                 // 压扁（深度方向压薄），让默认差不多正对镜头的视角看到的是清晰的侧面剪影。
+                // 身子比其它几件腰饰（coin/bell/yarn）横向占的地方都大，贴身距离一收紧
+                // 就整个陷回身体里了——把整条鱼缩小一圈，跟其它几件用同一个贴身距离
+                // 才不会露出一半、被自己的身子挡住大半。
                 let mat = new THREE.MeshLambertMaterial({ color: 0xd9a066 });
-                let body = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat);
-                body.scale.set(1.3, 0.7, 0.32); body.position.set(hx, hy, 0); g.add(body);
-                let tail = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.9, 4), mat);
-                tail.scale.set(1, 1, 0.25); tail.rotation.z = -Math.PI / 2; tail.position.set(hx + 0.65, hy, 0); g.add(tail);
+                let body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), mat);
+                body.scale.set(1.2, 0.65, 0.3); body.position.set(hx, hy, 0); g.add(body);
+                let tail = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.65, 4), mat);
+                tail.scale.set(1, 1, 0.25); tail.rotation.z = -Math.PI / 2; tail.position.set(hx + 0.55, hy, 0); g.add(tail);
             } else if (id === 'coin') {
                 let mat = new THREE.MeshLambertMaterial({ color: 0xffd54f });
                 let coin = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.2, 14), mat);
@@ -17715,10 +17745,12 @@
             // 身体半宽 3，耳朵半径 1.6，偏移收到 1.2 避免外沿(2.8)超出身体边缘（大厅/竞速/
             // 监狱救援/躲避球全用这个身体，之前 1.8 的偏移会让耳朵支棱到身体外面去）。
             let earGeo = new THREE.ConeGeometry(1.6, 3.4, 8);
+            let ears = [];
             [-1, 1].forEach(function (sdir) {
                 let ear = new THREE.Mesh(earGeo, mat);
-                ear.position.set(sdir * 1.2, 12.5, 0); g.add(ear);
+                ear.position.set(sdir * 1.2, 12.5, 0); g.add(ear); ears.push(ear);
             });
+            g.userData.ears = ears;
             let legs = [];
             [-1, 1].forEach(function (sdir) {
                 let hip = new THREE.Group();
@@ -22100,10 +22132,12 @@
             body.position.y = 5; g.add(body);
             addCatFace(g, 7, 4.05);
             let earGeo = new THREE.ConeGeometry(1.6, 3.2, 8);
+            let ears = [];
             [-1, 1].forEach(function (sdir) {
                 let ear = new THREE.Mesh(earGeo, mat);
-                ear.position.set(sdir * 2.1, 11.2, 0); g.add(ear);
+                ear.position.set(sdir * 2.1, 11.2, 0); g.add(ear); ears.push(ear);
             });
+            g.userData.ears = ears;
             // 腿：矮墩墩的小圆柱，贴着身体下沿露出一截
             let legs = [];
             [-1, 1].forEach(function (sdir) {
