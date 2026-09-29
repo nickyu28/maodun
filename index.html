@@ -2195,7 +2195,7 @@
             signal: { active: false, timer: 0, mesh: null },
             machines: [], chairs: [], doors: [], pallets: [], nightChar: 'cat',
             debuff: { type: 0, timer: 0, cooldown: 0 },
-            matchHistory: [], pityGuaranteed: false, isFirstRound: true, safesOpenedGlobal: 0
+            matchHistory: [], pityGuaranteed: false, isFirstRound: true
         };
 
         const mapConfigs = {
@@ -4165,6 +4165,10 @@
             currentNavPath = [];
 
             buildProceduralMaze(); spawnLobbyAgents();
+            // 保底用在"这一局"身上——不管这局最后撤没撤出去，用过就是用过了，不然连
+            // 续几局都失败/没撤出去的人会一直卡在保底状态，每局都重复吃保底。放在生
+            // 成地图之后清零：这局造图的时候两个标记还是 true，能正常生效。
+            gState.isFirstRound = false; gState.pityGuaranteed = false; saveProgress();
 
             if (syncSpawns) gState.preGenSpawns = syncSpawns;
 
@@ -5322,6 +5326,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-29-pity-timing-fix', date: '2026-09-29', title: '寻宝队再修两处细节', items: [
+                    '修了个之前一直卡住没消耗的状态：连续几局没撤出去的话，那个"照顾一下"的状态会一直挂着不消失，现在到了下一局就正常翻篇了。',
+                    '触发条件也改成看真正连续的次数，不再是"最近几把里凑够几次"这种松散算法。'
+                ]
+            },
             {
                 id: '2026-09-29-misc-fixes', date: '2026-09-29', title: '寻宝队小修复 + 背景音乐默认开启', items: [
                     '寻宝队修了个战利品箱生成相关的小问题，跟地图难度选择有关，现在应该更稳定了。',
@@ -16836,8 +16846,8 @@
         }
 
         function completeExtraction(text) {
-            gState.isFirstRound = false;
-            gState.pityGuaranteed = false;
+            // isFirstRound/pityGuaranteed 不在这清零了——进图那一刻（startGameMap）已经
+            // 处理过，不然连续撤离失败的人会一直卡在"首次必出"状态出不来。
             gState.matchHistory.push(true); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
 
             gState.inv.forEach(function (i) { if (i) nightTreasureEgg(i.n); });
@@ -16936,6 +16946,9 @@
 
         function teamExtractWithoutYou() {
             gState.matchHistory.push(false); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
+            // 这个分支之前漏了保底判断——你倒下算这局没拿到货，跟 forfeitRun 是一回事，
+            // 不然连续几局都是"队友撤了但你倒下"的人永远攒不出保底。
+            if (huntConsecutiveFails() >= 5) gState.pityGuaranteed = true;
             tidyGarage();
             let saved = (gState.submittedItems || []).slice();
             gState.submittedItems = [];
@@ -16950,10 +16963,18 @@
                 ' 件东西保住了，身上带的全丢了。');
         }
 
+        // 保底提示写的是"连续几把没出货了"，但原来的判断是"最近 10 把里失败次数
+        // ≥5"——赢一把输一把交替来，10 把里凑够 5 输一样触发，跟"连续"对不上。
+        // 改成从最近一把往前数真正连续失败了几把，碰到一次成功就停。
+        function huntConsecutiveFails() {
+            let h = gState.matchHistory, n = 0;
+            for (let i = h.length - 1; i >= 0 && !h[i]; i--) n++;
+            return n;
+        }
         function forfeitRun() {
             gState.submittedItems = [];   // 没撤出去，上交过的东西也一并没收
             gState.matchHistory.push(false); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
-            if (gState.matchHistory.filter(w => !w).length >= 5) gState.pityGuaranteed = true;
+            if (huntConsecutiveFails() >= 5) gState.pityGuaranteed = true;
 
             let confiscated = gState.runCash || 0;
             if (confiscated > 0 || gState.totalSubmitted > 0) {
