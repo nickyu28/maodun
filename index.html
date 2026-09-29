@@ -2202,7 +2202,7 @@
                 if (saved) {
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
-                        gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; if (gState.ownedAcc.bowtie) gState.ownedAcc.bowsash = true; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
+                        gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {};
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); grantBadgeIfMissing(); return;
                     }
@@ -5298,7 +5298,7 @@
             {
                 id: '2026-09-28-skin-accessory', date: '2026-09-28', title: '皮肤抽奖降价 + 新增配饰自由 DIY', items: [
                     '皮肤颜色抽一次从 50 猫盾币降到 10。',
-                    '商店"皮肤/配饰"页新增"配饰"：头饰（普通帽子/生日帽/皇冠/眼镜/墨镜/星星）、腰饰（小鱼干/猫盾币挂件/铃铛/毛线球/蝴蝶结腰带）两个部位，每件直接花钱买断（不是抽奖），买完永久拥有，两个部位各自独立装备、随便搭配组合。作用范围跟皮肤颜色一样——大厅广场/竞速/密室/松饼大作战，监狱救援/躲避球颜色代表队伍不受影响；但配饰是联机同步的，房间里其他真人能看到你戴的搭配（这点跟只有自己能看见的皮肤颜色不一样）。',
+                    '商店"皮肤/配饰"页新增"配饰"：头饰（普通帽子/生日帽/皇冠/眼镜/墨镜/星星）、腰饰（小鱼干/猫盾币挂件/铃铛/毛线球）两个部位，每件直接花钱买断（不是抽奖），买完永久拥有，两个部位各自独立装备、随便搭配组合。作用范围跟皮肤颜色一样——大厅广场/竞速/密室/松饼大作战，监狱救援/躲避球颜色代表队伍不受影响；但配饰是联机同步的，房间里其他真人能看到你戴的搭配（这点跟只有自己能看见的皮肤颜色不一样）。',
                     'AI/路人现在也会随机戴点配饰活跃画面，按概率抽、大多数时候什么都不戴；要是同屏人多卡了，"测试开关"面板里有个"AI/路人不戴配饰"一键关掉。'
                 ]
             },
@@ -17415,8 +17415,7 @@
                 { id: 'fish', n: '小鱼干', price: 10 },
                 { id: 'coin', n: '猫盾币挂件', price: 10 },
                 { id: 'bell', n: '铃铛', price: 8 },
-                { id: 'yarn', n: '毛线球', price: 10 },
-                { id: 'bowsash', n: '蝴蝶结腰带', price: 8 }
+                { id: 'yarn', n: '毛线球', price: 10 }
             ]
         };
         const ACC_SLOT_NAME = { head: '头饰', waist: '腰饰' };
@@ -17445,11 +17444,16 @@
         }
         // 配饰部位从帽子/眼镜/脖子三槽改成头饰/腰饰两槽那天存下的老存档，acc 字段还是
         // 旧形状——帽子/眼镜的选择直接搬进头饰（id 没变，兼容），脖子直接扔（新方案没有
-        // 对应部位），领结顺手换算成腰饰的蝴蝶结腰带，别白买一场。
+        // 对应部位）。顺手也兜底一下目录里已经下架的 id（比如腰饰这边试过又撤掉的蝴蝶结
+        // 腰带）——查不到对应商品就当没戴，不会出现挂了个不存在的东西的怪状态。
         function migrateAccData(rawAcc) {
             rawAcc = rawAcc || {};
-            if ('head' in rawAcc || 'waist' in rawAcc) return { head: rawAcc.head || null, waist: rawAcc.waist || null };
-            return { head: rawAcc.hat || rawAcc.eye || null, waist: rawAcc.neck === 'bowtie' ? 'bowsash' : null };
+            let out = ('head' in rawAcc || 'waist' in rawAcc)
+                ? { head: rawAcc.head || null, waist: rawAcc.waist || null }
+                : { head: rawAcc.hat || rawAcc.eye || null, waist: null };
+            if (out.head && !accDefOf(out.head)) out.head = null;
+            if (out.waist && !accDefOf(out.waist)) out.waist = null;
+            return out;
         }
         // AI/路人配饰：给同屏的电脑角色也随机戴点东西活跃画面，但按概率抽、多数时候
         // 什么都不戴——同屏一堆人全戴满配饰会多出很多网格，卡的话把 AI_ACC_CHANCE
@@ -17621,18 +17625,7 @@
             }
         }
         function addAccWaist(g, id, y, z) {
-            if (id === 'bowsash') {
-                let mat = new THREE.MeshLambertMaterial({ color: 0xd32f2f });
-                let band = new THREE.Mesh(new THREE.TorusGeometry(3.0, 0.3, 6, 16), mat);
-                band.rotation.x = Math.PI / 2; band.position.y = y; g.add(band);
-                [-1, 1].forEach(function (sdir) {
-                    let wing = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.4, 4), mat);
-                    wing.rotation.z = sdir * Math.PI / 2; wing.position.set(sdir * 0.7, y, z);
-                    g.add(wing);
-                });
-                let knot = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), mat);
-                knot.position.set(0, y, z); g.add(knot);
-            } else if (id === 'fish') {
+            if (id === 'fish') {
                 let mat = new THREE.MeshLambertMaterial({ color: 0xf0b48c });
                 let body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.1, 1.8, 8), mat);
                 body.rotation.x = Math.PI / 2; body.position.set(1.6, y - 0.6, z * 0.6); g.add(body);
