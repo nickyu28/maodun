@@ -91,7 +91,9 @@
             overflow-x: auto;
             overflow-y: hidden;
         }
-        #lobby-bottom > div { min-width: 168px; flex-shrink: 0; }
+        /* 五栏平分宽度，屏幕够宽就一屏放下；只有窄屏放不下 168px×5 时才横向滚动。
+           之前 flex-shrink:0 + 组队那栏说明文字很长，1280 宽也会把麦克风/聊天挤出屏幕，底下多一条滚动条 */
+        #lobby-bottom > div { flex: 1 1 0; min-width: 168px; }
 
         .hidden {
             display: none !important;
@@ -1210,6 +1212,7 @@
                 <div>生命值: <span id="hp-txt">100</span>/<span id="hp-max-txt">100</span></div>
                 <div>体力值: <span id="stamina-txt">100</span></div>
                 <div>总负重: <span id="weight-txt">0</span></div>
+                <button id="hunt-quit-btn" onclick="huntQuitAsk()" style="align-self:flex-start; margin:6px 0 0; padding:2px 10px; font-size:12px; background:#eee; color:#666; border:1px solid #ccc;">离开本局</button>
             </div>
             <div id="bars-center">
                 <div class="bar-bg"><div id="health-fill"></div></div>
@@ -1306,6 +1309,7 @@
         <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.62); color:#fff; padding:8px 12px; border-radius:6px;">
             <div id="night-machines" style="font-size:18px; color:#ffd54f; font-weight:bold;">矿机 0 / 5</div>
             <div id="night-side" style="font-size:12px; margin-top:4px; color:#ddd;"></div>
+            <button id="night-quit-btn" onclick="nightQuitAsk()" style="margin:6px 0 0; padding:2px 10px; font-size:12px; background:rgba(255,255,255,0.15); color:#eee; border:1px solid rgba(255,255,255,0.35); pointer-events:auto;">离开本局</button>
         </div>
         <div id="night-roster" style="position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.62); padding:8px 10px; border-radius:6px; display:flex; gap:12px; align-items:flex-start;"></div>
         <div id="night-prompt" style="position:absolute; bottom:120px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); color:#fff; padding:8px 16px; border-radius:5px; font-size:15px; display:none;"></div>
@@ -1470,6 +1474,7 @@
                 <div id="night-pick-team" style="color:#eee; font-size:12px; line-height:1.9;"></div>
             </div>
         </div>
+        <button id="night-pick-back" onclick="nightPickBack()" style="margin-top:14px; background:#555; color:#fff; border:none; padding:8px 24px; font-size:14px;">返回大厅</button>
     </div>
 
     <div id="game-over" class="screen hidden" style="background: rgba(255,255,255,0.95); z-index: 50;">
@@ -2621,7 +2626,19 @@
             // 之后单独用这个 tick 管显示，跟聊天面板一样跟着"是不是在局内"走。
             let joy = document.getElementById('joystick-left');
             if (joy) joy.style.display = (on && gState.control === 'pad') ? 'flex' : 'none';
+            // 大厅广场底下压着一条白色的组队/联机面板，聊天记录和"发言"按钮原来一样贴着屏幕底 14px，
+            // 正好盖在组队列表和麦克风上。在大厅就整体抬到面板上面。
+            let lb = document.getElementById('lobby-bottom');
+            let lift = (key === 'hub' && lb && lb.offsetParent) ? lb.offsetHeight + 8 : 14;
+            document.getElementById('chat-log').style.bottom = lift + 'px';
+            document.getElementById('chat-panel').style.bottom = lift + 'px';
+            // 从某个模式回到大厅：局里 AI 队友的喊话（"这块我来站着"之类）留在大厅里没意义，清掉
+            if (key !== chatLastKey) {
+                if (key === 'hub' && chatLastKey) document.getElementById('chat-log').innerHTML = '';
+                chatLastKey = key;
+            }
         }
+        let chatLastKey = null;
         setInterval(chatVisTick, 300);
 
         function chatSend(text) {
@@ -3548,6 +3565,7 @@
                 grid.appendChild(card);
             });
             nightPickRender();
+            document.getElementById('night-pick-back').style.display = netOn() ? 'none' : '';
             document.getElementById('night-pick').classList.remove('hidden');
         }
 
@@ -3585,6 +3603,15 @@
             let aiSlots = (gState.nightSide === 'hunter') ? 4 : 3;
             for (let i = others.length; i < aiSlots; i++) rows.push('<div style="color:#888;">AI 队友</div>');
             team.innerHTML = rows.join('');
+        }
+
+        // 选角色这一页原来没有任何退路——点了惊魂夜、匹配完就只能硬选一个开局。
+        // 单机的时候给个返回；联机大家已经一起进了同一张图，半路退掉别人会卡在等你选角色，不给。
+        function nightPickBack() {
+            if (netOn()) return;
+            document.getElementById('night-pick').classList.add('hidden');
+            nightMapReady = false;
+            nav('screen-lobby'); selectGameMode('night');
         }
 
         function nightPickChar(k) {
@@ -4215,7 +4242,16 @@
         // 各模式退出时该拿掉的场景残留统一走这——之前 cakeExit() 只删了角色/增益/特效，
         // 松饼地图自己搭的建筑（塞进 maze 网格里）跟跳台完全没清，回大厅之后这些楼房/台子
         // 一直杵在场景里没人管，谁都看得见（大厅明明没有 maze，看到的却是上一局松饼的楼）。
+        // 不进 maze 网格的地图装饰（火拼图的楼梯标记/传送门/竖井光柱这类）：搭图时往这里一塞，
+        // 退出和下一局开图时跟 maze 一起拿掉，之前没人管，每打一局就在场景里多留二十几个。
+        let mapExtraMeshes = [];
+        function mapExtraAdd(m) { scene.add(m); mapExtraMeshes.push(m); return m; }
         function clearMazeMeshes() {
+            mapExtraMeshes.forEach(function (m) { scene.remove(m); }); mapExtraMeshes = [];
+            // 寻宝图的墙/地板在开局后会合并成几块大网格（huntMergeStatic），原来的格子早就
+            // 从场景里拿掉了，只清 maze 清不到它们——寻宝撤离/离开回大厅，整张迷宫还罩在
+            // 大厅广场上，镜头直接卡在安全区的墙里，满屏一片青色。
+            huntDropMerged();
             maze.forEach(function (fRows) { if (fRows) fRows.forEach(function (row) { if (row) row.forEach(function (m) { if (m) ['mesh', 'roof', 'roof2', 'roof3', 'roof4', 'roof5', 'roof6'].forEach(function (k) { if (m[k]) scene.remove(m[k]); }); }); }); });
             chests.forEach(function (c) { scene.remove(c); }); groundItems.forEach(function (g) { scene.remove(g); }); entities.forEach(function (e) { scene.remove(e); });
             cakePlatformMeshes.forEach(function (m) { scene.remove(m); }); cakePlatformMeshes = []; cakePlatforms = [];
@@ -4502,6 +4538,18 @@
 
             huntMergeStatic();
             camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
+            // 出生点在角落的安全屋里，原来一律面朝 -Z——那边正好是地图边墙，开局第一眼
+            // 就是贴脸一整面青色的墙，得自己转一圈才找得到路。四个方向各打一条射线，
+            // 朝最空旷的那边站。
+            let best = 0, bestD = -1, rc = new THREE.Raycaster();
+            [0, -Math.PI / 2, Math.PI, Math.PI / 2].forEach(function (yaw) {
+                let dir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+                rc.set(camera.position, dir);
+                let hit = rc.intersectObjects(huntMerged, false)[0];
+                let d = hit ? hit.distance : Infinity;
+                if (d > bestD + 0.01) { bestD = d; best = yaw; }
+            });
+            camera.rotation.set(0, best, 0);
         }
 
         // 反馈「游戏有点卡」：寻宝图每一格墙/地板/台阶都是单独一个 mesh + 单独一个材质，
@@ -5354,6 +5402,17 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-30-modes-sweep', date: '2026-09-30', title: '大厅和各模式的一轮修复', items: [
+                    '寻宝队、惊魂夜（单机）活着的时候也能「离开本局」了，以前只能等死了才能走；惊魂夜选角色页加了「返回大厅」。',
+                    '寻宝队撤离回大厅后，整张迷宫还罩在大厅广场上，镜头卡在墙里满屏青色——修了；每打一局超燃，大厅里就多留二十几个楼梯/传送门模型，也清掉了。',
+                    '寻宝队开局不再脸贴安全屋的墙，会朝着有路的方向站。',
+                    '玩过躲避球之后，超燃的普攻键一直写着「投」、竞速/松饼/密室的跳键写着「接」——改回来了。',
+                    '惊魂夜联机被抓后观战，队员点「离开」没反应——修了。',
+                    '大厅底部面板在普通电脑屏幕上也要横向滚动，现在一屏放得下；聊天记录和「发言」按钮不再压在组队面板上，从局里回大厅会清掉 AI 队友的喊话。',
+                    '头顶名字牌离镜头近的时候不会再糊满半个屏幕。'
+                ]
+            },
             {
                 id: '2026-09-30-escape-15', date: '2026-09-30', title: '合作密室大改：15 关 + 新机关 + 真正要动脑', items: [
                     '密室从 1 关扩成 15 关，在「选择模式 → 密室」里选关：通一关解锁下一关，按用时给 1~3 颗星，首次通关和拿到新星星都有猫盾币。',
@@ -8071,13 +8130,13 @@
                     new THREE.MeshBasicMaterial({ color: 0xffab91 }));
                 rail.rotation.x = -Math.PI / 2;
                 rail.position.set(BLAZE_SHAFT.x * TILE, fl * BLAZE.floorH + 1, BLAZE_SHAFT.z * TILE);
-                scene.add(rail);
+                mapExtraAdd(rail);
             }
             let beam = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, BLAZE.floorH * (floors - 1) + 30, 10, 1, true),
                 new THREE.MeshBasicMaterial({ color: 0xffccbc, transparent: true, opacity: 0.16, side: THREE.DoubleSide }));
             beam.position.set(BLAZE_SHAFT.x * TILE, (BLAZE.floorH * (floors - 1) + 30) / 2, BLAZE_SHAFT.z * TILE);
             beam.visible = !ffa;
-            scene.add(beam);
+            mapExtraAdd(beam);
 
             // 楼梯：发光柱子 + 头顶悬浮箭头，隔着半张地图都看得见，
             // 走近了自动换层（见 blazeStairTick），不用真的爬台阶
@@ -8086,15 +8145,15 @@
                     let fy = fl * BLAZE.floorH;
                     let m = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 1.5, 20),
                         new THREE.MeshBasicMaterial({ color: 0xffca28 }));
-                    m.position.set(s.x * TILE, fy + 0.8, s.z * TILE); scene.add(m);
+                    m.position.set(s.x * TILE, fy + 0.8, s.z * TILE); mapExtraAdd(m);
 
                     let pillar = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 26, 8),
                         new THREE.MeshBasicMaterial({ color: 0xffca28, transparent: true, opacity: 0.55 }));
-                    pillar.position.set(s.x * TILE, fy + 13, s.z * TILE); scene.add(pillar);
+                    pillar.position.set(s.x * TILE, fy + 13, s.z * TILE); mapExtraAdd(pillar);
 
                     let arrow = new THREE.Mesh(new THREE.ConeGeometry(5, 9, 4),
                         new THREE.MeshBasicMaterial({ color: 0xffe082 }));
-                    arrow.position.set(s.x * TILE, fy + 30, s.z * TILE); scene.add(arrow);
+                    arrow.position.set(s.x * TILE, fy + 30, s.z * TILE); mapExtraAdd(arrow);
                 });
             });
 
@@ -8104,12 +8163,12 @@
                     let m = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 1.5, 20),
                         new THREE.MeshBasicMaterial({ color: pr.color, transparent: true, opacity: 0.75 }));
                     m.position.set(pad.x * TILE, pad.floor * BLAZE.floorH + 1, pad.z * TILE);
-                    scene.add(m);
+                    mapExtraAdd(m);
                     let ring = new THREE.Mesh(new THREE.TorusGeometry(10, 1.2, 6, 20),
                         new THREE.MeshBasicMaterial({ color: pr.color }));
                     ring.rotation.x = -Math.PI / 2;
                     ring.position.set(pad.x * TILE, pad.floor * BLAZE.floorH + 8, pad.z * TILE);
-                    scene.add(ring);
+                    mapExtraAdd(ring);
                 });
             });
 
@@ -12153,6 +12212,7 @@
 
             chatLoad(); chatSetMode(0);
             document.getElementById('chat-log').innerHTML = '';
+            document.getElementById('night-quit-btn').style.display = netOn() ? 'none' : '';
             isPlaying = false;
             bgmStart();
             nightLoop();
@@ -12340,7 +12400,10 @@
             sp.onBeforeRender = function (renderer, sc, cam) {
                 sp.getWorldPosition(ntWorldPos);
                 let d = cam.position.distanceTo(ntWorldPos);
-                let s = Math.min(1, Math.max(0.35, d / 30));
+                // 30 格以内才开始缩、下限 35%：大厅广场第三人称镜头下，路过的 AI 离镜头
+                // 三四十格时名字牌照样占掉 1/4~1/3 屏宽。改成 100 格起按距离等比缩——
+                // 近处屏幕上的大小基本恒定（约 10% 屏宽，字 16px 左右依然看得清），远处跟原来一样。
+                let s = Math.min(1, Math.max(0.08, d / 100));
                 sp.scale.set(ntBaseW * s, ntBaseH * s, 1);
             };
             if (through) sp.renderOrder = 999;
@@ -15061,7 +15124,20 @@
         function nightLeaveSpectate() {
             if (!night) return;
             let n = night.survivors.filter(function (a) { return a.escaped; }).length;
-            endNightGame('你已离开观战。当前 ' + n + ' 人撤离。');
+            // 联机里只有房主能结束整局（endNightGame 对非房主直接 return），
+            // 队员观战点"离开"原来什么都不会发生。队员只在自己这边收场、不广播，房主那局照常打。
+            endNightGame('你已离开观战。当前 ' + n + ' 人撤离。', netOn() && !netIsHost());
+        }
+
+        // 单机惊魂夜原来只有被抓出局后的观战条里才有"离开"，活着的时候没有任何退出方式。
+        // 联机不给：你的角色会原地僵住，队友还以为你在。
+        function nightQuitAsk() {
+            if (!night || night.over || netOn()) return;
+            if (document.pointerLockElement) document.exitPointerLock();
+            showSysModal('离开本局？', '中途离开算这一局失败。', [
+                { label: '离开', color: '#d9534f', onClick: function () { if (night && !night.over) endNightGame('你中途离开了本局。'); } },
+                { label: '继续玩' }
+            ]);
         }
 
         // night-msg 这个提示条被 nightFlash 和 nightApplyCalib（校准小游戏反馈）两处
@@ -16960,6 +17036,17 @@
             document.getElementById('death-wait-page').classList.add('hidden');
             document.getElementById('spectate-bar').classList.remove('hidden');
             gState.spectateIdx = -1; applySpectate();
+        }
+
+        // 寻宝队活着的时候原来没有任何退出方式，只能等死了在死亡页点离开，或者硬撑到撤离。
+        // 这里就是"原地放弃"：跟死亡后离开走同一套——物资散落、本局已上交的没收。
+        function huntQuitAsk() {
+            if (!isPlaying || gState.isDead || gState.hasLeft) return;
+            if (document.pointerLockElement) document.exitPointerLock();
+            showSysModal('离开本局？', '离开等于放弃这一局：身上的物资散落在地，本局已上交的也会被没收。', [
+                { label: '离开', color: '#d9534f', onClick: function () { if (!isPlaying || gState.isDead) return; triggerAgentDeath(); chooseLeave(); } },
+                { label: '继续玩' }
+            ]);
         }
 
         function chooseLeave() {
@@ -20682,9 +20769,11 @@
             // 「投」这颗键身兼捡/放/瞄准投掷三件事（点一下捡/放，按住瞄准松手丢）；
             // 「接」借竞速的「跳」键位专门张手接球；跑步开关借寻宝队的「跑/走」键；
             // 跳跃另外借超燃的「跳」键位——都是平板才需要
-            if (atk) { atk.innerText = '投'; atk.style.display = (on && pad) ? 'flex' : 'none'; }
+            // 借来的键退出时要把字改回去：之前一直留着「投」「接」，玩过躲避球之后
+            // 超燃的普攻键写着「投」，竞速/松饼/密室的跳键写着「接」
+            if (atk) { atk.innerText = on ? '投' : '普攻'; atk.style.display = (on && pad) ? 'flex' : 'none'; }
             let jb = document.getElementById('race-jump-btn');
-            if (jb) { jb.innerText = '接'; jb.style.display = (on && pad) ? 'flex' : 'none'; }
+            if (jb) { jb.innerText = on ? '接' : '跳'; jb.style.display = (on && pad) ? 'flex' : 'none'; }
             let jump = document.getElementById('blaze-jump-btn');
             if (jump) { jump.innerText = '跳'; jump.style.display = (on && pad) ? 'flex' : 'none'; }
             let rb = document.getElementById('run-btn');
