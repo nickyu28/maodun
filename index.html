@@ -848,8 +848,8 @@
     </div>
 
     <div id="screen-shop" class="screen hidden">
+        <div id="shop-wallet" style="position:absolute; top:14px; right:16px; font-size:15px; font-weight:bold; color:#e6a23c; display:flex; align-items:center; gap:5px;"></div>
         <h1 style="font-size:30px; color:#666;">商店</h1>
-        <div id="shop-wallet" style="font-size:14px; color:#e6a23c; margin-bottom:8px;"></div>
         <div style="display:flex; gap:8px; margin-bottom:10px;">
             <button onclick="shopTab('pet')" id="shop-tab-pet">宠物</button>
             <button onclick="shopTab('face')" id="shop-tab-face">表情</button>
@@ -5315,6 +5315,12 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-29-acc-strap-coin', date: '2026-09-29', title: '配饰改成真的"挂"在身上 + 商店右上角显示猫盾币', items: [
+                    '腰饰（小鱼干/猫盾币挂件/铃铛/毛线球）跟身体之间现在有一根细绳连着，读起来是真的挂在身上，不是凭空飘在旁边。小鱼干重新画过，圆乎乎的身子+明显的三角尾巴+一颗眼睛，比之前那个扁长条更像条鱼。',
+                    '商店右上角新增猫盾币余额显示：金额 + 猫盾币图案（金色圆底，中间是猫盾轮廓），买东西的时候随时看得到自己有多少钱。'
+                ]
+            },
+            {
                 id: '2026-09-29-race-duo-net', date: '2026-09-29', title: '竞速"双人"模式接上真联机 + 联机稳定性修复', items: [
                     '竞速里"双人"按钮之前一直是纯本地模拟——组队邀请了朋友一起点"双人"，看到的其实是朋友的 AI 替身，不是真人。现在跟"开跑"一样接上真联机了：组队面板里的人会被分到同一队一起跑，每轮谁赢谁淘汰的结算也会正确同步给队友，不会两边看到不一样的结果。',
                     '修了一个更底层的联机问题：之前联机组件没配 TURN 中继，只有 STUN，两台设备不在同一个网络（比如一个 WiFi 一个用流量）的时候经常直接连不上，卡在"连接中"。现在加了免费的公共 TURN 中继兜底，直连打得通照样走直连，打不通就转发。'
@@ -6420,6 +6426,21 @@
             if (TEST_INFINITE_COINS) return 99999;
             return gState.mcoin || 0;
         }
+        // 猫盾币图案：金色圆底 + 中间一个猫盾轮廓（圆角身子 + 两只尖耳朵），
+        // 跟登录页那个猫盾 Logo 一个造型，只是换成金币配色，一看就知道是"钱"。
+        function coinIconSvg(size) {
+            size = size || 18;
+            return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 20 20" style="vertical-align:middle; flex-shrink:0;">' +
+                '<circle cx="10" cy="10" r="9" fill="#ffd54f" stroke="#f0b90b" stroke-width="1.2"/>' +
+                '<path d="M5.5 8.5 L4 5.3 L7.2 7 Z" fill="#8d6e63"/>' +
+                '<path d="M14.5 8.5 L16 5.3 L12.8 7 Z" fill="#8d6e63"/>' +
+                '<rect x="6" y="7.3" width="8" height="6.8" rx="2.2" fill="#8d6e63"/>' +
+                '</svg>';
+        }
+        // 数额 + 图案拼一起的标准格式：xxx（金额）+ 猫盾币图案，买东西的地方统一用这个。
+        function coinBadgeHtml(n, size) {
+            return '<span style="display:inline-flex; align-items:center; gap:4px;">' + n + coinIconSvg(size) + '</span>';
+        }
         function coinsAdd(mode, n) {
             gState.mcoin = (gState.mcoin || 0) + n;
             saveProgress();
@@ -6613,7 +6634,7 @@
                 if (b) { b.style.background = (k === t) ? '#e6a23c' : ''; b.style.color = (k === t) ? '#fff' : ''; }
             });
             let w = document.getElementById('shop-wallet');
-            if (w) w.innerText = '猫盾币 ' + coinsOf() + '　（打一局 +2，赢了再 +2，连胜还有额外）';
+            if (w) w.innerHTML = coinBadgeHtml(coinsOf(), 22);
             let el = document.getElementById('shop-body'); if (!el) return;
             if (t === 'pet') el.innerHTML = shopPetHtml();
             else if (t === 'face') el.innerHTML = shopFaceHtml();
@@ -17698,39 +17719,55 @@
                 }
             }
         }
+        // 挂饰跟身体之间拉一根细绳/带子，从身体表面接到挂饰上——不然光是把挂饰摆
+        // 在旁边，就算不嵌进身体，看着也是凭空飘在半空，不像"挂"在身上。绳子用
+        // 两点算长度和朝向（quaternion 对齐默认竖直的圆柱），两头一头贴身体表面、
+        // 一头接到挂饰，视觉上才读得出"真的挂着"。
+        function addAccStrap(g, from, to, mat) {
+            let dir = new THREE.Vector3().subVectors(to, from);
+            let len = dir.length();
+            if (len < 0.05) return;
+            let mid = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5);
+            let strap = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, len, 6), mat);
+            strap.position.copy(mid);
+            strap.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+            g.add(strap);
+        }
         function addAccWaist(g, id, y, z, bodyR) {
             // 之前这几件都往正前方偏中间放（x 只有 1.3~1.6，z 还打了折），两种身体
             // （方盒子半宽 3 / 圆柱半径 4）都比这个大得多，挂饰整个嵌进身体实心网格
             // 里面，从外面根本看不见（小鱼干反馈的就是这个坑，coin/yarn 其实也一样中）。
             // 改成挂在身体侧面——但固定用 4.4 又对两种身体不公平：方盒子身体半宽只有
             // 3，4.4 探得太远，飘在半空贴不住身体。按传进来的 bodyR（各自身体的真实
-            // 半宽/半径）算是对的方向，但只留 0.4 间隙太贴了——挂饰本身还有自己的体积
-            // （半径/半宽通常有 0.5~0.9），0.4 完全不够看，近看/换个角度还是有一截缩
-            // 进身体的实心网格里，跟"卡进身体里"看着是一回事。间隙加到 0.9，留足够
-            // 空间让挂饰整个露在身体外面，不会因为自己的体积又吃回去。
+            // 半宽/半径）算是对的方向，间隙留 0.9（够大的毛线球也不会被自己的体积吃
+            // 回身体里）。光留间隙还不够——中间空荡荡的，看着还是"飘在旁边"，所以
+            // 每件都在身体表面到挂饰之间拉一根细绳，读起来才是真的"挂"在身上。
             let hx = bodyR + 0.9, hy = y - 0.7;
+            let strapMat = new THREE.MeshBasicMaterial({ color: 0x6d4c41 });
+            let strapFrom = new THREE.Vector3(bodyR, hy + 0.55, 0);
             if (id === 'fish') {
-                // 圆柱+圆锥拼出来的实际效果是根尖头小棍/箭头，完全看不出是条鱼——鱼真正
-                // 好认的地方是侧面轮廓：一个扁扁的椭圆身子 + 一个扁扁的三角尾巴。往 Z 方向
-                // 压扁（深度方向压薄），让默认差不多正对镜头的视角看到的是清晰的侧面剪影。
-                // 身子比其它几件腰饰（coin/bell/yarn）横向占的地方都大，贴身距离一收紧
-                // 就整个陷回身体里了——把整条鱼缩小一圈，跟其它几件用同一个贴身距离
-                // 才不会露出一半、被自己的身子挡住大半。
+                // 参照真实反馈画的示意图重做：圆乎乎的身子（不是拉得老长的扁椭圆）+
+                // 一个明显的三角尾巴，加一颗眼睛——这才读得出"这是条鱼"，不是随便一坨。
                 let mat = new THREE.MeshLambertMaterial({ color: 0xd9a066 });
-                let body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), mat);
-                body.scale.set(1.2, 0.65, 0.3); body.position.set(hx, hy, 0); g.add(body);
-                let tail = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.65, 4), mat);
-                tail.scale.set(1, 1, 0.25); tail.rotation.z = -Math.PI / 2; tail.position.set(hx + 0.55, hy, 0); g.add(tail);
+                let body = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), mat);
+                body.scale.set(1.0, 0.85, 0.35); body.position.set(hx, hy, 0); g.add(body);
+                let tail = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.65, 3), mat);
+                tail.scale.set(1, 1, 0.35); tail.rotation.z = -Math.PI / 2; tail.position.set(hx + 0.62, hy, 0); g.add(tail);
+                let eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({ color: 0x3e2723 }));
+                eye.position.set(hx - 0.28, hy + 0.12, 0.19); g.add(eye);
+                addAccStrap(g, strapFrom, new THREE.Vector3(hx - 0.1, hy + 0.35, 0), strapMat);
             } else if (id === 'coin') {
                 let mat = new THREE.MeshLambertMaterial({ color: 0xffd54f });
                 let coin = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.2, 14), mat);
                 coin.rotation.z = Math.PI / 2; coin.position.set(hx, hy, 0); g.add(coin);
+                addAccStrap(g, strapFrom, new THREE.Vector3(hx, hy + 0.55, 0), strapMat);
             } else if (id === 'bell') {
                 let mat = new THREE.MeshLambertMaterial({ color: 0xffca28 });
                 let bell = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), mat);
                 bell.position.set(hx, hy, 0); g.add(bell);
                 let slit = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.5), new THREE.MeshBasicMaterial({ color: 0x5d4037 }));
                 slit.position.set(hx + 0.5, hy - 0.15, 0); g.add(slit);
+                addAccStrap(g, strapFrom, new THREE.Vector3(hx, hy + 0.45, 0), strapMat);
             } else if (id === 'yarn') {
                 let mat = new THREE.MeshLambertMaterial({ color: 0xef5350 });
                 let ball = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 8), mat);
@@ -17740,6 +17777,7 @@
                     let strand = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.05, 4, 12), strMat);
                     strand.rotation.set(Math.PI / 2, 0, rot); strand.position.copy(ball.position); g.add(strand);
                 });
+                addAccStrap(g, strapFrom, new THREE.Vector3(hx, hy + 0.7, 0), strapMat);
             }
         }
         function addAccessories(g, faceY, faceZ, hatY, waistY, acc, bodyR) {
