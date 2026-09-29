@@ -5315,8 +5315,8 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
-                id: '2026-09-29-acc-waist-hug', date: '2026-09-29', title: '腰饰贴身修正：飘在半空 → 插进身体 → 贴在表面', items: [
-                    '腰饰位置来回调了两轮：先是离身体留 0.9 间隙，结果飘在半空；改成往身体里陷一点又变成插进身体里了。现在按每件挂饰自己的半径把它精确摆在身体表面上——不留空隙也不重叠嵌入，真正贴在表面。'
+                id: '2026-09-29-acc-waist-hug', date: '2026-09-29', title: '腰饰贴身修正：飘在半空 → 插进身体 → 贴在正面', items: [
+                    '腰饰位置调了三轮：先是离身体留 0.9 间隙飘在半空；改成往身体里陷一点又变成插进身体里；现在按每件挂饰自己的半径贴在身体表面（不留空隙不嵌入）。同时把挂饰从身体侧面改到了正面——猫脸所在那一面，正对着镜头才看得清是条鱼还是猫盾币。'
                 ]
             },
             {
@@ -17740,61 +17740,59 @@
             strap.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
             g.add(strap);
         }
-        function addAccWaist(g, id, y, z, bodyR) {
-            // 之前固定间隙 0.9（不管挂饰多大都留一样的空隙）反而把挂饰推得离身体太
-            // 远，飘在半空只靠一根细绳吊着（反馈图里画的就是这个问题：小鱼干整个甩
-            // 到身体外面去了）。加了点重叠让它贴身之后，又变成陷进身体里了（插进去
-            // 了）。折中就是不留重叠也不留空隙——挂饰半径刚好顶到身体表面，贴着表
-            // 面但不嵌进去，真正意义上的"表面"。
-            let OVERLAP = 0;
+        function addAccWaist(g, id, y, z) {
+            // 挂在身体侧面时人物从正面看基本看不清（侧面贴身体那面被自己的宽度挡住
+            // 大半），反馈要求挂在正面——猫脸所在那一面（z 用 addCatFace 同一个
+            // faceZ，就是脸的位置，贴身高度沿用 y）。每件挂饰用自己的深度半径顶到
+            // 这个正面上，不留空隙也不嵌进身体。
             let hy = y - 0.7;
             let strapMat = new THREE.MeshBasicMaterial({ color: 0x6d4c41 });
-            let strapFrom = new THREE.Vector3(bodyR, hy + 0.55, 0);
+            let strapFrom = new THREE.Vector3(0, hy + 0.55, z);
             if (id === 'fish') {
                 // 参照真实反馈画的示意图重做：圆乎乎的身子（不是拉得老长的扁椭圆）+
                 // 一个明显的三角尾巴，加一颗眼睛——这才读得出"这是条鱼"，不是随便一坨。
                 // 整条鱼（含眼睛）统一用猫盾币同款金色，不分深浅——跟商店图标里的
                 // 小鱼干一个颜色，图标和挂饰对得上号。
-                let hx = bodyR + 0.6 - OVERLAP;
+                let hz = z + 0.21;
                 let mat = new THREE.MeshLambertMaterial({ color: 0xe6a23c });
                 let body = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), mat);
-                body.scale.set(1.0, 0.85, 0.35); body.position.set(hx, hy, 0); g.add(body);
+                body.scale.set(1.0, 0.85, 0.35); body.position.set(0, hy, hz); g.add(body);
                 let tail = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.65, 3), mat);
-                tail.scale.set(1, 1, 0.35); tail.rotation.z = -Math.PI / 2; tail.position.set(hx + 0.62, hy, 0); g.add(tail);
+                tail.scale.set(1, 1, 0.35); tail.rotation.z = -Math.PI / 2; tail.position.set(0.62, hy, hz); g.add(tail);
                 let eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), mat);
-                eye.position.set(hx - 0.28, hy + 0.12, 0.19); g.add(eye);
-                addAccStrap(g, strapFrom, new THREE.Vector3(hx - 0.1, hy + 0.35, 0), strapMat);
+                eye.position.set(-0.28, hy + 0.12, hz + 0.19); g.add(eye);
+                addAccStrap(g, strapFrom, new THREE.Vector3(-0.1, hy + 0.35, hz), strapMat);
             } else if (id === 'coin') {
-                let hx = bodyR + 0.8 - OVERLAP;
+                let hz = z + 0.1;
                 let mat = new THREE.MeshLambertMaterial({ color: 0xffd54f });
                 let coin = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.2, 14), mat);
-                coin.rotation.z = Math.PI / 2; coin.position.set(hx, hy, 0); g.add(coin);
-                addAccStrap(g, strapFrom, new THREE.Vector3(hx, hy + 0.55, 0), strapMat);
+                coin.rotation.x = Math.PI / 2; coin.position.set(0, hy, hz); g.add(coin);
+                addAccStrap(g, strapFrom, new THREE.Vector3(0, hy + 0.55, hz), strapMat);
             } else if (id === 'bell') {
-                let hx = bodyR + 0.55 - OVERLAP;
+                let hz = z + 0.55;
                 let mat = new THREE.MeshLambertMaterial({ color: 0xffca28 });
                 let bell = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), mat);
-                bell.position.set(hx, hy, 0); g.add(bell);
-                let slit = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.5), new THREE.MeshBasicMaterial({ color: 0x5d4037 }));
-                slit.position.set(hx + 0.5, hy - 0.15, 0); g.add(slit);
-                addAccStrap(g, strapFrom, new THREE.Vector3(hx, hy + 0.45, 0), strapMat);
+                bell.position.set(0, hy, hz); g.add(bell);
+                let slit = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), new THREE.MeshBasicMaterial({ color: 0x5d4037 }));
+                slit.position.set(0, hy - 0.15, hz + 0.5); g.add(slit);
+                addAccStrap(g, strapFrom, new THREE.Vector3(0, hy + 0.45, hz), strapMat);
             } else if (id === 'yarn') {
-                let hx = bodyR + 0.9 - OVERLAP;
+                let hz = z + 0.9;
                 let mat = new THREE.MeshLambertMaterial({ color: 0xef5350 });
                 let ball = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 8), mat);
-                ball.position.set(hx, hy, 0); g.add(ball);
+                ball.position.set(0, hy, hz); g.add(ball);
                 let strMat = new THREE.MeshBasicMaterial({ color: 0xffcdd2 });
                 [0, Math.PI / 3, -Math.PI / 3].forEach(function (rot) {
                     let strand = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.05, 4, 12), strMat);
                     strand.rotation.set(Math.PI / 2, 0, rot); strand.position.copy(ball.position); g.add(strand);
                 });
-                addAccStrap(g, strapFrom, new THREE.Vector3(hx, hy + 0.7, 0), strapMat);
+                addAccStrap(g, strapFrom, new THREE.Vector3(0, hy + 0.7, hz), strapMat);
             }
         }
-        function addAccessories(g, faceY, faceZ, hatY, waistY, acc, bodyR) {
+        function addAccessories(g, faceY, faceZ, hatY, waistY, acc) {
             if (!acc) return;
             if (acc.head) addAccHead(g, acc.head, hatY, faceY, faceZ);
-            if (acc.waist) addAccWaist(g, acc.waist, waistY, faceZ, bodyR);
+            if (acc.waist) addAccWaist(g, acc.waist, waistY, faceZ);
         }
         function raceMakeBody(col, handRange, hideRing, acc) {
             let g = new THREE.Group();
@@ -17858,7 +17856,7 @@
                 reach.rotation.x = -Math.PI / 2; reach.position.y = 0.4; g.add(reach);
                 g.userData.reach = reach;
             }
-            if (acc) addAccessories(g, 8, 2.02, 12.9, 4.2, acc, 3);
+            if (acc) addAccessories(g, 8, 2.02, 12.9, 4.2, acc);
             return g;
         }
 
@@ -22302,7 +22300,7 @@
                 reach.rotation.x = -Math.PI / 2; reach.position.y = 0.4; g.add(reach);
                 g.userData.reach = reach;
             }
-            if (acc) addAccessories(g, 7, 4.05, 11.6, 3.6, acc, 4);
+            if (acc) addAccessories(g, 7, 4.05, 11.6, 3.6, acc);
             return g;
         }
 
