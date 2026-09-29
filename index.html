@@ -2100,7 +2100,12 @@
 
         const itemPool = {
             purple: [{ n: "彩窗圆盘", v: 10000, w: 3, tex: 'disc', c: 0x9c27b0 }, { n: "镀金怀表", v: 12000, w: 5, tex: 'watch', c: 0x9c27b0 }, { n: "水晶沙漏", v: 15000, w: 8, tex: 'glass', c: 0x9c27b0 }, { n: "猫盾", v: 15000, w: 1, tex: 'cat_shield', c: 0x9c27b0 }, { n: "猫盾", v: 15000, w: 1, tex: 'cat_shield', c: 0x9c27b0 }, { n: "猫盾", v: 15000, w: 1, tex: 'cat_shield', c: 0x9c27b0 }, { n: "小鱼干", v: 10000, w: 1, tex: 'fish_chip', c: 0x9c27b0 }, { n: "小鱼干", v: 10000, w: 1, tex: 'fish_chip', c: 0x9c27b0 }, { n: "小鱼干", v: 10000, w: 1, tex: 'fish_chip', c: 0x9c27b0 }],
-            gold: [{ n: "黄金书", v: 30000, w: 3, tex: 'book', c: 0xffeb3b }, { n: "金苹果", v: 50000, w: 2, tex: 'apple', c: 0xffeb3b }, { n: "黄金圣杯", v: 60000, w: 4, tex: 'cup', c: 0xffeb3b }, { n: "黄金小鱼干", v: 50000, w: 1, tex: 'fish_chip', c: 0xffeb3b }, { n: "黄金小鱼干", v: 50000, w: 1, tex: 'fish_chip', c: 0xffeb3b }, { n: "黄金小鱼干", v: 50000, w: 1, tex: 'fish_chip', c: 0xffeb3b }, { n: "黄金猫盾", v: 50000, w: 1, tex: 'cat_shield', c: 0xffeb3b }, { n: "黄金猫盾", v: 50000, w: 1, tex: 'cat_shield', c: 0xffeb3b }, { n: "黄金猫盾", v: 50000, w: 1, tex: 'cat_shield', c: 0xffeb3b }, { n: "外星信号接收器", v: 30000, w: 2, tex: 'signal', c: 0xffeb3b, type: 'signal', uses: 1, maxUses: 1 }],
+            // 黄金猫盾不在这个池子里——它是配方 gcat（猫盾+小鱼干）的合成产物，跟至臻
+            // 猫盾/丰饶圣餐/猫盾骑士剑/皇冠一样，只能合成，宝箱/保险柜不会直接开出来。
+            // 之前它跟黄金小鱼干一样也在池子里放了 3 份，等于宝箱+合成两条路都能拿，
+            // 而猫盾/小鱼干两样原料又是紫色池子里最常见的东西，导致黄金猫盾比黄金
+            // 小鱼干好拿得多（反馈：一局合出 5 个黄金猫盾，一个黄金小鱼干都没见到）。
+            gold: [{ n: "黄金书", v: 30000, w: 3, tex: 'book', c: 0xffeb3b }, { n: "金苹果", v: 50000, w: 2, tex: 'apple', c: 0xffeb3b }, { n: "黄金圣杯", v: 60000, w: 4, tex: 'cup', c: 0xffeb3b }, { n: "黄金小鱼干", v: 50000, w: 1, tex: 'fish_chip', c: 0xffeb3b }, { n: "黄金小鱼干", v: 50000, w: 1, tex: 'fish_chip', c: 0xffeb3b }, { n: "黄金小鱼干", v: 50000, w: 1, tex: 'fish_chip', c: 0xffeb3b }, { n: "外星信号接收器", v: 30000, w: 2, tex: 'signal', c: 0xffeb3b, type: 'signal', uses: 1, maxUses: 1 }],
             ultra: [{ n: "凤凰金雕", v: 200000, w: 10, tex: 'statue', c: 0xffb300 }, { n: "骑士团圣剑", v: 400000, w: 5, tex: 'sword', c: 0xffb300, type: 'wep', dmg: 100 }, { n: "星光圣诞树", v: 600000, w: 3, tex: 'tree', c: 0xffb300 }, { n: "皇家马车", v: 2026888, w: 1, tex: 'carriage', c: 0xff6b6b, type: 'carriage' }],
             god: [{ n: "帝王翡翠", v: 800000, w: 3, tex: 'jade', c: 0x00e676 }, { n: "王权之心", v: 1000000, w: 4, tex: 'heart', c: 0xff1744 }, { n: "eggy金条", v: 200000, w: 10, tex: 'statue', c: 0xffb300 }, { n: "永恒誓言", v: 2000000, w: 1, tex: 'heart', c: 0xffffff, type: 'amulet' }, { n: "时空沙漏", v: 1000000, w: 4, tex: 'glass', c: 0x00ffff, type: 'time_stop', uses: 3, maxUses: 3 }]
         };
@@ -5314,6 +5319,11 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-29-gold-cat-loot-fix', date: '2026-09-29', title: '寻宝队修复：黄金猫盾不再宝箱直接开出', items: [
+                    '反馈"一局合出 5 个黄金猫盾，一个黄金小鱼干都没见到"：黄金猫盾之前既在金色战利品池子里能直接开出来，又能靠猫盾+小鱼干（紫色池子里最常见的两样东西）合成，等于两条路都能拿；黄金小鱼干却只有宝箱这一条路，天然吃亏。把黄金猫盾从金色战利品池子里删掉——跟至臻猫盾/丰饶圣餐/猫盾骑士剑/皇冠一样，只能合成，宝箱和保险柜都不会直接开出来了。'
+                ]
+            },
             {
                 id: '2026-09-29-acc-waist-hug', date: '2026-09-29', title: '腰饰贴身修正：飘在半空 → 插进身体 → 贴在正面右下角', items: [
                     '腰饰位置调了几轮：先是离身体留 0.9 间隙飘在半空；改成往身体里陷一点又变成插进身体里；现在按每件挂饰自己的半径贴在身体表面（不留空隙不嵌入）。把挂饰从身体侧面改到了正面——猫脸所在那一面，又从正中间挪到了右下角（角色自己的腰部左侧，正对镜头看起来在画面右边偏下，像是真的挂在胯侧）。',
