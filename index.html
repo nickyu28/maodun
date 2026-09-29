@@ -2881,6 +2881,14 @@
             if (bl) { bl.style.background = deviceStr === 'laptop' ? '#5cb85c' : '#eceff1'; bl.style.color = deviceStr === 'laptop' ? '#fff' : '#555'; }
             if (bp) { bp.style.background = deviceStr === 'pad' ? '#5cb85c' : '#eceff1'; bp.style.color = deviceStr === 'pad' ? '#fff' : '#555'; }
         }
+        // 设备选择每次刷新都是从"电脑"这个默认值开始——手机/平板用户打开第一屏，
+        // 明明摸得到屏幕，却要先自己点一下"平板"才对。触屏 + 窄屏就猜"平板"（宽屏
+        // 触屏笔记本不猜，那种还是键鼠为主），猜错了用户自己点一下就是，比每次都要
+        // 手动切换省事。
+        (function () {
+            let looksLikePad = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth < 900;
+            if (looksLikePad) selectControl('pad');
+        })();
 
         // 大厅里那几段静态说明，选完设备再按设备填进去
         function applyControlHints() {
@@ -5326,6 +5334,12 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-29-ui-detail-fixes', date: '2026-09-29', title: '两处界面细节修复', items: [
+                    '手机/平板打开游戏时，"你在用什么设备"默认一直是"电脑"，得自己点一下"平板"。现在触屏 + 窄屏会自动帮你选好"平板"，猜错了自己点一下换回来就行。',
+                    '手机竖屏进大厅广场时，"在线 X 人"那行字会被挤扁成一列一个字一行的竖排文字，糊满大半个屏幕——这行本来是卡在两块菜单中间的缝里，窄屏上那条缝几乎不存在。现在给它留了个最小宽度，宁可稍微往下挪、露在两块菜单下方，也不会再挤成没法看的竖排。'
+                ]
+            },
             {
                 id: '2026-09-29-pity-timing-fix', date: '2026-09-29', title: '寻宝队再修两处细节', items: [
                     '修了个之前一直卡住没消耗的状态：连续几局没撤出去的话，那个"照顾一下"的状态会一直挂着不消失，现在到了下一局就正常翻篇了。',
@@ -22994,11 +23008,19 @@
             // 在线人数/大厅提示这行本来是屏幕水平居中的，套用到大厅里就会跟右上角
             // lobby-tr 那块选模式面板撞在一起——按跟 lobby-tl/tr 同样的断点公式，
             // 把它的左右边界卡在两块面板中间那条真正空着的缝里，不再整屏居中。
+            // 手机竖屏这么窄的时候，lobby-tl/tr 两块面板本身就占了 92vw，中间缝
+            // 只剩几个像素，left/right 算出来的宽度是负的——这行字被挤到只剩几像
+            // 素宽，每个字自己换一行，一整列竖排文字糊满大半个屏幕。补一个
+            // min-width 兜底，宽度不够就宁可稍微盖到旁边面板上，也不要挤成负数。
             let scoreWrap = document.getElementById('blaze-score-wrap');
             if (scoreWrap) {
                 scoreWrap.style.left = 'calc(14px + min(190px, 42vw) + 12px)';
                 scoreWrap.style.right = 'calc(14px + min(320px, 50vw) + 12px)';
                 scoreWrap.style.transform = 'none';
+                scoreWrap.style.minWidth = '150px';
+                // min-width 兜底之后，窄屏下这行会比中间缝更宽，往右盖住 lobby-tr
+                // 那排"选择模式/寻宝队/开始游戏"按钮——挪到那排按钮下方，就不叠字了。
+                scoreWrap.style.top = window.innerWidth < 480 ? '74px' : '10px';
             }
             if (blaze) { try { blazeExit(); } catch (e) { } }
             if (race) { try { raceExit(); } catch (e) { } }
@@ -23047,7 +23069,7 @@
             // 大厅专用的窄化定位只对大厅有意义——其它模式没有 lobby-tl/tr 那两块面板，
             // 离开大厅要把这行改回原来的整屏水平居中，不然进了正式对局这行会一直偏在中间偏左。
             let scoreWrapExit = document.getElementById('blaze-score-wrap');
-            if (scoreWrapExit) { scoreWrapExit.style.left = '50%'; scoreWrapExit.style.right = ''; scoreWrapExit.style.transform = 'translateX(-50%)'; }
+            if (scoreWrapExit) { scoreWrapExit.style.left = '50%'; scoreWrapExit.style.right = ''; scoreWrapExit.style.transform = 'translateX(-50%)'; scoreWrapExit.style.minWidth = ''; scoreWrapExit.style.top = '10px'; }
             bgmStop();
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
