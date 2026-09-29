@@ -17562,33 +17562,42 @@
                 new THREE.MeshBasicMaterial({ map: catFaceTexture(), transparent: true, depthWrite: false }));
             face.position.set(0, y, z); g.add(face);
         }
-        // "星星"配饰要的是那种柔光晕开的闪烁效果，几个几何体拼出来的实心尖角星星
-        // 看着太"硬"、不像星星——画一张径向渐变光晕 + 中心十字闪光的贴图，糊在一个
-        // Sprite 上（Sprite 永远面朝镜头，不用管角色朝向），叠加混合让它真的"发光"。
-        let starGlowTex = null;
-        function starGlowTexture() {
-            if (starGlowTex) return starGlowTex;
+        // "星星"配饰要的是头顶几颗真正的五角星，绕中心缓慢旋转——不是静态摆几个
+        // 尖角，也不只是一团光晕。贴图画成实心五角星（10 个点，外/内半径交替连线）
+        // 再垫一层柔光晕，兼顾"星形"和"发光"；旋转靠 g.userData.accStarOrbit 挂出去，
+        // 由各个模式自己的每帧 tick 调 tickAccStarOrbit() 转（跟腿部摆动动画一个套路，
+        // 都是 tick 里按 dt 更新 userData 上的东西，不是配饰自己会转）。
+        let star5Tex = null;
+        function star5Texture() {
+            if (star5Tex) return star5Tex;
             let cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
             let g2 = cv.getContext('2d');
             let cx = 32, cy = 32;
-            let glow = g2.createRadialGradient(cx, cy, 0, cx, cy, 32);
-            glow.addColorStop(0, 'rgba(255,250,180,1)');
-            glow.addColorStop(0.35, 'rgba(255,213,79,0.95)');
-            glow.addColorStop(0.7, 'rgba(255,193,7,0.4)');
-            glow.addColorStop(1, 'rgba(255,193,7,0)');
-            g2.fillStyle = glow;
-            g2.fillRect(0, 0, 64, 64);
-            g2.save(); g2.translate(cx, cy); g2.fillStyle = 'rgba(255,255,255,0.9)';
-            for (let i = 0; i < 4; i++) {
-                g2.rotate(Math.PI / 2);
-                g2.beginPath();
-                g2.moveTo(0, -28); g2.lineTo(3, -3); g2.lineTo(28, 0); g2.lineTo(3, 3);
-                g2.lineTo(0, 28); g2.lineTo(-3, 3); g2.lineTo(-28, 0); g2.lineTo(-3, -3);
-                g2.closePath(); g2.fill();
+            let glow = g2.createRadialGradient(cx, cy, 0, cx, cy, 30);
+            glow.addColorStop(0, 'rgba(255,235,130,0.9)');
+            glow.addColorStop(0.5, 'rgba(255,213,79,0.35)');
+            glow.addColorStop(1, 'rgba(255,213,79,0)');
+            g2.fillStyle = glow; g2.fillRect(0, 0, 64, 64);
+            g2.save(); g2.translate(cx, cy);
+            g2.beginPath();
+            let outerR = 22, innerR = 9;
+            for (let i = 0; i < 10; i++) {
+                let r = (i % 2 === 0) ? outerR : innerR;
+                let ang = (i / 10) * Math.PI * 2 - Math.PI / 2;
+                let px = Math.cos(ang) * r, py = Math.sin(ang) * r;
+                if (i === 0) g2.moveTo(px, py); else g2.lineTo(px, py);
             }
+            g2.closePath();
+            g2.fillStyle = '#ffd740';
+            g2.fill();
+            g2.strokeStyle = 'rgba(255,255,255,0.85)'; g2.lineWidth = 1.5; g2.stroke();
             g2.restore();
-            starGlowTex = new THREE.CanvasTexture(cv);
-            return starGlowTex;
+            star5Tex = new THREE.CanvasTexture(cv);
+            return star5Tex;
+        }
+        const ACC_STAR_SPIN = 0.9;   // 弧度/秒——"缓慢旋转"，转一圈大概 7 秒
+        function tickAccStarOrbit(u, dt) {
+            if (u && u.accStarOrbit) u.accStarOrbit.rotation.y += dt * ACC_STAR_SPIN;
         }
         // 配饰渲染：acc 是调用方传进来的 {head, waist} 数据（本人传 gState.acc，联机对面
         // 真人传 peerAccOf(id) 从房间心跳里查来的，AI/路人传 aiRandomAcc() 随机抽的，都不传
@@ -17621,14 +17630,18 @@
                         grp.add(spike);
                     }
                 } else if (id === 'star') {
-                    // 叠加混合（AdditiveBlending）在浅色天空背景下核心会糊成一片死白，看不出
-                    // 金黄色——改回普通透明混合，贴图本身的渐变色（金黄核心+淡出边缘）才会
-                    // 老老实实显出来，深色/浅色背景下都不容易过曝。
-                    let mat = new THREE.SpriteMaterial({ map: starGlowTexture(), transparent: true, depthWrite: false });
-                    let spr = new THREE.Sprite(mat);
-                    spr.scale.set(3.4, 3.4, 1);
-                    spr.position.y = 1.2;
-                    grp.add(spr);
+                    let mat = new THREE.SpriteMaterial({ map: star5Texture(), transparent: true, depthWrite: false });
+                    let orbit = new THREE.Group(); orbit.position.y = 1.3;
+                    let n = 3, r = 1.7;
+                    for (let i = 0; i < n; i++) {
+                        let spr = new THREE.Sprite(mat);
+                        spr.scale.set(1.3, 1.3, 1);
+                        let ang = (i / n) * Math.PI * 2;
+                        spr.position.set(Math.cos(ang) * r, Math.sin(ang * 2) * 0.4, Math.sin(ang) * r);
+                        orbit.add(spr);
+                    }
+                    grp.add(orbit);
+                    g.userData.accStarOrbit = orbit;
                 }
                 g.add(grp);
             } else if (id === 'glasses' || id === 'shades') {
@@ -17650,12 +17663,14 @@
                 }
             }
         }
-        function addAccWaist(g, id, y, z) {
+        function addAccWaist(g, id, y, z, bodyR) {
             // 之前这几件都往正前方偏中间放（x 只有 1.3~1.6，z 还打了折），两种身体
             // （方盒子半宽 3 / 圆柱半径 4）都比这个大得多，挂饰整个嵌进身体实心网格
             // 里面，从外面根本看不见（小鱼干反馈的就是这个坑，coin/yarn 其实也一样中）。
-            // 改成统一挂在身体侧面、往外探到 4.4，比两种身体的表面都更靠外，稳定露出来。
-            let hx = 4.4, hy = y - 0.7;
+            // 改成挂在身体侧面——但固定用 4.4 又对两种身体不公平：方盒子身体半宽只有
+            // 3，4.4 探得太远，飘在半空贴不住身体。改成按传进来的 bodyR（各自身体的
+            // 真实半宽/半径）算，只多探出 0.4，两种身体都能贴身又不会被挡住。
+            let hx = bodyR + 0.4, hy = y - 0.7;
             if (id === 'fish') {
                 // 圆柱+圆锥拼出来的实际效果是根尖头小棍/箭头，完全看不出是条鱼——鱼真正
                 // 好认的地方是侧面轮廓：一个扁扁的椭圆身子 + 一个扁扁的三角尾巴。往 Z 方向
@@ -17664,7 +17679,7 @@
                 let body = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat);
                 body.scale.set(1.3, 0.7, 0.32); body.position.set(hx, hy, 0); g.add(body);
                 let tail = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.9, 4), mat);
-                tail.scale.set(1, 1, 0.25); tail.rotation.z = -Math.PI / 2; tail.position.set(hx + 1.15, hy, 0); g.add(tail);
+                tail.scale.set(1, 1, 0.25); tail.rotation.z = -Math.PI / 2; tail.position.set(hx + 0.65, hy, 0); g.add(tail);
             } else if (id === 'coin') {
                 let mat = new THREE.MeshLambertMaterial({ color: 0xffd54f });
                 let coin = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.2, 14), mat);
@@ -17686,10 +17701,10 @@
                 });
             }
         }
-        function addAccessories(g, faceY, faceZ, hatY, waistY, acc) {
+        function addAccessories(g, faceY, faceZ, hatY, waistY, acc, bodyR) {
             if (!acc) return;
             if (acc.head) addAccHead(g, acc.head, hatY, faceY, faceZ);
-            if (acc.waist) addAccWaist(g, acc.waist, waistY, faceZ);
+            if (acc.waist) addAccWaist(g, acc.waist, waistY, faceZ, bodyR);
         }
         function raceMakeBody(col, handRange, hideRing, acc) {
             let g = new THREE.Group();
@@ -17751,7 +17766,7 @@
                 reach.rotation.x = -Math.PI / 2; reach.position.y = 0.4; g.add(reach);
                 g.userData.reach = reach;
             }
-            if (acc) addAccessories(g, 8, 2.02, 12.9, 4.2, acc);
+            if (acc) addAccessories(g, 8, 2.02, 12.9, 4.2, acc, 3);
             return g;
         }
 
@@ -18549,6 +18564,7 @@
                     u.legs[0].rotation.x = Math.sin(r.animT) * 0.9 * run;
                     u.legs[1].rotation.x = -Math.sin(r.animT) * 0.9 * run;
                 }
+                tickAccStarOrbit(u, dt);
                 if (u.arms) {
                     u.arms[0].rotation.x = -Math.sin(r.animT) * 0.7 * run;
                     u.arms[1].rotation.x = Math.sin(r.animT) * 0.7 * run;
@@ -20861,6 +20877,7 @@
                 a.animT = (a.animT || 0) + dt * 10;
                 let u = a.mesh.userData;
                 if (u.legs) { u.legs[0].rotation.x = Math.sin(a.animT) * 0.7; u.legs[1].rotation.x = -Math.sin(a.animT) * 0.7; }
+                tickAccStarOrbit(u, dt);
             });
             let me = escapeRoom.me;
             let camPos = escapeCameraPos(me);
@@ -21356,6 +21373,7 @@
             parkPlayerMove(dt);
             park.mesh.position.set(park.p.x, park.p.y, park.p.z);
             if (park.faceDir) park.mesh.rotation.y = Math.atan2(park.faceDir.x, park.faceDir.z);
+            tickAccStarOrbit(park.mesh.userData, dt);
             if (park.clock < park.compiled.duration) {
                 park.compiled.spawners.forEach(function (sp) {
                     sp.t -= dt;
@@ -21927,6 +21945,7 @@
                 a.animT = (a.animT || 0) + dt * (2 + run * 16);
                 let u = a.mesh.userData;
                 if (u.legs) { u.legs[0].rotation.x = Math.sin(a.animT) * 0.9 * run; u.legs[1].rotation.x = -Math.sin(a.animT) * 0.9 * run; }
+                tickAccStarOrbit(u, dt);
                 if (u.arms) {
                     if (a.gestureT > 0) { a.gestureT -= dt; bodyGesture(u, a.gestureKind, Math.max(0, a.gestureT) / 0.35); }
                     else { u.arms[0].rotation.x = -Math.sin(a.animT) * 0.7 * run; u.arms[1].rotation.x = Math.sin(a.animT) * 0.7 * run; }
@@ -22133,7 +22152,7 @@
                 reach.rotation.x = -Math.PI / 2; reach.position.y = 0.4; g.add(reach);
                 g.userData.reach = reach;
             }
-            if (acc) addAccessories(g, 7, 4.05, 11.6, 3.6, acc);
+            if (acc) addAccessories(g, 7, 4.05, 11.6, 3.6, acc, 4);
             return g;
         }
 
@@ -22717,6 +22736,7 @@
                 let run = Math.min(1, (real.spd || 0) / HUB.moveSpeed);
                 real.animT = (real.animT || 0) + dt * (2 + run * 14);
                 if (u.legs) { u.legs[0].rotation.x = Math.sin(real.animT) * 0.6 * run; u.legs[1].rotation.x = -Math.sin(real.animT) * 0.6 * run; }
+                tickAccStarOrbit(u, dt);
             });
             hubProximityTick();
             let camPos = hubCameraPos();
