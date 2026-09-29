@@ -6430,11 +6430,13 @@
         // 跟登录页那个猫盾 Logo 一个造型，只是换成金币配色，一看就知道是"钱"。
         function coinIconSvg(size) {
             size = size || 18;
+            // 圆中间一条小鱼干：椭圆身子 + 三角尾巴 + 一个眼睛，跟 3D 那条小鱼干挂饰
+            // 一个造型，圆底还是金色，一眼看出"这是钱"。
             return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 20 20" style="vertical-align:middle; flex-shrink:0;">' +
                 '<circle cx="10" cy="10" r="9" fill="#ffd54f" stroke="#f0b90b" stroke-width="1.2"/>' +
-                '<path d="M5.5 8.5 L4 5.3 L7.2 7 Z" fill="#8d6e63"/>' +
-                '<path d="M14.5 8.5 L16 5.3 L12.8 7 Z" fill="#8d6e63"/>' +
-                '<rect x="6" y="7.3" width="8" height="6.8" rx="2.2" fill="#8d6e63"/>' +
+                '<ellipse cx="8.3" cy="10" rx="4" ry="3" fill="#d9a066"/>' +
+                '<path d="M11.8 10 L15.5 7.3 L14.3 10 L15.5 12.7 Z" fill="#d9a066"/>' +
+                '<circle cx="6.5" cy="9" r="0.8" fill="#3e2723"/>' +
                 '</svg>';
         }
         // 数额 + 图案拼一起的标准格式：xxx（金额）+ 猫盾币图案，买东西的地方统一用这个。
