@@ -5335,6 +5335,11 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
             {
+                id: '2026-09-29-night-flash-fix', date: '2026-09-29', title: '惊魂夜提示文字闪烁修复', items: [
+                    '惊魂夜屏幕中间那行黄字提示（矿机进度、校准反馈等）之前是"先显示，1.2 秒后自动隐藏"，但每次新消息都会另起一个隐藏计时器，不会取消上一个——连续修机器的时候，新提示字刚出来没多久，上一条消息的计时器先到点了，直接把还在看的新提示藏起来，看着就是一闪一闪的。现在改成共用一个计时器，每次显示新消息都先取消上一个，不会再被提前藏起来。'
+                ]
+            },
+            {
                 id: '2026-09-29-ui-detail-fixes', date: '2026-09-29', title: '两处界面细节修复', items: [
                     '手机/平板打开游戏时，"你在用什么设备"默认一直是"电脑"，得自己点一下"平板"。现在触屏 + 窄屏会自动帮你选好"平板"，猜错了自己点一下换回来就行。',
                     '手机竖屏进大厅广场时，"在线 X 人"那行字会被挤扁成一列一个字一行的竖排文字，糊满大半个屏幕——这行本来是卡在两块菜单中间的缝里，窄屏上那条缝几乎不存在。现在给它留了个最小宽度，宁可稍微往下挪、露在两块菜单下方，也不会再挤成没法看的竖排。'
@@ -13980,12 +13985,12 @@
             let m = night.repairing; if (!m) return;
             let gain = calibGain(zone, night.t);
             m.progress = Math.min(100, m.progress + gain);
-            let msg = document.getElementById('night-msg');
-            msg.style.display = 'block';
-            if (zone === 'red') { msg.style.color = '#ff5fbd'; msg.innerText = '红区 +' + gain; }
-            else if (zone === 'white') { msg.style.color = '#8ef58e'; msg.innerText = '白区 +' + gain; }
-            else { msg.style.color = '#ff6b6b'; msg.innerText = '校准失败 ' + gain + '，眩晕 2 秒'; night.stun = NIGHT.calibStun; night.repairing = null; night.calib = null; }
-            setTimeout(function () { if (msg) msg.style.display = 'none'; }, 700);
+            if (zone === 'red') nightShowMsg('红区 +' + gain, '#ff5fbd', 700);
+            else if (zone === 'white') nightShowMsg('白区 +' + gain, '#8ef58e', 700);
+            else {
+                nightShowMsg('校准失败 ' + gain + '，眩晕 2 秒', '#ff6b6b', 700);
+                night.stun = NIGHT.calibStun; night.repairing = null; night.calib = null;
+            }
             nightCheckMachine(m);
         }
 
@@ -15024,11 +15029,20 @@
             endNightGame('你已离开观战。当前 ' + n + ' 人撤离。');
         }
 
-        function nightFlash(text) {
-            let msg = document.getElementById('night-msg');
-            msg.style.color = '#ffd54f'; msg.innerText = text; msg.style.display = 'block';
-            setTimeout(function () { if (msg) msg.style.display = 'none'; }, 1200);
+        // night-msg 这个提示条被 nightFlash 和 nightApplyCalib（校准小游戏反馈）两处
+        // 共用，各自原来都是各调各的 setTimeout，互不知道对方的存在。矿机进度这种
+        // 连续触发的提示，每次调用都叠一个新的隐藏定时器，最早那个先到时间就把还
+        // 在显示的新消息藏起来了——玩家还在修机器，进度提示却一闪一闪地消失/出现。
+        // 校准反馈同理，还会跟 nightFlash 的消息互相抢着隐藏对方。统一走一个共享
+        // 定时器，每次显示都先清掉上一个，不会再互相打架。
+        let nightMsgTimer = null;
+        function nightShowMsg(text, color, duration) {
+            let msg = document.getElementById('night-msg'); if (!msg) return;
+            msg.style.color = color; msg.innerText = text; msg.style.display = 'block';
+            clearTimeout(nightMsgTimer);
+            nightMsgTimer = setTimeout(function () { msg.style.display = 'none'; }, duration);
         }
+        function nightFlash(text) { nightShowMsg(text, '#ffd54f', 1200); }
 
         function nightFlashHunter(text) { if (night && night.side === 'hunter') nightFlash(text); }
 
