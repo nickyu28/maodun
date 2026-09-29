@@ -2000,8 +2000,19 @@
         // 不用房主批准。剩下这几个模式还是各玩各的本地对局：只有真组了队才要看房主
         // 脸色——大厅默认自动进同一个房间，"房间里有人"不代表在跟你一队，不能只因为
         // 房间里有别人（可能完全不相干）就不让你自己开一局。
+        // 联机惊魂夜中途回大厅的人：队友那局还在打，你还是房主/队伍还在，只是得等他们打完才能一起开下一局
+        let nightAway = null;
+        function nightAwayActive() {
+            if (nightAway && performance.now() > nightAway.until) nightAway = null;
+            return !!nightAway;
+        }
         function lobbyPrimaryStart() {
             let m = gState.gameMode;
+            if (nightAwayActive() && lobbyParty.length > 0) {
+                let min = Math.max(1, Math.ceil((nightAway.until - performance.now()) / 60000));
+                showSysModal('队友还在打惊魂夜', '等他们这局打完再一起开（最多还要 ' + min + ' 分钟左右）。打完了这里会提示。', [{ label: '知道了' }]);
+                return;
+            }
             if (m !== 'night' && m !== 'cake' && lobbyParty.length > 0 && !peerIsHost) {
                 lobbySuggestModeToHost(m);
                 return;
@@ -2274,7 +2285,7 @@
             } else if (msg.type === 'POS_SYNC') {
                 if (msg.sender !== gState.id && entities) {
                     let p = entities.find(e => e.userData.type === 'ai' && e.userData.name === msg.sender);
-                    if (p) { p.position.x = msg.x; p.position.y = msg.y; p.position.z = msg.z; p.userData.isRealPlayer = true; }
+                    if (p) { p.position.x = msg.x; p.position.y = msg.y; p.position.z = msg.z; p.userData.isRealPlayer = true; p.userData.lastSync = performance.now(); if (p.userData.aiTakeover) { p.userData.aiTakeover = false; gState.peerState[msg.sender] = 'active'; } }
                 }
             } else if (msg.type === 'CHEST_OPENED') {
                 let chest = chests.find(c => Math.floor(c.position.x / TILE) === msg.cx && Math.floor(c.position.z / TILE) === msg.cz && Math.floor(c.position.y / TILE) === msg.cf);
@@ -2282,6 +2293,7 @@
             } else if (msg.type === 'PLAYER_DOWN' || msg.type === 'PLAYER_LEFT' || msg.type === 'PLAYER_REVIVED') {
                 if (msg.sender !== gState.id) {
                     gState.peerState[msg.sender] = msg.type === 'PLAYER_DOWN' ? 'down' : (msg.type === 'PLAYER_LEFT' ? 'left' : 'active');
+                    if (msg.type === 'PLAYER_LEFT' && msg.alive && isPlaying) huntPeerToAi(msg.sender, msg.extracted ? ' 撤离了' : ' 离开了');
                     updateDeathWaitStatus();
                 }
             } else if (msg.type === 'ROOM_HELLO') {
@@ -2351,6 +2363,8 @@
                 netOnWorld(msg);
             } else if (msg.type === 'NEV') {
                 netOnEvent(msg);
+            } else if (msg.type === 'NIGHT_DONE') {
+                if (nightAway && msg.sender !== gState.id) { nightAway = null; if (hub) blazeFlash('队友那局惊魂夜打完了，可以开下一局了'); }
             } else if (msg.type === 'CHAT') {
                 if (msg.sender !== gState.id) {
 
@@ -3387,6 +3401,15 @@
             if (!night || night.over || !netOn() || m.key === undefined) return;
             let a = netActorByKey(m.key);
             if (!a || a.isPlayer) return;
+            a.lastSeen = performance.now();
+            // 之前因为掉线（切后台、网卡了）被 AI 接管的人又发消息了：控制权还给他。
+            // 每台机器都收得到这条 NS_ME，各自还原，不用额外广播。主动离开的人不会再发，也不接受还原。
+            if (a.aiTakeover && !a.leftForGood) {
+                a.remote = true; a.aiTakeover = null;
+                if (gState.netRoster && m.side) gState.netRoster[m.key] = m.side;
+                nightFlash(dispName(m.key) + ' 回来了');
+            }
+            if (!a.remote) return;
             a.netTo = { x: m.x, z: m.z, gy: m.gy };
             a.faceA = m.fa;
             a.hp = m.hp; a.downed = m.dn; a.onChair = m.ch; a.escaped = m.es; a.out = m.ot;
@@ -3428,14 +3451,23 @@
                 };
             }
             bc.postMessage({
-                type: 'NS_W', target: '*', a: acts, h: hd, t: +night.t.toFixed(1), done: night.done,
+                type: 'NS_W', target: '*', sender: gState.id, a: acts, h: hd, t: +night.t.toFixed(1), done: night.done,
                 m: gState.machines.map(function (o) { return +o.progress.toFixed(1); }),
                 p: gState.pallets.map(function (o) { return o.state === 'up' ? 0 : (o.state === 'down' ? 1 : 2); }),
                 d: gState.doors.map(function (o) { return o.open ? -1 : +o.openProgress.toFixed(1); })
             });
         }
         function netOnWorld(m) {
-            if (!night || night.over || !netOn() || netIsHost()) return;
+            if (!night || night.over || !netOn()) return;
+            if (m.sender && !(gState.netRoster || {})[m.sender]) return;   // 已经离开的原房主路上还没到的旧包
+            if (m.sender && m.sender !== gState.netHostId) {
+                // 别人已经接手当房主了（原房主离开/掉线）。两边都以为自己是房主的时候按 ID 定一个，
+                // 另一边收到对方的 NS_W 会照同样的规则让位，不会僵持。
+                if (netIsHost() && gState.id < m.sender) return;
+                gState.netHostId = m.sender;
+            }
+            if (netIsHost()) return;
+            night.lastWorldAt = performance.now();
             (m.a || []).forEach(function (o) {
                 let a = netActorByKey(o.k);
                 if (!a || a.isPlayer) return;
@@ -3475,6 +3507,7 @@
         }
         function netOnEvent(m) {
             if (!night || night.over || !netOn()) return;
+            if (m.ev === 'handover') { nightNetHandover(m.key, m.gone, m.host, m.left); return; }
             let a = m.key !== undefined ? netActorByKey(m.key) : null;
             if (m.ev === 'dmg') { if (a) nightDamage(a, true); }
             else if (m.ev === 'carry') { if (a) { night.hunter.carrying = a; a.struggle = 0; } }
@@ -3505,8 +3538,65 @@
             step(night.hunter);
         }
 
+        // 联机惊魂夜的"交接"：有人离开或掉线，他的角色交给 AI；走的/掉的是房主，就换一个人当房主。
+        // 房主这个身份本来就只管三件事——跑 AI、广播世界状态、判结束，都是看 netIsHost()，
+        // 换了 netHostId 新房主下一帧就接着跑，AI 从已经同步好的位置继续走。
+        const NET_DROP_MS = 6000;
+        function nightNetHandover(key, gone, host, left) {
+            if (!night) return;
+            let a = key ? netActorByKey(key) : null;
+            if (a && !a.isPlayer && a.remote) {
+                a.remote = false; a.aiTakeover = gone || key; a.netRep = -1;
+                if (left) a.leftForGood = true;
+                if (!a.out && !a.escaped) nightFlash(dispName(gone || key) + (left ? ' 离开了' : ' 掉线了') + '，AI 接管');
+            }
+            // 主动离开的从名单里拿掉（掉线的留着，回来了还能接回控制权）；
+            // 只剩自己一个真人的话 netOn() 变 false，这局就按单机继续打完。
+            if (left && gone && gState.netRoster) delete gState.netRoster[gone];
+            if (host) gState.netHostId = host;
+            night.lastWorldAt = performance.now();
+        }
+
+        // 自己主动离开联机局（活着中途走、或者观战时点离开）：不结束别人的局，只交接后自己回大厅。
+        function nightNetLeave(text) {
+            if (!night || night.over) return;
+            let me = night.side === 'hunter' ? night.hunter : night.survivors[0];
+            let others = Object.keys(gState.netRoster || {}).filter(function (id) { return id !== gState.id; }).sort();
+            let host = netIsHost() ? (others[0] || null) : gState.netHostId;
+            netEvent('handover', { key: me ? me.key : gState.id, gone: gState.id, host: host, left: true });
+            if (others.length) {
+                let leftSec = Math.max(0, (NIGHT.limit - night.t) / NIGHT.gamePerReal);
+                nightAway = { until: performance.now() + (leftSec + 30) * 1000 };
+            }
+            endNightGame(text, true);
+        }
+
         function netTick(dt) {
             if (!netOn() || !night || night.over) return;
+            let now = performance.now();
+            // 自己这台刚从"睡着"里醒来（切后台 rAF 停了）：这段时间别人多半已经接手当房主了，
+            // 先让出来，等收到新房主的 NS_W 认主；没人接手的话下面的超时逻辑会再选回来。
+            if (night.netRawLast && now - night.netRawLast > NET_DROP_MS && netIsHost()) {
+                let others = Object.keys(gState.netRoster || {}).filter(function (id) { return id !== gState.id; }).sort();
+                if (others.length) gState.netHostId = others[0];
+            }
+            night.netRawLast = now;
+            if (!night.lastWorldAt) night.lastWorldAt = now;
+            if (netIsHost()) {
+                [night.hunter].concat(night.survivors).forEach(function (a) {
+                    if (!a || !a.remote) return;
+                    if (a.lastSeen === undefined) { a.lastSeen = now; return; }
+                    if (now - a.lastSeen > NET_DROP_MS) {
+                        netEvent('handover', { key: a.key, gone: a.key });
+                        nightNetHandover(a.key, a.key, null, false);
+                    }
+                });
+            } else if (now - night.lastWorldAt > NET_DROP_MS) {
+                // 房主那边没动静了：剩下的人按 ID 排序选第一个当新房主，每台机器算出来都一样，不用商量
+                let old = gState.netHostId;
+                let cand = Object.keys(gState.netRoster || {}).filter(function (id) { return id !== old; }).sort();
+                if (cand.length) nightNetHandover(old, old, cand[0], false);
+            }
             night.netSelfT = (night.netSelfT || 0) + dt;
             if (night.netSelfT >= 1 / NET_SELF_HZ) { night.netSelfT = 0; netSendSelf(); }
             night.netWorldT = (night.netWorldT || 0) + dt;
@@ -5402,6 +5492,14 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-30-net-leave', date: '2026-09-30', title: '联机中途离开/掉线：AI 接管，房主走了局也不散', items: [
+                    '联机惊魂夜、寻宝队活着也能「离开本局」了：你的角色交给 AI 接着帮队友打，不会原地僵住。',
+                    '队友掉线（网卡了、切到后台）6 秒没动静，AI 先顶上；他回来之后控制权自动还给他。',
+                    '联机惊魂夜房主离开（包括观战时点「离开」），不会再把所有人踢回大厅：房主交给下一位玩家，这局照常打完。离开的人回大厅后还是房主，等队友打完会提示，然后再一起开下一局。',
+                    '房主那台卡住/掉线，其他人会自动选出新房主接着跑，不会整局卡死。'
+                ]
+            },
             {
                 id: '2026-09-30-modes-sweep', date: '2026-09-30', title: '大厅和各模式的一轮修复', items: [
                     '寻宝队、惊魂夜（单机）活着的时候也能「离开本局」了，以前只能等死了才能走；惊魂夜选角色页加了「返回大厅」。',
@@ -12212,7 +12310,7 @@
 
             chatLoad(); chatSetMode(0);
             document.getElementById('chat-log').innerHTML = '';
-            document.getElementById('night-quit-btn').style.display = netOn() ? 'none' : '';
+            night.netGame = netOn();
             isPlaying = false;
             bgmStart();
             nightLoop();
@@ -12230,6 +12328,9 @@
                 if (!netIsHost()) return;
                 netEvent('end', { text: text });
             }
+            // 中途回了大厅的人在等这局打完（nightAway）；只剩一个真人时 netOn() 已经是 false、
+            // 上面的 end 不会发，所以单独广播一条
+            if (night.netGame && !fromNet) bc.postMessage({ type: 'NIGHT_DONE', target: '*', sender: gState.id });
             night.over = true;
 
             if (!night.friendly && night.side === 'survivor') {
@@ -15124,18 +15225,26 @@
         function nightLeaveSpectate() {
             if (!night) return;
             let n = night.survivors.filter(function (a) { return a.escaped; }).length;
-            // 联机里只有房主能结束整局（endNightGame 对非房主直接 return），
-            // 队员观战点"离开"原来什么都不会发生。队员只在自己这边收场、不广播，房主那局照常打。
-            endNightGame('你已离开观战。当前 ' + n + ' 人撤离。', netOn() && !netIsHost());
+            // 联机：不管是不是房主，都只是自己回大厅——原来房主一点离开整局就结束了，别人打到一半全被踢回大厅。
+            // 房主走的话把房主交给下一个人（nightNetLeave）。
+            if (netOn()) { nightNetLeave('你已离开观战。当前 ' + n + ' 人撤离。队友那局会继续打完。'); return; }
+            endNightGame('你已离开观战。当前 ' + n + ' 人撤离。');
         }
 
-        // 单机惊魂夜原来只有被抓出局后的观战条里才有"离开"，活着的时候没有任何退出方式。
-        // 联机不给：你的角色会原地僵住，队友还以为你在。
+        // 惊魂夜原来只有被抓出局后的观战条里才有"离开"，活着的时候没有任何退出方式。
+        // 联机的时候你的角色交给 AI 接着打（nightNetLeave），队友那局不受影响。
         function nightQuitAsk() {
-            if (!night || night.over || netOn()) return;
+            if (!night || night.over) return;
             if (document.pointerLockElement) document.exitPointerLock();
-            showSysModal('离开本局？', '中途离开算这一局失败。', [
-                { label: '离开', color: '#d9534f', onClick: function () { if (night && !night.over) endNightGame('你中途离开了本局。'); } },
+            let net = netOn();
+            showSysModal('离开本局？', net ? '中途离开算这一局失败，你的角色会交给 AI 继续帮队友打。' : '中途离开算这一局失败。', [
+                {
+                    label: '离开', color: '#d9534f', onClick: function () {
+                        if (!night || night.over) return;
+                        if (netOn()) nightNetLeave('你中途离开了本局，角色已交给 AI。');
+                        else endNightGame('你中途离开了本局。');
+                    }
+                },
                 { label: '继续玩' }
             ]);
         }
@@ -17043,8 +17152,9 @@
         function huntQuitAsk() {
             if (!isPlaying || gState.isDead || gState.hasLeft) return;
             if (document.pointerLockElement) document.exitPointerLock();
-            showSysModal('离开本局？', '离开等于放弃这一局：身上的物资散落在地，本局已上交的也会被没收。', [
-                { label: '离开', color: '#d9534f', onClick: function () { if (!isPlaying || gState.isDead) return; triggerAgentDeath(); chooseLeave(); } },
+            showSysModal('离开本局？', '离开等于放弃这一局：身上的物资散落在地，本局已上交的也会被没收。' +
+                (liveHumanTeammates().length ? '<br>你的位置会交给 AI 继续帮队友打。' : ''), [
+                { label: '离开', color: '#d9534f', onClick: function () { if (!isPlaying || gState.isDead) return; gState.leavingAlive = true; triggerAgentDeath(); chooseLeave(); } },
                 { label: '继续玩' }
             ]);
         }
@@ -17053,9 +17163,36 @@
             gState.hasLeft = true; gState.spectating = null;
             document.getElementById('death-wait-page').classList.add('hidden');
             document.getElementById('spectate-bar').classList.add('hidden');
-            bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*' });
-            finishGame(false, "你选择离开本局，携带的物资散落在地。");
+            bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*', alive: !!gState.leavingAlive });
+            let alive = gState.leavingAlive; gState.leavingAlive = false;
+            finishGame(false, alive && liveHumanTeammates().length ? "你中途离开了本局，携带的物资散落在地，你的位置交给 AI 队友接着打。" : "你选择离开本局，携带的物资散落在地。");
         }
+
+        // 寻宝队里真人队友的那个身体，原来只是跟着他的 POS_SYNC 走；他活着离开或者掉线了，
+        // 身体就原地僵住，还一直被当成"真人"（不会救你、不会搜刮）。改成交给 AI：
+        // 每台机器的 AI 队友本来就是各自本地跑的，把 isRealPlayer 关掉，下一帧就按 AI 队友的逻辑动起来。
+        function huntPeerToAi(id, why) {
+            if (!entities) return;
+            let e = entities.find(function (x) { return x.userData.type === 'ai' && x.userData.name === id && x.userData.isRealPlayer; });
+            if (!e) return;
+            e.userData.isRealPlayer = false; e.userData.aiTakeover = true;
+            e.userData.path = null; e.userData.chest = null; e.userData.openTimer = 0; e.userData.stuck = 0;
+            if (e.userData.hp <= 0) e.userData.hp = 100;
+            chatPush('系统', dispName(id) + why + '，AI 接管了他的位置', false);
+            updateDeathWaitStatus();
+        }
+        const HUNT_DROP_MS = 6000;
+        setInterval(function () {
+            if (!isPlaying || !entities) return;
+            let now = performance.now();
+            entities.forEach(function (e) {
+                let u = e.userData;
+                if (u.type !== 'ai' || !u.isRealPlayer || !u.lastSync) return;
+                let st = gState.peerState[u.name];
+                if (st === 'down' || st === 'left') return;   // 倒地/已离开的不算掉线
+                if (now - u.lastSync > HUNT_DROP_MS) huntPeerToAi(u.name, ' 掉线了');
+            });
+        }, 1000);
 
         function spectateTargets() { return entities.filter(function (e) { return e.userData.type === 'ai' && e.userData.hp > 0; }); }
 
@@ -17150,7 +17287,8 @@
             });
 
             updateHUD(); saveProgress(); if (document.pointerLockElement) document.exitPointerLock();
-            bc.postMessage({ type: 'PLAYER_DOWN', sender: gState.id, target: '*' });
+            // 活着主动离开（huntQuitAsk）不算倒地：队友那边马上会收到 PLAYER_LEFT(alive) 把你交给 AI
+            if (!gState.leavingAlive) bc.postMessage({ type: 'PLAYER_DOWN', sender: gState.id, target: '*' });
             showDeathWaitUI();
         }
 
@@ -17172,6 +17310,8 @@
             isPlaying = false; if (document.pointerLockElement) document.exitPointerLock();
 
             if (!won) { let lost = forfeitRun(); if (lost > 0) text += `本局已上交的 $${lost} 全部被没收。`; }
+            // 活着撤离也告诉队友一声，不然他们那边你的身体停止同步 6 秒后会被当成"掉线"
+            else if (!gState.isDead) bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*', alive: true, extracted: true });
             hideDeathUI(); gState.spectating = null;
 
             document.getElementById('ui-layer').classList.add('hidden'); const goView = document.getElementById('game-over'); goView.classList.remove('hidden');
@@ -23971,7 +24111,8 @@
             document.getElementById('blaze-score').innerText = '在线 ' + (roomOnlineCount() + hub.wanderers.length) + ' 人';
             let team = lobbyParty.concat(hub.party);
             document.getElementById('blaze-round').innerText = '大厅广场　WASD 走动，空格跳，靠近人可以组队　当前队伍：' +
-                (team.length ? team.map(dispName).join('、') : '（还没组队）');
+                (team.length ? team.map(dispName).join('、') : '（还没组队）') +
+                (nightAwayActive() ? '　· 队友还在惊魂夜里，等他们打完' : '');
         }
         // ── 大厅广场联机：跟房间里其他真人互相广播位置，不经过房主转发。
         // 频率比正式对局低一些（8Hz）——大厅是常驻空间，没必要那么密。
