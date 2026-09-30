@@ -1006,6 +1006,9 @@
                 <button onclick="dodgeStartGo(false)" style="flex:1; margin:0; background:#fb8c00; color:#fff; border:none; padding:10px 0; font-size:14px;">经典模式</button>
                 <button onclick="dodgeStartGo(true)" style="flex:1; margin:0; background:#d84315; color:#fff; border:none; padding:10px 0; font-size:14px;">疯狂模式</button>
             </div>
+            <div style="display:flex; gap:6px; margin-top:6px;">
+                <button onclick="dodgeStartGo(false, true)" style="flex:1; margin:0; background:#ffb300; color:#fff; border:none; padding:8px 0; font-size:13px;">5v5 快速局（2 分半）</button>
+            </div>
         </div>
 
         <div id="escape-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:6px; padding:12px 14px; text-align:left;">
@@ -1220,6 +1223,7 @@
                 <div>生命值: <span id="hp-txt">100</span>/<span id="hp-max-txt">100</span></div>
                 <div>体力值: <span id="stamina-txt">100</span></div>
                 <div>总负重: <span id="weight-txt">0</span></div>
+                <div id="hunt-task-txt" style="font-weight:bold;"></div>
                 <button id="hunt-quit-btn" onclick="huntQuitAsk()" style="align-self:flex-start; margin:6px 0 0; padding:2px 10px; font-size:12px; background:#eee; color:#666; border:1px solid #ccc;">离开本局</button>
             </div>
             <div id="bars-center">
@@ -1411,6 +1415,12 @@
         <div id="blaze-perk" class="hidden" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:300px; max-height:76vh; overflow-y:auto; touch-action:pan-y; pointer-events:auto; background:rgba(20,10,25,.92); border-radius:10px; padding:14px; text-align:center; color:#fff; box-shadow:0 6px 24px rgba(0,0,0,.5);"></div>
         <div class="action-btn" id="blaze-atk-btn" style="bottom:100px; right:20px; pointer-events:auto;">普攻</div>
         <div class="action-btn" id="blaze-jump-btn" style="bottom:230px; right:60px; pointer-events:auto;">跳</div>
+        <div id="race-spectate-bar" style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:10px; background:rgba(0,0,0,0.72); padding:8px 14px; border-radius:6px; color:#fff; font-size:14px; pointer-events:auto; z-index:3;">
+            <button onclick="raceSpecCycle(-1)" style="margin:0; padding:4px 10px;">◀</button>
+            <span>观战：<span id="race-spectate-target">—</span></span>
+            <button onclick="raceSpecCycle(1)" style="margin:0; padding:4px 10px;">▶</button>
+            <button onclick="raceExit()" style="margin:0; padding:4px 10px; background:#d9534f; color:#fff; border:none;">回大厅</button>
+        </div>
         <div id="race-cardbar" style="display:none; position:absolute; left:50%; bottom:86px; transform:translateX(-50%); width:min(560px, 92vw); background:rgba(20,20,30,0.78); border-radius:10px; padding:8px 10px; text-align:center; pointer-events:auto; z-index:3;"></div>
         <div class="action-btn" id="race-jump-btn" style="bottom:100px; right:20px; pointer-events:auto; display:none;">跳</div>
         <div class="action-btn" id="race-dash-btn" style="bottom:170px; right:60px; pointer-events:auto; display:none;">冲刺</div>
@@ -3167,7 +3177,8 @@
         function renderDailyModBanner() {
             let el = document.getElementById('daily-mod-banner');
             if (!el) return;
-            el.innerHTML = '<b>今日效果：' + DAILY_MOD.name + '</b>　' + DAILY_MOD.desc + '（惊魂夜之外全模式生效，每天换一条）';
+            el.innerHTML = '<b>今日效果：' + DAILY_MOD.name + '</b>　' + DAILY_MOD.desc + '（惊魂夜之外全模式生效，每天换一条）' +
+                '<div style="margin-top:4px; color:#e65100;"><b>本周活动：' + MODE_CN[weeklyMode()] + '</b>　猫盾币翻倍</div>';
         }
         function toggleModeDetail() {
             let p = document.getElementById('mode-detail-panel');
@@ -4755,6 +4766,7 @@
             }
 
             huntMergeStatic();
+            huntTaskNew();
             camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
             // 出生点在角落的安全屋里，原来一律面朝 -Z——那边正好是地图边墙，开局第一眼
             // 就是贴脸一整面青色的墙，得自己转一圈才找得到路。四个方向各打一条射线，
@@ -6508,19 +6520,39 @@
             return Math.max(0, Math.min(1, v));
         }
 
+        // 一局打完的猫盾币（原来只有超燃给，寻宝/惊魂夜/竞速/监狱/躲避球/松饼打完一分都没有）：
+        //   打完 +3；赢了再 +4；连胜从第 2 连起每多一连 +1（最多 +5）；
+        //   每个模式每天第一次赢 +5；本周活动模式整局翻倍。中途退出不给。
+        const MODE_CN = { hunt: '寻宝队', night: '惊魂夜', blaze: '超燃', race: '竞速', jail: '监狱救援', dodge: '躲避球', escape: '合作密室', cake: '松饼大作战', sumo: '推推乐', paint: '彩弹占地', tower: '爬塔' };
+        const WEEKLY_MODES = ['dodge', 'race', 'jail', 'cake', 'escape', 'night', 'blaze', 'hunt', 'sumo', 'paint', 'tower'];
+        function weekNum() { return Math.floor((localDayNum() + 3) / 7); }   // 周一换
+        function weeklyMode() { return WEEKLY_MODES[weekNum() % WEEKLY_MODES.length]; }
+        let coinsLast = null;
         function coinsSettle(mode, won) {
-            if (!gState.streak) gState.streak = { hunt: 0, night: 0, blaze: 0 };
-            let gain = 2;
+            if (!gState.streak) gState.streak = {};
+            if (!gState.dailyWin) gState.dailyWin = {};
+            let parts = [['打完', 3]];
             if (won) {
-                gain += 2;
-                gState.streak[mode] = (gState.streak[mode] || 0) + 1;
-                gain += (gState.streak[mode] >= 5) ? 2 : 1;
-            } else {
-                gState.streak[mode] = 0;
-            }
+                parts.push(['赢了', 4]);
+                let st = gState.streak[mode] = (gState.streak[mode] || 0) + 1;
+                if (st >= 2) parts.push([st + ' 连胜', Math.min(5, st - 1)]);
+                let today = localDayNum();
+                if (gState.dailyWin[mode] !== today) { gState.dailyWin[mode] = today; parts.push(['今天首胜', 5]); }
+            } else gState.streak[mode] = 0;
+            let gain = parts.reduce(function (a, p) { return a + p[1]; }, 0);
+            if (weeklyMode() === mode) { parts.push(['本周活动', '×2']); gain *= 2; }
             coinsAdd(mode, gain);
+            if (typeof achCheck === 'function') achCheck('settle', { mode: mode, won: won });
+            coinsLast = { gain: gain, parts: parts };
             saveProgress();
             return gain;
+        }
+        function coinsBreakText() {
+            if (!coinsLast) return '';
+            return '猫盾币 +' + coinsLast.gain + '（' + coinsLast.parts.map(function (p) { return p[0] + ' ' + (typeof p[1] === 'number' ? '+' + p[1] : p[1]); }).join('，') + '）';
+        }
+        function coinsLine() {
+            return '<div style="margin-top:8px; color:#e6a23c; font-size:13px;">' + coinsBreakText().replace(/^猫盾币 \+(\d+)/, function (m, n) { return coinBadgeHtml('+' + n, 16); }) + '</div>';
         }
 
         // ══════════════ 商店：宠物 / 表情 / 角色 ══════════════
@@ -12164,6 +12196,12 @@
                 let out = (night.survivors || []).filter(function (q) { return q.escaped; }).length;
                 rankAdd('night', out <= 1);
             }
+            if (!night.quit) {
+                let me0 = night.survivors && night.survivors[0];
+                let won0 = night.side === 'survivor' ? !!(me0 && me0.escaped)
+                    : (night.survivors || []).filter(function (q) { return q.escaped; }).length <= 1;
+                coinsSettle('night', won0); text += '<br>' + coinsLine();
+            }
             if (night.raf) cancelAnimationFrame(night.raf);
             nightShowAllBodies();
             bgmStop();
@@ -15070,6 +15108,7 @@
                 {
                     label: '离开', color: '#d9534f', onClick: function () {
                         if (!night || night.over) return;
+                        night.quit = true;   // 中途走不给猫盾币
                         if (netOn()) nightNetLeave('你中途离开了本局，角色已交给 AI。');
                         else endNightGame('你中途离开了本局。');
                     }
@@ -16181,6 +16220,10 @@
                 if (keyStr === 'q' && night.side === 'hunter' && night.char === 'hmi') nightCycleTpTarget(1);
                 return;
             }
+            if (race && !race.over && race.racers[0].out) {
+                if (keyStr === 'a' || keyStr === 'arrowleft') raceSpecCycle(-1);
+                if (keyStr === 'd' || keyStr === 'arrowright') raceSpecCycle(1);
+            }
             if (dodge && !dodge.over && dodge.spectating) {
                 if (keyStr === 'a' || keyStr === 'arrowleft') dodgeCycleSpectate(-1);
                 if (keyStr === 'd' || keyStr === 'arrowright') dodgeCycleSpectate(1);
@@ -16337,20 +16380,106 @@
         function huntRender(dt) {
             let alive = !gState.isDead && !gState.hasLeft;
             if (alive && (!huntSelf || !huntSelf.parent)) {
-                huntSelf = raceMakeBody(mySkinColor(gState.char === 'yellow' ? 0xffd54f : 0x66bb6a), 0, true, gState.acc, myFace());
-                huntSelf.scale.setScalar(0.8);   // 眼睛高 9，身体压到 9 以下，镜头从头顶看过去不挡准星
+                // 外层在脚下管朝向；中间一层在半身高度管翻滚/后仰（绕身体中间转，不是绕脚底甩）
+                let body = raceMakeBody(mySkinColor(gState.char === 'yellow' ? 0xffd54f : 0x66bb6a), 0, true, gState.acc, myFace());
+                body.scale.setScalar(0.8);   // 眼睛高 9，身体压到 9 以下，镜头从头顶看过去不挡准星
+                body.position.y = -4.4;
+                let pivot = new THREE.Group(); pivot.position.y = 4.4; pivot.add(body);
+                huntSelf = new THREE.Group(); huntSelf.add(pivot);
+                huntSelf.userData = body.userData; huntSelf.userData.pivot = pivot;
+                huntSelf.userData.mats = [];
+                body.traverse(function (o) { if (o.isMesh && o.material && o.material.emissive && huntSelf.userData.mats.indexOf(o.material) < 0) huntSelf.userData.mats.push(o.material); });
                 mapExtraAdd(huntSelf);   // 退出/下一张图时跟地图一起清掉
             }
             if (huntSelf) {
                 huntSelf.visible = alive;
-                if (alive) tpPoseSelf(huntSelf, camera.position.y - 9, camera.rotation.y + Math.PI, dt);
+                if (alive) { tpPoseSelf(huntSelf, camera.position.y - 9, camera.rotation.y + Math.PI, dt); huntSelfAnim(dt); }
             }
+            huntAgentsAnim(dt);
+            huntTaskTick();
             let cf = Math.max(0, Math.min(FLOORS - 1, Math.floor(camera.position.y / TILE)));
             tpRender({
                 back: 22, up: 6, self: alive ? huntSelf : null, hideBelow: 8,
                 yMin: cf * TILE + 3, yMax: cf * TILE + TILE - 3,   // 别穿到楼上/楼下去
                 blocked: function (x, z, y) { return checkCol(x, z, y, y); }
             });
+        }
+
+        // 自己的动作：黄猫盾「滚动」时整个人往前翻滚；掉血时往后一仰、闪红；绿猫盾回血时身上泛绿光
+        function huntSelfAnim(dt) {
+            let u = huntSelf.userData, pv = u.pivot;
+            if (u.lastHp !== undefined && gState.hp < u.lastHp) u.hurtT = 0.4;
+            u.lastHp = gState.hp;
+            let rollOn = gState.char === 'yellow' && abilityActive > 0;
+            if (rollOn) { u.rollA = (u.rollA || 0) + dt * 16; pv.rotation.x = u.rollA; }
+            else { u.rollA = 0; pv.rotation.x = 0; }
+            let glow = 0x000000;
+            if (u.hurtT > 0) {
+                u.hurtT -= dt;
+                let k = Math.max(0, u.hurtT / 0.4);
+                if (!rollOn) pv.rotation.x = -0.5 * k;
+                glow = new THREE.Color(0x000000).lerp(new THREE.Color(0xcc1f1f), k).getHex();
+            } else if (gState.char !== 'yellow' && abilityActive > 0) {
+                glow = new THREE.Color(0x0a3d0a).lerp(new THREE.Color(0x2e7d32), 0.5 + 0.5 * Math.sin(performance.now() / 180)).getHex();
+            }
+            u.mats.forEach(function (m) { m.emissive.setHex(glow); });
+        }
+        // 队友（猫盾身体挂在逻辑圆柱上）：转向走的方向、走起来摆腿
+        function huntAgentsAnim(dt) {
+            entities.forEach(function (e) {
+                if (e.userData.type !== 'ai' || !e.children.length) return;
+                let b = e.children[0], u = b.userData;
+                let lp = u.lastP || e.position.clone();
+                let dx = e.position.x - lp.x, dz = e.position.z - lp.z;
+                u.lastP = e.position.clone();
+                let sp = Math.hypot(dx, dz) / Math.max(dt, 0.001);
+                if (sp > 2) b.rotation.y = Math.atan2(dx, dz);
+                let run = Math.min(1, sp / 30);
+                u.animT = (u.animT || 0) + dt * (2 + run * 14);
+                if (u.legs) { u.legs[0].rotation.x = Math.sin(u.animT) * 0.9 * run; u.legs[1].rotation.x = -Math.sin(u.animT) * 0.9 * run; }
+                if (u.arms) { u.arms[0].rotation.x = -Math.sin(u.animT) * 0.7 * run; u.arms[1].rotation.x = Math.sin(u.animT) * 0.7 * run; }
+                b.scale.y = e.userData.hp <= 0 ? 0.25 * 0.8 : 0.8;   // 倒地的队友趴下
+            });
+        }
+
+        // ── 每局一个随机小任务，做完给猫盾币 ──
+        const HUNT_TASKS = [
+            { id: 'gold', text: '开一个金箱子', n: 1 },
+            { id: 'chest', text: '开 4 个箱子', n: 4 },
+            { id: 'kill', text: '打倒 3 只怪', n: 3 },
+            { id: 'floor', text: '上到 3 楼', n: 1 },
+            { id: 'cash', text: '上交满 $30000', n: 30000 }
+        ];
+        const HUNT_TASK_REWARD = 8;
+        function huntTaskNew() {
+            let t = HUNT_TASKS[Math.floor(Math.random() * HUNT_TASKS.length)];
+            gState.huntTask = { id: t.id, text: t.text, n: t.n, got: 0, done: false };
+            huntTaskHud();
+        }
+        function huntTaskEvent(kind, arg) {
+            let t = gState.huntTask; if (!t || t.done) return;
+            if (kind === 'chest') { if (t.id === 'chest') t.got++; if (t.id === 'gold' && arg === 'gold') t.got++; }
+            else if (kind === 'kill' && t.id === 'kill') t.got++;
+            else if (kind === 'floor' && t.id === 'floor' && arg >= 2) t.got = 1;
+            else if (kind === 'cash' && t.id === 'cash') t.got = arg;
+            if (t.got >= t.n) {
+                t.done = true;
+                coinsAdd('hunt', HUNT_TASK_REWARD);
+                blazeFlash('任务完成！' + t.text + '　+' + HUNT_TASK_REWARD + ' 猫盾币');
+                if (typeof achCheck === 'function') achCheck('huntTask');
+            }
+            huntTaskHud();
+        }
+        function huntTaskTick() {
+            let t = gState.huntTask; if (!t || t.done || gState.isDead) return;
+            if (t.id === 'floor') { let cf = Math.floor(camera.position.y / TILE); if (cf >= 2) huntTaskEvent('floor', cf); }
+            if (t.id === 'cash' && (gState.runCash || 0) !== t.got) huntTaskEvent('cash', gState.runCash || 0);
+        }
+        function huntTaskHud() {
+            let el = document.getElementById('hunt-task-txt'); if (!el) return;
+            let t = gState.huntTask; if (!t) { el.innerText = ''; return; }
+            el.innerText = '任务：' + t.text + (t.done ? '　✔' : (t.n > 1 && t.id !== 'cash' ? '（' + t.got + '/' + t.n + '）' : '')) + '　+' + HUNT_TASK_REWARD;
+            el.style.color = t.done ? '#43a047' : '#e65100';
         }
 
         function handlePlayerEngine(dt) {
@@ -16481,6 +16610,7 @@
                             let currentWeaponDamage = (equippedWep && equippedWep.type === 'wep') ? (equippedWep.dmg || 5) : 5;
                             activeObj.userData.hp -= currentWeaponDamage;
                             if (activeObj.userData.hp <= 0) {
+                                huntTaskEvent('kill');
                                 if (activeObj.userData.type === 'splitter' && activeObj.userData.split < 2) {
                                     for (let i = 0; i < 2; i++) {
                                         let f = new THREE.Mesh(new THREE.SphereGeometry(4.5 * (0.7 ** (activeObj.userData.split + 1))), new THREE.MeshLambertMaterial({ color: 0x2ecc71 }));
@@ -16498,6 +16628,7 @@
                         bc.postMessage({ type: 'CHEST_OPENED', target: '*', cx: Math.floor(activeObj.position.x / TILE), cz: Math.floor(activeObj.position.z / TILE), cf: Math.floor(activeObj.position.y / TILE) });
 
                         let boxType = activeObj.userData.type;
+                        huntTaskEvent('chest', boxType);
                         if (boxType === 'safe') gState.safeOpenedThisGame = true;
                         let singleLoot = huntRollChest(boxType, seededRandom);
 
@@ -17093,6 +17224,7 @@
             document.getElementById('spectate-bar').classList.add('hidden');
             bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*', alive: !!gState.leavingAlive });
             let alive = gState.leavingAlive; gState.leavingAlive = false;
+            gState.quitNoPay = !!alive;   // 活着中途走的不给猫盾币
             finishGame(false, alive && liveHumanTeammates().length ? "你中途离开了本局，携带的物资散落在地，你的位置交给 AI 队友接着打。" : "你选择离开本局，携带的物资散落在地。");
         }
 
@@ -17240,6 +17372,8 @@
             if (!won) { let lost = forfeitRun(); if (lost > 0) text += `本局已上交的 $${lost} 全部被没收。`; }
             // 活着撤离也告诉队友一声，不然他们那边你的身体停止同步 6 秒后会被当成"掉线"
             else if (!gState.isDead) bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*', alive: true, extracted: true });
+            if (!gState.quitNoPay) { coinsSettle('hunt', won); text += '\n' + coinsBreakText(); }
+            gState.quitNoPay = false;
             hideDeathUI(); gState.spectating = null;
 
             document.getElementById('ui-layer').classList.add('hidden'); const goView = document.getElementById('game-over'); goView.classList.remove('hidden');
@@ -18640,6 +18774,7 @@
             race.phase = 'ready';
             race.wait = RACE.readyT;
             raceGateBuild();
+            raceGhostSetup();
             if (RACE_TEST_CARD) { raceGive(race.racers[0], RACE_TEST_CARD); race.draw = null; }   // 测试：直接发指定的那张
             else race.draw = raceDrawSkills();
             raceCardRender();
@@ -18733,16 +18868,27 @@
             }).join('<br>');
 
             let title = '第 ' + (race.round + 1) + ' 轮结束';
-            let btn = { label: '继续', color: '#5cb85c', onClick: function () { raceAfterResult(); } };
-            if (me.out) {
-                title = '你被淘汰了 · 第 ' + me.place + ' 名';
-                btn = { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } };
-            } else if (next <= 1 || race.round + 1 >= RACE.ladder.length) {
-                title = '冠军';
-                btn = { label: '返回大厅', color: '#5cb85c', onClick: function () { raceExit(); } };
+            let btns = [{ label: '继续', color: '#5cb85c', onClick: function () { raceAfterResult(); } }];
+            let champ = next <= 1 || race.round + 1 >= RACE.ladder.length;
+            let justOut = me.out && !race.coinsDone;
+            if (justOut || (champ && !race.coinsDone)) {   // 结算一次：前 4 名算赢
+                race.coinsDone = true;
+                coinsSettle('race', !me.out || me.place <= 4);
+                lines += coinsLine();
             }
-            if (title === '冠军') sfxChime(4); else if (me.out) sfxBuzz();
-            showSysModal(title, lines, [btn]);
+            if (champ) {
+                title = me.out ? '冠军：' + order[0].name : '冠军';
+                btns = [{ label: '返回大厅', color: '#5cb85c', onClick: function () { raceExit(); } }];
+            } else if (justOut) {
+                title = '你被淘汰了 · 第 ' + me.place + ' 名';
+                // 淘汰了可以留下来看后面几轮，也可以直接走
+                btns = [{ label: '留下观战', color: '#5cb85c', onClick: function () { race.watching = true; raceAfterResult(); } },
+                        { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } }];
+            } else if (me.out) {
+                btns.push({ label: '返回大厅', color: '#888', onClick: function () { raceExit(); } });
+            }
+            if (title === '冠军') sfxChime(4); else if (justOut) sfxBuzz();
+            showSysModal(title, lines, btns);
         }
 
         function raceRoundOverDuo() {
@@ -18801,15 +18947,25 @@
                 }).join('<br>');
 
             let title = '第 ' + (race.round + 1) + ' 轮结束';
-            let btn = { label: '继续', color: '#5cb85c', onClick: function () { raceAfterResult(); } };
-            if (me.out) {
-                title = '你的队伍被淘汰了';
-                btn = { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } };
-            } else if (target <= 1 || race.round + 1 >= RACE_DUO.ladder.length) {
-                title = '冠军队伍';
-                btn = { label: '返回大厅', color: '#5cb85c', onClick: function () { raceExit(); } };
+            let btns = [{ label: '继续', color: '#5cb85c', onClick: function () { raceAfterResult(); } }];
+            let champ = target <= 1 || race.round + 1 >= RACE_DUO.ladder.length;
+            let justOut = me.out && !race.coinsDone;
+            if (justOut || (champ && !race.coinsDone)) {
+                race.coinsDone = true;
+                coinsSettle('race', !me.out);
+                lines += coinsLine();
             }
-            showSysModal(title, lines, [btn]);
+            if (champ) {
+                title = me.out ? '冠军队伍出炉' : '冠军队伍';
+                btns = [{ label: '返回大厅', color: '#5cb85c', onClick: function () { raceExit(); } }];
+            } else if (justOut) {
+                title = '你的队伍被淘汰了';
+                btns = [{ label: '留下观战', color: '#5cb85c', onClick: function () { race.watching = true; raceAfterResult(); } },
+                        { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } }];
+            } else if (me.out) {
+                btns.push({ label: '返回大厅', color: '#888', onClick: function () { raceExit(); } });
+            }
+            showSysModal(title, lines, btns);
         }
 
         function raceAfterResult() {
@@ -18985,13 +19141,52 @@
                 if (r.mesh.scale.x !== sc) r.mesh.scale.set(sc, sc, sc);
             });
             let me = race.racers[0];
-            let look = me.out ? (race.racers.find(function (r) { return !r.out; }) || me) : me;
+            let look = me;
+            if (me.out) {   // 淘汰后观战：◀ ▶ / A D 换人看
+                let list = raceSpecList();
+                race.specIdx = ((race.specIdx || 0) % Math.max(1, list.length) + list.length) % Math.max(1, list.length);
+                look = list[race.specIdx] || me;
+            }
+            raceSpecBarSync(look);
+            raceGhostTick();
             let dir = chaseCamDir();
             let ay = look.p.y + RACE.camUp;
             camera.position.set(look.p.x - dir.x * RACE.camBack, ay - dir.y * RACE.camBack, look.p.z - dir.z * RACE.camBack);
 
             raceHud();
             renderer.render(scene, camera);
+        }
+
+        function raceSpecList() { return race.racers.filter(function (r) { return !r.out; }).sort(function (a, b) { return b.p.z - a.p.z; }); }
+        function raceSpecCycle(d) { if (!race) return; race.specIdx = (race.specIdx || 0) + d; }
+        function raceSpecBarSync(look) {
+            let bar = document.getElementById('race-spectate-bar'); if (!bar) return;
+            let on = race && race.racers[0].out;
+            bar.style.display = on ? 'flex' : 'none';
+            if (on) {
+                let list = raceSpecList(), i = list.indexOf(look);
+                document.getElementById('race-spectate-target').innerText = look.name + (i >= 0 ? '（第 ' + (i + 1) + '）' : '');
+            }
+        }
+        // 幽灵：你在"同样段数"的这一轮里跑出过的最好成绩，按那个配速从起点匀速飘到终点。
+        // 赛道每轮随机拼，没法逐帧回放；但同样段数的赛道长度一样，配速就能比。
+        function raceGhostSetup() {
+            if (race.ghost) { scene.remove(race.ghost); race.ghost = null; }
+            let me = race.racers[0];
+            if (me.out || race.duo) return;
+            let rec = (raceRecords()['r' + (race.round + 1)] || []).find(function (e) { return e.me; });
+            if (!rec) return;
+            let g = raceMakeBody(mySkinColor(0x66bb6a), 0, true, null, myFace());
+            g.traverse(function (o) { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.32; o.material.depthWrite = false; } });
+            let lb = nightMakeLabel('最好成绩 ' + rec.t.toFixed(1) + 's', 0xffffff, false); lb.position.y = 16; g.add(lb);
+            raceDeco(g);
+            race.ghost = g; race.ghostT = rec.t; race.ghostZ0 = me.p.z;
+        }
+        function raceGhostTick() {
+            let g = race.ghost; if (!g) return;
+            let k = race.phase === 'run' ? Math.min(1, race.clock / race.ghostT) : 0;
+            g.position.set(12, 4 + Math.sin(performance.now() / 300) * 0.8, race.ghostZ0 + (race.finishZ - race.ghostZ0) * k);
+            g.rotation.y = 0;
         }
 
         function raceLoop() {
@@ -19285,6 +19480,7 @@
             if (document.pointerLockElement) document.exitPointerLock();
             raceClearTrack();
             let cb = document.getElementById('race-cardbar'); if (cb) cb.style.display = 'none';
+            let rsb = document.getElementById('race-spectate-bar'); if (rsb) rsb.style.display = 'none';
             (race.fx || []).forEach(function (f) { scene.remove(f.o); });
             race.racers.forEach(function (r) { scene.remove(r.mesh); });
             race = null;
@@ -19712,6 +19908,7 @@
             let title;
             if (winTeam === null) { title = '平局'; text = '时间到，双方物品数量一样多。<br>' + text; }
             else { title = (winTeam === me.team) ? '你的队伍获胜' : '你的队伍输了'; }
+            coinsSettle('jail', winTeam === me.team); text += coinsLine();
             showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { jailExit(); } }]);
         }
 
@@ -20771,7 +20968,7 @@
             let remain = Math.max(0, DODGE.matchTime - dodge.clock);
             document.getElementById('blaze-score').innerText = a0 + ' : ' + a1 + '　' + Math.ceil(remain) + 's';
             document.getElementById('blaze-round').innerText =
-                (dodge.crazy ? '躲避球·疯狂　' : '躲避球·经典　') +
+                (dodge.crazy ? '躲避球·疯狂　' : (DODGE.teamSize === 5 ? '躲避球·5v5　' : '躲避球·经典　')) +
                 '我方存活 ' + (me.team === 0 ? a0 : a1) + '　对面存活 ' + (me.team === 0 ? a1 : a0) +
                 (me.out ? '　你被淘汰了，等复活'
                     : me.holding ? (me.mustReturn ? '　中线球，先跑回本方边线再出手！' : ('　手里有' + dodgeKindName(me.holding.kind) + (padOn() ? '，按住「投」瞄准/松手投出，点一下放下' : '，按住左键瞄准/松手投出，点一下放下')))
@@ -20795,6 +20992,7 @@
             let secs = Math.round(Math.min(dodge.clock, DODGE.matchTime));
             text += (text ? '<br>' : '') + '存活：我方 ' + alive(me.team) + ' 人 · 对面 ' + alive(1 - me.team) + ' 人　用时 ' +
                 Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
+            coinsSettle('dodge', winTeam === me.team); text += coinsLine();
             showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { dodgeExit(); } }]);
         }
 
@@ -21066,17 +21264,22 @@
 
         // 组了队直接带队友进（全部坐队伍0，队伍1 从头到尾是 AI）；没组队先等最多
         // 15 秒看房间里有没有人也想玩，凑不到就照旧配 AI——跟其它几个模式是同一套。
-        function dodgeStartGo(crazy) {
+        // 5v5 快速局：场地短一截、2 分半。开局前把 DODGE 里这几项换掉，联机开局消息里带上 quick。
+        const DODGE_SIZES = { full: { teamSize: 10, courtL: 960, matchTime: 240 }, quick: { teamSize: 5, courtL: 560, matchTime: 150 } };
+        function dodgeApplySize(quick) { let z = DODGE_SIZES[quick ? 'quick' : 'full']; Object.keys(z).forEach(function (k) { DODGE[k] = z[k]; }); }
+        function dodgeStartGo(crazy, quick) {
+            dodgeApplySize(quick);
             if (lobbyParty.length > 0) {
                 let ids = [gState.id].concat(lobbyParty.slice(0, DODGE.teamSize - 1));
                 let plan = dodgePlan(ids.map(function (id) { return { id: id }; }));
-                if (ids.length > 1) bc.postMessage({ type: 'DODGE_START', target: '*', sender: gState.id, crazy: !!crazy, plan: plan, host: gState.id });
+                if (ids.length > 1) bc.postMessage({ type: 'DODGE_START', target: '*', sender: gState.id, crazy: !!crazy, quick: !!quick, plan: plan, host: gState.id });
                 dodgeBegin(crazy, plan, gState.id);
                 return;
             }
             mmStart('dodge', DODGE.teamSize, function (ids) {
                 let plan = dodgePlan(ids.map(function (id) { return { id: id }; }));
-                if (ids.length > 1) bc.postMessage({ type: 'DODGE_START', target: '*', sender: gState.id, crazy: !!crazy, plan: plan, host: gState.id });
+                if (ids.length > 1) bc.postMessage({ type: 'DODGE_START', target: '*', sender: gState.id, crazy: !!crazy, quick: !!quick, plan: plan, host: gState.id });
+                dodgeApplySize(quick);   // 等匹配的 15 秒里可能被别的开局改过
                 dodgeBegin(crazy, plan, gState.id);
             });
         }
@@ -21084,6 +21287,7 @@
             if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
             mmCancel();
             if (dodge) { if (dodge.raf) cancelAnimationFrame(dodge.raf); dodge = null; }
+            dodgeApplySize(m.quick);
             dodgeBegin(m.crazy, m.plan, m.host);
         }
         const DODGE_ME_HZ = 15, DODGE_W_HZ = 12;
@@ -22410,6 +22614,7 @@
                 body = '第 ' + n + ' 关「' + lv.name + '」 时间到了，没能逃出去。';
                 if (host) btns.push({ label: '再试一次', color: '#1e88e5', onClick: function () { escapeRestart(n); } });
             }
+            coinsSettle('escape', won); body += coinsLine();
             if (!host) body += '<div style="color:#888; font-size:12px; margin-top:6px;">下一步由房主来选</div>';
             btns.push({ label: '返回大厅', color: '#78909c', onClick: function () { escapeExit(); } });
             showSysModal(won ? '通关成功' : '时间到', body, btns);
@@ -23257,6 +23462,7 @@
             let me = cake.me;
             let text = (reason ? reason + '<br>' : '') + '你一共拍出局 ' + (me.kills || 0) + ' 人。';
             let title = !winner ? '平局' : (winner === me ? '你赢了！' : winner.name + ' 获胜');
+            coinsSettle('cake', winner === me); text += coinsLine();
             showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { cakeExit(); } }]);
         }
 
