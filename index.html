@@ -928,6 +928,9 @@
                 <button id="btn-mode-escape" onclick="selectGameMode('escape')" style="margin:0; font-size:11px; padding:7px 2px;">密室</button>
                 <button id="btn-mode-park" onclick="selectGameMode('park')" style="margin:0; font-size:11px; padding:7px 2px;">猫盾乐园</button>
                 <button id="btn-mode-cake" onclick="selectGameMode('cake')" style="margin:0; font-size:11px; padding:7px 2px;">松饼大作战</button>
+                <button id="btn-mode-sumo" onclick="selectGameMode('sumo')" style="margin:0; font-size:11px; padding:7px 2px;">推推乐</button>
+                <button id="btn-mode-paint" onclick="selectGameMode('paint')" style="margin:0; font-size:11px; padding:7px 2px;">彩弹占地</button>
+                <button id="btn-mode-tower" onclick="selectGameMode('tower')" style="margin:0; font-size:11px; padding:7px 2px;">爬塔</button>
             </div>
 
         <div id="hunt-only">
@@ -1026,6 +1029,40 @@
                 <div id="esc-level-grid" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:6px;"></div>
                 <div id="esc-level-info" style="font-size:12px; color:#556b57; margin-top:6px; line-height:1.6;"></div>
             </div>
+            <div style="border-top:1px dashed #a5d6a7; padding-top:8px; margin-bottom:8px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button onclick="escapeStartGo('daily')" style="margin:0; background:#00897b; color:#fff; border:none; padding:7px 14px; font-size:13px; white-space:nowrap;">今日密室</button>
+                    <div id="esc-daily-info" style="flex:1; font-size:11px; color:#556b57; line-height:1.5;"></div>
+                </div>
+            </div>
+            <div style="border-top:1px dashed #a5d6a7; padding-top:8px; font-size:12px; color:#2e7d32; font-weight:bold; margin-bottom:4px;">自己拼一个</div>
+            <div style="font-size:11px; color:#78909c; margin-bottom:6px;">一块积木一个房间，从上往下走。3 个房间以上才给猫盾币。</div>
+            <input id="esc-edit-name" placeholder="关卡名字" maxlength="12" oninput="escEditName(this.value)" style="width:100%; box-sizing:border-box; margin:0 0 6px; padding:5px; font-size:12px;">
+            <div id="esc-edit-rooms" style="display:flex; flex-direction:column; gap:5px; margin-bottom:8px;"></div>
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+                <select id="esc-add-room" style="flex:1; margin:0; padding:5px; font-size:12px;">
+                    <option value="color">彩色板：各站各的颜色</option>
+                    <option value="duo">灰板 ×2：两个人站住</option>
+                    <option value="heavy">重压板：四个人都要站</option>
+                    <option value="lever">拉杆门：一人撑着</option>
+                    <option value="key">钥匙：捡了送到锁上</option>
+                    <option value="seq">顺序板：按颜色顺序踩</option>
+                    <option value="timed">限时按钮：门只开 4 秒</option>
+                    <option value="code">密码：墙上找三位数</option>
+                    <option value="laser">激光走廊</option>
+                    <option value="hurdle">矮栏：跳过去</option>
+                </select>
+                <button onclick="escEditAdd()" style="margin:0; background:#2e7d32; color:#fff; border:none; padding:5px 14px; font-size:13px;">+ 添加</button>
+            </div>
+            <div style="display:flex; gap:6px; margin-bottom:6px;">
+                <button onclick="escEditTest()" style="flex:1; margin:0; background:#66bb6a; color:#fff; border:none; padding:7px 0; font-size:13px;">试玩</button>
+                <button onclick="escEditShare()" style="flex:1; margin:0; background:#00897b; color:#fff; border:none; padding:7px 0; font-size:13px;">生成分享码</button>
+            </div>
+            <div id="esc-share-out" style="font-size:11px; color:#999; word-break:break-all; margin-bottom:6px;"></div>
+            <div style="display:flex; gap:6px;">
+                <input id="esc-import-code" placeholder="粘贴别人的分享码" style="flex:1; margin:0; padding:6px; font-size:12px;">
+                <button onclick="escImportPlay()" style="margin:0; background:#8d6e63; color:#fff; border:none; padding:6px 12px; font-size:13px;">玩</button>
+            </div>
         </div>
 
         <div id="park-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fce4ec; border:1px solid #f48fb1; border-radius:6px; padding:12px 14px; text-align:left;">
@@ -1069,6 +1106,39 @@
             </div>
         </div>
 
+        <div id="sumo-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff3e0; border:1px solid #ffb74d; border-radius:6px; padding:12px 14px; text-align:left;">
+            <div style="font-size:14px; color:#e65100; font-weight:bold; margin-bottom:2px;">推推乐 · 8 人混战</div>
+            <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
+                台子 20 秒后开始缩。<br>
+                <b>左键 / E</b>（平板「推」）撞人，掉下去就出局。<br>
+                最后站着的赢。
+            </div>
+            <button onclick="nmStartGo('sumo')" style="width:100%; margin:0; background:#fb8c00; color:#fff; border:none; padding:10px 0; font-size:14px;">开始</button>
+        </div>
+        <div id="paint-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#e1f5fe; border:1px solid #81d4fa; border-radius:6px; padding:12px 14px; text-align:left;">
+            <div style="font-size:14px; color:#0277bd; font-weight:bold; margin-bottom:2px;">彩弹占地 · 4v4</div>
+            <div style="font-size:12px; color:#455a64; line-height:1.7; margin-bottom:8px;">
+                走过的地方变成你们队的颜色。<br>
+                <b>左键 / E</b>（平板「喷」）扔颜料，砸中人他会愣一下。<br>
+                2 分钟后地盘大的队赢。
+            </div>
+            <button onclick="nmStartGo('paint')" style="width:100%; margin:0; background:#039be5; color:#fff; border:none; padding:10px 0; font-size:14px;">开始</button>
+        </div>
+        <div id="tower-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#ede7f6; border:1px solid #b39ddb; border-radius:6px; padding:12px 14px; text-align:left;">
+            <div style="font-size:14px; color:#4527a0; font-weight:bold; margin-bottom:2px;">爬塔 · 跑酷</div>
+            <div style="font-size:12px; color:#5e35b1; line-height:1.7; margin-bottom:8px;">
+                岩浆一直在涨，往上跳。<br>
+                <b>单人</b>：看你能爬多高。<br>
+                <b>双人</b>：都到顶才算赢。掉了的话，队友爬到下一面绿旗就能救你。<br>
+                <b>多人</b>：6 个人比谁先到顶。
+                <div id="tower-best" style="margin-top:4px; color:#7e57c2;"></div>
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button onclick="nmStartGo('tower', { kind: 'solo' })" style="flex:1; margin:0; background:#7e57c2; color:#fff; border:none; padding:9px 0; font-size:13px;">单人</button>
+                <button onclick="nmStartGo('tower', { kind: 'duo' })" style="flex:1; margin:0; background:#5e35b1; color:#fff; border:none; padding:9px 0; font-size:13px;">双人合作</button>
+                <button onclick="nmStartGo('tower', { kind: 'multi' })" style="flex:1; margin:0; background:#4527a0; color:#fff; border:none; padding:9px 0; font-size:13px;">多人</button>
+            </div>
+        </div>
         <div id="cake-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff8e1; border:1px solid #ffca28; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#f57f17; font-weight:bold; margin-bottom:2px;">松饼大作战 · 自由混战</div>
             <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
@@ -1415,6 +1485,13 @@
         <div id="blaze-perk" class="hidden" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:300px; max-height:76vh; overflow-y:auto; touch-action:pan-y; pointer-events:auto; background:rgba(20,10,25,.92); border-radius:10px; padding:14px; text-align:center; color:#fff; box-shadow:0 6px 24px rgba(0,0,0,.5);"></div>
         <div class="action-btn" id="blaze-atk-btn" style="bottom:100px; right:20px; pointer-events:auto;">普攻</div>
         <div class="action-btn" id="blaze-jump-btn" style="bottom:230px; right:60px; pointer-events:auto;">跳</div>
+        <button id="nm-act-btn" style="position:absolute; bottom:200px; right:24px; width:72px; height:72px; border-radius:50%; border:none; background:rgba(255,112,67,0.9); color:#fff; font-size:20px; font-weight:bold; display:none; align-items:center; justify-content:center; pointer-events:auto; z-index:3;"></button>
+        <div id="nm-spectate-bar" style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:10px; background:rgba(0,0,0,0.72); padding:8px 14px; border-radius:6px; color:#fff; font-size:14px; pointer-events:auto; z-index:3;">
+            <button onclick="nmSpecCycle(-1)" style="margin:0; padding:4px 10px;">◀</button>
+            <span>观战：<span id="nm-spectate-target">—</span></span>
+            <button onclick="nmSpecCycle(1)" style="margin:0; padding:4px 10px;">▶</button>
+            <button onclick="nmExit()" style="margin:0; padding:4px 10px; background:#d9534f; color:#fff; border:none;">回大厅</button>
+        </div>
         <div id="race-spectate-bar" style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:10px; background:rgba(0,0,0,0.72); padding:8px 14px; border-radius:6px; color:#fff; font-size:14px; pointer-events:auto; z-index:3;">
             <button onclick="raceSpecCycle(-1)" style="margin:0; padding:4px 10px;">◀</button>
             <span>观战：<span id="race-spectate-target">—</span></span>
@@ -2046,6 +2123,8 @@
             else if (m === 'escape') escapeStartGo();
             else if (m === 'park') parkBegin(PARK_BUILTIN.easy);
             else if (m === 'cake') cakeStartGo();
+            else if (m === 'sumo' || m === 'paint') nmStartGo(m);
+            else if (m === 'tower') nmStartGo('tower', { kind: 'solo' });
         }
 
         function lobbySuggestModeToHost(mode) {
@@ -2417,6 +2496,14 @@
             } else if (msg.type === 'SPAWN_MOBS') {
                 let flag = 'wave' + (msg.wave || 1) + 'Spawned';
                 if (!gState[flag]) { gState[flag] = true; spawnMonstersWithData(msg.spawns); }
+            } else if (msg.type === 'NM_START') {
+                if (msg.sender !== gState.id) nmOnStart(msg);
+            } else if (msg.type === 'NM_ME') {
+                nmOnMe(msg);
+            } else if (msg.type === 'NM_W') {
+                nmOnWorld(msg);
+            } else if (msg.type === 'NM_EV') {
+                nmOnEv(msg);
             } else if (msg.type === 'CK_START') {
                 if (msg.sender !== gState.id && msg.plan && msg.plan.some(function (q) { return q.id === gState.id; })) {
                     mmCancel();   // 见 blazeOnStart 里的同一条注释——防止本机自己的匹配计时几秒后又触发一次
@@ -2646,6 +2733,7 @@
             if (typeof escapeRoom !== 'undefined' && escapeRoom && !escapeRoom.over) return 'escape';
             if (typeof park !== 'undefined' && park && !park.over) return 'park';
             if (typeof cake !== 'undefined' && cake && !cake.over) return 'cake';
+            if (typeof nm !== 'undefined' && nm && !nm.over) return nm.mode;
             if (typeof isPlaying !== 'undefined' && isPlaying && !gState.isDead) return 'hunt';
             if (typeof hub !== 'undefined' && hub) return 'hub';
             return null;
@@ -2803,7 +2891,10 @@
             dodge: { panel: 'dodge-only', title: '躲避球规则' },
             escape: { panel: 'escape-only', title: '密室规则' },
             park: { panel: 'park-only', title: '猫盾乐园规则' },
-            cake: { panel: 'cake-only', title: '松饼大作战规则' }
+            cake: { panel: 'cake-only', title: '松饼大作战规则' },
+            sumo: { panel: 'sumo-only', title: '推推乐规则' },
+            paint: { panel: 'paint-only', title: '彩弹占地规则' },
+            tower: { panel: 'tower-only', title: '爬塔规则' }
         };
         function modeIntroHtml(panelId) {
             let panel = document.getElementById(panelId);
@@ -2844,7 +2935,7 @@
         }
         let mmActive = null;      // 我自己在等：{ mode, cap, t0, left, onResolve, timer }
         let mmRoomPool = {};      // roomSync() 每次心跳都重新算一遍：{ id: { mode, left } }
-        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速', escape: '合作密室', jail: '监狱救援', dodge: '躲避球' };
+        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速', escape: '合作密室', jail: '监狱救援', dodge: '躲避球', sumo: '推推乐', paint: '彩弹占地', tower: '爬塔' };
         function mmMinLeft() {
             let v = mmActive ? mmActive.left : Infinity;
             Object.keys(mmRoomPool).forEach(function (id) {
@@ -3189,6 +3280,8 @@
             refreshRankUI();
             renderDailyModBanner();
             let isHunt = m === 'hunt', isNight = m === 'night', isBlaze = m === 'blaze', isRace = m === 'race', isJail = m === 'jail', isDodge = m === 'dodge', isEscape = m === 'escape', isPark = m === 'park', isCake = m === 'cake';
+            ['sumo', 'paint', 'tower'].forEach(function (k) { let e = document.getElementById(k + '-only'); if (e) e.classList.toggle('hidden', m !== k); });
+            if (m === 'tower') { let tb = document.getElementById('tower-best'); if (tb) tb.innerText = gState.towerBest ? '你的最好成绩：第 ' + gState.towerBest + ' 块' : ''; }
             document.getElementById('hunt-only').classList.toggle('hidden', !isHunt);
             document.getElementById('night-only').classList.toggle('hidden', !isNight);
             document.getElementById('blaze-only').classList.toggle('hidden', !isBlaze);
@@ -3196,7 +3289,7 @@
             document.getElementById('jail-only').classList.toggle('hidden', !isJail);
             document.getElementById('dodge-only').classList.toggle('hidden', !isDodge);
             document.getElementById('escape-only').classList.toggle('hidden', !isEscape);
-            if (isEscape) escRenderLevels();
+            if (isEscape) { escRenderLevels(); escDailyInfoRender(); escEditRender(); }
             document.getElementById('park-only').classList.toggle('hidden', !isPark);
             document.getElementById('cake-only').classList.toggle('hidden', !isCake);
             // 保底之前完全是黑箱，连续输几把之后悄悄给你保底，玩家自己感觉不到，
@@ -3208,7 +3301,7 @@
                 pityHint.style.display = showPity ? 'block' : 'none';
                 if (showPity) pityHint.innerText = '';   // 不告诉玩家有保底
             }
-            let modeName = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : '超燃');
+            let modeName = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : MODE_CN[m] && NM_DEFS[m] ? MODE_CN[m] : '超燃');
             document.getElementById('lobby-title').innerText = modeName;
             let mbc = document.getElementById('mode-bar-current'); if (mbc) mbc.innerText = isEscape ? modeName + ' · 第 ' + (escProg().sel || 1) + ' 关' : modeName;
             if (isNight) selectNightChar(gState.nightChar || 'cat');
@@ -3226,7 +3319,10 @@
             ['btn-mode-dodge', isDodge, '#e65100'],
             ['btn-mode-escape', isEscape, '#2e7d32'],
             ['btn-mode-park', isPark, '#ad1457'],
-            ['btn-mode-cake', isCake, '#f57f17']].forEach(function (e) {
+            ['btn-mode-cake', isCake, '#f57f17'],
+            ['btn-mode-sumo', m === 'sumo', '#e65100'],
+            ['btn-mode-paint', m === 'paint', '#0277bd'],
+            ['btn-mode-tower', m === 'tower', '#4527a0']].forEach(function (e) {
                 let b = document.getElementById(e[0]); if (!b) return;
                 b.style.borderColor = e[1] ? e[2] : '#ccc';
                 b.style.color = e[1] ? e[2] : '#333';
@@ -4319,6 +4415,7 @@
         function touchLookActive() {
             if (gState.backpackOpen || gState.largeMapOpen) return false;
             if (blaze && !blaze.over) return true;
+            if (nm && !nm.over) return true;
             if (night && !night.over) return true;
             if (race && !race.over) return true;
             if (jail && !jail.over) return true;
@@ -6219,6 +6316,7 @@
         function touchInGame() {
             if (gState.backpackOpen || gState.largeMapOpen) return false;
             if (blaze && !blaze.over) return true;
+            if (nm && !nm.over) return true;
             if (night && !night.over) return true;
             if (race && !race.over) return true;
             if (jail && !jail.over) return true;
@@ -16220,6 +16318,10 @@
                 if (keyStr === 'q' && night.side === 'hunter' && night.char === 'hmi') nightCycleTpTarget(1);
                 return;
             }
+            if (nm && !nm.over && (nm.me.out || nm.me.downed)) {
+                if (keyStr === 'a' || keyStr === 'arrowleft') nmSpecCycle(-1);
+                if (keyStr === 'd' || keyStr === 'arrowright') nmSpecCycle(1);
+            }
             if (race && !race.over && race.racers[0].out) {
                 if (keyStr === 'a' || keyStr === 'arrowleft') raceSpecCycle(-1);
                 if (keyStr === 'd' || keyStr === 'arrowright') raceSpecCycle(1);
@@ -17461,6 +17563,7 @@
         }
 
         bindTouchTap('esc-act-btn', function () { touchBtn.interact = true; });
+        bindTouchTap('nm-act-btn', function () { touchBtn.nmAct = true; });
         bindTouchTap('night-atk-btn', function () {
             if (!night || night.over || night.spectating) return;
             if (night.side === 'hunter') nightHunterAttack(); else nightInteract();
@@ -21574,7 +21677,146 @@
                 tip: '最后一道门后面是滚石走廊，一路别停'
             }
         ];
-        function escLevelDef(n) { return ESC_LEVELS[Math.max(0, Math.min(ESC_LEVELS.length - 1, (n || 1) - 1))]; }
+        function escLevelDef(n) {
+            if (typeof n === 'string') return escSpecialDef(n);
+            return ESC_LEVELS[Math.max(0, Math.min(ESC_LEVELS.length - 1, (n || 1) - 1))];
+        }
+        // ── 拼关卡：一关 = 一串"房间"（每个房间一个机关或一段陷阱）。每日密室、玩家自己拼的密室都走这个 ──
+        // 关卡号 lvl：数字 = 正式关卡；'daily' = 今日密室；'c:分享码' = 自制关卡（联机时对方拿同一个码生成一模一样的关）
+        const ESC_ROOM_META = {
+            color: { label: '彩色板', bg: '#43a047' },
+            duo: { label: '灰板 ×2', bg: '#78909c' },
+            heavy: { label: '重压板', bg: '#546e7a' },
+            lever: { label: '拉杆门', bg: '#8d6e63', side: true },
+            key: { label: '钥匙', bg: '#f9a825', side: true },
+            seq: { label: '顺序板', bg: '#7e57c2' },
+            timed: { label: '限时按钮', bg: '#e53935', side: true },
+            code: { label: '密码', bg: '#3949ab', side: true },
+            laser: { label: '激光走廊', bg: '#d81b60', speed: true },
+            hurdle: { label: '矮栏', bg: '#fb8c00' }
+        };
+        const ESC_ROOM_MAX = 8;
+        const ESC_LASER_SPD = { slow: 20, mid: 28, fast: 36 };
+        function escStrHash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+        function escRng(seed) { let a = seed >>> 0 || 1; return function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+        function escCompose(rooms, name, seed) {
+            let rnd = escRng(seed);
+            let perm = function () { let a = [0, 1, 2, 3]; for (let i = 3; i > 0; i--) { let j = Math.floor(rnd() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; };
+            let lv = { name: name || '自制密室', gates: [], mechs: [], boards: [], lasers: [], hurdles: [] };
+            let z = 18, gi = 0, est = 4;
+            let gate = function (gz) { let id = 'g' + (++gi); lv.gates.push({ id: id, z: gz }); return id; };
+            (rooms || []).slice(0, ESC_ROOM_MAX).forEach(function (r) {
+                let sd = r.side === 'L' ? -1 : 1;
+                if (r.t === 'color') { lv.mechs.push({ type: 'plates', gate: gate(z + 45), plates: escColorPlates(z + 23, perm()), hint: '每人站到自己颜色的板上' }); z += 45; est += 10; }
+                else if (r.t === 'duo') { lv.mechs.push({ type: 'plates', gate: gate(z + 45), plates: [{ x: -15, z: z + 23 }, { x: 15, z: z + 23 }], hint: '两块灰板要同时有人站住' }); z += 45; est += 8; }
+                else if (r.t === 'heavy') { lv.mechs.push({ type: 'plates', gate: gate(z + 45), plates: [{ x: -14, z: z + 23, need: 2 }, { x: 14, z: z + 23, need: 2 }], hint: '两块板各要两个人' }); z += 45; est += 10; }
+                else if (r.t === 'lever') { lv.mechs.push({ type: 'lever', gate: gate(z + 45), x: 18 * sd, z: z + 33, hint: '拉杆门：一人撑住，其他人先过' }); z += 45; est += 12; }
+                else if (r.t === 'key') { lv.mechs.push({ type: 'key', gate: gate(z + 45), key: { x: -22 * sd, z: z + 10 }, lock: { x: 18 * sd, z: z + 38 }, hint: '捡钥匙，送到锁上' }); z += 45; est += 12; }
+                else if (r.t === 'seq') { lv.mechs.push({ type: 'seq', gate: gate(z + 47), plates: escSeqPlates(z + 10), order: perm(), hint: '按门上的颜色顺序踩板' }); z += 47; est += 14; }
+                else if (r.t === 'timed') { lv.mechs.push({ type: 'timed', gate: gate(z + 50), x: 18 * sd, z: z + 12, open: 4, hint: '先到门口集合，再有人踩按钮' }); z += 50; est += 12; }
+                else if (r.t === 'code') {
+                    let code = '' + (1 + Math.floor(rnd() * 9)) + Math.floor(rnd() * 10) + Math.floor(rnd() * 10);
+                    [8, 20, 32].forEach(function (dz, k) { lv.boards.push({ z: z + dz, face: (k % 2 ? (sd > 0 ? 'L' : 'R') : (sd > 0 ? 'R' : 'L')), text: '密码第 ' + (k + 1) + ' 位\n' + code[k] }); });
+                    lv.mechs.push({ type: 'code', gate: gate(z + 45), pad: { x: 18 * sd, z: z + 38 }, code: code, prompt: '输入三位密码', hint: '墙上有三位密码，到密码台输入' }); z += 45; est += 16;
+                }
+                else if (r.t === 'laser') {
+                    let sp = ESC_LASER_SPD[r.speed] || ESC_LASER_SPD.mid;
+                    lv.lasers.push({ z: z + 12, w: 22, speed: sp }, { z: z + 28, w: 24, speed: sp + 4, phase: 0.5 }); z += 40; est += 8;
+                }
+                else if (r.t === 'hurdle') { lv.hurdles.push({ x: 0, z: z + 12, w: 57, d: 2, h: 4 }, { x: 0, z: z + 38, w: 57, d: 2, h: 4 }); z += 50; est += 6; }
+            });
+            if (lv.lasers.some(function (L) { return L; }) || lv.hurdles.length) lv.tip = '红激光躲开，矮栏跳过去';
+            lv.finish = z + 22;
+            lv.stars = [Math.round(est), Math.round(est * 1.8)];
+            lv.time = Math.max(120, Math.ceil(est * 4 / 30) * 30);
+            return lv;
+        }
+        // 今日密室：按日期挑 4 个房间，所有人同一天拿到的是同一关
+        function escDailyRooms(day) {
+            let rnd = escRng(day * 7919 + 17), pool = Object.keys(ESC_ROOM_META), out = [], last = '';
+            while (out.length < 4) {
+                let t = pool[Math.floor(rnd() * pool.length)];
+                if (t === last || out.filter(function (r) { return r.t === t; }).length) continue;
+                out.push({ t: t, side: rnd() < 0.5 ? 'L' : 'R', speed: ['slow', 'mid', 'fast'][Math.floor(rnd() * 3)] });
+                last = t;
+            }
+            return out;
+        }
+        function escDailyName(day) { let d = new Date(day * 86400000); return '今日密室 · ' + (d.getUTCMonth() + 1) + '月' + d.getUTCDate() + '日'; }
+        let escLvlCache = {};
+        function escSpecialDef(key) {
+            if (escLvlCache[key]) return escLvlCache[key];
+            let lv = null;
+            if (key === 'daily') { let day = localDayNum(); key = 'daily' + day; if (escLvlCache[key]) return escLvlCache[key]; lv = escCompose(escDailyRooms(day), escDailyName(day), day); }
+            else if (key.indexOf('c:') === 0) {
+                let d = parkDecode(key.slice(2));
+                let rooms = d && d.p && Array.isArray(d.p.r) ? d.p.r.filter(function (r) { return r && ESC_ROOM_META[r.t]; }) : [];
+                if (!rooms.length) rooms = [{ t: 'color' }];
+                lv = escCompose(rooms, (d && d.p && d.p.n ? String(d.p.n).slice(0, 12) : '') || '自制密室', escStrHash(key));
+                lv.roomCount = rooms.length;
+            }
+            escLvlCache[key] = lv;
+            return lv;
+        }
+        function escIsSpecial(n) { return typeof n === 'string'; }
+        function escLvlTitle(n, lv) { return escIsSpecial(n) ? '「' + lv.name + '」' : '第 ' + n + ' 关「' + lv.name + '」'; }
+
+        // ── 自制密室编辑器（跟猫盾乐园一样，一块积木一个房间）──
+        function escDraft() {
+            if (!gState.escDraft || !Array.isArray(gState.escDraft.r)) gState.escDraft = { n: '', r: [{ t: 'color' }, { t: 'lever', side: 'R' }] };
+            return gState.escDraft;
+        }
+        function escEditAdd() {
+            let D = escDraft(), t = document.getElementById('esc-add-room').value;
+            if (D.r.length >= ESC_ROOM_MAX) { blazeFlash('最多 ' + ESC_ROOM_MAX + ' 个房间'); return; }
+            D.r.push({ t: t, side: 'R', speed: 'mid' }); saveProgress(); escEditRender();
+        }
+        function escEditDel(i) { escDraft().r.splice(i, 1); saveProgress(); escEditRender(); }
+        function escEditUp(i) { let r = escDraft().r; if (i > 0) { let t = r[i]; r[i] = r[i - 1]; r[i - 1] = t; saveProgress(); escEditRender(); } }
+        function escEditSet(i, f, v) { escDraft().r[i][f] = v; saveProgress(); }
+        function escEditName(v) { escDraft().n = String(v || '').slice(0, 12); saveProgress(); }
+        function escEditRender() {
+            let el = document.getElementById('esc-edit-rooms'); if (!el) return;
+            let D = escDraft();
+            let nm = document.getElementById('esc-edit-name'); if (nm && document.activeElement !== nm) nm.value = D.n || '';
+            if (!D.r.length) { el.innerHTML = '<div style="font-size:11px; color:#999;">还没有房间，从下面加一个</div>'; return; }
+            el.innerHTML = D.r.map(function (r, i) {
+                let M = ESC_ROOM_META[r.t] || { label: r.t, bg: '#999' };
+                let opt = '';
+                if (M.side) opt = parkOptList({ L: '靠左', R: '靠右' }, r.side || 'R', i, 'side').replace('parkUpdateBlock', 'escEditSet');
+                if (M.speed) opt = parkOptList({ slow: '慢', mid: '中', fast: '快' }, r.speed || 'mid', i, 'speed').replace('parkUpdateBlock', 'escEditSet');
+                return '<div style="background:' + M.bg + '; color:#fff; border-radius:5px; padding:5px 8px; font-size:12px; display:flex; align-items:center; gap:6px;">' +
+                    '<span style="opacity:0.8;">' + (i + 1) + '</span><span style="flex:1;">' + M.label + ' ' + opt + '</span>' +
+                    (i > 0 ? '<span onclick="escEditUp(' + i + ')" style="cursor:pointer; padding:0 4px;">↑</span>' : '') +
+                    '<span onclick="escEditDel(' + i + ')" style="cursor:pointer; font-weight:bold; padding:0 4px;">×</span></div>';
+            }).join('');
+        }
+        function escEditCode() { let D = escDraft(); return parkEncode(gState.id, { n: D.n || '', r: D.r }); }
+        function escEditTest() {
+            if (!escDraft().r.length) { blazeFlash('先加一个房间'); return; }
+            escapeStartGo('c:' + escEditCode());
+        }
+        function escEditShare() {
+            if (!escDraft().r.length) { blazeFlash('先加一个房间'); return; }
+            let code = escEditCode();
+            let out = document.getElementById('esc-share-out');
+            if (out) out.innerText = '分享码：' + code;
+            try { navigator.clipboard.writeText(code); blazeFlash('分享码复制好了'); } catch (e) { }
+        }
+        function escImportPlay() {
+            let raw = (document.getElementById('esc-import-code').value || '').trim();
+            let d = parkDecode(raw);
+            if (!d || !d.p || !Array.isArray(d.p.r) || !d.p.r.length) { showSysModal('提示', '这个码看不懂，检查一下复制全了没有', [{ label: '好' }]); return; }
+            escapeStartGo('c:' + raw);
+        }
+        function escDailyInfoRender() {
+            let el = document.getElementById('esc-daily-info'); if (!el) return;
+            let lv = escSpecialDef('daily'), D = gState.escDaily;
+            let done = D && D.day === localDayNum();
+            el.innerHTML = lv.name.replace('今日密室 · ', '') + '　' + escDailyRooms(localDayNum()).map(function (r) { return ESC_ROOM_META[r.t].label; }).join(' → ') +
+                (done ? '　今天最好 ' + escFmtTime(D.t) : '　今天第一次过 +10 猫盾币');
+        }
+
 
         // ── 进度：解锁到第几关、每关最好成绩、上次选的关 ──
         function escProg() {
@@ -22350,7 +22592,7 @@
             if (pad && !R.codeOpen) goal = (gState.control === 'pad' ? '点「互动」' : '按 E') + ' 输入密码';
             let role = ESC_ROLES[me.role];
             let el = document.getElementById('blaze-round');
-            el.innerHTML = '<span style="color:' + role.css + ';">●</span> 你是<b style="color:' + role.css + ';">' + role.name + '色</b>　第 ' + R.lvl + ' 关「' + lv.name + '」<br>' + goal;
+            el.innerHTML = '<span style="color:' + role.css + ';">●</span> 你是<b style="color:' + role.css + ';">' + role.name + '色</b>　' + escLvlTitle(R.lvl, lv) + '<br>' + goal;
         }
         // 每帧的视觉：门滑下去/升起来、板子亮不亮、拉杆扳下、钥匙跟着人、激光挪动、滚石转
         function escVisualTick(dt) {
@@ -22513,7 +22755,7 @@
         function escapeBegin(plan, hostId, lvl) {
             plan = plan || escapePlan([{ id: gState.id }]);
             hostId = hostId || gState.id;
-            lvl = Math.max(1, Math.min(ESC_LEVELS.length, lvl || escProg().sel || 1));
+            if (typeof lvl !== 'string') lvl = Math.max(1, Math.min(ESC_LEVELS.length, lvl || escProg().sel || 1));
             showModeIntroIfFirstTime('escape');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
@@ -22593,28 +22835,37 @@
             let lv = R.lv, n = R.lvl, host = escIsHost(), t = R.clock;
             let btns = [];
             let body = '';
+            let special = escIsSpecial(n);
             if (won) {
-                let P = escProg(), prev = P.best[n], stars = escStarsFor(lv, t), prevS = prev ? prev.s : 0;
-                let reward = (prev ? 0 : 5 + n) + Math.max(0, stars - prevS) * 2;
+                let P = escProg(), stars = escStarsFor(lv, t), tr = Math.round(t * 10) / 10;
+                let prev = special ? null : P.best[n], prevS = prev ? prev.s : 0;
+                let reward = special ? 0 : (prev ? 0 : 5 + n) + Math.max(0, stars - prevS) * 2;
                 let rec = !prev || t < prev.t;
-                let tr = Math.round(t * 10) / 10;
-                P.best[n] = { t: prev ? Math.min(prev.t, tr) : tr, s: Math.max(prevS, stars) };
-                if (n < ESC_LEVELS.length && P.unlocked < n + 1) P.unlocked = n + 1;
+                if (n === 'daily') {
+                    let day = localDayNum(), D = gState.escDaily;
+                    if (!D || D.day !== day) { reward = 10; gState.escDaily = { day: day, t: tr }; }
+                    else { rec = tr < D.t; prev = { t: D.t }; if (rec) D.t = tr; }
+                }
+                if (!special) {
+                    P.best[n] = { t: prev ? Math.min(prev.t, tr) : tr, s: Math.max(prevS, stars) };
+                    if (n < ESC_LEVELS.length && P.unlocked < n + 1) P.unlocked = n + 1;
+                }
                 if (reward) coinsAdd('escape', reward); else saveProgress();
                 blazeFlash('通关了！'); sfxChime(3);
                 let a = R.actors.filter(function (o) { return o.ai; })[0];
                 if (a) aiSay(a, a.name, 'win', ESC_LINES.win);
                 body = '<div style="font-size:30px; letter-spacing:4px; margin:4px 0;"><span style="color:#f9a825;">' + '★'.repeat(stars) + '</span><span style="color:#ccc;">' + '★'.repeat(3 - stars) + '</span></div>' +
-                    '<div>第 ' + n + ' 关「' + lv.name + '」 用时 <b>' + escFmtTime(t) + '</b>' + (rec && prev ? '（新纪录！）' : '') + '</div>' +
+                    '<div>' + escLvlTitle(n, lv) + ' 用时 <b>' + escFmtTime(t) + '</b>' + (rec && prev ? '（新纪录！）' : '') + '</div>' +
                     '<div style="color:#888; font-size:12px; margin-top:4px;">三星 ≤ ' + escFmtTime(lv.stars[0]) + '　两星 ≤ ' + escFmtTime(lv.stars[1]) + '</div>' +
                     (reward ? '<div style="margin-top:8px;">获得 ' + coinBadgeHtml(reward, 18) + '</div>' : '');
-                if (host && n < ESC_LEVELS.length) btns.push({ label: '下一关', color: '#43a047', onClick: function () { escapeRestart(n + 1); } });
+                if (host && !special && n < ESC_LEVELS.length) btns.push({ label: '下一关', color: '#43a047', onClick: function () { escapeRestart(n + 1); } });
                 if (host) btns.push({ label: '再玩一次', color: '#1e88e5', onClick: function () { escapeRestart(n); } });
             } else {
-                body = '第 ' + n + ' 关「' + lv.name + '」 时间到了，没能逃出去。';
+                body = escLvlTitle(n, lv) + ' 时间到了，没能逃出去。';
                 if (host) btns.push({ label: '再试一次', color: '#1e88e5', onClick: function () { escapeRestart(n); } });
             }
-            coinsSettle('escape', won); body += coinsLine();
+            // 自制密室少于 3 个房间不给局末猫盾币（不然拼一个房间的关反复刷）
+            if (!(n + '').startsWith('c:') || (lv.roomCount || 0) >= 3) { coinsSettle('escape', won); body += coinsLine(); }
             if (!host) body += '<div style="color:#888; font-size:12px; margin-top:6px;">下一步由房主来选</div>';
             btns.push({ label: '返回大厅', color: '#78909c', onClick: function () { escapeExit(); } });
             showSysModal(won ? '通关成功' : '时间到', body, btns);
@@ -22646,8 +22897,8 @@
         }
 
         // 组了队直接带队友进；没组队先等最多 15 秒看房间里有没有人也想玩，凑不到就配 AI
-        function escapeStartGo() {
-            let lvl = escProg().sel || 1;
+        function escapeStartGo(lvlOverride) {
+            let lvl = lvlOverride || escProg().sel || 1;
             if (lobbyParty.length > 0) {
                 let ids = [gState.id].concat(lobbyParty.slice(0, ESCAPE.teamSize - 1));
                 let plan = escapePlan(ids.map(function (id) { return { id: id }; }));
@@ -24006,6 +24257,891 @@
         }
 
         // ══════════════════════════════════════════════════════════
+        //  新模式通用框架：推推乐 / 彩弹占地 / 爬塔
+        //  三个模式共用：开局（组队直接开 / 没组队走通用匹配，凑不齐用 AI 补）、
+        //  猫盾身体 + 头顶名字、第三人称镜头、惯性移动/跳跃/击退、联机同步、结算和猫盾币。
+        //  每个模式只在 NM_DEFS 里写自己的规则（场地、AI、胜负、HUD）。
+        //  联机的分工跟松饼大作战一样：每个真人只模拟、只广播自己；机器人和胜负只归房主。
+        //  打中别人（击退/定身）发给"那个人归谁模拟"的那台机器去执行。
+        // ══════════════════════════════════════════════════════════
+        let nm = null;
+        const NM_DEFS = {};
+        const NM_TEAM_COL = [0x29b6f6, 0xec407a];
+
+        function nmIsHost() { return !nm || !nm.net || nm.host === gState.id; }
+        function nmMine(a) { return a.isPlayer || (!a.netId && nmIsHost()); }
+
+        function nmStartGo(mode, opt) {
+            opt = opt || {};
+            let def = NM_DEFS[mode];
+            let cap = def.count(opt);
+            let go = function (ids) {
+                let plan = ids.slice(0, cap).map(function (id) { return { id: id }; });
+                let seed = Math.floor(Math.random() * 1000000) || 1;
+                if (plan.length > 1) bc.postMessage({ type: 'NM_START', target: '*', sender: gState.id, mode: mode, plan: plan, host: gState.id, seed: seed, opt: opt });
+                nmBegin(mode, plan, gState.id, seed, opt);
+            };
+            if (cap <= 1) { go([gState.id]); return; }
+            if (lobbyParty.length > 0) { go([gState.id].concat(lobbyParty)); return; }
+            mmStart(mode, cap, go);
+        }
+        function nmOnStart(m) {
+            if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            mmCancel();
+            if (nm) nmTeardown();
+            nmBegin(m.mode, m.plan, m.host, m.seed, m.opt || {});
+        }
+
+        function nmAdd(obj) { scene.add(obj); nm.meshes.push(obj); return obj; }
+
+        function nmBegin(mode, plan, hostId, seed, opt) {
+            let def = NM_DEFS[mode];
+            showModeIntroIfFirstTime(mode);
+            nav('none');
+            document.getElementById('ui-layer').classList.add('hidden');
+            document.getElementById('night-hud').classList.add('hidden');
+            document.getElementById('blaze-hud').classList.remove('hidden');
+            let pe = document.getElementById('blaze-perk'); if (pe) pe.classList.add('hidden');
+            if (blaze) { try { blazeExit(); } catch (e) { } }
+            if (race) { try { raceExit(); } catch (e) { } }
+            if (jail) { try { jailExit(); } catch (e) { } }
+            if (dodge) { try { dodgeExit(); } catch (e) { } }
+            if (escapeRoom) { try { escapeExit(); } catch (e) { } }
+            if (park) { try { parkExit(); } catch (e) { } }
+            if (cake) { try { cakeExit(); } catch (e) { } }
+            ensureScene();
+            clearMazeMeshes();
+            scene.background = new THREE.Color(def.sky);
+            scene.fog = new THREE.FogExp2(def.sky, def.fog || 0.0012);
+            gameSeed = seed;
+            nm = {
+                mode: mode, def: def, opt: opt, over: false, clock: 0, actors: [], fx: [], meshes: [],
+                host: hostId, plan: plan, seed: seed,
+                net: plan.some(function (q) { return q.id && q.id !== gState.id; }),
+                sendSelf: 0, sendWorld: 0, last: performance.now(), raf: null, outOrder: [], specIdx: 0
+            };
+            def.build(nm);
+            let n = def.count(opt);
+            let spawns = def.spawns(nm, n);
+            let pool = HUB_BOT_NAMES.slice();
+            for (let i = 0; i < n; i++) {
+                let q = plan[i] || {};
+                let isP = q.id === gState.id;
+                let team = def.teams ? (i % 2) : -1;
+                let base = team >= 0 ? NM_TEAM_COL[team] : RACE_COLORS[i % RACE_COLORS.length];
+                let col = team >= 0 ? base : (isP ? mySkinColor(base) : (q.id ? base : aiSkinColor(base)));
+                let mesh = raceMakeBody(col, 0, true, isP ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()), isP ? myFace() : (q.id ? peerFaceOf(q.id) : aiRandomFace()));
+                nmAdd(mesh);
+                let name = q.id ? dispName(q.id) : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
+                let label = nightMakeLabel(name, col, false);
+                label.position.y = 16; mesh.add(label);
+                if (isP) label.visible = false;
+                let sp = spawns[i];
+                let a = {
+                    idx: i, isPlayer: isP, netId: q.id || null, name: name, team: team, col: col,
+                    p: new THREE.Vector3(sp.x, sp.y || 0, sp.z), mvx: 0, mvz: 0, vy: 0, kx: 0, kz: 0,
+                    onGround: true, facing: sp.facing || 0, out: false, kills: 0, actCd: 0, stunT: 0,
+                    mesh: mesh, target: null, aiT: Math.random(), animT: 0, spd: 0
+                };
+                if (def.initActor) def.initActor(nm, a);
+                nm.actors.push(a);
+            }
+            nm.me = nm.actors.filter(function (a) { return a.isPlayer; })[0] || nm.actors[0];
+            camera.rotation.set(-0.15, (def.camYaw ? def.camYaw(nm) : nm.me.facing + Math.PI), 0);
+            document.body.onmousedown = function (e) {
+                if (!nm || nm.over) return;
+                if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal'))) return;
+                if (!document.pointerLockElement) safeLockPointer();
+            };
+            nmTouchUI(true);
+            let ex = document.getElementById('blaze-exit-btn'); if (ex) ex.onclick = nmExit;
+            bgmStart();
+            nmLoop();
+        }
+
+        function nmTouchUI(on) {
+            ['blaze-atk-btn', 'blaze-skill1-btn', 'blaze-skill2-btn', 'blaze-card-btn', 'blaze-jump-btn',
+                'race-dash-btn', 'race-skill-btn', 'race-item-btn', 'run-btn'].forEach(function (id) {
+                    let e = document.getElementById(id); if (e) e.style.display = 'none';
+                });
+            let pad = gState.control === 'pad';
+            let jb = document.getElementById('race-jump-btn'); if (jb) { jb.innerText = '跳'; jb.style.display = (on && pad) ? 'flex' : 'none'; }
+            let ab = document.getElementById('nm-act-btn');
+            if (ab) { ab.innerText = on && nm ? (nm.def.actLabel || '') : ''; ab.style.display = (on && pad && nm && nm.def.actLabel) ? 'flex' : 'none'; }
+            ['blaze-stats-btn'].forEach(function (id) { let e = document.getElementById(id); if (e) e.style.display = 'none'; });
+            let sb = document.getElementById('blaze-skillbar'); if (sb) sb.innerHTML = '';
+            let st = document.getElementById('blaze-skill'); if (st) st.innerText = '';
+            document.getElementById('blaze-bottom').style.display = 'none';
+            ['blaze-stats', 'blaze-perk', 'blaze-ffa-cards'].forEach(function (id) { let e = document.getElementById(id); if (e && on) e.classList.add('hidden'); });
+            let bar = document.getElementById('nm-spectate-bar'); if (bar && !on) bar.style.display = 'none';
+        }
+
+        // ── 移动：惯性 + 跳 + 重力；地面高度和墙由各模式告诉框架 ──
+        function nmWish(a) {
+            let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
+            a.facing = Math.atan2(dir.x, dir.z);
+            let side = new THREE.Vector3(-dir.z, 0, dir.x);
+            let fwd = 0, strafe = 0;
+            if (keys['w']) fwd += 1; if (keys['s']) fwd -= 1;
+            if (keys['a']) strafe -= 1; if (keys['d']) strafe += 1;
+            if (fwd === 0 && strafe === 0) { fwd = -tMove.y; strafe = tMove.x; }
+            let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe;
+            let n = Math.hypot(mx, mz);
+            let jump = !!(keys[' '] || touchBtn.jump); keys[' '] = false; touchBtn.jump = false;
+            let act = !!(keys['lmb'] || keys['e'] || touchBtn.nmAct); keys['e'] = false; touchBtn.nmAct = false;
+            if (nm.def.actHold) act = !!(keys['lmb'] || keys['e']) || act;
+            // 人朝镜头方向（横着走也是面朝前），推/喷都朝镜头看的方向
+            return { x: n > 1 ? mx / n : mx, z: n > 1 ? mz / n : mz, jump: jump, act: act, face: a.facing };
+        }
+        function nmPhysics(a, w, dt) {
+            let def = nm.def;
+            if (a.actCd > 0) a.actCd -= dt;
+            if (a.stunT > 0) { a.stunT -= dt; w = { x: 0, z: 0, jump: false, act: false, face: w.face }; }
+            let sp = def.speed * (def.speedMul ? def.speedMul(nm, a) : 1) * DAILY_MOD.speedMul;
+            let wx = w.x * sp, wz = w.z * sp;
+            let rate = (Math.abs(wx) + Math.abs(wz) > 0.01 ? 1 / 0.16 : 1 / 0.14) * (a.onGround ? 1 : 0.45);
+            let k = Math.min(1, rate * dt);
+            a.mvx += (wx - a.mvx) * k; a.mvz += (wz - a.mvz) * k;
+            if (w.face !== undefined) a.facing = w.face;
+            else if (w.x || w.z) a.facing = Math.atan2(w.x, w.z);
+            // 击退冲量单独算，慢慢衰减——被推的那一下是"飞出去"，不是被自己的移动抵消
+            let kd = Math.pow(0.08, dt);
+            a.kx *= kd; a.kz *= kd;
+            let dx = (a.mvx + a.kx) * dt, dz = (a.mvz + a.kz) * dt;
+            let prevY = a.p.y;
+            if (def.blocked) {
+                if (!def.blocked(nm, a.p.x + dx, a.p.z, prevY)) a.p.x += dx; else { a.mvx = 0; a.kx *= -0.3; }
+                if (!def.blocked(nm, a.p.x, a.p.z + dz, prevY)) a.p.z += dz; else { a.mvz = 0; a.kz *= -0.3; }
+            } else { a.p.x += dx; a.p.z += dz; }
+            if (def.carry) def.carry(nm, a, dt);
+            let g = def.groundAt(nm, a.p.x, a.p.z, prevY);
+            let onG = g > -1e8 && a.p.y <= g + 0.05;
+            if (w.jump && (onG || a.coyote > 0)) { a.vy = def.jumpV * DAILY_MOD.jumpMul; onG = false; a.coyote = 0; }
+            a.vy -= def.gravity * dt;
+            a.p.y += a.vy * dt;
+            g = def.groundAt(nm, a.p.x, a.p.z, prevY);
+            if (g > -1e8 && a.p.y <= g && prevY >= g - 0.8) { a.p.y = g; a.vy = 0; a.onGround = true; a.coyote = 0.1; }
+            else { if (a.onGround) a.coyote = 0.1; a.onGround = false; if (a.coyote > 0) a.coyote -= dt; }
+            if (w.act && a.actCd <= 0 && def.act) def.act(nm, a);
+        }
+        function nmKnock(b, ix, iz, by, hop) {
+            if (!b || b.out) return;
+            if (nmMine(b)) {
+                b.kx += ix; b.kz += iz; b.vy = Math.max(b.vy, hop || 16); b.onGround = false;
+                if (by) { b.lastHitBy = by.idx; b.lastHitT = nm.clock; }
+            } else if (nm.net) {
+                bc.postMessage({ type: 'NM_EV', target: '*', sender: gState.id, mode: nm.mode, ev: 'kb', to: b.idx, ix: +ix.toFixed(1), iz: +iz.toFixed(1), by: by ? by.idx : -1, hop: hop || 16 });
+            }
+        }
+        function nmStun(b, t, by) {
+            if (!b || b.out) return;
+            if (nmMine(b)) { b.stunT = Math.max(b.stunT, t); if (by) { b.lastHitBy = by.idx; b.lastHitT = nm.clock; } }
+            else if (nm.net) bc.postMessage({ type: 'NM_EV', target: '*', sender: gState.id, mode: nm.mode, ev: 'stun', to: b.idx, t: t, by: by ? by.idx : -1 });
+        }
+        // 人挤人：谁归我模拟，我就把谁往外挪一点（不然 AI 和人会叠在一起）
+        function nmSeparate() {
+            let L = nm.actors.filter(function (a) { return !a.out; });
+            for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+                let a = L[i], b = L[j];
+                if (Math.abs(a.p.y - b.p.y) > 8) continue;
+                let dx = b.p.x - a.p.x, dz = b.p.z - a.p.z, d = Math.hypot(dx, dz);
+                if (d > 6 || d < 0.001) continue;
+                let push = (6 - d) / 2, nx = dx / d, nz = dz / d;
+                if (nmMine(a)) { a.p.x -= nx * push; a.p.z -= nz * push; }
+                if (nmMine(b)) { b.p.x += nx * push; b.p.z += nz * push; }
+            }
+        }
+        function nmOut(a, reason) {
+            if (a.out) return;
+            a.out = true; a.mesh.visible = false;
+            nm.outOrder.push(a.idx);
+            let by = (a.lastHitBy !== undefined && nm.clock - (a.lastHitT || -99) < 4) ? nm.actors[a.lastHitBy] : null;
+            if (by && by !== a) by.kills++;
+            nmBurst(a.p.x, Math.max(a.p.y, nm.def.fxY || 0), a.p.z, 0xff7043);
+            if (a.isPlayer) blazeFlash(reason || '你出局了');
+            else if (by && by.isPlayer) blazeFlash('把 ' + a.name + ' 推下去了！');
+            if (a.isPlayer && nm.net) bc.postMessage({ type: 'NM_EV', target: '*', sender: gState.id, mode: nm.mode, ev: 'out', i: a.idx, by: by ? by.idx : -1 });
+        }
+        function nmBurst(x, y, z, color) {
+            for (let i = 0; i < 8; i++) {
+                let m = new THREE.Mesh(new THREE.SphereGeometry(0.9, 6, 4), new THREE.MeshBasicMaterial({ color: color, transparent: true }));
+                m.position.set(x, y + 3, z); nmAdd(m);
+                nm.fx.push({ o: m, t: 0.6, vx: (Math.random() - 0.5) * 40, vy: 20 + Math.random() * 20, vz: (Math.random() - 0.5) * 40 });
+            }
+        }
+        function nmFxTick(dt) {
+            nm.fx = nm.fx.filter(function (f) {
+                f.t -= dt;
+                if (f.t <= 0) { scene.remove(f.o); return false; }
+                f.vy -= 60 * dt;
+                f.o.position.x += f.vx * dt; f.o.position.y += f.vy * dt; f.o.position.z += f.vz * dt;
+                f.o.material.opacity = Math.min(1, f.t * 2);
+                return true;
+            });
+        }
+
+        // ── 联机 ──
+        function nmNetTick(dt) {
+            if (!nm.net) return;
+            nm.sendSelf -= dt;
+            if (nm.sendSelf <= 0 && !nm.me.out) {
+                nm.sendSelf = 1 / 15;
+                let me = nm.me;
+                bc.postMessage({ type: 'NM_ME', target: '*', sender: gState.id, mode: nm.mode, i: me.idx, x: +me.p.x.toFixed(1), y: +me.p.y.toFixed(1), z: +me.p.z.toFixed(1), f: +me.facing.toFixed(2), s: me.stunT > 0 ? 1 : 0 });
+            }
+            if (!nmIsHost()) return;
+            nm.sendWorld -= dt;
+            if (nm.sendWorld > 0) return;
+            nm.sendWorld = 1 / 10;
+            bc.postMessage({
+                type: 'NM_W', target: '*', sender: gState.id, mode: nm.mode, clock: +nm.clock.toFixed(2),
+                a: nm.actors.map(function (a) { return { i: a.idx, x: +a.p.x.toFixed(1), y: +a.p.y.toFixed(1), z: +a.p.z.toFixed(1), f: +(a.facing || 0).toFixed(2), o: a.out ? 1 : 0, k: a.kills || 0 }; }),
+                s: nm.def.worldState ? nm.def.worldState(nm) : null
+            });
+        }
+        function nmOnMe(m) {
+            if (!nm || nm.mode !== m.mode || m.sender === gState.id) return;
+            let a = nm.actors[m.i];
+            if (!a || a.netId !== m.sender) return;
+            a.target = { x: m.x, y: m.y, z: m.z }; a.facing = m.f; a.stunT = m.s ? 0.2 : 0;
+        }
+        function nmOnWorld(m) {
+            if (!nm || nm.mode !== m.mode || nmIsHost()) return;
+            nm.clock = m.clock;
+            (m.a || []).forEach(function (o) {
+                let a = nm.actors[o.i]; if (!a) return;
+                if (!a.netId) { a.target = { x: o.x, y: o.y, z: o.z }; a.facing = o.f; }
+                a.kills = o.k;
+                if (o.o && !a.out) { a.out = true; a.mesh.visible = false; nm.outOrder.push(a.idx); nmBurst(a.p.x, Math.max(a.p.y, nm.def.fxY || 0), a.p.z, 0xff7043); }
+            });
+            if (m.s && nm.def.applyWorld) nm.def.applyWorld(nm, m.s);
+        }
+        function nmOnEv(m) {
+            if (!nm || nm.mode !== m.mode || m.sender === gState.id) return;
+            if (m.ev === 'kb') { let b = nm.actors[m.to]; if (b && nmMine(b)) nmKnock(b, m.ix, m.iz, m.by >= 0 ? nm.actors[m.by] : null, m.hop); }
+            else if (m.ev === 'stun') { let b = nm.actors[m.to]; if (b && nmMine(b)) nmStun(b, m.t, m.by >= 0 ? nm.actors[m.by] : null); }
+            else if (m.ev === 'out') {
+                let a = nm.actors[m.i]; if (!a || a.out) return;
+                a.lastHitBy = m.by >= 0 ? m.by : undefined; a.lastHitT = nm.clock;
+                nmOut(a);
+            }
+            else if (m.ev === 'end') nmEnd(m.res, true);
+            else if (nm.def.onEv) nm.def.onEv(nm, m);
+        }
+        function nmLerpRemotes(dt) {
+            let k = Math.min(1, dt * 12);
+            nm.actors.forEach(function (a) {
+                if (!a.target || nmMine(a)) return;
+                a.p.x += (a.target.x - a.p.x) * k; a.p.y += (a.target.y - a.p.y) * k; a.p.z += (a.target.z - a.p.z) * k;
+            });
+        }
+
+        // ── 主循环 ──
+        function nmLoop() {
+            if (!nm) return;
+            let now = performance.now();
+            let dt = Math.min(0.05, (now - nm.last) / 1000);
+            nm.last = now;
+            if (!nm.over) nmTick(dt);
+            nm.raf = requestAnimationFrame(nmLoop);
+        }
+        function nmTick(dt) {
+            let def = nm.def;
+            nm.clock += dt;
+            let px0 = nm.actors.map(function (a) { return a.p.clone(); });
+            nm.actors.forEach(function (a) {
+                if (a.out || a.downed) return;
+                if (a.isPlayer) nmPhysics(a, nmWish(a), dt);
+                else if (nmMine(a)) nmPhysics(a, def.ai(nm, a, dt), dt);
+            });
+            nmLerpRemotes(dt);
+            nmSeparate();
+            if (def.tick) def.tick(nm, dt);
+            // 掉下去 / 掉进岩浆：谁归我模拟谁由我判
+            nm.actors.forEach(function (a) {
+                if (a.out || a.downed || !nmMine(a)) return;
+                let why = def.fallCheck(nm, a);
+                if (why) { if (def.onFall) def.onFall(nm, a, why); else nmOut(a, why); }
+            });
+            nmNetTick(dt);
+            nmFxTick(dt);
+            nm.actors.forEach(function (a, i) {
+                a.spd = Math.hypot(a.p.x - px0[i].x, a.p.z - px0[i].z) / Math.max(dt, 0.001);
+                a.mesh.position.set(a.p.x, a.p.y, a.p.z);
+                if (a.out) return;
+                a.mesh.rotation.y = a.facing || 0;
+                let run = Math.min(1, a.spd / def.speed);
+                a.animT += dt * (2 + run * 16);
+                let u = a.mesh.userData;
+                if (u.legs) { u.legs[0].rotation.x = Math.sin(a.animT) * 0.9 * run; u.legs[1].rotation.x = -Math.sin(a.animT) * 0.9 * run; }
+                if (u.arms) {
+                    if (a.gestureT > 0) { a.gestureT -= dt; bodyGesture(u, 'throw', Math.max(0, a.gestureT) / 0.35); }
+                    else { u.arms[0].rotation.x = -Math.sin(a.animT) * 0.7 * run; u.arms[1].rotation.x = Math.sin(a.animT) * 0.7 * run; }
+                }
+                a.mesh.rotation.z = a.stunT > 0 ? Math.sin(nm.clock * 30) * 0.15 : 0;
+                tickAccStarOrbit(u, dt);
+            });
+            // 镜头：出局了就看别人（◀ ▶ / A D 换人）
+            let look = nm.me;
+            if (nm.me.out || nm.me.downed) {
+                let list = nm.actors.filter(function (a) { return !a.out && !a.downed; });
+                if (list.length) { nm.specIdx = ((nm.specIdx % list.length) + list.length) % list.length; look = list[nm.specIdx]; }
+            }
+            let bar = document.getElementById('nm-spectate-bar');
+            if (bar) {
+                let on = (nm.me.out || nm.me.downed) && look !== nm.me;
+                bar.style.display = on ? 'flex' : 'none';
+                if (on) document.getElementById('nm-spectate-target').innerText = look.name;
+            }
+            let dir = chaseCamDir();
+            let back = def.camBack || 30, up = def.camUp || 16;
+            camera.position.set(look.p.x - dir.x * back, look.p.y + up - dir.y * back, look.p.z - dir.z * back);
+            def.hud(nm);
+            if (nmIsHost() && !nm.over) { let res = def.checkEnd(nm); if (res) nmEnd(res); }
+            renderer.render(scene, camera);
+        }
+        function nmSpecCycle(d) { if (nm) nm.specIdx += d; }
+
+        // ── 结算 ──
+        function nmEnd(res, fromNet) {
+            if (!nm || nm.over) return;
+            nm.over = true;
+            if (nm.net && nmIsHost() && !fromNet) bc.postMessage({ type: 'NM_EV', target: '*', sender: gState.id, mode: nm.mode, ev: 'end', res: res });
+            if (document.pointerLockElement) document.exitPointerLock();
+            let def = nm.def, me = nm.me;
+            let won = def.didWin(nm, res, me);
+            let text = def.resultText(nm, res);
+            coinsSettle(nm.mode, won);
+            text += coinsLine();
+            if (def.afterEnd) def.afterEnd(nm, res, won);
+            let mode = nm.mode, opt = nm.opt;
+            let btns = [];
+            if (!nm.net) btns.push({ label: '再来一局', color: '#1e88e5', onClick: function () { nmTeardown(); nmStartGo(mode, opt); } });
+            btns.push({ label: '返回大厅', color: '#5cb85c', onClick: function () { nmExit(); } });
+            won ? sfxChime(3) : sfxBuzz();
+            showSysModal(def.resultTitle(nm, res, won), text, btns);
+        }
+        function nmTeardown() {
+            if (!nm) return;
+            nm.over = true;
+            if (nm.raf) cancelAnimationFrame(nm.raf);
+            if (document.pointerLockElement) document.exitPointerLock();
+            nm.meshes.forEach(function (m) { scene.remove(m); });
+            if (nm.def.teardown) nm.def.teardown(nm);
+            nm = null;
+            nmTouchUI(false);
+            bgmStop();
+            document.body.onmousedown = null;
+            document.getElementById('blaze-hud').classList.add('hidden');
+            let ex = document.getElementById('blaze-exit-btn'); if (ex) ex.onclick = blazeExit;
+        }
+        function nmExit() {
+            if (!nm) return;
+            let mode = nm.mode;
+            nmTeardown();
+            nav('screen-lobby'); selectGameMode(mode);
+        }
+        function nmHudText(score, line) {
+            document.getElementById('blaze-score').innerText = score;
+            document.getElementById('blaze-round').innerText = line;
+            document.getElementById('blaze-roster').innerHTML = '';
+        }
+        function nmFacingDot(a, b) {
+            let dx = b.p.x - a.p.x, dz = b.p.z - a.p.z, d = Math.hypot(dx, dz) || 1;
+            return (dx / d) * Math.sin(a.facing) + (dz / d) * Math.cos(a.facing);
+        }
+        function nmNearest(a, filter) {
+            let best = null, bd = Infinity;
+            nm.actors.forEach(function (b) {
+                if (b === a || b.out || b.downed || (filter && !filter(b))) return;
+                let d = Math.hypot(b.p.x - a.p.x, b.p.z - a.p.z);
+                if (d < bd) { bd = d; best = b; }
+            });
+            return best ? { b: best, d: bd } : null;
+        }
+        function nmPlace(a) {   // 名次：没出局的并列第 1，出局越早名次越靠后
+            if (!a.out) return 1;
+            let k = nm.outOrder.indexOf(a.idx);
+            return nm.actors.length - k;
+        }
+
+        // ══════════════ 推推乐 ══════════════
+        // 一块圆台子，开局 20 秒后开始往里缩。按「推」往前一撞，面前的人被撞飞；掉下台子就出局。
+        // 最后站着的赢，时间到就看谁推下去的人多。
+        const SUMO = {
+            count: 8, r0: 110, rMin: 34, shrinkAt: 20, shrinkRate: 0.55, time: 150,
+            speed: 42, jumpV: 40, gravity: 140, pushRange: 12, pushCos: 0.5, pushPower: 105, pushCd: 1.1
+        };
+        function sumoRadius(t) { return t < SUMO.shrinkAt ? SUMO.r0 : Math.max(SUMO.rMin, SUMO.r0 - (t - SUMO.shrinkAt) * SUMO.shrinkRate); }
+        NM_DEFS.sumo = {
+            sky: 0xb3e5fc, fog: 0.0016, speed: SUMO.speed, jumpV: SUMO.jumpV, gravity: SUMO.gravity,
+            camBack: 34, camUp: 20, actLabel: '推', fxY: 0,
+            count: function () { return SUMO.count; },
+            build: function (g) {
+                let plat = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 8, 64), new THREE.MeshLambertMaterial({ color: 0xffe0b2 }));
+                plat.position.y = -4; nmAdd(plat); g.plat = plat;
+                let ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 6, 64), new THREE.MeshBasicMaterial({ color: 0xe53935 }));
+                ring.rotation.x = -Math.PI / 2; ring.position.y = 0.3; nmAdd(ring); g.ring = ring;
+                let rings = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.24, 48), new THREE.MeshBasicMaterial({ color: 0xffcc80, side: THREE.DoubleSide }));
+                rings.rotation.x = -Math.PI / 2; rings.position.y = 0.05; rings.scale.setScalar(SUMO.r0); nmAdd(rings);
+                let sea = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshLambertMaterial({ color: 0x4fc3f7 }));
+                sea.rotation.x = -Math.PI / 2; sea.position.y = -70; nmAdd(sea);
+            },
+            spawns: function (g, n) {
+                let out = [];
+                for (let i = 0; i < n; i++) {
+                    let ang = i / n * Math.PI * 2;
+                    out.push({ x: Math.cos(ang) * SUMO.r0 * 0.65, z: Math.sin(ang) * SUMO.r0 * 0.65, facing: Math.atan2(-Math.cos(ang), -Math.sin(ang)) });
+                }
+                return out;
+            },
+            camYaw: function (g) { return g.me.facing + Math.PI; },
+            groundAt: function (g, x, z) { return Math.hypot(x, z) <= sumoRadius(g.clock) ? 0 : -1e9; },
+            act: function (g, a) {
+                a.actCd = SUMO.pushCd; a.gestureT = 0.35;
+                let fx = Math.sin(a.facing), fz = Math.cos(a.facing);
+                a.kx += fx * 45; a.kz += fz * 45;   // 自己往前一冲
+                g.actors.forEach(function (b) {
+                    if (b === a || b.out) return;
+                    let dx = b.p.x - a.p.x, dz = b.p.z - a.p.z, d = Math.hypot(dx, dz);
+                    if (d > SUMO.pushRange || d < 0.01 || Math.abs(b.p.y - a.p.y) > 8) return;
+                    if ((dx / d) * fx + (dz / d) * fz < SUMO.pushCos) return;
+                    nmKnock(b, dx / d * SUMO.pushPower, dz / d * SUMO.pushPower, a, 22);
+                    nmBurst(b.p.x, b.p.y, b.p.z, 0xffffff);
+                });
+            },
+            ai: function (g, a, dt) {
+                let r = sumoRadius(g.clock), dc = Math.hypot(a.p.x, a.p.z);
+                let w = { x: 0, z: 0, jump: false, act: false };
+                a.aiT -= dt;
+                if (dc > r - 16) { w.x = -a.p.x / (dc || 1); w.z = -a.p.z / (dc || 1); return w; }   // 太靠边，先回中间
+                let t = nmNearest(a);
+                if (!t) return w;
+                let dx = t.b.p.x - a.p.x, dz = t.b.p.z - a.p.z, d = t.d || 1;
+                w.x = dx / d; w.z = dz / d;
+                if (a.aiT <= 0 && d < SUMO.pushRange - 1 && nmFacingDot(a, t.b) > 0.6) { w.act = true; a.aiT = 0.3 + Math.random() * 0.6; }
+                if (Math.random() < dt * 0.15) w.jump = true;
+                return w;
+            },
+            tick: function (g) {
+                let r = sumoRadius(g.clock);
+                g.plat.scale.set(r, 1, r);
+                g.ring.scale.set(r, r, 1);
+                g.ring.material.color.setHex(g.clock > SUMO.shrinkAt - 3 && Math.sin(g.clock * 8) > 0 ? 0xffeb3b : 0xe53935);
+            },
+            fallCheck: function (g, a) { return a.p.y < -50 ? '掉下去了' : null; },
+            checkEnd: function (g) {
+                let alive = g.actors.filter(function (a) { return !a.out; });
+                if (alive.length <= 1) return { w: alive.length ? alive[0].idx : -1 };
+                if (g.clock >= SUMO.time) {
+                    let best = alive.slice().sort(function (a, b) { return b.kills - a.kills; })[0];
+                    return { w: best.idx, timeUp: 1 };
+                }
+                return null;
+            },
+            didWin: function (g, res, me) { return res.w === me.idx || nmPlace(me) <= 3; },
+            resultTitle: function (g, res, won) { return res.w === g.me.idx ? '你是最后站着的！' : (res.w >= 0 ? g.actors[res.w].name + ' 赢了' : '同归于尽'); },
+            resultText: function (g, res) {
+                return (res.timeUp ? '时间到，推下去最多的人赢。<br>' : '') + '你推下去 ' + g.me.kills + ' 人，第 ' + nmPlace(g.me) + ' 名。';
+            },
+            hud: function (g) {
+                let alive = g.actors.filter(function (a) { return !a.out; }).length;
+                let t = Math.max(0, Math.ceil(SUMO.time - g.clock));
+                nmHudText('存活 ' + alive + ' / ' + g.actors.length + '　' + t + 's',
+                    '推推乐　' + (g.clock < SUMO.shrinkAt ? Math.ceil(SUMO.shrinkAt - g.clock) + ' 秒后台子开始缩　' : '台子在缩！　') + '推下去 ' + g.me.kills + ' 人' +
+                    (g.me.out ? '　你已出局，观战中' : ''));
+            }
+        };
+
+        // ══════════════ 彩弹占地 ══════════════
+        // 4v4。走过的地方刷成自己队的颜色，按「喷」往前扔一团颜料，落地炸开一片；
+        // 砸中对面的人他会愣 1.5 秒。时间到，哪队地盘大哪队赢。踩在对面的颜色上走得慢。
+        const PAINT = {
+            count: 8, grid: 32, cell: 9, time: 120, speed: 44, jumpV: 40, gravity: 140,
+            shootCd: 0.45, blobSpeed: 95, blobGrav: 110, splash: 1, stunT: 1.5, enemySlow: 0.72, hitR: 5
+        };
+        function paintHalf() { return PAINT.grid * PAINT.cell / 2; }
+        function paintCellOf(x, z) {
+            let h = paintHalf();
+            return { cx: Math.floor((x + h) / PAINT.cell), cz: Math.floor((z + h) / PAINT.cell) };
+        }
+        function paintSet(g, cx, cz, team) {
+            if (cx < 0 || cz < 0 || cx >= PAINT.grid || cz >= PAINT.grid) return;
+            let i = cz * PAINT.grid + cx;
+            if (g.walls[i]) return;
+            let v = team + 1;
+            if (g.cells[i] === v) return;
+            g.cells[i] = v; g.dirty = true;
+        }
+        function paintSplash(g, x, z, team, r) {
+            let c = paintCellOf(x, z);
+            for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dz * dz <= r * r + 1) paintSet(g, c.cx + dx, c.cz + dz, team);
+        }
+        function paintCount(g) {
+            let c = [0, 0], tot = 0;
+            for (let i = 0; i < g.cells.length; i++) { if (g.walls[i]) continue; tot++; if (g.cells[i] === 1) c[0]++; else if (g.cells[i] === 2) c[1]++; }
+            return { a: c[0], b: c[1], tot: tot };
+        }
+        function paintTexUpdate(g) {
+            if (!g.dirty) return;
+            g.dirty = false;
+            let d = g.tex.image.data;
+            let cols = [[236, 239, 241], [41, 182, 246], [236, 64, 122]];
+            for (let i = 0; i < g.cells.length; i++) {
+                let c = g.walls[i] ? [120, 144, 156] : cols[g.cells[i]];
+                d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 255;
+            }
+            g.tex.needsUpdate = true;
+        }
+        function paintShoot(g, a, remote) {
+            let fx = Math.sin(a.facing), fz = Math.cos(a.facing);
+            let pitch = a.isPlayer ? Math.max(-0.1, Math.min(0.8, camera.rotation.x + 0.35)) : 0.3 + Math.random() * 0.2;
+            let b = {
+                x: a.p.x + fx * 4, y: a.p.y + 8, z: a.p.z + fz * 4, team: a.team, by: a.idx,
+                vx: fx * PAINT.blobSpeed * Math.cos(pitch), vy: PAINT.blobSpeed * Math.sin(pitch), vz: fz * PAINT.blobSpeed * Math.cos(pitch)
+            };
+            b.mesh = nmAdd(new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), new THREE.MeshLambertMaterial({ color: NM_TEAM_COL[a.team], emissive: NM_TEAM_COL[a.team], emissiveIntensity: 0.3 })));
+            g.blobs.push(b);
+            if (!remote && g.net) bc.postMessage({ type: 'NM_EV', target: '*', sender: gState.id, mode: 'paint', ev: 'shot', i: a.idx, x: +b.x.toFixed(1), y: +b.y.toFixed(1), z: +b.z.toFixed(1), vx: +b.vx.toFixed(1), vy: +b.vy.toFixed(1), vz: +b.vz.toFixed(1) });
+        }
+        NM_DEFS.paint = {
+            sky: 0xe1f5fe, fog: 0.0012, speed: PAINT.speed, jumpV: PAINT.jumpV, gravity: PAINT.gravity,
+            camBack: 32, camUp: 18, actLabel: '喷', teams: true, actHold: true, fxY: 0,
+            count: function () { return PAINT.count; },
+            build: function (g) {
+                let N = PAINT.grid, h = paintHalf();
+                g.cells = new Uint8Array(N * N); g.walls = new Uint8Array(N * N); g.blobs = [];
+                // 几块掩体：中心对称摆，两边公平
+                for (let k = 0; k < 7; k++) {
+                    let cx = 5 + Math.floor(seededRandom() * (N / 2 - 6)), cz = 3 + Math.floor(seededRandom() * (N - 6));
+                    let w = 1 + Math.floor(seededRandom() * 2), d = 1 + Math.floor(seededRandom() * 3);
+                    [[cx, cz], [N - 1 - cx - (w - 1), N - 1 - cz - (d - 1)]].forEach(function (o) {
+                        for (let z = 0; z < d; z++) for (let x = 0; x < w; x++) g.walls[(o[1] + z) * N + o[0] + x] = 1;
+                        let m = new THREE.Mesh(new THREE.BoxGeometry(w * PAINT.cell, 10, d * PAINT.cell), new THREE.MeshLambertMaterial({ color: 0x90a4ae }));
+                        m.position.set(-h + (o[0] + w / 2) * PAINT.cell, 5, -h + (o[1] + d / 2) * PAINT.cell); nmAdd(m);
+                    });
+                }
+                let data = new Uint8Array(N * N * 4);
+                g.tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+                g.tex.magFilter = THREE.NearestFilter; g.tex.minFilter = THREE.NearestFilter;
+                g.dirty = true; paintTexUpdate(g);
+                let floor = new THREE.Mesh(new THREE.PlaneGeometry(N * PAINT.cell, N * PAINT.cell), new THREE.MeshLambertMaterial({ map: g.tex }));
+                floor.rotation.x = -Math.PI / 2; nmAdd(floor);
+                [[0, -h, N * PAINT.cell, 2], [0, h, N * PAINT.cell, 2], [-h, 0, 2, N * PAINT.cell], [h, 0, 2, N * PAINT.cell]].forEach(function (w) {
+                    let m = new THREE.Mesh(new THREE.BoxGeometry(w[2], 6, w[3]), new THREE.MeshLambertMaterial({ color: 0x78909c }));
+                    m.position.set(w[0], 3, w[1]); nmAdd(m);
+                });
+                let grass = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshLambertMaterial({ color: 0xa5d6a7 }));
+                grass.rotation.x = -Math.PI / 2; grass.position.y = -0.2; nmAdd(grass);
+            },
+            spawns: function (g, n) {
+                let h = paintHalf(), out = [];
+                for (let i = 0; i < n; i++) {
+                    let team = i % 2, k = Math.floor(i / 2);
+                    out.push({ x: (team === 0 ? -1 : 1) * (h - 14), z: (k - 1.5) * 22, facing: team === 0 ? Math.PI / 2 : -Math.PI / 2 });
+                }
+                return out;
+            },
+            camYaw: function (g) { return g.me.facing + Math.PI; },
+            groundAt: function () { return 0; },
+            blocked: function (g, x, z) {
+                let h = paintHalf() - 3;
+                if (Math.abs(x) > h || Math.abs(z) > h) return true;
+                let c = paintCellOf(x, z);
+                return !!g.walls[c.cz * PAINT.grid + c.cx];
+            },
+            speedMul: function (g, a) {
+                let c = paintCellOf(a.p.x, a.p.z), v = g.cells[c.cz * PAINT.grid + c.cx];
+                return (v && v !== a.team + 1) ? PAINT.enemySlow : 1;
+            },
+            act: function (g, a) { a.actCd = PAINT.shootCd; a.gestureT = 0.3; paintShoot(g, a, false); },
+            ai: function (g, a, dt) {
+                let w = { x: 0, z: 0, jump: false, act: false };
+                a.aiT -= dt;
+                // 找一块不是自己颜色的格子去刷；路上看到对面的人就朝他喷
+                if (!a.goal || a.aiT <= 0 || Math.hypot(a.goal.x - a.p.x, a.goal.z - a.p.z) < 6) {
+                    a.aiT = 2 + Math.random() * 2;
+                    let h = paintHalf() - 8, best = null, bs = -1;
+                    for (let k = 0; k < 8; k++) {
+                        let x = (Math.random() * 2 - 1) * h, z = (Math.random() * 2 - 1) * h;
+                        let c = paintCellOf(x, z), v = g.cells[c.cz * PAINT.grid + c.cx];
+                        let score = (v === a.team + 1 ? 0 : (v ? 2 : 1.5)) - Math.hypot(x - a.p.x, z - a.p.z) / 200;
+                        if (score > bs && !g.walls[c.cz * PAINT.grid + c.cx]) { bs = score; best = { x: x, z: z }; }
+                    }
+                    a.goal = best || { x: 0, z: 0 };
+                }
+                let dx = a.goal.x - a.p.x, dz = a.goal.z - a.p.z, d = Math.hypot(dx, dz) || 1;
+                w.x = dx / d; w.z = dz / d;
+                let foe = nmNearest(a, function (b) { return b.team !== a.team; });
+                if (foe && foe.d < 55) {
+                    w.face = Math.atan2(foe.b.p.x - a.p.x, foe.b.p.z - a.p.z);
+                    if (Math.random() < dt * 3) w.act = true;
+                } else if (Math.random() < dt * 1.2) w.act = true;
+                if (a.actCd > 0) w.act = false;
+                return w;
+            },
+            tick: function (g, dt) {
+                g.actors.forEach(function (a) { if (!a.out && a.p.y < 1) paintSet(g, paintCellOf(a.p.x, a.p.z).cx, paintCellOf(a.p.x, a.p.z).cz, a.team); });
+                g.blobs = g.blobs.filter(function (b) {
+                    b.vy -= PAINT.blobGrav * dt;
+                    b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+                    b.mesh.position.set(b.x, b.y, b.z);
+                    let hitActor = null;
+                    g.actors.forEach(function (o) {
+                        if (hitActor || o.out || o.team === b.team) return;
+                        if (Math.hypot(o.p.x - b.x, o.p.z - b.z) < PAINT.hitR && b.y < o.p.y + 12 && b.y > o.p.y - 1) hitActor = o;
+                    });
+                    let land = b.y <= 0.5 || NM_DEFS.paint.blocked(g, b.x, b.z);
+                    if (hitActor || land) {
+                        paintSplash(g, b.x, b.z, b.team, PAINT.splash + (hitActor ? 1 : 0));
+                        if (hitActor && nmMine(hitActor)) { nmStun(hitActor, PAINT.stunT, g.actors[b.by]); if (hitActor.isPlayer) blazeFlash('被颜料砸中了！'); }
+                        nmBurst(b.x, Math.max(0, b.y - 3), b.z, NM_TEAM_COL[b.team]);
+                        scene.remove(b.mesh);
+                        return false;
+                    }
+                    return true;
+                });
+                paintTexUpdate(g);
+            },
+            fallCheck: function () { return null; },
+            worldState: function (g) {
+                g.gridSend = (g.gridSend || 0) - 1;
+                if (g.gridSend > 0) return null;
+                g.gridSend = 10;   // 一秒一次整张格子，其余时候各自本地刷，差一点会被这一下拉齐
+                return { cells: Array.prototype.join.call(g.cells, '') };
+            },
+            applyWorld: function (g, s) {
+                if (!s.cells) return;
+                for (let i = 0; i < g.cells.length; i++) { let v = +s.cells[i]; if (g.cells[i] !== v) { g.cells[i] = v; g.dirty = true; } }
+            },
+            onEv: function (g, m) {
+                if (m.ev !== 'shot') return;
+                let a = g.actors[m.i]; if (!a) return;
+                let b = { x: m.x, y: m.y, z: m.z, vx: m.vx, vy: m.vy, vz: m.vz, team: a.team, by: a.idx };
+                b.mesh = nmAdd(new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), new THREE.MeshLambertMaterial({ color: NM_TEAM_COL[a.team] })));
+                g.blobs.push(b);
+            },
+            checkEnd: function (g) {
+                if (g.clock < PAINT.time) return null;
+                let c = paintCount(g);
+                return { a: c.a, b: c.b, tot: c.tot, w: c.a === c.b ? -1 : (c.a > c.b ? 0 : 1), cells: Array.prototype.join.call(g.cells, '') };
+            },
+            didWin: function (g, res, me) { return res.w === me.team; },
+            resultTitle: function (g, res, won) { return res.w < 0 ? '平局' : (won ? '你的队伍赢了' : '你的队伍输了'); },
+            resultText: function (g, res) {
+                let mine = g.me.team === 0 ? res.a : res.b, theirs = g.me.team === 0 ? res.b : res.a;
+                return '地盘：我方 ' + Math.round(mine / res.tot * 100) + '% · 对面 ' + Math.round(theirs / res.tot * 100) + '%';
+            },
+            hud: function (g) {
+                let c = paintCount(g);
+                let mine = g.me.team === 0 ? c.a : c.b, theirs = g.me.team === 0 ? c.b : c.a;
+                let t = Math.max(0, Math.ceil(PAINT.time - g.clock));
+                nmHudText(Math.round(mine / c.tot * 100) + '% : ' + Math.round(theirs / c.tot * 100) + '%　' + t + 's',
+                    '彩弹占地　走过的地方就是你的颜色，' + (padOn() ? '「喷」' : '左键') + '扔颜料' + (g.me.stunT > 0 ? '　被砸中了！' : ''));
+            }
+        };
+
+        // ══════════════ 爬塔 ══════════════
+        // 一座绕着柱子盘上去的跳台塔，底下岩浆一直在涨。
+        //   单人：能爬多高爬多高，爬到顶算赢。
+        //   双人合作：两个人都要爬到顶。有人掉进岩浆就先趴下，另一个爬到下一面旗子就能把他拉回来；两个都掉就输。
+        //   多人：谁先到顶谁赢，掉进岩浆就出局。
+        const TOWER = { steps: 60, flagEvery: 10, speed: 40, jumpV: 50, gravity: 140, lava0: -40, rise0: 2.2, rise1: 5, riseRamp: 100, grace: 6 };
+        function towerTop(g) { return g.steps[g.steps.length - 1]; }
+        NM_DEFS.tower = {
+            sky: 0x311b92, fog: 0.0016, speed: TOWER.speed, jumpV: TOWER.jumpV, gravity: TOWER.gravity,
+            camBack: 36, camUp: 16, fxY: 0,
+            count: function (opt) { return opt.kind === 'solo' ? 1 : opt.kind === 'duo' ? 2 : 6; },
+            build: function (g) {
+                g.steps = [];
+                let ang = 0, y = 0, r = 68, prevHalf = 26;
+                g.steps.push({ x: 0, z: 70, y: 0, half: 26, mv: 0 });   // 起点大平台
+                for (let i = 1; i <= TOWER.steps; i++) {
+                    // 按"边到边的空隙"来排，而不是随便转个角度——之前角度+半径都随机，有的两块离了 40 格，根本跳不过去。
+                    // 满力跳大概能飞 20 格，空隙控制在 5~11，越往上越宽一点。
+                    let half = i === TOWER.steps ? 16 : Math.max(5.5, 10 - i * 0.06 - seededRandom() * 2);
+                    let gap = 5 + seededRandom() * 4 + Math.min(2, i * 0.04);
+                    r = Math.max(60, Math.min(76, r + (seededRandom() - 0.5) * 6));
+                    ang += (prevHalf + half + gap) / r;
+                    prevHalf = half;
+                    y += 5 + seededRandom() * 2.6;
+                    let mv = (i > 8 && i % 7 === 0) ? (6 + seededRandom() * 6) : 0;   // 每隔几块有一块左右晃
+                    g.steps.push({ x: Math.sin(ang) * r, z: Math.cos(ang) * r, y: y, half: half, mv: mv, ph: seededRandom() * 6, flag: i % TOWER.flagEvery === 0 });
+                }
+                g.steps.forEach(function (s, i) {
+                    let top = i === g.steps.length - 1;
+                    let m = new THREE.Mesh(new THREE.BoxGeometry(s.half * 2, 3, s.half * 2), new THREE.MeshLambertMaterial({ color: top ? 0xffd54f : (s.mv ? 0x80deea : (i % 2 ? 0xb39ddb : 0x9575cd)) }));
+                    m.position.set(s.x, s.y - 1.5, s.z); nmAdd(m); s.mesh = m; s.x0 = s.x;
+                    if (s.flag) {
+                        let pole = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 12), new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
+                        pole.position.set(0, 7.5, 0); m.add(pole);
+                        let fl = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 0.4), new THREE.MeshBasicMaterial({ color: 0x66bb6a }));
+                        fl.position.set(2.5, 12, 0); m.add(fl); s.flagMesh = fl;
+                    }
+                });
+                let pillar = new THREE.Mesh(new THREE.CylinderGeometry(30, 34, towerTop(g).y + 60, 24), new THREE.MeshLambertMaterial({ color: 0x4527a0 }));
+                pillar.position.y = (towerTop(g).y + 60) / 2 - 40; nmAdd(pillar);
+                g.lavaY = TOWER.lava0;
+                let lava = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshBasicMaterial({ color: 0xff5722 }));
+                lava.rotation.x = -Math.PI / 2; lava.position.y = g.lavaY; nmAdd(lava); g.lava = lava;
+                let glow = new THREE.PointLight(0xff7043, 1.2, 160); nmAdd(glow); g.glow = glow;
+            },
+            spawns: function (g, n) {
+                let out = [];
+                for (let i = 0; i < n; i++) out.push({ x: (i - (n - 1) / 2) * 6, z: 70, y: 0, facing: Math.PI / 2 });
+                return out;
+            },
+            initActor: function (g, a) { a.best = 0; a.si = 0; a.skill = Math.random(); a.pauseT = 0; },
+            speedMul: function (g, a) { return a.isPlayer || a.netId ? 1 : 0.62 + a.skill * 0.22; },   // AI 别比人快太多
+            camYaw: function () { return -Math.PI / 2; },   // 塔是逆时针往上盘的，开局朝 +x 看第一块
+            groundAt: function (g, x, z, prevY) {
+                let best = -1e9;
+                g.steps.forEach(function (s) {
+                    if (Math.abs(x - s.x) <= s.half && Math.abs(z - s.z) <= s.half && s.y <= prevY + 0.6 && s.y > best) best = s.y;
+                });
+                return best;
+            },
+            carry: function (g, a) {   // 站在晃动的台子上跟着走
+                if (!a.onGround) return;
+                g.steps.forEach(function (s) {
+                    if (s.mv && Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half && Math.abs(a.p.y - s.y) < 0.2) a.p.x += s.dx || 0;
+                });
+            },
+            ai: function (g, a, dt) {
+                let w = { x: 0, z: 0, jump: false, act: false };
+                // 站着的台子编号：往上找最近的一块当目标
+                g.steps.forEach(function (s, i) { if (a.onGround && Math.abs(a.p.y - s.y) < 0.3 && Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half) a.si = i; });
+                let t = g.steps[Math.min(g.steps.length - 1, a.si + 1)];
+                let dx = t.x - a.p.x, dz = t.z - a.p.z, d = Math.hypot(dx, dz) || 1;
+                if (a.si === g.steps.length - 1) return w;
+                // 双人合作：AI 队友领先太多就停下等你
+                if (g.opt.kind === 'duo') {
+                    let mate = g.actors.filter(function (b) { return b !== a; })[0];
+                    if (mate && !mate.downed && a.si - mate.si > 4 && a.onGround) return w;
+                }
+                // 偶尔站一下再跳，像人在瞄
+                if (a.pauseT > 0) { a.pauseT -= dt; return w; }
+                if (a.onGround && Math.random() < dt * (0.5 - a.skill * 0.3)) { a.pauseT = 0.3 + Math.random() * 0.6; return w; }
+                w.x = dx / d; w.z = dz / d;
+                a.aiT -= dt;
+                // 离目标台子边缘不远了就起跳；偶尔起跳时机没掐好（AI 也会失误）
+                // 脚下马上没地了就跳（看 0.12 秒后的位置），比按距离算稳——之前一群 AI 在起点边上直接走下去
+                let edge = a.onGround && NM_DEFS.tower.groundAt(g, a.p.x + a.mvx * 0.12, a.p.z + a.mvz * 0.12, a.p.y) < a.p.y - 0.5;
+                if (a.onGround && (edge || (a.aiT <= 0 && d < t.half + 10))) {
+                    // 偶尔没跳好直接掉下去（技术差的掉得多）
+                    if (edge && Math.random() < 0.05 - a.skill * 0.035) { a.aiT = 0.5; return w; }
+                    w.jump = true; a.aiT = 0.35 + Math.random() * 0.4;
+                }
+                if (Math.random() < dt * 0.05) { w.x += (Math.random() - 0.5); w.z += (Math.random() - 0.5); }
+                return w;
+            },
+            tick: function (g, dt) {
+                g.steps.forEach(function (s) {
+                    if (!s.mv) return;
+                    let nx = s.x0 + Math.sin(g.clock * 1.3 + s.ph) * s.mv;
+                    s.dx = nx - s.x; s.x = nx; s.mesh.position.x = nx;
+                });
+                if (nmIsHost() && g.clock > TOWER.grace) {
+                    let k = Math.min(1, (g.clock - TOWER.grace) / TOWER.riseRamp);
+                    g.lavaY += (TOWER.rise0 + (TOWER.rise1 - TOWER.rise0) * k) * dt;
+                }
+                g.lava.position.y = g.lavaY;
+                g.glow.position.set(g.me.p.x, g.lavaY + 20, g.me.p.z);
+                g.actors.forEach(function (a) {
+                    if (a.out || a.downed) return;
+                    g.steps.forEach(function (s, i) { if (a.onGround && Math.abs(a.p.y - s.y) < 0.3 && Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half) { a.si = i; if (i > a.best) a.best = i; } });
+                    if (a.best >= g.steps.length - 1 && !a.done) {
+                        a.done = true; a.doneT = g.clock;
+                        if (a.isPlayer) blazeFlash('到顶了！');
+                    }
+                });
+                // 双人：活着的那个人摸到比倒下的人更高的旗子，就把他拉回来
+                if (g.opt.kind === 'duo') g.actors.forEach(function (a) {
+                    if (!a.downed) return;
+                    let mate = g.actors.filter(function (b) { return b !== a && !b.downed && !b.out; })[0];
+                    if (!mate || !nmMine(a)) return;
+                    let s = g.steps[mate.si];
+                    if (s && s.flag && mate.si > (a.downAt || 0) && mate.onGround) {
+                        a.downed = false; a.mesh.visible = true;
+                        a.p.set(s.x + 3, s.y + 1, s.z); a.vy = 0; a.mvx = a.mvz = a.kx = a.kz = 0; a.si = mate.si;
+                        nmBurst(a.p.x, a.p.y, a.p.z, 0x66bb6a);
+                        blazeFlash(a.isPlayer ? mate.name + ' 把你拉回来了！' : '把 ' + a.name + ' 拉回来了！');
+                        if (g.net) bc.postMessage({ type: 'NM_EV', target: '*', sender: gState.id, mode: 'tower', ev: 'up', i: a.idx });
+                    }
+                });
+            },
+            fallCheck: function (g, a) { return a.p.y < g.lavaY + 1 ? '掉进岩浆了' : null; },
+            onFall: function (g, a, why) {
+                // 岩浆还没开始涨就掉下去的，送回起点，不算出局
+                if (g.clock < TOWER.grace) {
+                    let s0 = g.steps[0];
+                    a.p.set(s0.x + (Math.random() - 0.5) * 20, 1, s0.z + (Math.random() - 0.5) * 10); a.vy = 0; a.mvx = a.mvz = a.kx = a.kz = 0; a.si = 0;
+                    if (a.isPlayer) blazeFlash('回到起点');
+                    return;
+                }
+                if (g.opt.kind === 'duo') {
+                    a.downed = true; a.downAt = a.si; a.mesh.visible = false;
+                    nmBurst(a.p.x, g.lavaY, a.p.z, 0xff5722);
+                    if (a.isPlayer) blazeFlash('掉进岩浆了！等队友救');
+                    if (g.net) bc.postMessage({ type: 'NM_EV', target: '*', sender: gState.id, mode: 'tower', ev: 'down', i: a.idx, at: a.si });
+                    return;
+                }
+                nmOut(a, why);
+            },
+            onEv: function (g, m) {
+                let a = g.actors[m.i]; if (!a) return;
+                if (m.ev === 'down') { a.downed = true; a.downAt = m.at; a.mesh.visible = false; }
+                else if (m.ev === 'up') { a.downed = false; a.mesh.visible = true; }
+            },
+            worldState: function (g) { return { lava: +g.lavaY.toFixed(1), d: g.actors.map(function (a) { return a.done ? 1 : 0; }) }; },
+            applyWorld: function (g, s) {
+                g.lavaY = s.lava;
+                (s.d || []).forEach(function (v, i) { if (v && g.actors[i]) g.actors[i].done = true; });
+            },
+            checkEnd: function (g) {
+                let kind = g.opt.kind;
+                let alive = g.actors.filter(function (a) { return !a.out && !a.downed; });
+                if (kind === 'duo') {
+                    if (g.actors.every(function (a) { return a.done; })) return { w: 1 };
+                    if (!alive.length) return { w: 0 };
+                    return null;
+                }
+                let first = g.actors.filter(function (a) { return a.done; }).sort(function (a, b) { return a.doneT - b.doneT; })[0];
+                if (first) return { w: first.idx, top: 1 };
+                if (kind === 'solo') return g.me.out ? { w: -1, h: g.me.best } : null;
+                if (alive.length === 0) return { w: -1 };
+                if (alive.length === 1 && g.actors.length > 1) return { w: alive[0].idx };
+                return null;
+            },
+            didWin: function (g, res, me) {
+                if (g.opt.kind === 'duo') return res.w === 1;
+                if (g.opt.kind === 'solo') return res.w === me.idx;
+                return res.w === me.idx || nmPlace(me) <= 2;
+            },
+            resultTitle: function (g, res, won) {
+                if (g.opt.kind === 'duo') return won ? '两个人都爬上去了！' : '都掉下去了';
+                if (res.w === g.me.idx) return res.top ? '到顶了！' : '你撑到了最后！';
+                return res.w >= 0 ? g.actors[res.w].name + (res.top ? ' 先到顶' : ' 撑到了最后') : '岩浆赢了';
+            },
+            resultText: function (g, res) {
+                let h = g.me.best;
+                let rec = gState.towerBest || 0;
+                return '你爬到第 ' + h + ' 块（共 ' + (g.steps.length - 1) + ' 块）' + (h > rec ? '，新纪录！' : '，最好 ' + rec + ' 块');
+            },
+            afterEnd: function (g) { if ((g.me.best || 0) > (gState.towerBest || 0)) { gState.towerBest = g.me.best; saveProgress(); } },
+            hud: function (g) {
+                let me = g.me, total = g.steps.length - 1;
+                let gap = Math.max(0, Math.round(me.p.y - g.lavaY));
+                let kindTxt = g.opt.kind === 'solo' ? '单人' : g.opt.kind === 'duo' ? '双人合作' : '多人';
+                let mate = g.opt.kind === 'duo' ? g.actors.filter(function (b) { return b !== me; })[0] : null;
+                nmHudText('第 ' + me.best + ' / ' + total + ' 块　离岩浆 ' + gap,
+                    '爬塔 · ' + kindTxt + (g.clock < TOWER.grace ? '　' + Math.ceil(TOWER.grace - g.clock) + ' 秒后岩浆开始涨' : '　岩浆在涨，往上爬！') +
+                    (mate ? '　队友：' + mate.name + (mate.downed ? '（掉了，爬到下一面旗救回来）' : mate.done ? '（到顶了）' : '') : '') +
+                    (me.downed ? '　等队友救你' : ''));
+            }
+        };
+
+        // ══════════════════════════════════════════════════════════
         //  大厅广场：进游戏前的一个可以走来走去的 3D 空间，边上搭了一小段
         //  跑酷，还有几个 AI 路人在晃悠——凑近谁都会弹出「组队」，是真人
         //  好友（同房间里认识的）还能顺手「加好友」。没有服务器存不了全网
@@ -24490,6 +25626,7 @@
             if (escapeRoom) { try { escapeExit(); } catch (e) { } }
             if (park) { try { parkExit(); } catch (e) { } }
             if (cake) { try { cakeExit(); } catch (e) { } }
+            if (nm) { try { nmTeardown(); } catch (e) { } }
             ensureScene();
             clearMazeMeshes();   // 保险：万一某个模式退出时没清干净，进大厅前兜底扫一遍
             scene.background = new THREE.Color(0x8fd3f4);
