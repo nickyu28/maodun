@@ -900,6 +900,7 @@
             <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">彩蛋图鉴</button>
             <button onclick="openSettings()" style="width:100%; margin:0 0 6px; background:#546e7a; color:#fff; border:none; font-size:12px; padding:7px 4px;">设置</button>
             <button onclick="openFeedback()" style="width:100%; margin:0 0 6px; background:#e91e63; color:#fff; border:none; font-size:12px; padding:7px 4px;">反馈</button>
+            <button onclick="openAchievements()" style="width:100%; margin:0 0 6px; background:#8e24aa; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">成就 · 称号<span id="ach-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
             <button onclick="openPlayLog()" style="width:100%; margin:0 0 6px; background:#795548; color:#fff; border:none; font-size:12px; padding:7px 4px;">游玩记录</button>
             <!-- 清空本地数据是破坏性操作（清掉存档），跟"商店"这种核心功能视觉权重不该一样——
                  降级成小字文字链接，放最下面，弹窗二次确认还保留着（clearLocalCache 里）。 -->
@@ -1901,6 +1902,7 @@
                 bz: gState.blazeChar || 'bow',
                 acc: gState.acc || null,
                 face: myFace(),
+                title: myTitle(),
                 stats: playStatsDigest()
             };
         }
@@ -1935,6 +1937,7 @@
                 mm: m.mm || null,
                 acc: m.acc || null,
                 face: m.face || 'cat',
+                title: m.title || null,
                 at: performance.now()
             };
             if (m.bz) blazePeerChar[m.sender] = m.bz;
@@ -2345,7 +2348,7 @@
         const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -2356,6 +2359,7 @@
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
                         gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {}; gState.escProg = data.escProg || null;
+                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {};
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); grantBadgeIfMissing(); return;
                     }
@@ -2364,6 +2368,7 @@
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
             gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { head: null, waist: null }; gState.ownedAcc = {}; gState.escProg = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
+            gState.dailyWin = {}; gState.towerBest = 0; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.title = null; gState.titles = {};
             expandInventory();
         }
 
@@ -2526,6 +2531,8 @@
                 hubOnMe(msg);
             } else {
                 if (msg.target !== '*' && msg.target !== gState.id) return;
+                // 寻宝队开局只拉自己队里的人：之前房间里谁开都会把全房间的人拽进去，别的模式打一半也会被拽走
+                if ((msg.type === 'START_GARAGE' || msg.type === 'START_MAP') && !(msg.sender && lobbyParty.indexOf(msg.sender) >= 0)) return;
                 if (msg.type === 'START_GARAGE') {
                     nav('screen-garage'); initGarage();
                 } else if (msg.type === 'START_MAP') {
@@ -3224,7 +3231,7 @@
             // 不该拦你自己开寻宝队。
             if (lobbyParty.length && !peerIsHost) { showSysModal('提示', '等房主开局。', [{ label: '确定' }]); return; }
             huntRebuildTeam();
-            bc.postMessage({ type: 'START_GARAGE', target: '*' });
+            bc.postMessage({ type: 'START_GARAGE', target: '*', sender: gState.id });
             nav('screen-garage'); initGarage();
         }
 
@@ -3253,7 +3260,7 @@
                     });
                 });
 
-                bc.postMessage({ type: 'START_MAP', target: '*', seed: s, mapDiff: gState.mapDifficulty, spawns: spawns });
+                bc.postMessage({ type: 'START_MAP', target: '*', sender: gState.id, seed: s, mapDiff: gState.mapDifficulty, spawns: spawns });
                 startGameMap(s, spawns);
             }
         }
@@ -5731,7 +5738,20 @@
         // 更新公告：只写玩家关心的，一条一句话，按时间合并成几段（原来六十多条，太长没人看）
         const CHANGELOG = [
             {
-                id: '2026-09-30-v2', date: '9 月 30 日', title: '最新', items: [
+                id: '2026-09-30-v3', date: '9 月 30 日', title: '新模式和成就', items: [
+                    '三个新模式：推推乐、彩弹占地、爬塔（爬塔能单人、双人合作、多人）',
+                    '每个模式打完都给猫盾币，赢了、连胜、每天首胜给得更多',
+                    '每周换一个活动模式，那一周猫盾币翻倍',
+                    '大厅多了「成就 · 称号」：成就能领猫盾币，称号戴在名字上面',
+                    '密室多了「今日密室」，还能自己拼关卡发给朋友玩',
+                    '竞速被淘汰后能换人看，还能跟自己最好成绩的影子比',
+                    '躲避球加了 5 对 5 快速局',
+                    '寻宝队有翻滚和受伤的动作了，每局还有个小任务',
+                    '房间里别人开寻宝队，不会再把没组队的你拽进去了'
+                ]
+            },
+            {
+                id: '2026-09-30-v2', date: '9 月 30 日', title: '界面和操作', items: [
                     '竞速开跑前有 7 秒：栏杆拦着，可以往前挤位置、顺手选技能',
                     '不用选电脑还是平板了，键盘和触屏都能用；大厅多了「设置」',
                     '方向键也能走，回车打开聊天，寻宝队按 1 / 2 / 3 换物品',
@@ -5791,6 +5811,7 @@
         function changelogBadgeSync() {
             let b = document.getElementById('changelog-badge');
             if (b) b.style.display = changelogHasUnseen() ? 'inline-block' : 'none';
+            if (typeof achBadgeSync === 'function') achBadgeSync();
         }
         function openChangelog() {
             let html = '<div style="max-height:320px; overflow-y:auto; text-align:left;">';
@@ -6556,7 +6577,7 @@
         function charBuy(mode, key) {
             if (charOwned(mode, key)) return true;
             if (coinsOf() < COIN_PRICE) {
-                showSysModal('猫盾币不够', '解锁这个角色需要 ' + COIN_PRICE + ' 猫盾币，你现在有 ' + coinsOf() + ' 个。\n打一局 +2，赢了再 +2，连胜还有额外奖励。', [{ label: '去打一局赚钱', color: '#5cb85c', onClick: function () { nav('screen-lobby'); selectGameMode('hunt'); } }, { label: '知道了' }]);
+                showSysModal('猫盾币不够', '解锁这个角色需要 ' + COIN_PRICE + ' 猫盾币，你现在有 ' + coinsOf() + ' 个。\n打一局 +3，赢了再 +4，连胜、每天首胜还有额外的。', [{ label: '去打一局赚钱', color: '#5cb85c', onClick: function () { nav('screen-lobby'); selectGameMode('hunt'); } }, { label: '知道了' }]);
                 return false;
             }
             coinsAdd(mode, -COIN_PRICE);
@@ -6567,7 +6588,6 @@
             return true;
         }
 
-        // 一局结束结算：打完 +2，赢了再 +2，连胜额外（不到 5 连 +1，5 连及以上 +2）
         // ══════════════ 隐藏分（排位）══════════════
         // 只有惊魂夜和超燃有排位。分数不给你看，它唯一的作用是决定
         // 这局的 AI 有多强 —— 打得越好，队友和对手就越难缠。
@@ -6651,6 +6671,151 @@
         }
         function coinsLine() {
             return '<div style="margin-top:8px; color:#e6a23c; font-size:13px;">' + coinsBreakText().replace(/^猫盾币 \+(\d+)/, function (m, n) { return coinBadgeHtml('+' + n, 16); }) + '</div>';
+        }
+
+
+        // ══════════════ 成就 + 称号 ══════════════
+        // 成就：做到了点「领取」拿猫盾币，有的顺带送一个称号。
+        // 称号：显示在头顶名字上面；成就送的免费，其他的拿猫盾币买（猫盾币多一个用处）。
+        // 统计都记在 gState.ach.c 里，打完一局 coinsSettle 会调 achCheck('settle')。
+        const ACH_LIST = [
+            { id: 'g1', name: '初来乍到', desc: '打完 1 局', stat: 'games', goal: 1, coin: 10 },
+            { id: 'g50', name: '老玩家', desc: '打完 50 局', stat: 'games', goal: 50, coin: 40, title: 'old' },
+            { id: 'w1', name: '第一次赢', desc: '赢 1 局', stat: 'wins', goal: 1, coin: 10 },
+            { id: 'w30', name: '常胜猫', desc: '赢 30 局', stat: 'wins', goal: 30, coin: 40, title: 'winner' },
+            { id: 'st5', name: '五连胜', desc: '同一个模式连赢 5 局', stat: 'bestStreak', goal: 5, coin: 30, title: 'streak' },
+            { id: 'all', name: '全都玩过', desc: '每个模式都打完一局', stat: 'modes', goal: 11, coin: 50, title: 'allround' },
+            { id: 'wk5', name: '活动达人', desc: '本周活动模式打 5 局', stat: 'weekly', goal: 5, coin: 20 },
+            { id: 'ht10', name: '跑腿专家', desc: '寻宝队小任务完成 10 次', stat: 'huntTask', goal: 10, coin: 30 },
+            { id: 'tw30', name: '半山腰', desc: '爬塔爬到第 30 块', stat: 'tower', goal: 30, coin: 20 },
+            { id: 'tw60', name: '塔顶', desc: '爬塔爬到顶', stat: 'tower', goal: 60, coin: 40, title: 'tower' },
+            { id: 'es15', name: '密室大师', desc: '合作密室 15 关全过', stat: 'escLevels', goal: 15, coin: 60, title: 'escape' },
+            { id: 'es30', name: '星星收集', desc: '合作密室拿到 30 颗星', stat: 'escStars', goal: 30, coin: 40 },
+            { id: 'dl7', name: '天天来', desc: '今日密室通关 7 天', stat: 'escDaily', goal: 7, coin: 30 },
+            { id: 'rich', name: '攒钱', desc: '手上攒到 500 猫盾币', stat: 'coins', goal: 500, coin: 20, title: 'rich' }
+        ];
+        // buy: 价格；ach: 哪个成就送的
+        const TITLES = {
+            old: { name: '老玩家', col: '#90caf9', ach: 'g50' },
+            winner: { name: '常胜猫', col: '#ffd54f', ach: 'w30' },
+            streak: { name: '连胜王', col: '#ff8a65', ach: 'st5' },
+            allround: { name: '全能猫盾', col: '#a5d6a7', ach: 'all' },
+            tower: { name: '塔顶', col: '#b39ddb', ach: 'tw60' },
+            escape: { name: '密室大师', col: '#80cbc4', ach: 'es15' },
+            rich: { name: '小富翁', col: '#ffe082', ach: 'rich' },
+            nap: { name: '爱睡觉', col: '#ce93d8', buy: 60 },
+            fast: { name: '跑得快', col: '#4fc3f7', buy: 80 },
+            push: { name: '推人专家', col: '#ffab91', buy: 80 },
+            paint: { name: '颜料桶', col: '#f48fb1', buy: 80 },
+            fish: { name: '小鱼干爱好者', col: '#ffcc80', buy: 120 },
+            shield: { name: '猫盾本盾', col: '#fff176', buy: 200 },
+            legend: { name: '传说', col: '#ff5252', buy: 400 }
+        };
+        function achState() {
+            if (!gState.ach || typeof gState.ach !== 'object') gState.ach = { c: {}, done: {}, got: {}, modes: {} };
+            ['c', 'done', 'got', 'modes'].forEach(function (k) { if (!gState.ach[k]) gState.ach[k] = {}; });
+            return gState.ach;
+        }
+        function achStat(key) {
+            let A = achState();
+            if (key === 'modes') return Object.keys(A.modes).length;
+            if (key === 'tower') return gState.towerBest || 0;
+            if (key === 'coins') return coinsOf();
+            if (key === 'escLevels') { let P = escProg(); return Object.keys(P.best || {}).length; }
+            if (key === 'escStars') { let P = escProg(); return Object.keys(P.best || {}).reduce(function (a, k) { return a + ((P.best[k] || {}).s || 0); }, 0); }
+            if (key === 'bestStreak') return Math.max(A.c.bestStreak || 0, Math.max.apply(null, [0].concat(Object.keys(gState.streak || {}).map(function (k) { return gState.streak[k] || 0; }))));
+            return A.c[key] || 0;
+        }
+        function achCheck(kind, data) {
+            let A = achState();
+            if (kind === 'settle') {
+                A.c.games = (A.c.games || 0) + 1;
+                if (data.won) A.c.wins = (A.c.wins || 0) + 1;
+                if (data.mode) A.modes[data.mode] = 1;
+                if (data.mode && weeklyMode() === data.mode) A.c.weekly = (A.c.weekly || 0) + 1;
+                A.c.bestStreak = achStat('bestStreak');
+            } else if (kind === 'huntTask') A.c.huntTask = (A.c.huntTask || 0) + 1;
+            else if (kind === 'escDaily') A.c.escDaily = (A.c.escDaily || 0) + 1;
+            let fresh = ACH_LIST.filter(function (a) { return !A.done[a.id] && achStat(a.stat) >= a.goal; });
+            fresh.forEach(function (a) { A.done[a.id] = 1; });
+            if (fresh.length) {
+                setTimeout(function () { blazeFlash('成就：' + fresh.map(function (a) { return a.name; }).join('、') + '（去大厅领猫盾币）'); }, 1600);
+                sfxChime(2);
+            }
+            saveProgress();
+            achBadgeSync();
+        }
+        function achClaimable() { let A = achState(); return ACH_LIST.filter(function (a) { return A.done[a.id] && !A.got[a.id]; }); }
+        function achBadgeSync() { let b = document.getElementById('ach-badge'); if (b) b.style.display = achClaimable().length ? 'block' : 'none'; }
+        function achClaim(id) {
+            let A = achState(), a = ACH_LIST.filter(function (x) { return x.id === id; })[0];
+            if (!a || !A.done[id] || A.got[id]) return;
+            A.got[id] = 1;
+            coinsAdd(null, a.coin);
+            if (a.title) { if (!gState.titles) gState.titles = {}; gState.titles[a.title] = 1; }
+            sfxChime(3);
+            saveProgress(); achBadgeSync();
+            openAchievements('ach');
+        }
+        function titleOwned(k) { return !!(TITLES[k] && (TEST_INFINITE_COINS || (gState.titles && gState.titles[k]))); }
+        function titleBuy(k) {
+            let T = TITLES[k]; if (!T || !T.buy || titleOwned(k)) return;
+            if (coinsOf() < T.buy) { blazeFlash('还差 ' + (T.buy - coinsOf()) + ' 个猫盾币'); return; }
+            coinsAdd(null, -T.buy);
+            if (!gState.titles) gState.titles = {};
+            gState.titles[k] = 1; gState.title = k;
+            saveProgress(); roomHello();
+            openAchievements('title');
+        }
+        function titleWear(k) {
+            if (k && !titleOwned(k)) return;
+            gState.title = k || null; saveProgress(); roomHello();
+            openAchievements('title');
+        }
+        function myTitle() { return gState.title && titleOwned(gState.title) ? gState.title : null; }
+        function peerTitleOf(id) { let p = roomPeers[id]; return p && p.title && TITLES[p.title] ? p.title : null; }
+        // AI 也按概率挂称号（跟表情/配饰一个规矩）
+        function aiRandomTitle() {
+            if (Math.random() > 0.2) return null;
+            let ks = Object.keys(TITLES);
+            return ks[Math.floor(Math.random() * ks.length)];
+        }
+        function openAchievements(tab) {
+            tab = tab || 'ach';
+            let A = achState(), html = '';
+            let tabBtn = function (k, label) {
+                return '<button onclick="openAchievements(\'' + k + '\')" style="margin:0; padding:5px 14px; font-size:13px; border:none; border-radius:5px; background:' + (tab === k ? '#6a1b9a' : '#e1bee7') + '; color:' + (tab === k ? '#fff' : '#6a1b9a') + ';">' + label + '</button>';
+            };
+            html += '<div style="display:flex; gap:6px; justify-content:center; margin-bottom:10px;">' + tabBtn('ach', '成就') + tabBtn('title', '称号') + '</div>';
+            if (tab === 'ach') {
+                html += '<div style="max-height:52vh; overflow-y:auto; text-align:left;">' + ACH_LIST.map(function (a) {
+                    let v = Math.min(a.goal, achStat(a.stat)), done = A.done[a.id] || v >= a.goal, got = A.got[a.id];
+                    let right = got ? '<span style="color:#9e9e9e; font-size:12px;">已领</span>' :
+                        done ? '<button onclick="achClaim(\'' + a.id + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#e6a23c; color:#fff; border:none;">领取</button>' :
+                            '<span style="color:#9e9e9e; font-size:12px;">' + v + ' / ' + a.goal + '</span>';
+                    return '<div style="display:flex; align-items:center; gap:8px; padding:7px 4px; border-top:1px solid #eee; opacity:' + (got ? 0.6 : 1) + ';">' +
+                        '<div style="flex:1;"><b style="font-size:13px;">' + a.name + '</b>' + (a.title ? ' <span style="font-size:11px; color:#8e24aa;">送称号「' + TITLES[a.title].name + '」</span>' : '') +
+                        '<div style="font-size:12px; color:#777;">' + a.desc + '　' + coinBadgeHtml('+' + a.coin, 13) + '</div>' +
+                        '<div style="height:4px; background:#eee; border-radius:2px; margin-top:3px;"><div style="height:4px; width:' + Math.round(v / a.goal * 100) + '%; background:' + (done ? '#66bb6a' : '#ba68c8') + '; border-radius:2px;"></div></div></div>' +
+                        '<div style="white-space:nowrap;">' + right + '</div></div>';
+                }).join('') + '</div>';
+            } else {
+                let cur = myTitle();
+                html += '<div style="font-size:12px; color:#777; margin-bottom:6px;">戴上以后名字上面会显示。现在有 ' + coinBadgeHtml(coinsOf(), 14) + '</div>';
+                html += '<div style="max-height:52vh; overflow-y:auto; text-align:left;">' +
+                    '<div style="display:flex; align-items:center; padding:6px 4px; border-top:1px solid #eee;"><span style="flex:1; font-size:13px; color:#999;">不戴</span>' +
+                    (cur ? '<button onclick="titleWear(null)" style="margin:0; padding:4px 10px; font-size:12px; background:#90a4ae; color:#fff; border:none;">摘掉</button>' : '<span style="font-size:12px; color:#66bb6a;">✓</span>') + '</div>' +
+                    Object.keys(TITLES).map(function (k) {
+                        let T = TITLES[k], own = titleOwned(k), on = cur === k;
+                        let right = on ? '<span style="font-size:12px; color:#66bb6a;">戴着</span>' :
+                            own ? '<button onclick="titleWear(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#7e57c2; color:#fff; border:none;">戴上</button>' :
+                                T.buy ? '<button onclick="titleBuy(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#e6a23c; color:#fff; border:none;">' + coinBadgeHtml(T.buy, 13) + '</button>' :
+                                    '<span style="font-size:11px; color:#9e9e9e;">成就「' + ACH_LIST.filter(function (a) { return a.id === T.ach; })[0].name + '」送</span>';
+                        return '<div style="display:flex; align-items:center; gap:8px; padding:6px 4px; border-top:1px solid #eee;">' +
+                            '<span style="flex:1;"><span style="display:inline-block; padding:1px 8px; border-radius:9px; background:#263238; color:' + T.col + '; font-size:12px; font-weight:bold;">' + T.name + '</span></span>' + right + '</div>';
+                    }).join('') + '</div>';
+            }
+            showSysModal('成就', html, [{ label: '关闭' }]);
         }
 
         // ══════════════ 商店：宠物 / 表情 / 角色 ══════════════
@@ -6896,7 +7061,7 @@
         function shopSpend(n) {
             if (TEST_INFINITE_COINS) return true;
             if (coinsOf() < n) {
-                showSysModal('猫盾币不够', '还差 ' + (n - coinsOf()) + ' 个。打一局 +2，赢了再 +2。', [{ label: '去打一局赚钱', color: '#5cb85c', onClick: function () { nav('screen-lobby'); selectGameMode('hunt'); } }, { label: '知道了' }]);
+                showSysModal('猫盾币不够', '还差 ' + (n - coinsOf()) + ' 个。打一局 +3，赢了再 +4。', [{ label: '去打一局赚钱', color: '#5cb85c', onClick: function () { nav('screen-lobby'); selectGameMode('hunt'); } }, { label: '知道了' }]);
                 return false;
             }
             gState.mcoin -= n; saveProgress(); return true;
@@ -8975,7 +9140,7 @@
                 };
                 scene.add(a.mesh);
                 // 头顶名字：混战/联机的时候光看剪影分不出谁是真人朋友、谁是 AI
-                let lbl = nightMakeLabel(a.name, blazeTeamCol(q.team), false);
+                let lbl = nightMakeLabel(a.name, blazeTeamCol(q.team), false, mine ? myTitle() : (q.id ? peerTitleOf(q.id) : aiRandomTitle()));
                 lbl.position.y = 20; a.mesh.add(lbl);
                 if (mine) lbl.visible = false;   // 自己头顶的名字不用给自己看
                 blaze.actors.push(a);
@@ -12442,17 +12607,27 @@
             return g;
         }
 
-        function nightMakeLabel(text, colorHex, through) {
-            let cv = document.createElement('canvas'); cv.width = 320; cv.height = 80;
+        // title：称号 key（TITLES），有的话在名字上面多画一个小牌子
+        function nightMakeLabel(text, colorHex, through, title) {
+            let T = title && TITLES[title], top = T ? 40 : 0;
+            let cv = document.createElement('canvas'); cv.width = 320; cv.height = 80 + top;
             let ctx = cv.getContext('2d');
-            ctx.fillStyle = 'rgba(15,15,20,0.78)';
-            ctx.fillRect(0, 12, 320, 56);
-            ctx.fillStyle = cssColor(colorHex, '#ffffff');
-            ctx.fillRect(0, 12, 320, 5);
-            ctx.font = 'bold 38px "Microsoft YaHei", sans-serif';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            if (T) {
+                ctx.font = 'bold 26px "Microsoft YaHei", sans-serif';
+                let tw = Math.min(300, ctx.measureText(T.name).width + 28);
+                ctx.fillStyle = 'rgba(38,50,56,0.9)';
+                ctx.fillRect(160 - tw / 2, 8, tw, 34);
+                ctx.fillStyle = T.col;
+                ctx.fillText(T.name, 160, 26);
+            }
+            ctx.fillStyle = 'rgba(15,15,20,0.78)';
+            ctx.fillRect(0, 12 + top, 320, 56);
+            ctx.fillStyle = cssColor(colorHex, '#ffffff');
+            ctx.fillRect(0, 12 + top, 320, 5);
+            ctx.font = 'bold 38px "Microsoft YaHei", sans-serif';
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(dispName(text), 160, 42);
+            ctx.fillText(dispName(text), 160, 42 + top);
             let tex = new THREE.CanvasTexture(cv);
             let sp = new THREE.Sprite(new THREE.SpriteMaterial({
                 map: tex, transparent: true, depthTest: !through
@@ -12461,8 +12636,10 @@
             // 完全不会跟着变小，糊满大半个屏幕，看着像个渲染出错的黑色方块——
             // 用 onBeforeRender 按跟镜头的距离动态缩放，远处保持原大小，贴近了收小，
             // 但留个下限（35%）不会完全缩没。
-            let ntBaseW = 22, ntBaseH = 5.5, ntWorldPos = new THREE.Vector3();
+            let ntBaseW = 22, ntBaseH = 22 * cv.height / 320, ntWorldPos = new THREE.Vector3();
             sp.scale.set(ntBaseW, ntBaseH, 1);
+            sp.userData.aspect = cv.height / 320;
+            if (T) sp.center.set(0.5, 40 / cv.height);   // 名字还在原来的位置，称号往上长
             sp.onBeforeRender = function (renderer, sc, cam) {
                 sp.getWorldPosition(ntWorldPos);
                 let d = cam.position.distanceTo(ntWorldPos);
@@ -12529,7 +12706,7 @@
                     a.mesh = nightMakeBody(ck, false, remote ? peerFaceOf(key) : aiRandomFace(), remote ? peerAccOf(key) : aiRandomAcc()); scene.add(a.mesh);
 
                     let ch = NIGHT_CHARS[ck];
-                    let lb = nightMakeLabel(remote ? key : ch.name, NIGHT_BODY[ck] || 0x3498db, playerSide === 'survivor');
+                    let lb = nightMakeLabel(remote ? key : ch.name, NIGHT_BODY[ck] || 0x3498db, playerSide === 'survivor', remote ? peerTitleOf(key) : aiRandomTitle());
                     lb.position.y = SURV_H + 8; a.mesh.add(lb);
                     if (playerSide === 'survivor') { a.xray = nightMakeXray(ck); scene.add(a.xray); }
                     nightSyncMesh(a);
@@ -22790,13 +22967,13 @@
                 // 脚下圆圈 = 这个人的颜色（彩色板认的就是它），身体可以是自己的皮肤色
                 if (mesh.userData.ring) mesh.userData.ring.material.color.setHex(role.hex);
                 if (!isP) {
-                    let label = nightMakeLabel(slot.id ? (dispName(slot.id) || slot.id) : ('队员·' + role.name), role.hex, false);
+                    let label = nightMakeLabel(slot.id ? (dispName(slot.id) || slot.id) : ('队员·' + role.name), role.hex, false, slot.id ? peerTitleOf(slot.id) : aiRandomTitle());
                     // 密室里队友经常就贴在身边，原来那个大小（22 宽）一挨近就糊住半个屏幕——收小一半多
                     let lw = new THREE.Vector3();
                     label.onBeforeRender = function (rr, sc, cam) {
                         label.getWorldPosition(lw);
                         let k = Math.min(1, Math.max(0.45, cam.position.distanceTo(lw) / 45));
-                        label.scale.set(9 * k, 2.25 * k, 1);
+                        label.scale.set(9 * k, 9 * k * (label.userData.aspect || 0.25), 1);
                     };
                     label.position.y = 15; mesh.add(label);
                 }
@@ -22843,7 +23020,7 @@
                 let rec = !prev || t < prev.t;
                 if (n === 'daily') {
                     let day = localDayNum(), D = gState.escDaily;
-                    if (!D || D.day !== day) { reward = 10; gState.escDaily = { day: day, t: tr }; }
+                    if (!D || D.day !== day) { reward = 10; gState.escDaily = { day: day, t: tr }; achCheck('escDaily'); }
                     else { rec = tr < D.t; prev = { t: D.t }; if (rec) D.t = tr; }
                 }
                 if (!special) {
@@ -24213,7 +24390,7 @@
                 let sp = spawns[i];
                 let name = q.id ? dispName(q.id) : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
                 // 头顶名字：联机的时候一堆猫盾身体长得一样，不然根本分不清谁是真人朋友
-                let label = nightMakeLabel(name, col, false);
+                let label = nightMakeLabel(name, col, false, isP ? myTitle() : (q.id ? peerTitleOf(q.id) : aiRandomTitle()));
                 label.position.y = 13.5; mesh.add(label);
                 if (isP) label.visible = false;   // 第三人称镜头就在自己背后，自己头顶的名字一直挡在画面正中
                 let a = {
@@ -24333,7 +24510,7 @@
                 let mesh = raceMakeBody(col, 0, true, isP ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()), isP ? myFace() : (q.id ? peerFaceOf(q.id) : aiRandomFace()));
                 nmAdd(mesh);
                 let name = q.id ? dispName(q.id) : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
-                let label = nightMakeLabel(name, col, false);
+                let label = nightMakeLabel(name, col, false, isP ? myTitle() : (q.id ? peerTitleOf(q.id) : aiRandomTitle()));
                 label.position.y = 16; mesh.add(label);
                 if (isP) label.visible = false;
                 let sp = spawns[i];
@@ -24611,9 +24788,9 @@
             let def = nm.def, me = nm.me;
             let won = def.didWin(nm, res, me);
             let text = def.resultText(nm, res);
+            if (def.afterEnd) def.afterEnd(nm, res, won);   // 先记最好成绩，成就才能马上算到
             coinsSettle(nm.mode, won);
             text += coinsLine();
-            if (def.afterEnd) def.afterEnd(nm, res, won);
             let mode = nm.mode, opt = nm.opt;
             let btns = [];
             if (!nm.net) btns.push({ label: '再来一局', color: '#1e88e5', onClick: function () { nmTeardown(); nmStartGo(mode, opt); } });
@@ -25231,7 +25408,7 @@
                 let mesh = raceMakeBody(aiSkinColor(col), 0, true, aiRandomAcc(), aiRandomFace());
                 // 真人头顶有名字，路人却没有——一群猫盾凑一起，光看身体颜色根本分不出
                 // 谁是真人朋友、谁是凑数的路人，得靠头顶名字才能看清爽。
-                let label = nightMakeLabel(name, col, false);
+                let label = nightMakeLabel(name, col, false, aiRandomTitle());
                 label.position.y = 13.5; mesh.add(label);
                 scene.add(mesh);
                 let x = (Math.random() - 0.5) * HUB.plazaHalf, z = (Math.random() - 0.5) * HUB.plazaHalf;
@@ -25472,7 +25649,7 @@
             let w = hub.realPlayers[m.sender];
             if (!w) {
                 let mesh = raceMakeBody(0xff8a65, 0, true, peerAccOf(m.sender), peerFaceOf(m.sender));
-                let label = nightMakeLabel(m.sender, 0xff8a65, false);
+                let label = nightMakeLabel(m.sender, 0xff8a65, false, peerTitleOf(m.sender));
                 label.position.y = 13.5; mesh.add(label);
                 scene.add(mesh);
                 w = hub.realPlayers[m.sender] = {
