@@ -4263,6 +4263,46 @@
             return chaseCamLastDir;
         }
 
+        // ── 寻宝队 / 惊魂夜的第三人称 ──
+        // 这两个模式原来是第一人称，而且整套逻辑（碰撞、开箱、修机、联机同步……）都把 camera.position
+        // 当成"人"站的位置。那些一概不动：只在画这一帧的时候把镜头沿视线往身后挪，碰到墙就停在墙前面，
+        // 朝向对准"眼睛"视线远处那一点——准星指的还是原来那个地方。画完把镜头原样放回去。
+        let tpLastD = 0;
+        function tpRender(o) {
+            let eye = camera.position.clone();
+            let rx = camera.rotation.x, ry = camera.rotation.y, rz = camera.rotation.z;
+            let dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+            let back = o.back, up = o.up, d = 0;
+            for (let st = 1; st <= back; st++) {
+                if (o.blocked(eye.x - dir.x * st, eye.z - dir.z * st, eye.y - dir.y * st + up * st / back)) break;
+                d = st;
+            }
+            d = Math.max(0, d - 2);   // 跟墙留点空，不然镜头贴着墙面会穿进墙里
+            // 离墙近了立刻收进来（不然会穿墙）；离开墙往外退的时候慢慢退，不会一跳一跳的
+            tpLastD = d < tpLastD ? d : tpLastD + (d - tpLastD) * 0.15;
+            d = tpLastD;
+            let cy = eye.y - dir.y * d + up * d / back;
+            if (o.yMin !== undefined) cy = Math.max(o.yMin, Math.min(o.yMax, cy));
+            if (o.self) o.self.visible = d > (o.hideBelow || 6);   // 被墙挤到贴着自己后背的时候不画自己，不然满屏都是后背
+            camera.position.set(eye.x - dir.x * d, cy, eye.z - dir.z * d);
+            camera.lookAt(eye.x + dir.x * 60, eye.y + dir.y * 60, eye.z + dir.z * 60);
+            renderer.render(scene, camera);
+            camera.position.copy(eye); camera.rotation.set(rx, ry, rz); camera.updateMatrixWorld();
+        }
+        // 自己的身体摆到"眼睛"下面：朝向跟视线一致，走起来摆腿（raceMakeBody 的腿/胳膊）
+        function tpPoseSelf(mesh, footY, faceRotY, dt) {
+            let u = mesh.userData;
+            let px = camera.position.x, pz = camera.position.z;
+            let sp = u.tpLast ? Math.hypot(px - u.tpLast.x, pz - u.tpLast.z) / Math.max(dt, 0.001) : 0;
+            u.tpLast = { x: px, z: pz };
+            mesh.position.set(px, footY, pz);
+            mesh.rotation.y = faceRotY;
+            let run = Math.min(1, sp / 30);
+            u.tpT = (u.tpT || 0) + dt * (2 + run * 14);
+            if (u.legs) { u.legs[0].rotation.x = Math.sin(u.tpT) * 0.9 * run; u.legs[1].rotation.x = -Math.sin(u.tpT) * 0.9 * run; }
+            if (u.arms) { u.arms[0].rotation.x = -Math.sin(u.tpT) * 0.7 * run; u.arms[1].rotation.x = Math.sin(u.tpT) * 0.7 * run; }
+        }
+
         // 各模式各有各的「在局内」标志：寻宝队看 isPlaying，惊魂夜看 night，超燃看 blaze……
         // 大厅广场（hub）、松饼大作战（cake）当时加的时候漏加了，导致触屏在这两个模式里转不动视角。
         function touchLookActive() {
@@ -5590,7 +5630,9 @@
                     '联机时有人走了或掉线，AI 帮他顶上；惊魂夜房主走了也能打完',
                     '密室变成 15 关，越往后越难',
                     '修了一堆界面问题，手机上好用多了',
-                    '商店换的表情现在真的会戴在脸上了（别人也看得到），加了「默认」脸'
+                    '表情分成「角色的脸」和「宠物的脸」各选各的，商店里能看到换上的样子',
+                    '寻宝队和惊魂夜也改成第三人称了',
+                    'AI 也会戴商店里的表情、配饰、颜色，超燃里有的还带宠物'
                 ]
             },
             {
@@ -6551,6 +6593,7 @@
             if (!sh.faceV2) { if (!sh.face || sh.face === 'normal') sh.face = 'cat'; sh.faceV2 = 1; }
             if (!sh.petDays) sh.petDays = {};
             if (!sh.face || !SHOP_FACES[sh.face]) sh.face = 'cat';
+            if (!sh.petFace || !SHOP_FACES[sh.petFace]) sh.petFace = 'normal';   // 宠物原来一直是这张
             return sh;
         }
 
@@ -6641,21 +6684,58 @@
             return out;
         }
 
+        // 表情分两份：角色戴的、宠物戴的，各选各的（原来只有一份，而且只贴在宠物上）。
+        // 上面放一张预览——游戏里镜头都在身后，自己的脸平时看不见，得在这儿能看到换上是什么样。
+        let shopFaceTarget = 'me';
         function shopFaceHtml() {
             let sh = shopState();
-            let out = '<div style="font-size:12px; color:#888; margin-bottom:8px; text-align:left;">只换脸，不加属性。</div>';
+            let pet = shopFaceTarget === 'pet';
+            let cur = pet ? sh.petFace : sh.face;
+            let seg = function (t, label) {
+                let on = shopFaceTarget === t;
+                return '<button onclick="shopFaceTarget=\'' + t + '\'; shopTab(\'face\')" style="flex:1; margin:0; padding:6px 0; font-size:13px; border:none; border-radius:6px; background:' +
+                    (on ? '#546e7a' : '#eceff1') + '; color:' + (on ? '#fff' : '#555') + ';">' + label + '</button>';
+            };
+            let out = '<div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">' +
+                '<img src="' + shopFacePreviewImg() + '" style="width:84px; height:96px; border-radius:8px; background:#dfe8ee; flex-shrink:0;">' +
+                '<div style="flex:1; text-align:left;"><div style="display:flex; gap:6px; margin-bottom:6px;">' + seg('me', '角色的脸') + seg('pet', '宠物的脸') + '</div>' +
+                '<div style="font-size:12px; color:#888; line-height:1.5;">' +
+                (pet ? (sh.pet ? '宠物跟着你的时候戴这张。' : '还没有宠物，先去「宠物」买一只。') : '所有模式里你都戴这张，别人也看得到。') +
+                '</div></div></div>';
             Object.keys(SHOP_FACES).forEach(function (k) {
-                let d = SHOP_FACES[k], owned = d.price === 0 || !!sh.faces[k], on = sh.face === k;
+                let d = SHOP_FACES[k], owned = d.price === 0 || !!sh.faces[k], on = cur === k;
                 out += shopRow(
                     '<div style="display:flex; justify-content:space-between; align-items:center;">' +
                     '<span style="display:flex; align-items:center; gap:8px;"><b style="display:inline-block; width:3em;">' + d.name + '</b><img src="' + facePreview(k) + '" ' +
                     'style="width:34px; height:34px; vertical-align:middle; background:#cfd8dc; border-radius:6px;"></span>' +
                     (owned
-                        ? '<button onclick="shopEquipFace(\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:' + (on ? '#5cb85c' : '#999') + '; color:#fff; border:none;">' + (on ? '使用中' : '装备') + '</button>'
+                        ? '<button onclick="shopEquipFace(\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:' + (on ? '#5cb85c' : '#999') + '; color:#fff; border:none;">' + (on ? '使用中' : '换上') + '</button>'
                         : '<button onclick="shopBuyFace(\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:#e6a23c; color:#fff; border:none;">' + coinBadgeHtml(d.price, 14) + '</button>') +
                     '</div>');
             });
             return out;
+        }
+        // 预览图：角色 = 开始页那只猫盾（身体颜色跟皮肤走）；宠物 = 一个圆球。脸直接用游戏里那张贴图。
+        function shopFacePreviewImg() {
+            let sh = shopState();
+            let cv = document.createElement('canvas'); cv.width = 168; cv.height = 192;
+            let g = cv.getContext('2d');
+            let pet = shopFaceTarget === 'pet';
+            let face = faceCanvas(pet ? sh.petFace : sh.face);
+            if (pet) {
+                let st = sh.pet ? petStage(sh.pet) : null;
+                g.fillStyle = st ? st.def.css : '#b0bec5';
+                g.beginPath(); g.arc(84, 104, 58, 0, Math.PI * 2); g.fill();
+                g.drawImage(face, 34, 50, 100, 100);
+            } else {
+                let c = mySkinColor(0x66bb6a);
+                g.fillStyle = '#' + c.toString(16).padStart(6, '0');
+                g.beginPath();   // 两只尖耳朵 + 圆角身体
+                g.moveTo(30, 70); g.lineTo(46, 22); g.lineTo(66, 58); g.lineTo(102, 58); g.lineTo(122, 22); g.lineTo(138, 70);
+                g.lineTo(138, 164); g.quadraticCurveTo(138, 180, 122, 180); g.lineTo(46, 180); g.quadraticCurveTo(30, 180, 30, 164); g.closePath(); g.fill();
+                g.drawImage(face, 42, 62, 84, 84);
+            }
+            try { return cv.toDataURL(); } catch (e) { return ''; }
         }
 
         // 商店里的小头像：直接把游戏里那张脸画出来，所见即所得
@@ -6701,9 +6781,14 @@
         function shopEquipPet(k) { let sh = shopState(); sh.pet = k; saveProgress(); shopTab('pet'); }
         function shopBuyFace(k) {
             let d = SHOP_FACES[k]; if (!d || !shopSpend(d.price)) return;
-            let sh = shopState(); sh.faces[k] = 1; sh.face = k; saveProgress(); shopTab('face');
+            let sh = shopState(); sh.faces[k] = 1; saveProgress();
+            shopEquipFace(k);
         }
-        function shopEquipFace(k) { let sh = shopState(); sh.face = k; saveProgress(); shopTab('face'); }
+        function shopEquipFace(k) {
+            let sh = shopState();
+            if (shopFaceTarget === 'pet') sh.petFace = k; else sh.face = k;
+            saveProgress(); shopTab('face');
+        }
         function shopBuyChar(mode, k) { if (charBuy(mode, k)) { saveProgress(); shopTab('char'); } }
 
         // 加成卡分两类：
@@ -8025,13 +8110,14 @@
             return cv;
         }
 
-        function blazeMakeBody(key, team, faceKey) {
+        function blazeMakeBody(key, team, faceKey, acc) {
             let g = new THREE.Group();
             let col = BLAZE_CHARS[key].color;
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.BoxGeometry(6, 11, 4), mat);
             body.position.y = 5.5; g.add(body);
             addCatFace(g, 8, 2.02, faceKey);   // 超燃的身体原来没有脸
+            if (acc) addAccessories(g, 8, 2.02, 12.9, 4.2, acc);   // 配饰原来在超燃里也不显示
             // 圆锥段数从 4 提到 8——4 段是个尖顶四棱锥，贴脸/侧着看某些角度会显得
             // 像一块扁扁的三角形（跟贴图似的），8 段看着才是个正常的圆锥耳朵。
             // 身体箱体半宽是 3，耳朵半径 1.6——之前偏移 1.8 会让耳朵外沿到 3.4，
@@ -8185,7 +8271,18 @@
             let sh = shopState();
             if (!sh.pet) return null;
             let st = petStage(sh.pet); if (!st) return null;
-            let d = st.def;
+            return makePetMesh(st.def, st.st, sh.petFace);
+        }
+        // AI 也会带宠物（纯外观，不给它们加数值）：随机一种宠物、随机一个阶段、随机一张脸
+        function aiRandomPet() {
+            if (Math.random() > AI_PET_CHANCE) return null;
+            let ks = Object.keys(SHOP_PETS);
+            let d = SHOP_PETS[ks[Math.floor(Math.random() * ks.length)]];
+            let st = d.stages[Math.floor(Math.random() * d.stages.length)];
+            return makePetMesh(d, st, Math.random() < 0.5 ? 'normal' : aiRandomFace());
+        }
+        function makePetMesh(d, stage, faceKey) {
+            let st = { st: stage };
             let geo = d.shape === 'cone' ? new THREE.ConeGeometry(2, 4, 8)
                 : d.shape === 'box' ? new THREE.BoxGeometry(3.2, 3.2, 3.2)
                     : d.shape === 'octa' ? new THREE.OctahedronGeometry(2.2)
@@ -8201,7 +8298,7 @@
             // 表情贴在宠物脸上。用 Sprite 是因为宠物一直在自转，
             // 贴片会转到背面去看不见；Sprite 永远正对镜头。
             let face = new THREE.Sprite(new THREE.SpriteMaterial({
-                map: makeFaceTexture(shopState().face), transparent: true, depthTest: false
+                map: faceTexFor(faceKey), transparent: true, depthTest: false
             }));
             face.renderOrder = 940;
             face.scale.set(4.4, 4.4, 1);
@@ -8215,6 +8312,16 @@
         }
 
         function blazePetTick(dt) {
+            if (blaze && blaze.aiPets) blaze.aiPets.forEach(function (pm) {
+                let a = pm.userData.owner; if (!a) return;
+                pm.userData.t = (pm.userData.t || Math.random() * 6) + dt;
+                let f = blazeDirOf(a);
+                let tx = a.p.x - f.x * 9 - f.z * 7, tz = a.p.z - f.z * 9 + f.x * 7;
+                let ty = (a.floor || 0) * BLAZE.floorH + 14 + Math.sin(pm.userData.t * 2.2) * 1.6;
+                pm.position.lerp(new THREE.Vector3(tx, ty, tz), Math.min(1, dt * 6));
+                if (pm.userData.body) pm.userData.body.rotation.y += dt * 1.4;
+                pm.visible = a.alive;
+            });
             if (!blaze || !blaze.pet || !blaze.me) return;
             let a = blaze.me;
             blaze.petT = (blaze.petT || 0) + dt;
@@ -8734,7 +8841,7 @@
                     invisAtk: 0, invisGrace: 0, burstLock: 0,
                     usedRevive: false, usedPanic: false, stunGrow: 0,
                     floor: 0, teleCd: 0,
-                    mesh: blazeMakeBody(q.key, q.team, mine ? myFace() : (q.id ? peerFaceOf(q.id) : 'cat'))
+                    mesh: blazeMakeBody(q.key, q.team, mine ? myFace() : (q.id ? peerFaceOf(q.id) : aiRandomFace()), mine ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()))
                 };
                 scene.add(a.mesh);
                 // 头顶名字：混战/联机的时候光看剪影分不出谁是真人朋友、谁是 AI
@@ -8767,6 +8874,11 @@
                 blazeAutoPickPerks(false);
             }
             blaze.pet = blazeMakePet();
+            blaze.aiPets = [];
+            blaze.actors.forEach(function (a) {
+                if (a.isPlayer || a.netId) return;
+                let pm = aiRandomPet(); if (pm) { pm.userData.owner = a; blaze.aiPets.push(pm); }
+            });
             blaze.raf = requestAnimationFrame(blazeLoop);
         }
 
@@ -8842,6 +8954,7 @@
             if (blaze && blaze.ring) scene.remove(blaze.ring);
             if (blaze) { blazeClearBuilds(); blazeFfaClearChests(); blazeTombClear(); }
             if (blaze && blaze.pet) scene.remove(blaze.pet);
+            if (blaze && blaze.aiPets) blaze.aiPets.forEach(function (pm) { scene.remove(pm); });
             if (blaze && blaze.aimRing) scene.remove(blaze.aimRing);
             if (blaze && blaze.aimCone) scene.remove(blaze.aimCone);
             if (blaze && blaze.aimLine) scene.remove(blaze.aimLine);
@@ -12116,7 +12229,7 @@
         const HUNTER_BODY = { hunter: 0xffd21e, hmi: 0x6ec6ff, hgou: 0x8bc34a, hmeow: 0xba68c8, h3: 0xff7043, h4: 0x9e9e9e };
         const HUNTER_HORN = { hunter: 0xa1671b, hmi: 0x1e5f8f, hgou: 0x33691e, hmeow: 0x5e35b1, h3: 0x8c3a1c, h4: 0x4f4f4f };
 
-        function nightMakeBody(charKey, isHunter) {
+        function nightMakeBody(charKey, isHunter, faceKey, acc) {
             let g = new THREE.Group();
             let col = isHunter ? (HUNTER_BODY[charKey] || 0xffd21e) : (NIGHT_BODY[charKey] || 0x3498db);
             let h = isHunter ? HUNTER_H : SURV_H;
@@ -12166,13 +12279,19 @@
                 });
             }
 
-            let eyeGeo = new THREE.BoxGeometry(isHunter ? 1.6 : 0.8, isHunter ? 1.6 : 0.8, 0.4);
-            let eyeMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
-            [-1, 1].forEach(function (s) {
-                let eye = new THREE.Mesh(eyeGeo, eyeMat);
-                eye.position.set(s * (isHunter ? 2.2 : 1.4), h - (isHunter ? 3.5 : 2.2), isHunter ? 3.1 : 2.1);
-                g.add(eye);
-            });
+            if (isHunter) {
+                let eyeGeo = new THREE.BoxGeometry(1.6, 1.6, 0.4);
+                let eyeMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+                [-1, 1].forEach(function (s) {
+                    let eye = new THREE.Mesh(eyeGeo, eyeMat);
+                    eye.position.set(s * 2.2, h - 3.5, 3.1);
+                    g.add(eye);
+                });
+            } else {
+                // 逃生者跟别的模式一样戴商店表情和配饰（身体尺寸跟 raceMakeBody 一样，位置参数照抄）
+                addCatFace(g, 8, 2.02, faceKey);
+                if (acc) addAccessories(g, 8, 2.02, 12.9, 4.2, acc);
+            }
 
             if (isHunter) {
 
@@ -12271,7 +12390,7 @@
                     struggle: 0, struggleAt: 0
                 };
                 if (!isPlayer) {
-                    a.mesh = nightMakeBody(ck, false); scene.add(a.mesh);
+                    a.mesh = nightMakeBody(ck, false, remote ? peerFaceOf(key) : aiRandomFace(), remote ? peerAccOf(key) : aiRandomAcc()); scene.add(a.mesh);
 
                     let ch = NIGHT_CHARS[ck];
                     let lb = nightMakeLabel(remote ? key : ch.name, NIGHT_BODY[ck] || 0x3498db, playerSide === 'survivor');
@@ -15467,7 +15586,37 @@
             } else { night.escapeProg = 0; }
 
             nightHUD();
-            renderer.render(scene, camera);
+            nightRender(dt);
+        }
+
+        function nightRender(dt) {
+            let hunterSide = night.side === 'hunter';
+            let me = hunterSide ? night.hunter : night.survivors[0];
+            let show = !night.spectating && me && !me.out && !me.escaped && !me.onChair &&
+                !(night.hunter && night.hunter.carrying === me);
+            if (!night.selfMesh || !night.selfMesh.parent) {
+                night.selfMesh = nightMakeBody(night.char, hunterSide, myFace(), gState.acc);
+                // 追捕个子高（20），镜头被压在一层楼高度以内的话它会挡住准星——自己看自己半透明
+                if (hunterSide) night.selfMesh.traverse(function (o) {
+                    if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.35; o.material.depthWrite = false; }
+                });
+                mapExtraAdd(night.selfMesh);
+            }
+            let sm = night.selfMesh;
+            sm.visible = show;
+            if (show) {
+                let dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+                sm.position.set(camera.position.x, me.gy || 0, camera.position.z);
+                sm.rotation.y = -Math.atan2(dir.z, dir.x) + Math.PI / 2;
+                sm.scale.y = me.downed ? 0.22 : 1;
+            }
+            // 楼里（楼板底下/二楼）头顶有天花板，镜头最高只到脚下往上一层楼，不然会穿到屋顶上面去
+            let feet = camera.position.y - EYE_H;
+            tpRender({
+                back: hunterSide ? 32 : 26, up: hunterSide ? 18 : 7, self: show ? sm : null,
+                yMin: feet + 3, yMax: feet + DECK_H - 3, hideBelow: hunterSide ? 20 : 8,
+                blocked: function (x, z) { return checkCol(x, z, 9, 0); }
+            });
         }
 
         // 右上角每个逃生者的状态图标：用开始页那只猫盾的样子（圆角身体 + 两只尖耳朵）。
@@ -15724,6 +15873,12 @@
                 if (member.id === gState.id) return;
                 if (member.isAI && !huntAiOn()) return;
                 let m = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 10), new THREE.MeshLambertMaterial({ color: 0x3498db })); m.position.set(camera.position.x + (idx + 1) * 4, 5, camera.position.z + 4);
+                // 队友原来就是一根蓝色圆柱。圆柱留着（逻辑/碰撞/射线都认它），只是不画出来，
+                // 上面挂一只猫盾身体——AI 队友也会随机戴商店里的表情/配饰/颜色，真人队友戴他自己的。
+                m.material.visible = false;
+                let body = raceMakeBody(member.isAI ? aiSkinColor(0x3498db) : 0x3498db, 0, true,
+                    member.isAI ? aiRandomAcc() : peerAccOf(member.id), member.isAI ? aiRandomFace() : peerFaceOf(member.id));
+                body.scale.setScalar(0.8); body.position.y = -5; m.add(body);
                 m.userData = { type: 'ai', name: member.id, hp: 100, hasMed: true, hasRev: true, hasWep: true, atkCd: 0, chest: null, openTimer: 0, path: null, pathFloor: -1, stairGoal: null, skip: {}, skipAge: 0, floorLock: 0, stuck: 0, isRealPlayer: !member.isAI }; scene.add(m); entities.push(m);
             });
         }
@@ -16172,10 +16327,30 @@
                 else if (gState.deathPos) { camera.position.copy(gState.deathPos); }
             }
 
-            renderer.render(scene, camera);
+            huntRender(dt);
 
             let now = Date.now();
             if (now - lastSyncTime > 50) { bc.postMessage({ type: 'POS_SYNC', sender: gState.id, target: '*', x: camera.position.x, y: camera.position.y, z: camera.position.z }); lastSyncTime = now; }
+        }
+
+        let huntSelf = null;
+        function huntRender(dt) {
+            let alive = !gState.isDead && !gState.hasLeft;
+            if (alive && (!huntSelf || !huntSelf.parent)) {
+                huntSelf = raceMakeBody(mySkinColor(gState.char === 'yellow' ? 0xffd54f : 0x66bb6a), 0, true, gState.acc, myFace());
+                huntSelf.scale.setScalar(0.8);   // 眼睛高 9，身体压到 9 以下，镜头从头顶看过去不挡准星
+                mapExtraAdd(huntSelf);   // 退出/下一张图时跟地图一起清掉
+            }
+            if (huntSelf) {
+                huntSelf.visible = alive;
+                if (alive) tpPoseSelf(huntSelf, camera.position.y - 9, camera.rotation.y + Math.PI, dt);
+            }
+            let cf = Math.max(0, Math.min(FLOORS - 1, Math.floor(camera.position.y / TILE)));
+            tpRender({
+                back: 22, up: 6, self: alive ? huntSelf : null, hideBelow: 8,
+                yMin: cf * TILE + 3, yMax: cf * TILE + TILE - 3,   // 别穿到楼上/楼下去
+                blocked: function (x, z, y) { return checkCol(x, z, y, y); }
+            });
         }
 
         function handlePlayerEngine(dt) {
@@ -17602,6 +17777,17 @@
         // 什么都不戴——同屏一堆人全戴满配饰会多出很多网格，卡的话把 AI_ACC_CHANCE
         // 调低（0 就是 AI 全不戴），下面"测试开关"面板里也能直接勾。
         let AI_ACC_CHANCE = 0.3;
+        // 商店里的东西 AI 也会随机戴（规则：以后商店加什么，AI 都要按概率戴上，见 CLAUDE.md）
+        const AI_FACE_CHANCE = 0.45, AI_SKIN_CHANCE = 0.35, AI_PET_CHANCE = 0.25;
+        function aiRandomFace() {
+            if (Math.random() > AI_FACE_CHANCE) return 'cat';
+            let ks = Object.keys(SHOP_FACES).filter(function (k) { return k !== 'cat'; });
+            return ks[Math.floor(Math.random() * ks.length)];
+        }
+        // 身体颜色：不分队伍颜色的模式里，一部分 AI 换成商店皮肤颜色
+        function aiSkinColor(def) {
+            return Math.random() < AI_SKIN_CHANCE ? SKIN_COLORS[Math.floor(Math.random() * SKIN_COLORS.length)] : def;
+        }
         function aiRandomAcc() {
             if (Math.random() > AI_ACC_CHANCE) return null;
             let acc = {};
@@ -18000,9 +18186,9 @@
         }
 
         function raceMakeRacer(i, isPlayer, key, netId) {
-            let col = isPlayer ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
+            let col = isPlayer ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : (netId ? RACE_COLORS[i % RACE_COLORS.length] : aiSkinColor(RACE_COLORS[i % RACE_COLORS.length]));
             let acc = isPlayer ? gState.acc : (netId ? peerAccOf(netId) : aiRandomAcc());
-            let mesh = raceMakeBody(col, null, false, acc, isPlayer ? myFace() : (netId ? peerFaceOf(netId) : 'cat'));
+            let mesh = raceMakeBody(col, null, false, acc, isPlayer ? myFace() : (netId ? peerFaceOf(netId) : aiRandomFace()));
             scene.add(mesh);
             return {
                 idx: i, isPlayer: isPlayer, key: key,
@@ -19733,7 +19919,7 @@
                 for (let i = 0; i < n; i++) {
                     let slot = plan[jail.actors.length];
                     let isP = slot.id === gState.id;
-                    let mesh = raceMakeBody(col, JAIL.handRange, false, null, isP ? myFace() : (slot.id ? peerFaceOf(slot.id) : 'cat'));
+                    let mesh = raceMakeBody(col, JAIL.handRange, false, isP ? gState.acc : (slot.id ? peerAccOf(slot.id) : aiRandomAcc()), isP ? myFace() : (slot.id ? peerFaceOf(slot.id) : aiRandomFace()));
                     scene.add(mesh);
                     let sp = sps[i];
                     let a = {
@@ -20779,7 +20965,7 @@
                 for (let i = 0; i < n; i++) {
                     let slot = plan[dodge.actors.length];
                     let isP = slot.id === gState.id;
-                    let mesh = raceMakeBody(col, DODGE.pickupRange, false, null, isP ? myFace() : (slot.id ? peerFaceOf(slot.id) : 'cat'));
+                    let mesh = raceMakeBody(col, DODGE.pickupRange, false, isP ? gState.acc : (slot.id ? peerAccOf(slot.id) : aiRandomAcc()), isP ? myFace() : (slot.id ? peerFaceOf(slot.id) : aiRandomFace()));
                     scene.add(mesh);
                     let x = (i - (n - 1) / 2) * (DODGE.courtW / (n + 1));
                     let a = {
@@ -22154,7 +22340,7 @@
                 let slot = plan[i];
                 let isP = slot.id === gState.id;
                 let role = ESC_ROLES[i];
-                let mesh = raceMakeBody(isP ? mySkinColor(role.hex) : role.hex, 0, false, isP ? gState.acc : (slot.id ? peerAccOf(slot.id) : aiRandomAcc()), isP ? myFace() : (slot.id ? peerFaceOf(slot.id) : 'cat'));
+                let mesh = raceMakeBody(isP ? mySkinColor(role.hex) : role.hex, 0, false, isP ? gState.acc : (slot.id ? peerAccOf(slot.id) : aiRandomAcc()), isP ? myFace() : (slot.id ? peerFaceOf(slot.id) : aiRandomFace()));
                 // 脚下圆圈 = 这个人的颜色（彩色板认的就是它），身体可以是自己的皮肤色
                 if (mesh.userData.ring) mesh.userData.ring.material.color.setHex(role.hex);
                 if (!isP) {
@@ -23564,8 +23750,8 @@
             for (let i = 0; i < n; i++) {
                 let q = plan[i] || {};
                 let isP = q.id === gState.id;
-                let col = isP ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
-                let mesh = cakeMakeBody(col, CAKE.handRange, false, isP ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()), isP ? myFace() : (q.id ? peerFaceOf(q.id) : 'cat'));
+                let col = isP ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : (q.id ? RACE_COLORS[i % RACE_COLORS.length] : aiSkinColor(RACE_COLORS[i % RACE_COLORS.length]));
+                let mesh = cakeMakeBody(col, CAKE.handRange, false, isP ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()), isP ? myFace() : (q.id ? peerFaceOf(q.id) : aiRandomFace()));
                 scene.add(mesh);
                 let sp = spawns[i];
                 let name = q.id ? dispName(q.id) : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
@@ -23700,7 +23886,7 @@
                 let idx = Math.floor(Math.random() * pool.length);
                 let name = pool.length ? pool.splice(idx, 1)[0] : ('路人' + (i + 1));
                 let col = HUB_WANDER_COLORS[Math.floor(Math.random() * HUB_WANDER_COLORS.length)];
-                let mesh = raceMakeBody(col, 0, true, aiRandomAcc());
+                let mesh = raceMakeBody(aiSkinColor(col), 0, true, aiRandomAcc(), aiRandomFace());
                 // 真人头顶有名字，路人却没有——一群猫盾凑一起，光看身体颜色根本分不出
                 // 谁是真人朋友、谁是凑数的路人，得靠头顶名字才能看清爽。
                 let label = nightMakeLabel(name, col, false);
