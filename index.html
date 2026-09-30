@@ -1813,6 +1813,7 @@
                 mm: mmActive ? { mode: mmActive.mode, left: mmActive.left } : null,
                 bz: gState.blazeChar || 'bow',
                 acc: gState.acc || null,
+                face: myFace(),
                 stats: playStatsDigest()
             };
         }
@@ -1846,6 +1847,7 @@
                 left: (typeof m.left === 'number') ? m.left : null,
                 mm: m.mm || null,
                 acc: m.acc || null,
+                face: m.face || 'cat',
                 at: performance.now()
             };
             if (m.bz) blazePeerChar[m.sender] = m.bz;
@@ -5587,7 +5589,8 @@
                     '惊魂夜右上角换成小猫盾图标，受伤变红，倒地会趴下',
                     '联机时有人走了或掉线，AI 帮他顶上；惊魂夜房主走了也能打完',
                     '密室变成 15 关，越往后越难',
-                    '修了一堆界面问题，手机上好用多了'
+                    '修了一堆界面问题，手机上好用多了',
+                    '商店换的表情现在真的会戴在脸上了（别人也看得到），加了「默认」脸'
                 ]
             },
             {
@@ -6525,8 +6528,12 @@
         };
 
         // 表情只改脸，不影响任何数值
+        // 「默认」就是游戏里猫盾本来那张脸（圆点眼 + 半涂实的嘴），原来商店里写"默认"的那张
+        // 跟游戏里的脸根本不是一张，而且选了哪张都只贴到超燃宠物身上，角色本身一直是猫盾脸——
+        // 所以"换了没用"。现在选哪张，你在所有模式里的身体就贴哪张，联机别人也看得到。
         const SHOP_FACES = {
-            normal: { name: '默认', price: 0, eyes: 'dot', mouth: 'line' },
+            cat: { name: '默认', price: 0, special: 'cat' },
+            normal: { name: '乖巧', price: 0, eyes: 'dot', mouth: 'line' },
             happy: { name: '开心', price: 15, eyes: 'arc', mouth: 'smile' },
             angry: { name: '生气', price: 15, eyes: 'slant', mouth: 'frown' },
             blank: { name: '呆滞', price: 15, eyes: 'big', mouth: 'o' },
@@ -6535,12 +6542,15 @@
         };
 
         function shopState() {
-            if (!gState.shop) gState.shop = { pets: {}, faces: { normal: 1 }, pet: null, face: 'normal', petDays: {}, lastDay: '' };
+            if (!gState.shop) gState.shop = { pets: {}, faces: { cat: 1, normal: 1 }, pet: null, face: 'cat', faceV2: 1, petDays: {}, lastDay: '' };
             let sh = gState.shop;
             if (!sh.pets) sh.pets = {};
-            if (!sh.faces) sh.faces = { normal: 1 };
+            if (!sh.faces) sh.faces = { cat: 1, normal: 1 };
+            sh.faces.cat = 1;
+            // 老存档里"默认"指的是 normal，而且当时换脸根本没生效——统一回到真正的默认脸
+            if (!sh.faceV2) { if (!sh.face || sh.face === 'normal') sh.face = 'cat'; sh.faceV2 = 1; }
             if (!sh.petDays) sh.petDays = {};
-            if (!sh.face) sh.face = 'normal';
+            if (!sh.face || !SHOP_FACES[sh.face]) sh.face = 'cat';
             return sh;
         }
 
@@ -7980,7 +7990,8 @@
         }
 
         function faceCanvas(faceKey) {
-            let f = SHOP_FACES[faceKey] || SHOP_FACES.normal;
+            let f = SHOP_FACES[faceKey] || SHOP_FACES.cat;
+            if (f.special === 'cat') { let cv0 = document.createElement('canvas'); cv0.width = 64; cv0.height = 64; drawCatFace(cv0.getContext('2d')); return cv0; }
             let cv = document.createElement('canvas');
             cv.width = 64; cv.height = 64;
             let g = cv.getContext('2d');
@@ -8014,12 +8025,13 @@
             return cv;
         }
 
-        function blazeMakeBody(key, team) {
+        function blazeMakeBody(key, team, faceKey) {
             let g = new THREE.Group();
             let col = BLAZE_CHARS[key].color;
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.BoxGeometry(6, 11, 4), mat);
             body.position.y = 5.5; g.add(body);
+            addCatFace(g, 8, 2.02, faceKey);   // 超燃的身体原来没有脸
             // 圆锥段数从 4 提到 8——4 段是个尖顶四棱锥，贴脸/侧着看某些角度会显得
             // 像一块扁扁的三角形（跟贴图似的），8 段看着才是个正常的圆锥耳朵。
             // 身体箱体半宽是 3，耳朵半径 1.6——之前偏移 1.8 会让耳朵外沿到 3.4，
@@ -8722,7 +8734,7 @@
                     invisAtk: 0, invisGrace: 0, burstLock: 0,
                     usedRevive: false, usedPanic: false, stunGrow: 0,
                     floor: 0, teleCd: 0,
-                    mesh: blazeMakeBody(q.key, q.team)
+                    mesh: blazeMakeBody(q.key, q.team, mine ? myFace() : (q.id ? peerFaceOf(q.id) : 'cat'))
                 };
                 scene.add(a.mesh);
                 // 头顶名字：混战/联机的时候光看剪影分不出谁是真人朋友、谁是 AI
@@ -17668,7 +17680,20 @@
         function catFaceTexture() {
             if (catFaceTex) return catFaceTex;
             let cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
-            let g2 = cv.getContext('2d');
+            drawCatFace(cv.getContext('2d'));
+            catFaceTex = new THREE.CanvasTexture(cv);
+            return catFaceTex;
+        }
+        // 身体上贴哪张脸：每种表情一张贴图，缓存起来大家共用
+        let faceTexCache = {};
+        function faceTexFor(k) {
+            if (!k || !SHOP_FACES[k] || SHOP_FACES[k].special === 'cat') return catFaceTexture();
+            if (!faceTexCache[k]) faceTexCache[k] = makeFaceTexture(k);
+            return faceTexCache[k];
+        }
+        function myFace() { return shopState().face || 'cat'; }
+        function peerFaceOf(id) { let p = roomPeers[id]; return (p && p.face) || 'cat'; }
+        function drawCatFace(g2) {
             g2.fillStyle = '#222';
             g2.beginPath(); g2.arc(22, 19, 2.6, 0, Math.PI * 2); g2.fill();
             g2.beginPath(); g2.arc(41, 19, 2.6, 0, Math.PI * 2); g2.fill();
@@ -17681,14 +17706,12 @@
             g2.strokeStyle = '#222'; g2.lineWidth = 3; g2.lineCap = 'round';
             g2.beginPath(); g2.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g2.stroke();
             g2.beginPath(); g2.moveTo(cx, cy - ry); g2.lineTo(cx, cy + ry); g2.stroke();
-            catFaceTex = new THREE.CanvasTexture(cv);
-            return catFaceTex;
         }
         // 脸贴在身体正面（+Z，跟 faceDir 的朝向公式对上），是个普通 Mesh 不是 Sprite——
         // 要跟着身体一起转向移动方向，不能像宠物表情那样永远正对镜头。
-        function addCatFace(g, y, z) {
+        function addCatFace(g, y, z, faceKey) {
             let face = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2),
-                new THREE.MeshBasicMaterial({ map: catFaceTexture(), transparent: true, depthWrite: false }));
+                new THREE.MeshBasicMaterial({ map: faceTexFor(faceKey), transparent: true, depthWrite: false }));
             face.position.set(0, y, z); g.add(face);
         }
         // "星星"配饰要的是头顶几颗真正的五角星，绕中心缓慢旋转——不是静态摆几个
@@ -17882,12 +17905,12 @@
             if (acc.head) addAccHead(g, acc.head, hatY, faceY, faceZ);
             if (acc.waist) addAccWaist(g, acc.waist, waistY, faceZ);
         }
-        function raceMakeBody(col, handRange, hideRing, acc) {
+        function raceMakeBody(col, handRange, hideRing, acc, faceKey) {
             let g = new THREE.Group();
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.BoxGeometry(6, 11, 4), mat);
             body.position.y = 5.5; g.add(body);
-            addCatFace(g, 8, 2.02);
+            addCatFace(g, 8, 2.02, faceKey);
             // 身体半宽 3，耳朵半径 1.6，偏移收到 1.2 避免外沿(2.8)超出身体边缘（大厅/竞速/
             // 监狱救援/躲避球全用这个身体，之前 1.8 的偏移会让耳朵支棱到身体外面去）。
             let earGeo = new THREE.ConeGeometry(1.6, 3.4, 8);
@@ -17979,7 +18002,7 @@
         function raceMakeRacer(i, isPlayer, key, netId) {
             let col = isPlayer ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
             let acc = isPlayer ? gState.acc : (netId ? peerAccOf(netId) : aiRandomAcc());
-            let mesh = raceMakeBody(col, null, false, acc);
+            let mesh = raceMakeBody(col, null, false, acc, isPlayer ? myFace() : (netId ? peerFaceOf(netId) : 'cat'));
             scene.add(mesh);
             return {
                 idx: i, isPlayer: isPlayer, key: key,
@@ -19710,7 +19733,7 @@
                 for (let i = 0; i < n; i++) {
                     let slot = plan[jail.actors.length];
                     let isP = slot.id === gState.id;
-                    let mesh = raceMakeBody(col, JAIL.handRange);
+                    let mesh = raceMakeBody(col, JAIL.handRange, false, null, isP ? myFace() : (slot.id ? peerFaceOf(slot.id) : 'cat'));
                     scene.add(mesh);
                     let sp = sps[i];
                     let a = {
@@ -20756,7 +20779,7 @@
                 for (let i = 0; i < n; i++) {
                     let slot = plan[dodge.actors.length];
                     let isP = slot.id === gState.id;
-                    let mesh = raceMakeBody(col, DODGE.pickupRange);
+                    let mesh = raceMakeBody(col, DODGE.pickupRange, false, null, isP ? myFace() : (slot.id ? peerFaceOf(slot.id) : 'cat'));
                     scene.add(mesh);
                     let x = (i - (n - 1) / 2) * (DODGE.courtW / (n + 1));
                     let a = {
@@ -22131,7 +22154,7 @@
                 let slot = plan[i];
                 let isP = slot.id === gState.id;
                 let role = ESC_ROLES[i];
-                let mesh = raceMakeBody(isP ? mySkinColor(role.hex) : role.hex, 0, false, isP ? gState.acc : (slot.id ? peerAccOf(slot.id) : aiRandomAcc()));
+                let mesh = raceMakeBody(isP ? mySkinColor(role.hex) : role.hex, 0, false, isP ? gState.acc : (slot.id ? peerAccOf(slot.id) : aiRandomAcc()), isP ? myFace() : (slot.id ? peerFaceOf(slot.id) : 'cat'));
                 // 脚下圆圈 = 这个人的颜色（彩色板认的就是它），身体可以是自己的皮肤色
                 if (mesh.userData.ring) mesh.userData.ring.material.color.setHex(role.hex);
                 if (!isP) {
@@ -22723,7 +22746,7 @@
             scene.background = new THREE.Color(0x81d4fa);
             scene.fog = new THREE.FogExp2(0x81d4fa, 0.002);
 
-            let mesh = raceMakeBody(mySkinColor(0xffca28), 0, false, gState.acc);
+            let mesh = raceMakeBody(mySkinColor(0xffca28), 0, false, gState.acc, myFace());
             scene.add(mesh);
             let compiled = parkCompile(program.blocks);
             park = {
@@ -23353,12 +23376,12 @@
 
         // 松饼大作战专属身体：躯干换成圆柱（卷起来的松饼），耳朵不变，
         // 胳膊腿都改成贴着身体的矮圆墩——不再是伸得老远的细长方块。
-        function cakeMakeBody(col, handRange, hideRing, acc) {
+        function cakeMakeBody(col, handRange, hideRing, acc, faceKey) {
             let g = new THREE.Group();
             let mat = new THREE.MeshLambertMaterial({ color: col });
             let body = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10, 18), mat);
             body.position.y = 5; g.add(body);
-            addCatFace(g, 7, 4.05);
+            addCatFace(g, 7, 4.05, faceKey);
             let earGeo = new THREE.ConeGeometry(1.6, 3.2, 8);
             let ears = [];
             [-1, 1].forEach(function (sdir) {
@@ -23542,7 +23565,7 @@
                 let q = plan[i] || {};
                 let isP = q.id === gState.id;
                 let col = isP ? mySkinColor(RACE_COLORS[i % RACE_COLORS.length]) : RACE_COLORS[i % RACE_COLORS.length];
-                let mesh = cakeMakeBody(col, CAKE.handRange, false, isP ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()));
+                let mesh = cakeMakeBody(col, CAKE.handRange, false, isP ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()), isP ? myFace() : (q.id ? peerFaceOf(q.id) : 'cat'));
                 scene.add(mesh);
                 let sp = spawns[i];
                 let name = q.id ? dispName(q.id) : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
@@ -23920,7 +23943,7 @@
             if (!hub || !m.sender || m.sender === gState.id) return;
             let w = hub.realPlayers[m.sender];
             if (!w) {
-                let mesh = raceMakeBody(0xff8a65, 0, true, peerAccOf(m.sender));
+                let mesh = raceMakeBody(0xff8a65, 0, true, peerAccOf(m.sender), peerFaceOf(m.sender));
                 let label = nightMakeLabel(m.sender, 0xff8a65, false);
                 label.position.y = 13.5; mesh.add(label);
                 scene.add(mesh);
@@ -24080,7 +24103,7 @@
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
 
-            let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0, true, gState.acc);
+            let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0, true, gState.acc, myFace());
             scene.add(mesh);
             hub = {
                 meshes: [], wanderers: [], realPlayers: {}, party: [], nearby: null,
