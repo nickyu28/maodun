@@ -94,6 +94,24 @@
         /* 五栏平分宽度，屏幕够宽就一屏放下；只有窄屏放不下 168px×5 时才横向滚动。
            之前 flex-shrink:0 + 组队那栏说明文字很长，1280 宽也会把麦克风/聊天挤出屏幕，底下多一条滚动条 */
         #lobby-bottom > div { flex: 1 1 0; min-width: 168px; }
+        /* 各模式共用的顶部说明行：原来是浅橘色字直接压在天空/白墙上，只靠一层字影，
+           亮的场景里很难看清；而且外层 left:50% 定位，文字最多只能用半个屏宽，
+           手机上一句话被拆成两行、「跳跃」「地盘」这种词从中间断开。
+           给它一层半透明深色底，宽度放到屏幕减两边留白，只在全角空格处换行。 */
+        #blaze-score-wrap { width: max-content; max-width: calc(100vw - 230px); }
+        #blaze-round { display: inline-block; background: rgba(0,0,0,0.34); padding: 2px 10px; border-radius: 10px; margin-top: 2px; word-break: keep-all; line-height: 1.5; }
+        #blaze-round:empty { display: none; }
+        /* 手机横屏（矮屏）上寻宝队顶栏原来占掉 180px，将近半个屏幕；「背包」按钮又刚好压在「互动」上。
+           矮屏时六行数据排成两列、小地图缩小，背包挪到按键列左边。 */
+        @media (max-height: 520px) {
+            /* 基础规则写在后面，这里多带一层 #ui-layer 提高优先级 */
+            #ui-layer #top-hud { padding: 5px 10px; }
+            #ui-layer #stats-left { display: grid; grid-template-columns: auto auto; column-gap: 14px; row-gap: 1px; font-size: 12px; width: 250px; }
+            #ui-layer #stats-left #hunt-quit-btn { grid-column: 1 / span 2; justify-self: start; margin-top: 3px !important; }
+            #ui-layer #bars-center { gap: 8px; padding-top: 6px; }
+            #ui-layer #minimap-container { width: 84px; height: 84px; }
+            #ui-layer #phone-backpack-toggle { top: 106px; right: 130px; padding: 6px 12px; }
+        }
 
         .hidden {
             display: none !important;
@@ -1477,7 +1495,7 @@
         <button id="night-pick-back" onclick="nightPickBack()" style="margin-top:14px; background:#555; color:#fff; border:none; padding:8px 24px; font-size:14px;">返回大厅</button>
     </div>
 
-    <div id="game-over" class="screen hidden" style="background: rgba(255,255,255,0.95); z-index: 50;">
+    <div id="game-over" class="screen hidden" style="background: rgba(255,255,255,0.95); z-index: 50; justify-content: center; padding-bottom: 8vh;">
         <h1 id="go-title" style="font-size: 40px;">单局截止</h1>
         <p id="go-desc" style="font-size: 18px; color: #666;"></p>
         <button onclick="returnToGarageFromOver()" style="background:#5cb85c; color:#fff; font-size: 18px; padding: 10px 30px;">返回车库</button>
@@ -2600,12 +2618,17 @@
         // 除惊魂夜外，其它模式的 AI 也要会说话——统一走这一个小工具：
         // 每个 key 独立冷却 14s，同一个人两句话之间至少隔 3.5s，不然人多的模式（比如
         // 躲避球 10v10）一齐开口，聊天栏瞬间被刷屏。cd 状态就记在这个人自己的对象上。
+        let aiSayKeyAt = {};
         function aiSay(obj, name, key, lines) {
             if (!obj || !lines || !lines.length) return;
             if (!obj.sayCd) obj.sayCd = {};
             let now = performance.now();
             if (now - (obj.sayCd[key] || 0) < 14000) return;
             if (now - (obj.sayAny || 0) < 3500) return;
+            // 每个人各自有冷却，但同一件事大家会同时想说：躲避球一开局 6 个队友同时喊
+            // "这颗我来捡"，聊天栏被同一句话刷满。同一类话全队 6 秒内只说一次。
+            if (now - (aiSayKeyAt[key] || 0) < 6000) return;
+            aiSayKeyAt[key] = now;
             obj.sayCd[key] = now; obj.sayAny = now;
             chatPush(name, lines[Math.floor(Math.random() * lines.length)], false);
         }
@@ -2646,9 +2669,12 @@
             let lift = (key === 'hub' && lb && lb.offsetParent) ? lb.offsetHeight + 8 : 14;
             document.getElementById('chat-log').style.bottom = lift + 'px';
             document.getElementById('chat-panel').style.bottom = lift + 'px';
-            // 从某个模式回到大厅：局里 AI 队友的喊话（"这块我来站着"之类）留在大厅里没意义，清掉
-            if (key !== chatLastKey) {
-                if (key === 'hub' && chatLastKey) document.getElementById('chat-log').innerHTML = '';
+            // 离开某个模式（回大厅或直接进下一个模式）：局里 AI 队友的喊话（"这块我来站着"之类）
+            // 留着没意义，清掉。只记"上一个真正待过的模式"——结算弹窗那段 key 是 null，
+            // 之前连它一起记，再回到大厅时就以为是从 null 来的，没清，躲避球的喊话一直带进下一局。
+            // 从大厅进局不清，大厅里真人说的话还留着。
+            if (key && key !== chatLastKey) {
+                if (chatLastKey && chatLastKey !== 'hub') document.getElementById('chat-log').innerHTML = '';
                 chatLastKey = key;
             }
         }
@@ -5492,6 +5518,17 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         const CHANGELOG = [
+            {
+                id: '2026-09-30-ui-pass', date: '2026-09-30', title: '各模式界面细节修一轮', items: [
+                    '躲避球（平板/手机）：「接」和「投」原来叠在同一个位置，「投」根本点不到——分开了；说明文字也改成按键的说法，不再写左键右键。',
+                    '躲避球开局镜头退到了底墙外面，屏幕下半截全是灰墙、看不到自己——镜头现在不会出场地。',
+                    '顶部说明行加了深色底，亮的场景里也看得清；手机上不再一句话被拆成两行、词从中间断开。',
+                    '竞速：排位板不再压在「道具/冲刺」按键上（手机移到左上角只列前三名），掉出前八也能看到自己第几名。',
+                    '寻宝队（手机横屏）：顶栏从快占半屏缩到三分之一；「背包」不再压着「互动」。撤离结算页居中显示。',
+                    'AI 队友不再一开局同时喊同一句话刷屏；上一局 AI 的喊话不会带进下一局。',
+                    '松饼/超燃不再在自己头顶显示自己的名字；超燃结算时顶上比分和弹窗一致；躲避球结算补上存活人数和用时。'
+                ]
+            },
             {
                 id: '2026-09-30-net-leave', date: '2026-09-30', title: '联机中途离开/掉线：AI 接管，房主走了局也不散', items: [
                     '联机惊魂夜、寻宝队活着也能「离开本局」了：你的角色交给 AI 接着帮队友打，不会原地僵住。',
@@ -9033,6 +9070,7 @@
                 // 头顶名字：混战/联机的时候光看剪影分不出谁是真人朋友、谁是 AI
                 let lbl = nightMakeLabel(a.name, blazeTeamCol(q.team), false);
                 lbl.position.y = 20; a.mesh.add(lbl);
+                if (mine) lbl.visible = false;   // 自己头顶的名字不用给自己看
                 blaze.actors.push(a);
                 if (mine) blaze.me = a;
             });
@@ -11414,6 +11452,8 @@
                 blaze.over = true;
                 // 隐藏彩蛋：一整场打完，自己一次都没倒下
                 if (blaze.me && !blaze.me.deaths) unlockEgg('blaze_flawless');
+                // 循环马上就停了，顶上比分最后刷一次，不然结算弹窗写 10 : 3，头顶还停在 9 : 3
+                try { blazeHud(); } catch (e) { }
                 if (blaze.raf) cancelAnimationFrame(blaze.raf);
                 if (document.pointerLockElement) document.exitPointerLock();
                 let win = winner === blaze.me.team;
@@ -19069,10 +19109,22 @@
             let bd = document.getElementById('blaze-ffa-board');
             if (bd) {
                 bd.classList.remove('hidden');
+                // 平板/手机右侧那一列是 道具/冲刺/技能/跳 四个键，排位板原来就压在按键上面。
+                // 矮屏（手机横屏）挪到左上角只列前 3 + 自己；平板竖屏往下挪，让开顶上那行说明。
+                let short = padOn() && window.innerHeight < 600, narrow = window.innerWidth < 1000;
+                // 原始位置写在元素自己的 style 属性里（right:12px; width:190px; top:44px），清空会连它一起清掉，得写回原值
+                bd.style.left = short ? '10px' : ''; bd.style.right = short ? 'auto' : '12px';
+                bd.style.width = short ? '150px' : '190px';
+                bd.style.top = short ? '80px' : (narrow ? '96px' : '44px');
+                let order = alive.slice().sort(function (a, b) { return b.p.z - a.p.z; });
+                let n = short ? 3 : 8, myIdx = order.indexOf(me);
+                let rows = order.slice(0, n).map(function (r, i) { return [r, i]; });
+                if (myIdx >= n) rows.push([me, myIdx]);   // 自己掉到前几名以外也要能看到自己第几
                 bd.innerHTML = '<div style="color:#ffd54f;">本轮排位</div>' +
-                    alive.slice().sort(function (a, b) { return b.p.z - a.p.z; }).slice(0, 8).map(function (r, i) {
+                    rows.map(function (ri) {
+                        let r = ri[0];
                         return '<div style="color:' + (r === me ? '#80d8ff' : '#fff') + ';">' +
-                            (i + 1) + '. ' + r.name + (r.finished ? ' ✔' : '') + '</div>';
+                            (ri[1] + 1) + '. ' + r.name + (r.finished ? ' ✔' : '') + '</div>';
                     }).join('');
             }
         }
@@ -19316,7 +19368,7 @@
             bgmStop();
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
-            let bd = document.getElementById('blaze-ffa-board'); if (bd) bd.classList.add('hidden');
+            let bd = document.getElementById('blaze-ffa-board'); if (bd) { bd.classList.add('hidden'); bd.style.left = ''; bd.style.right = '12px'; bd.style.width = '190px'; bd.style.top = '44px'; }
             nav('screen-lobby'); selectGameMode('race');
         }
 
@@ -19986,7 +20038,7 @@
             bgmStop();
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
-            let bd = document.getElementById('blaze-ffa-board'); if (bd) bd.classList.add('hidden');
+            let bd = document.getElementById('blaze-ffa-board'); if (bd) { bd.classList.add('hidden'); bd.style.left = ''; bd.style.right = '12px'; bd.style.width = '190px'; bd.style.top = '44px'; }
             nav('screen-lobby'); selectGameMode('jail');
         }
 
@@ -20745,7 +20797,19 @@
         function dodgeCameraPos(me) {
             let dir = chaseCamDir();
             let ay = me.p.y + DODGE.camUp;
-            return { x: me.p.x - dir.x * DODGE.camBack, y: ay - dir.y * DODGE.camBack, z: me.p.z - dir.z * DODGE.camBack };
+            // 镜头不能退到场地围墙外面：开局大家都站在自己那一侧的底线上，镜头往后退 26 格
+            // 正好跑到底墙后面，屏幕下半截全是灰墙、自己的角色被整个挡住。按视线方向把镜头往前收，
+            // 收到墙里面为止。
+            let back = DODGE.camBack, m = 4;
+            let hx = DODGE.courtW / 2 - m, hz = DODGE.courtL / 2 - m;
+            let inside = Math.abs(me.p.x) <= hx && Math.abs(me.p.z) <= hz;   // 出局站在场外的不管
+            if (!inside) return { x: me.p.x - dir.x * back, y: ay - dir.y * back, z: me.p.z - dir.z * back };
+            if (dir.x > 1e-4) back = Math.min(back, (me.p.x + hx) / dir.x);
+            else if (dir.x < -1e-4) back = Math.min(back, (me.p.x - hx) / dir.x);
+            if (dir.z > 1e-4) back = Math.min(back, (me.p.z + hz) / dir.z);
+            else if (dir.z < -1e-4) back = Math.min(back, (me.p.z - hz) / dir.z);
+            back = Math.max(6, back);
+            return { x: me.p.x - dir.x * back, y: ay - dir.y * back, z: me.p.z - dir.z * back };
         }
 
         // 瞄准辅助：按住左键（还没松手）那段时间，模拟当前视角丢出去的抛物线——
@@ -20786,8 +20850,8 @@
                 (dodge.crazy ? '躲避球·疯狂　' : '躲避球·经典　') +
                 '我方存活 ' + (me.team === 0 ? a0 : a1) + '　对面存活 ' + (me.team === 0 ? a1 : a0) +
                 (me.out ? '　你被淘汰了，等复活'
-                    : me.holding ? (me.mustReturn ? '　中线球，先跑回本方边线再出手！' : ('　手里有' + dodgeKindName(me.holding.kind) + '，按住左键瞄准/松手投出，点一下放下'))
-                        : '　左键点一下捡球，右键接球，空格跳跃');
+                    : me.holding ? (me.mustReturn ? '　中线球，先跑回本方边线再出手！' : ('　手里有' + dodgeKindName(me.holding.kind) + (padOn() ? '，按住「投」瞄准/松手投出，点一下放下' : '，按住左键瞄准/松手投出，点一下放下')))
+                        : (padOn() ? '　点「投」捡球，「接」接球' : '　左键点一下捡球，右键接球，空格跳跃'));
             document.getElementById('blaze-roster').innerHTML = '';
             let pct = Math.max(0, me.stamina / DODGE.staminaMax * 100);
             let bar = document.getElementById('blaze-hpbar');
@@ -20802,6 +20866,11 @@
             let title, text = '';
             if (winTeam === null) { title = '平局'; text = '时间到，双方存活人数一样多。'; }
             else title = (winTeam === me.team) ? '你的队伍获胜' : '你的队伍输了';
+            // 结算原来只有一行标题，别的模式都有比分/用时，这里补上
+            let alive = function (t) { return dodge.actors.filter(function (a) { return a.team === t && !a.out; }).length; };
+            let secs = Math.round(Math.min(dodge.clock, DODGE.matchTime));
+            text += (text ? '<br>' : '') + '存活：我方 ' + alive(me.team) + ' 人 · 对面 ' + alive(1 - me.team) + ' 人　用时 ' +
+                Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
             showSysModal(title, text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { dodgeExit(); } }]);
         }
 
@@ -20913,7 +20982,8 @@
             // 超燃的普攻键写着「投」，竞速/松饼/密室的跳键写着「接」
             if (atk) { atk.innerText = on ? '投' : '普攻'; atk.style.display = (on && pad) ? 'flex' : 'none'; }
             let jb = document.getElementById('race-jump-btn');
-            if (jb) { jb.innerText = on ? '接' : '跳'; jb.style.display = (on && pad) ? 'flex' : 'none'; }
+            // 「接」原来跟「投」是同一个位置（bottom:100 right:20），接叠在上面，平板上根本点不到「投」
+            if (jb) { jb.innerText = on ? '接' : '跳'; jb.style.right = on ? '120px' : '20px'; jb.style.display = (on && pad) ? 'flex' : 'none'; }
             let jump = document.getElementById('blaze-jump-btn');
             if (jump) { jump.innerText = '跳'; jump.style.display = (on && pad) ? 'flex' : 'none'; }
             let rb = document.getElementById('run-btn');
@@ -21066,7 +21136,7 @@
             bgmStop();
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
-            let bd = document.getElementById('blaze-ffa-board'); if (bd) bd.classList.add('hidden');
+            let bd = document.getElementById('blaze-ffa-board'); if (bd) { bd.classList.add('hidden'); bd.style.left = ''; bd.style.right = '12px'; bd.style.width = '190px'; bd.style.top = '44px'; }
             nav('screen-lobby'); selectGameMode('dodge');
         }
 
@@ -22285,6 +22355,8 @@
             if (sw) {
                 sw.style.left = on ? '0' : '50%'; sw.style.right = on ? '0' : '';
                 sw.style.transform = on ? 'none' : 'translateX(-50%)'; sw.style.pointerEvents = on ? 'none' : '';
+                // 通用样式给了 width:max-content（让说明行能用满屏宽），这里铺满左右时要改回 auto，不然整块贴到左边
+                sw.style.width = on ? 'auto' : ''; sw.style.maxWidth = on ? 'none' : '';
             }
             let br = document.getElementById('blaze-round');
             if (br) {
@@ -22826,7 +22898,7 @@
             let varNames = Object.keys(park.vars);
             let varTxt = varNames.length ? '　' + varNames.map(function (n) { return n + ':' + park.vars[n]; }).join(' ') : '';
             document.getElementById('blaze-score').innerText = scoreTxt + '　' + Math.ceil(remain) + 's';
-            document.getElementById('blaze-round').innerText = (park.program.name || '猫盾乐园') + '　WASD 移动去碰物品' + varTxt;
+            document.getElementById('blaze-round').innerText = (park.program.name || '猫盾乐园') + (padOn() ? '　摇杆移动去碰物品' : '　WASD 移动去碰物品') + varTxt;
         }
         function parkEndMatch(won) {
             if (!park || park.over) return;
@@ -23290,7 +23362,7 @@
             let remain = Math.max(0, CAKE.matchTime - cake.clock);
             document.getElementById('blaze-score').innerText = '存活 ' + live + ' / ' + cake.actors.length + '　' + Math.ceil(remain) + 's';
             document.getElementById('blaze-round').innerText =
-                '松饼大作战　面朝对方并进入手的范围即可拍出局，最后剩下的人赢　已拍出局 ' + (me.kills || 0) + ' 人' +
+                '松饼大作战　面朝对方、走进手的范围就能拍出局　已拍出局 ' + (me.kills || 0) + ' 人' +
                 (me.out ? '　你已出局，正在观战' : '') +
                 (me.shieldT > 0 ? '　护盾' : '') +
                 (me.speedT > 0 ? '　加速中' : '') +
@@ -23762,6 +23834,7 @@
                 // 头顶名字：联机的时候一堆猫盾身体长得一样，不然根本分不清谁是真人朋友
                 let label = nightMakeLabel(name, col, false);
                 label.position.y = 13.5; mesh.add(label);
+                if (isP) label.visible = false;   // 第三人称镜头就在自己背后，自己头顶的名字一直挡在画面正中
                 let a = {
                     idx: i, isPlayer: isP, col: col, name: name,
                     netId: q.id || null, remote: !!(q.id && !isP), target: null,
@@ -24275,6 +24348,7 @@
                 scoreWrap.style.right = 'calc(14px + min(320px, 50vw) + 12px)';
                 scoreWrap.style.transform = 'none';
                 scoreWrap.style.minWidth = '150px';
+                scoreWrap.style.width = 'auto'; scoreWrap.style.maxWidth = 'none';   // 左右两边卡住了，别用通用的 max-content
                 // min-width 兜底之后，窄屏下这行会比中间缝更宽，往右盖住 lobby-tr
                 // 那排"选择模式/寻宝队/开始游戏"按钮——挪到那排按钮下方，就不叠字了。
                 scoreWrap.style.top = window.innerWidth < 480 ? '74px' : '10px';
@@ -24326,7 +24400,7 @@
             // 大厅专用的窄化定位只对大厅有意义——其它模式没有 lobby-tl/tr 那两块面板，
             // 离开大厅要把这行改回原来的整屏水平居中，不然进了正式对局这行会一直偏在中间偏左。
             let scoreWrapExit = document.getElementById('blaze-score-wrap');
-            if (scoreWrapExit) { scoreWrapExit.style.left = '50%'; scoreWrapExit.style.right = ''; scoreWrapExit.style.transform = 'translateX(-50%)'; scoreWrapExit.style.minWidth = ''; scoreWrapExit.style.top = '10px'; }
+            if (scoreWrapExit) { scoreWrapExit.style.left = '50%'; scoreWrapExit.style.right = ''; scoreWrapExit.style.transform = 'translateX(-50%)'; scoreWrapExit.style.minWidth = ''; scoreWrapExit.style.top = '10px'; scoreWrapExit.style.width = ''; scoreWrapExit.style.maxWidth = ''; }
             bgmStop();
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
