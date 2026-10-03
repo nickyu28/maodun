@@ -3937,7 +3937,7 @@
             if (others.length) {
                 others.forEach(function (r) { rows.push('<div>' + dispName(r.id) + '<br><span style="color:#999;">真人</span></div>'); });
             }
-            let aiSlots = (gState.nightSide === 'hunter') ? 4 : 3;
+            let aiSlots = (gState.nightSide === 'hunter') ? 0 : 3;   // 追捕者是一个人，没有队友（B2，重做夜间 PR #16）
             for (let i = others.length; i < aiSlots; i++) rows.push('<div style="color:#888;">AI 队友</div>');
             team.innerHTML = rows.join('');
         }
@@ -5797,7 +5797,11 @@
                 id: '2026-10-03', date: '10 月 3 日', title: '联机安全', items: [
                     '别人起的怪名字不会再在你的页面上乱跑代码了',
                     '没组队、没在排的人，不能再把你硬拉进对局了',
-                    '联机升级了，跟朋友一起玩前都刷新一下页面'
+                    '联机升级了，跟朋友一起玩前都刷新一下页面',
+                    '超燃乱斗买到「奇遇」卡不再白花钱，会抽一张别的牌并加强',
+                    '松饼大作战的护盾只在真要被抓时才用掉',
+                    '惊魂夜当追捕者时，不再显示 4 个「AI 队友」',
+                    '被拉进超燃时，手上那局会先好好退出，不再两局抢画面'
                 ]
             },
             {
@@ -7336,6 +7340,19 @@
             if (rolled) blazeApplyPerk(a, rolled, BLAZE.perkLuckyMul);
         }
 
+        // 买到/拿到一张牌并广播。「奇遇」（lucky）不能直接 blazeApplyPerk——它在 blazeApplyPerkBody 里没有分支，
+        // 直接套等于白花钱；要先随机抽一张别的牌再按 ×1.5 套上（跟局间选牌那条路一样）。（B2，重做夜间 PR #12）
+        function blazeApplyPerkNet(a, id) {
+            if (id === 'lucky') {
+                let rolled = blazeRollLucky(a);
+                blazeTakeLucky(a, rolled);
+                blazeNetEv({ ev: 'perk', i: a.idx, id: 'lucky', r: rolled });
+            } else {
+                blazeApplyPerk(a, id);
+                blazeNetEv({ ev: 'perk', i: a.idx, id: id });
+            }
+        }
+
         function blazeLuckyLabel(rolled) {
             let o = BLAZE_PERKS.filter(function (q) { return q.id === rolled; })[0];
             return o ? o.label : '（什么都没抽到）';
@@ -7410,8 +7427,7 @@
             if (!blaze || !blaze.ffa || (blaze.ffaFreeN || 0) <= 0) return;
             blaze.ffaFreeN--;
             blaze.ffaFree = null;
-            blazeApplyPerk(blaze.me, id);
-            blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: id });
+            blazeApplyPerkNet(blaze.me, id);
             blazeFfaCardRender();
         }
 
@@ -7429,8 +7445,7 @@
             blaze.ffaMoney -= BLAZE.ffaCustomPrice;
             blaze.ffaCustom = false;
             blaze.ffaDraw = null;
-            blazeApplyPerk(blaze.me, id);
-            blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: id });
+            blazeApplyPerkNet(blaze.me, id);
             blazeFfaCardRender();
         }
 
@@ -7599,8 +7614,7 @@
             let price = blazeFfaPrice(o);
             if (blaze.ffaMoney < price) { blazeFlash('钱不够（要 ' + price + '）'); return; }
             blaze.ffaMoney -= price;
-            blazeApplyPerk(blaze.me, id);
-            blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: id });
+            blazeApplyPerkNet(blaze.me, id);
             // 买完整架刷新，并且换成另一种卡
             blaze.ffaShopKind = (blazeFfaKind() === 'func') ? 'stat' : 'func';
             blaze.ffaDraw = null;
@@ -7745,8 +7759,7 @@
                 });
                 if (!best) return;
                 a.money -= blazeFfaPrice(best);
-                blazeApplyPerk(a, best.id);
-                blazeNetEv({ ev: 'perk', i: a.idx, id: best.id });
+                blazeApplyPerkNet(a, best.id);
             });
         }
 
@@ -9099,6 +9112,16 @@
         }
 
         function blazeBegin(plan, hostId, ffa, tomb, law) {
+            // 别的模式的 Begin 都会先退出还开着的其它模式，超燃这里漏了：被联机拉进超燃时旧那局还在后台跑，
+            // 两边抢镜头和按键。
+            // 放在最前面：这些 Exit 会回大厅、藏起 blaze-hud，得在下面摆超燃自己的界面之前做完。（B2，重做夜间 PR #14；顺带加上后来才有的新模式 nm）
+            if (race) { try { raceExit(); } catch (e) { } }
+            if (jail) { try { jailExit(); } catch (e) { } }
+            if (dodge) { try { dodgeExit(); } catch (e) { } }
+            if (escapeRoom) { try { escapeExit(); } catch (e) { } }
+            if (park) { try { parkExit(); } catch (e) { } }
+            if (cake) { try { cakeExit(); } catch (e) { } }
+            if (nm) { try { nmTeardown(); } catch (e) { } }
             showModeIntroIfFirstTime('blaze');
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
@@ -23822,19 +23845,20 @@
                 if (b.out) return;
                 live.forEach(function (a) {
                     if (a === b || a.out || b.out) return;
+                    let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
+                    if (d > cakeHandRange(b)) return;
+                    let dx = (a.p.x - b.p.x) / (d || 1), dz = (a.p.z - b.p.z) / (d || 1);
+                    let fx = Math.sin(b.facing || 0), fz = Math.cos(b.facing || 0);
+                    if (dx * fx + dz * fz < coneCos) return;
+                    // 护盾只挡一下：真的要被拍出局时才用掉（以前放在距离/朝向判断前面，
+                    // 随便哪个人在不在身边都会把护盾当场耗掉）。（B2，重做夜间 PR #12）
                     if (a.shieldT > 0) {
-                        // 护盾只挡一下：帮你免掉这次出局，但用一次就没了
                         a.shieldT = 0;
                         cakeBurst(a.p.x, a.p.z, 0x81c784);
                         if (a.isPlayer) blazeFlash('护盾帮你挡了一下，但用掉了！');
                         else if (b.isPlayer) blazeFlash(a.name + ' 的护盾帮TA挡了一下！');
                         return;
                     }
-                    let d = Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z);
-                    if (d > cakeHandRange(b)) return;
-                    let dx = (a.p.x - b.p.x) / (d || 1), dz = (a.p.z - b.p.z) / (d || 1);
-                    let fx = Math.sin(b.facing || 0), fz = Math.cos(b.facing || 0);
-                    if (dx * fx + dz * fz < coneCos) return;
                     cakeTagOut(a, b);
                 });
             });
