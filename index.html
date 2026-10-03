@@ -2125,7 +2125,7 @@
         function lobbyOnModeSuggest(m) {
             if (!peerIsHost || !m.sender || m.sender === gState.id) return;
             if (m.target !== '*' && m.target !== gState.id) return;
-            showSysModal('模式推荐', dispName(m.sender) + ' 推荐游戏模式：' + (m.modeName || m.mode), [
+            showSysModal('模式推荐', dispName(m.sender) + ' 推荐游戏模式：' + chatEscape(m.modeName || m.mode || ''), [
                 { label: '切换到这个模式', color: '#5cb85c', onClick: function () { selectGameMode(m.mode); } },
                 { label: '知道了' }
             ]);
@@ -2366,8 +2366,28 @@
             else { let g = gState.garage.findIndex(function (i) { return i === null; }); if (g !== -1) gState.garage[g] = { ...shopItems['地窖徽章'] }; }
         }
 
+        // A1：所有联机消息进来先把身份类字段里的 HTML 特殊字符去掉（跟 sanitizeId 一样的规则）。
+        // 只洗 ID，不递归洗所有字符串——ESC_START 之类的消息里带着关卡数据。
+        function netScrubIds(m) {
+            if (!m || typeof m !== 'object') return m;
+            ['sender', 'target', 'to', 'host', 'id'].forEach(function (k) {
+                if (m[k] !== undefined && m[k] !== null && typeof m[k] !== 'boolean') m[k] = sanitizeId(m[k]);
+            });
+            ['plan', 'team'].forEach(function (k) {
+                if (!Array.isArray(m[k])) return;
+                m[k].forEach(function (q) { if (q && typeof q === 'object' && q.id !== undefined && q.id !== null) q.id = sanitizeId(q.id); });
+            });
+            if (Array.isArray(m.ids)) m.ids = m.ids.map(sanitizeId);
+            if (m.sides && typeof m.sides === 'object') {
+                let clean = {};
+                Object.keys(m.sides).forEach(function (k) { clean[sanitizeId(k)] = m.sides[k]; });
+                m.sides = clean;
+            }
+            return m;
+        }
         bc.onmessage = function (ev) {
-            let msg = ev.data;
+            let msg = netScrubIds(ev.data);
+            if (!msg || typeof msg !== 'object') return;
             if (msg.type === 'CHECK_ID') {
                 if (gState.id === msg.id) { bc.postMessage({ type: 'ID_CONFLICT', target: '*' }); }
             } else if (msg.type === 'ID_CONFLICT') {
@@ -2690,7 +2710,7 @@
             if (!log) return;
             let row = document.createElement('div');
             row.style.cssText = 'background:rgba(0,0,0,0.62); color:#fff; font-size:12px; padding:4px 8px; border-radius:4px; max-width:100%;';
-            row.innerHTML = '<span style="color:' + (mine ? '#7fd1ff' : '#ffd54f') + ';">' + chatEscape(dispName(who)) + '</span>：' + chatEscape(text);
+            row.innerHTML = '<span style="color:' + (mine ? '#7fd1ff' : '#ffd54f') + ';">' + dispName(who) + '</span>：' + chatEscape(text);
             log.appendChild(row);
             while (log.children.length > 6) log.removeChild(log.firstChild);
 
@@ -3169,8 +3189,9 @@
         }
         // resolvePlayerId 加的 #xxxx 小尾巴只是为了后台防撞车，玩家不需要看到它——
         // 显示的时候统一用这个把尾巴去掉（AI 名字是 "本名#xxxx_AI_1" 这种，也要连着摘掉）。
+        // 返回的是已经转义过的文本，可以直接拼进 innerHTML（A1）
         function dispName(id) {
-            return (id || '').replace(/#[0-9a-z]{4}(?=(_AI_\d+)?$)/, '');
+            return chatEscape(String(id || '').replace(/#[0-9a-z]{4}(?=(_AI_\d+)?$)/, ''));
         }
         // ID 会原样广播给房间里所有人，好多地方（房间列表、好友列表、组队邀请弹窗、
         // 匹配等待名单……）是直接把它拼进 innerHTML 里显示的，不是当纯文本塞进
@@ -3544,7 +3565,7 @@
             document.getElementById('night-wait-list').innerHTML = need.map(function (id) {
                 let c = gState.netChars[id];
                 return '<div style="color:' + (c ? '#7fd1ff' : '#888') + ';">' + dispName(id) + '　' +
-                    (c ? (NIGHT_CHARS[c] ? NIGHT_CHARS[c].name : c) : '选择中…') + '</div>';
+                    (c ? (NIGHT_CHARS[c] ? NIGHT_CHARS[c].name : chatEscape(c)) : '选择中…') + '</div>';
             }).join('');
 
             let done = (have.length >= need.length) || (performance.now() - gState.netCharT0 > 12000);
@@ -5735,6 +5756,11 @@
         // 更新公告：只写玩家关心的，一条一句话，按时间合并成几段（原来六十多条，太长没人看）
         const CHANGELOG = [
             {
+                id: '2026-10-03', date: '10 月 3 日', title: '联机安全', items: [
+                    '别人起的怪名字不会再在你的页面上乱跑代码了'
+                ]
+            },
+            {
                 id: '2026-09-30-v3', date: '9 月 30 日', title: '新模式和成就', items: [
                     '三个新模式：推推乐、彩弹占地、爬塔（爬塔能单人、双人合作、多人）',
                     '每个模式打完都给猫盾币，赢了、连胜、每天首胜给得更多',
@@ -5963,7 +5989,7 @@
             let rows = ids.length ? ids.map(function (id) {
                 let e = playLog[id], s = e.stats || {};
                 let statsTxt = s.mcoin === undefined ? '（还没收到数据）' :
-                    (s.mcoin + ' 猫盾币　皮肤 ' + s.skins + '　彩蛋 ' + s.eggs +
+                    chatEscape(s.mcoin + ' 猫盾币　皮肤 ' + s.skins + '　彩蛋 ' + s.eggs +
                         '　惊魂夜 ' + s.nightRank + '　超燃 ' + s.blazeRank);
                 return '<tr><td style="padding:4px 8px; border-top:1px solid #eee;">' + dispName(id) + '</td>' +
                     '<td style="padding:4px 8px; border-top:1px solid #eee; color:#888; font-size:11px;">' +
@@ -21964,7 +21990,7 @@
             return lv;
         }
         function escIsSpecial(n) { return typeof n === 'string'; }
-        function escLvlTitle(n, lv) { return escIsSpecial(n) ? '「' + lv.name + '」' : '第 ' + n + ' 关「' + lv.name + '」'; }
+        function escLvlTitle(n, lv) { let nm = chatEscape(lv.name); return escIsSpecial(n) ? '「' + nm + '」' : '第 ' + n + ' 关「' + nm + '」'; }
 
         // ── 自制密室编辑器（跟猫盾乐园一样，一块积木一个房间）──
         function escDraft() {
@@ -24191,7 +24217,7 @@
             if (!cakeInvite) { clearInterval(cakeInviteTimer); cakeInviteTimer = null; return; }
             if (cakeInvite.declined.length) {
                 clearInterval(cakeInviteTimer); cakeInviteTimer = null;
-                let who = cakeInvite.declined.join('、'); cakeInvite = null;
+                let who = cakeInvite.declined.map(dispName).join('、'); cakeInvite = null;
                 showSysModal('没法开局', who + ' 拒绝了，这次先不开松饼大作战。', [{ label: '知道了' }]);
                 return;
             }
@@ -24207,7 +24233,7 @@
             }
             if (performance.now() - cakeInvite.t0 > CAKE_INVITE_TIMEOUT) {
                 clearInterval(cakeInviteTimer); cakeInviteTimer = null;
-                let who = cakeInvite.pending.join('、'); cakeInvite = null;
+                let who = cakeInvite.pending.map(dispName).join('、'); cakeInvite = null;
                 showSysModal('没法开局', who + ' 没有回应（可能不在了），这次先不开松饼大作战。', [{ label: '知道了' }]);
             }
         }
@@ -24215,7 +24241,7 @@
         // 把结果发回给发起人。
         function cakeOnInvite(m) {
             if (!m.ids || m.ids.indexOf(gState.id) < 0) return;
-            showSysModal('邀请　松饼大作战', (m.sender || '有人') + ' 想现在开始松饼大作战，同意一起玩吗？', [
+            showSysModal('邀请　松饼大作战', (m.sender ? dispName(m.sender) : '有人') + ' 想现在开始松饼大作战，同意一起玩吗？', [
                 {
                     label: '同意', color: '#5cb85c', onClick: function () {
                         bc.postMessage({ type: 'CK_INVITE_ACK', target: m.sender, sender: gState.id, reqId: m.reqId, accept: true });
