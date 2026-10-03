@@ -128,6 +128,36 @@
             #ui-layer #phone-backpack-toggle { top: 106px; right: 130px; padding: 6px 12px; }
         }
 
+
+        /* ── 创作界面（Scratch 风格）── */
+        #maker { position: fixed; inset: 0; z-index: 60; background: #f5f6fa; display: flex; flex-direction: column; font-family: "Microsoft YaHei", sans-serif; }
+        #maker.hidden { display: none !important; }
+        #mk-top { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; border-bottom: 1px solid #ddd; flex-wrap: wrap; }
+        #mk-top b { font-size: 15px; color: #333; }
+        #mk-name { flex: 1; min-width: 90px; max-width: 220px; margin: 0; padding: 6px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 6px; }
+        #mk-count { font-size: 12px; color: #999; }
+        .mk-tbtn { margin: 0; padding: 7px 14px; font-size: 13px; color: #fff; border: none; border-radius: 6px; white-space: nowrap; }
+        #mk-share { font-size: 11px; color: #888; word-break: break-all; padding: 0 12px; }
+        #mk-share:empty { display: none; }
+        #mk-body { flex: 1; display: flex; min-height: 0; }
+        #mk-palette { width: min(240px, 42vw); box-sizing: border-box; overflow-y: auto; background: #fff; border-right: 1px solid #ddd; padding: 8px 10px 20px; transition: background 0.15s; }
+        #mk-palette.mk-trash { background: #ffebee; }
+        .mk-cat { font-size: 12px; color: #666; margin: 10px 0 6px; display: flex; align-items: center; gap: 6px; }
+        .mk-cat span { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+        .mk-pal { margin-bottom: 8px; cursor: grab; touch-action: none; }
+        #mk-area { flex: 1; position: relative; overflow: auto; background-color: #f5f6fa; background-image: radial-gradient(#d5d8e0 1px, transparent 1px); background-size: 20px 20px; }
+        #mk-stack { padding: 20px 20px 80px; display: flex; flex-direction: column; align-items: flex-start; }
+        .mk-blk { position: relative; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 9px 12px; min-height: 22px; border-radius: 6px; color: #fff; font-size: 14px; font-weight: bold; box-shadow: 0 2px 0 rgba(0,0,0,0.22); user-select: none; -webkit-user-select: none; touch-action: none; cursor: grab; margin-bottom: 2px; max-width: 100%; box-sizing: border-box; }
+        .mk-blk::before { content: ''; position: absolute; top: 0; left: 14px; width: 16px; height: 5px; background: rgba(0,0,0,0.18); border-radius: 0 0 4px 4px; }
+        .mk-hat { background: #ffbf00; border-radius: 18px 18px 6px 6px; padding-top: 12px; cursor: default; }
+        .mk-hat::before, .mk-cap::before { display: none; }
+        .mk-cap { background: #cf8b17; border-radius: 6px 6px 14px 14px; cursor: default; }
+        .mk-pill { background: #fff; color: #555; border-radius: 10px; padding: 1px 8px; font-size: 12px; }
+        .mk-num, .mk-sel { margin: 0; border: none; border-radius: 10px; padding: 2px 6px; font-size: 13px; color: #333; background: #fff; }
+        .mk-num { width: 46px; text-align: center; }
+        .mk-empty { color: #9aa0ac; font-size: 13px; padding: 14px 4px; }
+        #mk-line { position: absolute; left: 20px; width: 200px; height: 4px; background: #4c97ff; border-radius: 2px; display: none; pointer-events: none; }
+        .mk-ghost { position: fixed; z-index: 70; pointer-events: none; opacity: 0.85; transform: rotate(-2deg); }
         .hidden {
             display: none !important;
         }
@@ -928,7 +958,7 @@
                 <button id="btn-mode-race" onclick="selectGameMode('race')" style="margin:0; font-size:11px; padding:7px 2px;">竞速</button>
                 <button id="btn-mode-jail" onclick="selectGameMode('jail')" style="margin:0; font-size:11px; padding:7px 2px;">监狱救援</button>
                 <button id="btn-mode-dodge" onclick="selectGameMode('dodge')" style="margin:0; font-size:11px; padding:7px 2px;">躲避球</button>
-                <button id="btn-mode-escape" onclick="selectGameMode('escape')" style="margin:0; font-size:11px; padding:7px 2px;">密室</button>
+                <button id="btn-mode-escape" onclick="selectGameMode('escape')" style="margin:0; font-size:11px; padding:7px 2px;">合作密室</button>
                 <button id="btn-mode-park" onclick="selectGameMode('park')" style="margin:0; font-size:11px; padding:7px 2px;">猫盾乐园</button>
                 <button id="btn-mode-cake" onclick="selectGameMode('cake')" style="margin:0; font-size:11px; padding:7px 2px;">松饼大作战</button>
                 <button id="btn-mode-sumo" onclick="selectGameMode('sumo')" style="margin:0; font-size:11px; padding:7px 2px;">推推乐</button>
@@ -1029,6 +1059,7 @@
             <div id="esc-level-wrap" style="margin-bottom:8px;">
                 <div id="esc-level-grid" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:6px;"></div>
                 <div id="esc-level-info" style="font-size:12px; color:#556b57; margin-top:6px; line-height:1.6;"></div>
+                <button id="esc-start-btn" onclick="escapeStartGo()" style="width:100%; margin:8px 0 0; background:#43a047; color:#fff; border:none; padding:9px 0; font-size:14px;">开始</button>
             </div>
             <div style="border-top:1px dashed #a5d6a7; padding-top:8px; margin-bottom:8px;">
                 <div style="display:flex; align-items:center; gap:8px;">
@@ -1036,30 +1067,9 @@
                     <div id="esc-daily-info" style="flex:1; font-size:11px; color:#556b57; line-height:1.5;"></div>
                 </div>
             </div>
-            <div style="border-top:1px dashed #a5d6a7; padding-top:8px; font-size:12px; color:#2e7d32; font-weight:bold; margin-bottom:4px;">自己拼一个</div>
-            <div style="font-size:11px; color:#78909c; margin-bottom:6px;">一块积木一个房间，从上往下走。3 个房间以上才给猫盾币。</div>
-            <input id="esc-edit-name" placeholder="关卡名字" maxlength="12" oninput="escEditName(this.value)" style="width:100%; box-sizing:border-box; margin:0 0 6px; padding:5px; font-size:12px;">
-            <div id="esc-edit-rooms" style="display:flex; flex-direction:column; gap:5px; margin-bottom:8px;"></div>
-            <div style="display:flex; gap:6px; margin-bottom:8px;">
-                <select id="esc-add-room" style="flex:1; margin:0; padding:5px; font-size:12px;">
-                    <option value="color">彩色板：各站各的颜色</option>
-                    <option value="duo">灰板 ×2：两个人站住</option>
-                    <option value="heavy">重压板：四个人都要站</option>
-                    <option value="lever">拉杆门：一人撑着</option>
-                    <option value="key">钥匙：捡了送到锁上</option>
-                    <option value="seq">顺序板：按颜色顺序踩</option>
-                    <option value="timed">限时按钮：门只开 4 秒</option>
-                    <option value="code">密码：墙上找三位数</option>
-                    <option value="laser">激光走廊</option>
-                    <option value="hurdle">矮栏：跳过去</option>
-                </select>
-                <button onclick="escEditAdd()" style="margin:0; background:#2e7d32; color:#fff; border:none; padding:5px 14px; font-size:13px;">+ 添加</button>
+            <div style="border-top:1px dashed #a5d6a7; padding-top:8px; display:flex; gap:6px; margin-bottom:6px;">
+                <button onclick="makerOpen('escape')" style="flex:1; margin:0; background:#ff8c1a; color:#fff; border:none; padding:9px 0; font-size:14px;">自己做一关</button>
             </div>
-            <div style="display:flex; gap:6px; margin-bottom:6px;">
-                <button onclick="escEditTest()" style="flex:1; margin:0; background:#66bb6a; color:#fff; border:none; padding:7px 0; font-size:13px;">试玩</button>
-                <button onclick="escEditShare()" style="flex:1; margin:0; background:#00897b; color:#fff; border:none; padding:7px 0; font-size:13px;">生成分享码</button>
-            </div>
-            <div id="esc-share-out" style="font-size:11px; color:#999; word-break:break-all; margin-bottom:6px;"></div>
             <div style="display:flex; gap:6px;">
                 <input id="esc-import-code" placeholder="粘贴别人的分享码" style="flex:1; margin:0; padding:6px; font-size:12px;">
                 <button onclick="escImportPlay()" style="margin:0; background:#8d6e63; color:#fff; border:none; padding:6px 12px; font-size:13px;">玩</button>
@@ -1069,37 +1079,13 @@
         <div id="park-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fce4ec; border:1px solid #f48fb1; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#ad1457; font-weight:bold; margin-bottom:2px;">猫盾乐园</div>
             <div style="font-size:12px; color:#6d4c41; line-height:1.6; margin-bottom:8px;">
-                用积木拼自己的小游戏，不用写代码。别人玩你做的，你就有猫盾币（要在同一个房间）。现在有：<span id="park-coin-disp">0</span>
+                拖积木做自己的小游戏。别人玩你做的，你也有猫盾币（要在同一个房间）。现在有：<span id="park-coin-disp">0</span>
             </div>
             <div style="display:flex; gap:6px; margin-bottom:8px;">
                 <button onclick="parkBegin(PARK_BUILTIN.easy)" style="flex:1; margin:0; background:#4fc3f7; color:#fff; border:none; padding:9px 0; font-size:13px;">鱼干捕手·简单</button>
                 <button onclick="parkBegin(PARK_BUILTIN.hard)" style="flex:1; margin:0; background:#0288d1; color:#fff; border:none; padding:9px 0; font-size:13px;">鱼干捕手·挑战</button>
             </div>
-            <div style="border-top:1px dashed #f48fb1; padding-top:8px; margin-bottom:6px; font-size:12px; color:#ad1457; font-weight:bold;">拼积木做一个</div>
-            <div id="park-blocks" style="display:flex; flex-direction:column; gap:5px; margin-bottom:8px;"></div>
-            <div style="display:flex; gap:6px; margin-bottom:8px;">
-                <select id="park-add-type" style="flex:1; margin:0; padding:5px; font-size:12px;">
-                    <option value="spawn">生成：造一种物品</option>
-                    <option value="fall">运动：下落</option>
-                    <option value="step">运动：前进 N 步</option>
-                    <option value="wait">运动：等待 N 秒</option>
-                    <option value="turnplayer">运动：转向玩家</option>
-                    <option value="turnrandom">运动：随机转向</option>
-                    <option value="touch">规则：碰到某种物品</option>
-                    <option value="var">变量：定义一个</option>
-                    <option value="condition">判断：如果变量…</option>
-                    <option value="win">规则：得分几分算赢</option>
-                    <option value="time">规则：时间限制</option>
-                    <option value="arena">设置：场地大小</option>
-                    <option value="speed">设置：移动速度</option>
-                </select>
-                <button onclick="parkAddBlock()" style="margin:0; background:#ad1457; color:#fff; border:none; padding:5px 14px; font-size:13px;">+ 添加</button>
-            </div>
-            <div style="display:flex; gap:6px; margin-bottom:8px;">
-                <button onclick="parkTestCustom()" style="flex:1; margin:0; background:#66bb6a; color:#fff; border:none; padding:7px 0; font-size:13px;">试玩</button>
-                <button onclick="parkShareCustom()" style="flex:1; margin:0; background:#ec407a; color:#fff; border:none; padding:7px 0; font-size:13px;">生成分享码</button>
-            </div>
-            <div id="park-share-out" style="font-size:11px; color:#999; word-break:break-all; margin-bottom:8px;"></div>
+            <button onclick="makerOpen('park')" style="width:100%; margin:0 0 8px; background:#ffab19; color:#fff; border:none; padding:9px 0; font-size:14px;">自己做一个</button>
             <div style="border-top:1px dashed #f48fb1; padding-top:8px; font-size:12px; color:#ad1457; font-weight:bold;">玩别人分享的</div>
             <div style="display:flex; gap:6px; margin-top:4px;">
                 <input id="park-import-code" placeholder="粘贴分享码" style="flex:1; margin:0; padding:6px; font-size:12px;">
@@ -2348,7 +2334,7 @@
         const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -2359,7 +2345,7 @@
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
                         gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {}; gState.escProg = data.escProg || null;
-                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {};
+                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded;
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); grantBadgeIfMissing(); return;
                     }
@@ -2368,7 +2354,7 @@
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
             gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { head: null, waist: null }; gState.ownedAcc = {}; gState.escProg = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
-            gState.dailyWin = {}; gState.towerBest = 0; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.title = null; gState.titles = {};
+            gState.dailyWin = {}; gState.towerBest = 0; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false;
             expandInventory();
         }
 
@@ -3208,7 +3194,7 @@
         function proceedToLobby(pid) {
             let ai1Name = pid + "_AI_1"; let ai2Name = pid + "_AI_2"; gState.id = pid;
             gState.team = [{ id: pid, isLeader: true, isReady: true, isAI: false }, { id: ai1Name, isLeader: false, isReady: true, isAI: true }, { id: ai2Name, isLeader: false, isReady: true, isAI: true }];
-            loadProgress(pid); loadEggs(); friendLoad(); playLogLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); checkinBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
+            loadProgress(pid); parkRefundOld(); loadEggs(); friendLoad(); playLogLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); checkinBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
             chatLoad();
             // 之前得自己敲房间号、点"进入"才算联机——两台设备各自打开游戏，
             // 谁都没点那一下，大厅里当然看不到对方，跟单机一样。现在默认自动
@@ -3296,7 +3282,7 @@
             document.getElementById('jail-only').classList.toggle('hidden', !isJail);
             document.getElementById('dodge-only').classList.toggle('hidden', !isDodge);
             document.getElementById('escape-only').classList.toggle('hidden', !isEscape);
-            if (isEscape) { escRenderLevels(); escDailyInfoRender(); escEditRender(); }
+            if (isEscape) { escRenderLevels(); escDailyInfoRender(); }
             document.getElementById('park-only').classList.toggle('hidden', !isPark);
             document.getElementById('cake-only').classList.toggle('hidden', !isCake);
             // 保底之前完全是黑箱，连续输几把之后悄悄给你保底，玩家自己感觉不到，
@@ -3313,7 +3299,7 @@
             let mbc = document.getElementById('mode-bar-current'); if (mbc) mbc.innerText = isEscape ? modeName + ' · 第 ' + (escProg().sel || 1) + ' 关' : modeName;
             if (isNight) selectNightChar(gState.nightChar || 'cat');
             if (isBlaze) blazeRenderChars();
-            if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsOf(); parkRenderBlocks(); parkRenderAddTypeOptions(); }
+            if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsOf(); }
             if (isRace) raceTestCardBtnSync();
             if (isJail || isDodge || isEscape) applyControlHints();
             let cb = document.getElementById('hunt-ai-fill');
@@ -5762,7 +5748,9 @@
                     '平板上大厅、松饼、密室、乐园走不动的问题修好了，左半屏按住拖就能走',
                     '寻宝队捡东西、开箱子不用对准了，离得近点「互动」就行',
                     '平板竖着拿视野宽了，自己不会挡住半个屏幕',
-                    '密室的提示都改短了，走上密码台会自己弹出键盘'
+                    '密室的提示都改短了，走上密码台会自己弹出键盘',
+                    '乐园和密室多了「创作」界面，像拼 Scratch 一样拖积木做关卡',
+                    '密室面板里多了「开始」按钮，选好关直接点'
                 ]
             },
             {
@@ -21983,43 +21971,6 @@
             if (!gState.escDraft || !Array.isArray(gState.escDraft.r)) gState.escDraft = { n: '', r: [{ t: 'color' }, { t: 'lever', side: 'R' }] };
             return gState.escDraft;
         }
-        function escEditAdd() {
-            let D = escDraft(), t = document.getElementById('esc-add-room').value;
-            if (D.r.length >= ESC_ROOM_MAX) { blazeFlash('最多 ' + ESC_ROOM_MAX + ' 个房间'); return; }
-            D.r.push({ t: t, side: 'R', speed: 'mid' }); saveProgress(); escEditRender();
-        }
-        function escEditDel(i) { escDraft().r.splice(i, 1); saveProgress(); escEditRender(); }
-        function escEditUp(i) { let r = escDraft().r; if (i > 0) { let t = r[i]; r[i] = r[i - 1]; r[i - 1] = t; saveProgress(); escEditRender(); } }
-        function escEditSet(i, f, v) { escDraft().r[i][f] = v; saveProgress(); }
-        function escEditName(v) { escDraft().n = String(v || '').slice(0, 12); saveProgress(); }
-        function escEditRender() {
-            let el = document.getElementById('esc-edit-rooms'); if (!el) return;
-            let D = escDraft();
-            let nm = document.getElementById('esc-edit-name'); if (nm && document.activeElement !== nm) nm.value = D.n || '';
-            if (!D.r.length) { el.innerHTML = '<div style="font-size:11px; color:#999;">还没有房间，从下面加一个</div>'; return; }
-            el.innerHTML = D.r.map(function (r, i) {
-                let M = ESC_ROOM_META[r.t] || { label: r.t, bg: '#999' };
-                let opt = '';
-                if (M.side) opt = parkOptList({ L: '靠左', R: '靠右' }, r.side || 'R', i, 'side').replace('parkUpdateBlock', 'escEditSet');
-                if (M.speed) opt = parkOptList({ slow: '慢', mid: '中', fast: '快' }, r.speed || 'mid', i, 'speed').replace('parkUpdateBlock', 'escEditSet');
-                return '<div style="background:' + M.bg + '; color:#fff; border-radius:5px; padding:5px 8px; font-size:12px; display:flex; align-items:center; gap:6px;">' +
-                    '<span style="opacity:0.8;">' + (i + 1) + '</span><span style="flex:1;">' + M.label + ' ' + opt + '</span>' +
-                    (i > 0 ? '<span onclick="escEditUp(' + i + ')" style="cursor:pointer; padding:0 4px;">↑</span>' : '') +
-                    '<span onclick="escEditDel(' + i + ')" style="cursor:pointer; font-weight:bold; padding:0 4px;">×</span></div>';
-            }).join('');
-        }
-        function escEditCode() { let D = escDraft(); return parkEncode(gState.id, { n: D.n || '', r: D.r }); }
-        function escEditTest() {
-            if (!escDraft().r.length) { blazeFlash('先加一个房间'); return; }
-            escapeStartGo('c:' + escEditCode());
-        }
-        function escEditShare() {
-            if (!escDraft().r.length) { blazeFlash('先加一个房间'); return; }
-            let code = escEditCode();
-            let out = document.getElementById('esc-share-out');
-            if (out) out.innerText = '分享码：' + code;
-            try { navigator.clipboard.writeText(code); blazeFlash('分享码复制好了'); } catch (e) { }
-        }
         function escImportPlay() {
             let raw = (document.getElementById('esc-import-code').value || '').trim();
             let d = parkDecode(raw);
@@ -22061,6 +22012,7 @@
                     'border:2px solid ' + (sel ? '#2e7d32' : '#c8e6c9') + '; background:' + (un ? (sel ? '#c8e6c9' : '#fff') : '#eceff1') + '; color:' + (un ? '#2e7d32' : '#b0bec5') + ';">' +
                     (un ? '<b>' + n + '</b>' : '<span style="font-size:11px;">未解锁</span>') + '<br><span style="font-size:10px;">' + stars + '</span></button>';
             }).join('');
+            let sb = document.getElementById('esc-start-btn'); if (sb) sb.innerText = '开始第 ' + P.sel + ' 关';
             let info = document.getElementById('esc-level-info');
             if (info) {
                 let L = escLevelDef(P.sel), best = P.best[P.sel];
@@ -23114,6 +23066,7 @@
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
             nav('screen-lobby'); selectGameMode('escape');
+            makerAfterGame();
         }
 
         // 组了队直接带队友进；没组队先等最多 15 秒看房间里有没有人也想玩，凑不到就配 AI
@@ -23223,40 +23176,14 @@
         const PARK_SPEED_VAL = { slow: 20, normal: 32, fast: 46 };
         const PARK_COND_OPS = { gt: '>', lt: '<', eq: '=' };
         const PARK_STEP_SPEED = 8;   // "前进 N 步"里，1 步等于走这么远，走完这么多秒结束这条指令
-        // 每种颜色的"生成/下落/前进/等待/转向"是几块独立的小积木，靠颜色对上号——
-        // 不是一个大积木塞死一堆参数，拼起来更像真的在编程：先生成，再一步步描述它怎么动。
-        const PARK_BLOCK_META = {
-            spawn: { bg: '#ba68c8', label: '生成一种物品' },
-            fall: { bg: '#8e24aa', label: '下落（重力）' },
-            step: { bg: '#42a5f5', label: '前进 N 步' },
-            wait: { bg: '#7986cb', label: '等待 N 秒' },
-            turnplayer: { bg: '#5c6bc0', label: '转向玩家' },
-            turnrandom: { bg: '#5c6bc0', label: '随机转向' },
-            touch: { bg: '#4fc3f7', label: '碰到某种物品' },
-            var: { bg: '#a1887f', label: '定义变量' },
-            condition: { bg: '#ef6c00', label: '如果变量…就判定' },
-            win: { bg: '#66bb6a', label: '得分几分算赢' },
-            time: { bg: '#ffb74d', label: '时间限制' },
-            arena: { bg: '#26a69a', label: '场地大小' },
-            speed: { bg: '#78909c', label: '移动速度' }
-        };
-        // 部分进阶积木要花猫盾币解锁一次，解锁之后永久能用——给猫盾币一个花的地方，
-        // 也让新手先从基础积木上手，不至于一上来就被"变量/判断"这种概念绕晕。
         const PARK_BLOCK_PRICE = { var: 30, condition: 40, turnrandom: 20 };
-        function parkBlockUnlocked(type) {
-            if (TEST_INFINITE_COINS) return true;
-            if (!PARK_BLOCK_PRICE[type]) return true;
-            return !!(gState.parkUnlocked && gState.parkUnlocked[type]);
-        }
-        function parkRenderAddTypeOptions() {
-            let sel = document.getElementById('park-add-type'); if (!sel) return;
-            let cur = sel.value;
-            Array.from(sel.options).forEach(function (opt) {
-                let price = PARK_BLOCK_PRICE[opt.value];
-                let base = opt.textContent.replace(/（需解锁.*?）/, '');
-                opt.textContent = base + (price && !parkBlockUnlocked(opt.value) ? '（需解锁 ' + price + ' 猫盾币）' : '');
-            });
-            sel.value = cur;
+        // 以前"变量/判断/随机转向"要花猫盾币解锁；创作界面只留基础积木后这三块不卖了，买过的退钱（只退一次）
+        function parkRefundOld() {
+            if (gState.parkRefunded || !gState.id) return;
+            gState.parkRefunded = true;
+            let back = Object.keys(gState.parkUnlocked || {}).reduce(function (a, k) { return a + (gState.parkUnlocked[k] ? (PARK_BLOCK_PRICE[k] || 0) : 0); }, 0);
+            if (back > 0) { coinsAdd(null, back); setTimeout(function () { blazeFlash('乐园积木简化了，买过的积木退你 ' + back + ' 猫盾币'); }, 1500); }
+            saveProgress();
         }
         const PARK_BUILTIN = {
             easy: {
@@ -23311,6 +23238,7 @@
                 else if (b.type === 'wait') (scripts[c] = scripts[c] || []).push({ op: 'wait', s: Math.max(0.1, +b.s || 1) });
                 else if (b.type === 'turnplayer') (scripts[c] = scripts[c] || []).push({ op: 'turnplayer' });
                 else if (b.type === 'turnrandom') (scripts[c] = scripts[c] || []).push({ op: 'turnrandom' });
+                else if (b.type === 'chase') (scripts[c] = scripts[c] || []).push({ op: 'turnplayer' }, { op: 'step', n: 3 });
                 else if (b.type === 'touch') rules[c] = { effect: b.effect || 'score', varName: (b.varName || '').trim(), amount: +b.amount || 1 };
                 else if (b.type === 'var') vars[(b.name || '变量').trim()] = +b.initial || 0;
                 else if (b.type === 'condition') conditions.push({ varName: (b.varName || '').trim(), op: b.op || 'gt', value: +b.value || 0, result: b.result === 'win' ? 'win' : 'lose' });
@@ -23337,89 +23265,6 @@
             };
         }
 
-        function parkAddBlock() {
-            let type = document.getElementById('park-add-type').value;
-            if (!parkBlockUnlocked(type)) {
-                let price = PARK_BLOCK_PRICE[type];
-                showSysModal('这块积木还没解锁', '解锁「' + (PARK_BLOCK_META[type] || {}).label + '」需要 ' + price + ' 猫盾币，你现在有 ' + coinsOf() + ' 个。解锁之后这块积木永久能用。', [
-                    { label: '解锁', color: '#e6a23c', onClick: function () {
-                        if (coinsOf() < price) { showSysModal('猫盾币不够', '还差 ' + (price - coinsOf()) + ' 个。', [{ label: '去打一局赚钱', color: '#5cb85c', onClick: function () { nav('screen-lobby'); selectGameMode('hunt'); } }, { label: '知道了' }]); return; }
-                        coinsAdd(null, -price);
-                        if (!gState.parkUnlocked) gState.parkUnlocked = {};
-                        gState.parkUnlocked[type] = true;
-                        saveProgress();
-                        parkRenderAddTypeOptions();
-                        blazeFlash('解锁成功！');
-                    } },
-                    { label: '算了' }
-                ]);
-                return;
-            }
-            let d = {
-                spawn: { type: 'spawn', color: 'orange', every: 1.5 },
-                fall: { type: 'fall', color: 'orange', speed: 8 },
-                step: { type: 'step', color: 'orange', n: 3 },
-                wait: { type: 'wait', color: 'orange', s: 1 },
-                turnplayer: { type: 'turnplayer', color: 'orange' },
-                turnrandom: { type: 'turnrandom', color: 'orange' },
-                touch: { type: 'touch', color: 'orange', effect: 'score', varName: '', amount: 1 },
-                var: { type: 'var', name: '生命', initial: 3 },
-                condition: { type: 'condition', varName: '生命', op: 'lt', value: 1, result: 'lose' },
-                win: { type: 'win', score: 10 },
-                time: { type: 'time', seconds: 60, result: 'lose' },
-                arena: { type: 'arena', size: 'medium' },
-                speed: { type: 'speed', level: 'normal' }
-            }[type];
-            if (d) parkEditorBlocks.push(d);
-            parkRenderBlocks();
-        }
-        function parkRemoveBlock(i) { parkEditorBlocks.splice(i, 1); parkRenderBlocks(); }
-        function parkUpdateBlock(i, field, value) {
-            if (['every', 'speed', 'n', 's', 'score', 'seconds', 'initial', 'value', 'amount'].indexOf(field) >= 0) value = parseFloat(value) || 0;
-            parkEditorBlocks[i][field] = value;
-        }
-        function parkOptList(names, current, i, field) {
-            return '<select onchange="parkUpdateBlock(' + i + ',\'' + field + '\',this.value)" style="font-size:11px;">' +
-                Object.keys(names).map(function (k) { return '<option value="' + k + '"' + (k === current ? ' selected' : '') + '>' + names[k] + '</option>'; }).join('') + '</select>';
-        }
-        function parkNumIn(i, field, val, w) {
-            return '<input type="number" value="' + val + '" style="width:' + (w || 36) + 'px;" onchange="parkUpdateBlock(' + i + ',\'' + field + '\',this.value)">';
-        }
-        function parkTxtIn(i, field, val, w) {
-            return '<input type="text" value="' + (val || '') + '" placeholder="变量名" style="width:' + (w || 50) + 'px;" onchange="parkUpdateBlock(' + i + ',\'' + field + '\',this.value)">';
-        }
-        function parkRenderBlocks() {
-            let el = document.getElementById('park-blocks'); if (!el) return;
-            if (!parkEditorBlocks.length) { el.innerHTML = '<div style="font-size:11px; color:#999;">还没有积木，从下面选一块加进来</div>'; return; }
-            el.innerHTML = parkEditorBlocks.map(function (b, i) {
-                let bg = (PARK_BLOCK_META[b.type] || {}).bg || '#999';
-                let inner = '';
-                if (b.type === 'spawn') inner = '生成 ' + parkOptList(PARK_COLOR_NAMES, b.color, i, 'color') + ' 每' + parkNumIn(i, 'every', b.every) + '秒一个';
-                else if (b.type === 'fall') inner = parkOptList(PARK_COLOR_NAMES, b.color, i, 'color') + ' 下落，速度' + parkNumIn(i, 'speed', b.speed);
-                else if (b.type === 'step') inner = parkOptList(PARK_COLOR_NAMES, b.color, i, 'color') + ' 前进' + parkNumIn(i, 'n', b.n) + '步';
-                else if (b.type === 'wait') inner = parkOptList(PARK_COLOR_NAMES, b.color, i, 'color') + ' 等待' + parkNumIn(i, 's', b.s) + '秒';
-                else if (b.type === 'turnplayer') inner = parkOptList(PARK_COLOR_NAMES, b.color, i, 'color') + ' 转向玩家';
-                else if (b.type === 'turnrandom') inner = parkOptList(PARK_COLOR_NAMES, b.color, i, 'color') + ' 随机转向';
-                else if (b.type === 'touch') {
-                    inner = '碰到 ' + parkOptList(PARK_COLOR_NAMES, b.color, i, 'color') + ' 就 ' + parkOptList(PARK_EFFECT_NAMES, b.effect, i, 'effect');
-                    if (b.effect === 'varinc' || b.effect === 'vardec') inner += ' ' + parkTxtIn(i, 'varName', b.varName) + parkNumIn(i, 'amount', b.amount, 30);
-                } else if (b.type === 'var') inner = '变量 ' + parkTxtIn(i, 'name', b.name) + ' 初始值' + parkNumIn(i, 'initial', b.initial);
-                else if (b.type === 'condition') {
-                    inner = '如果变量 ' + parkTxtIn(i, 'varName', b.varName) + parkOptList(PARK_COND_OPS, b.op, i, 'op') + parkNumIn(i, 'value', b.value, 30) +
-                        ' 就 ' + parkOptList({ win: '获胜', lose: '失败' }, b.result, i, 'result');
-                } else if (b.type === 'win') inner = '得分达到 ' + parkNumIn(i, 'score', b.score) + ' 分就获胜';
-                else if (b.type === 'time') inner = '时限 ' + parkNumIn(i, 'seconds', b.seconds) + ' 秒，时间到算 ' + parkOptList({ lose: '失败', win: '获胜' }, b.result, i, 'result');
-                else if (b.type === 'arena') inner = '场地大小：' + parkOptList(PARK_ARENA_NAMES, b.size, i, 'size');
-                else if (b.type === 'speed') inner = '移动速度：' + parkOptList(PARK_SPEED_NAMES, b.level, i, 'level');
-                return '<div style="background:' + bg + '; color:#fff; border-radius:5px; padding:5px 8px; font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
-                    '<span>' + inner + '</span><span onclick="parkRemoveBlock(' + i + ')" style="cursor:pointer; font-weight:bold; padding:0 4px;">×</span></div>';
-            }).join('');
-        }
-        function parkTestCustom() { parkBegin({ name: '试玩中的自制游戏', blocks: parkEditorBlocks.slice() }); }
-        function parkShareCustom() {
-            let code = parkEncode(gState.id, parkEditorBlocks);
-            document.getElementById('park-share-out').innerText = '分享码（发给好友，让他粘贴到下面「玩别人分享的」里）：' + code;
-        }
         function parkImportPlay() {
             let raw = document.getElementById('park-import-code').value;
             let data = parkDecode(raw);
@@ -23644,6 +23489,7 @@
             document.body.onmousedown = null;
             document.getElementById('blaze-hud').classList.add('hidden');
             nav('screen-lobby'); selectGameMode('park');
+            makerAfterGame();
         }
 
         // ══════════════════════════════════════════════════════════
@@ -25361,6 +25207,205 @@
             }
         };
 
+
+        // ══════════════ 创作界面（猫盾乐园 / 合作密室 共用，像 Scratch 那样拖积木）══════════════
+        // 左边是积木，拖（或点一下）到右边就加进去；右边的积木能上下拖着换位置，拖回左边就删掉。
+        // 只留最基础的几块：乐园 6 块，密室 6 种房间。老分享码里的其它积木照样能玩，只是这里不再提供。
+        const MK_COLOR_OPTS = { orange: '橙色', blue: '蓝色', red: '红色', green: '绿色' };
+        const MAKER_DEFS = {
+            park: {
+                title: '猫盾乐园 · 创作', max: 16, hat: '当游戏开始', cap: null,
+                cats: [
+                    { name: '生成', col: '#ffab19', blocks: ['spawn'] },
+                    { name: '动作', col: '#4c97ff', blocks: ['fall', 'chase'] },
+                    { name: '碰到', col: '#5cb1d6', blocks: ['touch'] },
+                    { name: '输赢', col: '#59c059', blocks: ['win', 'time'] }
+                ],
+                blocks: {
+                    spawn: { col: '#ffab19', make: function () { return { type: 'spawn', color: 'orange', every: 1.5 }; }, parts: ['每', ['every', 'num'], '秒出一个', ['color', MK_COLOR_OPTS]] },
+                    fall: { col: '#4c97ff', make: function () { return { type: 'fall', color: 'orange', speed: 8 }; }, parts: [['color', MK_COLOR_OPTS], '往下掉，速度', ['speed', 'num']] },
+                    chase: { col: '#4c97ff', make: function () { return { type: 'chase', color: 'red' }; }, parts: [['color', MK_COLOR_OPTS], '朝我走过来'] },
+                    touch: { col: '#5cb1d6', make: function () { return { type: 'touch', color: 'orange', effect: 'score' }; }, parts: ['碰到', ['color', MK_COLOR_OPTS], '就', ['effect', { score: '+1 分', lose1: '-1 分', win: '赢了', lose: '输了' }]] },
+                    win: { col: '#59c059', make: function () { return { type: 'win', score: 10 }; }, parts: ['得到', ['score', 'num'], '分就赢'] },
+                    time: { col: '#59c059', make: function () { return { type: 'time', seconds: 60, result: 'lose' }; }, parts: [['seconds', 'num'], '秒后', ['result', { lose: '输了', win: '赢了' }]] }
+                },
+                load: function () {
+                    if (!Array.isArray(gState.parkDraft)) gState.parkDraft = parkEditorBlocks.slice();
+                    return gState.parkDraft;
+                },
+                test: function (list) { parkBegin({ name: makerName() || '我做的小游戏', blocks: list.slice() }); },
+                code: function (list) { return parkEncode(gState.id, list); }
+            },
+            escape: {
+                title: '合作密室 · 创作', max: ESC_ROOM_MAX, hat: '从起点出发', cap: '到终点',
+                cats: [
+                    { name: '机关', col: '#ff8c1a', blocks: ['color', 'duo', 'lever', 'key'] },
+                    { name: '陷阱', col: '#ff6680', blocks: ['laser', 'hurdle'] }
+                ],
+                blocks: {
+                    color: { col: '#ff8c1a', make: function () { return { t: 'color' }; }, parts: ['彩色板：各站各的颜色'] },
+                    duo: { col: '#ff8c1a', make: function () { return { t: 'duo' }; }, parts: ['灰板：两个人站住'] },
+                    lever: { col: '#ff8c1a', make: function () { return { t: 'lever', side: 'R' }; }, parts: ['拉杆门', ['side', { L: '在左边', R: '在右边' }]] },
+                    key: { col: '#ff8c1a', make: function () { return { t: 'key', side: 'R' }; }, parts: ['钥匙开锁', ['side', { L: '锁在左边', R: '锁在右边' }]] },
+                    laser: { col: '#ff6680', make: function () { return { t: 'laser', speed: 'mid' }; }, parts: ['激光', ['speed', { slow: '慢', mid: '中', fast: '快' }]] },
+                    hurdle: { col: '#ff6680', make: function () { return { t: 'hurdle' }; }, parts: ['矮栏：跳过去'] }
+                },
+                load: function () { return escDraft().r; },
+                test: function (list) { escapeBegin(null, gState.id, 'c:' + this.code(list)); },
+                code: function (list) { return parkEncode(gState.id, { n: makerName(), r: list }); }
+            }
+        };
+        let maker = null, makerReturn = null;
+        function makerKindOf(b) { return b.type || b.t; }
+        function makerName() { let el = document.getElementById('mk-name'); return el ? el.value.trim().slice(0, 12) : ''; }
+        function makerOpen(kind) {
+            let D = MAKER_DEFS[kind]; if (!D) return;
+            maker = { kind: kind, D: D, list: D.load() };
+            document.getElementById('mk-title').innerText = D.title;
+            let nm = document.getElementById('mk-name');
+            nm.value = kind === 'escape' ? (escDraft().n || '') : (gState.parkDraftName || '');
+            document.getElementById('mk-share').innerText = '';
+            makerRenderPalette(); makerRender();
+            document.getElementById('maker').classList.remove('hidden');
+            if (document.pointerLockElement) { try { document.exitPointerLock(); } catch (e) { } }
+        }
+        function makerClose() {
+            makerSave();
+            document.getElementById('maker').classList.add('hidden');
+            if (maker) selectGameMode(maker.kind);
+            maker = null;
+        }
+        function makerSave() {
+            if (!maker) return;
+            if (maker.kind === 'escape') escDraft().n = makerName(); else gState.parkDraftName = makerName();
+            saveProgress();
+        }
+        // 一块积木的 HTML。live=true 是右边真的积木（输入框能改），false 是左边的样品
+        function makerBlockHtml(b, i, live) {
+            let def = maker.D.blocks[makerKindOf(b)];
+            if (!def) return '<div class="mk-blk" style="background:#9e9e9e;" data-i="' + i + '">（这块积木现在没有了）</div>';
+            let inner = def.parts.map(function (p) {
+                if (typeof p === 'string') return '<span>' + p + '</span>';
+                let f = p[0], v = b[f];
+                if (p[1] === 'num') return live ? '<input class="mk-num" type="number" value="' + v + '" onchange="makerSet(' + i + ',\'' + f + '\',this.value,1)">' : '<span class="mk-pill">' + v + '</span>';
+                let opts = p[1];
+                if (!live) return '<span class="mk-pill">' + (opts[v] || v) + ' ▾</span>';
+                return '<select class="mk-sel" onchange="makerSet(' + i + ',\'' + f + '\',this.value,0)">' + Object.keys(opts).map(function (k) { return '<option value="' + k + '"' + (k === v ? ' selected' : '') + '>' + opts[k] + '</option>'; }).join('') + '</select>';
+            }).join('');
+            return '<div class="mk-blk" style="background:' + def.col + ';" data-i="' + i + '">' + inner + '</div>';
+        }
+        function makerRenderPalette() {
+            let el = document.getElementById('mk-palette');
+            el.innerHTML = maker.D.cats.map(function (c) {
+                return '<div class="mk-cat"><span style="background:' + c.col + ';"></span>' + c.name + '</div>' +
+                    c.blocks.map(function (k) { return '<div class="mk-pal" data-k="' + k + '">' + makerBlockHtml(maker.D.blocks[k].make(), -1, false) + '</div>'; }).join('');
+            }).join('');
+            el.querySelectorAll('.mk-pal').forEach(function (n) {
+                n.addEventListener('pointerdown', function (e) { makerDragStart(e, { pal: n.getAttribute('data-k') }, n.firstChild); });
+            });
+        }
+        function makerRender() {
+            let el = document.getElementById('mk-stack');
+            let L = maker.list;
+            el.innerHTML = '<div class="mk-blk mk-hat">' + maker.D.hat + '</div>' +
+                L.map(function (b, i) { return makerBlockHtml(b, i, true); }).join('') +
+                (L.length ? '' : '<div class="mk-empty">把左边的积木拖到这里（点一下也行）</div>') +
+                (maker.D.cap ? '<div class="mk-blk mk-cap">' + maker.D.cap + '</div>' : '');
+            el.querySelectorAll('.mk-blk[data-i]').forEach(function (n) {
+                n.addEventListener('pointerdown', function (e) {
+                    if (e.target.closest('input, select')) return;
+                    makerDragStart(e, { idx: +n.getAttribute('data-i') }, n);
+                });
+            });
+            document.getElementById('mk-count').innerText = L.length + ' / ' + maker.D.max;
+        }
+        function makerSet(i, f, v, num) { let b = maker.list[i]; if (!b) return; b[f] = num ? (parseFloat(v) || 0) : v; makerSave(); }
+        function makerAdd(k, at) {
+            if (maker.list.length >= maker.D.max) { blazeFlash('最多 ' + maker.D.max + ' 块'); return; }
+            let b = maker.D.blocks[k].make();
+            if (at === undefined || at > maker.list.length) at = maker.list.length;
+            maker.list.splice(at, 0, b); makerSave(); makerRender();
+        }
+        // ── 拖积木：鼠标和手指都走 pointer 事件 ──
+        let mkDrag = null;
+        function makerDragStart(e, src, node) {
+            e.preventDefault();
+            let r = node.getBoundingClientRect();
+            mkDrag = { src: src, node: node, sx: e.clientX, sy: e.clientY, ox: e.clientX - r.left, oy: e.clientY - r.top, ghost: null, moved: false };
+            window.addEventListener('pointermove', makerDragMove);
+            window.addEventListener('pointerup', makerDragEnd);
+            window.addEventListener('pointercancel', makerDragEnd);
+        }
+        function makerDropIndex(y) {
+            let ns = Array.from(document.querySelectorAll('#mk-stack .mk-blk[data-i]'));
+            for (let i = 0; i < ns.length; i++) { let r = ns[i].getBoundingClientRect(); if (y < r.top + r.height / 2) return +ns[i].getAttribute('data-i'); }
+            return maker.list.length;
+        }
+        function makerOverStack(x, y) { let r = document.getElementById('mk-area').getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; }
+        function makerDragMove(e) {
+            let d = mkDrag; if (!d) return;
+            if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 6) return;
+            if (!d.moved) {
+                d.moved = true;
+                d.ghost = d.node.cloneNode(true); d.ghost.classList.add('mk-ghost');
+                document.body.appendChild(d.ghost);
+                if (d.src.idx !== undefined) d.node.style.opacity = '0.3';
+            }
+            d.ghost.style.left = (e.clientX - d.ox) + 'px'; d.ghost.style.top = (e.clientY - d.oy) + 'px';
+            let line = document.getElementById('mk-line');
+            if (makerOverStack(e.clientX, e.clientY)) {
+                let i = makerDropIndex(e.clientY), ns = document.querySelectorAll('#mk-stack .mk-blk[data-i]');
+                let ref = ns[i] || document.querySelector('#mk-stack .mk-cap') || null;
+                let host = document.getElementById('mk-stack').getBoundingClientRect();
+                let y = ref ? ref.getBoundingClientRect().top : (ns.length ? ns[ns.length - 1].getBoundingClientRect().bottom : document.querySelector('#mk-stack .mk-hat').getBoundingClientRect().bottom);
+                line.style.display = 'block'; line.style.top = (y - host.top - 2) + 'px';
+            } else line.style.display = 'none';
+            document.getElementById('mk-palette').classList.toggle('mk-trash', d.src.idx !== undefined && !makerOverStack(e.clientX, e.clientY));
+        }
+        function makerDragEnd(e) {
+            let d = mkDrag; mkDrag = null;
+            window.removeEventListener('pointermove', makerDragMove);
+            window.removeEventListener('pointerup', makerDragEnd);
+            window.removeEventListener('pointercancel', makerDragEnd);
+            document.getElementById('mk-line').style.display = 'none';
+            document.getElementById('mk-palette').classList.remove('mk-trash');
+            if (!d) return;
+            if (d.ghost) d.ghost.remove();
+            d.node.style.opacity = '';
+            if (!d.moved) { if (d.src.pal) makerAdd(d.src.pal); return; }   // 点一下 = 加到最后
+            let over = makerOverStack(e.clientX, e.clientY);
+            if (d.src.pal) { if (over) makerAdd(d.src.pal, makerDropIndex(e.clientY)); return; }
+            let from = d.src.idx, b = maker.list[from];
+            if (!over) { maker.list.splice(from, 1); makerSave(); makerRender(); return; }   // 拖出去 = 删掉
+            let to = makerDropIndex(e.clientY);
+            maker.list.splice(from, 1);
+            if (to > from) to--;
+            maker.list.splice(to, 0, b); makerSave(); makerRender();
+        }
+        function makerTest() {
+            if (!maker.list.length) { blazeFlash('先拖一块积木进来'); return; }
+            makerSave();
+            let kind = maker.kind, D = maker.D, list = maker.list;
+            document.getElementById('maker').classList.add('hidden');
+            maker = null; makerReturn = kind;
+            D.test(list);
+        }
+        function makerShare() {
+            if (!maker.list.length) { blazeFlash('先拖一块积木进来'); return; }
+            makerSave();
+            let code = maker.D.code(maker.list);
+            document.getElementById('mk-share').innerText = '分享码：' + code;
+            let done = function () { blazeFlash('分享码复制好了，发给朋友'); }, fail = function () { blazeFlash('长按上面的分享码复制'); };
+            try { navigator.clipboard.writeText(code).then(done, fail); } catch (e) { fail(); }
+        }
+        // 试玩完回到创作界面，不是回大厅
+        function makerAfterGame() {
+            if (!makerReturn) return false;
+            let k = makerReturn; makerReturn = null;
+            document.getElementById('sys-modal').classList.add('hidden');
+            makerOpen(k);
+            return true;
+        }
         // ══════════════════════════════════════════════════════════
         //  大厅广场：进游戏前的一个可以走来走去的 3D 空间，边上搭了一小段
         //  跑酷，还有几个 AI 路人在晃悠——凑近谁都会弹出「组队」，是真人
@@ -25898,5 +25943,21 @@
         let hudSlots = document.querySelectorAll('#hud-hotbar-container .slot');
         hudSlots.forEach(function (slot, i) { setupSlotDrag(slot, 'inv', i); });
     </script>
+
+    <div id="maker" class="hidden">
+        <div id="mk-top">
+            <button onclick="makerClose()" class="mk-tbtn" style="background:#78909c;">← 返回</button>
+            <b id="mk-title"></b>
+            <input id="mk-name" placeholder="起个名字" maxlength="12" oninput="makerSave()">
+            <span id="mk-count"></span>
+            <button onclick="makerTest()" class="mk-tbtn" style="background:#59c059;">▶ 试玩</button>
+            <button onclick="makerShare()" class="mk-tbtn" style="background:#4c97ff;">分享码</button>
+        </div>
+        <div id="mk-share"></div>
+        <div id="mk-body">
+            <div id="mk-palette"></div>
+            <div id="mk-area"><div id="mk-stack"></div><div id="mk-line"></div></div>
+        </div>
+    </div>
 </body>
 </html>
