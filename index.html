@@ -1745,7 +1745,10 @@
             c.on('error', function () { try { c.close(); } catch (e) { } });
         }
 
-        const NET_PREFIX = 'maodun-';
+        // A9：PeerJS 房间 id 带协议版本号。以后每次改联机消息格式就把 v2 加一，
+        // 新旧版本的页面就不会进到同一个房间里（各算各的房间）。
+        const NET_PROTO = 2;
+        const NET_PREFIX = 'maodun-v' + NET_PROTO + '-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
         // 这一整套匹配等待（matchPool/matchLeader/night-wait 那个浮层）早就写好了，
         // 只是默认值一直是"跳过"（0），测试面板里的"惊魂夜：跳过匹配等待"开关反而是默认生效的
@@ -5793,7 +5796,8 @@
             {
                 id: '2026-10-03', date: '10 月 3 日', title: '联机安全', items: [
                     '别人起的怪名字不会再在你的页面上乱跑代码了',
-                    '没组队、没在排的人，不能再把你硬拉进对局了'
+                    '没组队、没在排的人，不能再把你硬拉进对局了',
+                    '联机升级了，跟朋友一起玩前都刷新一下页面'
                 ]
             },
             {
