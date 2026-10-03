@@ -2294,7 +2294,7 @@
         const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntTutorialShown: gState.huntTutorialShown, weightWarnShown: gState.weightWarnShown, skinPity: gState.skinPity };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -2306,6 +2306,7 @@
                     if (data.ver === SAVE_VER) {
                         gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {}; gState.escProg = data.escProg || null;
                         gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {};
+                        gState.huntTutorialShown = !!data.huntTutorialShown; gState.weightWarnShown = !!data.weightWarnShown; gState.skinPity = data.skinPity || 0;
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); grantBadgeIfMissing(); return;
                     }
@@ -2315,6 +2316,7 @@
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
             gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { head: null, waist: null }; gState.ownedAcc = {}; gState.escProg = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
             gState.dailyWin = {}; gState.towerBest = 0; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false; gState.introSeen = {}; gState.modeIntroShown = {};
+            gState.huntTutorialShown = false; gState.weightWarnShown = false; gState.skinPity = 0;
             expandInventory();
         }
 
@@ -5828,9 +5830,15 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         // 更新公告：只写玩家关心的，一条一句话，按时间合并成几段（原来六十多条，太长没人看）
         // B4：版本号。每次发版手动加一（同一天多次发版就把最后的 -N 加一）。B5 拆文件后，脚本地址也带这个版本号。
-        const GAME_VERSION = '2026.10.03-2';
+        const GAME_VERSION = '2026.10.03-3';
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
+            {
+                id: '2026-10-03-save-fix', date: '10 月 3 日', title: '修了几个存档小问题', items: [
+                    '负重超了的提示、新手进寻宝队的提示，以后只会弹一次，不会刷新页面就又弹',
+                    '皮肤抽卡的进度刷新页面也不会丢了'
+                ]
+            },
             {
                 id: '2026-10-03', date: '10 月 3 日', title: '联机安全', items: [
                     '别人起的怪名字不会再在你的页面上乱跑代码了',
