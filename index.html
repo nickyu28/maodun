@@ -7578,7 +7578,7 @@
                 if (a && a.isPlayer) {
                     blaze.ffaFreeN = (blaze.ffaFreeN || 0) + 1;
                     blaze.ffaFree = null;
-                    blazeFlash('金箱：免费 ' + BLAZE.ffaGoldPickN + ' 选 1（' + kTxt('按 C', '点「商店」') + '）');
+                    blazeFlash('金箱：免费 ' + BLAZE.ffaGoldPickN + ' 选 1');
                     blazeFfaCardToggle(true);
                 } else if (a) {
                     // AI 拿到金箱就当一笔大钱花
@@ -11547,7 +11547,7 @@
                 // 定期进账，顺便把刷新价打回底价 —— 一轮刷贵了，下一轮重新来
                 blaze.ffaRefreshN = 0;
                 blaze.actors.forEach(function (a) { blazeFfaEarn(a, BLAZE.ffaMoneyTick, ''); });
-                blazeFlash('进账 +' + BLAZE.ffaMoneyTick + '（' + kTxt('按 C', '点「商店」') + ' 开商店）');
+                { blazeFlash('进账 +' + BLAZE.ffaMoneyTick); introOnce('blaze.shop', '商店', '乱斗里会慢慢进账，' + kTxt('按 <b>C</b>', '点 <b>商店</b>') + ' 花钱买卡。'); }
                 blazeFfaCardToggle(true);   // 有钱了就自己弹出来
             }
             // 决赛：最后两分钟每人发几条命，死光出局。
@@ -11917,7 +11917,7 @@
                     : '') +
                 (blaze.ffaFinal && !me.out ? '　决赛 ❤×' + Math.max(0, me.lives) : '') +
                 (!me.out && !me.alive ? '　复活 ' + Math.ceil(Math.max(0, me.respawnT)) + 's' : '') +
-                '　' + blaze.ffaMoney + '（' + kTxt('C', '点「商店」') + ' 开商店）';
+                '　钱 ' + blaze.ffaMoney;
             document.getElementById('blaze-roster').innerHTML = '';
 
             let bd = document.getElementById('blaze-ffa-board');
@@ -14773,7 +14773,7 @@
                 if (d < bd && nightCanHit(h.p, a.p, NIGHT.atkRange + 6)) { bd = d; t = a; }
             });
             if (!t) { nightFlashHunter('附近没有倒地的人'); return; }
-            h.carrying = t; h.recover = 0.5; nightFlashHunter('已抓起 —— 走到椅子边再按 ' + nightKey('space') + ' 挂上');
+            h.carrying = t; h.recover = 0.5; { nightFlashHunter('已抓起'); introOnce('night.carry', '抓起来了', '扛到椅子边，按 ' + nightKey('space') + ' 挂上去。'); }
         }
 
         function nightHC() { return night.side === 'hunter' ? night.char : (night.hunterChar || 'hunter'); }
@@ -16266,15 +16266,19 @@
                     show = nightKey('act') + ' 爬出去撤离';
                 }
                 else if (me.downed) {
-                    show = '自愈 ' + Math.round((me.healProg || 0) * 100) + '%（最多 ' +
-                        Math.round(NIGHT.selfHealCap * 100) + '%，剩下的要队友来摸）';
+                    show = '自愈 ' + Math.round((me.healProg || 0) * 100) + '%';
+                    introOnce('night.down', '倒地了', '自己能慢慢恢复到 ' + Math.round(NIGHT.selfHealCap * 100) + '%，剩下的要队友过来扶你。');
                     frac = me.healProg || 0;
                 } else {
-                    show = '等队友来救　挂数 ' + me.chairCount + '/3';
+                    show = '挂在椅子上　' + me.chairCount + '/3';
+                    introOnce('night.chair', '被挂上椅子了', '等队友来把你放下来。挂满 3 次就出局。');
                     frac = 1 - me.chairTime / NIGHT.chairStage;
                 }
             }
-            else if (night.repairing) { show = '修理中 ' + night.repairing.progress.toFixed(1) + ' / 100　（' + nightKey('space') + ' 校准，移动则中断）'; frac = night.repairing.progress / 100; }
+            else if (night.repairing) {
+                show = '修理中 ' + night.repairing.progress.toFixed(1) + ' / 100'; frac = night.repairing.progress / 100;
+                introOnce('night.repair', '修矿机', '修的时候会跳出校准圈，指针转到红区按 ' + nightKey('space') + '。走开就停下来。');
+            }
             else if (night.doorTarget && !night.doorTarget.open) { show = '开门中 ' + night.doorTarget.openProgress.toFixed(1) + ' / ' + NIGHT.doorOpenTime + 's'; frac = night.doorTarget.openProgress / NIGHT.doorOpenTime; }
             else if (night.doorTarget && night.doorTarget.open) { show = '撤离中 ' + night.escapeProg.toFixed(1) + ' / ' + NIGHT.escapeTime + 's'; frac = night.escapeProg / NIGHT.escapeTime; }
             else {
@@ -18262,7 +18266,7 @@
                     b.gone = 6; b.mesh.visible = false;
                     r.item = raceRollItem();      // 开出什么完全看运气
                     raceBurst(b.x, r.p.y, b.z, 0xffca28, 6, 16, 0.35);
-                    if (r.isPlayer) blazeFlash('开到【' + raceItemDef(r.item).name + '】（' + kTxt('Q 使用', '点「道具」使用') + '）');
+                    if (r.isPlayer) { blazeFlash('开到【' + raceItemDef(r.item).name + '】'); introOnce('race.item', '道具', '路上的箱子能开出道具，' + kTxt('按 <b>Q</b>', '点 <b>道具</b>') + ' 用掉。一次只能拿一个。'); }
                 });
             });
         }
@@ -19267,10 +19271,12 @@
             let ev = raceEventDef(race.event);
             let me = race.racers[0];
             let sk = raceCardDef(me.skill), bf = raceCardDef(me.buff);
-            let line = '开跑！' + (sk ? '　【' + sk.name + '】' + kTxt('E', '「技能」') + '放' : '');
+            let line = '开跑！' + (sk ? '　【' + sk.name + '】' : '');
+            if (sk) introOnce('race.skill', '技能', '这轮选的技能 ' + kTxt('按 <b>E</b> 或 <b>右键</b>', '点 <b>技能</b>') + ' 放，用完要等一会儿才能再放。');
             if (bf) line += '　+【' + bf.name + '】';
             if (ev && ev.id !== 'none') {
-                line += '　' + '本轮：' + ev.name + ' —— ' + ev.desc;
+                line += '　' + '本轮：' + ev.name;
+                introOnce('race.ev.' + ev.id, '本轮：' + ev.name, ev.desc);
             }
             blazeFlash(line);
         }
@@ -19658,7 +19664,7 @@
                     if (bf) out += '　+' + bf.name;
                     return out;
                 })() +
-                (me.item ? '　' + raceItemDef(me.item).name + '（Q）' : '') +
+                (me.item ? '　' + raceItemDef(me.item).name : '') +
                 (function () {
                     let ev = raceEventDef(race.event);
                     return (ev && ev.id !== 'none') ? '　' + ev.name : '';
@@ -20393,9 +20399,12 @@
             document.getElementById('blaze-round').innerText =
                 '监狱救援　我方物品 ' + ic[me.team] + '　对面物品 ' + ic[1 - me.team] +
                 '　我方被抓 ' + jc[me.team] + '　对面被抓 ' + jc[1 - me.team] +
-                (me.jailed ? '　你被关在监狱里，等队友来救' : inEnemy ? '　你在敌方地盘，小心' : '　你在自己地盘，安全') +
+                (me.jailed ? '　在监狱里' : inEnemy ? '　敌方地盘' : '　自己地盘') +
                 (me.invulT > 0 ? '　无敌 ' + me.invulT.toFixed(1) + 's' : '') +
-                (me.carrying ? '　扛着一件物品，快回家！' : '');
+                (me.carrying ? '　扛着东西' : '');
+            if (inEnemy && !me.jailed) introOnce('jail.enemy', '对面的地盘', '这里是对面的地盘，被对面的人碰到就进监狱。回到自己这边就安全了。');
+            if (me.carrying) introOnce('jail.carry', '扛东西', '扛着东西走得慢。跑回自己家就算抢到，路上被抓东西会掉在原地。');
+            if (me.jailed) introOnce('jail.jailed', '进监狱了', '等队友跑过来碰一下监狱，就能出来。');
             document.getElementById('blaze-roster').innerHTML = '';
             // 体力条：借超燃的血条槽位
             let pct = Math.max(0, me.stamina / JAIL.staminaMax * 100);
@@ -21412,9 +21421,11 @@
             document.getElementById('blaze-round').innerText =
                 (dodge.crazy ? '躲避球·疯狂　' : (DODGE.teamSize === 5 ? '躲避球·5v5　' : '躲避球·经典　')) +
                 '我方存活 ' + (me.team === 0 ? a0 : a1) + '　对面存活 ' + (me.team === 0 ? a1 : a0) +
-                (me.out ? '　你被淘汰了，等复活'
-                    : me.holding ? (me.mustReturn ? '　中线球，先跑回本方边线再出手！' : ('　手里有' + dodgeKindName(me.holding.kind) + (padOn() ? '，按住「投」瞄准/松手投出，点一下放下' : '，按住左键瞄准/松手投出，点一下放下')))
-                        : (padOn() ? '　点「投」捡球，「接」接球' : '　左键点一下捡球，右键接球，空格跳跃'));
+                (me.out ? '　你出局了'
+                    : me.holding ? ('　手里：' + dodgeKindName(me.holding.kind) + (me.mustReturn ? '（中线球）' : '')) : '');
+            if (me.holding) introOnce('dodge.hold', '拿到球了', kTxt('按住 <b>左键</b> 瞄准，松手扔出去。点一下 <b>左键</b> 放下。', '按住 <b>投</b> 瞄准，松手扔出去。点一下 <b>投</b> 放下。'));
+            if (me.holding && me.mustReturn) introOnce('dodge.center', '中线球', '中线上捡的球，要先跑回自己底线才能扔。');
+            if (me.out) introOnce('dodge.out', '出局了', '队友接住球、或者把球投进中间的篮筐，就能把你救回来。');
             document.getElementById('blaze-roster').innerHTML = '';
             let pct = Math.max(0, me.stamina / DODGE.staminaMax * 100);
             let bar = document.getElementById('blaze-hpbar');
@@ -23962,8 +23973,8 @@
             let remain = Math.max(0, CAKE.matchTime - cake.clock);
             document.getElementById('blaze-score').innerText = '存活 ' + live + ' / ' + cake.actors.length + '　' + Math.ceil(remain) + 's';
             document.getElementById('blaze-round').innerText =
-                '松饼大作战　面朝对方、走进手的范围就能拍出局　已拍出局 ' + (me.kills || 0) + ' 人' +
-                (me.out ? '　你已出局，正在观战' : '') +
+                '抓到 ' + (me.kills || 0) + ' 人' +
+                (me.out ? '　出局了，在观战' : '') +
                 (me.shieldT > 0 ? '　护盾' : '') +
                 (me.speedT > 0 ? '　加速中' : '') +
                 (me.reachT > 0 ? '　长手中' : '');
@@ -24969,8 +24980,8 @@
                 let alive = g.actors.filter(function (a) { return !a.out; }).length;
                 let t = Math.max(0, Math.ceil(SUMO.time - g.clock));
                 nmHudText('存活 ' + alive + ' / ' + g.actors.length + '　' + t + 's',
-                    '推推乐　' + (g.clock < SUMO.shrinkAt ? Math.ceil(SUMO.shrinkAt - g.clock) + ' 秒后台子开始缩　' : '台子在缩！　') + '推下去 ' + g.me.kills + ' 人' +
-                    (g.me.out ? '　你已出局，观战中' : ''));
+                    (g.clock < SUMO.shrinkAt ? Math.ceil(SUMO.shrinkAt - g.clock) + ' 秒后台子开始缩　' : '台子在缩　') + '推下去 ' + g.me.kills + ' 人' +
+                    (g.me.out ? '　出局了，在观战' : ''));
             }
         };
 
@@ -25158,7 +25169,7 @@
                 let mine = g.me.team === 0 ? c.a : c.b, theirs = g.me.team === 0 ? c.b : c.a;
                 let t = Math.max(0, Math.ceil(PAINT.time - g.clock));
                 nmHudText(Math.round(mine / c.tot * 100) + '% : ' + Math.round(theirs / c.tot * 100) + '%　' + t + 's',
-                    '彩弹占地　走过的地方就是你的颜色，' + (padOn() ? '「喷」' : '左键') + '扔颜料' + (g.me.stunT > 0 ? '　被砸中了！' : ''));
+                    (g.me.stunT > 0 ? '被砸中了！' : ''));
             }
         };
 
@@ -25356,9 +25367,11 @@
                 let kindTxt = g.opt.kind === 'solo' ? '单人' : g.opt.kind === 'duo' ? '双人合作' : '多人';
                 let mate = g.opt.kind === 'duo' ? g.actors.filter(function (b) { return b !== me; })[0] : null;
                 nmHudText('第 ' + me.best + ' / ' + total + ' 块　离岩浆 ' + gap,
-                    '爬塔 · ' + kindTxt + (g.clock < TOWER.grace ? '　' + Math.ceil(TOWER.grace - g.clock) + ' 秒后岩浆开始涨' : '　岩浆在涨，往上爬！') +
-                    (mate ? '　队友：' + mate.name + (mate.downed ? '（掉了，爬到下一面旗救回来）' : mate.done ? '（到顶了）' : '') : '') +
-                    (me.downed ? '　等队友救你' : ''));
+                    kindTxt + (g.clock < TOWER.grace ? '　' + Math.ceil(TOWER.grace - g.clock) + ' 秒后岩浆开始涨' : '　岩浆在涨') +
+                    (mate ? '　队友：' + mate.name + (mate.downed ? '（掉下去了）' : mate.done ? '（到顶了）' : '') : '') +
+                    (me.downed ? '　掉下去了' : ''));
+                if (mate && mate.downed) introOnce('tower.save', '救队友', '队友掉下去了。你爬到下一面绿旗，就能把他拉回来。');
+                if (me.downed) introOnce('tower.down', '掉下去了', '别急，队友爬到下一面绿旗就能把你拉回来。');
             }
         };
 
@@ -25869,7 +25882,7 @@
             // 数字永远一样、永远不变，看着就跟假的一样；现在加回路人数只是为了凑热闹感。
             document.getElementById('blaze-score').innerText = '在线 ' + (roomOnlineCount() + hub.wanderers.length) + ' 人';
             let team = lobbyParty.concat(hub.party);
-            document.getElementById('blaze-round').innerText = '大厅广场　WASD 走动，空格跳，靠近人可以组队　当前队伍：' +
+            document.getElementById('blaze-round').innerText = '队伍：' +
                 (team.length ? team.map(dispName).join('、') : '（还没组队）') +
                 (nightAwayActive() ? '　· 队友还在惊魂夜里，等他们打完' : '');
         }
