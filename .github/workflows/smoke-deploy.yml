@@ -1,0 +1,65 @@
+# 冒烟测试 + 部署到 GitHub Pages（B3）
+#
+# 现在只跑冒烟测试；部署那一步先关着（deploy 任务里 if 的第一项是 false）。
+# 作者确认 B1 验收、并把仓库 Settings → Pages 的 Source 改成「GitHub Actions」之后，
+# 把 deploy 任务 if 里的 "false &&" 去掉，就变成：测试通过才部署。
+#
+# 手动触发（Actions 页 → Smoke test and deploy → Run workflow）：
+#   force 勾上 = 不管冒烟测试结果，强制发布一次（测试本身出问题时用）。
+#
+# 冒烟测试里"几何体泄漏"那一项是已知问题（等 D1），只报告 XFAIL，不会让这里失败。
+# D1 做完后把 tests/smoke.js 里的 EXPECT_GEOMETRY_LEAK 改成 false，它就必须通过。
+
+name: Smoke test and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '不管冒烟测试结果，强制发布'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Smoke test
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node tests/smoke.js
+
+  deploy:
+    needs: smoke
+    # 部署先关着：确认 B1、Pages Source 改成 GitHub Actions 之后，删掉下一行开头的 "false && "
+    if: ${{ false && github.event_name != 'pull_request' && (needs.smoke.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.force)) }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
