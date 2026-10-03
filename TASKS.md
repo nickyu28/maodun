@@ -89,13 +89,22 @@
 **A2 开局消息校验**
 - 只有「我正在排这个模式」（`mmActive.mode` 匹配，或 `nightMatch` 存在），或「发送者在 `lobbyParty` 里」，才接受开局消息。不要拆掉正在进行的对局。
 - 改哪里：`START_NIGHT`、`CK_START` 分支，`blazeOnStart`、`raceOnStart`、`jailOnStart`、`dodgeOnStart`、`escapeOnStart`、`nmOnStart`。
+- 另外两种也接受（10-03 作者确认）：
+  - 发送者是我当前（或刚结束）这一局的房主。用于合作密室的「下一关 / 再玩一次」（`escapeRestart` 会重新发 `ESC_START`）。
+  - 我 60 秒内同意过这个发送者的松饼邀请（松饼是邀请制，同意的人不一定在队伍里）。
+- 发送者以连接为准，不信消息里自己写的 `sender`（能伪造）：
+  - 经 PeerJS 来的：以连接为准。房主把每条连接绑定到它的游戏 ID，转发时由房主写入真实的 `sender`；客人信房主写的值，不信原消息里的。
+  - 经 BroadcastChannel 来的（同一浏览器）：可以放宽，信消息里的 `sender`。
+  - `START_NIGHT` 现在没有 `sender` 字段，发送端要补上。
 - 证据：伪造一条 `sides` 里含对方 ID 的 `START_NIGHT`，对方被拉进了选角界面。
-- 验收：没在排队的玩家收到伪造开局消息后留在原地。
+- 验收：没在排队的玩家收到伪造开局消息后留在原地；伪造 `sender` 的 `START_NIGHT` 被拒。
 
 **A3 加币消息设限**
 - `PARK_CREDIT` 只收正数，设单次上限，按发送者限流，发送者必须在房间里。唯一的合法发送处是 `parkEndMatch`。
+- 数字（10-03 作者确认）：单次上限 30 个猫盾币，超过就整条忽略；同一个发送者 10 分钟内最多收 3 条；发送端也把金额压到 30 以内。
+- 发送者的认定和 A2 一样：经 PeerJS 来的以房主绑定的连接身份为准（房主写入真实 `sender`），经 BroadcastChannel 来的可以放宽。现在消息里没有 `sender` 字段，发送端要补上。
 - 证据：线上实测给对方加了 777；本地测试里改成负 400 万并写进了存档。
-- 验收：负数和超上限的金额被忽略。
+- 验收：负数和超上限的金额被忽略；伪造 `sender` 的 `PARK_CREDIT` 被拒。
 
 **A5 测试面板开关**
 - `testPanelShow` 下面的 `keydown` 监听：网址不带 `?dev=1` 时，按 T 没有反应。
@@ -141,7 +150,8 @@
 
 **A6 删掉游玩记录和反馈**
 - 游玩记录：心跳里的 `stats` 字段（`playStatsDigest`、`roomSelfMsg`），`playLogSeen`，`openPlayLog`，`playLogSubmit`，以及界面入口。
-- 反馈：`openFeedback`、`feedbackSend`、`feedbackSubmit`、界面入口，以及 `netlify/functions/feedback.js`。
+- 反馈：`openFeedback`、`feedbackSend`、`feedbackSubmit`、界面入口，以及 `netlify/functions/feedback.js` 和 `netlify.toml`（10-03 作者确认一起删）。
+- 做 A6 时先停下来问作者要不要停掉「Maodun Feedback Triage」定时任务。
 - 夜间任务如果读取反馈，要同步去掉。
 - 验收：心跳里不再带金币、皮肤数、段位；界面上没有游玩记录和反馈入口。
 
