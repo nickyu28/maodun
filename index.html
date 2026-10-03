@@ -2538,7 +2538,7 @@
                     updateTeamListUI();
                 }
             } else if (msg.type === 'PARK_CREDIT') {
-                if (msg.to === gState.id) { coinsAdd('park', msg.amount || 0); blazeFlash('有人玩了你设计的密室小游戏，+' + (msg.amount || 0) + ' 猫盾币！'); }
+                if (msg.to === gState.id) parkOnCredit(msg);
             } else if (msg.type === 'SPAWN_MOBS') {
                 let flag = 'wave' + (msg.wave || 1) + 'Spawned';
                 if (!gState[flag]) { gState[flag] = true; spawnMonstersWithData(msg.spawns); }
@@ -23412,6 +23412,21 @@
             document.getElementById('blaze-score').innerText = scoreTxt + '　' + Math.ceil(remain) + 's';
             document.getElementById('blaze-round').innerText = (park.program.name || '猫盾乐园') + (padOn() ? '　摇杆移动去碰物品' : '　WASD 移动去碰物品') + varTxt;
         }
+        // A3：别人玩了你做的乐园游戏，分你一份猫盾币。只认房间里的人，金额 1～30，
+        // 同一个人 10 分钟内最多 3 次；不合规矩的整条丢掉。sender 由房主按连接写入（见 netDeliver）。
+        const PARK_CREDIT_MAX = 30, PARK_CREDIT_WINDOW = 10 * 60 * 1000, PARK_CREDIT_PER_WINDOW = 3;
+        let parkCreditLog = {};
+        function parkOnCredit(msg) {
+            let from = msg.sender, amt = msg.amount;
+            if (!from || from === gState.id || !roomPeers[from]) return;
+            if (typeof amt !== 'number' || !isFinite(amt) || amt !== Math.floor(amt) || amt <= 0 || amt > PARK_CREDIT_MAX) return;
+            let now = Date.now();
+            let log = (parkCreditLog[from] || []).filter(function (t) { return now - t < PARK_CREDIT_WINDOW; });
+            if (log.length >= PARK_CREDIT_PER_WINDOW) { parkCreditLog[from] = log; return; }
+            log.push(now); parkCreditLog[from] = log;
+            coinsAdd('park', amt);
+            blazeFlash('有人玩了你做的乐园小游戏，+' + amt + ' 猫盾币！');
+        }
         function parkEndMatch(won) {
             if (!park || park.over) return;
             park.over = true;
@@ -23420,7 +23435,8 @@
             let reward = won ? baseReward : Math.max(1, Math.floor(baseReward * 0.3));
             coinsAdd('park', reward);
             if (park.program.creatorId && park.program.creatorId !== gState.id && roomPeers[park.program.creatorId]) {
-                bc.postMessage({ type: 'PARK_CREDIT', target: '*', to: park.program.creatorId, amount: Math.round(reward * 0.5) });
+                let credit = Math.min(PARK_CREDIT_MAX, Math.round(reward * 0.5));
+                if (credit > 0) bc.postMessage({ type: 'PARK_CREDIT', target: '*', sender: gState.id, to: park.program.creatorId, amount: credit });
             }
             showSysModal(won ? '通关！' : '没能达成目标', '获得 ' + reward + ' 猫盾币' + (won ? '' : '（安慰奖）'),
                 [{ label: '返回大厅', color: '#5cb85c', onClick: function () { parkExit(); } }]);
