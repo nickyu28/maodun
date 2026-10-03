@@ -119,9 +119,14 @@ async function openTab(chrome, url, opts) {
     const pid = (opts && opts.name) || ('smoke' + Math.floor(Math.random() * 100000));
     await tab.eval(`document.getElementById('player-id').value = ${JSON.stringify(pid)}; requestLobbyAccess(); true;`);
     await W(1500);
-    await tab.eval(`gState.modeIntroShown = { hunt:1, night:1, blaze:1, race:1, jail:1, dodge:1, escape:1, park:1, cake:1, sumo:1, paint:1, tower:1 }; document.getElementById('sys-modal').classList.add('hidden'); true;`);
+    await tab.eval(`gState.modeIntroShown = { hunt:1, night:1, blaze:1, race:1, jail:1, dodge:1, escape:1, park:1, cake:1, sumo:1, paint:1, tower:1 }; ${HIDE} true;`);
     return tab;
 }
+
+// 关掉弹窗。介绍卡片要连排队一起清掉，光藏起来的话 introOpen 一直是 true，单人密室会一直停着
+const HIDE = `document.getElementById('sys-modal').classList.add('hidden'); introQ.length = 0; introOpen = false;`;
+const MODAL = `(document.getElementById('sys-modal').classList.contains('hidden') ? null : document.getElementById('sys-modal-title').innerText)`;
+const CLICK_OK = `(function(){ let b = document.querySelector('#sys-modal-btns button'); if (b) b.click(); return !!b; })()`;
 
 const MODES = {
     hunt: { start: `(requestStartGame(), requestEnterMap())`, exit: `(function(){ chooseLeave(); document.getElementById('game-over').classList.add('hidden'); nav('screen-lobby'); })()` },
@@ -141,12 +146,12 @@ const ACTIVE = `(function(){ let k = chatActiveModeKey(); return k === 'hub' ? n
 
 async function enterExit(tab, key) {
     const m = MODES[key];
-    await tab.eval(`document.getElementById('sys-modal').classList.add('hidden'); selectGameMode('${key}'); ${m.start}; true;`);
+    await tab.eval(`${HIDE} selectGameMode('${key}'); ${m.start}; true;`);
     await W(3000);
     const active = await tab.eval(ACTIVE);
-    await tab.eval(`document.getElementById('sys-modal').classList.add('hidden'); ${m.exit}; true;`);
+    await tab.eval(`${HIDE} ${m.exit}; true;`);
     await W(1800);
-    await tab.eval(`document.getElementById('sys-modal').classList.add('hidden'); true;`);
+    await tab.eval(`${HIDE} true;`);
     const back = await tab.eval(`!!hub && ${ACTIVE} === null`);
     return { active, back };
 }
@@ -169,6 +174,88 @@ async function enterExit(tab, key) {
             try { r = await enterExit(A, key); } catch (e) { r = { active: null, back: false, err: e.message.slice(0, 200) }; }
             const errs = A.errors.slice(before);
             report('模式 ' + key, r.active === key && r.back && errs.length === 0, (r.err || '') + (r.active !== key ? ' 进入后的模式=' + r.active : '') + (r.back ? '' : ' 没回到大厅') + (errs.length ? ' ' + errs.slice(0, 2).join(' / ') : ''));
+        }
+
+        // 2b. 规则按钮、新东西介绍、密室入门关
+        {
+            const before = A.errors.length;
+            const bad = [];
+            for (const key of Object.keys(MODES)) {
+                await A.eval(`${HIDE} selectGameMode('${key}'); document.querySelector('button[onclick="openRules()"]').click(); true;`);
+                await W(150);
+                const want = await A.eval(`MODE_RULES['${key}'].title + ' · 规则'`);
+                const t = await A.eval(MODAL);
+                await A.eval(CLICK_OK); await W(300);
+                const closed = await A.eval(`${MODAL} === null && !introOpen`);
+                if (t !== want || !closed) bad.push(key + (t !== want ? ' 标题=' + t : ' 关不掉'));
+            }
+            report('规则按钮 12 个模式都能打开、关闭', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+        {
+            const before = A.errors.length;
+            await A.eval(`${HIDE} delete gState.modeIntroShown.cake; selectGameMode('cake'); cakeBegin(); true;`);
+            await W(1500);
+            const t = await A.eval(MODAL);
+            await A.eval(CLICK_OK); await W(300);
+            const closed = await A.eval(`${MODAL} === null`);
+            await A.eval(`${HIDE} cakeExit(); true;`); await W(1500); await A.eval(`${HIDE} true;`);
+            const back = await A.eval(`!!hub && ${ACTIVE} === null`);
+            report('第一次进模式自动弹规则', t === '松饼大作战 · 规则' && closed && back && A.errors.length === before, '弹窗=' + t + (closed ? '' : ' 关不掉') + (back ? '' : ' 没回到大厅') + A.errors.slice(before, before + 2).join(' / '));
+        }
+        {
+            const before = A.errors.length;
+            await A.eval(`${HIDE} delete gState.introSeen['smoke.a']; delete gState.introSeen['smoke.b']; introOnce('smoke.a', '测试 A', '一'); introOnce('smoke.b', '测试 B', '二'); true;`);
+            await W(150);
+            const t1 = await A.eval(MODAL);
+            await A.eval(CLICK_OK); await W(500);
+            const t2 = await A.eval(MODAL);
+            await A.eval(CLICK_OK); await W(500);
+            const t3 = await A.eval(MODAL);
+            await A.eval(`introOnce('smoke.a', '测试 A', '一'); true;`); await W(150);
+            const t4 = await A.eval(MODAL);
+            const saved = await A.eval(`JSON.parse(localStorage.getItem('TH_save_' + gState.id) || '{}').introSeen`);
+            report('介绍卡片排队弹、能关、只弹一次', t1 === '测试 A' && t2 === '测试 B' && t3 === null && t4 === null && !!(saved && saved['smoke.a']) && A.errors.length === before,
+                [t1, t2, t3, t4].join(' → ') + (saved && saved['smoke.a'] ? '' : ' 没进存档') + A.errors.slice(before, before + 2).join(' / '));
+        }
+        {
+            // 单人密室第 1 关：第一次碰到彩色板弹卡片，开着时这一局停住，关了接着跑
+            const before = A.errors.length;
+            await A.eval(`${HIDE} Object.keys(ESC_INTROS).forEach(function (k) { delete gState.introSeen['esc.' + k]; }); selectGameMode('escape'); escapeBegin(null, null, 1); true;`);
+            await W(2500);
+            const t = await A.eval(MODAL);
+            const c1 = await A.eval('escapeRoom.startT + escapeRoom.clock'); await W(1000);
+            const c2 = await A.eval('escapeRoom.startT + escapeRoom.clock');
+            await A.eval(CLICK_OK); await W(300);
+            await A.eval(`while (introOpen || introQ.length) { if (!${CLICK_OK}) break; } true;`);
+            await W(4500);
+            const run = await A.eval('JSON.stringify({ started: escapeRoom.started, clock: escapeRoom.clock })');
+            await A.eval(`${HIDE} escapeExit(); true;`); await W(1500); await A.eval(`${HIDE} true;`);
+            const ok = t === '彩色板' && c1 === c2 && JSON.parse(run).started;
+            report('密室介绍卡片：弹出时停住、关了继续', ok && A.errors.length === before, '弹窗=' + t + ' 停住前后计时 ' + c1 + '/' + c2 + ' 之后 ' + run + A.errors.slice(before, before + 2).join(' / '));
+        }
+        {
+            const before = A.errors.length;
+            const bad = [];
+            const intro = await A.eval(`ESC_LEVELS.slice(0, ESC_INTRO_N).every(function (l) { return l.intro; }) && !ESC_LEVELS[ESC_INTRO_N].intro && ESC_INTRO_N === 8`);
+            if (!intro) bad.push('前 8 关不全是入门关');
+            await A.eval(`Object.keys(ESC_INTROS).forEach(function (k) { gState.introSeen['esc.' + k] = 1; }); true;`);
+            for (let n = 1; n <= 8; n++) {
+                await A.eval(`${HIDE} escapeBegin(null, null, ${n}); true;`);
+                await W(2000);
+                const s = await A.eval(`JSON.stringify(escapeRoom ? { n: escapeRoom.lvl, intro: !!escapeRoom.lv.intro, active: ${ACTIVE} } : null)`);
+                await A.eval(`${HIDE} escapeExit(); true;`); await W(1200); await A.eval(`${HIDE} true;`);
+                const back = await A.eval(`!!hub && ${ACTIVE} === null`);
+                const o = JSON.parse(s);
+                if (!o || o.n !== n || !o.intro || o.active !== 'escape' || !back) bad.push(n + ':' + s + (back ? '' : ' 没回到大厅'));
+            }
+            report('密室入门关 1–8 能进能出', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+        {
+            // 老存档：原第 2 关往后挪到第 9 关，原第 1 关的成绩不带过来（那关拿掉了）
+            const r = await A.eval(`(function () { let keep = gState.escProg; gState.escProg = { unlocked: 3, best: { 1: { s: 3 }, 2: { s: 2 } }, sel: 2 };
+                let P = escProg(), o = { unlocked: P.unlocked, sel: P.sel, best: Object.keys(P.best).join(','), v: P.v }; gState.escProg = keep; return JSON.stringify(o); })()`);
+            const o = JSON.parse(r);
+            report('密室老进度往后挪', o.unlocked === 10 && o.sel === 9 && o.best === '1,9' && o.v === 2, r);
         }
 
         // 3. 伪造消息（附录）
