@@ -17070,6 +17070,7 @@
                     else if (activeObj.userData.isItem) {
                         expandInventory(); let emptyIdx = gState.inv.findIndex(function (item, idx) { return item === null && idx < gState.maxInv; });
                         if (emptyIdx !== -1) {
+                            huntItemIntro(activeObj.userData);
                             gState.inv[emptyIdx] = { n: activeObj.userData.n, v: activeObj.userData.v, w: activeObj.userData.w, tex: activeObj.userData.tex, type: activeObj.userData.type, c: activeObj.userData.c, dmg: activeObj.userData.dmg, spd: activeObj.userData.spd, hp: activeObj.userData.hp, uses: activeObj.userData.uses, maxUses: activeObj.userData.maxUses };
 
                             if (activeObj.userData.fromSignal || activeObj === gState.signal.mesh) {
@@ -17085,6 +17086,25 @@
         }
 
         const HUNT_GRAB_TYPES = { angel: 1, puppet: 1, high: 1, splitter: 1, curser: 1 };
+        // 第一次碰到某种怪/某种道具，弹一张说明（只弹一次）
+        const HUNT_MOB_INTRO = {
+            angel: '你看着它，它就不动；一转身它就冲过来。',
+            puppet: '看着它它就不动，背过去它就追你。',
+            high: '会隔着楼层打到你，上下楼也躲不开。',
+            splitter: '打死会分成两个小的。',
+            curser: '被它盯上会中诅咒：地图乱掉、体力掉得快、或者血量上限变低。'
+        };
+        const HUNT_ITEM_INTRO = {
+            wep: ['武器', '拿在手上，' + '对着怪物「互动」就能打它。'],
+            signal: ['信号接收器', '拿在手上用一下，会指出附近一件好东西在哪。'],
+            time_stop: ['时空沙漏', '用了以后怪物会停住一会儿。'],
+            amulet: ['永恒誓言', '带在身上，凝视者和伪装者就不会靠近你。'],
+            badge: ['地窖徽章', '用了直接回到起点。只能用一次，回仓库能充能。']
+        };
+        function huntItemIntro(d) {
+            let t = HUNT_ITEM_INTRO[d && d.type]; if (!t) return;
+            introOnce('hunt.item.' + d.type, t[0], t[1] + (d.type === 'wep' ? '' : '<br>' + kTxt('选中它按 <b>右键</b> 用。', '选中它点 <b>道具</b> 用。')));
+        }
         function huntNearestInteract() {
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
             let best = null, bestD = 1e9, p = camera.position;
@@ -17138,6 +17158,8 @@
 
             entities.forEach(function (entity) {
                 let meta = entity.userData;
+                if (HUNT_MOB_INTRO[meta.type] && Math.abs(entity.position.y - camera.position.y) < TILE * 0.6 && entity.position.distanceTo(camera.position) < 45)
+                    introOnce('hunt.mob.' + meta.type, meta.name || '怪物', HUNT_MOB_INTRO[meta.type]);
                 if (meta.type === 'ai') {
                     if (!meta.isRealPlayer) {
                         let anchor = playerAnchor();
@@ -23731,7 +23753,10 @@
             else if (kind.key === 'reach') a.reachT = Infinity;
             else if (kind.key === 'shield') a.shieldT = Infinity;
             cakeBurst(a.p.x, a.p.z, kind.color);
-            if (a.isPlayer) blazeFlash('捡到增益：' + kind.label + (kind.key === 'speed' ? '！' : '（永久）！'));
+            if (a.isPlayer) {
+                blazeFlash('捡到增益：' + kind.label + (kind.key === 'speed' ? '！' : '（永久）！'));
+                introOnce('cake.' + kind.key, kind.label, { speed: '跑得快一阵子。', reach: '手变长了，离远一点也能抓到人。这局一直有效。', shield: '被抓的时候能挡一次。' }[kind.key] || '');
+            }
         }
         function cakeBuffTick(dt) {
             if (cake.net && !cakeIsHost()) return;   // 联机时刷新/判定归房主，其他人靠世界同步对齐
