@@ -949,6 +949,7 @@
             <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
                 <button onclick="toggleModeDetail()" style="margin:0; font-size:12px; padding:8px 10px; background:#607d8b; color:#fff; border:none; white-space:nowrap;">选择模式</button>
                 <div id="mode-bar-current" style="flex:1; min-width:0; font-size:13px; color:#333; text-align:center; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">寻宝队</div>
+                <button onclick="openRules()" style="margin:0; font-size:12px; padding:8px 8px; background:#8d6e63; color:#fff; border:none; white-space:nowrap;">规则</button>
                 <button id="lobby-start-btn" onclick="lobbyPrimaryStart()" style="margin:0; font-size:13px; padding:8px 12px; background:#4caf50; color:#fff; border:none; font-weight:bold; white-space:nowrap;">开始游戏！</button>
             </div>
             <div id="mode-detail-panel" class="hidden">
@@ -990,55 +991,34 @@
         </div>
 
         <div id="night-only" class="hidden" style="text-align:center; margin:0 0 8px;">
-            <div style="font-size:13px; color:#666; margin-bottom:8px;">1v4 逃生。7 台矿机修好 5 台开门。</div>
+            <div style="font-size:13px; color:#666; margin-bottom:8px;">1v4 逃生</div>
             <div style="font-size:12px; color:#666; margin-bottom:6px;">选择阵营</div>
             <div style="display:flex; gap:6px; justify-content:center;">
                 <button onclick="enterNightMatch('survivor')" style="flex:1; margin:0; background:#5cb85c; color:#fff; border:none; padding:10px 0; font-size:13px;">逃生者 · 4 人</button>
                 <button onclick="enterNightMatch('hunter')" style="flex:1; margin:0; background:#d9534f; color:#fff; border:none; padding:10px 0; font-size:13px;">追捕 · 1 人</button>
             </div>
-            <div style="font-size:11px; color:#999; margin-top:6px;">进图后再选具体角色</div>
             <button onclick="openCalibPractice()" style="width:100%; margin-top:6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 0;">矿机校准练习</button>
         </div>
 
         <div id="race-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#e0f2f1; border:1px solid #80cbc4; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#00695c; font-weight:bold; margin-bottom:2px;">竞速 · 16 人淘汰赛</div>
-            <div style="font-size:12px; color:#00796b; line-height:1.7; margin-bottom:8px;">
-                五轮淘汰，16 → 12 → 8 → 4 → 2，每轮刷掉最后几名。<br>
-                开跑前 7 秒被栏杆拦着：可以往前挤位置，顺便选这轮的技能。<br>
-                <span id="race-help-keys"></span>掉下去不算输，回检查点。赛道每轮都不一样，路上有道具箱。
-            </div>
+            <div style="height:6px;"></div>
             <div style="display:flex; gap:6px;">
                 <button onclick="raceStartGo()" style="flex:1; margin:0; background:#00897b; color:#fff; border:none; padding:10px 0; font-size:15px;">开跑</button>
                 <button onclick="raceDuoStart()" style="flex:1; margin:0; background:#00695c; color:#fff; border:none; padding:10px 0; font-size:15px;">双人</button>
             </div>
-            <div style="font-size:11px; color:#00796b; margin:4px 0 0;">双人：两人一队，按名次算分，两人加起来最少的队淘汰。</div>
             <button onclick="raceBoardOpen(1)" style="width:100%; margin:6px 0 0; background:#455a64; color:#fff; border:none; padding:8px 0; font-size:13px;">记录榜</button>
             <button id="race-testcard-btn" onclick="raceTestPickCard()" style="width:100%; margin:6px 0 0; background:#eceff1; color:#607d8b; border:1px solid #cfd8dc; padding:7px 0; font-size:12px;">测试：自选牌（随机）</button>
         </div>
 
         <div id="jail-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#ede7f6; border:1px solid #b39ddb; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#4527a0; font-weight:bold; margin-bottom:2px;">监狱救援 · 5v5</div>
-            <div style="font-size:12px; color:#5e35b1; line-height:1.7; margin-bottom:8px;">
-                两队各有一半地盘。在<b>对面地盘</b>被敌人碰到就进监狱，在自己家很安全。<br>
-                去对面监狱碰一下，能把队友全救出来。<br>
-                每队家门口有 <b>5 件东西</b>，把对面的扛回自己家就算抢到；被抓了东西掉在原地。<br>
-                <b>东西多的一队赢</b>，一队全进监狱直接输。一局 4 分钟。<br>
-                Shift（平板「跑」）跑得快但耗体力，空格跳。
-            </div>
+            <div style="font-size:12px; color:#5e35b1;">抢对面的东西，别被抓进监狱。点上面的「规则」看怎么玩。</div>
         </div>
 
         <div id="dodge-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff8e1; border:1px solid #ffca28; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#e65100; font-weight:bold; margin-bottom:2px;">躲避球 · 10v10 · 超大场地</div>
-            <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
-                两队各占半场，不能过中线。砸中对面的人，他就出局。<br>
-                <b>左键</b>（平板「投」）：点一下捡球或放下；按住瞄准，松手扔。<br>
-                <b>右键</b>（平板「接」）：接球，要掐准时间。接住还能救回一个队友。<br>
-                中线的球捡起来，要先跑回自己底线才能扔。<br>
-                球投进中间的<b>篮筐</b>，全队复活。一队全灭就输，4 分钟到了比人数。
-            </div>
-            <div style="font-size:12px; color:#bf360c; line-height:1.7; margin-bottom:8px; border-top:1px dashed #ffca28; padding-top:6px;">
-                <b>疯狂模式</b>：多了金色复活球、碰到就死的秒杀球，还会不停空投新球。
-            </div>
+            <div style="height:6px;"></div>
             <div style="display:flex; gap:6px;">
                 <button onclick="dodgeStartGo(false)" style="flex:1; margin:0; background:#fb8c00; color:#fff; border:none; padding:10px 0; font-size:14px;">经典模式</button>
                 <button onclick="dodgeStartGo(true)" style="flex:1; margin:0; background:#d84315; color:#fff; border:none; padding:10px 0; font-size:14px;">疯狂模式</button>
@@ -1049,14 +1029,7 @@
         </div>
 
         <div id="escape-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:6px; padding:12px 14px; text-align:left;">
-            <div style="font-size:14px; color:#2e7d32; font-weight:bold; margin-bottom:2px;">合作密室 · 15 关</div>
-            <div style="font-size:12px; color:#556b57; line-height:1.7; margin-bottom:8px;">
-                一起开机关，全员走到出口就过关。脚下圆圈是你的颜色。<br>
-                <b>板子</b>：彩色的同色才能踩，×2 要两个人。<br>
-                <b>拉杆</b>有人站着门才开，<b>按钮</b>踩一下门开几秒。<br>
-                <b>顺序板、钥匙、密码</b>你来做，AI 帮你站岗。<br>
-                红激光躲开，橙激光和矮栏跳过去。
-            </div>
+            <div id="esc-title" style="font-size:14px; color:#2e7d32; font-weight:bold; margin-bottom:8px;">合作密室 · 15 关</div>
             <div id="esc-level-wrap" style="margin-bottom:8px;">
                 <div id="esc-level-grid" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:6px;"></div>
                 <div id="esc-level-info" style="font-size:12px; color:#556b57; margin-top:6px; line-height:1.6;"></div>
@@ -1079,9 +1052,7 @@
 
         <div id="park-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fce4ec; border:1px solid #f48fb1; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#ad1457; font-weight:bold; margin-bottom:2px;">猫盾乐园</div>
-            <div style="font-size:12px; color:#6d4c41; line-height:1.6; margin-bottom:8px;">
-                拖积木做自己的小游戏。别人玩你做的，你也有猫盾币（要在同一个房间）。现在有：<span id="park-coin-disp">0</span>
-            </div>
+            <div style="font-size:12px; color:#6d4c41; margin-bottom:8px;">猫盾币：<span id="park-coin-disp">0</span></div>
             <div style="display:flex; gap:6px; margin-bottom:8px;">
                 <button onclick="parkBegin(PARK_BUILTIN.easy)" style="flex:1; margin:0; background:#4fc3f7; color:#fff; border:none; padding:9px 0; font-size:13px;">鱼干捕手·简单</button>
                 <button onclick="parkBegin(PARK_BUILTIN.hard)" style="flex:1; margin:0; background:#0288d1; color:#fff; border:none; padding:9px 0; font-size:13px;">鱼干捕手·挑战</button>
@@ -1096,31 +1067,17 @@
 
         <div id="sumo-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff3e0; border:1px solid #ffb74d; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#e65100; font-weight:bold; margin-bottom:2px;">推推乐 · 8 人混战</div>
-            <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
-                台子 20 秒后开始缩。<br>
-                <b>左键 / E</b>（平板「推」）撞人，掉下去就出局。<br>
-                最后站着的赢。
-            </div>
+            <div style="height:6px;"></div>
             <button onclick="nmStartGo('sumo')" style="width:100%; margin:0; background:#fb8c00; color:#fff; border:none; padding:10px 0; font-size:14px;">开始</button>
         </div>
         <div id="paint-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#e1f5fe; border:1px solid #81d4fa; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#0277bd; font-weight:bold; margin-bottom:2px;">彩弹占地 · 4v4</div>
-            <div style="font-size:12px; color:#455a64; line-height:1.7; margin-bottom:8px;">
-                走过的地方变成你们队的颜色。<br>
-                <b>左键 / E</b>（平板「喷」）扔颜料，砸中人他会愣一下。<br>
-                2 分钟后地盘大的队赢。
-            </div>
+            <div style="height:6px;"></div>
             <button onclick="nmStartGo('paint')" style="width:100%; margin:0; background:#039be5; color:#fff; border:none; padding:10px 0; font-size:14px;">开始</button>
         </div>
         <div id="tower-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#ede7f6; border:1px solid #b39ddb; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#4527a0; font-weight:bold; margin-bottom:2px;">爬塔 · 跑酷</div>
-            <div style="font-size:12px; color:#5e35b1; line-height:1.7; margin-bottom:8px;">
-                岩浆一直在涨，往上跳。<br>
-                <b>单人</b>：看你能爬多高。<br>
-                <b>双人</b>：都到顶才算赢。掉了的话，队友爬到下一面绿旗就能救你。<br>
-                <b>多人</b>：6 个人比谁先到顶。
-                <div id="tower-best" style="margin-top:4px; color:#7e57c2;"></div>
-            </div>
+            <div id="tower-best" style="font-size:12px; margin-bottom:8px; color:#7e57c2;"></div>
             <div style="display:flex; gap:6px;">
                 <button onclick="nmStartGo('tower', { kind: 'solo' })" style="flex:1; margin:0; background:#7e57c2; color:#fff; border:none; padding:9px 0; font-size:13px;">单人</button>
                 <button onclick="nmStartGo('tower', { kind: 'duo' })" style="flex:1; margin:0; background:#5e35b1; color:#fff; border:none; padding:9px 0; font-size:13px;">双人合作</button>
@@ -1129,27 +1086,17 @@
         </div>
         <div id="cake-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff8e1; border:1px solid #ffca28; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#f57f17; font-weight:bold; margin-bottom:2px;">松饼大作战 · 自由混战</div>
-            <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
-                不分队，谁都能抓人：<b>面朝对方</b>、让他进到你手的范围，他就出局。<br>
-                最后剩下的人赢。地上的东西能加速、加长手，或者挡一次。<br>
-                时间到了比谁抓得多。空格跳。
-            </div>
+            <div style="font-size:12px; color:#8d6e63;">面朝谁、碰到谁，谁就出局。点上面的「规则」看怎么玩。</div>
         </div>
 
         <div id="blaze-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff3e0; border:1px solid #ffcc80; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#e64a19; font-weight:bold; margin-bottom:2px;">超燃 · 2v2</div>
-            <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-bottom:8px;">
-                一条命，一队全灭输一局。<span id="blaze-help-keys"></span>局间可以选一项加成。
-            </div>
+
             <div id="blaze-coins" style="font-size:12px; color:#e6a23c; margin-bottom:6px;"></div>
             <div id="blaze-chars" style="display:grid; grid-template-columns:1fr 1fr; gap:6px;"></div>
             <div id="blaze-detail" style="margin-top:8px; font-size:12px; color:#5d4037; line-height:1.8; min-height:66px;"></div>
             <button onclick="blazeStart()" style="width:100%; margin:8px 0 0; background:#ff5722; color:#fff; border:none; padding:9px 0; font-size:15px;">开打（2v2）</button>
-            <div style="font-size:12px; color:#8d6e63; line-height:1.7; margin-top:10px; border-top:1px solid #ffcc80; padding-top:8px;">
-                <b style="color:#e64a19;">乱斗 · 16 人单排混战</b><br>
-                5 分钟，死了 10 秒后复活。<span id="ffa-help-keys"></span>卡池随时打开随便挑。
-                击杀 +2、助攻 +2、死亡 −1，不算排位。
-            </div>
+            <div style="font-size:12px; color:#e64a19; font-weight:bold; margin-top:10px; border-top:1px solid #ffcc80; padding-top:8px;">乱斗 · 16 人</div>
             <div style="display:flex; gap:6px; margin-top:8px;">
                 <button onclick="blazeFfaStart()" style="flex:1; margin:0; background:#8e24aa; color:#fff; border:none; padding:9px 0; font-size:14px;">乱斗 · 单排</button>
                 <button onclick="blazeFfaDuoStart()" style="flex:1; margin:0; background:#5e35b1; color:#fff; border:none; padding:9px 0; font-size:14px;">乱斗 · 双人</button>
@@ -2346,7 +2293,7 @@
         const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -2357,7 +2304,7 @@
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
                         gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {}; gState.escProg = data.escProg || null;
-                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded;
+                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {};
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); grantBadgeIfMissing(); return;
                     }
@@ -2366,7 +2313,7 @@
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
             gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { head: null, waist: null }; gState.ownedAcc = {}; gState.escProg = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
-            gState.dailyWin = {}; gState.towerBest = 0; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false;
+            gState.dailyWin = {}; gState.towerBest = 0; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false; gState.introSeen = {}; gState.modeIntroShown = {};
             expandInventory();
         }
 
@@ -2935,40 +2882,132 @@
         // 但那是选模式的时候才看得到的——真进了局，尤其是没细看就点了开始的人，
         // 完全没有任何提醒。第一次进某个模式的时候，把那块面板的文字原样弹出来
         // 当一次性教程：不重复维护一份文案，面板改了这里也跟着改。
-        const MODE_INTRO = {
-            night: { panel: 'night-only', title: '惊魂夜规则' },
-            blaze: { panel: 'blaze-only', title: '超燃规则' },
-            race: { panel: 'race-only', title: '竞速规则' },
-            jail: { panel: 'jail-only', title: '监狱救援规则' },
-            dodge: { panel: 'dodge-only', title: '躲避球规则' },
-            escape: { panel: 'escape-only', title: '密室规则' },
-            park: { panel: 'park-only', title: '猫盾乐园规则' },
-            cake: { panel: 'cake-only', title: '松饼大作战规则' },
-            sumo: { panel: 'sumo-only', title: '推推乐规则' },
-            paint: { panel: 'paint-only', title: '彩弹占地规则' },
-            tower: { panel: 'tower-only', title: '爬塔规则' }
+        // ══════════════ 游戏规则 + 第一次碰到新东西时的介绍 ══════════════
+        // 局内画面上只留状态（分数、时间、剩几个人），怎么玩全放这里：大厅「规则」按钮看，
+        // 第一次进某个模式自动弹一次；局里第一次碰到新机关/新道具，用 introOnce 弹一张小卡片。
+        const MODE_RULES = {
+            hunt: { title: '寻宝队', lines: function () { return [
+                '迷宫里开箱子找宝贝，拿回起点那一格上交。',
+                '上交的钱够了就能撤离，撤离出去才算赢。',
+                '怪物会追人。倒地了队友能救你，开了 AI 补齐的话 AI 也会来救。',
+                kTxt('<b>F / 左键</b> 开箱子、捡东西、打怪　<b>右键</b> 用手上的东西', '<b>互动</b> 开箱子、捡东西、打怪　<b>道具</b> 用手上的东西'),
+                kTxt('<b>1 2 3</b> 换手上的东西　<b>Q</b> 扔　<b>E</b> 背包　<b>M</b> 地图', '点下面的格子换手上的东西，<b>背包</b> 看全部'),
+                kTxt('<b>Shift</b> 跑　<b>空格</b> 跳', '<b>跑</b> <b>跳</b> 在右下角'),
+                '绿色猫盾能回血，黄色猫盾能翻滚躲开攻击。'
+            ]; } },
+            night: { title: '惊魂夜', lines: function () { return [
+                '1 个追捕者对 4 个逃生者。',
+                '<b>逃生者</b>：修好 5 台矿机，逃生门就能开，从门里跑出去。',
+                '被打两下会倒地，倒地被挂上椅子就出局，队友能救你。',
+                '<b>追捕者</b>：把人打倒、挂上椅子。',
+                kTxt('<b>左键</b> 互动 / 普攻　<b>空格</b> 动作（校准、抓人、挂椅子）　<b>E</b> 破坏板子　<b>Q</b> 切换', '按钮名字会跟着你在做的事变'),
+                '屏幕中间会提示现在能做什么。'
+            ]; } },
+            blaze: { title: '超燃', lines: function () { return [
+                '<b>2v2</b>：一条命，一队全灭输一局，先赢 ' + BLAZE.roundsToWin + ' 局。局间能选一项加成。',
+                '毒圈会收，站在圈外掉血。',
+                '<b>乱斗</b>：16 人混战 5 分钟，死了 10 秒后复活。击杀 +2、助攻 +2、死亡 −1。',
+                '乱斗里会慢慢进账，' + kTxt('按 <b>C</b>', '点 <b>商店</b>') + ' 花钱买卡。',
+                kTxt('<b>空格</b> 普攻　<b>左键</b> 1 技能　<b>右键</b> 2 技能（按住瞄准，松手放）　<b>Shift</b> 跳', '<b>普攻</b> <b>1技能</b> <b>2技能</b>（按住瞄准，松手放）<b>跳</b>')
+            ]; } },
+            race: { title: '竞速', lines: function () { return [
+                '16 人五轮淘汰：16 → 12 → 8 → 4 → 2，每轮最后几名出局。',
+                '开跑前 7 秒被栏杆拦着，可以往前挤，顺便选这轮的技能。',
+                '掉下去不算输，会回到检查点。路上的箱子能开出道具。',
+                '<b>双人</b>：两人一队，按名次算分，加起来最少的队出局。',
+                '出局了还能换人看。',
+                kTxt('<b>WASD</b> 跑　<b>空格</b> 跳　<b>左键 / Shift</b> 冲刺　<b>右键 / E</b> 技能　<b>Q</b> 道具', '右下角 <b>跳</b> <b>冲刺</b> <b>技能</b> <b>道具</b>')
+            ]; } },
+            jail: { title: '监狱救援', lines: function () { return [
+                '5v5，两队各占一半地盘。',
+                '在对面地盘被对面的人碰到，就进监狱。在自己家很安全。',
+                '去对面监狱碰一下，能把队友全救出来。',
+                '每队家门口有 5 件东西，扛回自己家就算抢到。被抓了东西掉在原地。',
+                '东西多的队赢，一队全进监狱直接输。一局 4 分钟。',
+                kTxt('<b>Shift</b> 跑（耗体力）　<b>空格</b> 跳', '<b>跑</b>（耗体力）<b>跳</b>')
+            ]; } },
+            dodge: { title: '躲避球', lines: function () { return [
+                '两队各占半场，不能过中线。被砸中就出局。',
+                kTxt('<b>左键</b> 点一下捡球或放下，按住瞄准，松手扔。', '<b>投</b> 点一下捡球或放下，按住瞄准，松手扔。'),
+                kTxt('<b>右键</b> 接球，要掐准时间。接住能救回一个队友。', '<b>接</b> 接球，要掐准时间。接住能救回一个队友。'),
+                '中线的球捡起来，要先跑回自己底线才能扔。',
+                '球投进中间的篮筐，全队复活。',
+                '一队全灭就输，时间到了比人数。',
+                '<b>疯狂模式</b>：多了金色复活球、碰到就出局的黑球，还会空投新球。'
+            ]; } },
+            escape: { title: '合作密室', lines: function () { return [
+                '四个人一起开机关，全员走到出口（绿色地面）就过关。',
+                '脚下圆圈的颜色就是你的颜色。',
+                '<b>彩色板</b> 只有同色的人能站，<b>灰板</b> 谁都行，<b>×2</b> 要两个人。',
+                '<b>拉杆</b> 有人站着门才开，<b>按钮</b> 踩一下门开 4 秒。',
+                '<b>钥匙、顺序板、密码</b> 要你来做，AI 帮你站岗。',
+                '红激光躲开，碰到会退回去。橙激光和矮栏跳过去。',
+                '越快过关星越多。'
+            ]; } },
+            park: { title: '猫盾乐园', lines: function () { return [
+                '玩别人用积木做的小游戏，每个游戏的规则都不一样。',
+                kTxt('<b>WASD</b> 走，<b>空格</b> 跳', '左半屏拖着走，<b>跳</b> 在右下角'),
+                '点「自己做一个」进创作界面，像 Scratch 一样拖积木做游戏。',
+                '别人玩你做的游戏，你也有猫盾币（要在同一个房间）。'
+            ]; } },
+            cake: { title: '松饼大作战', lines: function () { return [
+                '不分队，谁都能抓人。',
+                '面朝一个人、让他进到你手的范围，他就出局。',
+                '地上的东西能加速、加长手，或者挡一次。',
+                '最后剩下的人赢，时间到了比谁抓得多。',
+                kTxt('<b>空格</b> 跳', '<b>跳</b> 在右下角')
+            ]; } },
+            sumo: { title: '推推乐', lines: function () { return [
+                '8 个人站在圆台上，20 秒后台子开始缩小。',
+                kTxt('<b>左键 / E</b> 往前一撞，面前的人会飞出去。', '<b>推</b> 往前一撞，面前的人会飞出去。'),
+                '掉下去就出局，最后站着的赢。时间到了比谁推下去的多。'
+            ]; } },
+            paint: { title: '彩弹占地', lines: function () { return [
+                '4v4，走过的地方变成你们队的颜色。',
+                kTxt('<b>左键 / E</b> 扔颜料，落地炸开一片。', '<b>喷</b> 扔颜料，落地炸开一片。'),
+                '砸中对面的人他会愣一下。踩在对面颜色上走得慢。',
+                '2 分钟后地盘大的队赢。'
+            ]; } },
+            tower: { title: '爬塔', lines: function () { return [
+                '跳台绕着柱子往上盘，底下的岩浆一直在涨，越往后涨得越快。',
+                '<b>单人</b>：看你能爬多高。',
+                '<b>双人</b>：两个人都到顶才赢。有人掉下去，另一个爬到下一面绿旗就能救回来。',
+                '<b>多人</b>：6 个人比谁先到顶。',
+                '开局 6 秒内掉下去会回到起点。'
+            ]; } }
         };
-        function modeIntroHtml(panelId) {
-            let panel = document.getElementById(panelId);
-            if (!panel) return '';
-            let html = '';
-            // querySelector 只找子孙节点，裸的 <button> 直接子元素（没套在 div 里）会漏检——
-            // 竞速/超燃面板里就有这种独立按钮（"记录榜"、"开打"），得单独判它自己是不是 button。
-            Array.from(panel.children).forEach(function (child) {
-                if (child.tagName !== 'BUTTON' && child.tagName !== 'SELECT' && child.tagName !== 'INPUT' && !child.querySelector('button')) html += child.outerHTML;
-            });
-            return html;
+        function rulesHtml(key) {
+            let R = MODE_RULES[key]; if (!R) return '';
+            return '<div style="text-align:left; max-height:62vh; overflow-y:auto; font-size:14px; line-height:1.75;">' +
+                R.lines().map(function (l) { return '<div style="padding:3px 0; border-bottom:1px dashed #eee;">' + l + '</div>'; }).join('') + '</div>';
+        }
+        function openRules(key) {
+            key = key || gState.gameMode || 'hunt';
+            let R = MODE_RULES[key]; if (!R) return;
+            introPush(R.title + ' · 规则', rulesHtml(key));
+        }
+        // 弹卡片排队：同时碰到好几样新东西，一张一张来，不互相盖掉
+        let introQ = [], introOpen = false;
+        function introPush(title, html) { introQ.push({ title: title, html: html }); introPump(); }
+        function introPump() {
+            if (introOpen || !introQ.length) return;
+            if (!document.getElementById('sys-modal').classList.contains('hidden')) { setTimeout(introPump, 600); return; }
+            let it = introQ.shift(); introOpen = true;
+            showSysModal(it.title, it.html, [{ label: '知道了', color: '#43a047', onClick: function () { introOpen = false; setTimeout(introPump, 200); } }]);
+        }
+        // 单人的时候弹卡片会把这一局停住（escape / 乐园 / 新模式单机都看这个）
+        function introPaused() { return introOpen; }
+        function introOnce(key, title, text) {
+            if (!gState.introSeen || typeof gState.introSeen !== 'object') gState.introSeen = {};
+            if (gState.introSeen[key]) return;
+            gState.introSeen[key] = 1; saveProgress();
+            introPush(title, '<div style="text-align:left; font-size:14px; line-height:1.75;">' + text + '</div>');
         }
         function showModeIntroIfFirstTime(key) {
             if (!gState.modeIntroShown) gState.modeIntroShown = {};
             if (gState.modeIntroShown[key]) return;
             gState.modeIntroShown[key] = true; saveProgress();
-            let cfg = MODE_INTRO[key]; if (!cfg) return;
-            setTimeout(function () {
-                let html = modeIntroHtml(cfg.panel);
-                if (!html) return;
-                showSysModal(cfg.title, '<div style="text-align:left; max-height:60vh; overflow-y:auto;">' + html + '</div>', [{ label: '知道了' }]);
-            }, 400);
+            if (MODE_RULES[key]) setTimeout(function () { openRules(key); }, 400);
         }
 
         // ── 通用匹配等待：给没组队直接点"开始"的人用——先等最多 15 秒看房间里还有
@@ -3183,13 +3222,6 @@
             let set = function (id, html) { let e = document.getElementById(id); if (e) e.innerHTML = html; };
             let ct = document.getElementById('chat-toggle');
             if (ct && (typeof chatMode === 'undefined' || chatMode === 0)) ct.innerText = gState.control === 'pad' ? '发言' : '发言（回车）';
-            set('race-help-keys', kTxt(
-                '<b>WASD</b> 跑、<b>空格</b> 跳、<b>左键 / Shift</b> 冲刺、<b>右键 / E</b> 技能、<b>Q</b> 道具。',
-                '左边摇杆跑，右下角 <b>跳</b> / <b>冲刺</b> / <b>技能</b> / <b>道具</b> 四个键。'));
-            set('blaze-help-keys', kTxt(
-                '空格普攻，左键 1 技能，右键 2 技能（按住瞄准、松手释放），Shift 跳。',
-                '右下角 <b>普攻</b> / <b>1技能</b> / <b>2技能</b>（按住瞄准、松手释放）/ <b>跳</b>。'));
-            set('ffa-help-keys', kTxt('按 <b>C</b> ', '点 <b>商店</b> '));
             set('calib-help-keys', kTxt('按 <b>空格</b> 校准。', '点屏幕任意处校准。'));
         }
 
@@ -4584,6 +4616,7 @@
         function startGameMap(seed, syncSpawns) {
             stashLootBeforeRun();   // 宝物留在仓库，只带工具进图
             mSize = HUNT_SIZE;
+            showModeIntroIfFirstTime('hunt');
             gameSeed = seed || 1; nav('none'); document.getElementById('ui-layer').classList.remove('hidden'); document.getElementById('ui-id').innerText = dispName(gState.id);
             isPlaying = true; gState.isDead = false; gState.submittedItems = []; gState.hp = 100; timeSecs = 8 * 3600; gState.totalSubmitted = 0; gState.runCash = 0; gState.aiSubmitted = 0; gState.aiChestsTaken = 0; stamina = 100;
             // abilityCd/abilityActive 之前是全局变量，从来没在开新一局的时候清零过——
