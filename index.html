@@ -1029,7 +1029,7 @@
         </div>
 
         <div id="escape-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:6px; padding:12px 14px; text-align:left;">
-            <div id="esc-title" style="font-size:14px; color:#2e7d32; font-weight:bold; margin-bottom:8px;">合作密室 · 15 关</div>
+            <div id="esc-title" style="font-size:14px; color:#2e7d32; font-weight:bold; margin-bottom:8px;">合作密室</div>
             <div id="esc-level-wrap" style="margin-bottom:8px;">
                 <div id="esc-level-grid" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:6px;"></div>
                 <div id="esc-level-info" style="font-size:12px; color:#556b57; margin-top:6px; line-height:1.6;"></div>
@@ -1693,9 +1693,10 @@
             c.on('error', function () { try { c.close(); } catch (e) { } });
         }
 
-        // A9：PeerJS 房间 id 带协议版本号。以后每次改联机消息格式就把 v2 加一，
+        // A9：PeerJS 房间 id 带协议版本号。以后每次改联机消息格式就把版本号加一，
         // 新旧版本的页面就不会进到同一个房间里（各算各的房间）。
-        const NET_PROTO = 2;
+        // v3：密室前面插了 8 个入门关，ESC_START 里的关卡号跟旧版对不上了
+        const NET_PROTO = 3;
         const NET_PREFIX = 'maodun-v' + NET_PROTO + '-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
         // 这一整套匹配等待（matchPool/matchLeader/night-wait 那个浮层）早就写好了，
@@ -2942,7 +2943,7 @@
                 '<b>拉杆</b> 有人站着门才开，<b>按钮</b> 踩一下门开 4 秒。',
                 '<b>钥匙、顺序板、密码</b> 要你来做，AI 帮你站岗。',
                 '红激光躲开，碰到会退回去。橙激光和矮栏跳过去。',
-                '越快过关星越多。'
+                '前 8 关是入门关，一关教一样东西。越快过关星越多。'
             ]; } },
             park: { title: '猫盾乐园', lines: function () { return [
                 '玩别人用积木做的小游戏，每个游戏的规则都不一样。',
@@ -6809,7 +6810,7 @@
             { id: 'ht10', name: '跑腿专家', desc: '寻宝队小任务完成 10 次', stat: 'huntTask', goal: 10, coin: 30 },
             { id: 'tw30', name: '半山腰', desc: '爬塔爬到第 30 块', stat: 'tower', goal: 30, coin: 20 },
             { id: 'tw60', name: '塔顶', desc: '爬塔爬到顶', stat: 'tower', goal: 60, coin: 40, title: 'tower' },
-            { id: 'es15', name: '密室大师', desc: '合作密室 15 关全过', stat: 'escLevels', goal: 15, coin: 60, title: 'escape' },
+            { id: 'es15', name: '密室大师', desc: '合作密室所有关都过', stat: 'escLevels', goal: 22, coin: 60, title: 'escape' },
             { id: 'es30', name: '星星收集', desc: '合作密室拿到 30 颗星', stat: 'escStars', goal: 30, coin: 40 },
             { id: 'dl7', name: '天天来', desc: '今日密室通关 7 天', stat: 'escDaily', goal: 7, coin: 30 },
             { id: 'rich', name: '攒钱', desc: '手上攒到 500 猫盾币', stat: 'coins', goal: 500, coin: 20, title: 'rich' }
@@ -21851,7 +21852,7 @@
         }
 
         // ══════════════════════════════════════════════════════════
-        //  合作密室：15 关，关卡全是数据（ESC_LEVELS），机关/陷阱/AI 都是通用的。
+        //  合作密室：8 个入门关 + 14 关，关卡全是数据（ESC_LEVELS），机关/陷阱/AI 都是通用的。
         //  没有战斗、没有淘汰，全队一起走到出口。
         //  机关：彩色板/重量板(plates)、拉杆(lever，站住才开)、限时按钮(timed)、
         //        顺序板(seq)、钥匙(key)、密码锁(code)
@@ -21891,63 +21892,84 @@
         // 每关：name 名字、time 限时(秒)、stars [三星秒数, 两星秒数]、finish 终点线 z、
         // gates 门、mechs 机关（按过关顺序排，HUD 按这个顺序找"当前目标"）、
         // walls 额外的墙、boards 墙上的字、lasers/hurdles/boulder 陷阱、dark 暗室、tip 开局提示。
+        // 前 ESC_INTRO_N 关是入门关：一关只教一样东西，第一次碰到会弹介绍卡片（escIntroCheck）
+        const ESC_INTRO_N = 8;
         const ESC_LEVELS = [
-            {
-                name: '各就各位', time: 120, stars: [16, 30], finish: 100,
+            { name: '认颜色', intro: true, time: 120, stars: [12, 25], finish: 85,
                 gates: [{ id: 'g1', z: 60 }],
-                mechs: [{ type: 'plates', gate: 'g1', plates: escColorPlates(38, [2, 0, 3, 1]), hint: '每人站到自己颜色的板上' }],
-                tip: '脚下圆圈的颜色就是你的颜色'
-            },
+                mechs: [{ type: 'plates', gate: 'g1', plates: escColorPlates(38, [0, 1, 2, 3]) }] },
+            { name: '一起站', intro: true, time: 120, stars: [12, 25], finish: 85,
+                gates: [{ id: 'g1', z: 60 }],
+                mechs: [{ type: 'plates', gate: 'g1', plates: [{ x: -15, z: 38 }, { x: 15, z: 38, need: 2 }] }] },
+            { name: '拉杆', intro: true, time: 120, stars: [14, 28], finish: 85,
+                gates: [{ id: 'g1', z: 60 }],
+                mechs: [{ type: 'lever', gate: 'g1', x: 18, z: 45 }] },
+            { name: '钥匙', intro: true, time: 120, stars: [16, 30], finish: 95,
+                gates: [{ id: 'g1', z: 70 }],
+                mechs: [{ type: 'key', gate: 'g1', key: { x: -20, z: 32 }, lock: { x: 18, z: 62 } }] },
+            { name: '按钮', intro: true, time: 120, stars: [16, 30], finish: 95,
+                gates: [{ id: 'g1', z: 70 }],
+                mechs: [{ type: 'timed', gate: 'g1', x: 18, z: 28, open: 4 }] },
+            { name: '顺序', intro: true, time: 150, stars: [18, 34], finish: 100,
+                gates: [{ id: 'g1', z: 75 }],
+                mechs: [{ type: 'seq', gate: 'g1', plates: escSeqPlates(35), order: [2, 0, 3, 1] }] },
+            { name: '密码', intro: true, time: 150, stars: [20, 40], finish: 100,
+                gates: [{ id: 'g1', z: 75 }],
+                boards: [{ z: 25, face: 'L', text: '密码第 1 位\n5' }, { z: 40, face: 'R', text: '密码第 2 位\n2' }, { z: 52, face: 'L', text: '密码第 3 位\n7' }],
+                mechs: [{ type: 'code', gate: 'g1', pad: { x: 18, z: 66 }, code: '527', prompt: '输入三位密码' }] },
+            { name: '激光和矮栏', intro: true, time: 120, stars: [10, 20], finish: 115,
+                gates: [], mechs: [],
+                lasers: [{ z: 40, w: 22, speed: 20 }, { z: 66, w: 30, speed: 22, low: true }],
+                hurdles: [{ x: 0, z: 92, w: 57, d: 2, h: 4 }] },
             {
                 name: '拉杆门', time: 150, stars: [20, 38], finish: 160,
                 gates: [{ id: 'g1', z: 60 }, { id: 'g2', z: 120 }],
                 mechs: [
-                    { type: 'plates', gate: 'g1', plates: [{ x: -15, z: 38 }, { x: 15, z: 38 }], hint: '两块灰板都要有人站' },
-                    { type: 'lever', gate: 'g2', x: 18, z: 100, hint: '一人站拉杆，其他人先过' }
+                    { type: 'plates', gate: 'g1', plates: [{ x: -15, z: 38 }, { x: 15, z: 38 }] },
+                    { type: 'lever', gate: 'g2', x: 18, z: 100 }
                 ]
             },
             {
                 name: '钥匙', time: 180, stars: [28, 50], finish: 170,
                 gates: [{ id: 'g1', z: 60 }, { id: 'g2', z: 130 }],
                 mechs: [
-                    { type: 'plates', gate: 'g1', plates: [{ x: 0, z: 38, need: 2 }, { x: -18, z: 38 }, { x: 18, z: 38 }], hint: '三块板都要站住，×2 的要两个人' },
-                    { type: 'key', gate: 'g2', key: { x: -22, z: 100 }, lock: { x: 0, z: 124 }, hint: '你去捡钥匙，送到锁上' }
+                    { type: 'plates', gate: 'g1', plates: [{ x: 0, z: 38, need: 2 }, { x: -18, z: 38 }, { x: 18, z: 38 }] },
+                    { type: 'key', gate: 'g2', key: { x: -22, z: 100 }, lock: { x: 0, z: 124 } }
                 ]
             },
             {
                 name: '按顺序', time: 180, stars: [28, 50], finish: 175,
                 gates: [{ id: 'g1', z: 75 }, { id: 'g2', z: 135 }],
                 mechs: [
-                    { type: 'seq', gate: 'g1', plates: escSeqPlates(38), order: [2, 0, 3, 1], hint: '按门上的颜色顺序踩板' },
-                    { type: 'lever', gate: 'g2', x: -18, z: 115, hint: '一人站拉杆，其他人先过' }
+                    { type: 'seq', gate: 'g1', plates: escSeqPlates(38), order: [2, 0, 3, 1] },
+                    { type: 'lever', gate: 'g2', x: -18, z: 115 }
                 ]
             },
             {
                 name: '限时大门', time: 180, stars: [26, 48], finish: 185,
                 gates: [{ id: 'g1', z: 60 }, { id: 'g2', z: 145 }],
                 mechs: [
-                    { type: 'plates', gate: 'g1', plates: escColorPlates(38, [1, 3, 0, 2]), hint: '每人站到自己颜色的板上' },
-                    { type: 'timed', gate: 'g2', x: 0, z: 88, open: 4, hint: '门只开 4 秒：先到门口，再踩按钮' }
+                    { type: 'plates', gate: 'g1', plates: escColorPlates(38, [1, 3, 0, 2]) },
+                    { type: 'timed', gate: 'g2', x: 0, z: 88, open: 4 }
                 ]
             },
             {
                 name: '四人重压', time: 210, stars: [38, 68], finish: 220,
                 gates: [{ id: 'g1', z: 60 }, { id: 'g2', z: 130 }, { id: 'g3', z: 180 }],
                 mechs: [
-                    { type: 'plates', gate: 'g1', plates: [{ x: -14, z: 38, need: 2 }, { x: 14, z: 38, need: 2 }], hint: '两块板各要两个人' },
-                    { type: 'key', gate: 'g2', key: { x: 23, z: 78 }, lock: { x: -18, z: 124 }, hint: '找到钥匙，送到锁上' },
-                    { type: 'lever', gate: 'g3', x: 20, z: 162, hint: '一人站拉杆，其他人先过' }
+                    { type: 'plates', gate: 'g1', plates: [{ x: -14, z: 38, need: 2 }, { x: 14, z: 38, need: 2 }] },
+                    { type: 'key', gate: 'g2', key: { x: 23, z: 78 }, lock: { x: -18, z: 124 } },
+                    { type: 'lever', gate: 'g3', x: 20, z: 162 }
                 ]
             },
             {
                 name: '激光走廊', time: 210, stars: [32, 60], finish: 200,
                 gates: [{ id: 'g1', z: 55 }, { id: 'g2', z: 160 }],
                 mechs: [
-                    { type: 'plates', gate: 'g1', plates: escColorPlates(35, [3, 1, 2, 0]), hint: '每人站到自己颜色的板上' },
-                    { type: 'lever', gate: 'g2', x: -20, z: 142, hint: '躲开激光，再站拉杆' }
+                    { type: 'plates', gate: 'g1', plates: escColorPlates(35, [3, 1, 2, 0]) },
+                    { type: 'lever', gate: 'g2', x: -20, z: 142 }
                 ],
-                lasers: [{ z: 78, w: 22, speed: 24 }, { z: 98, w: 26, speed: 30, phase: 0.4 }, { z: 118, w: 20, speed: 36, phase: 0.75 }],
-                tip: '碰到红激光会退回去'
+                lasers: [{ z: 78, w: 22, speed: 24 }, { z: 98, w: 26, speed: 30, phase: 0.4 }, { z: 118, w: 20, speed: 36, phase: 0.75 }]
             },
             {
                 name: '密码锁', time: 240, stars: [42, 80], finish: 220,
@@ -21958,9 +21980,9 @@
                     { z: 108, face: 'L', text: '密码第 3 位\n5' }
                 ],
                 mechs: [
-                    { type: 'plates', gate: 'g1', plates: [{ x: -18, z: 38 }, { x: 18, z: 38 }], hint: '两块灰板都要有人站' },
-                    { type: 'code', gate: 'g2', pad: { x: 18, z: 120 }, code: '385', prompt: '输入三位密码', hint: '墙上找三位密码，到密码台输入' },
-                    { type: 'lever', gate: 'g3', x: -18, z: 162, hint: '一人站拉杆，其他人先过' }
+                    { type: 'plates', gate: 'g1', plates: [{ x: -18, z: 38 }, { x: 18, z: 38 }] },
+                    { type: 'code', gate: 'g2', pad: { x: 18, z: 120 }, code: '385', prompt: '输入三位密码' },
+                    { type: 'lever', gate: 'g3', x: -18, z: 162 }
                 ]
             },
             {
@@ -21968,39 +21990,37 @@
                 walls: [ESC_SPLIT_WALL],
                 gates: [{ id: 'gL', z: 85, x0: -28.5, x1: -1.5 }, { id: 'gR', z: 85, x0: 1.5, x1: 28.5 }],
                 mechs: [
-                    { type: 'lever', gate: 'gR', x: -15, z: 60, hint: '分成两组：左边拉杆开右边的门' },
-                    { type: 'lever', gate: 'gL', x: 15, z: 110, hint: '右边的人站拉杆，给左边开门' }
+                    { type: 'lever', gate: 'gR', x: -15, z: 60 },
+                    { type: 'lever', gate: 'gL', x: 15, z: 110 }
                 ]
             },
             {
                 name: '跨栏', time: 210, stars: [32, 60], finish: 235,
                 gates: [{ id: 'g1', z: 72 }, { id: 'g2', z: 205 }],
                 mechs: [
-                    { type: 'seq', gate: 'g1', plates: escSeqPlates(35), order: [3, 1, 0, 2], hint: '按门上的颜色顺序踩板' },
-                    { type: 'lever', gate: 'g2', x: 20, z: 192, hint: '跳过矮栏和橙激光，再站拉杆' }
+                    { type: 'seq', gate: 'g1', plates: escSeqPlates(35), order: [3, 1, 0, 2] },
+                    { type: 'lever', gate: 'g2', x: 20, z: 192 }
                 ],
                 // 一跳大概能飞 22 个单位远：障碍之间至少隔开 25 以上，不然跳过一个正好落进下一个
                 hurdles: [{ x: 0, z: 92, w: 57, d: 2, h: 4 }, { x: 0, z: 122, w: 57, d: 2, h: 4 }],
-                lasers: [{ z: 158, w: 30, speed: 22, low: true }, { z: 182, w: 30, speed: 28, low: true, phase: 0.5 }],
-                tip: '矮栏和橙激光要跳过去'
+                lasers: [{ z: 158, w: 30, speed: 22, low: true }, { z: 182, w: 30, speed: 28, low: true, phase: 0.5 }]
             },
             {
                 name: '暗室', time: 240, stars: [40, 75], finish: 190, dark: true,
                 gates: [{ id: 'g1', z: 60 }, { id: 'g2', z: 150 }],
                 mechs: [
-                    { type: 'plates', gate: 'g1', plates: escColorPlates(38, [0, 2, 1, 3]), hint: '每人站到自己颜色的板上' },
-                    { type: 'key', gate: 'g2', key: { x: -23, z: 70 }, lock: { x: 18, z: 144 }, hint: '找到发光的钥匙，送到锁上' }
+                    { type: 'plates', gate: 'g1', plates: escColorPlates(38, [0, 2, 1, 3]) },
+                    { type: 'key', gate: 'g2', key: { x: -23, z: 70 }, lock: { x: 18, z: 144 } }
                 ],
-                lasers: [{ z: 95, w: 20, speed: 18 }, { z: 118, w: 24, speed: 22, phase: 0.5 }],
-                tip: '这里很暗，钥匙会发光'
+                lasers: [{ z: 95, w: 20, speed: 18 }, { z: 118, w: 24, speed: 22, phase: 0.5 }]
             },
             {
                 name: '连锁机关', time: 270, stars: [48, 90], finish: 230,
                 gates: [{ id: 'g1', z: 55 }, { id: 'g2', z: 120 }, { id: 'g3', z: 190 }],
                 mechs: [
-                    { type: 'plates', gate: 'g1', plates: [{ x: -18, z: 35, need: 2 }, { x: 18, z: 35, role: 0 }], hint: '左板要两个人，红板只有红色能踩' },
-                    { type: 'timed', gate: 'g2', x: -20, z: 75, open: 4, hint: '门只开 4 秒：先到门口，再踩按钮' },
-                    { type: 'lever', gate: 'g3', x: 20, z: 172, hint: '躲开激光，一人站拉杆' }
+                    { type: 'plates', gate: 'g1', plates: [{ x: -18, z: 35, need: 2 }, { x: 18, z: 35, role: 0 }] },
+                    { type: 'timed', gate: 'g2', x: -20, z: 75, open: 4 },
+                    { type: 'lever', gate: 'g3', x: 20, z: 172 }
                 ],
                 lasers: [{ z: 145, w: 22, speed: 28 }]
             },
@@ -22014,21 +22034,20 @@
                     { z: 130, face: 'L', text: '■ = 9' }
                 ],
                 mechs: [
-                    { type: 'lever', gate: 'gR', x: -15, z: 60, hint: '分成两组：左边拉杆开右边的门' },
-                    { type: 'lever', gate: 'gL', x: 15, z: 110, hint: '右边的人站拉杆，给左边开门' },
-                    { type: 'code', gate: 'g3', pad: { x: 0, z: 175 }, code: '792', prompt: '按 ▲ ■ ● 的顺序输入', hint: '两边墙上有符号，按密码台的顺序输数字' }
+                    { type: 'lever', gate: 'gR', x: -15, z: 60 },
+                    { type: 'lever', gate: 'gL', x: 15, z: 110 },
+                    { type: 'code', gate: 'g3', pad: { x: 0, z: 175 }, code: '792', prompt: '按 ▲ ■ ● 的顺序输入' }
                 ]
             },
             {
                 name: '激光迷阵', time: 300, stars: [55, 100], finish: 270,
                 gates: [{ id: 'g1', z: 70 }, { id: 'g2', z: 174 }, { id: 'g3', z: 230 }],
                 mechs: [
-                    { type: 'seq', gate: 'g1', plates: escSeqPlates(33), order: [1, 3, 0, 2], hint: '按门上的颜色顺序踩板' },
-                    { type: 'key', gate: 'g2', key: { x: 23, z: 160 }, lock: { x: -18, z: 166 }, hint: '躲开激光拿钥匙，送到锁上' },
-                    { type: 'timed', gate: 'g3', x: 18, z: 190, open: 4, hint: '门只开 4 秒：先到门口，再踩按钮' }
+                    { type: 'seq', gate: 'g1', plates: escSeqPlates(33), order: [1, 3, 0, 2] },
+                    { type: 'key', gate: 'g2', key: { x: 23, z: 160 }, lock: { x: -18, z: 166 } },
+                    { type: 'timed', gate: 'g3', x: 18, z: 190, open: 4 }
                 ],
-                lasers: [{ z: 86, w: 20, speed: 30 }, { z: 104, w: 36, speed: 26, low: true }, { z: 124, w: 24, speed: 36, phase: 0.3 }, { z: 144, w: 36, speed: 32, low: true, phase: 0.6 }],
-                tip: '红激光躲开，橙激光跳过'
+                lasers: [{ z: 86, w: 20, speed: 30 }, { z: 104, w: 36, speed: 26, low: true }, { z: 124, w: 24, speed: 36, phase: 0.3 }, { z: 144, w: 36, speed: 32, low: true, phase: 0.6 }]
             },
             {
                 name: '滚石大逃亡', time: 330, stars: [65, 120], finish: 300,
@@ -22040,14 +22059,13 @@
                     { z: 140, face: 'R', text: '密码第 3 位\n4' }
                 ],
                 mechs: [
-                    { type: 'plates', gate: 'g1', plates: escColorPlates(35, [2, 3, 1, 0]), hint: '每人站到自己颜色的板上' },
-                    { type: 'plates', gate: 'g2', plates: [{ x: -14, z: 85, need: 2 }, { x: 14, z: 85, need: 2 }], hint: '两块板各要两个人' },
-                    { type: 'code', gate: 'g3', pad: { x: -18, z: 150 }, code: '614', prompt: '输入三位密码', hint: '找齐密码，门一开滚石就来' }
+                    { type: 'plates', gate: 'g1', plates: escColorPlates(35, [2, 3, 1, 0]) },
+                    { type: 'plates', gate: 'g2', plates: [{ x: -14, z: 85, need: 2 }, { x: 14, z: 85, need: 2 }] },
+                    { type: 'code', gate: 'g3', pad: { x: -18, z: 150 }, code: '614', prompt: '输入三位密码' }
                 ],
                 hurdles: [{ x: 0, z: 196, w: 29, d: 2, h: 4 }, { x: 0, z: 256, w: 29, d: 2, h: 4 }],
                 lasers: [{ z: 226, w: 14, speed: 18, low: true, x0: -14.5, x1: 14.5 }],
-                boulder: { gate: 'g3', z0: 150, r: 11, speed: 27, endZ: 268, delay: 2.5 },
-                tip: '最后有滚石，一路别停'
+                boulder: { gate: 'g3', z0: 150, r: 11, speed: 27, endZ: 268, delay: 2.5 }
             }
         ];
         function escLevelDef(n) {
@@ -22080,17 +22098,17 @@
             let gate = function (gz) { let id = 'g' + (++gi); lv.gates.push({ id: id, z: gz }); return id; };
             (rooms || []).slice(0, ESC_ROOM_MAX).forEach(function (r) {
                 let sd = r.side === 'L' ? -1 : 1;
-                if (r.t === 'color') { lv.mechs.push({ type: 'plates', gate: gate(z + 45), plates: escColorPlates(z + 23, perm()), hint: '每人站到自己颜色的板上' }); z += 45; est += 10; }
-                else if (r.t === 'duo') { lv.mechs.push({ type: 'plates', gate: gate(z + 45), plates: [{ x: -15, z: z + 23 }, { x: 15, z: z + 23 }], hint: '两块灰板都要有人站' }); z += 45; est += 8; }
-                else if (r.t === 'heavy') { lv.mechs.push({ type: 'plates', gate: gate(z + 45), plates: [{ x: -14, z: z + 23, need: 2 }, { x: 14, z: z + 23, need: 2 }], hint: '两块板各要两个人' }); z += 45; est += 10; }
-                else if (r.t === 'lever') { lv.mechs.push({ type: 'lever', gate: gate(z + 45), x: 18 * sd, z: z + 33, hint: '一人站拉杆，其他人先过' }); z += 45; est += 12; }
-                else if (r.t === 'key') { lv.mechs.push({ type: 'key', gate: gate(z + 45), key: { x: -22 * sd, z: z + 10 }, lock: { x: 18 * sd, z: z + 38 }, hint: '捡钥匙，送到锁上' }); z += 45; est += 12; }
-                else if (r.t === 'seq') { lv.mechs.push({ type: 'seq', gate: gate(z + 47), plates: escSeqPlates(z + 10), order: perm(), hint: '按门上的颜色顺序踩板' }); z += 47; est += 14; }
-                else if (r.t === 'timed') { lv.mechs.push({ type: 'timed', gate: gate(z + 50), x: 18 * sd, z: z + 12, open: 4, hint: '门只开 4 秒：先到门口，再踩按钮' }); z += 50; est += 12; }
+                if (r.t === 'color') { lv.mechs.push({ type: 'plates', gate: gate(z + 45), plates: escColorPlates(z + 23, perm()) }); z += 45; est += 10; }
+                else if (r.t === 'duo') { lv.mechs.push({ type: 'plates', gate: gate(z + 45), plates: [{ x: -15, z: z + 23 }, { x: 15, z: z + 23 }] }); z += 45; est += 8; }
+                else if (r.t === 'heavy') { lv.mechs.push({ type: 'plates', gate: gate(z + 45), plates: [{ x: -14, z: z + 23, need: 2 }, { x: 14, z: z + 23, need: 2 }] }); z += 45; est += 10; }
+                else if (r.t === 'lever') { lv.mechs.push({ type: 'lever', gate: gate(z + 45), x: 18 * sd, z: z + 33 }); z += 45; est += 12; }
+                else if (r.t === 'key') { lv.mechs.push({ type: 'key', gate: gate(z + 45), key: { x: -22 * sd, z: z + 10 }, lock: { x: 18 * sd, z: z + 38 } }); z += 45; est += 12; }
+                else if (r.t === 'seq') { lv.mechs.push({ type: 'seq', gate: gate(z + 47), plates: escSeqPlates(z + 10), order: perm() }); z += 47; est += 14; }
+                else if (r.t === 'timed') { lv.mechs.push({ type: 'timed', gate: gate(z + 50), x: 18 * sd, z: z + 12, open: 4 }); z += 50; est += 12; }
                 else if (r.t === 'code') {
                     let code = '' + (1 + Math.floor(rnd() * 9)) + Math.floor(rnd() * 10) + Math.floor(rnd() * 10);
                     [8, 20, 32].forEach(function (dz, k) { lv.boards.push({ z: z + dz, face: (k % 2 ? (sd > 0 ? 'L' : 'R') : (sd > 0 ? 'R' : 'L')), text: '密码第 ' + (k + 1) + ' 位\n' + code[k] }); });
-                    lv.mechs.push({ type: 'code', gate: gate(z + 45), pad: { x: 18 * sd, z: z + 38 }, code: code, prompt: '输入三位密码', hint: '墙上找三位密码，到密码台输入' }); z += 45; est += 16;
+                    lv.mechs.push({ type: 'code', gate: gate(z + 45), pad: { x: 18 * sd, z: z + 38 }, code: code, prompt: '输入三位密码' }); z += 45; est += 16;
                 }
                 else if (r.t === 'laser') {
                     let sp = ESC_LASER_SPD[r.speed] || ESC_LASER_SPD.mid;
@@ -22098,7 +22116,6 @@
                 }
                 else if (r.t === 'hurdle') { lv.hurdles.push({ x: 0, z: z + 12, w: 57, d: 2, h: 4 }, { x: 0, z: z + 38, w: 57, d: 2, h: 4 }); z += 50; est += 6; }
             });
-            if (lv.lasers.some(function (L) { return L; }) || lv.hurdles.length) lv.tip = '红激光躲开，矮栏跳过去';
             lv.finish = z + 22;
             lv.stars = [Math.round(est), Math.round(est * 1.8)];
             lv.time = Math.max(120, Math.ceil(est * 4 / 30) * 30);
@@ -22156,8 +22173,14 @@
 
         // ── 进度：解锁到第几关、每关最好成绩、上次选的关 ──
         function escProg() {
-            if (!gState.escProg || typeof gState.escProg !== 'object') gState.escProg = { unlocked: 1, best: {}, sel: 1 };
+            if (!gState.escProg || typeof gState.escProg !== 'object') gState.escProg = { unlocked: 1, best: {}, sel: 1, v: 2 };
             if (!gState.escProg.best) gState.escProg.best = {};
+            // 第 2 版：前面插了 8 个入门关、拿掉了原来的第 1 关。老进度往后挪 7 格
+            if (!gState.escProg.v) {
+                let P = gState.escProg, nb = {}, sh = function (n) { n = +n; return n >= 2 ? n + ESC_INTRO_N - 1 : 1; };
+                Object.keys(P.best).forEach(function (k) { nb[sh(k)] = P.best[k]; });
+                P.best = nb; P.unlocked = sh(P.unlocked || 1); P.sel = sh(P.sel || 1); P.v = 2;
+            }
             return gState.escProg;
         }
         function escUnlocked(n) { return TEST_INFINITE_COINS || n <= escProg().unlocked; }
@@ -22175,12 +22198,13 @@
             if (!escUnlocked(P.sel)) P.sel = 1;
             grid.innerHTML = ESC_LEVELS.map(function (L, i) {
                 let n = i + 1, un = escUnlocked(n), best = P.best[n], sel = n === P.sel;
-                let stars = best ? '<span style="color:#f9a825;">' + '★'.repeat(best.s) + '</span><span style="color:#ccc;">' + '★'.repeat(3 - best.s) + '</span>' : '&nbsp;';
+                let stars = best ? '<span style="color:#f9a825;">' + '★'.repeat(best.s) + '</span><span style="color:#ccc;">' + '★'.repeat(3 - best.s) + '</span>' : (L.intro && un ? '入门' : '&nbsp;');
                 return '<button onclick="escSelectLevel(' + n + ')"' + (un ? '' : ' disabled') + ' title="' + L.name + '" style="margin:0; padding:5px 0; font-size:13px; line-height:1.25; border-radius:6px; cursor:' + (un ? 'pointer' : 'default') + '; ' +
                     'border:2px solid ' + (sel ? '#2e7d32' : '#c8e6c9') + '; background:' + (un ? (sel ? '#c8e6c9' : '#fff') : '#eceff1') + '; color:' + (un ? '#2e7d32' : '#b0bec5') + ';">' +
                     (un ? '<b>' + n + '</b>' : '<span style="font-size:11px;">未解锁</span>') + '<br><span style="font-size:10px;">' + stars + '</span></button>';
             }).join('');
             let sb = document.getElementById('esc-start-btn'); if (sb) sb.innerText = '开始第 ' + P.sel + ' 关';
+            let tt = document.getElementById('esc-title'); if (tt) tt.innerText = '合作密室 · ' + ESC_LEVELS.length + ' 关（前 ' + ESC_INTRO_N + ' 关是入门）';
             let info = document.getElementById('esc-level-info');
             if (info) {
                 let L = escLevelDef(P.sel), best = P.best[P.sel];
@@ -22918,21 +22942,57 @@
             let sc = document.getElementById('blaze-score');
             sc.innerText = escFmtTime(remain);
             sc.style.color = remain < 30 && R.started ? '#ff8a80' : '#fff';
-            // 当前目标：按关卡里机关的顺序，找第一个还没搞定的
+            // 局里只报状态（门还开几秒、顺序踩到第几块、钥匙在不在手上），怎么玩看规则和介绍卡片
             let M = R.mechs.filter(function (m) { return !m.done; })[0];
-            let goal = M ? M.def.hint : '全员走到终点（绿色区域）';
+            let goal = '';
             if (M) {
-                if (M.def.type === 'timed' && M.openT > 0) goal += '（门还开 ' + M.openT.toFixed(1) + ' 秒）';
-                if (M.def.type === 'seq') goal += '（' + M.seqPos + ' / ' + M.def.order.length + '）';
-                if (M.def.type === 'key' && M.keyCarrier === me.idx) goal = '钥匙在你手上，送到锁那里';
+                if (M.def.type === 'timed' && M.openT > 0) goal = '门还开 ' + M.openT.toFixed(1) + ' 秒';
+                if (M.def.type === 'seq') goal = '顺序 ' + M.seqPos + ' / ' + M.def.order.length;
+                if (M.def.type === 'key' && M.keyCarrier === me.idx) goal = '钥匙在你手上';
             }
             let pad = R.mechs.filter(function (m) { return m.def.type === 'code' && !m.done && Math.hypot(me.p.x - m.def.pad.x, me.p.z - m.def.pad.z) < ESCAPE.padR; })[0];
-            if (pad && !R.codeOpen) goal = gState.control === 'pad' ? '点「互动」输入密码' : '按 E 输入密码';
             // 「互动」只在密码台边上才用得到，平时藏起来，少一个看不懂的按钮
             let ab = document.getElementById('esc-act-btn'); if (ab && gState.control === 'pad') ab.style.display = pad && !R.codeOpen ? 'flex' : 'none';
             let role = ESC_ROLES[me.role];
             let el = document.getElementById('blaze-round');
-            el.innerHTML = '<span style="color:' + role.css + ';">●</span> 你是<b style="color:' + role.css + ';">' + role.name + '色</b>　' + escLvlTitle(R.lvl, lv) + '<br>' + goal;
+            el.innerHTML = '<span style="color:' + role.css + ';">●</span> 你是<b style="color:' + role.css + ';">' + role.name + '色</b>　' + escLvlTitle(R.lvl, lv) + (goal ? '<br>' + goal : '');
+        }
+        // 第一次碰到某种机关/陷阱：弹一张介绍。机关看"现在该开的那扇门"，陷阱看离你近不近
+        const ESC_INTROS = {
+            color: ['彩色板', '脚下圆圈的颜色就是你的颜色。<br>彩色板只认同色的人，每块都有人站住，门就开。'],
+            gray: ['灰板', '灰色的板谁都能站。几块板同时有人站住，门就开。'],
+            need2: ['×2 的板', '写着 ×2 的板，要两个人一起站上去才算。'],
+            lever: ['拉杆', '有人站在拉杆上，门就一直开着。<br>大家先过去，最后一个离开拉杆后门还会开一小会儿，赶紧冲。'],
+            key: ['钥匙', '钥匙只有你能捡，AI 捡不了。<br>捡起来拿到锁旁边，门就开。拿着钥匙走得慢一点。'],
+            timed: ['按钮', '踩一下按钮，门只开 4 秒。<br>先让大家走到门口，再去踩。'],
+            seq: ['顺序板', '门上画着颜色顺序，按这个顺序一块一块踩。<br>踩错了从头来。AI 不会踩，要你来。'],
+            code: ['密码', '墙上写着密码的每一位，边走边记。<br>走到密码台上会弹出键盘，输对门就开。'],
+            symbol: ['符号密码', '墙上写的是“符号 = 数字”，按密码台上符号的顺序把数字输进去。'],
+            laser: ['红激光', '红激光会来回扫，碰到就退回上一个检查点。看准空档再过。'],
+            low: ['橙激光', '橙色的激光很低，' + '跳过去就行。'],
+            hurdle: ['矮栏', '矮栏挡在路上，跳过去。'],
+            boulder: ['滚石', '门一开，后面的滚石就追过来了，一路往前跑别停！'],
+            dark: ['暗室', '这一关很暗。钥匙会发光，找找看。'],
+            split: ['两条通道', '中间有墙隔开，大家要分成两组。<br>一边的拉杆开的是另一边的门。']
+        };
+        function escIntro(k) { let t = ESC_INTROS[k]; if (t) introOnce('esc.' + k, t[0], t[1] + (k === 'low' || k === 'hurdle' ? '<br>' + kTxt('按 <b>空格</b> 跳。', '点 <b>跳</b>。') : '')); }
+        function escIntroCheck(R) {
+            let lv = R.lv, me = R.me;
+            if (lv.dark) escIntro('dark');
+            if ((lv.walls || []).indexOf(ESC_SPLIT_WALL) >= 0) escIntro('split');
+            let M = R.mechs.filter(function (m) { return !m.done; })[0];
+            if (M) {
+                let d = M.def;
+                if (d.type === 'plates') {
+                    if (d.plates.some(function (p) { return p.role !== undefined && p.role >= 0; })) escIntro('color');
+                    if (d.plates.some(function (p) { return p.role === undefined || p.role < 0; })) escIntro('gray');
+                    if (d.plates.some(function (p) { return (p.need || 1) > 1; })) escIntro('need2');
+                } else if (d.type === 'code') escIntro(/[▲●■]/.test(d.prompt || '') ? 'symbol' : 'code');
+                else escIntro(d.type);
+            }
+            R.lasers.forEach(function (L) { if (Math.abs(L.def.z - me.p.z) < 30) escIntro(L.def.low ? 'low' : 'laser'); });
+            R.hurdles.forEach(function (h) { if (Math.abs(h.z - me.p.z) < 30) escIntro('hurdle'); });
+            if (R.boulder && R.boulder.on) escIntro('boulder');
         }
         // 每帧的视觉：门滑下去/升起来、板子亮不亮、拉杆扳下、钥匙跟着人、激光挪动、滚石转
         function escVisualTick(dt) {
@@ -22991,15 +23051,18 @@
 
         function escapeTick(dt) {
             let R = escapeRoom, host = escIsHost();
+            escIntroCheck(R);
+            // 单人时弹介绍卡片，这一局先停住（联机停不了，别人还在跑）
+            if (introPaused() && !R.netOn) { escHud(); renderer.render(scene, camera); return; }
             // 开局：规则弹窗（第一次玩才有）关掉之前不开跑，关掉后再 3、2、1——
             // 以前倒计时在弹窗后面就开始走了，AI 也在后台把第一道门开了
             if (!R.started) {
                 let modalUp = !document.getElementById('sys-modal').classList.contains('hidden');
                 if (!modalUp) {
                     let c = Math.ceil(R.startT);
-                    if (c !== R.cdShown) { R.cdShown = c; blazeFlash(c > 0 ? String(c) : (R.lv.tip ? '开始！' + R.lv.tip : '开始！')); }
+                    if (c !== R.cdShown) { R.cdShown = c; blazeFlash(c > 0 ? String(c) : '开始！'); }
                     R.startT -= dt;
-                    if (R.startT <= 0) { R.started = true; blazeFlash(R.lv.tip ? '开始！' + R.lv.tip : '开始！'); }
+                    if (R.startT <= 0) { R.started = true; blazeFlash('开始！'); }
                 }
             } else R.clock += dt;
             R.actors.forEach(function (a) {
