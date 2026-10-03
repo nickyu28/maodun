@@ -3321,7 +3321,7 @@
         function renderDailyModBanner() {
             let el = document.getElementById('daily-mod-banner');
             if (!el) return;
-            el.innerHTML = '<b>今日效果：' + DAILY_MOD.name + '</b>　' + DAILY_MOD.desc + '（惊魂夜之外全模式生效，每天换一条）' +
+            el.innerHTML = '<b>今日效果：' + DAILY_MOD.name + '</b>　' + DAILY_MOD.desc + '（惊魂夜、密室、乐园之外全模式生效，每天换一条）' +
                 '<div style="margin-top:4px; color:#e65100;"><b>本周活动：' + MODE_CN[weeklyMode()] + '</b>　猫盾币翻倍</div>';
         }
         function toggleModeDetail() {
@@ -5806,7 +5806,8 @@
                     '松饼大作战的护盾只在真要被抓时才用掉',
                     '惊魂夜当追捕者时，不再显示 4 个「AI 队友」',
                     '被拉进超燃时，手上那局会先好好退出，不再两局抢画面',
-                    '大厅左上角能看到版本号了'
+                    '大厅左上角能看到版本号了',
+                    '大厅「今日效果」写清楚了：惊魂夜、密室、乐园不受影响'
                 ]
             },
             {
