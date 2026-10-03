@@ -1680,17 +1680,25 @@
         }
 
         function netDeliver(m, from) {
-
-            if (from && m && m.sender) {
-                // 房主这边第一次认出这条连接对应哪个游戏 ID，顺手记下它真实的
-                // PeerJS id、告诉房间里所有人——语音通话拨号靠的就是这个真实 id，
-                // 不是游戏里显示的那个名字。
-                let isNewWho = !from._who;
-                from._who = m.sender;
-                if (isNewWho && peerIsHost) {
-                    voicePeerIds[m.sender] = from.peer;
-                    bc.postMessage({ type: 'VOICE_PEER', target: '*', id: m.sender, peerId: from.peer });
+            if (!m || typeof m !== 'object') return;
+            if (from && peerIsHost) {
+                // A2/A3：发送者以连接为准，不信消息里自己写的 sender（能伪造）。
+                // 每条连接第一次带 sender 的消息把它绑定到一个游戏 ID（这个 ID 已经被别的连接或房主自己占着就不绑），
+                // 之后这条连接发来的所有消息，sender 一律由房主改写成绑定的那个 ID 再处理、再转发；
+                // 客人收到房主转发的消息，信房主写的 sender。
+                // 顺手记下它真实的 PeerJS id、告诉房间里所有人——语音通话拨号靠的就是这个真实 id。
+                if (!from._who && typeof m.sender === 'string' && m.sender) {
+                    let claimed = sanitizeId(m.sender);
+                    let taken = !claimed || claimed === gState.id || peerConns.some(function (c) { return c !== from && c.open && c._who === claimed; });
+                    if (!taken) {
+                        from._who = claimed;
+                        voicePeerIds[claimed] = from.peer;
+                        bc.postMessage({ type: 'VOICE_PEER', target: '*', id: claimed, peerId: from.peer });
+                    }
                 }
+                if (from._who) m.sender = from._who; else delete m.sender;
+            } else if (from && m.sender) {
+                from._who = m.sender;
             }
             if (peerIsHost) netSend(m, from);
             if (bc.onmessage) bc.onmessage({ data: m });
@@ -2366,6 +2374,33 @@
             else { let g = gState.garage.findIndex(function (i) { return i === null; }); if (g !== -1) gState.garage[g] = { ...shopItems['地窖徽章'] }; }
         }
 
+        // A2：开局消息只有这几种情况才接：
+        //   发送者是我当前（或刚结束、结算框还没关）这一局的房主——密室「下一关 / 再玩一次」；
+        //   我没在打别的局（正在打的不拆），并且：发送者在我的队伍里 / 我正在排这个模式 / 60 秒内同意过他的松饼邀请。
+        let cakeAcceptAt = {};
+        function netGameHostOf(mode) {
+            if (mode === 'blaze') return blaze ? blaze.host : null;
+            if (mode === 'race') return race ? race.host : null;
+            if (mode === 'jail') return jail ? jail.hostId : null;
+            if (mode === 'dodge') return dodge ? dodge.hostId : null;
+            if (mode === 'escape') return escapeRoom ? escapeRoom.hostId : null;
+            if (mode === 'cake') return cake ? cake.host : null;
+            if (nm && nm.mode === mode) return nm.host;
+            return null;
+        }
+        function netStartAllowed(mode, m) {
+            let s = m && m.sender;
+            if (!s || s === gState.id) return false;
+            let h = netGameHostOf(mode);
+            if (h && h === s) return true;
+            let k = chatActiveModeKey();
+            if ((k && k !== 'hub') || isPlaying) return false;
+            if (lobbyParty.indexOf(s) >= 0) return true;
+            if (mmActive && (mmActive.mode === mode || (mode === 'blaze' && mmActive.mode === 'blazeffa'))) return true;
+            if (mode === 'night' && nightMatch) return true;
+            if (mode === 'cake' && cakeAcceptAt[s] && performance.now() - cakeAcceptAt[s] < 60000) return true;
+            return false;
+        }
         // A1：所有联机消息进来先把身份类字段里的 HTML 特殊字符去掉（跟 sanitizeId 一样的规则）。
         // 只洗 ID，不递归洗所有字符串——ESC_START 之类的消息里带着关卡数据。
         function netScrubIds(m) {
@@ -2414,7 +2449,7 @@
 
                 let mine = msg.sides ? msg.sides[gState.id] : msg.side;
 
-                if (mine) {
+                if (mine && netStartAllowed('night', msg)) {
                     nightCancelMatch(); matchPool = {};
                     netMatchSetup(msg.sides, msg.host);
                     startNightFromNet(msg.seed, msg.variant, mine);
@@ -2516,7 +2551,7 @@
             } else if (msg.type === 'NM_EV') {
                 nmOnEv(msg);
             } else if (msg.type === 'CK_START') {
-                if (msg.sender !== gState.id && msg.plan && msg.plan.some(function (q) { return q.id === gState.id; })) {
+                if (msg.sender !== gState.id && msg.plan && msg.plan.some(function (q) { return q.id === gState.id; }) && netStartAllowed('cake', msg)) {
                     mmCancel();   // 见 blazeOnStart 里的同一条注释——防止本机自己的匹配计时几秒后又触发一次
                     if (cake) { if (cake.raf) cancelAnimationFrame(cake.raf); cake = null; }
                     cakeBegin(msg.plan, msg.host, msg.seed);
@@ -3515,7 +3550,7 @@
             if (Object.keys(matchPool).length > 1) {
                 sides = nightBuildSides();
                 bc.postMessage({
-                    type: 'START_NIGHT', target: '*', seed: seed, variant: variant,
+                    type: 'START_NIGHT', target: '*', sender: gState.id, seed: seed, variant: variant,
                     sides: sides, host: gState.id
                 });
                 if (sides[gState.id]) side = sides[gState.id];
@@ -5757,7 +5792,8 @@
         const CHANGELOG = [
             {
                 id: '2026-10-03', date: '10 月 3 日', title: '联机安全', items: [
-                    '别人起的怪名字不会再在你的页面上乱跑代码了'
+                    '别人起的怪名字不会再在你的页面上乱跑代码了',
+                    '没组队、没在排的人，不能再把你硬拉进对局了'
                 ]
             },
             {
@@ -12302,6 +12338,7 @@
 
         function blazeOnStart(m) {
             if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            if (!netStartAllowed('blaze', m)) return;
             // 真人对局是别人那边先广播成的——本机万一还在自己那套匹配计时里挂着
             // （倒计时没停），不清掉的话它几秒后会自己再触发一次，把刚建好的对局
             // 顶掉，人卡在选技能选一半的画面上动不了。跟惊魂夜收到 START_NIGHT
@@ -19657,6 +19694,7 @@
         }
         function raceOnStart(m) {
             if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            if (!netStartAllowed('race', m)) return;
             mmCancel();   // 见 blazeOnStart 里的同一条注释——防止本机自己的匹配计时几秒后又触发一次
             if (race) { if (race.raf) cancelAnimationFrame(race.raf); race = null; }
             raceStart(!!m.duo, m.plan, m.host);
@@ -20515,6 +20553,7 @@
         }
         function jailOnStart(m) {
             if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            if (!netStartAllowed('jail', m)) return;
             mmCancel();
             if (jail) { if (jail.raf) cancelAnimationFrame(jail.raf); jail = null; }
             jailBegin(m.plan, m.host);
@@ -21619,6 +21658,7 @@
         }
         function dodgeOnStart(m) {
             if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            if (!netStartAllowed('dodge', m)) return;
             mmCancel();
             if (dodge) { if (dodge.raf) cancelAnimationFrame(dodge.raf); dodge = null; }
             dodgeApplySize(m.quick);
@@ -23113,6 +23153,7 @@
         }
         function escapeOnStart(m) {
             if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            if (!netStartAllowed('escape', m)) return;
             mmCancel();
             document.getElementById('sys-modal').classList.add('hidden');   // 上一关的结算框
             escapeBegin(m.plan, m.host, m.lvl || 1);
@@ -24244,6 +24285,7 @@
             showSysModal('邀请　松饼大作战', (m.sender ? dispName(m.sender) : '有人') + ' 想现在开始松饼大作战，同意一起玩吗？', [
                 {
                     label: '同意', color: '#5cb85c', onClick: function () {
+                        if (m.sender) cakeAcceptAt[m.sender] = performance.now();
                         bc.postMessage({ type: 'CK_INVITE_ACK', target: m.sender, sender: gState.id, reqId: m.reqId, accept: true });
                     }
                 },
@@ -24379,6 +24421,7 @@
         }
         function nmOnStart(m) {
             if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
+            if (!NM_DEFS[m.mode] || !netStartAllowed(m.mode, m)) return;
             mmCancel();
             if (nm) nmTeardown();
             nmBegin(m.mode, m.plan, m.host, m.seed, m.opt || {});
