@@ -939,6 +939,7 @@
             <div style="text-align:center; margin-top:8px; padding-top:6px; border-top:1px solid #ddd;">
                 <a href="javascript:void(0)" onclick="clearLocalCache()" style="font-size:11px; color:#999; text-decoration:underline;">清空本地数据</a>
             </div>
+            <div id="lobby-version" style="font-size:10px; color:#aaa; text-align:center; margin-top:2px;"></div>
             <div id="lobby-rank" style="font-size:11px; color:#888; margin-top:4px;"></div>
             <div id="daily-mod-banner" style="font-size:11px; color:#795548; background:#fff8e1; border:1px solid #ffe082; border-radius:5px; padding:5px 6px; margin-top:4px;"></div>
         </div>
@@ -5792,6 +5793,9 @@
         // 更新公告：新条目往数组最前面加（下标 0 永远是最新的）。夜间自动修 bug 的
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         // 更新公告：只写玩家关心的，一条一句话，按时间合并成几段（原来六十多条，太长没人看）
+        // B4：版本号。每次发版手动加一（同一天多次发版就把最后的 -N 加一）。B5 拆文件后，脚本地址也带这个版本号。
+        const GAME_VERSION = '2026.10.03-1';
+        (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
                 id: '2026-10-03', date: '10 月 3 日', title: '联机安全', items: [
@@ -5801,7 +5805,8 @@
                     '超燃乱斗买到「奇遇」卡不再白花钱，会抽一张别的牌并加强',
                     '松饼大作战的护盾只在真要被抓时才用掉',
                     '惊魂夜当追捕者时，不再显示 4 个「AI 队友」',
-                    '被拉进超燃时，手上那局会先好好退出，不再两局抢画面'
+                    '被拉进超燃时，手上那局会先好好退出，不再两局抢画面',
+                    '大厅左上角能看到版本号了'
                 ]
             },
             {
