@@ -6590,7 +6590,10 @@
                 if (sl) { sl.value = BLAZE.roundsToWin; testSetWinScore(BLAZE.roundsToWin); }
             }
         }
+        // A5：测试面板只有网址带 ?dev=1 才能用 T 打开
+        const DEV_MODE = (function () { try { return new URLSearchParams(location.search).get('dev') === '1'; } catch (e) { return false; } })();
         window.addEventListener('keydown', function (e) {
+            if (!DEV_MODE) return;
             if (e.target && /input|textarea/i.test(e.target.tagName)) return;
             if (e.key === 't' || e.key === 'T') testPanelShow();
         });
