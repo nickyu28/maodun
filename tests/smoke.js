@@ -114,6 +114,7 @@ async function openTab(chrome, url, opts) {
             if (r.result && r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 500));
             return r.result.result.value;
         },
+        send,
         async close() { try { ws.close(); } catch (e) { } await jget(chrome.port, '/json/close/' + info.id, 'PUT').catch(() => { }); }
     };
     const pid = (opts && opts.name) || ('smoke' + Math.floor(Math.random() * 100000));
@@ -194,6 +195,28 @@ function STAIR_SIM() {
     let lift = Math.abs(camera.position.y - 9 - (s.base * TILE + TILE)) < 0.5;
     return JSON.stringify({ stairs: stairs.length, runs: runs, slowClimb: slow.climbed, slowN: 40, down: down, lift: lift });
 }
+// 真的用鼠标按下、移动、松开（CDP 鼠标事件会变成 pointerdown/move/up/click）
+async function mouseAt(tab, sel) {
+    return tab.eval(`(function(){ let e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; let r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+}
+async function mouseDrag(tab, fromSel, toSel, dist) {
+    const a = await mouseAt(tab, fromSel), b = toSel ? await mouseAt(tab, toSel) : null;
+    if (!a) throw new Error('找不到 ' + fromSel);
+    const to = b || [a[0] + (dist || 0), a[1]];
+    const ev = (type, p, buttons) => tab.send('Input.dispatchMouseEvent', { type, x: p[0], y: p[1], button: 'left', buttons, clickCount: 1 });
+    await ev('mouseMoved', a, 0); await ev('mousePressed', a, 1);
+    for (let i = 1; i <= 5; i++) await ev('mouseMoved', [a[0] + (to[0] - a[0]) * i / 5, a[1] + (to[1] - a[1]) * i / 5], 1);
+    await ev('mouseReleased', to, 0);
+    await W(200);
+}
+const INV_SLOT = (i) => `#garage-active-inv .slot:nth-child(${i + 1})`;
+const GAR_SLOT = (i) => `#garage-stash-container .slot:nth-child(${i + 1})`;
+// 进仓库，摆好背包和仓库里的东西
+const GARAGE_SETUP = (inv, gar, money) => `(function(){ ${HIDE} selectGameMode('hunt'); requestStartGame();
+    window.S = function (n) { return Object.assign({}, shopItems[n], { isShop: true }); }; window.L = function (n) { return { n: n, v: 5000, w: 1, tex: 'misc', c: 0xffffff }; };
+    gState.inv = ${inv}; gState.garage = Array(200).fill(null); let g = ${gar}; g.forEach(function (q, i) { gState.garage[i] = q; });
+    gState.money = ${money}; gState.selectedContainer = 'inv'; gState.selectedSlot = -1; initGarage(); return true; })()`;
+
 const ACTIVE = `(function(){ let k = chatActiveModeKey(); return k === 'hub' ? null : k; })()`;
 
 async function enterExit(tab, key) {
@@ -329,6 +352,34 @@ async function enterExit(tab, key) {
         }
         await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1800); await A.eval(`${HIDE} true;`);
 
+        {
+            // H2：仓库拖放。空格能放；宝物进不了背包；钱不够、仓库满了有提示
+            const before = A.errors.length, bad = [];
+            await A.eval(GARAGE_SETUP(`[S('鱼叉'), S('医疗包'), null, null, null, null]`, `[L('金杯')]`, 0));
+            await mouseDrag(A, INV_SLOT(0), GAR_SLOT(5));
+            if ((await A.eval(MODAL)) !== null || (await A.eval(`gState.garage.some(function (q) { return q && q.n === '鱼叉'; }) && !gState.inv[0]`)) !== true) bad.push('背包→仓库空格 ' + (await A.eval(MODAL)));
+            await A.eval(`${HIDE} true;`);
+            await mouseDrag(A, INV_SLOT(1), INV_SLOT(3));
+            if ((await A.eval(MODAL)) !== null || (await A.eval(`!!(gState.inv[3] && gState.inv[3].n === '医疗包' && !gState.inv[1])`)) !== true) bad.push('背包内拖到空格 ' + (await A.eval(MODAL)));
+            await A.eval(`${HIDE} true;`);
+            await mouseDrag(A, GAR_SLOT(0), INV_SLOT(0));
+            const m1 = await A.eval(`${MODAL} + ' ' + document.getElementById('sys-modal-text').innerText`);
+            if (!/宝物/.test(m1) || (await A.eval(`!!gState.inv[0]`))) bad.push('宝物进背包没拦住 ' + m1);
+            await A.eval(`${HIDE} buy('鱼叉', 25000); true;`);
+            const m2 = await A.eval(MODAL);
+            if (m2 !== '钱不够') bad.push('钱不够没提示 ' + m2);
+            await A.eval(`${HIDE} gState.money = 99999999; for (let i = 0; i < 200; i++) if (!gState.garage[i]) gState.garage[i] = { n: '石头', v: 1, w: 1 }; buy('鱼叉', 25000); true;`);
+            const m3 = await A.eval(MODAL);
+            if (m3 !== '仓库满了') bad.push('仓库满了没提示 ' + m3);
+            // 腰包拿下来、扩展格的东西放不下
+            await A.eval(`${HIDE} gState.inv = [S('腰包'), S('鱼叉'), S('鱼叉'), S('鱼叉'), S('鱼叉'), S('鱼叉'), S('医疗包'), S('医疗包'), null]; gState.garage[199] = null; true;`);
+            const m4 = await A.eval(`garageDropProblem('inv', 0, 'garage', 199)`);
+            if (!/腰包/.test(m4)) bad.push('腰包拿下来没拦住 ' + m4);
+            await A.eval(`${HIDE} true;`);
+            report('H2 仓库拖放和购买提示', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+        await A.eval(`${HIDE} gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); gState.money = 0; nav('screen-lobby'); true;`);
+
         // 3. 伪造消息（附录）
         const B = await openTab(chrome, url);
         const idA = await A.eval('gState.id'), idB = await B.eval('gState.id');
@@ -375,7 +426,7 @@ async function enterExit(tab, key) {
         report('全程控制台零报错', A.errors.length === 0, A.errors.slice(0, 3).join(' / '));
         await A.close();
     } catch (e) {
-        report('测试脚本本身出错', false, e.message.slice(0, 300));
+        const d = e.message.match(/"description":"([^"]*)/); report('测试脚本本身出错', false, (d ? d[1] : e.message).slice(0, 300));
     } finally {
         try { chrome.proc.kill(); } catch (e) { }
         srv.close();

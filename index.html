@@ -4203,6 +4203,27 @@
         window.addEventListener('pointermove', moveGhost); window.addEventListener('touchmove', moveGhost, { passive: false });
         window.addEventListener('pointerup', endDrag); window.addEventListener('touchend', endDrag);
 
+        // 仓库里拖一件东西过去行不行；不行就返回原因（H2）。空格当然可以放。
+        // 宝物根本放不进背包（只在仓库里管；进图之后捡到的照常放）：拖进去不行，把工具换出来、宝物换进去也不行。
+        function garageDropProblem(srcC, srcI, dstC, dstI) {
+            let srcArr = srcC === 'inv' ? gState.inv : gState.garage, dstArr = dstC === 'inv' ? gState.inv : gState.garage;
+            let a = srcArr[srcI], b = dstArr[dstI];
+            if (srcC === dstC && srcI === dstI) return '';
+            if ((dstC === 'inv' && a && !isCarryOn(a)) || (srcC === 'inv' && b && !isCarryOn(b))) return '宝物不能带上场，只有商店买的道具能放进背包。';
+            // 腰包拿下来，扩展的 3 格就没了，里面的东西要挪到背包空格或仓库里，放不下就不让拿
+            let inv = gState.inv.slice(), gar = gState.garage.slice();
+            let s2 = srcC === 'inv' ? inv : gar, d2 = dstC === 'inv' ? inv : gar;
+            s2[srcI] = b; d2[dstI] = a;
+            let hasPouch = false;
+            for (let i = 0; i < INV_BASE && i < inv.length; i++) if (inv[i] && inv[i].type === 'backpack_ext') hasPouch = true;
+            if (!hasPouch && inv.length > INV_BASE) {
+                let extra = inv.slice(INV_BASE).filter(function (q) { return q; }).length;
+                let room = inv.slice(0, INV_BASE).filter(function (q) { return !q; }).length + gar.filter(function (q) { return !q; }).length;
+                if (extra > room) return '腰包拿下来，多出来那 3 格里的东西就没地方放了。仓库满了，先卖掉点东西。';
+            }
+            return '';
+        }
+
         function endDrag(e) {
             if (!isDragging) return; isDragging = false; if (dragGhost) { dragGhost.remove(); dragGhost = null; }
 
@@ -4214,15 +4235,9 @@
                 let destContainer = targetSlot.getAttribute('data-container'); let destIdx = parseInt(targetSlot.getAttribute('data-idx'));
                 let srcArr = dragSourceObj.container === 'inv' ? gState.inv : gState.garage; let destArr = destContainer === 'inv' ? gState.inv : gState.garage;
                 let temp = srcArr[dragSourceObj.idx];
-                // 宝物根本放不进背包（只在仓库里管；进图之后捡到的照常放）。
-                // 两边都要判：拖进去不行，把工具换出来、宝物换进去也不行。
-                if (!isPlaying && ((destContainer === 'inv' && !isCarryOn(temp)) ||
-                    (dragSourceObj.container === 'inv' && !isCarryOn(destArr[destIdx])))) {
-                    showSysModal('带不走', '宝物不能带上场，只有商店买的道具能放进背包。',
-                        [{ label: '知道了' }]);
-                } else {
-                    srcArr[dragSourceObj.idx] = destArr[destIdx]; destArr[destIdx] = temp;
-                }
+                let why = isPlaying ? '' : garageDropProblem(dragSourceObj.container, dragSourceObj.idx, destContainer, destIdx);
+                if (why) showSysModal('放不了', why, [{ label: '知道了' }]);
+                else { srcArr[dragSourceObj.idx] = destArr[destIdx]; destArr[destIdx] = temp; }
             } else {
                 if (isPlaying && !gState.isDead && dragSourceObj.container === 'inv') {
                     let hudBox = document.getElementById('hud-hotbar-container'); let bpBox = document.getElementById('backpack-grid-box');
@@ -4315,7 +4330,9 @@
 
         function buy(n, cost) {
             let emptyIdx = gState.garage.findIndex(function (item) { return item === null; });
-            if (gState.money >= cost && emptyIdx !== -1) { gState.money -= cost; gState.garage[emptyIdx] = { ...shopItems[n], isShop: true }; initGarage(); }
+            if (gState.money < cost) { showSysModal('钱不够', '买' + n + '还差 $' + (cost - gState.money).toLocaleString() + '。', [{ label: '知道了' }]); return; }
+            if (emptyIdx === -1) { showSysModal('仓库满了', '仓库没空位了，先卖掉点东西再买。', [{ label: '知道了' }]); return; }
+            gState.money -= cost; gState.garage[emptyIdx] = { ...shopItems[n], isShop: true }; initGarage();
         }
         function repairSelected() {
 
@@ -5882,7 +5899,8 @@
         const CHANGELOG = [
             {
                 id: '2026-10-04-v2', date: '10 月 4 日', title: '寻宝队修复', items: [
-                    '卡的时候爬楼梯不会再掉进台阶里、卡在平台底下了'
+                    '卡的时候爬楼梯不会再掉进台阶里、卡在平台底下了',
+                    '仓库里东西能拖到空格了；钱不够、仓库满了会告诉你'
                 ]
             },
             {
