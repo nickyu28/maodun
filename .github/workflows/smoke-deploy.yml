@@ -60,3 +60,16 @@ jobs:
           path: .
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: 确认线上版本号
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          want=$(grep -o "GAME_VERSION = '[^']*'" index.html)
+          echo "要的：$want"
+          for i in $(seq 1 20); do
+            got=$(curl -fsSL "${PAGE_URL}?v=${GITHUB_SHA}-$i" | grep -o "GAME_VERSION = '[^']*'" || true)
+            echo "第 $i 次：$got"
+            [ "$got" = "$want" ] && exit 0
+            sleep 15
+          done
+          echo "线上版本号不对"; exit 1
