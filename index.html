@@ -22181,10 +22181,10 @@
         function escProg() {
             if (!gState.escProg || typeof gState.escProg !== 'object') gState.escProg = { unlocked: 1, best: {}, sel: 1, v: 2 };
             if (!gState.escProg.best) gState.escProg.best = {};
-            // 第 2 版：前面插了 8 个入门关、拿掉了原来的第 1 关。老进度往后挪 7 格
+            // 第 2 版：前面插了 8 个入门关、拿掉了原来的第 1 关。老进度往后挪 7 格，原第 1 关的成绩丢掉
             if (!gState.escProg.v) {
                 let P = gState.escProg, nb = {}, sh = function (n) { n = +n; return n >= 2 ? n + ESC_INTRO_N - 1 : 1; };
-                Object.keys(P.best).forEach(function (k) { nb[sh(k)] = P.best[k]; });
+                Object.keys(P.best).forEach(function (k) { if (+k >= 2) nb[sh(k)] = P.best[k]; });
                 P.best = nb; P.unlocked = sh(P.unlocked || 1); P.sel = sh(P.sel || 1); P.v = 2;
             }
             return gState.escProg;
