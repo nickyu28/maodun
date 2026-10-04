@@ -469,6 +469,29 @@ async function enterExit(tab, key) {
             await C.close();
             report('H5 中途退出、刷新都算撤离失败', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
         }
+        {
+            // H6：地窖徽章只送一次；商店能买，价格单独存，v 不变
+            const bad = [];
+            const D = await openTab(chrome, url, { name: 'h6' + Math.floor(Math.random() * 100000) });
+            const oldSave = (withBadge) => D.eval(`(function(){ let k = 'TH_save_' + gState.id, d = JSON.parse(localStorage.getItem(k)); delete d.badgeGiven;
+                d.inv = [Object.assign({}, shopItems['鱼叉']), ${withBadge ? "Object.assign({}, shopItems['地窖徽章'])" : 'null'}, null, null, null, null]; d.garage = Array(200).fill(null);
+                localStorage.setItem(k, JSON.stringify(d)); loadProgress(gState.id);
+                return gState.badgeGiven + ' ' + gState.inv.concat(gState.garage).filter(function (q) { return q && q.type === 'badge'; }).length; })()`);
+            let r = await oldSave(true);
+            if (r !== 'true 1') bad.push('旧存档有徽章 ' + r);
+            r = await oldSave(false);
+            if (r !== 'true 1') bad.push('旧存档没徽章 ' + r);
+            r = await D.eval(`(function(){ gState.inv = gState.inv.map(function (q) { return q && q.type === 'badge' ? null : q; }); saveProgress(); loadProgress(gState.id);
+                return gState.badgeGiven + ' ' + gState.inv.concat(gState.garage).filter(function (q) { return q && q.type === 'badge'; }).length; })()`);
+            if (r !== 'true 0') bad.push('送过以后又送了 ' + r);
+            await D.eval(`${HIDE} selectGameMode('hunt'); requestStartGame(); gState.money = 900000; gState.garage = Array(200).fill(null); initGarage();
+                Array.from(document.querySelectorAll('#shop-modal .shop-item')).find(function (x) { return /地窖徽章/.test(x.innerText); }).click(); true;`);
+            r = await D.eval(`(function(){ let b = gState.garage.find(function (q) { return q && q.type === 'badge'; }); return gState.money + ' ' + (b ? b.v + ' ' + b.price + ' ' + b.isShop : 'none'); })()`);
+            if (r !== '0 0 900000 true') bad.push('商店买徽章 ' + r);
+            if (D.errors.length) bad.push(D.errors.slice(0, 2).join(' / '));
+            await D.close();
+            report('H6 地窖徽章只送一次、商店能买', bad.length === 0, bad.join(' / '));
+        }
         await A.eval(`${HIDE} gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); gState.money = 0; nav('screen-lobby'); true;`);
 
         // 3. 伪造消息（附录）
