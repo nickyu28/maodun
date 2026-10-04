@@ -378,6 +378,48 @@ async function enterExit(tab, key) {
             await A.eval(`${HIDE} true;`);
             report('H2 仓库拖放和购买提示', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
         }
+        {
+            // H3：鼠标/触屏点一下就选中；Backspace / Delete 只卖选中的仓库物品，价格和按钮一样；卖完清空选中；徽章不能卖；进图重置选中
+            const before = A.errors.length, bad = [];
+            const key = async (k, code, rep) => { await A.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code: k, windowsVirtualKeyCode: code, autoRepeat: !!rep }); await A.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, windowsVirtualKeyCode: code }); await W(200); };
+            await A.eval(GARAGE_SETUP(`[S('医疗包'), null, null, null, null, null]`, `[L('金杯'), S('鱼叉'), Object.assign({}, S('鱼叉'), { n: '地窖徽章', type: 'badge', v: 50000 })]`, 0));
+            await mouseDrag(A, GAR_SLOT(0), null, 3);
+            const sel = await A.eval(`gState.selectedContainer + ':' + gState.selectedSlot + ' ' + document.getElementById('sell-btn-container').innerText`);
+            if (!/^garage:0 卖掉（\$5,000）/.test(sel)) bad.push('鼠标点不中 ' + sel);
+            await key('Backspace', 8);
+            const r1 = await A.eval(`gState.money + ' ' + gState.selectedSlot + ' ' + gState.garage.filter(function (q) { return q; }).map(function (q) { return q.n; }).join(',')`);
+            if (r1 !== '5000 -1 鱼叉,地窖徽章') bad.push('Backspace 卖金杯 ' + r1);
+            await mouseDrag(A, GAR_SLOT(0), null, 2);
+            await key('Delete', 46, true);
+            if ((await A.eval('gState.money')) !== 5000) bad.push('按键重复也卖了');
+            await key('Delete', 46);
+            const r2 = await A.eval(`gState.money + ' ' + gState.selectedSlot + ' ' + gState.garage.filter(function (q) { return q; }).map(function (q) { return q.n; }).join(',')`);
+            if (r2 !== '17500 -1 地窖徽章') bad.push('Delete 半价卖鱼叉 ' + r2);
+            // 触屏点一下
+            await A.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+            const p = await mouseAt(A, GAR_SLOT(0));
+            await A.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p[0], y: p[1] }] });
+            await A.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+            await W(300);
+            await A.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+            const r3 = await A.eval(`gState.selectedContainer + ':' + gState.selectedSlot + ' ' + document.getElementById('sell-btn-container').innerText`);
+            if (r3 !== 'garage:0 地窖徽章不能卖') bad.push('触屏点不中或徽章能卖 ' + r3);
+            await key('Backspace', 8);
+            const r4 = await A.eval(`${MODAL} + ' ' + gState.money + ' ' + !!gState.garage[0]`);
+            if (r4 !== '卖不了 17500 true') bad.push('徽章 ' + r4);
+            await A.eval(`${HIDE} true;`);
+            // 背包里的东西按 Delete 不卖
+            await mouseDrag(A, INV_SLOT(0), null, 2);
+            await key('Delete', 46);
+            if ((await A.eval(`gState.money + ' ' + !!gState.inv[0]`)) !== '17500 true') bad.push('背包里的被卖了');
+            // 进图重置选中
+            await A.eval(`${HIDE} gState.selectedContainer = 'garage'; gState.selectedSlot = 7; requestEnterMap(); true;`);
+            await W(2500);
+            const r5 = await A.eval(`gState.selectedContainer + ':' + gState.selectedSlot`);
+            if (r5 !== 'inv:0') bad.push('进图没重置 ' + r5);
+            await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1800); await A.eval(`${HIDE} true;`);
+            report('H3 仓库点选、卖出、徽章、进图重置', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
         await A.eval(`${HIDE} gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); gState.money = 0; nav('screen-lobby'); true;`);
 
         // 3. 伪造消息（附录）

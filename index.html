@@ -4184,18 +4184,33 @@
         function tidyAll() { tidyInv(); tidyGarage(); if (!isPlaying) initGarage(); else updateHUD(); saveProgress(); }
 
         let isDragging = false; let dragSourceObj = null; let dragGhost = null;
+        // 按下以后移动不到 6 像素就松手，算点一下（选中这格），不算拖（H3）。
+        // 以前一按下就开始拖，松手时 endDrag 重画了所有格子，click 就丢了，鼠标怎么点都选不中。
+        let slotPress = null, slotTapAt = 0;
+        const SLOT_DRAG_PX = 6;
 
         function setupSlotDrag(el, container, idx) {
             el.setAttribute('data-container', container); el.setAttribute('data-idx', idx);
             el.addEventListener('pointerdown', function (e) {
                 let item = container === 'inv' ? gState.inv[idx] : gState.garage[idx]; if (!item) return;
-                isDragging = true; dragSourceObj = { container: container, idx: idx };
-                dragGhost = document.createElement('div'); dragGhost.className = 'slot'; dragGhost.style.position = 'fixed'; dragGhost.style.pointerEvents = 'none'; dragGhost.style.zIndex = '1000'; dragGhost.style.opacity = '0.8';
-                dragGhost.innerHTML = el.innerHTML; document.body.appendChild(dragGhost);
-                moveGhost(e); el.style.opacity = '0.3'; e.preventDefault();
+                slotPress = { el: el, container: container, idx: idx, x: e.clientX, y: e.clientY };
+                e.preventDefault();
             });
+            // 点一下已经在 pointerup 里处理了，浏览器随后补发的 click 不再处理第二遍
+            el.addEventListener('click', function (e) { if (performance.now() - slotTapAt < 500) { e.stopImmediatePropagation(); e.preventDefault(); } });
+        }
+        function slotBeginDrag(e) {
+            let p = slotPress; slotPress = null;
+            isDragging = true; dragSourceObj = { container: p.container, idx: p.idx };
+            dragGhost = document.createElement('div'); dragGhost.className = 'slot'; dragGhost.style.position = 'fixed'; dragGhost.style.pointerEvents = 'none'; dragGhost.style.zIndex = '1000'; dragGhost.style.opacity = '0.8';
+            dragGhost.innerHTML = p.el.innerHTML; document.body.appendChild(dragGhost);
+            p.el.style.opacity = '0.3';
         }
         function moveGhost(e) {
+            if (slotPress) {
+                let x = e.clientX || (e.touches && e.touches[0].clientX) || 0, y = e.clientY || (e.touches && e.touches[0].clientY) || 0;
+                if (Math.hypot(x - slotPress.x, y - slotPress.y) >= SLOT_DRAG_PX) slotBeginDrag(e);
+            }
             if (!isDragging || !dragGhost) return;
             dragGhost.style.left = (e.clientX || (e.touches && e.touches[0].clientX)) - 30 + 'px';
             dragGhost.style.top = (e.clientY || (e.touches && e.touches[0].clientY)) - 30 + 'px';
@@ -4225,6 +4240,11 @@
         }
 
         function endDrag(e) {
+            if (slotPress) {
+                let p = slotPress; slotPress = null; slotTapAt = performance.now();
+                if (p.el.onclick) p.el.onclick();
+                return;
+            }
             if (!isDragging) return; isDragging = false; if (dragGhost) { dragGhost.remove(); dragGhost = null; }
 
             let clientX = e.clientX; let clientY = e.clientY;
@@ -4295,9 +4315,12 @@
 
             if (gState.selectedContainer === 'garage' && gState.garage[gState.selectedSlot]) {
                 let item = gState.garage[gState.selectedSlot];
-                let sellVal = item.isShop ? Math.floor(item.v / 2) : item.v;
-                let sBtn = document.createElement('button'); sBtn.innerText = `出售 ($${sellVal})`; sBtn.style.background = '#f39c12'; sBtn.style.color = '#fff'; sBtn.style.width = '200px';
-                sBtn.onclick = function () { gState.money += sellVal; gState.garage[gState.selectedSlot] = null; initGarage(); }; sellDiv.appendChild(sBtn);
+                if (item.type === 'badge') {
+                    let t = document.createElement('div'); t.innerText = '地窖徽章不能卖'; t.style.cssText = 'color:#999; font-size:13px; margin:6px 0;'; sellDiv.appendChild(t);
+                } else {
+                    let sBtn = document.createElement('button'); sBtn.innerText = '卖掉（$' + garageSellPrice(item).toLocaleString() + '）' + kTxt('　Backspace', ''); sBtn.style.background = '#f39c12'; sBtn.style.color = '#fff'; sBtn.style.minWidth = '200px';
+                    sBtn.onclick = garageSellSelected; sellDiv.appendChild(sBtn);
+                }
 
                 // 选中的是王冠底座：把仓库里现有的宝石列出来，点一下就镚上去。
                 // 地上扔在一起也能镚，两边走的是同一个函数。
@@ -4328,6 +4351,17 @@
             saveProgress();
         }
 
+        // 卖掉仓库里选中的那一件（H3）：宝物原价，商店道具半价；地窖徽章不能卖。卖完清空选中
+        function garageSellPrice(item) { return item.isShop ? Math.floor(item.v / 2) : item.v; }
+        function garageSellSelected() {
+            let item = gState.selectedContainer === 'garage' ? gState.garage[gState.selectedSlot] : null;
+            if (!item) return;
+            if (item.type === 'badge') { showSysModal('卖不了', '地窖徽章不能卖。', [{ label: '知道了' }]); return; }
+            gState.money += garageSellPrice(item); gState.garage[gState.selectedSlot] = null;
+            gState.selectedSlot = -1;
+            initGarage();
+        }
+
         function buy(n, cost) {
             let emptyIdx = gState.garage.findIndex(function (item) { return item === null; });
             if (gState.money < cost) { showSysModal('钱不够', '买' + n + '还差 $' + (cost - gState.money).toLocaleString() + '。', [{ label: '知道了' }]); return; }
@@ -4352,9 +4386,12 @@
             if (isPlaying) { updateHUD(); saveProgress(); } else initGarage();
         }
         window.addEventListener('keydown', function (e) {
-            if (e.target.tagName === 'INPUT') return;
-            if (!document.getElementById('screen-garage').classList.contains('hidden') && e.key === 'Delete') {
-                if (gState.selectedSlot !== -1 && gState.inv[gState.selectedSlot]) { gState.money += gState.inv[gState.selectedSlot].v; gState.inv[gState.selectedSlot] = null; initGarage(); }
+            let tg = e.target, tn = tg && tg.tagName;
+            if (tn === 'INPUT' || tn === 'TEXTAREA' || tn === 'SELECT' || (tg && tg.isContentEditable)) return;
+            if (!document.getElementById('screen-garage').classList.contains('hidden') && (e.key === 'Delete' || e.key === 'Backspace')) {
+                e.preventDefault();
+                if (e.repeat) return;
+                garageSellSelected();
             }
         });
 
@@ -4685,6 +4722,7 @@
             mSize = HUNT_SIZE;
             showModeIntroIfFirstTime('hunt');
             gameSeed = seed || 1; nav('none'); document.getElementById('ui-layer').classList.remove('hidden'); document.getElementById('ui-id').innerText = dispName(gState.id);
+            gState.selectedSlot = 0; gState.selectedContainer = 'inv';   // 仓库和局内快捷栏共用这两个
             isPlaying = true; gState.isDead = false; gState.submittedItems = []; gState.hp = 100; timeSecs = 8 * 3600; gState.totalSubmitted = 0; gState.runCash = 0; gState.aiSubmitted = 0; gState.aiChestsTaken = 0; stamina = 100;
             // abilityCd/abilityActive 之前是全局变量，从来没在开新一局的时候清零过——
             // 上一局技能刚用完、冷却还没走完就退出，下一局技能会一直显示"还在冷却"，
@@ -5900,7 +5938,8 @@
             {
                 id: '2026-10-04-v2', date: '10 月 4 日', title: '寻宝队修复', items: [
                     '卡的时候爬楼梯不会再掉进台阶里、卡在平台底下了',
-                    '仓库里东西能拖到空格了；钱不够、仓库满了会告诉你'
+                    '仓库里东西能拖到空格了；钱不够、仓库满了会告诉你',
+                    '仓库里点一下就能选中，选中后按 Backspace 或点「卖掉」卖掉'
                 ]
             },
             {
