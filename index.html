@@ -2889,7 +2889,8 @@
         const MODE_RULES = {
             hunt: { title: '寻宝队', lines: function () { return [
                 '迷宫里开箱子找宝贝，拿回起点那一格上交。',
-                '上交的钱够了就能撤离，撤离出去才算赢。',
+                '上交的东西值够了就能撤离，撤离出去才算赢。',
+                '上交不给钱，撤离后东西进仓库，卖掉才有钱。',
                 '怪物会追人。倒地了队友能救你，开了 AI 补齐的话 AI 也会来救。',
                 kTxt('<b>F / 左键</b> 开箱子、捡东西、打怪　<b>右键</b> 用手上的东西', '<b>互动</b> 开箱子、捡东西、打怪　<b>道具</b> 用手上的东西'),
                 kTxt('<b>1 2 3</b> 换手上的东西　<b>Q</b> 扔　<b>E</b> 背包　<b>M</b> 地图', '点下面的格子换手上的东西，<b>背包</b> 看全部'),
@@ -4757,12 +4758,12 @@
 
             if (gState.control === 'laptop') { document.body.onclick = function (e) { if (isPlaying && !gState.backpackOpen && !gState.largeMapOpen && !e.target.closest('.action-btn') && !e.target.closest('button')) { safeLockPointer(); gState.needsLock = false; } }; }
             updateHUD(); bgmStart(); animate();
-            // 第一次进寻宝队才弹——新手不知道"捡了东西不代表到手"，得回安全区按上交才真的变现，
+            // 第一次进寻宝队才弹——新手不知道"捡了东西不代表到手"，得回安全区上交、撤离出去、回仓库卖掉才有钱，
             // 死了/没上交就白捡了，这个规则不解释一下容易被当成 bug。
             if (!gState.huntTutorialShown) {
                 gState.huntTutorialShown = true; saveProgress();
                 setTimeout(function () {
-                    showSysModal('新手提示', '捡到的东西要拿回出生点，站在安全区里按「上交」才算钱。没交就死了，东西全没。', [{ label: '知道了' }]);
+                    showSysModal('新手提示', '捡到的东西拿回出生点，站在安全区里按「上交」。撤离出去以后东西进仓库，卖掉才有钱。没撤出去，东西全没。', [{ label: '知道了' }]);
                 }, 400);
             }
         }
@@ -5939,7 +5940,8 @@
                 id: '2026-10-04-v2', date: '10 月 4 日', title: '寻宝队修复', items: [
                     '卡的时候爬楼梯不会再掉进台阶里、卡在平台底下了',
                     '仓库里东西能拖到空格了；钱不够、仓库满了会告诉你',
-                    '仓库里点一下就能选中，选中后按 Backspace 或点「卖掉」卖掉'
+                    '仓库里点一下就能选中，选中后按 Backspace 或点「卖掉」卖掉',
+                    '上交不再直接给钱：撤离出去东西进仓库，卖掉才有钱'
                 ]
             },
             {
@@ -17704,16 +17706,15 @@
                     nightTreasureEgg(item.n);
 
                     submittedNow += item.v; cashNow += item.v;
-                    gState.money += item.v;
-                    // 上交的东西不再凭空消失：先寄存起来，撤离成功就一起进车库。
-                    // 死了的话跟着已上交的钱一起没收。
+                    // 上交只算进度，不给钱（H4）：东西先寄存起来，撤离成功就一起进仓库，卖掉才有钱。
+                    // 没撤出去的话一起没收。
                     gState.submittedItems.push(item);
                     gState.inv[idx] = null;
                 } else { savedLoadout.push(item); }
             });
 
             gState.totalSubmitted += submittedNow;
-            gState.runCash = (gState.runCash || 0) + cashNow;
+            gState.runCash = (gState.runCash || 0) + cashNow;   // 只给本局任务「上交满 $30000」计数
             huntRefreshSubmitUI();
 
             gState.inv = savedLoadout; expandInventory(); updateHUD(); saveProgress();
@@ -17886,14 +17887,14 @@
             for (let i = h.length - 1; i >= 0 && !h[i]; i--) n++;
             return n;
         }
+        // 没撤出去：这局上交过的东西全部没收，返回没收了几件。上交本来就不给钱，所以不扣钱（H4）
         function forfeitRun() {
-            gState.submittedItems = [];   // 没撤出去，上交过的东西也一并没收
+            let confiscated = (gState.submittedItems || []).length;
+            gState.submittedItems = [];
             gState.matchHistory.push(false); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
             if (huntConsecutiveFails() >= 5) gState.pityGuaranteed = true;
 
-            let confiscated = gState.runCash || 0;
             if (confiscated > 0 || gState.totalSubmitted > 0) {
-                gState.money = Math.max(0, gState.money - confiscated);
                 gState.totalSubmitted = 0; gState.runCash = 0;
                 document.getElementById('submit-progress').innerText = `上交进度: 0 / ${gState.extractTarget}`;
                 document.getElementById('submit-progress').style.color = '#ffeb3b';
@@ -17937,7 +17938,7 @@
             if (!isPlaying) return;
             isPlaying = false; if (document.pointerLockElement) document.exitPointerLock();
 
-            if (!won) { let lost = forfeitRun(); if (lost > 0) text += `本局已上交的 $${lost} 全部被没收。`; }
+            if (!won) { let lost = forfeitRun(); if (lost > 0) text += '这局上交的 ' + lost + ' 件东西没收了。'; }
             // 活着撤离也告诉队友一声，不然他们那边你的身体停止同步 6 秒后会被当成"掉线"
             else if (!gState.isDead) bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*', alive: true, extracted: true });
             if (!gState.quitNoPay) { coinsSettle('hunt', won); text += '\n' + coinsBreakText(); }

@@ -420,6 +420,27 @@ async function enterExit(tab, key) {
             await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1800); await A.eval(`${HIDE} true;`);
             report('H3 仓库点选、卖出、徽章、进图重置', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
         }
+        {
+            // H4：上交不给钱，撤离后进仓库，卖掉才有钱；撤离失败不扣钱，上交的东西没收
+            const before = A.errors.length, bad = [];
+            const enter = async () => { await A.eval(GARAGE_SETUP(`[S('鱼叉'), null, null, null, null, null]`, `[]`, 1000)); await A.eval(`${HIDE} requestEnterMap(); true;`); await W(2500); await A.eval(`${HIDE} true;`); };
+            const submit = `(function(){ gState.inv[1] = L('金杯'); camera.position.set(TILE, 9, TILE); clickSubmit(); return gState.money + ' ' + gState.totalSubmitted + ' ' + gState.submittedItems.length; })()`;
+            await enter();
+            const s1 = await A.eval(submit);
+            if (s1 !== '1000 5000 1') bad.push('上交后 钱/进度/寄存 ' + s1);
+            await A.eval(`completeExtraction('撤离成功'); true;`); await W(300);
+            const s2 = await A.eval(`gState.money + ' ' + gState.garage.filter(function (q) { return q && q.n === '金杯'; }).length`);
+            if (s2 !== '1000 1') bad.push('撤离后 钱/仓库里的金杯 ' + s2);
+            await A.eval(`${HIDE} returnToGarageFromOver(); gState.selectedContainer = 'garage'; gState.selectedSlot = gState.garage.findIndex(function (q) { return q && q.n === '金杯'; }); garageSellSelected(); true;`);
+            if ((await A.eval('gState.money')) !== 6000) bad.push('卖掉后钱不对 ' + (await A.eval('gState.money')));
+            await enter();
+            await A.eval(submit);
+            await A.eval(`finishGame(false, '测试'); true;`); await W(300);
+            const s3 = await A.eval(`gState.money + ' ' + document.getElementById('go-desc').innerText.split(String.fromCharCode(10))[0]`);
+            if (!/^1000 测试这局上交的 1 件东西没收了。$/.test(s3)) bad.push('撤离失败 ' + s3);
+            await A.eval(`${HIDE} returnToGarageFromOver(); true;`);
+            report('H4 上交不给钱，卖掉才有钱', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
         await A.eval(`${HIDE} gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); gState.money = 0; nav('screen-lobby'); true;`);
 
         // 3. 伪造消息（附录）
