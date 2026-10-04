@@ -492,6 +492,35 @@ async function enterExit(tab, key) {
             await D.close();
             report('H6 地窖徽章只送一次、商店能买', bad.length === 0, bad.join(' / '));
         }
+        {
+            // H7：仓库「返回大厅」谁都能点；组队时一个人回大厅，房主和其他人留在仓库，开局不再把他拉进去
+            const bad = [];
+            const H = await openTab(chrome, url), G1 = await openTab(chrome, url), G2 = await openTab(chrome, url);
+            const [h, g1, g2] = [await H.eval('gState.id'), await G1.eval('gState.id'), await G2.eval('gState.id')];
+            await H.eval(`peerIsHost = true; teamAddMember(${JSON.stringify(g1)}); teamAddMember(${JSON.stringify(g2)}); true;`);
+            await G1.eval(`teamAddMember(${JSON.stringify(h)}); true;`); await G2.eval(`teamAddMember(${JSON.stringify(h)}); true;`);
+            await W(3000);
+            await H.eval(`${HIDE} selectGameMode('hunt'); requestStartGame(); true;`); await W(1200);
+            const humans = (t) => t.eval(`gState.team.filter(function (m) { return !m.isAI; }).map(function (m) { return m.id; }).sort().join(',')`);
+            const onGarage = (t) => t.eval(`!document.getElementById('screen-garage').classList.contains('hidden')`);
+            const all3 = [h, g1, g2].sort().join(',');
+            if ((await humans(H)) !== all3 || !(await onGarage(G1)) || !(await onGarage(G2))) bad.push('组队进仓库没成 ' + (await humans(H)));
+            if (!(await G1.eval(`document.getElementById('garage-lobby-btn').offsetParent !== null && document.getElementById('start-game-btn').style.display === 'none'`))) bad.push('队员看不到返回大厅按钮');
+            await G1.eval(`document.getElementById('garage-lobby-btn').click(); true;`); await W(1200);
+            const r1 = await G1.eval(`!document.getElementById('screen-lobby').classList.contains('hidden') + ' ' + gState.team.filter(function (m) { return !m.isAI; }).length`);
+            if (r1 !== 'true 1') bad.push('回大厅的人 ' + r1);
+            const two = [h, g2].sort().join(',');
+            if ((await humans(H)) !== two) bad.push('房主队伍 ' + (await humans(H)));
+            if ((await humans(G2)) !== two || !(await onGarage(G2))) bad.push('另一个队员 ' + (await humans(G2)));
+            await H.eval(`requestEnterMap(); true;`); await W(2500);
+            const r2 = [await H.eval('isPlaying'), await G2.eval('isPlaying'), await G1.eval('isPlaying')].join(' ');
+            if (r2 !== 'true true false') bad.push('开局 房主/队员/回大厅的 ' + r2);
+            for (const t of [H, G1, G2]) if (t.errors.length) bad.push(t.errors.slice(0, 2).join(' / '));
+            for (const t of [H, G2]) await t.eval(`${HIDE} ${MODES.hunt.exit}; true;`).catch(() => { });
+            await W(800);
+            for (const t of [H, G1, G2]) await t.close();
+            report('H7 仓库返回大厅', bad.length === 0, bad.join(' / '));
+        }
         await A.eval(`${HIDE} gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); gState.money = 0; nav('screen-lobby'); true;`);
 
         // 3. 伪造消息（附录）

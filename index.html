@@ -1188,6 +1188,7 @@
         <button onclick="bookOpen()" style="background:#5e35b1; color:#fff; border:none;">配方图鉴</button>
         <button onclick="tidyAll()" style="background:#607d8b; color:#fff; border:none;">一键整理</button>
         <button id="start-game-btn" onclick="requestEnterMap()">开始游戏</button>
+        <button id="garage-lobby-btn" onclick="garageBackToLobby()" style="background:#78909c; color:#fff; border:none;">返回大厅</button>
         <div id="race-board" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);
              z-index:60; display:flex; align-items:center; justify-content:center;">
             <div style="background:#fff; border-radius:10px; padding:16px; width:min(92vw,420px); text-align:left;">
@@ -2411,6 +2412,7 @@
                 if (msg.sender !== gState.id) {
                     gState.peerState[msg.sender] = msg.type === 'PLAYER_DOWN' ? 'down' : (msg.type === 'PLAYER_LEFT' ? 'left' : 'active');
                     if (msg.type === 'PLAYER_LEFT' && msg.alive && isPlaying) huntPeerToAi(msg.sender, msg.extracted ? ' 撤离了' : ' 离开了');
+                    if (msg.type === 'PLAYER_LEFT' && !isPlaying) huntDropFromTeam(msg.sender);
                     updateDeathWaitStatus();
                 }
             } else if (msg.type === 'ROOM_HELLO') {
@@ -2503,8 +2505,9 @@
             } else if (msg.type === 'TEAM_SYNC') {
                 // 只有真组队了才接受同步——不然大厅里随便一个不相干的人广播的队伍
                 // 会把你自己单机的 gState.team 顶掉。
+                // 队伍名单里没有自己的不接（H7：从仓库回了大厅、被房主拿掉的人，不该被拉回这份名单）
                 let isLeader = (lobbyParty.length === 0 || peerIsHost);
-                if (!isLeader && msg.team) {
+                if (!isLeader && Array.isArray(msg.team) && msg.team.some(function (m) { return m && m.id === gState.id; })) {
                     gState.team = msg.team;
                     if (msg.map) gState.mapDifficulty = msg.map;
                     updateTeamListUI();
@@ -2547,8 +2550,10 @@
                 // 寻宝队开局只拉自己队里的人：之前房间里谁开都会把全房间的人拽进去，别的模式打一半也会被拽走
                 if ((msg.type === 'START_GARAGE' || msg.type === 'START_MAP') && !(msg.sender && lobbyParty.indexOf(msg.sender) >= 0)) return;
                 if (msg.type === 'START_GARAGE') {
+                    huntOptOut = false;
                     nav('screen-garage'); initGarage();
                 } else if (msg.type === 'START_MAP') {
+                    if (huntOptOut) return;   // 从仓库回了大厅的人，不再被拉进这一局（H7）
                     gState.mapDifficulty = msg.mapDiff; gState.extractTarget = mapConfigs[msg.mapDiff].extr;
                     startGameMap(msg.seed, msg.spawns);
                 }
@@ -3331,9 +3336,45 @@
             // 只有真的组了队（lobbyParty 非空）才需要等房主，单纯房间里有陌生人
             // 不该拦你自己开寻宝队。
             if (lobbyParty.length && !peerIsHost) { showSysModal('提示', '等房主开局。', [{ label: '确定' }]); return; }
+            huntOptOut = false;
             huntRebuildTeam();
             bc.postMessage({ type: 'START_GARAGE', target: '*', sender: gState.id });
             nav('screen-garage'); initGarage();
+        }
+
+        // ── 仓库「返回大厅」（H7）：谁都能点。自己的寻宝队伍恢复成单人（+AI），
+        // 用现有的 PLAYER_LEFT 告诉队友；房主把这个人从队伍里拿掉、补 AI，再用 TEAM_SYNC 同步给其他人。
+        // 其他人留在仓库不受影响；回了大厅的人不会再被这局的 START_MAP 拉进去，直到房主再开一次仓库。
+        let huntOptOut = false;
+        function huntSoloTeam() {
+            let team = [{ id: gState.id, isLeader: true, isReady: true, isAI: false }];
+            if (huntAiOn()) for (let n = 1; team.length < HUNT_TEAM_SIZE; n++) team.push({ id: gState.id + '_AI_' + n, isLeader: false, isReady: true, isAI: true });
+            gState.team = team; updateTeamListUI();
+        }
+        function huntDropFromTeam(id) {
+            if (!id || id === gState.id || !gState.team) return;
+            if (!gState.team.some(function (m) { return m.id === id && !m.isAI; })) return;
+            gState.team = gState.team.filter(function (m) { return m.id !== id; });
+            if (lobbyParty.length === 0 || peerIsHost) {
+                if (huntAiOn()) {
+                    let n = 1;
+                    while (gState.team.length < HUNT_TEAM_SIZE) {
+                        while (gState.team.some(function (m) { return m.id === gState.id + '_AI_' + n; })) n++;
+                        gState.team.push({ id: gState.id + '_AI_' + n, isLeader: false, isReady: true, isAI: true });
+                    }
+                }
+                broadcastTeam();
+            } else updateTeamListUI();
+        }
+        function garageBackToLobby() {
+            if (isPlaying) return;
+            huntOptOut = true;
+            bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*', alive: false });
+            huntSoloTeam();
+            ['shop-modal', 'book-modal'].forEach(function (id) { let e = document.getElementById(id); if (e) e.classList.add('hidden'); });
+            gState.selectedSlot = 0; gState.selectedContainer = 'inv';
+            saveProgress();
+            nav('screen-lobby');
         }
 
         function requestEnterMap() {
@@ -5965,7 +6006,8 @@
                     '仓库里点一下就能选中，选中后按 Backspace 或点「卖掉」卖掉',
                     '上交不再直接给钱：撤离出去东西进仓库，卖掉才有钱',
                     '中途退出、关页面都算撤离失败，背包里的东西全丢（腰包、徽章也是）',
-                    '地窖徽章只送一次，丢了可以在商店买'
+                    '地窖徽章只送一次，丢了可以在商店买',
+                    '仓库里有「返回大厅」了，组队时自己回去不影响别人'
                 ]
             },
             {
