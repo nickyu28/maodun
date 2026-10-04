@@ -218,6 +218,63 @@ const GARAGE_SETUP = (inv, gar, money) => `(function(){ ${HIDE} selectGameMode('
     gState.inv = ${inv}; gState.garage = Array(200).fill(null); let g = ${gar}; g.forEach(function (q, i) { gState.garage[i] = q; });
     gState.money = ${money}; gState.selectedContainer = 'inv'; gState.selectedSlot = -1; initGarage(); return true; })()`;
 
+// H8：跳上桌子不掉进去；从二楼走进楼梯井、乱跳，不停在墙或桌子里
+function TABLE_SIM() {
+    function cellAt(f, x, z) { let r = maze[f] && maze[f][Math.floor((z + TILE / 2) / TILE)]; return r ? r[Math.floor((x + TILE / 2) / TILE)] || null : null; }
+    function inside(p) {
+        let feet = p.y - 9, f = Math.max(0, Math.min(FLOORS - 1, Math.floor(feet / TILE))), c = cellAt(f, p.x, p.z);
+        if (!c || c.type === 1) return 'wall';
+        if (c.type === 2 && feet < f * TILE + 8 - 0.5) return 'table';
+        if (f + 1 < FLOORS && feet >= (f + 1) * TILE - 4) { let u = cellAt(f + 1, p.x, p.z); if (!u || u.type === 1) return 'upperWall'; if (u.type === 2) return 'upperTable'; }
+        return null;
+    }
+    // 测试跑道：一楼最后一行 3 格空地 + 1 格桌子
+    let z = mSize - 2, x0 = 2;
+    for (let x = x0; x < x0 + 3; x++) maze[0][z][x] = { type: 0 };
+    let m = new THREE.Mesh(new THREE.BoxGeometry(TILE, 8, TILE), new THREE.MeshLambertMaterial());
+    m.position.set((x0 + 3) * TILE, 4, z * TILE); m.updateMatrixWorld(); walkableMeshes.push(m);
+    maze[0][z][x0 + 3] = { type: 2, mesh: m };
+    let face = (x0 + 3) * TILE - TILE / 2, scans = [], onTable = 0;
+    [[60, 42], [60, 67.2], [30, 42], [30, 67.2]].forEach(function (c) {
+        let dt = 1 / c[0], fails = 0;
+        for (let o of [0, 3, 6]) for (let d = 5; d <= 44.001; d += 0.5) {
+            camera.position.set(face - d, 9, z * TILE + o); pVel.set(0, 44, 0); onGround = false;
+            let bad = false, up = false;
+            for (let t = 0; t < d / c[1] + 1.2; t += dt) {
+                huntPhysics(dt, 1, 0, c[1]); if (inside(camera.position)) bad = true;
+                let cc = cellAt(0, camera.position.x, camera.position.z);
+                if (cc && cc.type === 2 && Math.abs(camera.position.y - 9 - 8) < 0.01) up = true;
+            }
+            if (bad) fails++;
+            if (up) onTable++;
+        }
+        scans.push(c[0] + 'fps ' + c[1] + ': ' + fails);
+    });
+    let seed = 3; let rnd = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    let holes = [];
+    for (let f = 1; f < FLOORS; f++) for (let zz = 1; zz < mSize - 1; zz++) for (let x = 1; x < mSize - 1; x++) {
+        let c = maze[f][zz][x]; if (!(c && c.type === 3 && c.stair && c.stair.base === f - 1)) continue;
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) { let nb = maze[f][zz + d[1]] && maze[f][zz + d[1]][x + d[0]]; if (nb && nb.type === 0) holes.push({ f: f, x: x, z: zz, d: d }); });
+    }
+    let wells = [];
+    [60, 30, 20].forEach(function (fps) {
+        let dt = 1 / fps, bad = 0;
+        for (let k = 0; k < 150; k++) {
+            let h = holes[k % holes.length], a0 = Math.atan2(-h.d[1], -h.d[0]), ang = 0, turn = 0, sp = 42 * (k % 2 ? 1.6 : 1), hit = false;
+            camera.position.set((h.x + h.d[0]) * TILE + (rnd() - 0.5) * 10, h.f * TILE + 9, (h.z + h.d[1]) * TILE + (rnd() - 0.5) * 10);
+            pVel.set(0, 0, 0); onGround = true;
+            for (let t = 0; t < 3; t += dt) {
+                turn -= dt; if (turn <= 0) { ang = (rnd() * 2 - 1) * Math.PI * 0.6; turn = 0.15 + rnd() * 0.5; }
+                if (onGround && rnd() < dt * 2) { pVel.y = 44; onGround = false; }
+                huntPhysics(dt, Math.cos(a0 + ang), Math.sin(a0 + ang), sp);
+                if (inside(camera.position)) hit = true;
+            }
+            if (hit) bad++;
+        }
+        wells.push(fps + 'fps: ' + bad);
+    });
+    return JSON.stringify({ scans: scans, onTable: onTable, wells: wells, holes: holes.length });
+}
 const ACTIVE = `(function(){ let k = chatActiveModeKey(); return k === 'hub' ? null : k; })()`;
 
 async function enterExit(tab, key) {
@@ -350,6 +407,13 @@ async function enterExit(tab, key) {
             report('H1 楼梯不穿模（1/60 1/30 1/20 各 300 次）', o.stairs > 0 && bad.length === 0 && A.errors.length === before, bad.join(' / ') + ' 楼梯数 ' + o.stairs);
             report('H1 1/12 帧率跑步能上楼', o.slowClimb === o.slowN, o.slowClimb + '/' + o.slowN);
             report('H1 能下楼、平台下面会被托上去', o.down && o.lift, JSON.stringify({ down: o.down, lift: o.lift }));
+        }
+        {
+            const before = A.errors.length;
+            const o = JSON.parse(await A.eval(`(${TABLE_SIM.toString()})()`));
+            const scanBad = o.scans.filter((x) => !/: 0$/.test(x)), wellBad = o.wells.filter((x) => !/: 0$/.test(x));
+            report('H8 跳桌子不掉进去（距离 5–44 × 偏移 0/3/6，60/30 帧，走/跑）', scanBad.length === 0 && o.onTable > 0 && A.errors.length === before, o.scans.join(' / ') + ' 跳上桌面 ' + o.onTable + ' 次');
+            report('H8 从二楼走进楼梯井乱跳，不停在墙或桌子里', o.holes > 0 && wellBad.length === 0, o.wells.join(' / ') + ' 楼梯口 ' + o.holes);
         }
         await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1800); await A.eval(`${HIDE} true;`);
 

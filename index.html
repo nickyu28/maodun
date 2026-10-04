@@ -4534,32 +4534,44 @@
         function blockedX(x, z, y, dir) { let ex = x + dir * P_RADIUS, b = y - 9; return checkCol(ex, z - EDGE_INSET, y, b) || checkCol(ex, z + EDGE_INSET, y, b); }
         function blockedZ(x, z, y, dir) { let ez = z + dir * P_RADIUS, b = y - 9; return checkCol(x - EDGE_INSET, ez, y, b) || checkCol(x + EDGE_INSET, ez, y, b); }
 
-        // ── 寻宝队玩家移动（H1）──
-        // 墙、桌子按身体边缘挡；楼梯按身体中心落点挡：脚到那里台阶顶的落差不超过 MAX_STEP_UP 才能走进去。
-        // 楼梯格（type 3）在上下两层都有，平台那段也算最高一级。
-        function huntStairTopAt(x, z, feet) {
-            let cf = Math.floor(feet / TILE); if (cf < 0) cf = 0; if (cf > FLOORS - 1) cf = FLOORS - 1;
-            let cX = Math.floor((x + TILE / 2) / TILE), cZ = Math.floor((z + TILE / 2) / TILE);
-            let c = maze[cf] && maze[cf][cZ] && maze[cf][cZ][cX];
-            if (!c || c.type !== 3 || !c.stair) return null;
-            let s = c.stair, t = s.sign * ((s.axis === 'z' ? z : x) - s.edge);
-            let i = Math.floor(t / s.depth); if (i < 0) i = 0; if (i > s.count - 1) i = s.count - 1;
-            return s.base * TILE + s.rise * (i + 1);
+        // ── 寻宝队玩家移动（H1、H8）──
+        // 墙按身体边缘挡；楼梯和桌子按"表面高度"、看身体中心落点：脚到那里表面的落差不超过 MAX_STEP_UP 才能走进去。
+        // 楼梯格（type 3）在上下两层都有，平台那段也算最高一级；桌子面高 8。
+        // 脚离上一层地面不到 MAX_STEP_UP（比如从二楼楼梯井掉下来、脚在 20–24 之间）时，上一层那一格也算：
+        // 墙就挡，桌子按桌面算，地板就能踩上去。
+        const HUNT_TABLE_H = 8;
+        function huntCellAt(fl, x, z) {
+            let r = maze[fl] && maze[fl][Math.floor((z + TILE / 2) / TILE)];
+            return (r && r[Math.floor((x + TILE / 2) / TILE)]) || null;
+        }
+        function huntCellTop(fl, c, x, z) {
+            if (!c || c.type === 1) return Infinity;
+            if (c.type === 2) return fl * TILE + HUNT_TABLE_H;
+            if (c.type === 3 && c.stair) {
+                let s = c.stair, t = s.sign * ((s.axis === 'z' ? z : x) - s.edge);
+                let i = Math.floor(t / s.depth); if (i < 0) i = 0; if (i > s.count - 1) i = s.count - 1;
+                return s.base * TILE + s.rise * (i + 1);
+            }
+            return fl * TILE;
+        }
+        function huntFloorOf(feet) { let cf = Math.floor(feet / TILE); return cf < 0 ? 0 : cf > FLOORS - 1 ? FLOORS - 1 : cf; }
+        function huntNearUpper(cf, feet) { return cf + 1 < FLOORS && feet >= (cf + 1) * TILE - MAX_STEP_UP; }
+        function huntSurfaceAt(x, z, feet) {
+            let cf = huntFloorOf(feet), top = huntCellTop(cf, huntCellAt(cf, x, z), x, z);
+            if (huntNearUpper(cf, feet)) top = Math.max(top, huntCellTop(cf + 1, huntCellAt(cf + 1, x, z), x, z));
+            return top;
         }
         function huntWallAt(x, z, feet) {
-            let cf = Math.floor(feet / TILE); if (cf < 0) cf = 0; if (cf > 2) cf = 2;
-            let cX = Math.floor((x + TILE / 2) / TILE), cZ = Math.floor((z + TILE / 2) / TILE);
-            if (!maze[cf] || !maze[cf][cZ] || !maze[cf][cZ][cX]) return true;
-            let type = maze[cf][cZ][cX].type;
-            if (type === 1) return true;
-            if (type === 2 && feet + 9 < cf * TILE + 13) return true;
+            let cf = huntFloorOf(feet), c = huntCellAt(cf, x, z);
+            if (!c || c.type === 1) return true;
+            if (c.type === 2 && feet < cf * TILE + HUNT_TABLE_H - MAX_STEP_UP) return true;   // 桌子侧面：脚太低时边缘也挡，免得身体插进桌子
+            if (huntNearUpper(cf, feet)) { let u = huntCellAt(cf + 1, x, z); if (!u || u.type === 1) return true; }
             return false;
         }
         function huntBlockedAt(x, z, feet, dx, dz) {
             if (dx) { let ex = x + Math.sign(dx) * P_RADIUS; if (huntWallAt(ex, z - EDGE_INSET, feet) || huntWallAt(ex, z + EDGE_INSET, feet)) return true; }
             if (dz) { let ez = z + Math.sign(dz) * P_RADIUS; if (huntWallAt(x - EDGE_INSET, ez, feet) || huntWallAt(x + EDGE_INSET, ez, feet)) return true; }
-            let top = huntStairTopAt(x, z, feet);
-            return top !== null && top - feet > MAX_STEP_UP;
+            return huntSurfaceAt(x, z, feet) - feet > MAX_STEP_UP;
         }
         // 一帧的移动 + 重力 + 落地。位移超过 1 个单位拆成小步；挡住的轴就不走，没挡的轴走的就是检查过的距离。
         function huntPhysics(dt, mx, mz, speed) {
@@ -4577,9 +4589,12 @@
                 if (hits.length > 0) ground = hits[0].point.y + 9;
                 if ((ground - p.y <= MAX_STEP_UP) && (p.y <= ground + 0.1)) { p.y = ground; pVel.y = 0; onGround = true; }
                 else onGround = false;
-                // 保底：已经在台阶里面或平台下面了，直接托到表面
-                let top = huntStairTopAt(p.x, p.z, p.y - 9);
-                if (top !== null && p.y - 9 < top) { p.y = top + 9; if (pVel.y < 0) pVel.y = 0; onGround = true; }
+                // 保底：已经在台阶、桌子里面或平台下面了，直接托到表面
+                let top = huntSurfaceAt(p.x, p.z, p.y - 9);
+                if (top !== Infinity && p.y - 9 < top) { p.y = top + 9; if (pVel.y < 0) pVel.y = 0; onGround = true; }
+                // 脚快到上一层、头顶那一格是上一层的墙：当成撞到天花板，压回下面（不会停在墙里）
+                let cf = huntFloorOf(p.y - 9);
+                if (huntNearUpper(cf, p.y - 9)) { let u = huntCellAt(cf + 1, p.x, p.z); if (!u || u.type === 1) { p.y = (cf + 1) * TILE - MAX_STEP_UP - 0.01 + 9; if (pVel.y > 0) pVel.y = 0; } }
             }
         }
 
@@ -6007,7 +6022,8 @@
                     '上交不再直接给钱：撤离出去东西进仓库，卖掉才有钱',
                     '中途退出、关页面都算撤离失败，背包里的东西全丢（腰包、徽章也是）',
                     '地窖徽章只送一次，丢了可以在商店买',
-                    '仓库里有「返回大厅」了，组队时自己回去不影响别人'
+                    '仓库里有「返回大厅」了，组队时自己回去不影响别人',
+                    '跳上桌子不会再掉进桌子里，从楼梯口掉下去也不会卡进墙'
                 ]
             },
             {
