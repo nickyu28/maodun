@@ -4417,6 +4417,55 @@
         function blockedX(x, z, y, dir) { let ex = x + dir * P_RADIUS, b = y - 9; return checkCol(ex, z - EDGE_INSET, y, b) || checkCol(ex, z + EDGE_INSET, y, b); }
         function blockedZ(x, z, y, dir) { let ez = z + dir * P_RADIUS, b = y - 9; return checkCol(x - EDGE_INSET, ez, y, b) || checkCol(x + EDGE_INSET, ez, y, b); }
 
+        // ── 寻宝队玩家移动（H1）──
+        // 墙、桌子按身体边缘挡；楼梯按身体中心落点挡：脚到那里台阶顶的落差不超过 MAX_STEP_UP 才能走进去。
+        // 楼梯格（type 3）在上下两层都有，平台那段也算最高一级。
+        function huntStairTopAt(x, z, feet) {
+            let cf = Math.floor(feet / TILE); if (cf < 0) cf = 0; if (cf > FLOORS - 1) cf = FLOORS - 1;
+            let cX = Math.floor((x + TILE / 2) / TILE), cZ = Math.floor((z + TILE / 2) / TILE);
+            let c = maze[cf] && maze[cf][cZ] && maze[cf][cZ][cX];
+            if (!c || c.type !== 3 || !c.stair) return null;
+            let s = c.stair, t = s.sign * ((s.axis === 'z' ? z : x) - s.edge);
+            let i = Math.floor(t / s.depth); if (i < 0) i = 0; if (i > s.count - 1) i = s.count - 1;
+            return s.base * TILE + s.rise * (i + 1);
+        }
+        function huntWallAt(x, z, feet) {
+            let cf = Math.floor(feet / TILE); if (cf < 0) cf = 0; if (cf > 2) cf = 2;
+            let cX = Math.floor((x + TILE / 2) / TILE), cZ = Math.floor((z + TILE / 2) / TILE);
+            if (!maze[cf] || !maze[cf][cZ] || !maze[cf][cZ][cX]) return true;
+            let type = maze[cf][cZ][cX].type;
+            if (type === 1) return true;
+            if (type === 2 && feet + 9 < cf * TILE + 13) return true;
+            return false;
+        }
+        function huntBlockedAt(x, z, feet, dx, dz) {
+            if (dx) { let ex = x + Math.sign(dx) * P_RADIUS; if (huntWallAt(ex, z - EDGE_INSET, feet) || huntWallAt(ex, z + EDGE_INSET, feet)) return true; }
+            if (dz) { let ez = z + Math.sign(dz) * P_RADIUS; if (huntWallAt(x - EDGE_INSET, ez, feet) || huntWallAt(x + EDGE_INSET, ez, feet)) return true; }
+            let top = huntStairTopAt(x, z, feet);
+            return top !== null && top - feet > MAX_STEP_UP;
+        }
+        // 一帧的移动 + 重力 + 落地。位移超过 1 个单位拆成小步；挡住的轴就不走，没挡的轴走的就是检查过的距离。
+        function huntPhysics(dt, mx, mz, speed) {
+            let len = Math.hypot(mx, mz), vx = 0, vz = 0;
+            if (len > 0) { vx = mx / len * speed; vz = mz / len * speed; }
+            let n = Math.max(1, Math.ceil(Math.hypot(vx, vz) * dt / 1));
+            let h = dt / n, p = camera.position;
+            for (let k = 0; k < n; k++) {
+                let dx = vx * h, dz = vz * h;
+                if (dx && !huntBlockedAt(p.x + dx, p.z, p.y - 9, dx, 0)) p.x += dx;
+                if (dz && !huntBlockedAt(p.x, p.z + dz, p.y - 9, 0, dz)) p.z += dz;
+                pVel.y -= 120 * h; p.y += pVel.y * h;
+                let hits = new THREE.Raycaster(p, new THREE.Vector3(0, -1, 0), 0, 30).intersectObjects(walkableMeshes);
+                let ground = playerFloor() * TILE + 9;
+                if (hits.length > 0) ground = hits[0].point.y + 9;
+                if ((ground - p.y <= MAX_STEP_UP) && (p.y <= ground + 0.1)) { p.y = ground; pVel.y = 0; onGround = true; }
+                else onGround = false;
+                // 保底：已经在台阶里面或平台下面了，直接托到表面
+                let top = huntStairTopAt(p.x, p.z, p.y - 9);
+                if (top !== null && p.y - 9 < top) { p.y = top + 9; if (pVel.y < 0) pVel.y = 0; onGround = true; }
+            }
+        }
+
         function moveWithCollision(obj, dx, dz) {
             if (!obj) return;
             if (!checkCol(obj.position.x + dx, obj.position.z, obj.position.y)) obj.position.x += dx;
@@ -5831,6 +5880,11 @@
         const GAME_VERSION = '2026.10.04-1';
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
+            {
+                id: '2026-10-04-v2', date: '10 月 4 日', title: '寻宝队修复', items: [
+                    '卡的时候爬楼梯不会再掉进台阶里、卡在平台底下了'
+                ]
+            },
             {
                 id: '2026-10-04', date: '10 月 4 日', title: '规则和入门关', items: [
                     '大厅有「规则」按钮了，局里第一次碰到新东西会弹介绍，密室前 8 关改成入门关',
@@ -16993,28 +17047,13 @@
 
             if (isMovingAllowed) {
 
-                let stepVec = new THREE.Vector3(moveX, 0, moveZ);
-                if (stepVec.lengthSq() > 0) stepVec.normalize().multiplyScalar(baseMoveSpeed * dt);
-                if (stepVec.x !== 0 && blockedX(camera.position.x + stepVec.x, camera.position.z, camera.position.y, Math.sign(stepVec.x))) moveX = 0;
-                if (stepVec.z !== 0 && blockedZ(camera.position.x, camera.position.z + stepVec.z, camera.position.y, Math.sign(stepVec.z))) moveZ = 0;
-
-                if (isMoving) { let step = new THREE.Vector3(moveX, 0, moveZ).normalize().multiplyScalar(baseMoveSpeed * dt); camera.position.x += step.x; camera.position.z += step.z; }
                 if (keys[' '] || touchBtn.jump) { huntJumpBuf = 0.16; keys[' '] = false; touchBtn.jump = false; }
                 if (huntJumpBuf > 0) {
                     huntJumpBuf -= dt;
                     if (onGround) { pVel.y = 44; onGround = false; huntJumpBuf = 0; }
                 }
-                pVel.y -= 120 * dt; camera.position.y += pVel.y * dt;
-
-                let downRay = new THREE.Raycaster(camera.position, new THREE.Vector3(0, -1, 0), 0, 30);
-                let intersects = downRay.intersectObjects(walkableMeshes);
+                huntPhysics(dt, moveX, moveZ, baseMoveSpeed);
                 let cf = playerFloor();
-                let ground = cf * TILE + 9;
-                if (intersects.length > 0) ground = intersects[0].point.y + 9;
-
-                if ((ground - camera.position.y <= MAX_STEP_UP) && (camera.position.y <= ground + 0.1)) {
-                    camera.position.y = ground; pVel.y = 0; onGround = true;
-                } else onGround = false;
 
                 let inSafeZone = (cf === 0 && Math.floor((camera.position.x + TILE / 2) / TILE) === 1 && Math.floor((camera.position.z + TILE / 2) / TILE) === 1);
                 if (inSafeZone && !gState.inSafeZone) { if (document.pointerLockElement) document.exitPointerLock(); }

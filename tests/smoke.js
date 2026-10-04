@@ -142,6 +142,58 @@ const MODES = {
     paint: { start: `nmBegin('paint', [{ id: gState.id }], gState.id, 5, {})`, exit: `nmExit()` },
     tower: { start: `nmBegin('tower', [{ id: gState.id }], gState.id, 5, { kind: 'solo' })`, exit: `nmExit()` }
 };
+// H1 的楼梯模拟：在页面里跑，直接调 huntPhysics。台阶顶按身体中心算，跟游戏代码分开写一份
+function STAIR_SIM() {
+    function topAt(x, z, feet) {
+        let cf = Math.floor(feet / TILE); if (cf < 0) cf = 0; if (cf > FLOORS - 1) cf = FLOORS - 1;
+        let c = maze[cf] && maze[cf][Math.floor((z + TILE / 2) / TILE)] && maze[cf][Math.floor((z + TILE / 2) / TILE)][Math.floor((x + TILE / 2) / TILE)];
+        if (!c || c.type !== 3 || !c.stair) return null;
+        let s = c.stair, i = Math.floor(s.sign * ((s.axis === 'z' ? z : x) - s.edge) / s.depth);
+        return s.base * TILE + s.rise * (Math.max(0, Math.min(s.count - 1, i)) + 1);
+    }
+    let seed = 7; let rnd = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    let stairs = [];
+    for (let f = 0; f < FLOORS; f++) for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) {
+        let c = maze[f][z][x]; if (c && c.type === 3 && c.stair && c.stair.base === f) stairs.push({ x: x, z: z, s: c.stair });
+    }
+    function put(st, back) {
+        let s = st.s, ax = s.axis === 'x' ? s.sign : 0, az = s.axis === 'z' ? s.sign : 0;
+        camera.position.set(st.x * TILE - ax * TILE * back, s.base * TILE + 9, st.z * TILE - az * TILE * back);
+        pVel.set(0, 0, 0); onGround = true; return Math.atan2(az, ax);
+    }
+    function run(dt, n, dev, jump, T) {
+        let bad = 0, climbed = 0;
+        for (let k = 0; k < n; k++) {
+            let st = stairs[k % stairs.length], a0 = put(st, 1), ang = 0, turn = 0, sp = 42 * (k % 2 ? 1.6 : 1), hit = false;
+            for (let t = 0; t < T; t += dt) {
+                turn -= dt; if (turn <= 0) { ang = (rnd() * 2 - 1) * dev; turn = 0.2 + rnd() * 0.6; }
+                if (jump && onGround && rnd() < dt * 1.5) { pVel.y = 44; onGround = false; }
+                huntPhysics(dt, Math.cos(a0 + ang), Math.sin(a0 + ang), sp);
+                let feet = camera.position.y - 9, top = topAt(camera.position.x, camera.position.z, feet);
+                if (top !== null && feet < top - 0.5) hit = true;
+            }
+            if (hit) bad++;
+            if (camera.position.y - 9 >= st.s.base * TILE + TILE - 0.5) climbed++;
+        }
+        return { bad: bad, climbed: climbed };
+    }
+    let D = 50 * Math.PI / 180, runs = [];
+    [60, 30, 20].forEach(function (f) {
+        runs.push(Object.assign({ name: '1/' + f + ' 斜走跑' }, run(1 / f, 150, D, false, 3)));
+        runs.push(Object.assign({ name: '1/' + f + ' 斜走跑加跳' }, run(1 / f, 150, D, true, 3)));
+    });
+    let slow = run(1 / 12, 40, 0, false, 3);
+    // 下楼：站到平台上，往回走
+    let st = stairs[0], s = st.s, a0 = put(st, 0), down = false;
+    camera.position.y = s.base * TILE + TILE + 9; camera.position[s.axis] = s.edge + s.sign * (TILE - 2);
+    for (let t = 0; t < 3; t += 1 / 30) huntPhysics(1 / 30, -Math.cos(a0), -Math.sin(a0), 42);
+    down = Math.abs(camera.position.y - 9 - s.base * TILE) < 0.5;
+    // 平台下面的空腔里：托到平台上
+    put(st, 0); camera.position[s.axis] = s.edge + s.sign * (TILE - 3);
+    huntPhysics(1 / 60, 0, 0, 0);
+    let lift = Math.abs(camera.position.y - 9 - (s.base * TILE + TILE)) < 0.5;
+    return JSON.stringify({ stairs: stairs.length, runs: runs, slowClimb: slow.climbed, slowN: 40, down: down, lift: lift });
+}
 const ACTIVE = `(function(){ let k = chatActiveModeKey(); return k === 'hub' ? null : k; })()`;
 
 async function enterExit(tab, key) {
@@ -261,6 +313,21 @@ async function enterExit(tab, key) {
             const o2 = JSON.parse(r2);
             report('密室老进度往后挪', o.unlocked === 10 && o.sel === 9 && o.best === '9' && o.v === 2 && o2.unlocked === 3 && o2.sel === 2 && o2.best === '1,2', r + ' / v2 存档 ' + r2);
         }
+
+        // H 组：寻宝队
+        await A.eval(`${HIDE} selectGameMode('hunt'); requestStartGame(); requestEnterMap(); true;`);
+        await W(3000);
+        {
+            // H1：固定 dt 爬楼梯。脚不能低于所在台阶顶 0.5 以上；1/12 也能上去；能下楼；在平台下面会被托上去
+            const before = A.errors.length;
+            const r = await A.eval(`(${STAIR_SIM.toString()})()`);
+            const o = JSON.parse(r);
+            const bad = o.runs.filter((x) => x.bad > 0).map((x) => x.name + ' ' + x.bad);
+            report('H1 楼梯不穿模（1/60 1/30 1/20 各 300 次）', o.stairs > 0 && bad.length === 0 && A.errors.length === before, bad.join(' / ') + ' 楼梯数 ' + o.stairs);
+            report('H1 1/12 帧率跑步能上楼', o.slowClimb === o.slowN, o.slowClimb + '/' + o.slowN);
+            report('H1 能下楼、平台下面会被托上去', o.down && o.lift, JSON.stringify({ down: o.down, lift: o.lift }));
+        }
+        await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1800); await A.eval(`${HIDE} true;`);
 
         // 3. 伪造消息（附录）
         const B = await openTab(chrome, url);
