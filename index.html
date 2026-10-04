@@ -6023,7 +6023,8 @@
                     '中途退出、关页面都算撤离失败，背包里的东西全丢（腰包、徽章也是）',
                     '地窖徽章只送一次，丢了可以在商店买',
                     '仓库里有「返回大厅」了，组队时自己回去不影响别人',
-                    '跳上桌子不会再掉进桌子里，从楼梯口掉下去也不会卡进墙'
+                    '跳上桌子不会再掉进桌子里，从楼梯口掉下去也不会卡进墙',
+                    '撤离成功后，鱼叉、医疗包这些道具留在背包里，不用每局再拖'
                 ]
             },
             {
@@ -17811,9 +17812,9 @@
             gState.inv.forEach(function (i) { if (i) nightTreasureEgg(i.n); });
 
             tidyGarage();
-            // 背上的 + 这一局上交过的，全部搬进车库
+            // 背上的宝物 + 这一局上交过的，搬进仓库；商店道具（鱼叉、医疗包、腰包、徽章……）留在背包，下局接着用（H9）
             let carry = [];
-            for (let i = 0; i < gState.maxInv; i++) { if (gState.inv[i]) { carry.push(gState.inv[i]); gState.inv[i] = null; } }
+            for (let i = 0; i < gState.maxInv; i++) { if (gState.inv[i] && !gState.inv[i].isShop) { carry.push(gState.inv[i]); gState.inv[i] = null; } }
             carry = carry.concat(gState.submittedItems || []);
             gState.submittedItems = [];
             carry.forEach(function (it) {

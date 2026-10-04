@@ -493,9 +493,12 @@ async function enterExit(tab, key) {
             await enter();
             const s1 = await A.eval(submit);
             if (s1 !== '1000 5000 1') bad.push('上交后 钱/进度/寄存 ' + s1);
-            await A.eval(`completeExtraction('撤离成功'); true;`); await W(300);
+            await A.eval(`gState.inv[2] = L('银杯'); completeExtraction('撤离成功'); true;`); await W(300);
             const s2 = await A.eval(`gState.money + ' ' + gState.garage.filter(function (q) { return q && q.n === '金杯'; }).length`);
             if (s2 !== '1000 1') bad.push('撤离后 钱/仓库里的金杯 ' + s2);
+            // H9：撤离后商店道具留在背包，宝物进仓库
+            const s9 = await A.eval(`gState.inv.filter(function (q) { return q; }).map(function (q) { return q.n; }).join(',') + ' ' + gState.garage.filter(function (q) { return q && q.isShop; }).length + ' ' + gState.garage.filter(function (q) { return q && !q.isShop; }).map(function (q) { return q.n; }).sort().join(',')`);
+            if (s9 !== '鱼叉 0 金杯,银杯') bad.push('H9 撤离后 背包/仓库里的道具 ' + s9);
             await A.eval(`${HIDE} returnToGarageFromOver(); gState.selectedContainer = 'garage'; gState.selectedSlot = gState.garage.findIndex(function (q) { return q && q.n === '金杯'; }); garageSellSelected(); true;`);
             if ((await A.eval('gState.money')) !== 6000) bad.push('卖掉后钱不对 ' + (await A.eval('gState.money')));
             await enter();
@@ -504,7 +507,7 @@ async function enterExit(tab, key) {
             const s3 = await A.eval(`gState.money + ' ' + document.getElementById('go-desc').innerText.split(String.fromCharCode(10))[0]`);
             if (!/^1000 测试这局上交的 1 件东西没收了/.test(s3)) bad.push('撤离失败 ' + s3);
             await A.eval(`${HIDE} returnToGarageFromOver(); true;`);
-            report('H4 上交不给钱，卖掉才有钱', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+            report('H4 上交不给钱，卖掉才有钱；H9 撤离后道具留在背包', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
         }
         {
             // H5：中途退出算撤离失败，背包全丢（腰包、徽章也是）；没结算就刷新，下次读档按撤离失败算
