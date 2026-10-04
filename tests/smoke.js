@@ -187,7 +187,8 @@ function STAIR_SIM() {
     // 下楼：站到平台上，往回走
     let st = stairs[0], s = st.s, a0 = put(st, 0), down = false;
     camera.position.y = s.base * TILE + TILE + 9; camera.position[s.axis] = s.edge + s.sign * (TILE - 2);
-    for (let t = 0; t < 3; t += 1 / 30) huntPhysics(1 / 30, -Math.cos(a0), -Math.sin(a0), 42);
+    // 只走回入口那一格（走远了可能掉进别的楼梯口，下到更低一层）
+    for (let t = 0; t < 34 / 42; t += 1 / 30) huntPhysics(1 / 30, -Math.cos(a0), -Math.sin(a0), 42);
     down = Math.abs(camera.position.y - 9 - s.base * TILE) < 0.5;
     // 平台下面的空腔里：托到平台上
     put(st, 0); camera.position[s.axis] = s.edge + s.sign * (TILE - 3);
@@ -437,9 +438,36 @@ async function enterExit(tab, key) {
             await A.eval(submit);
             await A.eval(`finishGame(false, '测试'); true;`); await W(300);
             const s3 = await A.eval(`gState.money + ' ' + document.getElementById('go-desc').innerText.split(String.fromCharCode(10))[0]`);
-            if (!/^1000 测试这局上交的 1 件东西没收了。$/.test(s3)) bad.push('撤离失败 ' + s3);
+            if (!/^1000 测试这局上交的 1 件东西没收了/.test(s3)) bad.push('撤离失败 ' + s3);
             await A.eval(`${HIDE} returnToGarageFromOver(); true;`);
             report('H4 上交不给钱，卖掉才有钱', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+        {
+            // H5：中途退出算撤离失败，背包全丢（腰包、徽章也是）；没结算就刷新，下次读档按撤离失败算
+            const before = A.errors.length, bad = [];
+            const saved = (t) => t.eval(`JSON.parse(localStorage.getItem('TH_save_' + gState.id)).huntRunActive`);
+            const kit = `[S('鱼叉'), S('腰包'), Object.assign({}, S('鱼叉'), { n: '地窖徽章', type: 'badge', uses: 1, maxUses: 1 }), null, null, null]`;
+            await A.eval(GARAGE_SETUP(kit, `[]`, 0)); await A.eval(`${HIDE} requestEnterMap(); true;`); await W(2500); await A.eval(`${HIDE} true;`);
+            if ((await saved(A)) !== true) bad.push('进图没记"对局进行中"');
+            await A.eval(`huntQuitAsk(); true;`); await W(200);
+            await A.eval(`(function(){ let b = Array.from(document.querySelectorAll('#sys-modal-btns button')).find(function (x) { return x.innerText === '离开'; }); b.click(); return true; })()`); await W(500);
+            const q = await A.eval(`gState.inv.filter(function (x) { return x; }).length + ' ' + document.getElementById('go-title').innerText`);
+            if (q !== '0 撤离失败') bad.push('中途退出后背包/结算 ' + q);
+            if ((await saved(A)) !== false) bad.push('结算后标记没清掉');
+            await A.eval(`${HIDE} returnToGarageFromOver(); nav('screen-lobby'); true;`);
+            // 另开一个标签页：进图后直接刷新页面
+            const C = await openTab(chrome, url, { name: 'h5r' + Math.floor(Math.random() * 100000) });
+            await C.eval(GARAGE_SETUP(kit, `[]`, 0)); await C.eval(`${HIDE} requestEnterMap(); true;`); await W(2500);
+            const name = await C.eval('gState.id');
+            await C.send('Page.reload'); await W(2500);
+            await C.eval(`document.getElementById('player-id').value = ${JSON.stringify(name)}; requestLobbyAccess(); true;`); await W(1500);
+            let seen = null;
+            for (let i = 0; i < 6 && !seen; i++) { const t = await C.eval(MODAL); if (t === '上一局没撤出去') seen = t; else { await C.eval(CLICK_OK); await W(400); } }
+            const r = await C.eval(`gState.id + ' ' + gState.inv.filter(function (x) { return x; }).length + ' ' + gState.huntRunActive`);
+            if (!seen || r !== name + ' 0 false' || (await saved(C)) !== false) bad.push('刷新后 ' + seen + ' ' + r);
+            if (C.errors.length) bad.push(C.errors.slice(0, 2).join(' / '));
+            await C.close();
+            report('H5 中途退出、刷新都算撤离失败', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
         }
         await A.eval(`${HIDE} gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); gState.money = 0; nav('screen-lobby'); true;`);
 

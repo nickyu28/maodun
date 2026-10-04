@@ -2294,7 +2294,7 @@
         const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntRunActive: !!gState.huntRunActive };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -2305,17 +2305,31 @@
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
                         gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {}; gState.escProg = data.escProg || null;
-                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {};
+                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {}; gState.huntRunActive = !!data.huntRunActive;
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
-                        expandInventory(); grantBadgeIfMissing(); return;
+                        expandInventory(); grantBadgeIfMissing();
+                        if (gState.huntRunActive) huntRunAbandoned();
+                        return;
                     }
                     // 版本对不上：老存档，忽略，走下面全新初始化
                 }
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
             gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { head: null, waist: null }; gState.ownedAcc = {}; gState.escProg = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
-            gState.dailyWin = {}; gState.towerBest = 0; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false; gState.introSeen = {}; gState.modeIntroShown = {};
+            gState.dailyWin = {}; gState.towerBest = 0; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false; gState.introSeen = {}; gState.modeIntroShown = {}; gState.huntRunActive = false;
             expandInventory();
+        }
+
+        // 寻宝队进图时存档里记着"对局进行中"，结算时清掉（H5）。读档时还在，说明上次没结算就关了页面/刷新了：
+        // 按撤离失败算，背包清空，这局的东西都不留，弹一次说明。不靠 beforeunload（手机上经常不触发）。
+        function huntRunAbandoned() {
+            gState.huntRunActive = false;
+            gState.matchHistory = gState.matchHistory || [];
+            gState.matchHistory.push(false); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
+            if (huntConsecutiveFails() >= 5) gState.pityGuaranteed = true;
+            gState.inv = new Array(INV_BASE).fill(null); expandInventory();
+            saveProgress();
+            introPush('上一局没撤出去', '<div style="text-align:left; font-size:14px; line-height:1.75;">上次寻宝队没撤出去就离开了，按撤离失败算：背包里的东西都没了。</div>');
         }
 
         function grantBadgeIfMissing() {
@@ -2891,6 +2905,7 @@
                 '迷宫里开箱子找宝贝，拿回起点那一格上交。',
                 '上交的东西值够了就能撤离，撤离出去才算赢。',
                 '上交不给钱，撤离后东西进仓库，卖掉才有钱。',
+                '没撤出去（倒下后离开、中途退出、关页面）算失败：上交的和背包里的全没了。',
                 '怪物会追人。倒地了队友能救你，开了 AI 补齐的话 AI 也会来救。',
                 kTxt('<b>F / 左键</b> 开箱子、捡东西、打怪　<b>右键</b> 用手上的东西', '<b>互动</b> 开箱子、捡东西、打怪　<b>道具</b> 用手上的东西'),
                 kTxt('<b>1 2 3</b> 换手上的东西　<b>Q</b> 扔　<b>E</b> 背包　<b>M</b> 地图', '点下面的格子换手上的东西，<b>背包</b> 看全部'),
@@ -4724,6 +4739,7 @@
             showModeIntroIfFirstTime('hunt');
             gameSeed = seed || 1; nav('none'); document.getElementById('ui-layer').classList.remove('hidden'); document.getElementById('ui-id').innerText = dispName(gState.id);
             gState.selectedSlot = 0; gState.selectedContainer = 'inv';   // 仓库和局内快捷栏共用这两个
+            gState.huntRunActive = true; saveProgress();   // H5：没结算就关页面，下次读档按撤离失败算
             isPlaying = true; gState.isDead = false; gState.submittedItems = []; gState.hp = 100; timeSecs = 8 * 3600; gState.totalSubmitted = 0; gState.runCash = 0; gState.aiSubmitted = 0; gState.aiChestsTaken = 0; stamina = 100;
             // abilityCd/abilityActive 之前是全局变量，从来没在开新一局的时候清零过——
             // 上一局技能刚用完、冷却还没走完就退出，下一局技能会一直显示"还在冷却"，
@@ -5941,7 +5957,8 @@
                     '卡的时候爬楼梯不会再掉进台阶里、卡在平台底下了',
                     '仓库里东西能拖到空格了；钱不够、仓库满了会告诉你',
                     '仓库里点一下就能选中，选中后按 Backspace 或点「卖掉」卖掉',
-                    '上交不再直接给钱：撤离出去东西进仓库，卖掉才有钱'
+                    '上交不再直接给钱：撤离出去东西进仓库，卖掉才有钱',
+                    '中途退出、关页面都算撤离失败，背包里的东西全丢（腰包、徽章也是）'
                 ]
             },
             {
@@ -17780,7 +17797,7 @@
         function huntQuitAsk() {
             if (!isPlaying || gState.isDead || gState.hasLeft) return;
             if (document.pointerLockElement) document.exitPointerLock();
-            showSysModal('离开本局？', '身上的东西会掉，这局上交的也不算了。' +
+            showSysModal('离开本局？', '算撤离失败：背包里的东西全丢（腰包、徽章也是），这局上交的也没收。' +
                 (liveHumanTeammates().length ? '<br>你的位置交给 AI。' : ''), [
                 { label: '离开', color: '#d9534f', onClick: function () { if (!isPlaying || gState.isDead) return; gState.leavingAlive = true; triggerAgentDeath(); chooseLeave(); } },
                 { label: '继续玩' }
@@ -17893,6 +17910,8 @@
             gState.submittedItems = [];
             gState.matchHistory.push(false); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
             if (huntConsecutiveFails() >= 5) gState.pityGuaranteed = true;
+            // 撤离失败：背包里剩下的全部丢掉，腰包和徽章也一样（H5）
+            gState.inv = new Array(INV_BASE).fill(null); expandInventory();
 
             if (confiscated > 0 || gState.totalSubmitted > 0) {
                 gState.totalSubmitted = 0; gState.runCash = 0;
@@ -17938,7 +17957,8 @@
             if (!isPlaying) return;
             isPlaying = false; if (document.pointerLockElement) document.exitPointerLock();
 
-            if (!won) { let lost = forfeitRun(); if (lost > 0) text += '这局上交的 ' + lost + ' 件东西没收了。'; }
+            gState.huntRunActive = false;
+            if (!won) { let lost = forfeitRun(); text += lost > 0 ? '这局上交的 ' + lost + ' 件东西没收了，背包里的也全丢了。' : '背包里的东西全丢了。'; }
             // 活着撤离也告诉队友一声，不然他们那边你的身体停止同步 6 秒后会被当成"掉线"
             else if (!gState.isDead) bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*', alive: true, extracted: true });
             if (!gState.quitNoPay) { coinsSettle('hunt', won); text += '\n' + coinsBreakText(); }
