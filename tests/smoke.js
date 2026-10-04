@@ -6,6 +6,9 @@
 // 环境变量：
 //   CHROME_PATH   Chrome / Chromium 可执行文件（不填就在常见位置找）
 //   THREE_LOCAL   three.min.js 的本地路径（填了就不从 CDN 下载，离线时用）
+//   SMOKE_LOG_DIR 填了就把 Chrome 自己的输出写到这个目录的 chrome.log（CI 失败时一起上传）
+//
+// 退出码：0 全过；1 有检查没过；3 Chrome 没起来 / 还没跑到任何检查就退出了（CI 会自动重试一次）
 //
 // 检查项：
 //   1. 无头启动进大厅，控制台零报错
@@ -54,12 +57,19 @@ function findChrome() {
     for (const c of cands) if (fs.existsSync(c)) return c;
     throw new Error('找不到 Chrome，请设置 CHROME_PATH');
 }
+function chromeStdio() {
+    if (!process.env.SMOKE_LOG_DIR) return 'ignore';
+    fs.mkdirSync(process.env.SMOKE_LOG_DIR, { recursive: true });
+    const fd = fs.openSync(path.join(process.env.SMOKE_LOG_DIR, 'chrome.log'), 'a');
+    return ['ignore', fd, fd];
+}
+const EXIT_STARTUP = 3;
 async function startChrome() {
     const port = 9400 + Math.floor(Math.random() * 400);
     const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'smoke-chrome-'));
     const proc = spawn(findChrome(), ['--headless=new', '--remote-debugging-port=' + port, '--user-data-dir=' + dir,
         '--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist',
-        '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: 'ignore' });
+        '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: chromeStdio() });
     for (let i = 0; i < 50; i++) {
         await W(200);
         try { await jget(port, '/json/version'); return { proc, port }; } catch (e) { }
@@ -292,7 +302,11 @@ async function enterExit(tab, key) {
 (async () => {
     const srv = await startServer();
     const url = 'http://127.0.0.1:' + srv.address().port + '/index.html';
-    const chrome = await startChrome();
+    let chrome;
+    try { chrome = await startChrome(); } catch (e) {
+        console.log('STARTUP Chrome 没起来：' + e.message);
+        srv.close(); process.exit(EXIT_STARTUP);
+    }
     let exitCode = 0;
     try {
         // 1. 启动
@@ -636,12 +650,15 @@ async function enterExit(tab, key) {
         report('全程控制台零报错', A.errors.length === 0, A.errors.slice(0, 3).join(' / '));
         await A.close();
     } catch (e) {
-        const d = e.message.match(/"description":"([^"]*)/); report('测试脚本本身出错', false, (d ? d[1] : e.message).slice(0, 300));
+        const d = e.message.match(/"description":"([^"]*)/);
+        // 一项检查都还没跑就出错了，多半是 Chrome 自己挂了（连不上调试端口、标签页开不出来），算启动失败
+        if (results.length === 0) { console.log('STARTUP 还没跑到任何检查就出错了：' + (d ? d[1] : e.message).slice(0, 300)); exitCode = EXIT_STARTUP; }
+        else report('测试脚本本身出错', false, (d ? d[1] : e.message).slice(0, 300));
     } finally {
         try { chrome.proc.kill(); } catch (e) { }
         srv.close();
     }
     const fail = results.filter((r) => r.tag === 'FAIL').length;
     console.log('\n' + results.filter((r) => r.tag === 'PASS').length + ' 通过，' + fail + ' 失败，' + results.filter((r) => r.tag === 'XFAIL').length + ' 预期失败');
-    process.exit(fail ? 1 : 0);
+    process.exit(exitCode || (fail ? 1 : 0));
 })();
