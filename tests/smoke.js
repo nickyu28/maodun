@@ -569,9 +569,17 @@ async function enterExit(tab, key) {
                 Array.from(document.querySelectorAll('#shop-modal .shop-item')).find(function (x) { return /地窖徽章/.test(x.innerText); }).click(); true;`);
             r = await D.eval(`(function(){ let b = gState.garage.find(function (q) { return q && q.type === 'badge'; }); return gState.money + ' ' + (b ? b.v + ' ' + b.price + ' ' + b.isShop : 'none'); })()`);
             if (r !== '0 0 900000 true') bad.push('商店买徽章 ' + r);
+            // 夜间 PR #17：三个字段进存档白名单；旧存档没有这三个字段按默认值
+            r = await D.eval(`(function(){ gState.huntTutorialShown = true; gState.weightWarnShown = true; gState.skinPity = 4; saveProgress();
+                gState.huntTutorialShown = false; gState.weightWarnShown = false; gState.skinPity = 0; loadProgress(gState.id);
+                let a = [gState.huntTutorialShown, gState.weightWarnShown, gState.skinPity].join(',');
+                let k = 'TH_save_' + gState.id, d = JSON.parse(localStorage.getItem(k)); delete d.huntTutorialShown; delete d.weightWarnShown; delete d.skinPity;
+                localStorage.setItem(k, JSON.stringify(d)); loadProgress(gState.id);
+                return a + ' / ' + [gState.huntTutorialShown, gState.weightWarnShown, gState.skinPity].join(','); })()`);
+            if (r !== 'true,true,4 / false,false,0') bad.push('三个存档字段 ' + r);
             if (D.errors.length) bad.push(D.errors.slice(0, 2).join(' / '));
             await D.close();
-            report('H6 地窖徽章只送一次、商店能买', bad.length === 0, bad.join(' / '));
+            report('H6 地窖徽章只送一次、商店能买；三个存档字段刷新不丢', bad.length === 0, bad.join(' / '));
         }
         {
             // H7：仓库「返回大厅」谁都能点；组队时一个人回大厅，房主和其他人留在仓库，开局不再把他拉进去
