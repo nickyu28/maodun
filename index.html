@@ -1519,9 +1519,11 @@
     <script>
         // B4：版本号。每次发版手动加一（同一天多次发版就把最后的 -N 加一）。B5 拆文件后，脚本地址也带这个版本号。
         const GAME_VERSION = '2026.10.05-3';
-        // B5：脚本拆到 js/ 下面，按这个顺序加载（顺序不能乱，后面的文件要用前面定义的东西）。
+        // B5：脚本拆到 js/ 下面，按这个顺序执行（顺序不能乱，后面的文件要用前面定义的东西）。
         // 地址后面带 ?v=版本号，发新版时浏览器一定拿新文件，不会一半新一半旧。
-        const GAME_FILES = ['js/game.js'];
+        // 先把所有文件都下载下来，再在同一时刻一个接一个执行：中间不留空档，
+        // 不会出现前面的文件收到消息/定时器触发时，后面文件里的函数还没定义。有一个没下载下来就一个都不执行。
+        const GAME_FILES = ['js/game.js', 'js/10-race.js', 'js/11-jail.js', 'js/12-dodge.js', 'js/13-escape.js', 'js/14-park.js', 'js/15-cake.js', 'js/16-modes.js', 'js/17-hub.js'];
         // 哪个文件没下载下来，就盖一层提示，给个重试按钮
         function gameBootFail() {
             if (document.getElementById('boot-fail')) return;
@@ -1531,7 +1533,21 @@
             d.querySelector('button').onclick = function () { location.reload(); };
             (document.body || document.documentElement).appendChild(d);
         }
-        GAME_FILES.forEach(function (f) { document.write('<script src="' + f + '?v=' + GAME_VERSION + '" onerror="gameBootFail()"><\/script>'); });
+        (function () {
+            let codes = [];
+            try {
+                GAME_FILES.forEach(function (f) {
+                    let x = new XMLHttpRequest(); x.open('GET', f + '?v=' + GAME_VERSION, false); x.send();
+                    if (x.status !== 200 || !x.responseText) throw new Error(f);
+                    codes.push(x.responseText + '\n//# sourceURL=' + f);
+                });
+            } catch (e) {
+                // 直接双击打开本地文件（file://）时浏览器不让这样读，退回普通的 <script src>
+                if (location.protocol === 'file:') { GAME_FILES.forEach(function (f) { document.write('<script src="' + f + '"><\/script>'); }); return; }
+                gameBootFail(); return;
+            }
+            codes.forEach(function (c) { let el = document.createElement('script'); el.text = c; document.head.appendChild(el); });
+        })();
     </script>
 
     <div id="maker" class="hidden">

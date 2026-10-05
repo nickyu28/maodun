@@ -988,17 +988,23 @@ async function enterExit(tab, key) {
         }
 
         {
-            // B5：脚本拆到 js/ 下，地址都带 ?v=版本号；有一个文件下载失败就盖提示和重试按钮
-            const r = JSON.parse(await A.eval(`(function(){ let s = Array.prototype.filter.call(document.scripts, function (x) { return /\\/js\\//.test(x.src); });
-                return JSON.stringify({ n: s.length, files: GAME_FILES.length, ok: s.every(function (x) { return x.src.slice(-('?v=' + GAME_VERSION).length) === '?v=' + GAME_VERSION; }),
-                    order: s.map(function (x) { return x.src.replace(/^.*\\/(js\\/[^?]*).*$/, '$1'); }).join(',') === GAME_FILES.join(',') }); })()`));
+            // B5：脚本拆到 js/ 下，地址都带 ?v=版本号、按顺序；有一个文件下载失败就盖提示和重试按钮，一个都不执行；
+            // 新开页面加载的时候别的标签页一直在发消息，也不报错（所有文件下载完一口气执行，中间没有空档）
+            const r = JSON.parse(await A.eval(`(function(){ let s = performance.getEntriesByType('resource').filter(function (e) { return /\\/js\\/[^?]*\\.js\\?v=/.test(e.name); });
+                return JSON.stringify({ n: s.length, files: GAME_FILES.length, ok: s.every(function (e) { return e.name.slice(-('?v=' + GAME_VERSION).length) === '?v=' + GAME_VERSION; }),
+                    order: s.map(function (e) { return e.name.replace(/^.*\\/(js\\/[^?]*).*$/, '$1'); }).join(',') === GAME_FILES.join(',') }); })()`));
             const bad = [];
             if (!r.n || r.n !== r.files || !r.ok || !r.order) bad.push('脚本地址 ' + JSON.stringify(r));
             const F = await openTab(chrome, url, { noLobby: true, failUrl: '?v=' });
-            const f = await F.eval(`(function(){ let d = document.getElementById('boot-fail'); return d ? d.innerText.replace(/\\s+/g, ' ') : null; })()`);
-            if (!f || !/重试/.test(f)) bad.push('文件下载失败没提示 ' + f);
+            const f = await F.eval(`(function(){ let d = document.getElementById('boot-fail'); return (d ? d.innerText.replace(/\\s+/g, ' ') : null) + ' ' + (typeof requestLobbyAccess); })()`);
+            if (!/重试/.test(f) || !/undefined$/.test(f)) bad.push('文件下载失败 ' + f);
             await F.close();
-            report('B5 脚本地址带版本号、按顺序；下载失败有提示和重试', bad.length === 0, bad.join(' / ') + ' ' + (r.n || 0) + ' 个文件');
+            await A.eval(`window.__spam = setInterval(function () { for (let i = 0; i < 5; i++) bc.postMessage({ type: 'HUB_ME', target: '*', sender: 'spam' + i, x: 0, z: 0 }); }, 5); true;`);
+            const G = await openTab(chrome, url);
+            await A.eval(`clearInterval(window.__spam); true;`);
+            if (G.errors.length) bad.push('加载时收到消息报错 ' + G.errors.slice(0, 2).join(' / '));
+            await G.close();
+            report('B5 脚本地址带版本号、按顺序；下载失败有提示和重试；加载时收到消息不报错', bad.length === 0, bad.join(' / ') + ' ' + (r.n || 0) + ' 个文件');
         }
 
         {
