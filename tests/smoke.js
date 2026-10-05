@@ -332,6 +332,32 @@ function TOWER_SIM(nTowers) {
     } finally { DAILY_MOD.speedMul = keep.speedMul; DAILY_MOD.jumpMul = keep.jumpMul; nm = oldNm; window.nmAdd = oldAdd; }
     return JSON.stringify(out);
 }
+// E1：竞速在每种每日效果下最远能跳多远（数值从页面读，在 Node 里按竞速的移动规则算）
+function raceReach(R, sm, jm) {
+    const dt = 1 / 60;
+    const fly = (strat) => {
+        const sp = R.moveSpeed * sm, jv = R.jumpV * jm;
+        let x = -100, vx = sp, y = 0, vy = 0, air = false, dashT = 0, dashed = false;
+        for (let t = 0; t < 6; t += dt) {
+            if (dashT > 0) dashT -= dt;
+            if (!air && strat === 'dashjump' && !dashed && x >= -R.dashV * R.dashT) { dashed = true; dashT = R.dashT; vx = R.dashV; }
+            if (!air && x + vx * dt >= 0) { vy = jv; air = true; }
+            if (air && strat === 'jumpdash' && !dashed && vy <= 0) { dashed = true; dashT = R.dashT; vx = R.dashV; }
+            if (dashT <= 0) { const k = Math.min(1, (1 / R.accel) * (air ? R.airCtrl : 1) * dt); vx += (sp - vx) * k; }
+            if (air) vy -= R.gravity * dt;
+            x += vx * dt; y += vy * dt;
+            if (air && vy < 0 && y <= 0) return x;
+        }
+        return 0;
+    };
+    const bounce = () => {   // 弹跳板：走上去按 jumpV × 2.3 弹起（不乘每日效果）
+        const sp = R.moveSpeed * sm; let x = 0, vx = sp, y = 0, vy = R.jumpV * 2.3;
+        for (let t = 0; t < 5; t += dt) { const k = Math.min(1, (1 / R.accel) * R.airCtrl * dt); vx += (sp - vx) * k; vy -= R.gravity * dt; x += vx * dt; y += vy * dt; if (vy < 0 && y <= 0) return x; }
+        return 0;
+    };
+    return { jump: fly('jump'), dash: Math.max(fly('dashjump'), fly('jumpdash')), bounce: bounce(), h: (R.jumpV * jm) ** 2 / (2 * R.gravity) };
+}
+
 const ACTIVE = `(function(){ let k = chatActiveModeKey(); return k === 'hub' ? null : k; })()`;
 
 async function enterExit(tab, key) {
@@ -748,6 +774,24 @@ async function enterExit(tab, key) {
             if (!o.down || o.out) bad.push('双人 淹了再掉应倒下 ' + JSON.stringify(o));
             await A.eval(`${HIDE} nmExit(); true;`); await W(1200); await A.eval(`${HIDE} true;`);
             report('T2 爬塔存档点：回存档点、单人结束、多人出局、双人倒下、只升不降', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+
+        {
+            // E1：每日效果的新数值；竞速里平常光跳能过的地方各效果光跳都能过，要冲刺的地方余量 ≥ 3
+            const want = { turbo: [1.15, 1], moon: [1, 1.25], slow: [0.9, 0.95], hop: [1, 1.35], rush: [1.1, 1.1], normal: [1, 1] };
+            const got = JSON.parse(await A.eval(`JSON.stringify(DAILY_MODIFIERS.map(function (m) { return [m.id, m.speedMul, m.jumpMul]; }))`));
+            const R = JSON.parse(await A.eval(`JSON.stringify(RACE)`));
+            const bad = [];
+            got.forEach(([id, sm, jm]) => { if (!want[id] || want[id][0] !== sm || want[id][1] !== jm) bad.push(id + ' ' + sm + '/' + jm); });
+            const rows = got.map(([id, sm, jm]) => {
+                const r = raceReach(R, sm, jm);
+                if (r.jump < 22) bad.push(id + ' 断桥 22/裂谷 22 光跳只有 ' + r.jump.toFixed(1));
+                if (r.dash < 36 + 3) bad.push(id + ' 裂谷 36 冲刺只有 ' + r.dash.toFixed(1));
+                if (r.bounce < 56) bad.push(id + ' 弹跳板走上去只有 ' + r.bounce.toFixed(1));
+                if (r.h < 2) bad.push(id + ' 升降台跳不上去');
+                return id + ' ' + r.jump.toFixed(1) + '/' + r.dash.toFixed(1) + '/' + r.bounce.toFixed(1);
+            });
+            report('E1 每日效果改小，竞速各效果都跳得过（光跳/冲刺+跳/弹跳板）', bad.length === 0, bad.length ? bad.join(' / ') : rows.join(' '));
         }
 
         // 3. 伪造消息（附录）
