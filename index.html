@@ -2296,7 +2296,7 @@
         const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntRunActive: !!gState.huntRunActive, badgeGiven: !!gState.badgeGiven, huntTutorialShown: !!gState.huntTutorialShown, weightWarnShown: !!gState.weightWarnShown, skinPity: gState.skinPity || 0 };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntRunActive: !!gState.huntRunActive, badgeGiven: !!gState.badgeGiven, huntTutorialShown: !!gState.huntTutorialShown, weightWarnShown: !!gState.weightWarnShown, skinPity: gState.skinPity || 0, blazeChar: gState.blazeChar || 'bow' };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -2307,7 +2307,7 @@
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
                         gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {}; gState.escProg = data.escProg || null;
-                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {}; gState.huntRunActive = !!data.huntRunActive; gState.badgeGiven = !!data.badgeGiven; gState.huntTutorialShown = !!data.huntTutorialShown; gState.weightWarnShown = !!data.weightWarnShown; gState.skinPity = data.skinPity || 0;
+                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {}; gState.huntRunActive = !!data.huntRunActive; gState.badgeGiven = !!data.badgeGiven; gState.huntTutorialShown = !!data.huntTutorialShown; gState.weightWarnShown = !!data.weightWarnShown; gState.skinPity = data.skinPity || 0; gState.blazeChar = data.blazeChar || 'bow';
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); grantBadgeIfMissing();
                         if (gState.huntRunActive) huntRunAbandoned();
@@ -6025,7 +6025,8 @@
                     '仓库里有「返回大厅」了，组队时自己回去不影响别人',
                     '跳上桌子不会再掉进桌子里，从楼梯口掉下去也不会卡进墙',
                     '撤离成功后，鱼叉、医疗包这些道具留在背包里，不用每局再拖',
-                    '负重提示和寻宝队新手提示只弹一次，皮肤抽卡的进度刷新也不丢了'
+                    '负重提示和寻宝队新手提示只弹一次，皮肤抽卡的进度刷新也不丢了',
+                    '超燃选的角色刷新后不会变回默认；惊魂夜追捕者头上也有称号了'
                 ]
             },
             {
@@ -12764,7 +12765,8 @@
                 scene.add(night.hunter.mesh); nightSyncMesh(night.hunter);
                 let hc = NIGHT_CHARS[night.hunterChar] || NIGHT_CHARS.hunter;
 
-                let hlb = nightMakeLabel(hc.name, HUNTER_BODY[night.hunterChar] || 0xffd21e, false);
+                let hlb = nightMakeLabel(hc.name, HUNTER_BODY[night.hunterChar] || 0xffd21e, false,
+                    night.hunter.isPlayer ? myTitle() : night.hunter.remote ? peerTitleOf(night.hunter.key) : aiRandomTitle());
                 hlb.position.y = HUNTER_H + 8; night.hunter.mesh.add(hlb);
             }
             nightRefreshFish();
@@ -17345,7 +17347,10 @@
 
             let hasOath = gState.inv.some(i => i && i.n === '永恒誓言');
 
+            // AI 队友打死的怪等这一圈走完再从 entities 里拿掉：边遍历边 splice 会跳过下一个怪这一帧的更新
+            let aiKillTargets = [];
             entities.forEach(function (entity) {
+                if (aiKillTargets.indexOf(entity) >= 0) return;   // 这一帧已经被打死了
                 let meta = entity.userData;
                 if (HUNT_MOB_INTRO[meta.type] && Math.abs(entity.position.y - camera.position.y) < TILE * 0.6 && entity.position.distanceTo(camera.position) < 45)
                     introOnce('hunt.mob.' + meta.type, meta.name || '怪物', HUNT_MOB_INTRO[meta.type]);
@@ -17363,7 +17368,7 @@
                         if (meta.atkCd > 0) meta.atkCd -= dt;
                         if (meta.atkCd <= 0 && meta.hasWep && !gState.isDead) {
                             let target = entities.find(function (e) { return (e.userData.type === 'fake' || e.userData.type === 'angel' || e.userData.type === 'puppet' || e.userData.type === 'high' || e.userData.type === 'splitter' || e.userData.type === 'curser') && e.position.distanceTo(entity.position) < 25; });
-                            if (target) { target.userData.hp -= 5; meta.atkCd = 1.0; if (target.userData.hp <= 0) { scene.remove(target); let tIdx = entities.indexOf(target); if (tIdx > -1) entities.splice(tIdx, 1); } }
+                            if (target) { target.userData.hp -= 5; meta.atkCd = 1.0; if (target.userData.hp <= 0 && aiKillTargets.indexOf(target) < 0) { scene.remove(target); aiKillTargets.push(target); } }
                         }
 
                         if (gState.isDead && !gState.hasLeft && meta.hasRev && dToPlayer < 12) {
@@ -17438,6 +17443,7 @@
                     if (entity.position.y > targetY) entity.position.y -= 30 * dt; else entity.position.y = targetY;
                 }
             });
+            aiKillTargets.forEach(function (target) { let tIdx = entities.indexOf(target); if (tIdx > -1) entities.splice(tIdx, 1); });
         }
 
         function tickSignal(dt) {

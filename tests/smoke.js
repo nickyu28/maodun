@@ -610,6 +610,39 @@ async function enterExit(tab, key) {
             for (const t of [H, G1, G2]) await t.close();
             report('H7 仓库返回大厅', bad.length === 0, bad.join(' / '));
         }
+        {
+            // 夜间 PR #18：AI 队友打死怪时，排在后面的怪这一帧照常更新；被打死的从 entities 拿掉
+            const before = A.errors.length, bad = [];
+            await A.eval(`gState.aiFill = true; true;`);
+            await A.eval(GARAGE_SETUP(`[S('鱼叉'), null, null, null, null, null]`, `[]`, 0)); await A.eval(`${HIDE} requestEnterMap(); true;`); await W(2500); await A.eval(`${HIDE} true;`);
+            const r = await A.eval(`(function(){
+                let ai = entities.find(function (e) { return e.userData.type === 'ai' && !e.userData.isRealPlayer; }); if (!ai) return 'no-ai';
+                let keep = entities.slice(), calls = [], oldIntro = window.introOnce;
+                let mk = function (type, hp, pos) { let m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial()); m.position.copy(pos); m.userData = { type: type, hp: hp, speed: 0, dmg: 0, atkCd: 9, name: type }; scene.add(m); return m; };
+                ai.position.copy(camera.position).add(new THREE.Vector3(60, 0, 0)); ai.userData.hasWep = true; ai.userData.atkCd = 0;
+                let X = mk('high', 50, camera.position.clone().add(new THREE.Vector3(5, 0, 0)));
+                let M = mk('splitter', 1, ai.position.clone().add(new THREE.Vector3(3, 0, 0)));
+                entities.length = 0; entities.push(M, ai, X);   // 打死的怪排在 AI 前面：老代码 splice 后会跳过 X
+                window.introOnce = function (k) { calls.push(k); };
+                try { handleThrownItemsAndEntitiesEngine(1 / 60); } finally { window.introOnce = oldIntro; }
+                let out = calls.join(',') + ' | ' + (entities.indexOf(M) < 0) + ' ' + (entities.indexOf(X) >= 0);
+                scene.remove(X); entities.length = 0; keep.forEach(function (e) { entities.push(e); });
+                return out; })()`);
+            if (r !== 'hunt.mob.high | true true') bad.push('AI 打怪 ' + r);
+            await A.eval(`${HIDE} ${MODES.hunt.exit}; gState.aiFill = false; true;`); await W(1800); await A.eval(`${HIDE} true;`);
+            // blazeChar 进存档白名单
+            const b = await A.eval(`(function(){ let k = gState.blazeChar; gState.blazeChar = Object.keys(BLAZE_CHARS)[1]; saveProgress(); gState.blazeChar = 'bow'; loadProgress(gState.id); let got = gState.blazeChar; gState.blazeChar = k; saveProgress(); return got; })()`);
+            if (b !== (await A.eval('Object.keys(BLAZE_CHARS)[1]'))) bad.push('blazeChar 读档成 ' + b);
+            // 惊魂夜追捕者的名牌带称号：AI 用 aiRandomTitle，自己当追捕者用 myTitle
+            await A.eval(`window.__lblSeen = []; (function(){ let old = window.nightMakeLabel; window.__lblRestore = function(){ window.nightMakeLabel = old; window.aiRandomTitle = window.__oa; window.myTitle = window.__om; };
+                window.__oa = window.aiRandomTitle; window.__om = window.myTitle; window.aiRandomTitle = function () { return 'T_AI'; }; window.myTitle = function () { return 'T_ME'; };
+                window.nightMakeLabel = function (text, c, th, title) { if (th === false) window.__lblSeen.push(text + '=' + title); return old.apply(this, arguments); }; })(); true;`);
+            await A.eval(`${HIDE} selectGameMode('night'); ${MODES.night.start}; true;`); await W(2500);
+            const hl = await A.eval(`(function(){ let hc = NIGHT_CHARS[night.hunterChar] || NIGHT_CHARS.hunter; return window.__lblSeen.filter(function (x) { return x.indexOf(hc.name + '=') === 0; }).join(','); })()`);
+            await A.eval(`window.__lblRestore(); ${HIDE} ${MODES.night.exit}; true;`); await W(1800); await A.eval(`${HIDE} true;`);
+            if (!/=T_AI/.test(hl)) bad.push('AI 追捕者名牌 ' + hl);
+            report('夜间 #18：AI 打怪不跳过别的怪、超燃角色进存档、追捕者有称号', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
         await A.eval(`${HIDE} gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); gState.money = 0; nav('screen-lobby'); true;`);
 
         // 3. 伪造消息（附录）
