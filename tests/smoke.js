@@ -735,6 +735,8 @@ async function enterExit(tab, key) {
             await drop('nm.actors[1]', -20); await W(400);
             o = JSON.parse(await st('nm.actors[1]'));
             if (o.out || o.falls !== 1) bad.push('多人 AI 回存档点 ' + JSON.stringify(o));
+            // 先把两个 AI 放到第 50 块（岩浆淹不到），不然起点上的 AI 跟着一起淹、这局直接结束
+            await stand('nm.actors[1]', 50); await stand('nm.actors[2]', 50);
             await drop('nm.me', 5); await W(600); await A.eval(`${HIDE} true;`);
             o = JSON.parse(await st('nm.me'));
             const still = await A.eval(`!!nm && nm.actors.filter(function (a) { return !a.out; }).length`);
