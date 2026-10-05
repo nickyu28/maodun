@@ -177,16 +177,18 @@ function STAIR_SIM() {
     function run(dt, n, dev, jump, T) {
         let bad = 0, climbed = 0;
         for (let k = 0; k < n; k++) {
-            let st = stairs[k % stairs.length], a0 = put(st, 1), ang = 0, turn = 0, sp = 42 * (k % 2 ? 1.6 : 1), hit = false;
+            let st = stairs[k % stairs.length], a0 = put(st, 1), ang = 0, turn = 0, sp = 42 * (k % 2 ? 1.6 : 1), hit = false, hiFeet = -Infinity;
             for (let t = 0; t < T; t += dt) {
                 turn -= dt; if (turn <= 0) { ang = (rnd() * 2 - 1) * dev; turn = 0.2 + rnd() * 0.6; }
                 if (jump && onGround && rnd() < dt * 1.5) { pVel.y = 44; onGround = false; }
                 huntPhysics(dt, Math.cos(a0 + ang), Math.sin(a0 + ang), sp);
                 let feet = camera.position.y - 9, top = topAt(camera.position.x, camera.position.z, feet);
                 if (top !== null && feet < top - 0.5) hit = true;
+                hiFeet = Math.max(hiFeet, feet);
             }
             if (hit) bad++;
-            if (camera.position.y - 9 >= st.s.base * TILE + TILE - 0.5) climbed++;
+            // 到过楼上就算上去了：跑 3 秒，上去以后可能接着跑、掉进前面另一个楼梯井，最后不在楼上
+            if (hiFeet >= st.s.base * TILE + TILE - 0.5) climbed++;
         }
         return { bad: bad, climbed: climbed };
     }
