@@ -17744,8 +17744,10 @@
                     let s = maze[a.f][a.z][a.x].stair, y = a.f * TILE;
                     let take = huntStairPt(s, a.x, a.z, s.count * s.depth + 0.5, y); take.jump = true;
                     pts.push(take);
-                    pts.push(huntEdgePt(a, b, y, 'b'));
-                    pts.push(new THREE.Vector3(b.x * TILE, huntSurfY(b.f, b.x, b.z), b.z * TILE));
+                    // 落到桌子上：在井这一侧竖着抬到桌面再过去，不斜着穿进桌子
+                    let yb = huntSurfY(b.f, b.x, b.z), e = huntEdgePt(a, b, y, yb > y ? 'a' : 'b');
+                    pts.push(e); if (yb > y) pts.push(new THREE.Vector3(e.x, yb, e.z));
+                    pts.push(new THREE.Vector3(b.x * TILE, yb, b.z * TILE));
                 } else if (b.via === 'well') {        // 走到井边，竖着掉到台阶上
                     let s = maze[b.f][b.z][b.x].stair, y = a.f * TILE;
                     pts.push(huntEdgePt(a, b, y, 'a'));
