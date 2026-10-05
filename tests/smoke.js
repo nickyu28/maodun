@@ -374,8 +374,9 @@ async function enterExit(tab, key) {
             const c2 = await A.eval('escapeRoom.startT + escapeRoom.clock');
             await A.eval(CLICK_OK); await W(300);
             await A.eval(`while (introOpen || introQ.length) { if (!${CLICK_OK}) break; } true;`);
-            await W(4500);
-            const run = await A.eval('JSON.stringify({ started: escapeRoom.started, clock: escapeRoom.clock })');
+            // 关了以后倒计时接着走、开局。机器慢的时候帧率低（每帧 dt 有上限），所以按"开局了没有"等，最多 15 秒
+            for (let i = 0; i < 30 && !(await A.eval('escapeRoom.started')); i++) await W(500);
+            const run = await A.eval(`JSON.stringify({ started: escapeRoom.started, clock: escapeRoom.clock, startT: escapeRoom.startT, open: introOpen, q: introQ.length })`);
             await A.eval(`${HIDE} escapeExit(); true;`); await W(1500); await A.eval(`${HIDE} true;`);
             const ok = t === '彩色板' && c1 === c2 && JSON.parse(run).started;
             report('密室介绍卡片：弹出时停住、关了继续', ok && A.errors.length === before, '弹窗=' + t + ' 停住前后计时 ' + c1 + '/' + c2 + ' 之后 ' + run + A.errors.slice(before, before + 2).join(' / '));
