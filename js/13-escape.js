@@ -1340,7 +1340,7 @@
                 // 脚下圆圈 = 这个人的颜色（彩色板认的就是它），身体可以是自己的皮肤色
                 if (mesh.userData.ring) mesh.userData.ring.material.color.setHex(role.hex);
                 if (!isP) {
-                    let label = nightMakeLabel(slot.id ? (dispName(slot.id) || slot.id) : ('队员·' + role.name), role.hex, false, slot.id ? peerTitleOf(slot.id) : aiRandomTitle());
+                    let label = nightMakeLabel(slot.id ? (dispNameText(slot.id) || slot.id) : ('队员·' + role.name), role.hex, false, slot.id ? peerTitleOf(slot.id) : aiRandomTitle());
                     // 密室里队友经常就贴在身边，原来那个大小（22 宽）一挨近就糊住半个屏幕——收小一半多
                     let lw = new THREE.Vector3();
                     label.onBeforeRender = function (rr, sc, cam) {

@@ -388,8 +388,13 @@
         // resolvePlayerId 加的 #xxxx 小尾巴只是为了后台防撞车，玩家不需要看到它——
         // 显示的时候统一用这个把尾巴去掉（AI 名字是 "本名#xxxx_AI_1" 这种，也要连着摘掉）。
         // 返回的是已经转义过的文本，可以直接拼进 innerHTML（A1）
+        // 名字原文（去掉设备尾巴）：给 innerText、画到画布上、发出去的纯文本用
+        function dispNameText(id) {
+            return String(id || '').replace(/#[0-9a-z]{4}(?=(_AI_\d+)?$)/, '');
+        }
+        // 转义后的名字：给拼进 innerHTML 用
         function dispName(id) {
-            return chatEscape(String(id || '').replace(/#[0-9a-z]{4}(?=(_AI_\d+)?$)/, ''));
+            return chatEscape(dispNameText(id));
         }
         // ID 会原样广播给房间里所有人，好多地方（房间列表、好友列表、组队邀请弹窗、
         // 匹配等待名单……）是直接把它拼进 innerHTML 里显示的，不是当纯文本塞进
@@ -851,7 +856,7 @@
             if (a.aiTakeover && !a.leftForGood) {
                 a.remote = true; a.aiTakeover = null;
                 if (gState.netRoster && m.side) gState.netRoster[m.key] = m.side;
-                nightFlash(dispName(m.key) + ' 回来了');
+                nightFlash(dispNameText(m.key) + ' 回来了');
             }
             if (!a.remote) return;
             a.netTo = { x: m.x, z: m.z, gy: m.gy };
@@ -992,7 +997,7 @@
             if (a && !a.isPlayer && a.remote) {
                 a.remote = false; a.aiTakeover = gone || key; a.netRep = -1;
                 if (left) a.leftForGood = true;
-                if (!a.out && !a.escaped) nightFlash(dispName(gone || key) + (left ? ' 离开了' : ' 掉线了') + '，AI 接管');
+                if (!a.out && !a.escaped) nightFlash(dispNameText(gone || key) + (left ? ' 离开了' : ' 掉线了') + '，AI 接管');
             }
             // 主动离开的从名单里拿掉（掉线的留着，回来了还能接回控制权）；
             // 只剩自己一个真人的话 netOn() 变 false，这局就按单机继续打完。

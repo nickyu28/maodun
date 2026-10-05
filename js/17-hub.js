@@ -297,7 +297,7 @@
         function hubAddFriend() {
             if (!hub || !hub.nearby || hub.nearby.isAI) return;
             friendAdd(hub.nearby.name);
-            blazeFlash('已经加 ' + dispName(hub.nearby.name) + ' 为好友');
+            blazeFlash('已经加 ' + dispNameText(hub.nearby.name) + ' 为好友');
         }
         function hubHud() {
             // 在线人数 = 真实房间人数（roomOnlineCount）+ 大厅广场路人机器人数量。
@@ -307,7 +307,7 @@
             document.getElementById('blaze-score').innerText = '在线 ' + (roomOnlineCount() + hub.wanderers.length) + ' 人';
             let team = lobbyParty.concat(hub.party);
             document.getElementById('blaze-round').innerText = '队伍：' +
-                (team.length ? team.map(dispName).join('、') : '（还没组队）') +
+                (team.length ? team.map(dispNameText).join('、') : '（还没组队）') +
                 (nightAwayActive() ? '　· 队友还在惊魂夜里，等他们打完' : '');
         }
         // ── 大厅广场联机：跟房间里其他真人互相广播位置，不经过房主转发。

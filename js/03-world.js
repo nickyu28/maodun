@@ -160,7 +160,7 @@
             stashLootBeforeRun();   // 宝物留在仓库，只带工具进图
             mSize = HUNT_SIZE;
             showModeIntroIfFirstTime('hunt');
-            gameSeed = seed || 1; nav('none'); document.getElementById('ui-layer').classList.remove('hidden'); document.getElementById('ui-id').innerText = dispName(gState.id);
+            gameSeed = seed || 1; nav('none'); document.getElementById('ui-layer').classList.remove('hidden'); document.getElementById('ui-id').innerText = dispNameText(gState.id);
             gState.selectedSlot = 0; gState.selectedContainer = 'inv';   // 仓库和局内快捷栏共用这两个
             gState.huntRunActive = true; saveProgress();   // H5：没结算就关页面，下次读档按撤离失败算
             isPlaying = true; gState.isDead = false; gState.submittedItems = []; gState.hp = 100; timeSecs = 8 * 3600; gState.totalSubmitted = 0; gState.runCash = 0; gState.aiSubmitted = 0; gState.aiChestsTaken = 0; stamina = 100;
@@ -1442,7 +1442,8 @@
             {
                 id: '2026-10-05-v3', date: '10 月 5 日', title: '寻宝队地图', items: [
                     '寻宝队每两层之间都一定有楼梯了，不会再有上不去的楼层',
-                    '信号接收器的蓝线在楼梯口旁边有桌子的地方不会再穿进桌子了'
+                    '信号接收器的蓝线在楼梯口旁边有桌子的地方不会再穿进桌子了',
+                    '名字里带 & 或 < 的，在队伍、提示里不会再显示成乱码了'
                 ]
             },
             {
@@ -1701,7 +1702,7 @@
             ]);
         }
         function feedbackBuildBody(text, modes) {
-            let meta = 'ID: ' + dispName(gState.id) + '\n模式: ' + (modes.length ? modes.join('、') : '（没选）') + '\n时间: ' + new Date().toLocaleString();
+            let meta = 'ID: ' + dispNameText(gState.id) + '\n模式: ' + (modes.length ? modes.join('、') : '（没选）') + '\n时间: ' + new Date().toLocaleString();
             return text + '\n\n——\n' + meta;
         }
         function feedbackSend(viaEmail) {
@@ -1752,14 +1753,14 @@
             if (!ids.length) { showSysModal('提示', '还没记录到任何人，先联机玩一会儿再提交', [{ label: '确定' }]); return; }
             let lines = ids.sort().map(function (id) {
                 let e = playLog[id], s = e.stats || {};
-                return dispName(id) + '　首次 ' + new Date(e.firstSeen).toLocaleDateString() +
+                return dispNameText(id) + '　首次 ' + new Date(e.firstSeen).toLocaleDateString() +
                     '　最近 ' + new Date(e.lastSeen).toLocaleString() + '　次数 ' + e.timesSeen +
                     '　币 ' + (s.mcoin === undefined ? '?' : s.mcoin) + '　皮肤 ' + (s.skins === undefined ? '?' : s.skins) +
                     '　彩蛋 ' + (s.eggs === undefined ? '?' : s.eggs) +
                     '　惊魂夜 ' + (s.nightRank || '?') + '　超燃 ' + (s.blazeRank || '?');
             });
-            let body = '提交者: ' + dispName(gState.id) + '\n时间: ' + new Date().toLocaleString() + '\n记录到 ' + ids.length + ' 人\n\n' + lines.join('\n');
-            let title = '[游玩记录] ' + dispName(gState.id) + ' 提交，共 ' + ids.length + ' 人';
+            let body = '提交者: ' + dispNameText(gState.id) + '\n时间: ' + new Date().toLocaleString() + '\n记录到 ' + ids.length + ' 人\n\n' + lines.join('\n');
+            let title = '[游玩记录] ' + dispNameText(gState.id) + ' 提交，共 ' + ids.length + ' 人';
             if (viaEmail) { feedbackMailto(title, body); return; }
             feedbackSubmit(title, body, 'playlog',
                 function () { blazeFlash('游玩记录已提交，谢谢！'); },

@@ -417,7 +417,7 @@
             ctx.fillRect(0, 12 + top, 320, 5);
             ctx.font = 'bold 38px "Microsoft YaHei", sans-serif';
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(dispName(text), 160, 42 + top);
+            ctx.fillText(dispNameText(text), 160, 42 + top);
             let tex = new THREE.CanvasTexture(cv);
             let sp = new THREE.Sprite(new THREE.SpriteMaterial({
                 map: tex, transparent: true, depthTest: !through

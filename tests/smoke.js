@@ -990,6 +990,21 @@ async function enterExit(tab, key) {
         }
 
         {
+            // B5：dispName 拆成两个——原文给 innerText、转义后的给 innerHTML。名字里有 & < 时，
+            // 大厅「队伍：」那行显示原样，不是 &amp; 这种；拼进 innerHTML 的地方还是转义的
+            const r = JSON.parse(await A.eval(`(function(){
+                let id = 'a&b<i>c#ab12', o = { text: dispNameText(id), html: dispName(id) };
+                let keep = lobbyParty.slice(); lobbyParty.length = 0; lobbyParty.push(id);
+                let old = document.getElementById('blaze-round').innerText;
+                hubHud(); o.team = document.getElementById('blaze-round').innerText;
+                let div = document.createElement('div'); div.innerHTML = '<li>' + dispName(id) + '</li>'; o.li = div.innerText; o.liTags = div.querySelectorAll('i').length;
+                lobbyParty.length = 0; keep.forEach(function (q) { lobbyParty.push(q); }); document.getElementById('blaze-round').innerText = old;
+                return JSON.stringify(o); })()`));
+            const ok = r.text === 'a&b<i>c' && r.html === 'a&amp;b&lt;i&gt;c' && /队伍：a&b<i>c/.test(r.team) && r.li === 'a&b<i>c' && r.liTags === 0;
+            report('B5 dispName 原文/转义分开：队伍那行显示原样，innerHTML 里还是转义的', ok, ok ? '' : JSON.stringify(r));
+        }
+
+        {
             // B5：脚本拆到 js/ 下，地址都带 ?v=版本号、按顺序；有一个文件下载失败就盖提示和重试按钮，一个都不执行；
             // 新开页面加载的时候别的标签页一直在发消息，也不报错（所有文件下载完一口气执行，中间没有空档）
             const r = JSON.parse(await A.eval(`(function(){ let s = performance.getEntriesByType('resource').filter(function (e) { return /\\/js\\/[^?]*\\.js\\?v=/.test(e.name); });

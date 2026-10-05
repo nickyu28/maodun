@@ -684,7 +684,7 @@
             e.userData.isRealPlayer = false; e.userData.aiTakeover = true;
             e.userData.path = null; e.userData.chest = null; e.userData.openTimer = 0; e.userData.stuck = 0;
             if (e.userData.hp <= 0) e.userData.hp = 100;
-            chatPush('系统', dispName(id) + why + '，AI 接管了他的位置', false);
+            chatPush('系统', dispNameText(id) + why + '，AI 接管了他的位置', false);
             updateDeathWaitStatus();
         }
         const HUNT_DROP_MS = 6000;
@@ -715,7 +715,7 @@
             let list = spectateTargets();
             gState.spectating = (gState.spectateIdx >= 0 && gState.spectateIdx < list.length) ? list[gState.spectateIdx] : null;
             let label = document.getElementById('spectate-target');
-            if (label) label.innerText = gState.spectating ? dispName(gState.spectating.userData.name) : '自己（原地）';
+            if (label) label.innerText = gState.spectating ? dispNameText(gState.spectating.userData.name) : '自己（原地）';
         }
 
         function hideDeathUI() {

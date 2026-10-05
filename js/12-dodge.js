@@ -664,7 +664,7 @@
             let label = document.getElementById('dodge-spectate-target');
             if (list.length === 0) { if (label) label.innerText = '无人可观战'; return; }
             if (dodge.spectateIdx >= list.length) dodge.spectateIdx = 0;
-            if (label) label.innerText = dispName(list[dodge.spectateIdx].name);
+            if (label) label.innerText = dispNameText(list[dodge.spectateIdx].name);
         }
         function dodgeLeaveSpectate() {
             if (!dodge) return;

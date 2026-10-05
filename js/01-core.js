@@ -478,10 +478,10 @@
         const PARTY_CAP = 4;   // 算上自己最多 4 个人
         function teamInvite(id) {
             if (!id || id === gState.id) return;
-            if (lobbyParty.indexOf(id) >= 0) { blazeFlash('已经和 ' + dispName(id) + ' 组队了'); return; }
+            if (lobbyParty.indexOf(id) >= 0) { blazeFlash('已经和 ' + dispNameText(id) + ' 组队了'); return; }
             if (lobbyParty.length >= PARTY_CAP - 1) { blazeFlash('队伍最多 ' + PARTY_CAP + ' 人，满了'); return; }
             bc.postMessage({ type: 'TEAM_INVITE', target: id, sender: gState.id });
-            blazeFlash('已经向 ' + dispName(id) + ' 发出组队邀请，等 TA 同意');
+            blazeFlash('已经向 ' + dispNameText(id) + ' 发出组队邀请，等 TA 同意');
         }
         function teamOnInviteReceived(fromId) {
             if (lobbyParty.length >= PARTY_CAP - 1) {
@@ -494,7 +494,7 @@
                     label: '同意', color: '#5cb85c', onClick: function () {
                         bc.postMessage({ type: 'TEAM_INVITE_ACK', target: fromId, sender: gState.id, accept: true });
                         teamAddMember(fromId);
-                        blazeFlash('已经和 ' + dispName(fromId) + ' 组队');
+                        blazeFlash('已经和 ' + dispNameText(fromId) + ' 组队');
                     }
                 },
                 {
@@ -505,8 +505,8 @@
             ]);
         }
         function teamOnInviteAck(fromId, accept) {
-            if (accept) { teamAddMember(fromId); blazeFlash(dispName(fromId) + ' 同意组队了！'); }
-            else blazeFlash(dispName(fromId) + ' 拒绝了组队邀请');
+            if (accept) { teamAddMember(fromId); blazeFlash(dispNameText(fromId) + ' 同意组队了！'); }
+            else blazeFlash(dispNameText(fromId) + ' 拒绝了组队邀请');
         }
         function teamAddMember(id) {
             if (lobbyParty.indexOf(id) >= 0) return;
