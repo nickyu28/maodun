@@ -3001,7 +3001,9 @@
                 '<b>单人</b>：看你能爬多高。',
                 '<b>双人</b>：两个人都到顶才赢。有人掉下去，另一个爬到下一面绿旗就能救回来。',
                 '<b>多人</b>：6 个人比谁先到顶。',
-                '开局 6 秒内掉下去会回到起点。'
+                '起点和每面绿旗是存档点，站上去就记住（旗子变金色）。',
+                '掉进岩浆时，岩浆还没淹到存档点，就回存档点接着爬。',
+                '淹过了再掉：单人结束，多人出局，双人倒下等队友救。'
             ]; } }
         };
         function rulesHtml(key) {
@@ -6027,7 +6029,8 @@
                     '撤离成功后，鱼叉、医疗包这些道具留在背包里，不用每局再拖',
                     '负重提示和寻宝队新手提示只弹一次，皮肤抽卡的进度刷新也不丢了',
                     '超燃选的角色刷新后不会变回默认；惊魂夜追捕者头上也有称号了',
-                    '「举步维艰」那天爬塔也爬得上去了，塔会跟着当天的跳跃变矮一点'
+                    '「举步维艰」那天爬塔也爬得上去了，塔会跟着当天的跳跃变矮一点',
+                    '爬塔加了存档点：掉下去回最近的绿旗，岩浆淹过绿旗再掉才算输'
                 ]
             },
             {
@@ -25462,7 +25465,9 @@
         // 一座绕着柱子盘上去的跳台塔，底下岩浆一直在涨。
         //   单人：能爬多高爬多高，爬到顶算赢。
         //   双人合作：两个人都要爬到顶。有人掉进岩浆就先趴下，另一个爬到下一面旗子就能把他拉回来；两个都掉就输。
-        //   多人：谁先到顶谁赢，掉进岩浆就出局。
+        //   多人：谁先到顶谁赢。
+        // 存档点（T2）：起点和每面绿旗。站上更高的绿旗就更新，只升不降。掉进岩浆时岩浆还没淹到存档点台面，
+        // 就回存档点接着爬；淹过了：单人结束、多人出局、双人倒下等队友救。AI 一样。
         const TOWER = { steps: 60, flagEvery: 10, speed: 40, jumpV: 50, gravity: 140, lava0: -40, rise0: 2.2, rise1: 5, riseRamp: 100, grace: 6 };
         function towerTop(g) { return g.steps[g.steps.length - 1]; }
         // T1：塔按当天的每日效果生成。跳得矮/跑得慢的日子，台子高度差按最高跳高缩（跳高 ∝ jumpMul²），
@@ -25474,6 +25479,17 @@
             // 空隙跟着缩，跑完全程的时间和平常差不多，塔矮了多少岩浆就慢多少
             return { h: h, r: r, lava: h };
         }
+        // 存档点更新（只升不降）；自己的存档点那面旗换成金色
+        function towerSetCp(g, a, i) {
+            if (i <= (a.cp || 0)) return;
+            a.cp = i; a.cpWarned = false;
+            if (a.isPlayer) {
+                let s = g.steps[i];
+                if (s && s.flagMesh) s.flagMesh.material.color.setHex(0xffca28);
+                if (i < g.steps.length - 1) blazeFlash('存档点：第 ' + i + ' 块');
+            }
+        }
+        function towerLoseWord(g) { return g.opt.kind === 'solo' ? '就结束了' : g.opt.kind === 'duo' ? '就倒下了，等队友救' : '就出局了'; }
         NM_DEFS.tower = {
             sky: 0x311b92, fog: 0.0016, speed: TOWER.speed, jumpV: TOWER.jumpV, gravity: TOWER.gravity,
             camBack: 36, camUp: 16, fxY: 0,
@@ -25518,7 +25534,7 @@
                 for (let i = 0; i < n; i++) out.push({ x: (i - (n - 1) / 2) * 6, z: 70, y: 0, facing: Math.PI / 2 });
                 return out;
             },
-            initActor: function (g, a) { a.best = 0; a.si = 0; a.skill = Math.random(); a.pauseT = 0; },
+            initActor: function (g, a) { a.best = 0; a.si = 0; a.skill = Math.random(); a.pauseT = 0; a.cp = 0; a.falls = 0; a.cpWarned = false; },
             speedMul: function (g, a) { return a.isPlayer || a.netId ? 1 : 0.62 + a.skill * 0.22; },   // AI 别比人快太多
             camYaw: function () { return -Math.PI / 2; },   // 塔是逆时针往上盘的，开局朝 +x 看第一块
             groundAt: function (g, x, z, prevY) {
@@ -25577,6 +25593,10 @@
                 g.actors.forEach(function (a) {
                     if (a.out || a.downed) return;
                     g.steps.forEach(function (s, i) { if (a.onGround && Math.abs(a.p.y - s.y) < 0.3 && Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half) { a.si = i; if (i > a.best) a.best = i; } });
+                    let st = g.steps[a.si];
+                    if (st && st.flag && a.si > (a.cp || 0)) towerSetCp(g, a, a.si);
+                    // 存档点被岩浆淹了：提醒一次（再掉下去就结束了）
+                    if (a.isPlayer && !a.cpWarned && g.lavaY > g.steps[a.cp || 0].y) { a.cpWarned = true; blazeFlash('存档点被岩浆淹了！再掉下去' + towerLoseWord(g)); }
                     if (a.best >= g.steps.length - 1 && !a.done) {
                         a.done = true; a.doneT = g.clock;
                         if (a.isPlayer) blazeFlash('到顶了！');
@@ -25591,6 +25611,7 @@
                     if (s && s.flag && mate.si > (a.downAt || 0) && mate.onGround) {
                         a.downed = false; a.mesh.visible = true;
                         a.p.set(s.x + 3, s.y + 1, s.z); a.vy = 0; a.mvx = a.mvz = a.kx = a.kz = 0; a.si = mate.si;
+                        if (mate.si > (a.cp || 0)) towerSetCp(g, a, mate.si);
                         nmBurst(a.p.x, a.p.y, a.p.z, 0x66bb6a);
                         blazeFlash(a.isPlayer ? mate.name + ' 把你拉回来了！' : '把 ' + a.name + ' 拉回来了！');
                         if (g.net) bc.postMessage({ type: 'NM_EV', target: '*', sender: gState.id, mode: 'tower', ev: 'up', i: a.idx });
@@ -25599,11 +25620,17 @@
             },
             fallCheck: function (g, a) { return a.p.y < g.lavaY + 1 ? '掉进岩浆了' : null; },
             onFall: function (g, a, why) {
-                // 岩浆还没开始涨就掉下去的，送回起点，不算出局
-                if (g.clock < TOWER.grace) {
-                    let s0 = g.steps[0];
-                    a.p.set(s0.x + (Math.random() - 0.5) * 20, 1, s0.z + (Math.random() - 0.5) * 10); a.vy = 0; a.mvx = a.mvz = a.kx = a.kz = 0; a.si = 0;
-                    if (a.isPlayer) blazeFlash('回到起点');
+                a.falls = (a.falls || 0) + 1;
+                let cs = g.steps[a.cp || 0];
+                // 岩浆还没淹到存档点台面：回存档点接着爬，不算失败
+                if (g.lavaY < cs.y) {
+                    let spread = Math.min(10, cs.half);
+                    a.p.set(cs.x + (Math.random() - 0.5) * spread, cs.y + 1, cs.z + (Math.random() - 0.5) * spread);
+                    a.vy = 0; a.mvx = a.mvz = a.kx = a.kz = 0; a.si = a.cp || 0;
+                    if (a.isPlayer) {
+                        blazeFlash(a.cp ? '回到存档点（第 ' + a.cp + ' 块）' : '回到起点');
+                        introOnce('tower.cp', '存档点', '起点和每面绿旗是存档点，站上去就记住。<br>掉进岩浆时，岩浆还没淹到存档点就回那里接着爬；淹过了再掉，' + towerLoseWord(g) + '。');
+                    }
                     return;
                 }
                 if (g.opt.kind === 'duo') {
@@ -25613,7 +25640,7 @@
                     if (g.net) bc.postMessage({ type: 'NM_EV', target: '*', sender: gState.id, mode: 'tower', ev: 'down', i: a.idx, at: a.si });
                     return;
                 }
-                nmOut(a, why);
+                nmOut(a, g.opt.kind === 'solo' ? '岩浆淹过了存档点，游戏结束' : '岩浆淹过了存档点，出局了');
             },
             onEv: function (g, m) {
                 let a = g.actors[m.i]; if (!a) return;
@@ -25653,7 +25680,8 @@
             resultText: function (g, res) {
                 let h = g.me.best;
                 let rec = gState.towerBest || 0;
-                return '你爬到第 ' + h + ' 块（共 ' + (g.steps.length - 1) + ' 块）' + (h > rec ? '，新纪录！' : '，最好 ' + rec + ' 块');
+                return '你爬到第 ' + h + ' 块（共 ' + (g.steps.length - 1) + ' 块）' + (h > rec ? '，新纪录！' : '，最好 ' + rec + ' 块') +
+                    '<br>掉下去 ' + (g.me.falls || 0) + ' 次';
             },
             afterEnd: function (g) { if ((g.me.best || 0) > (gState.towerBest || 0)) { gState.towerBest = g.me.best; saveProgress(); } },
             hud: function (g) {
@@ -25661,7 +25689,9 @@
                 let gap = Math.max(0, Math.round(me.p.y - g.lavaY));
                 let kindTxt = g.opt.kind === 'solo' ? '单人' : g.opt.kind === 'duo' ? '双人合作' : '多人';
                 let mate = g.opt.kind === 'duo' ? g.actors.filter(function (b) { return b !== me; })[0] : null;
+                let flooded = g.lavaY > g.steps[me.cp || 0].y;
                 nmHudText('第 ' + me.best + ' / ' + total + ' 块　离岩浆 ' + gap,
+                    (flooded && !me.out && !me.downed ? '⚠ 存档点被淹了，再掉下去' + towerLoseWord(g) + '　' : '存档点：' + (me.cp ? '第 ' + me.cp + ' 块' : '起点') + '　') +
                     kindTxt + (g.clock < TOWER.grace ? '　' + Math.ceil(TOWER.grace - g.clock) + ' 秒后岩浆开始涨' : '　岩浆在涨') +
                     (mate ? '　队友：' + mate.name + (mate.downed ? '（掉下去了）' : mate.done ? '（到顶了）' : '') : '') +
                     (me.downed ? '　掉下去了' : ''));

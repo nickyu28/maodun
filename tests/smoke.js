@@ -703,6 +703,51 @@ async function enterExit(tab, key) {
                 Object.keys(o).map((k) => k + ' ' + o[k].bad + '/' + o[k].frac).join(' ') + ' 用时 ' + Math.round((Date.now() - t0) / 1000) + 's');
         }
 
+        {
+            // T2：存档点。岩浆低于存档点掉下去回存档点；高于时单人结束、多人出局、双人倒下；存档点只升不降；AI 一样
+            const before = A.errors.length, bad = [];
+            const begin = async (kind) => { await A.eval(`${HIDE} selectGameMode('tower'); nmBegin('tower', [{ id: gState.id }], gState.id, 5, { kind: '${kind}' }); true;`); await W(1500); await A.eval(`${HIDE} true;`); };
+            const stand = (who, i) => A.eval(`(function(){ let a = ${who}, s = nm.steps[${i}]; a.p.set(s.x, s.y, s.z); a.vy = 0; a.mvx = a.mvz = 0; a.onGround = true; return true; })()`);
+            const drop = (who, lavaVsCp) => A.eval(`(function(){ let a = ${who}, cs = nm.steps[a.cp || 0]; nm.lavaY = cs.y + (${lavaVsCp}); a.p.set(cs.x, nm.lavaY - 3, cs.z); a.vy = 0; return true; })()`);
+            const st = (who) => A.eval(`(function(){ let a = ${who}; return JSON.stringify({ cp: a.cp, out: !!a.out, down: !!a.downed, falls: a.falls, y: Math.round(a.p.y), cpY: Math.round(nm.steps[a.cp || 0].y) }); })()`);
+            await begin('solo');
+            await drop('nm.me', -20); await W(400); await A.eval(`${HIDE} true;`);
+            let o = JSON.parse(await st('nm.me'));
+            if (o.out || o.cp !== 0 || o.falls !== 1 || o.y < o.cpY - 1) bad.push('单人 岩浆低于起点时掉下去 ' + JSON.stringify(o));
+            await stand('nm.me', 10); await W(400); await A.eval(`${HIDE} true;`);
+            await stand('nm.me', 20); await W(400); await A.eval(`${HIDE} true;`);
+            await stand('nm.me', 10); await W(400); await A.eval(`${HIDE} true;`);
+            o = JSON.parse(await st('nm.me'));
+            const gold = await A.eval(`nm.steps[20].flagMesh.material.color.getHex() === 0xffca28 && nm.steps[30].flagMesh.material.color.getHex() !== 0xffca28`);
+            if (o.cp !== 20 || !gold) bad.push('存档点只升不降/旗子变色 ' + JSON.stringify(o) + ' ' + gold);
+            await drop('nm.me', -20); await W(400); await A.eval(`${HIDE} true;`);
+            o = JSON.parse(await st('nm.me'));
+            if (o.out || o.cp !== 20 || o.falls !== 2 || o.y < o.cpY - 1) bad.push('单人 回第 20 块 ' + JSON.stringify(o));
+            const hud = await A.eval(`(nm.lavaY = nm.steps[20].y + 5, nm.def.hud(nm), document.getElementById('blaze-round').innerText)`);
+            if (!/存档点被淹了/.test(hud)) bad.push('淹了没提示 ' + hud);
+            await drop('nm.me', 5); await W(1200);
+            o = JSON.parse(await st('nm.me'));
+            const endTxt = await A.eval(`document.getElementById('sys-modal-text').innerText`);
+            if (!o.out || !/掉下去 3 次/.test(endTxt)) bad.push('单人 淹了再掉 ' + JSON.stringify(o) + ' 结算:' + endTxt.slice(0, 60));
+            await A.eval(`${HIDE} nmExit(); true;`); await W(1200);
+            await begin('multi');
+            // AI 也用同一套：岩浆低于它的存档点时掉下去回存档点
+            await drop('nm.actors[1]', -20); await W(400);
+            o = JSON.parse(await st('nm.actors[1]'));
+            if (o.out || o.falls !== 1) bad.push('多人 AI 回存档点 ' + JSON.stringify(o));
+            await drop('nm.me', 5); await W(600); await A.eval(`${HIDE} true;`);
+            o = JSON.parse(await st('nm.me'));
+            const still = await A.eval(`!!nm && nm.actors.filter(function (a) { return !a.out; }).length`);
+            if (!o.out || !still) bad.push('多人 淹了再掉应出局、局还在 ' + JSON.stringify(o) + ' 剩 ' + still);
+            await A.eval(`${HIDE} nmExit(); true;`); await W(1200);
+            await begin('duo');
+            await drop('nm.me', 5); await W(600); await A.eval(`${HIDE} true;`);
+            o = JSON.parse(await st('nm.me'));
+            if (!o.down || o.out) bad.push('双人 淹了再掉应倒下 ' + JSON.stringify(o));
+            await A.eval(`${HIDE} nmExit(); true;`); await W(1200); await A.eval(`${HIDE} true;`);
+            report('T2 爬塔存档点：回存档点、单人结束、多人出局、双人倒下、只升不降', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+
         // 3. 伪造消息（附录）
         const B = await openTab(chrome, url);
         const idA = await A.eval('gState.id'), idB = await B.eval('gState.id');
