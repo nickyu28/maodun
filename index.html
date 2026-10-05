@@ -6359,11 +6359,12 @@
         // 只动"跑多快、跳多高"这两个最通用、最不容易搞坏平衡的维度，不碰球的物理、
         // 平台机关这些跟"公平/关卡设计"绑死的数值。换个日期就换一条，明天又不一样。
         const DAILY_MODIFIERS = [
-            { id: 'turbo', name: '风驰电掣', desc: '所有人跑得更快', speedMul: 1.35, jumpMul: 1 },
-            { id: 'moon', name: '月球重力', desc: '跳得更高更远', speedMul: 1, jumpMul: 1.6 },
-            { id: 'slow', name: '举步维艰', desc: '所有人都变慢了，拼反应', speedMul: 0.75, jumpMul: 0.85 },
-            { id: 'hop', name: '弹簧腿', desc: '走路一般，但跳跃格外带劲', speedMul: 0.95, jumpMul: 1.8 },
-            { id: 'rush', name: '全员疾跑', desc: '速度和跳跃都往上提一提', speedMul: 1.2, jumpMul: 1.25 },
+            // E1（10-06 作者定）：幅度都改小了，地图不用为每日效果另做一套
+            { id: 'turbo', name: '风驰电掣', desc: '所有人跑得快一点', speedMul: 1.15, jumpMul: 1 },
+            { id: 'moon', name: '月球重力', desc: '跳得更高更远', speedMul: 1, jumpMul: 1.25 },
+            { id: 'slow', name: '举步维艰', desc: '所有人都慢了一点', speedMul: 0.9, jumpMul: 0.95 },
+            { id: 'hop', name: '弹簧腿', desc: '走路照常，跳得更高', speedMul: 1, jumpMul: 1.35 },
+            { id: 'rush', name: '全员疾跑', desc: '速度和跳跃都往上提一点', speedMul: 1.1, jumpMul: 1.1 },
             { id: 'normal', name: '平常日子', desc: '今天没有特殊效果', speedMul: 1, jumpMul: 1 }
         ];
         function computeDailyModifier() {
