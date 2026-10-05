@@ -794,6 +794,29 @@ async function enterExit(tab, key) {
             report('E1 每日效果改小，竞速各效果都跳得过（光跳/冲刺+跳/弹跳板）', bad.length === 0, bad.length ? bad.join(' / ') : rows.join(' '));
         }
 
+        {
+            // H12：新号简单图第一局 0 个保险柜、金箱子多 1 个；第二局恢复。中等图保底局必出保险柜
+            const bad = [];
+            const N = await openTab(chrome, url, { name: 'h12' + Math.floor(Math.random() * 100000) });
+            const run = async (diff) => {
+                await N.eval(`${HIDE} gState.aiFill = false; gState.mapDifficulty = '${diff}'; selectGameMode('hunt'); requestStartGame(); requestEnterMap(); true;`); await W(2500);
+                const r = JSON.parse(await N.eval(`JSON.stringify({ gold: chests.filter(function (c) { return c.userData.type === 'gold'; }).length, safe: chests.filter(function (c) { return c.userData.type === 'safe'; }).length, first: gState.isFirstRound, pity: gState.pityGuaranteed, mul: huntPityMul })`));
+                await N.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1500); await N.eval(`${HIDE} true;`);
+                return r;
+            };
+            const easyGold = await N.eval(`mapConfigs.easy.gold`);
+            const r1 = await run('easy');
+            if (r1.safe !== 0 || r1.gold !== easyGold + 1 || r1.mul !== 2 || r1.first) bad.push('第一局 ' + JSON.stringify(r1));
+            const r2 = await run('easy');
+            if (r2.safe !== 0 || r2.gold !== easyGold || r2.mul !== 1) bad.push('第二局 ' + JSON.stringify(r2));
+            await N.eval(`gState.pityGuaranteed = true; true;`);
+            const r3 = await run('med');
+            if (r3.safe !== 1 || r3.pity) bad.push('中等图保底 ' + JSON.stringify(r3));
+            if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
+            await N.close();
+            report('H12 简单图不出保险柜，保底局多 1 个金箱子；中等图保底还是保险柜', bad.length === 0, bad.join(' / ') + ' 第一局 ' + JSON.stringify(r1) + ' 第二局 ' + JSON.stringify(r2));
+        }
+
         // 3. 伪造消息（附录）
         const B = await openTab(chrome, url);
         const idA = await A.eval('gState.id'), idB = await B.eval('gState.id');

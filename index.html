@@ -2192,6 +2192,10 @@
             god: [{ n: "帝王翡翠", v: 800000, w: 3, tex: 'jade', c: 0x00e676 }, { n: "王权之心", v: 1000000, w: 4, tex: 'heart', c: 0xff1744 }, { n: "eggy金条", v: 200000, w: 10, tex: 'statue', c: 0xffb300 }, { n: "永恒誓言", v: 2000000, w: 1, tex: 'heart', c: 0xffffff, type: 'amulet' }, { n: "时空沙漏", v: 1000000, w: 4, tex: 'glass', c: 0x00ffff, type: 'time_stop', uses: 3, maxUses: 3 }]
         };
 
+        // H12：保底局简单图的大金概率倍数（buildProceduralMaze 里定，H13 的大金概率常量乘上它）
+        let huntPityMul = 1;
+        function huntHasHumanMates() { return (gState.team || []).some(function (m) { return m && !m.isAI && m.id !== gState.id; }); }
+        function huntPityActive() { return !!(gState.isFirstRound || gState.pityGuaranteed) && !huntHasHumanMates(); }
         function ultraNoCarriage() { return itemPool.ultra.filter(function (u) { return u.type !== 'carriage'; }); }
 
         // 开箱抽奖。rnd 传 seededRandom 时是玩家开的（多人要同步），
@@ -4832,7 +4836,8 @@
             // 保底用在"这一局"身上——不管这局最后撤没撤出去，用过就是用过了，不然连
             // 续几局都失败/没撤出去的人会一直卡在保底状态，每局都重复吃保底。放在生
             // 成地图之后清零：这局造图的时候两个标记还是 true，能正常生效。
-            gState.isFirstRound = false; gState.pityGuaranteed = false; saveProgress();
+            // 组队局里保底不生效，标记留到下一次自己打的时候
+            if (!huntHasHumanMates()) { gState.isFirstRound = false; gState.pityGuaranteed = false; saveProgress(); }
 
             if (syncSpawns) gState.preGenSpawns = syncSpawns;
 
@@ -5097,7 +5102,13 @@
             let validLeaves = allLeaves.filter(l => !(l.f === 0 && l.x <= 2 && l.z <= 2) && maze[l.f][l.z][l.x].type === 0 && !(l.f === 0 && l.x === goldShopLoc.x && l.z === goldShopLoc.z));
             for (let i = validLeaves.length - 1; i > 0; i--) { let j = Math.floor(seededRandom() * (i + 1)); let temp = validLeaves[i]; validLeaves[i] = validLeaves[j]; validLeaves[j] = temp; }
 
+            // H12：保底局（新号第一局 / 连续没出货）。简单图不出保险柜，改成多 1 个金箱子、大金概率翻倍；
+            // 中等、困难图还是必出保险柜。只在没有真人队友的局里生效（标记是各人自己的，
+            // 组队时每人的地图要一模一样，不能因为谁带着保底就多一个箱子）。
+            let pity = huntPityActive();
+            huntPityMul = (pity && gState.mapDifficulty === 'easy') ? 2 : 1;
             let cTypes = [];
+            if (pity && gState.mapDifficulty === 'easy') cTypes.push('gold');
             for (let i = 0; i < conf.gold; i++) cTypes.push('gold'); for (let i = 0; i < conf.silver; i++) cTypes.push('silver'); for (let i = 0; i < conf.wood; i++) cTypes.push('wood');
 
             for (let i = cTypes.length - 1; i > 0; i--) { let j = Math.floor(seededRandom() * (i + 1)); let t = cTypes[i]; cTypes[i] = cTypes[j]; cTypes[j] = t; }
@@ -5133,11 +5144,11 @@
                 let c = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 4), new THREE.MeshLambertMaterial({ map: goldChestTex })); c.position.set(goldShopLoc.x * TILE - 8, 2, goldShopLoc.z * TILE + 8); c.userData = { isChest: true, type: 'gold', opened: false }; scene.add(c); chests.push(c);
             }
 
-            // 之前这里多加了一层 mapDifficulty !== 'easy'，导致选 Easy 的人（新手默认
-            // 难度）首次进图/连续没出货的保底承诺全部落空——保险柜压根不会生成，
-            // 但提示文案照样在显示"必出"。保底不该看难度，去掉这层限制。
-            if (conf.hasSafe || gState.isFirstRound || gState.pityGuaranteed) {
-                let prob = (gState.isFirstRound || gState.pityGuaranteed) ? 1.0 : 0.1;
+            // 简单图永远不出保险柜——这是作者的决定（10-05，记在 TASKS.md「作者的决定」），不要改回去。
+            // 简单图的保底换成上面那个多出来的金箱子 + 大金概率翻倍。中等、困难图保底局必出保险柜。
+            let safePity = pity && gState.mapDifficulty !== 'easy';
+            if (gState.mapDifficulty !== 'easy' && (conf.hasSafe || safePity)) {
+                let prob = safePity ? 1.0 : 0.1;
                 let roll = seededRandom();
                 let l = roll < prob ? takeSpreadLeaf() : null;
                 if (l) {
@@ -6018,7 +6029,8 @@
         const CHANGELOG = [
             {
                 id: '2026-10-05-v2', date: '10 月 5 日', title: '每日效果和寻宝队', items: [
-                    '每日效果的幅度都改小了，快慢高低都只差一点'
+                    '每日效果的幅度都改小了，快慢高低都只差一点',
+                    '寻宝队简单图不再出保险柜'
                 ]
             },
             {
