@@ -285,6 +285,53 @@ function TABLE_SIM() {
     });
     return JSON.stringify({ scans: scans, onTable: onTable, wells: wells, holes: holes.length });
 }
+// T1：6 种每日效果各生成 20 座塔，模拟角色（朝下一块跑、到边缘起跳、空中朝目标修正）逐块验证能不能上去；
+// 再不失误连续跑一遍，看到顶时岩浆占塔高的比例。在大厅里跑（nm 临时换成一个假的局）
+function TOWER_SIM(nTowers) {
+    let mods = {}; DAILY_MODIFIERS.forEach(function (m) { mods[m.id] = { speedMul: m.speedMul, jumpMul: m.jumpMul }; });
+    let keep = { speedMul: DAILY_MOD.speedMul, jumpMul: DAILY_MOD.jumpMul }, oldNm = nm, oldAdd = window.nmAdd, out = {};
+    let moveSteps = function (g) { g.steps.forEach(function (s) { if (!s.mv) return; let nx = s.x0 + Math.sin(g.clock * 1.3 + s.ph) * s.mv; s.dx = nx - s.x; s.x = nx; }); };
+    let onStep = function (a, s) { return a.onGround && Math.abs(a.p.y - s.y) < 0.3 && Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half; };
+    let at = function (s) { return { p: new THREE.Vector3(s.x, s.y, s.z), mvx: 0, mvz: 0, kx: 0, kz: 0, vy: 0, onGround: true, coyote: 0, actCd: 0, stunT: 0, isPlayer: true, facing: 0 }; };
+    let hop = function (g, a, i) {
+        let t = g.steps[i + 1];
+        for (let T = 0; T < 6; T += 1 / 60) {
+            moveSteps(g);
+            let dx = t.x - a.p.x, dz = t.z - a.p.z, d = Math.hypot(dx, dz) || 1;
+            let edge = a.onGround && NM_DEFS.tower.groundAt(g, a.p.x + a.mvx * 0.12, a.p.z + a.mvz * 0.12, a.p.y) < a.p.y - 0.5;
+            nmPhysics(a, { x: dx / d, z: dz / d, jump: edge, act: false }, 1 / 60); g.clock += 1 / 60;
+            if (onStep(a, t)) return true;
+            if (a.onGround && Math.abs(a.p.y - g.steps[i].y) > 0.3) return false;
+            if (a.p.y < t.y - 30) return false;
+        }
+        return false;
+    };
+    try {
+        window.nmAdd = function () { };
+        Object.keys(mods).forEach(function (id) {
+            DAILY_MOD.speedMul = mods[id].speedMul; DAILY_MOD.jumpMul = mods[id].jumpMul;
+            let bad = 0, frac = 0;
+            for (let k = 0; k < nTowers; k++) {
+                gameSeed = 1000 + k * 7919;
+                let g = { opt: { kind: 'solo' }, clock: 0, actors: [], def: NM_DEFS.tower, mode: 'tower', fx: [] };
+                NM_DEFS.tower.build(g); nm = g;
+                for (let i = 0; i < g.steps.length - 1; i++) {
+                    let ok = false;
+                    for (let tr = 0; tr < 3 && !ok; tr++) { g.clock = tr * 1.7; moveSteps(g); ok = hop(g, at(g.steps[i]), i); }
+                    if (!ok) bad++;
+                }
+                g.clock = 0; moveSteps(g);
+                let a = at(g.steps[0]);
+                for (let i = 0; i < g.steps.length - 1; i++) if (!hop(g, a, i)) a = at(g.steps[i + 1]);
+                let L = TOWER.lava0 * g.sc.h;
+                for (let c = 0; c < g.clock; c += 1 / 60) if (c > TOWER.grace) L += (TOWER.rise0 + (TOWER.rise1 - TOWER.rise0) * Math.min(1, (c - TOWER.grace) / TOWER.riseRamp)) * g.sc.lava / 60;
+                frac += L / towerTop(g).y / nTowers;
+            }
+            out[id] = { bad: bad, frac: +frac.toFixed(3) };
+        });
+    } finally { DAILY_MOD.speedMul = keep.speedMul; DAILY_MOD.jumpMul = keep.jumpMul; nm = oldNm; window.nmAdd = oldAdd; }
+    return JSON.stringify(out);
+}
 const ACTIVE = `(function(){ let k = chatActiveModeKey(); return k === 'hub' ? null : k; })()`;
 
 async function enterExit(tab, key) {
@@ -645,6 +692,16 @@ async function enterExit(tab, key) {
             report('夜间 #18：AI 打怪不跳过别的怪、超燃角色进存档、追捕者有称号', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
         }
         await A.eval(`${HIDE} gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); gState.money = 0; nav('screen-lobby'); true;`);
+
+        {
+            // T1：塔按每日效果生成，6 种效果都 0 块上不去；举步维艰下岩浆比例和平常接近
+            const before = A.errors.length, t0 = Date.now();
+            const o = JSON.parse(await A.eval(`${HIDE} (${TOWER_SIM.toString()})(20)`));
+            const bad = Object.keys(o).filter((k) => o[k].bad > 0).map((k) => k + ' ' + o[k].bad);
+            const near = Math.abs(o.slow.frac - o.normal.frac) < 0.05;
+            report('T1 6 种每日效果各 20 座塔 0 块上不去，举步维艰岩浆比例接近平常', bad.length === 0 && near && A.errors.length === before,
+                Object.keys(o).map((k) => k + ' ' + o[k].bad + '/' + o[k].frac).join(' ') + ' 用时 ' + Math.round((Date.now() - t0) / 1000) + 's');
+        }
 
         // 3. 伪造消息（附录）
         const B = await openTab(chrome, url);

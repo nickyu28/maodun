@@ -6026,7 +6026,8 @@
                     '跳上桌子不会再掉进桌子里，从楼梯口掉下去也不会卡进墙',
                     '撤离成功后，鱼叉、医疗包这些道具留在背包里，不用每局再拖',
                     '负重提示和寻宝队新手提示只弹一次，皮肤抽卡的进度刷新也不丢了',
-                    '超燃选的角色刷新后不会变回默认；惊魂夜追捕者头上也有称号了'
+                    '超燃选的角色刷新后不会变回默认；惊魂夜追捕者头上也有称号了',
+                    '「举步维艰」那天爬塔也爬得上去了，塔会跟着当天的跳跃变矮一点'
                 ]
             },
             {
@@ -25464,24 +25465,34 @@
         //   多人：谁先到顶谁赢，掉进岩浆就出局。
         const TOWER = { steps: 60, flagEvery: 10, speed: 40, jumpV: 50, gravity: 140, lava0: -40, rise0: 2.2, rise1: 5, riseRamp: 100, grace: 6 };
         function towerTop(g) { return g.steps[g.steps.length - 1]; }
+        // T1：塔按当天的每日效果生成。跳得矮/跑得慢的日子，台子高度差按最高跳高缩（跳高 ∝ jumpMul²），
+        // 空隙按能飞多远缩（∝ speedMul × jumpMul），岩浆也相应放慢；变强的日子塔不变。
+        // 所有人当天的每日效果一样，塔就一样（随机数的调用顺序不变）。
+        function towerScale() {
+            let j = DAILY_MOD.jumpMul, v = DAILY_MOD.speedMul;
+            let h = Math.min(1, j * j), r = Math.min(1, v * j);
+            // 空隙跟着缩，跑完全程的时间和平常差不多，塔矮了多少岩浆就慢多少
+            return { h: h, r: r, lava: h };
+        }
         NM_DEFS.tower = {
             sky: 0x311b92, fog: 0.0016, speed: TOWER.speed, jumpV: TOWER.jumpV, gravity: TOWER.gravity,
             camBack: 36, camUp: 16, fxY: 0,
             count: function (opt) { return opt.kind === 'solo' ? 1 : opt.kind === 'duo' ? 2 : 6; },
             build: function (g) {
                 g.steps = [];
+                let sc = towerScale(); g.sc = sc;
                 let ang = 0, y = 0, r = 68, prevHalf = 26;
                 g.steps.push({ x: 0, z: 70, y: 0, half: 26, mv: 0 });   // 起点大平台
                 for (let i = 1; i <= TOWER.steps; i++) {
                     // 按"边到边的空隙"来排，而不是随便转个角度——之前角度+半径都随机，有的两块离了 40 格，根本跳不过去。
                     // 满力跳大概能飞 20 格，空隙控制在 5~11，越往上越宽一点。
                     let half = i === TOWER.steps ? 16 : Math.max(5.5, 10 - i * 0.06 - seededRandom() * 2);
-                    let gap = 5 + seededRandom() * 4 + Math.min(2, i * 0.04);
+                    let gap = (5 + seededRandom() * 4 + Math.min(2, i * 0.04)) * sc.r;
                     r = Math.max(60, Math.min(76, r + (seededRandom() - 0.5) * 6));
                     ang += (prevHalf + half + gap) / r;
                     prevHalf = half;
-                    y += 5 + seededRandom() * 2.6;
-                    let mv = (i > 8 && i % 7 === 0) ? (6 + seededRandom() * 6) : 0;   // 每隔几块有一块左右晃
+                    y += (5 + seededRandom() * 2.6) * sc.h;
+                    let mv = (i > 8 && i % 7 === 0) ? (6 + seededRandom() * 6) * sc.r : 0;   // 每隔几块有一块左右晃
                     g.steps.push({ x: Math.sin(ang) * r, z: Math.cos(ang) * r, y: y, half: half, mv: mv, ph: seededRandom() * 6, flag: i % TOWER.flagEvery === 0 });
                 }
                 g.steps.forEach(function (s, i) {
@@ -25497,7 +25508,7 @@
                 });
                 let pillar = new THREE.Mesh(new THREE.CylinderGeometry(30, 34, towerTop(g).y + 60, 24), new THREE.MeshLambertMaterial({ color: 0x4527a0 }));
                 pillar.position.y = (towerTop(g).y + 60) / 2 - 40; nmAdd(pillar);
-                g.lavaY = TOWER.lava0;
+                g.lavaY = TOWER.lava0 * sc.h;
                 let lava = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshBasicMaterial({ color: 0xff5722 }));
                 lava.rotation.x = -Math.PI / 2; lava.position.y = g.lavaY; nmAdd(lava); g.lava = lava;
                 let glow = new THREE.PointLight(0xff7043, 1.2, 160); nmAdd(glow); g.glow = glow;
@@ -25559,7 +25570,7 @@
                 });
                 if (nmIsHost() && g.clock > TOWER.grace) {
                     let k = Math.min(1, (g.clock - TOWER.grace) / TOWER.riseRamp);
-                    g.lavaY += (TOWER.rise0 + (TOWER.rise1 - TOWER.rise0) * k) * dt;
+                    g.lavaY += (TOWER.rise0 + (TOWER.rise1 - TOWER.rise0) * k) * (g.sc ? g.sc.lava : 1) * dt;
                 }
                 g.lava.position.y = g.lavaY;
                 g.glow.position.set(g.me.p.x, g.lavaY + 20, g.me.p.z);
