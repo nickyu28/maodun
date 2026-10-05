@@ -2964,6 +2964,7 @@
                 kTxt('<b>Shift</b> 跑　<b>空格</b> 跳', '<b>跑</b> <b>跳</b> 在右下角'),
                 '每个腰包自带 3 格。在背包或仓库里点一下腰包打开，东西拖进拖出；腰包不能放进腰包。',
                 kTxt('手上拿着腰包时按 <b>1 2 3</b> 把里面的东西拿到手上。', '腰包里的东西要拖出来才能用。'),
+                '用了信号接收器，跟着蓝线走就能找到那件东西，换楼层也会带路。',
                 '绿色猫盾能回血，黄色猫盾能翻滚躲开攻击。'
             ]; } },
             night: { title: '惊魂夜', lines: function () { return [
@@ -4911,7 +4912,7 @@
             huntLure = null;
             huntLureFx.forEach(function (f) { scene.remove(f.o); }); huntLureFx = [];
             gState.hasLeft = false; gState.deathPos = null; gState.spectating = null; gState.spectateIdx = -1; gState.peerState = {}; hideDeathUI();
-            gState.signal = { active: false, timer: 0, mesh: null };
+            gState.signal = { active: false, timer: 0, mesh: null }; signalRouteClear();
             for (let wi = 0; wi < MOB_WAVES_AT.length; wi++) gState['wave' + (wi + 1) + 'Spawned'] = false;
             document.getElementById('backpack-overlay-page').classList.add('hidden'); document.getElementById('large-map-panel').classList.add('hidden'); document.getElementById('time-stop-overlay').style.display = 'none'; document.getElementById('debuff-msg').style.display = 'none';
             explored = Array(FLOORS).fill().map(function () { return Array(mSize).fill().map(() => Array(mSize).fill(false)); });
@@ -6126,7 +6127,8 @@
                     '每日效果的幅度都改小了，快慢高低都只差一点',
                     '寻宝队简单图不再出保险柜',
                     '宝箱开出大金的机会变少了，一张图最多 4 个',
-                    '腰包改成自己装东西：每个腰包 3 格，点一下打开，能带好几个'
+                    '腰包改成自己装东西：每个腰包 3 格，点一下打开，能带好几个',
+                    '信号接收器改成一条蓝线带路，上下楼也认得路'
                 ]
             },
             {
@@ -17120,6 +17122,7 @@
 
             refreshRadarMinimap(); if (gState.largeMapOpen) refreshLargeMinimap();
             tickSignal(dt);
+            signalRouteTick(false);
             if (!gState.isDead && !gState.hasLeft && !gState.backpackOpen && !gState.largeMapOpen) handlePlayerEngine(dt);
             handleThrownItemsAndEntitiesEngine(dt);
 
@@ -17398,6 +17401,7 @@
                                 let recv = gState.inv.find(function (i) { return i && i.type === 'signal'; });
                                 if (recv) recv.uses = 0;
                                 gState.signal = { active: false, timer: 0, mesh: null };
+                                signalRouteClear();
                             }
                             scene.remove(activeObj); let index = groundItems.indexOf(activeObj); if (index > -1) groundItems.splice(index, 1); updateHUD();
                         }
@@ -17417,7 +17421,7 @@
         };
         const HUNT_ITEM_INTRO = {
             wep: ['武器', '拿在手上，' + '对着怪物「互动」就能打它。'],
-            signal: ['信号接收器', '拿在手上用一下，会指出附近一件好东西在哪。'],
+            signal: ['信号接收器', '拿在手上用一下，图上会出现一件好东西，跟着蓝线就能走过去，换楼层也认路。'],
             time_stop: ['时空沙漏', '用了以后怪物会停住一会儿。'],
             amulet: ['永恒誓言', '带在身上，凝视者和伪装者就不会靠近你。'],
             badge: ['地窖徽章', '用了直接回到起点。只能用一次，回仓库能充能。']
@@ -17576,6 +17580,214 @@
             aiKillTargets.forEach(function (target) { let tIdx = entities.indexOf(target); if (tIdx > -1) entities.splice(tIdx, 1); });
         }
 
+        // ══════════════ 信号接收器的蓝色路线（H10）══════════════
+        // 在 (楼层, x, z) 格子上找路，楼梯按真实走法连：下层的楼梯格只能从开口那一侧进；爬上去到上层的平台；
+        // 上层楼梯格靠开口那一侧是楼梯井，从那边走进去会掉到下层台阶上；平台不能直接走回楼梯井那一侧。
+        // 路线画成一条连续的管子（一个 mesh），沿着人真正踩的面：过桌子抬到桌面、上楼梯沿台阶面、跳井就竖着往下。
+        const HUNT_ROUTE_LIFT = 0.8;   // 管子离脚下表面多高（不插进地面）
+        function huntCellKind(f, x, z) {
+            let c = maze[f] && maze[f][z] && maze[f][z][x];
+            if (!c || c.type === 1) return null;
+            if (c.type === 3 && c.stair) return c.stair.base === f ? 'stairLo' : 'stairHi';
+            return c.type === 2 ? 'table' : 'floor';
+        }
+        function huntStairAxis(s) { return s.axis === 'x' ? { dx: s.sign, dz: 0 } : { dx: 0, dz: s.sign }; }
+        // 一个节点能走到哪些节点
+        function huntRouteNbrs(n) {
+            let out = [], k = huntCellKind(n.f, n.x, n.z); if (!k) return out;
+            let c = maze[n.f][n.z][n.x];
+            if (k === 'stairLo') out.push({ f: n.f + 1, x: n.x, z: n.z, via: 'up' });
+            if (k === 'stairHi') out.push({ f: n.f - 1, x: n.x, z: n.z, via: 'down' });
+            [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) {
+                let x = n.x + d[0], z = n.z + d[1];
+                if (x < 0 || z < 0 || x >= mSize || z >= mSize) return;
+                let kn = huntCellKind(n.f, x, z); if (!kn) return;
+                if (k === 'stairLo') { let a = huntStairAxis(c.stair); if (d[0] !== -a.dx || d[1] !== -a.dz) return; }   // 只能从开口出去
+                if (k === 'stairHi') {   // 平台往井那一侧：走过去会掉下去，只能从平台边上跳过井
+                    let a = huntStairAxis(c.stair);
+                    if (d[0] === -a.dx && d[1] === -a.dz) { out.push({ f: n.f, x: x, z: z, via: 'leap' }); return; }
+                }
+                let cn = maze[n.f][z][x];
+                if (kn === 'stairLo') { let a = huntStairAxis(cn.stair); if (d[0] !== a.dx || d[1] !== a.dz) return; }  // 只能从开口进
+                if (kn === 'stairHi') {
+                    let a = huntStairAxis(cn.stair);
+                    if (d[0] === a.dx && d[1] === a.dz) { out.push({ f: n.f - 1, x: x, z: z, via: 'well' }); return; }   // 从井那一侧走进去，掉到下层台阶上
+                }
+                out.push({ f: n.f, x: x, z: z, via: 'walk' });
+            });
+            return out;
+        }
+        function huntRouteFind(from, to) {
+            let key = function (n) { return (n.f * 64 + n.z) * 64 + n.x; };
+            if (!huntCellKind(from.f, from.x, from.z) || !huntCellKind(to.f, to.x, to.z)) return null;
+            let prev = {}, q = [{ f: from.f, x: from.x, z: from.z }]; prev[key(from)] = null;
+            for (let h = 0; h < q.length; h++) {
+                let n = q[h];
+                if (n.f === to.f && n.x === to.x && n.z === to.z) {
+                    let path = [], cur = n; while (cur) { path.unshift(cur); cur = prev[key(cur)]; } return path;
+                }
+                huntRouteNbrs(n).forEach(function (m) { let k = key(m); if (!(k in prev)) { prev[k] = n; q.push(m); } });
+            }
+            return null;
+        }
+        // 楼梯格里沿轴向 t 处的点；side 是横向偏移
+        function huntStairPt(s, x, z, t, y, side) {
+            let along = s.edge + s.sign * t;
+            return s.axis === 'x' ? new THREE.Vector3(along, y, z * TILE + (side || 0)) : new THREE.Vector3(x * TILE + (side || 0), y, along);
+        }
+        function huntStepTop(s, t) { let i = Math.floor(t / s.depth); i = Math.max(0, Math.min(s.count - 1, i)); return s.base * TILE + s.rise * (i + 1); }
+        function huntPlatT(s) { return s.count * s.depth + (TILE - s.count * s.depth) / 2; }
+        // 沿台阶面的折线：从 t0 走到 t1（可以往回走），每级台阶的边上竖着上下
+        function huntStairWalk(pts, s, x, z, t0, t1) {
+            let dir = t1 >= t0 ? 1 : -1, t = t0;
+            pts.push(huntStairPt(s, x, z, t, huntStepTop(s, t + dir * 0.01)));
+            while (dir > 0 ? t < t1 - 1e-6 : t > t1 + 1e-6) {
+                let i = Math.floor(t / s.depth + (dir > 0 ? 1e-6 : -1e-6));
+                let nb = dir > 0 ? Math.min(t1, (i + 1) * s.depth) : Math.max(t1, i * s.depth);
+                let y = huntStepTop(s, (t + nb) / 2);
+                // 竖线永远放在矮的那一级上（t 小的一侧），上楼下楼都不会插进台阶
+                pts.push(huntStairPt(s, x, z, nb - 0.05, y));                                                   // 走到这一级的边
+                t = nb;
+                if (dir > 0 ? t < t1 - 1e-6 : t > t1 + 1e-6) pts.push(huntStairPt(s, x, z, t - 0.05, huntStepTop(s, t + dir * 0.01)));   // 竖着到下一级
+            }
+        }
+        function huntSurfY(f, x, z) { return f * TILE + (huntCellKind(f, x, z) === 'table' ? HUNT_TABLE_H : 0); }
+        // 两格交界的中点；toward 'a' 就往 a 那边偏一点点，竖线不会正好压在交界上
+        function huntEdgePt(a, b, y, toward) {
+            let mx = (a.x + b.x) / 2 * TILE, mz = (a.z + b.z) / 2 * TILE, k = toward === 'a' ? -0.05 : 0.05;
+            return new THREE.Vector3(mx + (b.x - a.x) * k, y, mz + (b.z - a.z) * k);
+        }
+        // 节点序列 → 脚踩的面上的折线
+        function huntRoutePoints(path, start) {
+            let pts = [];
+            let platPt = function (n) { let s = maze[n.f][n.z][n.x].stair; return huntStairPt(s, n.x, n.z, huntPlatT(s), n.f * TILE); };
+            let tOn = {};   // 在下层楼梯格里，现在走到了 t 的哪里
+            let n0 = path[0], k0 = huntCellKind(n0.f, n0.x, n0.z);
+            if (k0 === 'stairHi') pts.push(platPt(n0));
+            else if (k0 === 'stairLo') {
+                let s = maze[n0.f][n0.z][n0.x].stair;
+                let t = Math.max(0.1, Math.min(s.count * s.depth - 0.1, s.sign * ((s.axis === 'z' ? start.z : start.x) - s.edge)));
+                pts.push(huntStairPt(s, n0.x, n0.z, t, huntStepTop(s, t))); tOn[0] = t;
+            }
+            else pts.push(new THREE.Vector3(start ? start.x : n0.x * TILE, huntSurfY(n0.f, n0.x, n0.z), start ? start.z : n0.z * TILE));
+            for (let i = 1; i < path.length; i++) {
+                let a = path[i - 1], b = path[i], ka = huntCellKind(a.f, a.x, a.z), kb = huntCellKind(b.f, b.x, b.z);
+                if (b.via === 'up') {                 // 下层楼梯格 → 爬到上层平台
+                    let s = maze[a.f][a.z][a.x].stair;
+                    huntStairWalk(pts, s, a.x, a.z, tOn[i - 1] || 0, s.count * s.depth);
+                    pts.push(platPt(b));
+                } else if (b.via === 'down') {        // 上层平台 → 沿台阶走到底
+                    let s = maze[b.f][b.z][b.x].stair;
+                    pts.push(huntStairPt(s, b.x, b.z, s.count * s.depth + 0.05, a.f * TILE));
+                    huntStairWalk(pts, s, b.x, b.z, s.count * s.depth - 0.05, 0.1); tOn[i] = 0.1;
+                } else if (b.via === 'leap') {        // 从平台边上起跳，跳过楼梯井
+                    let s = maze[a.f][a.z][a.x].stair, y = a.f * TILE;
+                    let take = huntStairPt(s, a.x, a.z, s.count * s.depth + 0.5, y); take.jump = true;
+                    pts.push(take);
+                    pts.push(huntEdgePt(a, b, y, 'b'));
+                    pts.push(new THREE.Vector3(b.x * TILE, huntSurfY(b.f, b.x, b.z), b.z * TILE));
+                } else if (b.via === 'well') {        // 走到井边，竖着掉到台阶上
+                    let s = maze[b.f][b.z][b.x].stair, y = a.f * TILE;
+                    pts.push(huntEdgePt(a, b, y, 'a'));
+                    pts.push(huntStairPt(s, b.x, b.z, 1, y));
+                    pts.push(huntStairPt(s, b.x, b.z, 1, huntStepTop(s, 1))); tOn[i] = 1;
+                } else {                               // 同层相邻
+                    if (ka === 'stairLo') {            // 先沿台阶走回开口那一级
+                        let s = maze[a.f][a.z][a.x].stair;
+                        if ((tOn[i - 1] || 0) > 0.1) huntStairWalk(pts, s, a.x, a.z, tOn[i - 1], 0.1);
+                    }
+                    let ya = ka === 'stairHi' ? a.f * TILE : ka === 'stairLo' ? huntStepTop(maze[a.f][a.z][a.x].stair, 0) : huntSurfY(a.f, a.x, a.z);
+                    let yb = kb === 'stairHi' ? b.f * TILE : kb === 'stairLo' ? huntStepTop(maze[b.f][b.z][b.x].stair, 0) : huntSurfY(b.f, b.x, b.z);
+                    // 高差走不上去（桌子）时，竖线离交界 P_RADIUS+0.5：身子贴不到桌子边，人是在这儿起跳/落地的；
+                    // 上下台阶第一级这种走得上去的就在交界上
+                    let off = Math.abs(ya - yb) > MAX_STEP_UP ? P_RADIUS + 0.5 : 0;
+                    let ux = b.x - a.x, uz = b.z - a.z;   // a→b 方向
+                    if (ka === 'stairHi') {            // 从平台下去：先在平台上走到这一侧（要上桌子就停在起跳的地方）
+                        let q = platPt(a), e = huntEdgePt(a, b, a.f * TILE, 'a'), s = maze[a.f][a.z][a.x].stair;
+                        if (ya <= yb) { e.x -= ux * off; e.z -= uz * off; }
+                        pts.push(s.axis === 'x' ? new THREE.Vector3(q.x, q.y, e.z) : new THREE.Vector3(e.x, q.y, q.z));
+                    }
+                    let ea = huntEdgePt(a, b, ya, 'a'), eb = huntEdgePt(a, b, yb, 'b');
+                    // 从侧面上下平台：交界点放在平台那一段（不在井上面）
+                    let side = function (n) { let s = maze[n.f][n.z][n.x].stair; return s.axis === 'x' ? a.x === b.x : a.z === b.z; };
+                    if (kb === 'stairHi' && side(b)) { let s = maze[b.f][b.z][b.x].stair, q = platPt(b); if (s.axis === 'x') { ea.x = eb.x = q.x; } else { ea.z = eb.z = q.z; } }
+                    if (ka === 'stairHi' && side(a)) { let s = maze[a.f][a.z][a.x].stair, q = platPt(a); if (s.axis === 'x') { ea.x = eb.x = q.x; } else { ea.z = eb.z = q.z; } }
+                    // 在矮的那一侧竖着上下
+                    if (ya <= yb) {
+                        let lo = ea.clone(); lo.x -= ux * off; lo.z -= uz * off;
+                        pts.push(lo); if (yb > ya) { pts.push(new THREE.Vector3(lo.x, yb, lo.z)); if (off) pts.push(new THREE.Vector3(ea.x, yb, ea.z)); }
+                    } else {
+                        let lo = eb.clone(); lo.x += ux * off; lo.z += uz * off;
+                        if (off) pts.push(new THREE.Vector3(eb.x, ya, eb.z));
+                        pts.push(new THREE.Vector3(lo.x, ya, lo.z)); pts.push(lo);
+                    }
+                    if (kb === 'stairHi') pts.push(platPt(b));
+                    else if (kb === 'stairLo') { let s = maze[b.f][b.z][b.x].stair; pts.push(huntStairPt(s, b.x, b.z, 0.1, huntStepTop(s, 0))); tOn[i] = 0.1; }
+                    else pts.push(new THREE.Vector3(b.x * TILE, yb, b.z * TILE));
+                }
+            }
+            return pts;
+        }
+        let huntSignalRoute = { mesh: null, key: '', pts: null, ok: false };
+        function huntRouteDispose(r) {
+            if (r && r.mesh) { scene.remove(r.mesh); r.mesh.geometry.dispose(); r.mesh.material.dispose(); r.mesh = null; }
+        }
+        function huntRouteMesh(pts, color) {
+            let path = new THREE.CurvePath(), len = 0;
+            for (let i = 1; i < pts.length; i++) {
+                let a = pts[i - 1].clone(), b = pts[i].clone(); a.y += HUNT_ROUTE_LIFT; b.y += HUNT_ROUTE_LIFT;
+                if (a.distanceTo(b) < 1e-3) continue;
+                path.add(new THREE.LineCurve3(a, b)); len += a.distanceTo(b);
+            }
+            if (!path.curves.length) return null;
+            let geo = new THREE.TubeGeometry(path, Math.max(8, Math.ceil(len / 2)), 0.45, 6, false);
+            let m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85 }));
+            m.renderOrder = 2;
+            return m;
+        }
+        function huntPlayerNode() {
+            let feet = camera.position.y - 9, f = huntFloorOf(feet);
+            let x = Math.floor((camera.position.x + TILE / 2) / TILE), z = Math.floor((camera.position.z + TILE / 2) / TILE);
+            if (!huntCellKind(f, x, z) && huntCellKind(f + 1, x, z)) f++;
+            return { f: f, x: x, z: z };
+        }
+        function huntRouteBuild(from, to, start) {
+            let path = huntRouteFind(from, to); if (!path) return null;
+            return { path: path, pts: huntRoutePoints(path, start) };
+        }
+        function signalHint(t) {
+            let el = document.getElementById('signal-hint');
+            if (!el) {
+                el = document.createElement('div'); el.id = 'signal-hint';
+                el.style.cssText = 'position:absolute; top:58px; left:50%; transform:translateX(-50%); background:rgba(25,118,210,.85); color:#fff; padding:4px 10px; border-radius:6px; font-size:13px; pointer-events:none; z-index:5;';
+                (document.getElementById('ui-layer') || document.body).appendChild(el);
+            }
+            el.innerText = t; el.style.display = t ? 'block' : 'none';
+        }
+        function signalRouteClear() { huntRouteDispose(huntSignalRoute); huntSignalRoute = { mesh: null, key: '', pts: null, ok: false }; signalHint(''); }
+        // 每帧：玩家换了格子或楼层就从当前位置重算（走过的部分就没了）；诅咒期间藏起来，结束后恢复；找不到路就提示几楼、大致方向
+        function signalRouteTick(force) {
+            let s = gState.signal, it = s && s.mesh;
+            if (!it || groundItems.indexOf(it) < 0) { if (huntSignalRoute.key) signalRouteClear(); return; }
+            let to = { f: Math.floor(it.position.y / TILE), x: Math.floor((it.position.x + TILE / 2) / TILE), z: Math.floor((it.position.z + TILE / 2) / TILE) };
+            let from = huntPlayerNode(), key = [from.f, from.x, from.z, to.f, to.x, to.z].join(',');
+            if (force || key !== huntSignalRoute.key) {
+                huntRouteDispose(huntSignalRoute);
+                let r = huntRouteBuild(from, to, camera.position);
+                huntSignalRoute = { mesh: null, key: key, pts: r ? r.pts : null, ok: !!r };
+                if (r) { huntSignalRoute.mesh = huntRouteMesh(r.pts, 0x1e88e5); if (huntSignalRoute.mesh) scene.add(huntSignalRoute.mesh); }
+            }
+            let cursed = gState.debuff && gState.debuff.type === 1;
+            if (huntSignalRoute.mesh) huntSignalRoute.mesh.visible = !cursed;
+            if (cursed) { signalHint(''); return; }
+            if (huntSignalRoute.ok) { signalHint(to.f !== from.f ? '东西在 ' + (to.f + 1) + ' 楼，跟着蓝线走' : ''); return; }
+            let dx = it.position.x - camera.position.x, dz = it.position.z - camera.position.z;
+            let fw = new THREE.Vector3(); camera.getWorldDirection(fw);
+            let ang = Math.atan2(dx, dz) - Math.atan2(fw.x, fw.z); ang = Math.atan2(Math.sin(ang), Math.cos(ang));
+            let dirTxt = Math.abs(ang) < Math.PI / 4 ? '前面' : Math.abs(ang) > Math.PI * 3 / 4 ? '后面' : ang > 0 ? '左边' : '右边';
+            signalHint('东西在 ' + (to.f + 1) + ' 楼，在你' + dirTxt);
+        }
+
         function tickSignal(dt) {
             let s = gState.signal;
             if (!s.active || s.mesh) return;
@@ -17595,7 +17807,7 @@
             b.position.set(pos.fx * TILE, pos.fl * TILE + 1.5, pos.fz * TILE);
             b.userData = { ...reward, isItem: true, vel: new THREE.Vector3(0, 0, 0), fromSignal: true };
             scene.add(b); groundItems.push(b); s.mesh = b;
-            generateFootprintGuide(pos.fx, pos.fz);
+            signalRouteTick(true);
             if (!actionTarget) bar.style.display = 'none';
         }
 

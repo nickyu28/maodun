@@ -385,6 +385,68 @@ function LOOT_SIM(diff, n, pity, teamSize) {
     return JSON.stringify({ rate: rate, avg: +(sum / n).toFixed(3), anyPct: +(100 * any / n).toFixed(1), max: max, maxAll: maxAll, over: over });
 }
 
+// H10：随机挑 n 对（玩家格子, 物品格子），任意楼层。路线要找得到、终点对、点不在墙/桌子/台阶里，
+// 并且用 huntPhysics 模拟一个人沿着路线走（该跳桌子就跳、该跳井就跳）能走到
+function ROUTE_SIM(n, seed) {
+    function hd(u, v) { return Math.hypot(u.x - v.x, u.z - v.z); }
+    function step(pts, wp, dt) {
+        if (wp >= pts.length) wp = pts.length - 1;
+        let t = pts[wp], feet = camera.position.y - 9, P = camera.position, d = hd(t, P), mx = 0, mz = 0;
+        let reach = function (q) { return q.y <= feet + 4.05 && q.y >= feet - 3.5; };   // 往上 4 以内走得上去，往下一级台阶以内走得下去
+        if (d < 1.2) {
+            let nx = pts[wp + 1];
+            if (nx && hd(nx, t) < 0.3 && reach(nx)) return wp + 1;
+            if (reach(t)) return wp + 1;
+            let k = wp - 1; while (k > 0 && hd(pts[k], t) < 0.3) k--;   // 还没上去/没掉下去：沿来的方向继续走
+            let from = pts[Math.max(0, k)], fx = t.x - from.x, fz = t.z - from.z, fl = Math.hypot(fx, fz);
+            if (fl > 0.01) { mx = fx / fl; mz = fz / fl; }
+            if (t.y > feet && onGround) { pVel.y = 44; onGround = false; }
+        } else {
+            mx = (t.x - P.x) / d; mz = (t.z - P.z) / d;
+            for (let q = wp; q < Math.min(pts.length, wp + 3); q++) if (pts[q].y > feet + 4.05) { if (onGround && hd(pts[q], P) < 7) { pVel.y = 44; onGround = false; } break; }
+        }
+        let jp = pts[wp - 1]; if (jp && jp.jump && onGround && hd(jp, P) < 1.5) { pVel.y = 44; onGround = false; }
+        huntPhysics(dt, mx, mz, 42);
+        return wp;
+    }
+    let rs = seed; let rnd = function () { rs = (rs * 16807) % 2147483647; return rs / 2147483647; };
+    let cells = [];
+    for (let f = 0; f < FLOORS; f++) for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) if (maze[f][z][x] && maze[f][z][x].type === 0) cells.push({ f: f, x: x, z: z });
+    // 地图本身两层之间一座楼梯都没有的（造图的老问题，另外报告），跨过去的这一对不算
+    let link = []; for (let f = 0; f < FLOORS; f++) for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) { let c = maze[f][z][x]; if (c && c.type === 3 && c.stair) link[c.stair.base] = true; }
+    let res = { n: n, found: 0, endOk: 0, ptBad: 0, walked: 0, noStairs: 0, fails: [] }, save = camera.position.clone();
+    for (let k = 0; k < n; k++) {
+        let a = cells[Math.floor(rnd() * cells.length)], b = cells[Math.floor(rnd() * cells.length)];
+        let gap = false; for (let f = Math.min(a.f, b.f); f < Math.max(a.f, b.f); f++) if (!link[f]) gap = true;
+        if (gap) { res.noStairs++; continue; }
+        let start = new THREE.Vector3(a.x * TILE, a.f * TILE + 9, a.z * TILE);
+        let r = huntRouteBuild(a, b, start);
+        if (!r) { if (res.fails.length < 3) res.fails.push('没路 ' + JSON.stringify([a, b])); continue; }
+        res.found++;
+        let last = r.path[r.path.length - 1]; if (last.f === b.f && last.x === b.x && last.z === b.z) res.endOk++;
+        let bad = null;
+        for (let i = 1; i < r.pts.length && !bad; i++) {
+            let p0 = r.pts[i - 1], p1 = r.pts[i], m = Math.max(1, Math.ceil(p0.distanceTo(p1) / 0.5));
+            for (let j = 0; j <= m; j++) {
+                let p = p0.clone().lerp(p1, j / m), feet = p.y + 0.02, top = huntSurfaceAt(p.x, p.z, feet);
+                if (top === Infinity || feet < top - 0.05) { bad = [p.x.toFixed(1), p.y.toFixed(1), p.z.toFixed(1)]; break; }
+            }
+        }
+        if (bad) { res.ptBad++; if (res.fails.length < 3) res.fails.push('点插进去了 ' + bad.join('/')); }
+        camera.position.copy(start); camera.position.y = huntSurfY(a.f, a.x, a.z) + 9; pVel.set(0, 0, 0); onGround = true;
+        let wp = 1, pts = r.pts, T = 0, ok = false, dt = 1 / 30, len = 0;
+        for (let i = 1; i < pts.length; i++) len += pts[i - 1].distanceTo(pts[i]);
+        while (T < len / 42 * 2.5 + 6) {
+            let me = huntPlayerNode(); if (me.f === b.f && me.x === b.x && me.z === b.z) { ok = true; break; }
+            let w2 = step(pts, wp, dt); if (w2 !== wp) { wp = w2; continue; }
+            T += dt;
+        }
+        if (ok) res.walked++; else if (res.fails.length < 3) res.fails.push('走不到 ' + JSON.stringify([a, b]) + ' 停在 ' + JSON.stringify(huntPlayerNode()));
+    }
+    camera.position.copy(save); pVel.set(0, 0, 0);
+    return JSON.stringify(res);
+}
+
 const ACTIVE = `(function(){ let k = chatActiveModeKey(); return k === 'hub' ? null : k; })()`;
 
 async function enterExit(tab, key) {
@@ -925,6 +987,59 @@ async function enterExit(tab, key) {
             if (r !== 0) bad.push('撤离失败腰包还在 ' + r);
             await A.eval(`${HIDE} returnToGarageFromOver(); gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); nav('screen-lobby'); true;`);
             report('H14 腰包自己装东西：容量、展开收起、不能套娃、进图/上交/撤离/扔/卖/整理', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+
+        {
+            // H10：信号接收器的蓝色路线
+            const before = A.errors.length, bad = [], out = [];
+            for (const [m, diff] of ['easy', 'med', 'hard', 'easy', 'med'].entries()) {
+                await A.eval(`${HIDE} gState.mapDifficulty = '${diff}'; ${MODES.hunt.start}; true;`); await W(2500); await A.eval(`${HIDE} true;`);
+                const o = JSON.parse(await A.eval(`(${ROUTE_SIM.toString()})(80, ${m * 7 + 3})`));
+                const N = 80 - o.noStairs;
+                out.push(diff + ' ' + o.found + '/' + o.endOk + '/' + o.walked + (o.noStairs ? '（这张图有两层之间没楼梯，跳过 ' + o.noStairs + ' 次）' : ''));
+                if (o.found !== N || o.endOk !== N || o.ptBad || o.walked !== N || N < 40) bad.push(diff + ' ' + JSON.stringify(o));
+                if (m < 4) { await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000); }
+            }
+            // 用接收器：出东西、有蓝线；换楼层路线跟着变；连续重算 50 次几何体不涨；诅咒藏起来再恢复；没路给提示；捡走清掉
+            let r = JSON.parse(await A.eval(`(function(){
+                let o = {};
+                camera.position.set(TILE, 9, TILE); pVel.set(0, 0, 0); onGround = true;
+                gState.signal = { active: true, timer: 2, mesh: null }; tickSignal(0);
+                let it = gState.signal.mesh;
+                o.made = !!it && groundItems.indexOf(it) >= 0 && huntSignalRoute.ok && !!huntSignalRoute.mesh && huntSignalRoute.mesh.parent === scene;
+                let pts = huntSignalRoute.pts, end = pts && pts[pts.length - 1];
+                o.endNear = !!end && Math.hypot(end.x - it.position.x, end.z - it.position.z) < 0.5 && Math.floor(end.y / TILE) === Math.floor(it.position.y / TILE);
+                // 传送到另一层
+                let f0 = huntPlayerNode().f, other = null;
+                for (let f = 0; f < FLOORS && !other; f++) if (f !== f0) for (let z = 1; z < mSize && !other; z++) for (let x = 1; x < mSize; x++) if (maze[f][z][x].type === 0) { other = { f: f, x: x, z: z }; break; }
+                let k0 = huntSignalRoute.key;
+                camera.position.set(other.x * TILE, other.f * TILE + 9, other.z * TILE); signalRouteTick(false);
+                let p0 = huntSignalRoute.pts && huntSignalRoute.pts[0];
+                o.teleport = huntSignalRoute.key !== k0 && huntSignalRoute.ok && !!p0 && Math.floor((p0.y + 0.1) / TILE) === other.f && Math.hypot(p0.x - camera.position.x, p0.z - camera.position.z) < 1;
+                o.hintOtherFloor = other.f === Math.floor(it.position.y / TILE) || /楼，跟着蓝线走/.test(document.getElementById('signal-hint').innerText);
+                // 50 次重算
+                signalRouteTick(true); let g0 = renderer.info.memory.geometries, c0 = scene.children.length;
+                for (let i = 0; i < 50; i++) signalRouteTick(true);
+                o.geo = [g0, renderer.info.memory.geometries, c0, scene.children.length];
+                // 诅咒
+                gState.debuff.type = 1; signalRouteTick(false); o.cursedHidden = huntSignalRoute.mesh.visible === false;
+                gState.debuff.type = 0; signalRouteTick(false); o.restored = huntSignalRoute.mesh.visible === true;
+                // 找不到路
+                let keep = window.huntRouteFind; window.huntRouteFind = function () { return null; };
+                signalRouteTick(true); o.noRoute = !huntSignalRoute.mesh && /楼，在你(前面|后面|左边|右边)/.test(document.getElementById('signal-hint').innerText);
+                window.huntRouteFind = keep; signalRouteTick(true);
+                // 捡走
+                groundItems.splice(groundItems.indexOf(it), 1); scene.remove(it); signalRouteTick(false);
+                o.cleared = !huntSignalRoute.mesh && !huntSignalRoute.key && document.getElementById('signal-hint').style.display === 'none';
+                return JSON.stringify(o); })()`));
+            if (!r.made || !r.endNear) bad.push('用了没出蓝线 ' + JSON.stringify(r));
+            if (!r.teleport || !r.hintOtherFloor) bad.push('换楼层没更新 ' + JSON.stringify(r));
+            if (r.geo[1] > r.geo[0] || r.geo[3] > r.geo[2]) bad.push('重算 50 次几何体涨了 ' + r.geo.join(','));
+            if (!r.cursedHidden || !r.restored) bad.push('诅咒 ' + JSON.stringify(r));
+            if (!r.noRoute) bad.push('没路时没提示');
+            if (!r.cleared) bad.push('捡走后没清');
+            await A.eval(`${HIDE} ${MODES.hunt.exit}; gState.mapDifficulty = 'easy'; true;`); await W(1000);
+            report('H10 信号接收器蓝线：5 张图各 80 次能找到能走到、点不进墙、换层更新、重算不涨、诅咒藏起来', bad.length === 0 && A.errors.length === before, bad.length ? bad.join(' / ') + A.errors.slice(before, before + 2).join(' / ') : out.join(' | '));
         }
 
         // 3. 伪造消息（附录）
