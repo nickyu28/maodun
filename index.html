@@ -1523,7 +1523,7 @@
         // 地址后面带 ?v=版本号，发新版时浏览器一定拿新文件，不会一半新一半旧。
         // 先把所有文件都下载下来，再在同一时刻一个接一个执行：中间不留空档，
         // 不会出现前面的文件收到消息/定时器触发时，后面文件里的函数还没定义。有一个没下载下来就一个都不执行。
-        const GAME_FILES = ['js/game.js', 'js/10-race.js', 'js/11-jail.js', 'js/12-dodge.js', 'js/13-escape.js', 'js/14-park.js', 'js/15-cake.js', 'js/16-modes.js', 'js/17-hub.js'];
+        const GAME_FILES = ['js/01-core.js', 'js/02-lobby.js', 'js/03-world.js', 'js/04-blaze-2v2.js', 'js/05-shop.js', 'js/06-blaze.js', 'js/07-blaze-net.js', 'js/08-night.js', 'js/09-hunt.js', 'js/10-race.js', 'js/11-jail.js', 'js/12-dodge.js', 'js/13-escape.js', 'js/14-park.js', 'js/15-cake.js', 'js/16-modes.js', 'js/17-hub.js'];
         // 哪个文件没下载下来，就盖一层提示，给个重试按钮
         function gameBootFail() {
             if (document.getElementById('boot-fail')) return;
