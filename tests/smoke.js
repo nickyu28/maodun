@@ -412,13 +412,9 @@ function ROUTE_SIM(n, seed) {
     let rs = seed; let rnd = function () { rs = (rs * 16807) % 2147483647; return rs / 2147483647; };
     let cells = [];
     for (let f = 0; f < FLOORS; f++) for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) if (maze[f][z][x] && maze[f][z][x].type === 0) cells.push({ f: f, x: x, z: z });
-    // 地图本身两层之间一座楼梯都没有的（造图的老问题，另外报告），跨过去的这一对不算
-    let link = []; for (let f = 0; f < FLOORS; f++) for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) { let c = maze[f][z][x]; if (c && c.type === 3 && c.stair) link[c.stair.base] = true; }
-    let res = { n: n, found: 0, endOk: 0, ptBad: 0, walked: 0, noStairs: 0, fails: [] }, save = camera.position.clone();
+    let res = { n: n, found: 0, endOk: 0, ptBad: 0, walked: 0, fails: [] }, save = camera.position.clone();
     for (let k = 0; k < n; k++) {
         let a = cells[Math.floor(rnd() * cells.length)], b = cells[Math.floor(rnd() * cells.length)];
-        let gap = false; for (let f = Math.min(a.f, b.f); f < Math.max(a.f, b.f); f++) if (!link[f]) gap = true;
-        if (gap) { res.noStairs++; continue; }
         let start = new THREE.Vector3(a.x * TILE, a.f * TILE + 9, a.z * TILE);
         let r = huntRouteBuild(a, b, start);
         if (!r) { if (res.fails.length < 3) res.fails.push('没路 ' + JSON.stringify([a, b])); continue; }
@@ -990,14 +986,46 @@ async function enterExit(tab, key) {
         }
 
         {
+            // H15：三种难度各 300 张图，两对楼层之间都有楼梯，所有箱子从出生点走得到（huntRouteFind），每层都有走得到的空地
+            const before = A.errors.length;
+            await A.eval(`${HIDE} ${MODES.hunt.start}; true;`); await W(2500); await A.eval(`${HIDE} true;`);
+            const r = JSON.parse(await A.eval(`(function(){
+                let out = {}, keep = window.huntBuildMazeOnce, builds = 0, seed0 = gameSeed, diff0 = gState.mapDifficulty;
+                window.huntBuildMazeOnce = function () { builds++; return keep(); };
+                ['easy', 'med', 'hard'].forEach(function (d) {
+                    gState.mapDifficulty = d; let o = { n: 0, noStair: 0, chestBad: 0, floorBad: 0, rebuilt: 0 };
+                    for (let s = 1; s <= 300; s++) {
+                        gameSeed = s * 7919 % 233280 || 1; builds = 0; buildProceduralMaze(); o.n++; if (builds > 1) o.rebuilt++;
+                        let link = []; for (let f = 0; f < FLOORS; f++) for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) { let c = maze[f][z][x]; if (c && c.type === 3 && c.stair) link[c.stair.base] = true; }
+                        if (!link[0] || !link[1]) o.noStair++;
+                        if (!chests.every(function (c) { let p = c.position; return !!huntRouteFind({ f: 0, x: 1, z: 1 }, { f: Math.floor((p.y - 0.5) / TILE), x: Math.floor((p.x + TILE / 2) / TILE), z: Math.floor((p.z + TILE / 2) / TILE) }); })) o.chestBad++;
+                        let rr = huntReachFrom({ f: 0, x: 1, z: 1 });
+                        for (let f = 0; f < FLOORS; f++) if (!rr.list.some(function (q) { return q.f === f && huntCellKind(q.f, q.x, q.z) === 'floor'; })) { o.floorBad++; break; }
+                    }
+                    out[d] = o;
+                });
+                window.huntBuildMazeOnce = keep; gState.mapDifficulty = diff0; gameSeed = seed0;
+                // 同一个种子造两次一模一样（各端一致）
+                let sig = function () { let h = 0; for (let f = 0; f < FLOORS; f++) for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) h = (h * 31 + maze[f][z][x].type) | 0; chests.forEach(function (c) { h = (h * 31 + Math.round(c.position.x + c.position.z * 3 + c.position.y * 7)) | 0; }); return h; };
+                gState.mapDifficulty = 'easy'; gameSeed = 23 * 7919 % 233280; buildProceduralMaze(); let h1 = sig(); gameSeed = 23 * 7919 % 233280; buildProceduralMaze(); out.same = h1 === sig();
+                gState.mapDifficulty = diff0;
+                return JSON.stringify(out); })()`));
+            await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
+            const bad = [];
+            ['easy', 'med', 'hard'].forEach((d) => { const o = r[d]; if (o.n !== 300 || o.noStair || o.chestBad || o.floorBad) bad.push(d + ' ' + JSON.stringify(o)); });
+            if (!r.same) bad.push('同一个种子两次造出来不一样');
+            report('H15 每两层之间都有楼梯、箱子都走得到（各 300 张图）', bad.length === 0 && A.errors.length === before,
+                bad.length ? bad.join(' / ') + A.errors.slice(before, before + 2).join(' / ') : ['easy', 'med', 'hard'].map((d) => d + ' 重造 ' + r[d].rebuilt + ' 张').join(' | '));
+        }
+
+        {
             // H10：信号接收器的蓝色路线
             const before = A.errors.length, bad = [], out = [];
             for (const [m, diff] of ['easy', 'med', 'hard', 'easy', 'med'].entries()) {
                 await A.eval(`${HIDE} gState.mapDifficulty = '${diff}'; ${MODES.hunt.start}; true;`); await W(2500); await A.eval(`${HIDE} true;`);
                 const o = JSON.parse(await A.eval(`(${ROUTE_SIM.toString()})(80, ${m * 7 + 3})`));
-                const N = 80 - o.noStairs;
-                out.push(diff + ' ' + o.found + '/' + o.endOk + '/' + o.walked + (o.noStairs ? '（这张图有两层之间没楼梯，跳过 ' + o.noStairs + ' 次）' : ''));
-                if (o.found !== N || o.endOk !== N || o.ptBad || o.walked !== N || N < 40) bad.push(diff + ' ' + JSON.stringify(o));
+                out.push(diff + ' ' + o.found + '/' + o.endOk + '/' + o.walked);
+                if (o.found !== 80 || o.endOk !== 80 || o.ptBad || o.walked !== 80) bad.push(diff + ' ' + JSON.stringify(o));
                 if (m < 4) { await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000); }
             }
             // 用接收器：出东西、有蓝线；换楼层路线跟着变；连续重算 50 次几何体不涨；诅咒藏起来再恢复；没路给提示；捡走清掉

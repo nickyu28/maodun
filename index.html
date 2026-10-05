@@ -1722,7 +1722,8 @@
         // 新旧版本的页面就不会进到同一个房间里（各算各的房间）。
         // v3：密室前面插了 8 个入门关，ESC_START 里的关卡号跟旧版对不上了
         // v4：寻宝队箱子、保险柜、信号接收器的东西改成造图时按种子定好（H13），同一个 START_MAP 新旧版本开出来的不一样
-        const NET_PROTO = 4;
+        // v5：寻宝队造图保证每两层之间有楼梯、坏图换种子重造（H15），少数种子新旧版本造出来的图不一样
+        const NET_PROTO = 5;
         const NET_PREFIX = 'maodun-v' + NET_PROTO + '-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
         // 这一整套匹配等待（matchPool/matchLeader/night-wait 那个浮层）早就写好了，
@@ -4995,7 +4996,52 @@
             gState.machines = []; gState.chairs = []; gState.doors = []; gState.pallets = [];
             chests = []; groundItems = []; entities = []; maze = []; walkableMeshes = [];
         }
+        // H15：造完图验证从出生点能走到每个箱子、每层都有能走到的空格；不过就按固定规则换种子重造
+        // （新种子只由原种子和第几次决定，各端一样）。只有坏图才会重造，好图跟以前一模一样。
+        const HUNT_REBUILD_MAX = 20;
         function buildProceduralMaze() {
+            let seed0 = gameSeed;
+            for (let attempt = 0; ; attempt++) {
+                huntBuildMazeOnce();
+                if (huntMapReachable() || attempt >= HUNT_REBUILD_MAX) break;
+                // 合并之前台阶、桌子这些小 mesh 还在场景里，清图清不到，先拿掉
+                walkableMeshes.forEach(function (m) { scene.remove(m); });
+                gameSeed = (seed0 + 7919 * (attempt + 1)) % 233280 || 1;
+            }
+            huntAssignLoot(chests, seededRandom, Math.max(1, (gState.team || []).length));
+            gState.signalN = 0;
+            huntMergeStatic();
+            huntTaskNew();
+            camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
+            // 出生点在角落的安全屋里，原来一律面朝 -Z——那边正好是地图边墙，开局第一眼
+            // 就是贴脸一整面青色的墙，得自己转一圈才找得到路。四个方向各打一条射线，
+            // 朝最空旷的那边站。
+            let best = 0, bestD = -1, rc = new THREE.Raycaster();
+            [0, -Math.PI / 2, Math.PI, Math.PI / 2].forEach(function (yaw) {
+                let dir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+                rc.set(camera.position, dir);
+                let hit = rc.intersectObjects(huntMerged, false)[0];
+                let d = hit ? hit.distance : Infinity;
+                if (d > bestD + 0.01) { bestD = d; best = yaw; }
+            });
+            camera.rotation.set(0, best, 0);
+        }
+        // 从出生点按真实走法（huntRouteNbrs，跟信号接收器的路线一样）能走到的格子
+        function huntReachFrom(from) {
+            let key = function (n) { return (n.f * 64 + n.z) * 64 + n.x; }, seen = {}, q = [from];
+            seen[key(from)] = true;
+            for (let h = 0; h < q.length; h++) huntRouteNbrs(q[h]).forEach(function (m) { let k = key(m); if (!seen[k]) { seen[k] = true; q.push(m); } });
+            return { has: function (f, x, z) { return !!seen[key({ f: f, x: x, z: z })]; }, list: q };
+        }
+        function huntMapReachable() {
+            let r = huntReachFrom({ f: 0, x: 1, z: 1 });
+            for (let f = 0; f < FLOORS; f++) if (!r.list.some(function (n) { return n.f === f && huntCellKind(n.f, n.x, n.z) === 'floor'; })) return false;
+            return chests.every(function (c) {
+                let p = c.position, to = { f: Math.floor((p.y - 0.5) / TILE), x: Math.floor((p.x + TILE / 2) / TILE), z: Math.floor((p.z + TILE / 2) / TILE) };
+                return !!huntRouteFind({ f: 0, x: 1, z: 1 }, to);
+            });
+        }
+        function huntBuildMazeOnce() {
             mSize = HUNT_SIZE;
             clearFootprints3D();
             huntDropMerged();
@@ -5053,7 +5099,7 @@
 
                                 let tableM = new THREE.Mesh(new THREE.BoxGeometry(TILE, 8, TILE), new THREE.MeshLambertMaterial({ map: tableTex }));
                                 tableM.position.set(px, py + 4, pz); scene.add(tableM); walkableMeshes.push(tableM);
-                                maze[fl][z][x].type = 2;
+                                maze[fl][z][x].type = 2; maze[fl][z][x].table = tableM;
                             }
                         }
                     }
@@ -5061,20 +5107,49 @@
             }
 
             const STAIRS_PER_FLOOR = 2, STAIR_STEPS = 8, STAIR_DEPTH = 2, STAIR_RISE = TILE / STAIR_STEPS;
+            let stairOpen = function (fl, st) {
+                for (let d of [{ dx: 0, dz: -1 }, { dx: 0, dz: 1 }, { dx: -1, dz: 0 }, { dx: 1, dz: 0 }]) {
+                    let nz = st.z + d.dz, nx = st.x + d.dx;
+                    if (maze[fl][nz] && maze[fl][nz][nx] && maze[fl][nz][nx].type === 0) return d;
+                }
+                return null;
+            };
+            let dropTable = function (c) {   // H15：放宽条件时把桌子改回地板
+                if (!c || c.type !== 2) return;
+                if (c.table) { scene.remove(c.table); let wi = walkableMeshes.indexOf(c.table); if (wi > -1) walkableMeshes.splice(wi, 1); c.table = null; }
+                c.type = 0;
+            };
             for (let fl = 0; fl < FLOORS - 1; fl++) {
                 let cand = allLeaves.filter(function (l) {
                     return l.f === fl && maze[fl][l.z][l.x].type === 0 && maze[fl + 1][l.z][l.x].type === 0 && !(fl === 0 && l.x <= 2 && l.z <= 2);
                 });
-                for (let s = 0; s < STAIRS_PER_FLOOR && cand.length > 0; s++) {
-                    let st = cand.splice(Math.floor(seededRandom() * cand.length), 1)[0];
+                let placed = 0;
+                for (let s = 0, fb = false; (s < STAIRS_PER_FLOOR && cand.length > 0) || (placed === 0 && !fb); s++) {
+                    let st;
+                    if (cand.length > 0 && s < STAIRS_PER_FLOOR) st = cand.splice(Math.floor(seededRandom() * cand.length), 1)[0];
+                    else {
+                        // H15：死胡同里一座都没放上。按固定顺序扫全层：先找上下都是空地、下层有口的格子；
+                        // 还没有就允许上下是桌子（把桌子拿掉）。离出生点那 3×3 和金店那一格不放。
+                        let pick = function (allowTable) {
+                            let list = [];
+                            for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
+                                if (fl === 0 && ((x <= 2 && z <= 2) || (x === goldShopLoc.x && z === goldShopLoc.z))) continue;
+                                let lo = maze[fl][z][x], up = maze[fl + 1][z][x], ok = function (c) { return c.type === 0 || (allowTable && c.type === 2); };
+                                if (ok(lo) && ok(up) && stairOpen(fl, { x: x, z: z })) list.push({ x: x, z: z });
+                            }
+                            return list;
+                        };
+                        let list = pick(false); if (!list.length) list = pick(true);
+                        if (!list.length) break;
+                        st = list[Math.floor(seededRandom() * list.length)];
+                        dropTable(maze[fl][st.z][st.x]); dropTable(maze[fl + 1][st.z][st.x]);
+                        fb = true;   // 补一座就够了
+                    }
                     if (maze[fl][st.z][st.x].type !== 0 || maze[fl + 1][st.z][st.x].type !== 0) continue;
 
-                    let open = null;
-                    for (let d of [{ dx: 0, dz: -1 }, { dx: 0, dz: 1 }, { dx: -1, dz: 0 }, { dx: 1, dz: 0 }]) {
-                        let nz = st.z + d.dz, nx = st.x + d.dx;
-                        if (maze[fl][nz] && maze[fl][nz][nx] && maze[fl][nz][nx].type === 0) { open = d; break; }
-                    }
+                    let open = stairOpen(fl, st);
                     if (!open) continue;
+                    placed++;
 
                     let ax = -open.dx, az = -open.dz;
                     let axis = az !== 0 ? 'z' : 'x', sign = az !== 0 ? az : ax;
@@ -5274,23 +5349,6 @@
                 }
             }
 
-            huntAssignLoot(chests, seededRandom, Math.max(1, (gState.team || []).length));
-            gState.signalN = 0;
-            huntMergeStatic();
-            huntTaskNew();
-            camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
-            // 出生点在角落的安全屋里，原来一律面朝 -Z——那边正好是地图边墙，开局第一眼
-            // 就是贴脸一整面青色的墙，得自己转一圈才找得到路。四个方向各打一条射线，
-            // 朝最空旷的那边站。
-            let best = 0, bestD = -1, rc = new THREE.Raycaster();
-            [0, -Math.PI / 2, Math.PI, Math.PI / 2].forEach(function (yaw) {
-                let dir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-                rc.set(camera.position, dir);
-                let hit = rc.intersectObjects(huntMerged, false)[0];
-                let d = hit ? hit.distance : Infinity;
-                if (d > bestD + 0.01) { bestD = d; best = yaw; }
-            });
-            camera.rotation.set(0, best, 0);
         }
 
         // 反馈「游戏有点卡」：寻宝图每一格墙/地板/台阶都是单独一个 mesh + 单独一个材质，
@@ -6144,9 +6202,14 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         // 更新公告：只写玩家关心的，一条一句话，按时间合并成几段（原来六十多条，太长没人看）
         // B4：版本号。每次发版手动加一（同一天多次发版就把最后的 -N 加一）。B5 拆文件后，脚本地址也带这个版本号。
-        const GAME_VERSION = '2026.10.05-2';
+        const GAME_VERSION = '2026.10.05-3';
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
+            {
+                id: '2026-10-05-v3', date: '10 月 5 日', title: '寻宝队地图', items: [
+                    '寻宝队每两层之间都一定有楼梯了，不会再有上不去的楼层'
+                ]
+            },
             {
                 id: '2026-10-05-v2', date: '10 月 5 日', title: '每日效果和寻宝队', items: [
                     '游戏数据清了一次，大家从头开始',
