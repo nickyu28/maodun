@@ -4686,7 +4686,8 @@
         const CHANGELOG = [
             {
                 id: '2026-10-05-v3', date: '10 月 5 日', title: '寻宝队地图', items: [
-                    '寻宝队每两层之间都一定有楼梯了，不会再有上不去的楼层'
+                    '寻宝队每两层之间都一定有楼梯了，不会再有上不去的楼层',
+                    '信号接收器的蓝线在楼梯口旁边有桌子的地方不会再穿进桌子了'
                 ]
             },
             {
@@ -16227,8 +16228,8 @@
                     let yb = huntSurfY(b.f, b.x, b.z), e = huntEdgePt(a, b, y, yb > y ? 'a' : 'b');
                     pts.push(e); if (yb > y) pts.push(new THREE.Vector3(e.x, yb, e.z));
                     pts.push(new THREE.Vector3(b.x * TILE, yb, b.z * TILE));
-                } else if (b.via === 'well') {        // 走到井边，竖着掉到台阶上
-                    let s = maze[b.f][b.z][b.x].stair, y = a.f * TILE;
+                } else if (b.via === 'well') {        // 走到井边，竖着掉到台阶上（从桌子上走过去就是桌面的高度）
+                    let s = maze[b.f][b.z][b.x].stair, y = huntSurfY(a.f, a.x, a.z);
                     pts.push(huntEdgePt(a, b, y, 'a'));
                     pts.push(huntStairPt(s, b.x, b.z, 1, y));
                     pts.push(huntStairPt(s, b.x, b.z, 1, huntStepTop(s, 1))); tOn[i] = 1;

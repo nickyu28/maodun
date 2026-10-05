@@ -1050,7 +1050,7 @@ async function enterExit(tab, key) {
                 if (o.found !== 80 || o.endOk !== 80 || o.ptBad || o.walked !== 80) bad.push(diff + ' ' + JSON.stringify(o));
                 if (m < 4) { await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000); }
             }
-            // 从平台跳过楼梯井、正好落到桌子上：路线不斜着穿进桌子（换种子找 30 处）
+            // 楼梯井旁边是桌子（换种子找 30 处）：路线不斜着穿进桌子
             const lp = JSON.parse(await A.eval(`(function(){ let o = { cases: 0, bad: 0 }, seed0 = gameSeed, d0 = gState.mapDifficulty; gState.mapDifficulty = 'easy';
                 for (let s = 1; s <= 400 && o.cases < 30; s++) { gameSeed = s * 104729 % 233280 || 1; buildProceduralMaze();
                     for (let f = 1; f < FLOORS; f++) for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
@@ -1058,13 +1058,17 @@ async function enterExit(tab, key) {
                         let st = maze[f][z][x].stair, ax = huntStairAxis(st), bx = x - ax.dx, bz = z - ax.dz;
                         if (huntCellKind(f, bx, bz) !== 'table') continue;
                         o.cases++;
-                        let pts = huntRoutePoints([{ f: f, x: x, z: z }, { f: f, x: bx, z: bz, via: 'leap' }], huntStairPt(st, x, z, huntPlatT(st), f * TILE)), hit = false;
+                        // 两个方向都查：从平台跳过井落到桌子上；从桌子上走进井里掉到台阶上
+                        let routes = [huntRoutePoints([{ f: f, x: x, z: z }, { f: f, x: bx, z: bz, via: 'leap' }], huntStairPt(st, x, z, huntPlatT(st), f * TILE))];
+                        let w = huntRouteNbrs({ f: f, x: bx, z: bz }).filter(function (m) { return m.via === 'well' && m.x === x && m.z === z; })[0];
+                        if (w) { o.well = (o.well || 0) + 1; routes.push(huntRoutePoints([{ f: f, x: bx, z: bz }, w], new THREE.Vector3(bx * TILE, huntSurfY(f, bx, bz), bz * TILE))); }
+                        routes.forEach(function (pts) { let hit = false;
                         for (let i = 1; i < pts.length && !hit; i++) { let m = Math.max(1, Math.ceil(pts[i - 1].distanceTo(pts[i]) / 0.5));
                             for (let j = 0; j <= m; j++) { let p = pts[i - 1].clone().lerp(pts[i], j / m), top = huntSurfaceAt(p.x, p.z, p.y + 0.02); if (top === Infinity || p.y + 0.02 < top - 0.05) { hit = true; break; } } }
-                        if (hit) o.bad++;
+                        if (hit) o.bad++; });
                     } }
                 gameSeed = seed0; gState.mapDifficulty = d0; return JSON.stringify(o); })()`));
-            if (lp.cases < 10 || lp.bad) bad.push('跳井落到桌子 ' + JSON.stringify(lp));
+            if (lp.cases < 10 || !lp.well || lp.bad) bad.push('楼梯井旁边是桌子 ' + JSON.stringify(lp));
             await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
             await A.eval(`${HIDE} ${MODES.hunt.start}; true;`); await W(2500); await A.eval(`${HIDE} true;`);
             // 用接收器：出东西、有蓝线；换楼层路线跟着变；连续重算 50 次几何体不涨；诅咒藏起来再恢复；没路给提示；捡走清掉
