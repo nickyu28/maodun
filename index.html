@@ -1721,7 +1721,8 @@
         // A9：PeerJS 房间 id 带协议版本号。联机消息的格式或含义变了就把它加一，
         // 新旧版本的页面就不会进到同一个房间里（各算各的房间）。
         // v3：密室前面插了 8 个入门关，ESC_START 里的关卡号跟旧版对不上了
-        const NET_PROTO = 3;
+        // v4：寻宝队箱子、保险柜、信号接收器的东西改成造图时按种子定好（H13），同一个 START_MAP 新旧版本开出来的不一样
+        const NET_PROTO = 4;
         const NET_PREFIX = 'maodun-v' + NET_PROTO + '-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
         // 这一整套匹配等待（matchPool/matchLeader/night-wait 那个浮层）早就写好了，
@@ -6143,7 +6144,7 @@
         // 云端任务也会往这加一条，这样玩家不用来问我改了什么，打开游戏自己就能看见。
         // 更新公告：只写玩家关心的，一条一句话，按时间合并成几段（原来六十多条，太长没人看）
         // B4：版本号。每次发版手动加一（同一天多次发版就把最后的 -N 加一）。B5 拆文件后，脚本地址也带这个版本号。
-        const GAME_VERSION = '2026.10.05-1';
+        const GAME_VERSION = '2026.10.05-2';
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
