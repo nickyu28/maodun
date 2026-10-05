@@ -551,11 +551,6 @@ async function enterExit(tab, key) {
             await A.eval(`${HIDE} gState.money = 99999999; for (let i = 0; i < 200; i++) if (!gState.garage[i]) gState.garage[i] = { n: '石头', v: 1, w: 1 }; buy('鱼叉', 25000); true;`);
             const m3 = await A.eval(MODAL);
             if (m3 !== '仓库满了') bad.push('仓库满了没提示 ' + m3);
-            // 腰包拿下来、扩展格的东西放不下
-            await A.eval(`${HIDE} gState.inv = [S('腰包'), S('鱼叉'), S('鱼叉'), S('鱼叉'), S('鱼叉'), S('鱼叉'), S('医疗包'), S('医疗包'), null]; gState.garage[199] = null; true;`);
-            const m4 = await A.eval(`garageDropProblem('inv', 0, 'garage', 199)`);
-            if (!/腰包/.test(m4)) bad.push('腰包拿下来没拦住 ' + m4);
-            await A.eval(`${HIDE} true;`);
             report('H2 仓库拖放和购买提示', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
         }
         {
@@ -862,6 +857,74 @@ async function enterExit(tab, key) {
             await A.eval(`${HIDE} ${MODES.hunt.exit}; gState.mapDifficulty = 'easy'; true;`); await W(1500); await A.eval(`${HIDE} true;`);
             if (real.noLoot || real.big > 4 || !real.n) bad.push('真地图 ' + JSON.stringify(real));
             report('H13 大金单箱概率、每张图最多 4 个（各 2 万张图）', bad.length === 0, bad.length ? bad.join(' / ') : out.join(' | '));
+        }
+
+        {
+            // H14：腰包自己装东西
+            const before = A.errors.length, bad = [];
+            const P = `(function(){ let p = S('腰包'); p.bag = [null, null, null]; return p; })()`;
+            // 容量：两个腰包能装 6 + 2×3 − 2 = 10 件
+            let r = await A.eval(`(function(){ gState.inv = [${P}, ${P}, null, null, null, null]; let n = 0; while (n < 20) { let sl = carryFreeSlot(L('杯' + n)); if (!sl) break; sl[0][sl[1]] = L('杯' + n); n++; }
+                return n + ' ' + invWeight(); })()`);
+            // 重量：两个腰包各 4 + 10 件各 1
+            if (r !== '10 ' + (2 * 4 + 10)) bad.push('两个腰包能装/重量 ' + r);
+            // 老存档：第 7~9 格的东西挪进腰包
+            r = await A.eval(`(function(){ gState.inv = [${P}, S('鱼叉'), null, null, null, null, S('医疗包'), null, S('医疗包')]; expandInventory();
+                return gState.inv.length + ' ' + pouchCount(gState.inv[0]); })()`);
+            if (r !== '6 2') bad.push('老存档迁移 ' + r);
+            // 仓库里：点一下展开、再点收起、点别处收起；腰包拖不进腰包；宝物拖不进腰包；工具能拖进去
+            await A.eval(GARAGE_SETUP(`[${P}, null, null, null, null, null]`, `[${P}, S('鱼叉'), L('金杯')]`, 0));
+            await mouseDrag(A, INV_SLOT(0), null, 2);
+            const rowShown = () => A.eval(`(function(){ let r = document.getElementById('garage-pouch-row'); return !!r && r.style.display !== 'none' && r.querySelectorAll('.slot').length === 3; })()`);
+            if (!(await rowShown())) bad.push('点一下没展开');
+            await mouseDrag(A, GAR_SLOT(1), '#garage-pouch-row .slot:nth-child(2)');
+            if ((await A.eval(`pouchCount(gState.inv[0]) + ' ' + (gState.inv[0].bag[0] && gState.inv[0].bag[0].n)`)) !== '1 鱼叉') bad.push('工具拖不进腰包 ' + (await A.eval(MODAL)));
+            await A.eval(`${HIDE} true;`);
+            const gCup = await A.eval(`gState.garage.findIndex(function (q) { return q && q.n === '金杯'; })`);
+            await mouseDrag(A, GAR_SLOT(gCup), '#garage-pouch-row .slot:nth-child(3)');
+            const m1 = await A.eval(`${MODAL} + ' ' + document.getElementById('sys-modal-text').innerText`);
+            if (!/宝物/.test(m1)) bad.push('宝物进腰包没拦住 ' + m1);
+            await A.eval(`${HIDE} true;`);
+            const gP = await A.eval(`gState.garage.findIndex(function (q) { return isPouch(q); })`);
+            await mouseDrag(A, GAR_SLOT(gP), '#garage-pouch-row .slot:nth-child(4)');
+            const m2 = await A.eval(`${MODAL} + ' ' + document.getElementById('sys-modal-text').innerText`);
+            if (!/腰包不能放进腰包/.test(m2)) bad.push('腰包进腰包没拦住 ' + m2);
+            await A.eval(`${HIDE} true;`);
+            await mouseDrag(A, INV_SLOT(0), null, 2);
+            if (await rowShown()) bad.push('再点一下没收起');
+            await mouseDrag(A, INV_SLOT(0), null, 2);
+            await A.eval(`document.querySelector('#screen-garage h1').click(); true;`); await W(200);
+            if (await rowShown()) bad.push('点别处没收起');
+            // 卖腰包：不空不让卖
+            r = await A.eval(`(function(){ gState.garage[0] = gState.inv[0]; gState.inv[0] = null; gState.selectedContainer = 'garage'; gState.selectedSlot = 0; garageSellSelected(); return ${MODAL} + ' ' + isPouch(gState.garage[0]); })()`);
+            if (r !== '卖不了 true') bad.push('不空的腰包能卖 ' + r);
+            await A.eval(`${HIDE} true;`);
+            // 一键整理不把东西移进移出腰包
+            r = await A.eval(`(function(){ let p = ${P}; p.bag[1] = S('医疗包'); gState.inv = [null, p, null, S('鱼叉'), null, null]; tidyAll(); return isPouch(gState.inv[0]) + ' ' + pouchCount(gState.inv[0]) + ' ' + (gState.inv[0].bag[1] && gState.inv[0].bag[1].n) + ' ' + gState.inv.filter(function (q) { return q; }).length; })()`);
+            if (r !== 'true 1 医疗包 2') bad.push('一键整理 ' + r);
+            // 进图：腰包里的宝物挪回仓库
+            await A.eval(`(function(){ let p = gState.inv[0]; p.bag[2] = L('宝杯'); gState.garage = Array(200).fill(null); return true; })()`);
+            await A.eval(`${HIDE} requestEnterMap(); true;`); await W(2500); await A.eval(`${HIDE} true;`);
+            r = await A.eval(`(gState.inv[0].bag[2] === null) + ' ' + gState.garage.some(function (q) { return q && q.n === '宝杯'; })`);
+            if (r !== 'true true') bad.push('进图腰包宝物没挪回仓库 ' + r);
+            // 上交：腰包里的宝物一起上交
+            r = await A.eval(`(function(){ gState.inv[0].bag[2] = L('金杯'); camera.position.set(TILE, 9, TILE); let n0 = gState.submittedItems.length; clickSubmit(); return (gState.submittedItems.length - n0) + ' ' + (gState.inv[0].bag[2] === null) + ' ' + (gState.inv[0].bag[1] && gState.inv[0].bag[1].n); })()`);
+            if (r !== '1 true 医疗包') bad.push('上交 ' + r);
+            // 扔腰包、捡回来东西还在
+            r = await A.eval(`(function(){ selectSlot(0); executeThrow(0); let g = groundItems[groundItems.length - 1]; let back = huntItemFromGround(g.userData); return isPouch(back) + ' ' + pouchCount(back) + ' ' + (gState.inv[0] === null); })()`);
+            if (r !== 'true 1 true') bad.push('扔了再捡 ' + r);
+            // 撤离成功：腰包里的宝物进仓库，工具留在腰包里
+            r = await A.eval(`(function(){ let p = ${P}; p.bag[0] = S('鱼叉'); p.bag[1] = L('银杯'); gState.inv[0] = p; gState.garage = Array(200).fill(null); completeExtraction('撤离成功');
+                return (gState.inv[0].bag[0] && gState.inv[0].bag[0].n) + ' ' + (gState.inv[0].bag[1] === null) + ' ' + gState.garage.some(function (q) { return q && q.n === '银杯'; }); })()`);
+            if (r !== '鱼叉 true true') bad.push('撤离成功 ' + r);
+            await A.eval(`${HIDE} returnToGarageFromOver(); true;`);
+            // 撤离失败：腰包和里面的东西一起丢
+            await A.eval(`${HIDE} requestEnterMap(); true;`); await W(2500); await A.eval(`${HIDE} true;`);
+            await A.eval(`finishGame(false, '测试'); true;`); await W(300);
+            r = await A.eval(`gState.inv.filter(function (q) { return q; }).length`);
+            if (r !== 0) bad.push('撤离失败腰包还在 ' + r);
+            await A.eval(`${HIDE} returnToGarageFromOver(); gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); nav('screen-lobby'); true;`);
+            report('H14 腰包自己装东西：容量、展开收起、不能套娃、进图/上交/撤离/扔/卖/整理', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
         }
 
         // 3. 伪造消息（附录）

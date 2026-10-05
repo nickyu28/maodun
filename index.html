@@ -2962,6 +2962,8 @@
                 kTxt('<b>F / 左键</b> 开箱子、捡东西、打怪　<b>右键</b> 用手上的东西', '<b>互动</b> 开箱子、捡东西、打怪　<b>道具</b> 用手上的东西'),
                 kTxt('<b>1 2 3</b> 换手上的东西　<b>Q</b> 扔　<b>E</b> 背包　<b>M</b> 地图', '点下面的格子换手上的东西，<b>背包</b> 看全部'),
                 kTxt('<b>Shift</b> 跑　<b>空格</b> 跳', '<b>跑</b> <b>跳</b> 在右下角'),
+                '每个腰包自带 3 格。在背包或仓库里点一下腰包打开，东西拖进拖出；腰包不能放进腰包。',
+                kTxt('手上拿着腰包时按 <b>1 2 3</b> 把里面的东西拿到手上。', '腰包里的东西要拖出来才能用。'),
                 '绿色猫盾能回血，黄色猫盾能翻滚躲开攻击。'
             ]; } },
             night: { title: '惊魂夜', lines: function () { return [
@@ -4212,74 +4214,89 @@
 
         const INV_BASE = 6, POUCH_SLOTS = 3;
 
-        // 腰包只认第一个：再多带几个也还是 +3 格，而且放在扩展格里的腰包不算数
-        // （否则腰包能自己撑住自己扩出来的格子）。
-        function pouchIndex() {
-            for (let i = 0; i < INV_BASE && i < gState.inv.length; i++) {
-                if (gState.inv[i] && gState.inv[i].type === 'backpack_ext') return i;
+        // ── 腰包（H14）：背包固定 6 格；每个腰包自带 3 格，东西存在腰包这件物品身上（it.bag），
+        // 跟着腰包走——放仓库、扔地上、捡回来都还在。腰包不能放进腰包。重量算上里面的东西。
+        function isPouch(it) { return !!(it && it.type === 'backpack_ext'); }
+        function pouchBag(it) {
+            if (!isPouch(it)) return null;
+            if (!Array.isArray(it.bag)) it.bag = [];
+            while (it.bag.length < POUCH_SLOTS) it.bag.push(null);
+            return it.bag;
+        }
+        function pouchCount(it) { let b = pouchBag(it); return b ? b.filter(function (q) { return q; }).length : 0; }
+        function itemWeight(it) {
+            if (!it) return 0;
+            let w = it.w || 0;
+            if (isPouch(it)) pouchBag(it).forEach(function (q) { w += itemWeight(q); });
+            return w;
+        }
+        function invWeight() { return gState.inv.reduce(function (s, i) { return s + itemWeight(i); }, 0); }
+        // 身上所有的格子（背包 6 格 + 背包里每个腰包的 3 格），返回 [数组, 下标]
+        function carriedSlots() {
+            let out = [];
+            for (let i = 0; i < INV_BASE; i++) out.push([gState.inv, i]);
+            gState.inv.forEach(function (it) { if (isPouch(it)) pouchBag(it).forEach(function (q, k) { out.push([it.bag, k]); }); });
+            return out;
+        }
+        // 身上找个空格放 it：先背包，再背包里的腰包（腰包本身不能进腰包）
+        function carryFreeSlot(it) {
+            let L = carriedSlots();
+            for (let k = 0; k < L.length; k++) {
+                if (L[k][0][L[k][1]]) continue;
+                if (L[k][0] !== gState.inv && isPouch(it)) continue;
+                return L[k];
             }
-            return -1;
+            return null;
         }
 
+        // 名字是老的（到处在调），现在只做两件事：背包固定 6 格、每个腰包都有 3 格；
+        // 老存档里腰包撑出来的第 7~9 格的东西，挪进腰包（放不下就放背包空格或仓库）。
         function expandInventory() {
-            let targetMax = INV_BASE + (pouchIndex() >= 0 ? POUCH_SLOTS : 0);
-            while (gState.inv.length < targetMax) gState.inv.push(null);
-            // 腰包被拿走了：扩展格里剩下的东西先安置好，再把数组真的砍短。
-            // 以前只加不减，格子从界面上消失了，东西却还留在数组里 ——
-            // 重量照算、上交照走，看着就像凭空多出来一块空间。
-            if (gState.inv.length > targetMax) {
-                for (let i = targetMax; i < gState.inv.length; i++) {
-                    let it = gState.inv[i];
-                    if (!it) continue;
-                    let free = -1;
-                    for (let j = 0; j < targetMax; j++) if (!gState.inv[j]) { free = j; break; }
-                    if (free >= 0) gState.inv[free] = it;
-                    else {
-                        let g = gState.garage.findIndex(function (q) { return q === null; });
-                        if (g !== -1) gState.garage[g] = it;
-                    }
-                }
-                gState.inv.length = targetMax;
-            }
-            gState.maxInv = targetMax;
+            let extra = gState.inv.length > INV_BASE ? gState.inv.slice(INV_BASE).filter(function (q) { return q; }) : [];
+            if (gState.inv.length > INV_BASE) gState.inv.length = INV_BASE;
+            while (gState.inv.length < INV_BASE) gState.inv.push(null);
+            gState.inv.forEach(pouchBag);
+            (gState.garage || []).forEach(pouchBag);
+            extra.forEach(function (it) {
+                // 先放进背包里的腰包（原来就是腰包撑出来的格子），再背包空格，再仓库
+                let slot = null;
+                if (!isPouch(it)) gState.inv.some(function (p) { let b = pouchBag(p); let k = b ? b.indexOf(null) : -1; if (k >= 0) { slot = [b, k]; return true; } return false; });
+                if (!slot) slot = carryFreeSlot(it);
+                if (slot) { slot[0][slot[1]] = it; return; }
+                let g = gState.garage.findIndex(function (q) { return q === null; });
+                if (g !== -1) gState.garage[g] = it;
+            });
+            gState.maxInv = INV_BASE;
         }
 
-        // 自动整理：把空位挤掉，东西一律往前排。
-        // 前三格是手上拿着的，整理时不打乱它们的相对顺序。
         // ── 宝物不能带上场 ──
         // 只有商店买的家伙事（鱼叉、医疗包、腰包、徽章……）能跟着进图，
         // 捡来的宝物一律留在仓库。不然可以把上一局的战利品带进去直接凑够上交额度。
         // 找到的功能道具（信号器、时空沙漏、圣剑这些）本身也是宝物，同样留下。
         function isCarryOn(it) { return !!(it && it.isShop); }
 
-        // 旧存档兵库：背包里本来就不该有宝物（UI 已经不让放了），
+        // 旧存档兵库：背包（和背包里的腰包）里本来就不该有宝物（UI 已经不让放了），
         // 但以前存的档可能带着。开局静静挪回仓库，仓库满了就留着 ——
         // 宁可放它过去，也绝不把玩家的东西弄丢。
         function stashLootBeforeRun() {
+            expandInventory();
             let moved = [], stuck = 0;
-            for (let i = 0; i < gState.inv.length; i++) {
-                let it = gState.inv[i];
-                if (!it || isCarryOn(it)) continue;
+            carriedSlots().forEach(function (sl) {
+                let it = sl[0][sl[1]];
+                if (!it || isCarryOn(it)) return;
                 let g = gState.garage.findIndex(function (q) { return q === null; });
-                if (g === -1) { stuck++; continue; }
-                gState.garage[g] = it; gState.inv[i] = null; moved.push(it.n);
-            }
-            if (moved.length) {
-                tidyInv(); expandInventory();
-                saveProgress();
-            }
+                if (g === -1) { stuck++; return; }
+                gState.garage[g] = it; sl[0][sl[1]] = null; moved.push(it.n);
+            });
+            if (moved.length) { tidyInv(); saveProgress(); }
             return { moved: moved, stuck: stuck };
         }
 
+        // 自动整理：背包里把空位挤掉，东西往前排。不把东西移进或移出腰包。
         function tidyInv() {
             expandInventory();
-            let items = gState.inv.slice(0, gState.maxInv).filter(function (i) { return i; });
-            let pouch = items.filter(function (i) { return i.type === 'backpack_ext'; });
-            let rest = items.filter(function (i) { return i.type !== 'backpack_ext'; });
-            // 腰包排在最前面，不然整理完它被挤到扩展格里，格子会当场消失
-            let all = pouch.concat(rest);
-            for (let i = 0; i < gState.inv.length; i++) gState.inv[i] = all[i] || null;
-            expandInventory();
+            let items = gState.inv.filter(function (i) { return i; });
+            for (let i = 0; i < INV_BASE; i++) gState.inv[i] = items[i] || null;
         }
 
         function tidyGarage() {
@@ -4294,11 +4311,16 @@
         // 以前一按下就开始拖，松手时 endDrag 重画了所有格子，click 就丢了，鼠标怎么点都选不中。
         let slotPress = null, slotTapAt = 0;
         const SLOT_DRAG_PX = 6;
+        // 当前展开的腰包（同一时间只展开一个）。它的 3 格在界面上的容器名是 'bag'
+        let openPouch = null;
+        function slotArr(c) { return c === 'inv' ? gState.inv : c === 'garage' ? gState.garage : c === 'bag' ? pouchBag(openPouch) : null; }
+        // 点了一个格子：点腰包就展开/收起它，点别的格子收起
+        function pouchToggleFor(item) { openPouch = (isPouch(item) && openPouch !== item) ? item : null; }
 
         function setupSlotDrag(el, container, idx) {
             el.setAttribute('data-container', container); el.setAttribute('data-idx', idx);
             el.addEventListener('pointerdown', function (e) {
-                let item = container === 'inv' ? gState.inv[idx] : gState.garage[idx]; if (!item) return;
+                let arr = slotArr(container), item = arr && arr[idx]; if (!item) return;
                 slotPress = { el: el, container: container, idx: idx, x: e.clientX, y: e.clientY };
                 e.preventDefault();
             });
@@ -4322,26 +4344,28 @@
             dragGhost.style.top = (e.clientY || (e.touches && e.touches[0].clientY)) - 30 + 'px';
         }
         window.addEventListener('pointermove', moveGhost); window.addEventListener('touchmove', moveGhost, { passive: false });
+        // 点格子以外的地方，展开的腰包收起来
+        ['screen-garage', 'backpack-overlay-page'].forEach(function (id) {
+            let el = document.getElementById(id); if (!el) return;
+            el.addEventListener('click', function (e) {
+                if (!openPouch || e.target.closest('.slot')) return;
+                openPouch = null; if (isPlaying) updateHUD(); else initGarage();
+            });
+        });
         window.addEventListener('pointerup', endDrag); window.addEventListener('touchend', endDrag);
 
-        // 仓库里拖一件东西过去行不行；不行就返回原因（H2）。空格当然可以放。
-        // 宝物根本放不进背包（只在仓库里管；进图之后捡到的照常放）：拖进去不行，把工具换出来、宝物换进去也不行。
+        // 拖一件东西过去行不行；不行就返回原因（H2、H14）。空格当然可以放。
+        // 腰包不能放进腰包（局里局外都管）。
+        // 宝物放不进背包和腰包（只在仓库里管；进图之后捡到的照常放）：拖进去不行，把工具换出来、宝物换进去也不行。
         function garageDropProblem(srcC, srcI, dstC, dstI) {
-            let srcArr = srcC === 'inv' ? gState.inv : gState.garage, dstArr = dstC === 'inv' ? gState.inv : gState.garage;
+            let srcArr = slotArr(srcC), dstArr = slotArr(dstC);
+            if (!srcArr || !dstArr) return '这里放不了。';
             let a = srcArr[srcI], b = dstArr[dstI];
-            if (srcC === dstC && srcI === dstI) return '';
-            if ((dstC === 'inv' && a && !isCarryOn(a)) || (srcC === 'inv' && b && !isCarryOn(b))) return '宝物不能带上场，只有商店买的道具能放进背包。';
-            // 腰包拿下来，扩展的 3 格就没了，里面的东西要挪到背包空格或仓库里，放不下就不让拿
-            let inv = gState.inv.slice(), gar = gState.garage.slice();
-            let s2 = srcC === 'inv' ? inv : gar, d2 = dstC === 'inv' ? inv : gar;
-            s2[srcI] = b; d2[dstI] = a;
-            let hasPouch = false;
-            for (let i = 0; i < INV_BASE && i < inv.length; i++) if (inv[i] && inv[i].type === 'backpack_ext') hasPouch = true;
-            if (!hasPouch && inv.length > INV_BASE) {
-                let extra = inv.slice(INV_BASE).filter(function (q) { return q; }).length;
-                let room = inv.slice(0, INV_BASE).filter(function (q) { return !q; }).length + gar.filter(function (q) { return !q; }).length;
-                if (extra > room) return '腰包拿下来，多出来那 3 格里的东西就没地方放了。仓库满了，先卖掉点东西。';
-            }
+            if (srcArr === dstArr && srcI === dstI) return '';
+            if ((dstC === 'bag' && isPouch(a)) || (srcC === 'bag' && isPouch(b))) return '腰包不能放进腰包。';
+            if (isPlaying) return '';
+            let carry = function (c) { return c === 'inv' || c === 'bag'; };
+            if ((carry(dstC) && a && !isCarryOn(a)) || (carry(srcC) && b && !isCarryOn(b))) return '宝物不能带上场，只有商店买的道具能放进背包和腰包。';
             return '';
         }
 
@@ -4359,9 +4383,9 @@
 
             if (targetSlot && targetSlot.hasAttribute('data-idx')) {
                 let destContainer = targetSlot.getAttribute('data-container'); let destIdx = parseInt(targetSlot.getAttribute('data-idx'));
-                let srcArr = dragSourceObj.container === 'inv' ? gState.inv : gState.garage; let destArr = destContainer === 'inv' ? gState.inv : gState.garage;
-                let temp = srcArr[dragSourceObj.idx];
-                let why = isPlaying ? '' : garageDropProblem(dragSourceObj.container, dragSourceObj.idx, destContainer, destIdx);
+                let srcArr = slotArr(dragSourceObj.container), destArr = slotArr(destContainer);
+                let temp = srcArr ? srcArr[dragSourceObj.idx] : null;
+                let why = garageDropProblem(dragSourceObj.container, dragSourceObj.idx, destContainer, destIdx);
                 if (why) showSysModal('放不了', why, [{ label: '知道了' }]);
                 else { srcArr[dragSourceObj.idx] = destArr[destIdx]; destArr[destIdx] = temp; }
             } else {
@@ -4398,6 +4422,33 @@
                 }).join('');
         }
 
+        // 格子里显示的字：名字 + 重量（腰包算上里面的），腰包再标上装了几件、是不是展开着
+        function slotLabelHtml(it) {
+            if (!it) return '';
+            let extra = isPouch(it) ? '<div style="font-size:10px; color:#e65100;">' + pouchCount(it) + '/' + POUCH_SLOTS + (openPouch === it ? ' ▾' : ' ▸') + '</div>' : '';
+            return '<div>' + it.n + '</div><div>重:' + itemWeight(it) + '</div>' + extra;
+        }
+        // 展开的腰包：在 anchor 后面画一行 3 格（容器名 'bag'），能和背包、仓库互相拖
+        function pouchRowEl(anchor, id) {
+            let row = document.getElementById(id);
+            if (!row) { row = document.createElement('div'); row.id = id; anchor.parentNode.insertBefore(row, anchor.nextSibling); }
+            row.innerHTML = '';
+            return row;
+        }
+        function renderPouchSlots(row, rerender) {
+            let bag = pouchBag(openPouch);
+            if (!bag) { row.style.display = 'none'; return; }
+            row.style.cssText = 'display:flex; gap:6px; justify-content:center; align-items:center; margin:6px auto; padding:6px; border:1px dashed #e65100; border-radius:6px; max-width:320px;';
+            let t = document.createElement('div'); t.style.cssText = 'font-size:12px; color:#e65100;'; t.innerText = '腰包'; row.appendChild(t);
+            bag.forEach(function (q, k) {
+                let div = document.createElement('div'); div.className = 'slot';
+                div.innerHTML = slotLabelHtml(q);
+                setupSlotDrag(div, 'bag', k); div.onclick = function () { rerender(); };
+                row.appendChild(div);
+            });
+        }
+        function garageRenderPouchRow(actDiv) { renderPouchSlots(pouchRowEl(actDiv, 'garage-pouch-row'), initGarage); }
+
         function initGarage() {
             if (HUNT_TEST_MONEY) gState.money = 99999999;
             document.getElementById('garage-money').innerText = gState.money;
@@ -4407,16 +4458,18 @@
 
             expandInventory();
             tidyGarage();
+            if (openPouch && gState.inv.indexOf(openPouch) < 0 && gState.garage.indexOf(openPouch) < 0) openPouch = null;
             for (let i = 0; i < gState.maxInv; i++) {
                 let div = document.createElement('div'); div.className = 'slot' + (gState.selectedContainer === 'inv' && gState.selectedSlot === i ? ' selected' : '');
-                if (gState.inv[i]) { div.innerHTML = '<div>' + gState.inv[i].n + '</div><div>重:' + gState.inv[i].w + '</div>'; } else { div.innerHTML = ''; }
-                setupSlotDrag(div, 'inv', i); div.onclick = function () { gState.selectedContainer = 'inv'; gState.selectedSlot = i; initGarage(); }; actDiv.appendChild(div);
+                div.innerHTML = slotLabelHtml(gState.inv[i]);
+                setupSlotDrag(div, 'inv', i); div.onclick = function () { gState.selectedContainer = 'inv'; gState.selectedSlot = i; pouchToggleFor(gState.inv[i]); initGarage(); }; actDiv.appendChild(div);
             }
+            garageRenderPouchRow(actDiv);
 
             for (let i = 0; i < 200; i++) {
                 let div = document.createElement('div'); div.className = 'slot' + (gState.selectedContainer === 'garage' && gState.selectedSlot === i ? ' selected' : '');
-                if (gState.garage[i]) { div.innerHTML = '<div>' + gState.garage[i].n + '</div><div>重:' + gState.garage[i].w + '</div>'; } else { div.innerHTML = ''; }
-                setupSlotDrag(div, 'garage', i); div.onclick = function () { gState.selectedContainer = 'garage'; gState.selectedSlot = i; initGarage(); }; sthDiv.appendChild(div);
+                div.innerHTML = slotLabelHtml(gState.garage[i]);
+                setupSlotDrag(div, 'garage', i); div.onclick = function () { gState.selectedContainer = 'garage'; gState.selectedSlot = i; pouchToggleFor(gState.garage[i]); initGarage(); }; sthDiv.appendChild(div);
             }
 
             if (gState.selectedContainer === 'garage' && gState.garage[gState.selectedSlot]) {
@@ -4463,6 +4516,8 @@
             let item = gState.selectedContainer === 'garage' ? gState.garage[gState.selectedSlot] : null;
             if (!item) return;
             if (item.type === 'badge') { showSysModal('卖不了', '地窖徽章不能卖。', [{ label: '知道了' }]); return; }
+            if (pouchCount(item) > 0) { showSysModal('卖不了', '腰包里还有东西，先拿出来再卖。', [{ label: '知道了' }]); return; }
+            if (openPouch === item) openPouch = null;
             gState.money += garageSellPrice(item); gState.garage[gState.selectedSlot] = null;
             gState.selectedSlot = -1;
             initGarage();
@@ -6070,7 +6125,8 @@
                 id: '2026-10-05-v2', date: '10 月 5 日', title: '每日效果和寻宝队', items: [
                     '每日效果的幅度都改小了，快慢高低都只差一点',
                     '寻宝队简单图不再出保险柜',
-                    '宝箱开出大金的机会变少了，一张图最多 4 个'
+                    '宝箱开出大金的机会变少了，一张图最多 4 个',
+                    '腰包改成自己装东西：每个腰包 3 格，点一下打开，能带好几个'
                 ]
             },
             {
@@ -16665,8 +16721,15 @@
         }
         function clearFootprints3D() { footprints3D.forEach(function (f) { scene.remove(f); }); footprints3D = []; }
 
+        // 地上的东西捡起来：整件拷回来（腰包里装的东西、商店道具标记、宝石/底座的数据都跟着），去掉地上用的字段
+        function huntItemFromGround(ud) {
+            let it = Object.assign({}, ud);
+            delete it.isItem; delete it.vel; delete it.fromSignal; delete it.loot;
+            return it;
+        }
         function executeThrow(idx) {
             if (idx < 0 || idx >= gState.maxInv) return; let itemData = gState.inv[idx]; if (!itemData) return;
+            if (openPouch === itemData) openPouch = null;   // 腰包扔出去，里面的东西跟着它走（it.bag）
             gState.inv[idx] = null; updateHUD();
 
             let blockColor = itemData.v >= 30000 ? (itemData.v >= 200000 ? '#e74c3c' : '#f1c40f') : '#9b59b6';
@@ -16929,8 +16992,8 @@
                 if (keyStr === 'm') { toggleLargeMapUI(); }
                 if (!gState.backpackOpen && !gState.largeMapOpen) {
                     if (keyStr === 'q') { if (gState.selectedSlot >= 0 && gState.selectedSlot <= 2 && gState.inv[gState.selectedSlot]) executeThrow(gState.selectedSlot); }
-                    // 主手拿着腰包时，1～5 改成从腰包里取东西
-                    if (code >= 49 && code <= 53 && pouchOpen()) pouchTake(code - 49);
+                    // 手上拿着腰包时，1～3 改成从腰包里取东西
+                    if (code >= 49 && code <= 51 && pouchOpen()) pouchTake(code - 49);
                     else if (code >= 49 && code <= 51) selectSlot(code - 49);
                 }
                 if (gState.needsLock && !gState.backpackOpen && !gState.largeMapOpen && ['w', 'a', 's', 'd', ' '].includes(keyStr)) { safeLockPointer(); gState.needsLock = false; }
@@ -16995,7 +17058,7 @@
 
         function drawCapacityCircle() {
             let canvas = document.getElementById('cap-circle'); if (!canvas) return; let ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, 60, 60);
-            let max = gState.maxInv; let used = gState.inv.slice(0, max).filter(function (i) { return i !== null; }).length; let remain = max - used;
+            let all = carriedSlots(); let max = all.length; let used = all.filter(function (sl) { return sl[0][sl[1]]; }).length; let remain = max - used;   // 背包 + 身上腰包的格子
             let cx = 30, cy = 30, r = 24; ctx.lineWidth = 6;
             for (let i = 0; i < max; i++) {
                 ctx.beginPath(); let startAngle = (i * 2 * Math.PI / max) - Math.PI / 2; let endAngle = ((i + 1) * 2 * Math.PI / max) - Math.PI / 2 - 0.1;
@@ -17178,7 +17241,7 @@
         }
 
         function handlePlayerEngine(dt) {
-            let w = HUNT_TEST_NOWEIGHT ? 0 : gState.inv.reduce(function (s, i) { return s + (i ? i.w : 0); }, 0);
+            let w = HUNT_TEST_NOWEIGHT ? 0 : invWeight();
             let abilityTrigger = keys['rmb'] || touchBtn.ability; let selectedInv = gState.inv[gState.selectedSlot];
 
             if (abilityTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'signal') {
@@ -17325,10 +17388,11 @@
                         }
                     }
                     else if (activeObj.userData.isItem) {
-                        expandInventory(); let emptyIdx = gState.inv.findIndex(function (item, idx) { return item === null && idx < gState.maxInv; });
-                        if (emptyIdx !== -1) {
+                        expandInventory();
+                        let picked = huntItemFromGround(activeObj.userData), slot = carryFreeSlot(picked);   // 背包满了就放进身上腰包的空格
+                        if (slot) {
                             huntItemIntro(activeObj.userData);
-                            gState.inv[emptyIdx] = { n: activeObj.userData.n, v: activeObj.userData.v, w: activeObj.userData.w, tex: activeObj.userData.tex, type: activeObj.userData.type, c: activeObj.userData.c, dmg: activeObj.userData.dmg, spd: activeObj.userData.spd, hp: activeObj.userData.hp, uses: activeObj.userData.uses, maxUses: activeObj.userData.maxUses };
+                            slot[0][slot[1]] = picked;
 
                             if (activeObj.userData.fromSignal || activeObj === gState.signal.mesh) {
                                 let recv = gState.inv.find(function (i) { return i && i.type === 'signal'; });
@@ -17541,10 +17605,11 @@
             let hpMaxEl = document.getElementById('hp-max-txt');
             if (hpMaxEl) hpMaxEl.innerText = effectiveMaxHp();
             document.getElementById('health-fill').style.width = Math.max(0, Math.min(100, gState.hp / (effectiveMaxHp() || 100) * 100)) + '%';
-            let currentWeight = gState.inv.reduce(function (s, i) { return s + (i ? i.w : 0); }, 0);
+            let currentWeight = invWeight();
             document.getElementById('weight-txt').innerText = currentWeight;
 
             expandInventory();
+            if (openPouch && gState.inv.indexOf(openPouch) < 0) openPouch = null;
 
             for (let i = 0; i < 3; i++) {
                 let hudSlot = document.getElementById('hud-slot-' + i);
@@ -17553,7 +17618,7 @@
                 // 左上角标上 1/2/3，键盘玩的一看就知道按哪个（数字键不再被快捷语抢走了）
                 let keyTag = '<span style="position:absolute; top:1px; left:4px; font-size:10px; color:#999;">' + (i + 1) + '</span>';
                 hudSlot.style.position = 'relative';
-                if (gState.inv[i]) { hudSlot.innerHTML = keyTag + '<div>' + gState.inv[i].n + '</div><div>重:' + gState.inv[i].w + '</div>'; } else { hudSlot.innerHTML = keyTag; }
+                hudSlot.innerHTML = keyTag + slotLabelHtml(gState.inv[i]);
             }
 
             const bpHotbarEl = document.getElementById('bp-hotbar-slots'); const bpBackpackEl = document.getElementById('bp-backpack-slots');
@@ -17562,11 +17627,12 @@
             for (let i = 0; i < gState.maxInv; i++) {
                 let slotEl = document.createElement('div');
                 slotEl.className = 'slot' + (gState.selectedSlot === i ? ' selected' : '');
-                if (gState.inv[i]) { slotEl.innerHTML = '<div>' + gState.inv[i].n + '</div><div>重:' + gState.inv[i].w + '</div>'; }
+                slotEl.innerHTML = slotLabelHtml(gState.inv[i]);
                 setupSlotDrag(slotEl, 'inv', i);
-                slotEl.onclick = function () { if (i <= 2) selectSlot(i); else updateHUD(); };
+                slotEl.onclick = function () { pouchToggleFor(gState.inv[i]); if (i <= 2) selectSlot(i); else updateHUD(); };
                 if (i < 3) bpHotbarEl.appendChild(slotEl); else bpBackpackEl.appendChild(slotEl);
             }
+            renderPouchSlots(pouchRowEl(bpBackpackEl, 'bp-pouch-row'), updateHUD);
 
             let hint = document.getElementById('bp-repair-hint');
             if (hint) {
@@ -17578,37 +17644,26 @@
             drawCapacityCircle();
         }
 
-        // 主手拿着腰包的时候，把腰包扩出来的那几格列出来。
-        // 这时候 1～5 不再切快捷栏，而是直接把腰包里的东西换到手上。
+        // 手上（快捷栏 1～3）拿着腰包的时候，把它的 3 格列出来，按 1～3 把里面的东西拿到手上。
+        // 腰包里的东西不能直接用，得先拿出来。
         function pouchOpen() {
             let it = gState.inv[gState.selectedSlot];
-            return !!(it && it.type === 'backpack_ext' && gState.selectedSlot < INV_BASE);
+            return !!(isPouch(it) && gState.selectedSlot <= 2);
         }
 
-        function pouchSlots() {
-            let out = [];
-            for (let i = INV_BASE; i < gState.maxInv; i++) out.push(i);
-            return out;
-        }
-
-        // 把腰包第 n 个格子里的东西拿到手上。
-        // 不能直接和腰包本体对换 —— 那会把腰包塞进它自己撑出来的格子里，
-        // 格子当场就塌了。所以另找一个不是腰包的格子来接。
         function pouchTake(n) {
-            let slots = pouchSlots();
-            if (n < 0 || n >= slots.length) return;
-            let from = slots[n];
-            if (!gState.inv[from]) return;
-            let pi = pouchIndex(), to = -1;
+            if (!pouchOpen()) return;
+            let pi = gState.selectedSlot, bag = pouchBag(gState.inv[pi]);
+            if (n < 0 || n >= POUCH_SLOTS || !bag[n]) return;
+            let to = -1;
             for (let i = 0; i < 3; i++) if (i !== pi && !gState.inv[i]) { to = i; break; }              // 先找空的手上格
             if (to < 0) for (let i = 0; i < INV_BASE; i++) if (i !== pi && !gState.inv[i]) { to = i; break; }
-            if (to < 0) for (let i = 0; i < 3; i++) if (i !== pi) { to = i; break; }                     // 实在没空位就对换
+            if (to < 0) for (let i = 0; i < 3; i++) if (i !== pi && !isPouch(gState.inv[i])) { to = i; break; }   // 实在没空位就对换（腰包不能换进腰包）
             if (to < 0) return;
-            let a = gState.inv[from];
-            gState.inv[from] = gState.inv[to];
+            let a = bag[n];
+            bag[n] = gState.inv[to];
             gState.inv[to] = a;
             if (to <= 2) selectSlot(to);
-            expandInventory();
             updateHUD();
         }
 
@@ -17616,14 +17671,11 @@
             let el = document.getElementById('pouch-view'); if (!el) return;
             expandInventory();
             if (!isPlaying || !pouchOpen()) { el.classList.add('hidden'); return; }
-            let slots = pouchSlots();
-            el.innerHTML = '<div style="color:#ffd54f;">腰包（按 1～' + Math.max(1, slots.length) + ' 拿出来）</div>' +
-                (slots.length
-                    ? slots.map(function (idx, n) {
-                        let it = gState.inv[idx];
-                        return '<div>' + (n + 1) + '、' + (it ? it.n + '　重:' + it.w : '<span style="color:#888;">空</span>') + '</div>';
-                    }).join('')
-                    : '<div style="color:#888;">没有格子</div>');
+            let bag = pouchBag(gState.inv[gState.selectedSlot]);
+            el.innerHTML = '<div style="color:#ffd54f;">腰包（按 1～' + POUCH_SLOTS + ' 拿出来）</div>' +
+                bag.map(function (it, n) {
+                    return '<div>' + (n + 1) + '、' + (it ? it.n + '　重:' + itemWeight(it) : '<span style="color:#888;">空</span>') + '</div>';
+                }).join('');
             el.classList.remove('hidden');
         }
 
@@ -17858,9 +17910,11 @@
         }
 
         function submitLoot() {
-            let savedLoadout = []; let submittedNow = 0, cashNow = 0;
+            let submittedNow = 0, cashNow = 0;
             if (!gState.submittedItems) gState.submittedItems = [];
-            gState.inv.forEach(function (item, idx) {
+            // 背包和身上腰包里的宝物一起上交（H14）
+            carriedSlots().forEach(function (sl) {
+                let item = sl[0][sl[1]];
                 if (item && !item.isShop) {
                     nightTreasureEgg(item.n);
 
@@ -17868,15 +17922,15 @@
                     // 上交只算进度，不给钱（H4）：东西先寄存起来，撤离成功就一起进仓库，卖掉才有钱。
                     // 没撤出去的话一起没收。
                     gState.submittedItems.push(item);
-                    gState.inv[idx] = null;
-                } else { savedLoadout.push(item); }
+                    sl[0][sl[1]] = null;
+                }
             });
 
             gState.totalSubmitted += submittedNow;
             gState.runCash = (gState.runCash || 0) + cashNow;   // 只给本局任务「上交满 $30000」计数
             huntRefreshSubmitUI();
 
-            gState.inv = savedLoadout; expandInventory(); updateHUD(); saveProgress();
+            tidyInv(); updateHUD(); saveProgress();
             return submittedNow;
         }
 
@@ -17889,8 +17943,9 @@
 
             tidyGarage();
             // 背上的宝物 + 这一局上交过的，搬进仓库；商店道具（鱼叉、医疗包、腰包、徽章……）留在背包，下局接着用（H9）
+            // 腰包里的宝物也进仓库，工具留在腰包里（H14）
             let carry = [];
-            for (let i = 0; i < gState.maxInv; i++) { if (gState.inv[i] && !gState.inv[i].isShop) { carry.push(gState.inv[i]); gState.inv[i] = null; } }
+            carriedSlots().forEach(function (sl) { let it = sl[0][sl[1]]; if (it && !it.isShop) { carry.push(it); sl[0][sl[1]] = null; } });
             carry = carry.concat(gState.submittedItems || []);
             gState.submittedItems = [];
             carry.forEach(function (it) {
@@ -18032,7 +18087,7 @@
                 if (g !== -1) gState.garage[g] = it;
             });
             // 身上的不算数：倒地那一刻已经散落在地图上了
-            for (let i = 0; i < gState.inv.length; i++) if (gState.inv[i] && !gState.inv[i].isShop) gState.inv[i] = null;
+            carriedSlots().forEach(function (sl) { let it = sl[0][sl[1]]; if (it && !it.isShop) sl[0][sl[1]] = null; });
             expandInventory(); saveProgress();
             finishGame(true, '你倒下了，但队友完成了撤离。你上交过的 ' + saved.length +
                 ' 件东西保住了，身上带的全丢了。');
