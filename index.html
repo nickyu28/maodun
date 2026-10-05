@@ -4586,7 +4586,7 @@
         }
 
         let scene, camera, renderer, clock, raycaster;
-        let maze = [], chests = [], groundItems = [], entities = [], footprints3D = [], walkableMeshes = [], explored = [];
+        let maze = [], chests = [], groundItems = [], entities = [], walkableMeshes = [], explored = [];
         const TILE = 24;
 
         const HUNT_SIZE = 21, NIGHT_SIZE = 27;
@@ -6128,7 +6128,8 @@
                     '寻宝队简单图不再出保险柜',
                     '宝箱开出大金的机会变少了，一张图最多 4 个',
                     '腰包改成自己装东西：每个腰包 3 格，点一下打开，能带好几个',
-                    '信号接收器改成一条蓝线带路，上下楼也认得路'
+                    '信号接收器改成一条蓝线带路，上下楼也认得路',
+                    '点小地图导航改成绿线，跟蓝线分开，互不影响'
                 ]
             },
             {
@@ -16699,29 +16700,6 @@
             spawnMonstersWithData(list);
         }
 
-        function generateFootprintGuide(tx, tz) {
-            if (gState.debuff.type === 1) return;
-
-            if (!Number.isFinite(tx) || !Number.isFinite(tz)) return;
-            let cf = playerFloor();
-            if (tx < 0 || tx >= mSize || tz < 0 || tz >= mSize) return;
-            if (!maze[cf] || !maze[cf][tz] || !maze[cf][tz][tx] || maze[cf][tz][tx].type === 1) return;
-            let sx = Math.floor((camera.position.x + TILE / 2) / TILE), sz = Math.floor((camera.position.z + TILE / 2) / TILE);
-            let queue = [[{ x: sx, z: sz }]], visitedNodes = Array(mSize).fill().map(function () { return Array(mSize).fill(false); }); visitedNodes[sz][sx] = true; let foundPath = null;
-            while (queue.length > 0) {
-                let path = queue.shift(); let curr = path[path.length - 1]; if (curr.x === tx && curr.z === tz) { foundPath = path; break; }
-                let neighbors = [{ x: curr.x + 1, z: curr.z }, { x: curr.x - 1, z: curr.z }, { x: curr.x, z: curr.z + 1 }, { x: curr.x, z: curr.z - 1 }];
-                for (let n of neighbors) { if (n.x >= 0 && n.x < mSize && n.z >= 0 && n.z < mSize) { if (!visitedNodes[n.z][n.x] && maze[cf][n.z][n.x].type !== 1) { visitedNodes[n.z][n.x] = true; queue.push([...path, n]); } } }
-            }
-            if (foundPath) {
-                clearFootprints3D(); currentNavPath = foundPath;
-
-                const footprintGeo = new THREE.BoxGeometry(4.5, 0.2, 4.5);
-                const footprintMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71, transparent: true, opacity: 0.8 });
-                foundPath.forEach(function (node, stepIdx) { let fMesh = new THREE.Mesh(footprintGeo, footprintMat); fMesh.position.set(node.x * TILE, cf * TILE + 0.3, node.z * TILE); scene.add(fMesh); footprints3D.push(fMesh); });
-            }
-        }
-        function clearFootprints3D() { footprints3D.forEach(function (f) { scene.remove(f); }); footprints3D = []; }
 
         // 地上的东西捡起来：整件拷回来（腰包里装的东西、商店道具标记、宝石/底座的数据都跟着），去掉地上用的字段
         function huntItemFromGround(ud) {
@@ -17110,15 +17088,7 @@
                 }
             });
 
-            if (currentNavPath.length > 0) {
-                let tx = currentNavPath[0].x * TILE, tz = currentNavPath[0].z * TILE;
-                if ((tx - camera.position.x) ** 2 + (tz - camera.position.z) ** 2 < (TILE / 2) ** 2) {
-
-                    currentNavPath.shift();
-                    let passed = footprints3D.shift(); if (passed) scene.remove(passed);
-                    if (currentNavPath.length === 0) clearFootprints3D();
-                }
-            }
+            navRouteTick(false);
 
             refreshRadarMinimap(); if (gState.largeMapOpen) refreshLargeMinimap();
             tickSignal(dt);
@@ -17617,7 +17587,8 @@
             });
             return out;
         }
-        function huntRouteFind(from, to) {
+        // floor 给了就只在这一层里找（小地图导航用）
+        function huntRouteFind(from, to, floor) {
             let key = function (n) { return (n.f * 64 + n.z) * 64 + n.x; };
             if (!huntCellKind(from.f, from.x, from.z) || !huntCellKind(to.f, to.x, to.z)) return null;
             let prev = {}, q = [{ f: from.f, x: from.x, z: from.z }]; prev[key(from)] = null;
@@ -17626,7 +17597,7 @@
                 if (n.f === to.f && n.x === to.x && n.z === to.z) {
                     let path = [], cur = n; while (cur) { path.unshift(cur); cur = prev[key(cur)]; } return path;
                 }
-                huntRouteNbrs(n).forEach(function (m) { let k = key(m); if (!(k in prev)) { prev[k] = n; q.push(m); } });
+                huntRouteNbrs(n).forEach(function (m) { if (floor !== undefined && m.f !== floor) return; let k = key(m); if (!(k in prev)) { prev[k] = n; q.push(m); } });
             }
             return null;
         }
@@ -17751,8 +17722,8 @@
             if (!huntCellKind(f, x, z) && huntCellKind(f + 1, x, z)) f++;
             return { f: f, x: x, z: z };
         }
-        function huntRouteBuild(from, to, start) {
-            let path = huntRouteFind(from, to); if (!path) return null;
+        function huntRouteBuild(from, to, start, floor) {
+            let path = huntRouteFind(from, to, floor); if (!path) return null;
             return { path: path, pts: huntRoutePoints(path, start) };
         }
         function signalHint(t) {
@@ -17786,6 +17757,36 @@
             let ang = Math.atan2(dx, dz) - Math.atan2(fw.x, fw.z); ang = Math.atan2(Math.sin(ang), Math.cos(ang));
             let dirTxt = Math.abs(ang) < Math.PI / 4 ? '前面' : Math.abs(ang) > Math.PI * 3 / 4 ? '后面' : ang > 0 ? '左边' : '右边';
             signalHint('东西在 ' + (to.f + 1) + ' 楼，在你' + dirTxt);
+        }
+
+        // ══════════════ 小地图导航（H11）：点小地图/大地图，画一条绿线，只在当前这一层 ══════════════
+        // 跟信号接收器的蓝线是两条各管各的线，画法一样；清掉一条不影响另一条
+        let huntNavRoute = { mesh: null, key: '', pts: null, to: null };
+        function clearFootprints3D() { huntRouteDispose(huntNavRoute); huntNavRoute = { mesh: null, key: '', pts: null, to: null }; currentNavPath = []; }
+        function generateFootprintGuide(tx, tz) {
+            if (gState.debuff.type === 1) return;
+            if (!Number.isFinite(tx) || !Number.isFinite(tz)) return;
+            let from = huntPlayerNode(), f = from.f;
+            if (tx < 0 || tx >= mSize || tz < 0 || tz >= mSize) return;
+            if (!huntCellKind(f, tx, tz)) return;
+            clearFootprints3D();
+            huntNavRoute.to = { f: f, x: tx, z: tz };
+            navRouteTick(true);
+        }
+        // 每帧：换了格子就从当前位置重算（走过的就没了）；走到了、换了楼层、找不到路就清掉
+        function navRouteTick(force) {
+            let to = huntNavRoute.to; if (!to) return;
+            let from = huntPlayerNode();
+            if (from.f !== to.f || (from.x === to.x && from.z === to.z)) { clearFootprints3D(); return; }
+            let key = [from.f, from.x, from.z].join(',');
+            if (force || key !== huntNavRoute.key) {
+                huntRouteDispose(huntNavRoute);
+                let r = huntRouteBuild(from, to, camera.position, to.f);
+                if (!r) { clearFootprints3D(); return; }
+                huntNavRoute.key = key; huntNavRoute.pts = r.pts; currentNavPath = r.path;
+                huntNavRoute.mesh = huntRouteMesh(r.pts, 0x2ecc71); if (huntNavRoute.mesh) scene.add(huntNavRoute.mesh);
+            }
+            if (huntNavRoute.mesh) huntNavRoute.mesh.visible = !(gState.debuff && gState.debuff.type === 1);
         }
 
         function tickSignal(dt) {

@@ -1042,6 +1042,42 @@ async function enterExit(tab, key) {
             report('H10 信号接收器蓝线：5 张图各 80 次能找到能走到、点不进墙、换层更新、重算不涨、诅咒藏起来', bad.length === 0 && A.errors.length === before, bad.length ? bad.join(' / ') + A.errors.slice(before, before + 2).join(' / ') : out.join(' | '));
         }
 
+        {
+            // H11：小地图导航（绿线，只在这一层）和信号接收器的蓝线各管各的
+            const before = A.errors.length;
+            await A.eval(`${HIDE} ${MODES.hunt.start}; true;`); await W(2500); await A.eval(`${HIDE} true;`);
+            const r = JSON.parse(await A.eval(`(function(){
+                let o = {};
+                camera.position.set(TILE, 9, TILE); pVel.set(0, 0, 0); onGround = true;
+                gState.signal = { active: true, timer: 2, mesh: null }; tickSignal(0);
+                // 同一层离得最远、走得到的格子
+                let me = huntPlayerNode(), far = null, best = -1;
+                for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) if (maze[me.f][z][x].type === 0) {
+                    let d = Math.abs(x - me.x) + Math.abs(z - me.z); if (d > best && huntRouteFind(me, { f: me.f, x: x, z: z }, me.f)) { best = d; far = { x: x, z: z }; } }
+                generateFootprintGuide(far.x, far.z);
+                let sm = huntSignalRoute.mesh, nm = huntNavRoute.mesh;
+                o.both = !!sm && !!nm && sm !== nm && sm.parent === scene && nm.parent === scene;
+                o.colors = sm && nm ? [sm.material.color.getHex(), nm.material.color.getHex()] : null;
+                o.sameKind = !!sm && !!nm && sm.geometry.type === nm.geometry.type && nm.geometry.type === 'TubeGeometry';
+                o.sameFloor = huntNavRoute.pts.every(function (p) { return Math.floor((p.y + 0.1) / TILE) === me.f; });
+                // 走一格：绿线跟着重算
+                let k0 = huntNavRoute.key, p1 = currentNavPath[1]; camera.position.x = p1.x * TILE; camera.position.z = p1.z * TILE; navRouteTick(false);
+                o.follows = huntNavRoute.key !== k0 && !!huntNavRoute.mesh;
+                // 清掉导航，蓝线还在
+                clearFootprints3D();
+                o.navGone = !huntNavRoute.mesh && !nm.parent;
+                o.signalKept = huntSignalRoute.mesh === sm && sm.parent === scene && huntSignalRoute.ok;
+                // 清掉蓝线，绿线不受影响
+                generateFootprintGuide(far.x, far.z); let nm2 = huntNavRoute.mesh;
+                signalRouteClear(); o.navKept = huntNavRoute.mesh === nm2 && nm2.parent === scene;
+                // 换到别的楼层：小地图导航只管这一层，清掉
+                camera.position.y += TILE; navRouteTick(false); o.otherFloorCleared = !huntNavRoute.mesh;
+                return JSON.stringify(o); })()`));
+            await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
+            const ok = r.both && r.colors && r.colors[0] === 0x1e88e5 && r.colors[1] === 0x2ecc71 && r.sameKind && r.sameFloor && r.follows && r.navGone && r.signalKept && r.navKept && r.otherFloorCleared;
+            report('H11 小地图导航绿线和信号蓝线分开：同时在、清一条不影响另一条、只在这一层', ok && A.errors.length === before, ok ? '' : JSON.stringify(r) + A.errors.slice(before, before + 2).join(' / '));
+        }
+
         // 3. 伪造消息（附录）
         const B = await openTab(chrome, url);
         const idA = await A.eval('gState.id'), idB = await B.eval('gState.id');
