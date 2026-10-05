@@ -358,6 +358,33 @@ function raceReach(R, sm, jm) {
     return { jump: fly('jump'), dash: Math.max(fly('dashjump'), fly('jumpdash')), bounce: bounce(), h: (R.jumpV * jm) ** 2 / (2 * R.gravity) };
 }
 
+// H13：按造图时的箱子配置模拟 n 张图（同一个 huntAssignLoot），统计单箱大金概率、每张图大金个数
+function LOOT_SIM(diff, n, pity, teamSize) {
+    let keepD = gState.mapDifficulty, keepMul = huntPityMul;
+    gState.mapDifficulty = diff; huntPityMul = (pity && diff === 'easy') ? 2 : 1;
+    let conf = mapConfigs[diff], st = { wood: [0, 0], silver: [0, 0], gold: [0, 0], safe: [0, 0] };
+    let sum = 0, any = 0, max = 0, maxAll = 0, over = 0;
+    try {
+        for (let m = 0; m < n; m++) {
+            let types = [];
+            if (pity && diff === 'easy') types.push('gold');
+            for (let i = 0; i < conf.gold; i++) types.push('gold');
+            for (let i = 0; i < conf.silver; i++) types.push('silver');
+            for (let i = 0; i < conf.wood; i++) types.push('wood');
+            if (conf.hasGoldShop) types.push('gold');
+            if (diff !== 'easy' && (pity || (conf.hasSafe && Math.random() < 0.1))) types.push('safe');
+            let boxes = types.map(function (t) { return { userData: { type: t } }; });
+            huntAssignLoot(boxes, Math.random, teamSize);
+            let k = 0;
+            boxes.forEach(function (c) { let big = huntIsBig(c.userData.loot); st[c.userData.type][0]++; if (big) { st[c.userData.type][1]++; k++; } });
+            let ks = 0; huntSignalLoot.forEach(function (L) { L.forEach(function (it) { if (huntIsBig(it)) ks++; }); });
+            sum += k; if (k > 0) any++; if (k > max) max = k; if (k + ks > maxAll) maxAll = k + ks; if (k + ks > HUNT_BIG_CAP) over++;
+        }
+    } finally { gState.mapDifficulty = keepD; huntPityMul = keepMul; }
+    let rate = {}; Object.keys(st).forEach(function (t) { if (st[t][0]) rate[t] = +(100 * st[t][1] / st[t][0]).toFixed(2); });
+    return JSON.stringify({ rate: rate, avg: +(sum / n).toFixed(3), anyPct: +(100 * any / n).toFixed(1), max: max, maxAll: maxAll, over: over });
+}
+
 const ACTIVE = `(function(){ let k = chatActiveModeKey(); return k === 'hub' ? null : k; })()`;
 
 async function enterExit(tab, key) {
@@ -815,6 +842,26 @@ async function enterExit(tab, key) {
             if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
             await N.close();
             report('H12 简单图不出保险柜，保底局多 1 个金箱子；中等图保底还是保险柜', bad.length === 0, bad.join(' / ') + ' 第一局 ' + JSON.stringify(r1) + ' 第二局 ' + JSON.stringify(r2));
+        }
+
+        {
+            // H13：单箱大金概率 木 1% 银 4% 金 10%（±0.5 个百分点），每张图（箱子 + 保险柜 + 信号接收器全部用完）最多 4 个
+            const bad = [], out = [];
+            for (const [diff, pity, team] of [['easy', false, 1], ['med', false, 1], ['hard', false, 1], ['easy', true, 1], ['hard', false, 3]]) {
+                const o = JSON.parse(await A.eval(`(${LOOT_SIM.toString()})('${diff}', 20000, ${pity}, ${team})`));
+                const want = pity ? { wood: 2, silver: 8, gold: 20 } : { wood: 1, silver: 4, gold: 10 };
+                if (!pity) ['wood', 'silver', 'gold'].forEach((t) => { if (Math.abs(o.rate[t] - want[t]) > 0.5) bad.push(diff + ' ' + t + ' ' + o.rate[t] + '%'); });
+                if (o.over > 0 || o.maxAll > 4) bad.push(diff + (pity ? '保底' : '') + ' 有图超过 4 个（最多 ' + o.maxAll + '）');
+                out.push(diff + (pity ? '保底' : '') + (team > 1 ? '×' + team + '人' : '') + ' 平均 ' + o.avg + ' 个、' + o.anyPct + '% 至少 1 个、单箱 ' + JSON.stringify(o.rate) + '、最多 ' + o.maxAll);
+            }
+            // 真进一张困难图：每个箱子造图时都定好了东西，信号奖励按队员分好，大金总数不超过 4
+            await A.eval(`${HIDE} gState.mapDifficulty = 'hard'; selectGameMode('hunt'); requestStartGame(); requestEnterMap(); true;`); await W(2500);
+            const real = JSON.parse(await A.eval(`JSON.stringify({ noLoot: chests.filter(function (c) { return c.userData.loot === undefined; }).length, n: chests.length,
+                big: chests.filter(function (c) { return huntIsBig(c.userData.loot); }).length + huntSignalLoot.reduce(function (k, L) { return k + L.filter(huntIsBig).length; }, 0),
+                lists: huntSignalLoot.length + 'x' + (huntSignalLoot[0] || []).length })`));
+            await A.eval(`${HIDE} ${MODES.hunt.exit}; gState.mapDifficulty = 'easy'; true;`); await W(1500); await A.eval(`${HIDE} true;`);
+            if (real.noLoot || real.big > 4 || !real.n) bad.push('真地图 ' + JSON.stringify(real));
+            report('H13 大金单箱概率、每张图最多 4 个（各 2 万张图）', bad.length === 0, bad.length ? bad.join(' / ') : out.join(' | '));
         }
 
         // 3. 伪造消息（附录）

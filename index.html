@@ -2198,24 +2198,61 @@
         function huntPityActive() { return !!(gState.isFirstRound || gState.pityGuaranteed) && !huntHasHumanMates(); }
         function ultraNoCarriage() { return itemPool.ultra.filter(function (u) { return u.type !== 'carriage'; }); }
 
-        // 开箱抽奖。rnd 传 seededRandom 时是玩家开的（多人要同步），
-        // AI 开箱传 Math.random，免得把种子序列搅乱。
+        // ── 开箱抽奖（H13）──
+        // 「大金」= itemPool.ultra + itemPool.god。先按下面的概率定出不出大金，出就从这个箱子原来能开出的
+        // 大金里等概率抽（各档内部比例跟以前一样），不出就从原来的其余物品里抽。
+        // 每张图大金最多 HUNT_BIG_CAP 个：保险柜、各个箱子、信号接收器生成的都算，合成的不算；到上限改出金色一档。
+        // 为了多人时各端一致，所有箱子里是什么、每个队员的信号接收器会生成什么，造图时就用种子定好
+        // （huntAssignLoot），开箱时直接拿，不再临时抽。
+        const HUNT_BIG_P = { wood: 0.01, silver: 0.04, gold: 0.10 };
+        const HUNT_SIGNAL_BIG_P = 0.10;
+        const HUNT_BIG_CAP = 4;
+        const HUNT_SIGNAL_SLOTS = 10;   // 每个队员这一局最多用几次信号接收器（预先抽好）
+        let huntBigLeft = HUNT_BIG_CAP, huntSignalLoot = [];
+        function huntIsBig(it) { return !!it && (itemPool.ultra.indexOf(it) >= 0 || itemPool.god.indexOf(it) >= 0); }
+        function huntBigPool(boxType) {
+            if (boxType === 'safe') return gState.mapDifficulty === 'hard' ? itemPool.god : gState.mapDifficulty === 'med' ? itemPool.ultra : ultraNoCarriage();
+            if (boxType === 'wood') return [itemPool.ultra[0]];
+            if (boxType === 'silver') return itemPool.ultra.slice(0, 3);
+            if (boxType === 'gold') return itemPool.ultra.filter(function (u) { return u.v <= 1000000; });
+            return ultraNoCarriage();
+        }
+        function huntTakeBig(pool, pick) {
+            if (huntBigLeft > 0) { huntBigLeft--; return pick(pool); }
+            return pick(itemPool.gold);   // 这张图的大金用完了，改出金色一档
+        }
         function huntRollChest(boxType, rnd) {
             rnd = rnd || Math.random;
             let pick = function (a) { return a[Math.floor(rnd() * a.length)]; };
-            if (boxType === 'safe') {
-                if (gState.mapDifficulty === 'hard') return pick(itemPool.god);
-                if (gState.mapDifficulty === 'med') return pick(itemPool.ultra);
-                return pick(ultraNoCarriage());
-            }
+            if (boxType === 'safe') return huntTakeBig(huntBigPool('safe'), pick);
+            if (rnd() < (HUNT_BIG_P[boxType] || 0) * huntPityMul) return huntTakeBig(huntBigPool(boxType), pick);
             // 宝石：少量、值钱的金色收藏品
-            if (boxType !== 'safe' && rnd() < 0.034) return pick(HUNT_GEMS.map(huntGemItem));
+            if (rnd() < 0.034) return pick(HUNT_GEMS.map(huntGemItem));
             // 王冠底座：只这里出，保险柜里永远没有
-            if (boxType !== 'safe' && rnd() < 0.02) return crownBaseItem();
-            if (boxType === 'wood') return pick([...itemPool.purple, ...itemPool.gold, itemPool.ultra[0]]);
-            if (boxType === 'silver') return pick([...itemPool.purple, ...itemPool.gold, itemPool.ultra[0], itemPool.ultra[1], itemPool.ultra[2]]);
-            if (boxType === 'gold') return pick([...itemPool.gold, ...itemPool.ultra.filter(function (u) { return u.v <= 1000000; })]);
+            if (rnd() < 0.02) return crownBaseItem();
+            if (boxType === 'wood' || boxType === 'silver') return pick([...itemPool.purple, ...itemPool.gold]);
+            if (boxType === 'gold') return pick([...itemPool.gold]);
             return null;
+        }
+        function huntRollSignal(rnd) {
+            let pick = function (a) { return a[Math.floor(rnd() * a.length)]; };
+            if (rnd() < HUNT_SIGNAL_BIG_P * huntPityMul) return huntTakeBig(ultraNoCarriage(), pick);
+            return rnd() < 0.6 / 0.9 ? pick(itemPool.purple) : pick(itemPool.gold);
+        }
+        // 造图时把所有箱子的东西和每个队员的信号接收器奖励定好。保险柜先抽（保底局必出的那个一定是大金），
+        // 再按生成顺序抽箱子，最后按队员轮流抽信号奖励。boxes 是带 userData.type 的箱子列表。
+        function huntAssignLoot(boxes, rnd, teamSize) {
+            huntBigLeft = HUNT_BIG_CAP;
+            let order = boxes.filter(function (c) { return c.userData.type === 'safe'; }).concat(boxes.filter(function (c) { return c.userData.type !== 'safe'; }));
+            order.forEach(function (c) { c.userData.loot = huntRollChest(c.userData.type, rnd); });
+            huntSignalLoot = [];
+            for (let k = 0; k < teamSize; k++) huntSignalLoot.push([]);
+            for (let n = 0; n < HUNT_SIGNAL_SLOTS; n++) for (let k = 0; k < teamSize; k++) huntSignalLoot[k].push(huntRollSignal(rnd));
+        }
+        // 箱子里的东西：造图时定好的；万一没有（不该发生）就现抽一个不占上限的
+        function huntChestLoot(c) {
+            if (c.userData.loot !== undefined) return c.userData.loot;
+            let keep = huntBigLeft; huntBigLeft = 0; let it = huntRollChest(c.userData.type, Math.random); huntBigLeft = keep; return it;
         }
 
         // 王冠底座：只从普通箱子里开得出来，保险柜不出。
@@ -5156,6 +5193,8 @@
                 }
             }
 
+            huntAssignLoot(chests, seededRandom, Math.max(1, (gState.team || []).length));
+            gState.signalN = 0;
             huntMergeStatic();
             huntTaskNew();
             camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
@@ -6030,7 +6069,8 @@
             {
                 id: '2026-10-05-v2', date: '10 月 5 日', title: '每日效果和寻宝队', items: [
                     '每日效果的幅度都改小了，快慢高低都只差一点',
-                    '寻宝队简单图不再出保险柜'
+                    '寻宝队简单图不再出保险柜',
+                    '宝箱开出大金的机会变少了，一张图最多 4 个'
                 ]
             },
             {
@@ -17272,7 +17312,7 @@
                         let boxType = activeObj.userData.type;
                         huntTaskEvent('chest', boxType);
                         if (boxType === 'safe') gState.safeOpenedThisGame = true;
-                        let singleLoot = huntRollChest(boxType, seededRandom);
+                        let singleLoot = huntChestLoot(activeObj);
 
                         if (singleLoot) {
                             let tObj = createProceduralTexture(singleLoot.tex, singleLoot.c, '#ffffff');
@@ -17480,10 +17520,11 @@
             if (!actionTarget) { bar.style.display = 'block'; document.getElementById('progress-fill').style.width = Math.min(100, (s.timer / 1.5) * 100) + '%'; }
             if (s.timer < 1.5) return;
 
-            let r = Math.random(), reward;
-            if (r < 0.6) reward = itemPool.purple[Math.floor(Math.random() * itemPool.purple.length)];
-            else if (r < 0.9) reward = itemPool.gold[Math.floor(Math.random() * itemPool.gold.length)];
-            else { let up = ultraNoCarriage(); reward = up[Math.floor(Math.random() * up.length)]; }
+            // H13：奖励是造图时按队员预先抽好的（算在这张图的大金上限里）；用完了就出不占上限的紫/金
+            let me = Math.max(0, (gState.team || []).findIndex(function (m) { return m.id === gState.id; }));
+            let list = huntSignalLoot[me] || [], reward = list[gState.signalN || 0];
+            gState.signalN = (gState.signalN || 0) + 1;
+            if (!reward) reward = Math.random() < 0.6 / 0.9 ? itemPool.purple[Math.floor(Math.random() * itemPool.purple.length)] : itemPool.gold[Math.floor(Math.random() * itemPool.gold.length)];
 
             let pos = getHiddenSpawnPos();
             let b = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: createProceduralTexture(reward.tex || 'generic', reward.c, '#ffffff') }));
@@ -17732,8 +17773,10 @@
                 if (meta.openTimer <= 0 && meta.chest && !meta.chest.userData.opened) {
                     let c = meta.chest;
                     c.userData.opened = true; c.material.color.setHex(0x1a1a1a);
+                    // AI 开了也告诉别人（复用 CHEST_OPENED），不然别人那边这个箱子还能再开一次，大金就会超过上限
+                    bc.postMessage({ type: 'CHEST_OPENED', target: '*', cx: Math.floor(c.position.x / TILE), cz: Math.floor(c.position.z / TILE), cf: Math.floor(c.position.y / TILE) });
                     gState.aiChestsTaken = (gState.aiChestsTaken || 0) + 1;
-                    let loot = huntRollChest(c.userData.type, Math.random);
+                    let loot = huntChestLoot(c);
                     if (loot) {
                         let cap = Math.floor(gState.extractTarget * HUNT_AI_PROGRESS_CAP);
                         let add = Math.min(loot.v, Math.max(0, cap - (gState.aiSubmitted || 0)));
