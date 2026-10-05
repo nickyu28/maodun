@@ -104,7 +104,8 @@ async function openTab(chrome, url, opts) {
         }
         if (msg.method === 'Fetch.requestPaused') {
             const u = msg.params.request.url, rid = msg.params.requestId;
-            if (/peerjs/i.test(u)) send('Fetch.fulfillRequest', { requestId: rid, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/javascript' }], body: stub.toString('base64') });
+            if (opts && opts.failUrl && u.indexOf(opts.failUrl) >= 0) send('Fetch.failRequest', { requestId: rid, errorReason: 'Failed' });
+            else if (/peerjs/i.test(u)) send('Fetch.fulfillRequest', { requestId: rid, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/javascript' }], body: stub.toString('base64') });
             else if (/three(\.min)?\.js/i.test(u) && threeLocal) send('Fetch.fulfillRequest', { requestId: rid, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/javascript' }], body: threeLocal.toString('base64') });
             else send('Fetch.continueRequest', { requestId: rid });
         }
@@ -112,7 +113,7 @@ async function openTab(chrome, url, opts) {
     });
     await new Promise((r) => ws.addEventListener('open', r));
     await send('Runtime.enable'); await send('Page.enable');
-    await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }] });
+    await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
     await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url });
@@ -127,6 +128,7 @@ async function openTab(chrome, url, opts) {
         send,
         async close() { try { ws.close(); } catch (e) { } await jget(chrome.port, '/json/close/' + info.id, 'PUT').catch(() => { }); }
     };
+    if (opts && opts.noLobby) return tab;
     const pid = (opts && opts.name) || ('smoke' + Math.floor(Math.random() * 100000));
     await tab.eval(`document.getElementById('player-id').value = ${JSON.stringify(pid)}; requestLobbyAccess(); true;`);
     await W(1500);
@@ -983,6 +985,20 @@ async function enterExit(tab, key) {
             if (r !== 0) bad.push('撤离失败腰包还在 ' + r);
             await A.eval(`${HIDE} returnToGarageFromOver(); gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); nav('screen-lobby'); true;`);
             report('H14 腰包自己装东西：容量、展开收起、不能套娃、进图/上交/撤离/扔/卖/整理', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+
+        {
+            // B5：脚本拆到 js/ 下，地址都带 ?v=版本号；有一个文件下载失败就盖提示和重试按钮
+            const r = JSON.parse(await A.eval(`(function(){ let s = Array.prototype.filter.call(document.scripts, function (x) { return /\\/js\\//.test(x.src); });
+                return JSON.stringify({ n: s.length, files: GAME_FILES.length, ok: s.every(function (x) { return x.src.slice(-('?v=' + GAME_VERSION).length) === '?v=' + GAME_VERSION; }),
+                    order: s.map(function (x) { return x.src.replace(/^.*\\/(js\\/[^?]*).*$/, '$1'); }).join(',') === GAME_FILES.join(',') }); })()`));
+            const bad = [];
+            if (!r.n || r.n !== r.files || !r.ok || !r.order) bad.push('脚本地址 ' + JSON.stringify(r));
+            const F = await openTab(chrome, url, { noLobby: true, failUrl: '?v=' });
+            const f = await F.eval(`(function(){ let d = document.getElementById('boot-fail'); return d ? d.innerText.replace(/\\s+/g, ' ') : null; })()`);
+            if (!f || !/重试/.test(f)) bad.push('文件下载失败没提示 ' + f);
+            await F.close();
+            report('B5 脚本地址带版本号、按顺序；下载失败有提示和重试', bad.length === 0, bad.join(' / ') + ' ' + (r.n || 0) + ' 个文件');
         }
 
         {
