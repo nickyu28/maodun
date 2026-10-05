@@ -1517,6 +1517,29 @@
     </div>
 
     <script>
+        // ── Z1：每台设备清一次所有玩家数据（作者的决定，2026-10-05）──
+        // 标记存在不以 TH_ 开头的 key 里（清 TH_* 不会把它清掉，设置里的"清空本地数据"也不会），
+        // 对不上就删掉所有 TH_*、写上新值，所以每台设备只清一次。以后别改 DATA_WIPE_VER，除非作者明确说要再清。
+        const DATA_WIPE_KEY = 'maodun_data_ver', DATA_WIPE_VER = '2026-10-05';
+        (function () {
+            try {
+                if (localStorage.getItem(DATA_WIPE_KEY) === DATA_WIPE_VER) return;
+                let keys = [];
+                for (let i = 0; i < localStorage.length; i++) { let k = localStorage.key(i); if (k && k.indexOf('TH_') === 0) keys.push(k); }
+                keys.forEach(function (k) { localStorage.removeItem(k); });
+                localStorage.setItem(DATA_WIPE_KEY, DATA_WIPE_VER);
+                // 有旧数据才提示（全新设备没什么可重置的）；进大厅弹一次就删
+                if (keys.length) localStorage.setItem('maodun_wipe_notice', '1');
+            } catch (e) { }
+        })();
+        function dataWipeNotice() {
+            try {
+                if (localStorage.getItem('maodun_wipe_notice') !== '1') return;
+                localStorage.removeItem('maodun_wipe_notice');
+            } catch (e) { return; }
+            showSysModal('提示', '游戏更新了，之前的数据已经重置。', [{ label: '好' }]);
+        }
+
         let gameSeed = 1;
         function seededRandom() { gameSeed = (gameSeed * 9301 + 49297) % 233280; return gameSeed / 233280; }
 
@@ -3371,6 +3394,7 @@
                 document.getElementById('net-room').value = r;
                 netJoinRoom(r);
             } catch (e) { }
+            dataWipeNotice();
             let eb = document.getElementById('btn-egg-book');
             if (eb) eb.innerText = '彩蛋图鉴 ' + eggCount() + ' / ' + Object.keys(EGGS).length;
         }
@@ -6124,6 +6148,7 @@
         const CHANGELOG = [
             {
                 id: '2026-10-05-v2', date: '10 月 5 日', title: '每日效果和寻宝队', items: [
+                    '游戏数据清了一次，大家从头开始',
                     '每日效果的幅度都改小了，快慢高低都只差一点',
                     '寻宝队简单图不再出保险柜',
                     '宝箱开出大金的机会变少了，一张图最多 4 个',

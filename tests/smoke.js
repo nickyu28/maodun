@@ -1123,6 +1123,36 @@ async function enterExit(tab, key) {
 
         report('全程控制台零报错', A.errors.length === 0, A.errors.slice(0, 3).join(' / '));
         await A.close();
+
+        {
+            // Z1：每台设备清一次数据（放最后：会清掉同一个浏览器里所有 TH_ 数据）
+            const Z = await openTab(chrome, url), bad = [];
+            const keys = `(function(){ let o = []; for (let i = 0; i < localStorage.length; i++) { let k = localStorage.key(i); if (k.indexOf('TH_') === 0) o.push(k); } return o.sort().join(','); })()`;
+            const text = `(document.getElementById('sys-modal').classList.contains('hidden') ? '' : document.getElementById('sys-modal-text').innerText)`;
+            const enter = async (name) => { await Z.eval(`document.getElementById('player-id').value = ${JSON.stringify(name)}; requestLobbyAccess(); true;`); await W(1500); };
+            // 模拟清档前的老数据
+            await Z.eval(`localStorage.removeItem('maodun_data_ver'); localStorage.setItem('TH_save_old', '{"ver":2,"money":99999}'); localStorage.setItem('TH_settings', '{}'); localStorage.setItem('TH_mute', '1'); true;`);
+            await Z.send('Page.reload'); await W(2500);
+            let r = await Z.eval(keys);
+            if (r !== '') bad.push('刷新后还有 TH_ 数据 ' + r);
+            if ((await Z.eval(`localStorage.getItem('maodun_data_ver')`)) !== '2026-10-05') bad.push('没写数据版本');
+            await enter('z1new');
+            const t1 = await Z.eval(text);
+            if (!/游戏更新了，之前的数据已经重置。/.test(t1)) bad.push('进大厅没弹提示 ' + t1);
+            if ((await Z.eval('gState.money')) !== 10000) bad.push('存档没按新号开始 ' + (await Z.eval('gState.money')));
+            await Z.eval(`${HIDE} gState.money = 12345; saveProgress(); true;`);
+            // 再刷新：不清、不弹
+            await Z.send('Page.reload'); await W(2500);
+            r = await Z.eval(keys);
+            if (!/TH_save_z1new/.test(r)) bad.push('第二次刷新又清了 ' + r);
+            await enter('z1new');
+            const t2 = await Z.eval(text);
+            if (/重置/.test(t2)) bad.push('第二次又弹了');
+            if ((await Z.eval('gState.money')) !== 12345) bad.push('存档读不回来 ' + (await Z.eval('gState.money')));
+            if (Z.errors.length) bad.push(Z.errors.slice(0, 2).join(' / '));
+            await Z.close();
+            report('Z1 每台设备清一次数据：老数据清掉、进大厅提示一次、再刷新不清不弹、存档正常', bad.length === 0, bad.join(' / '));
+        }
     } catch (e) {
         const d = e.message.match(/"description":"([^"]*)/);
         // 一项检查都还没跑就出错了，多半是 Chrome 自己挂了（连不上调试端口、标签页开不出来），算启动失败
