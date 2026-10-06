@@ -1440,6 +1440,11 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026-10-06-park-ach', date: '10 月 6 日', title: '成就修复', items: [
+                    '「全都玩过」成就现在玩一局乐园也会算数了'
+                ]
+            },
+            {
                 id: '2026-10-05-v3', date: '10 月 5 日', title: '寻宝队地图', items: [
                     '寻宝队每两层之间都一定有楼梯了，不会再有上不去的楼层',
                     '信号接收器的蓝线在楼梯口旁边有桌子的地方不会再穿进桌子了',

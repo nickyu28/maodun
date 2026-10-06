@@ -205,6 +205,7 @@
             let baseReward = Math.round(8 + (park.compiled.winScore || 10) * 1.2 + totalSpeed * 0.3);
             let reward = won ? baseReward : Math.max(1, Math.floor(baseReward * 0.3));
             coinsAdd('park', reward);
+            if (typeof achState === 'function') achState().modes.park = 1;
             if (park.program.creatorId && park.program.creatorId !== gState.id && roomPeers[park.program.creatorId]) {
                 let credit = Math.min(PARK_CREDIT_MAX, Math.round(reward * 0.5));
                 if (credit > 0) bc.postMessage({ type: 'PARK_CREDIT', target: '*', sender: gState.id, to: park.program.creatorId, amount: credit });
