@@ -992,6 +992,25 @@ async function enterExit(tab, key) {
         }
 
         {
+            // C6b：大厅"联机诊断"——四项依次出"通/不通/用时"，最后一句结论，有"复制结果"；只读，不动游戏自己的连接
+            const bad = [];
+            // 测试环境里游戏自己的连接是个一直失败重连的桩，先停掉它，测完看诊断有没有碰它（还应该是 null、没有连接），再连回去
+            await A.eval(`${HIDE} window.__room0 = peerRoom; netLeaveRoom(true); Array.prototype.find.call(document.querySelectorAll('#lobby-tl button'), function (b) { return b.innerText === '联机诊断'; }).click(); true;`);
+            let done = false;
+            for (let i = 0; i < 100 && !done; i++) { await W(300); done = await A.eval(`!!netDiag && netDiag.done`); }
+            const r = JSON.parse(await A.eval(`JSON.stringify({ title: document.getElementById('sys-modal-title').innerText, rows: document.querySelectorAll('#net-diag > div').length,
+                text: netDiagText(), copy: !!Array.prototype.find.call(document.querySelectorAll('#net-diag button'), function (b) { return b.innerText === '复制结果'; }),
+                same: peer === null && peerConns.length === 0 && !peerWant })`));
+            const lines = r.text.split('\n');
+            if (!done) bad.push('没测完');
+            if (r.title !== '联机诊断' || r.rows !== 5 || !r.copy) bad.push('界面 ' + JSON.stringify(r));
+            if (!/^1\. 联机组件加载：通/.test(lines[1]) || !lines.slice(1, 5).every((l) => /：(通|不通)/.test(l)) || !/^结论：./.test(lines[5])) bad.push('结果 ' + r.text);
+            if (!r.same) bad.push('动了游戏自己的连接');
+            await A.eval(`${HIDE} netJoinRoom(window.__room0); true;`);
+            report('C6b 联机诊断四项都有结果和结论，能复制，不动游戏连接', bad.length === 0, bad.length ? bad.join(' / ') : lines.slice(1).join(' | '));
+        }
+
+        {
             // C6a：three.js 和 PeerJS 从自己的 vendor/ 加载，屏蔽 cdnjs 和 unpkg 后照样进大厅；
             // vendor 里的文件和原版逐字节相同（SHA-256 跟提交说明里一致）
             const bad = [];

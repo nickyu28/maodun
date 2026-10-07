@@ -287,6 +287,97 @@
             });
         }
 
+        // ── C6b 联机诊断：一项项测，显示"通 / 不通 / 用时"，最后说哪一环不通。
+        // 只读：自己另开一个临时的 Peer 和 RTCPeerConnection，测完就关，不碰游戏正在用的连接。
+        const NET_DIAG_STEPS = [
+            ['lib', '联机组件加载', '联机组件没加载上，刷新一下再试。'],
+            ['signal', '牵线服务器', '连不上牵线服务器，进不了房间。'],
+            ['stun', '探路服务器', '探路服务器没回地址，不在同一个网络时很难直连，只能靠中转。'],
+            ['turn', '中转服务器', '中转服务器没回地址，两边都没法直连时就连不上。']
+        ];
+        let netDiag = null;
+        function netDiagText() {
+            if (!netDiag) return '';
+            let lines = ['联机诊断　版本 ' + GAME_VERSION + '　' + new Date().toLocaleString()];
+            NET_DIAG_STEPS.forEach(function (st, i) {
+                let r = netDiag.res[st[0]];
+                lines.push((i + 1) + '. ' + st[1] + '：' + (!r ? '测试中…' : (r.ok ? '通' : '不通') + (r.ms !== undefined ? '　' + r.ms + ' 毫秒' : '') + (r.why ? '（' + r.why + '）' : '')));
+            });
+            lines.push(netDiag.done ? '结论：' + netDiagVerdict() : '还在测…');
+            return lines.join('\n');
+        }
+        function netDiagVerdict() {
+            let bad = NET_DIAG_STEPS.filter(function (st) { let r = netDiag.res[st[0]]; return r && !r.ok; });
+            return bad.length ? bad.map(function (st) { return st[2]; }).join('') : '四项都通，联机这边没问题。';
+        }
+        function netDiagRender() {
+            let el = document.getElementById('net-diag'); if (!el || !netDiag) return;
+            el.innerHTML = NET_DIAG_STEPS.map(function (st, i) {
+                let r = netDiag.res[st[0]];
+                let state = !r ? '<span style="color:#999;">测试中…</span>' : r.ok ? '<b style="color:#2e7d32;">通</b>' : '<b style="color:#d9534f;">不通</b>';
+                return '<div style="display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-bottom:1px solid #eee;"><span>' + (i + 1) + '. ' + st[1] + '</span><span>' + state +
+                    (r && r.ms !== undefined ? ' <span style="color:#888;">' + r.ms + ' 毫秒</span>' : '') + (r && r.why ? ' <span style="color:#888;">' + chatEscape(r.why) + '</span>' : '') + '</span></div>';
+            }).join('') + '<div id="net-diag-verdict" style="margin-top:8px; font-weight:bold;">' + (netDiag.done ? chatEscape(netDiagVerdict()) : '还在测…') + '</div>' +
+                '<button onclick="netDiagCopy()" style="margin-top:8px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:6px 14px;">复制结果</button>';
+        }
+        function netDiagCopy() {
+            let t = netDiagText(), ok = function () { blazeFlash('诊断结果复制好了'); };
+            let fallback = function () {
+                let ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed; left:-9999px;';
+                document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); ok(); } catch (e) { } ta.remove();
+            };
+            try { navigator.clipboard.writeText(t).then(ok, fallback); } catch (e) { fallback(); }
+        }
+        function openNetDiag() {
+            let run = { res: {}, done: false };
+            netDiag = run;
+            showSysModal('联机诊断', '<div id="net-diag" style="text-align:left; font-size:13px; min-width:260px;"></div>', [{ label: '关闭', color: '#666' }]);
+            netDiagRender();
+            let set = function (k, r) { if (netDiag !== run) return; run.res[k] = r; netDiagRender(); };
+            let now = function () { return performance.now(); };
+            // 1. 联机组件
+            let libOk = typeof Peer === 'function';
+            let ent = performance.getEntriesByType('resource').filter(function (e) { return /peerjs/i.test(e.name); })[0];
+            set('lib', { ok: libOk, ms: ent ? Math.round(ent.duration) : undefined, why: libOk ? '' : '没加载' });
+            // 2. 牵线服务器：临时 Peer 等 open，10 秒超时
+            let signal = function () {
+                return new Promise(function (resolve) {
+                    if (!libOk) { set('signal', { ok: false, why: '组件没加载' }); resolve(); return; }
+                    let t0 = now(), p = null, fin = false;
+                    let end = function (r) { if (fin) return; fin = true; clearTimeout(to); try { if (p) p.destroy(); } catch (e) { } set('signal', r); resolve(); };
+                    let to = setTimeout(function () { end({ ok: false, why: '10 秒没连上' }); }, 10000);
+                    try { p = new Peer({ config: PEER_ICE_CONFIG }); } catch (e) { end({ ok: false, why: '建不起来' }); return; }
+                    p.on('open', function () { end({ ok: true, ms: Math.round(now() - t0) }); });
+                    p.on('error', function (e) { end({ ok: false, ms: Math.round(now() - t0), why: String((e && e.type) || '出错') }); });
+                });
+            };
+            // 3、4. 探路（srflx）和中转（relay）：临时 RTCPeerConnection 收集候选地址，10 秒为限
+            let ice = function () {
+                return new Promise(function (resolve) {
+                    let t0 = now(), got = {}, pc = null, fin = false;
+                    let end = function () {
+                        if (fin) return; fin = true; clearTimeout(to); try { if (pc) pc.close(); } catch (e) { }
+                        set('stun', got.srflx !== undefined ? { ok: true, ms: got.srflx } : { ok: false, why: '没有返回地址' });
+                        set('turn', got.relay !== undefined ? { ok: true, ms: got.relay } : { ok: false, why: '没有返回地址' });
+                        resolve();
+                    };
+                    let to = setTimeout(end, 10000);
+                    try {
+                        pc = new RTCPeerConnection(PEER_ICE_CONFIG);
+                        pc.createDataChannel('diag');
+                        pc.onicecandidate = function (e) {
+                            if (!e.candidate) { end(); return; }
+                            let m = / typ (srflx|relay)/.exec(e.candidate.candidate || '');
+                            if (m && got[m[1]] === undefined) got[m[1]] = Math.round(now() - t0);
+                            if (got.srflx !== undefined && got.relay !== undefined) end();
+                        };
+                        pc.createOffer().then(function (o) { return pc.setLocalDescription(o); }).catch(end);
+                    } catch (e) { end(); }
+                });
+            };
+            signal().then(ice).then(function () { if (netDiag !== run) return; run.done = true; netDiagRender(); });
+        }
+
         function netLeaveRoom(quiet) {
             peerWant = false;
             if (peerRetry) { clearTimeout(peerRetry); peerRetry = null; }
