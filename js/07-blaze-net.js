@@ -429,6 +429,7 @@
             let ntBaseW = 22, ntBaseH = 22 * cv.height / 320, ntWorldPos = new THREE.Vector3();
             sp.scale.set(ntBaseW, ntBaseH, 1);
             sp.userData.aspect = cv.height / 320;
+            sp.userData.label = dispNameText(text);   // 画上去的名字（测试看这个）
             if (T) sp.center.set(0.5, 40 / cv.height);   // 名字还在原来的位置，称号往上长
             sp.onBeforeRender = function (renderer, sc, cam) {
                 sp.getWorldPosition(ntWorldPos);

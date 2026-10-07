@@ -992,6 +992,31 @@ async function enterExit(tab, key) {
         }
 
         {
+            // C7：同一个房间里两个玩家显示名一样（尾巴不同），两边看到的两个名字不同且一致（名字·尾巴前两位）；
+            // 一个走了，剩下的那个恢复成不带尾巴。两个标签页在同一个浏览器，设备尾巴一样，这里直接把 ID 改成两台设备的样子
+            const bad = [];
+            const P = await openTab(chrome, url), Q = await openTab(chrome, url);
+            await P.eval(`gState.id = 'dd#a1b2'; true;`); await Q.eval(`gState.id = 'dd#k7c3'; true;`);
+            const view = (tab) => tab.eval(`JSON.stringify({ a: dispNameText('dd#a1b2'), k: dispNameText('dd#k7c3'), list: document.getElementById('room-list').innerText,
+                lbl: Object.keys(hub.realPlayers).filter(function (id) { return /^dd#/.test(id); }).map(function (id) { return hub.realPlayers[id].label.userData.label; }).sort().join(',') })`);
+            let vp = null, vq = null;
+            for (let i = 0; i < 40; i++) {
+                await W(300); vp = JSON.parse(await view(P)); vq = JSON.parse(await view(Q));
+                if (vp.a === 'dd·a1' && vq.a === 'dd·a1' && vp.k === 'dd·k7' && vq.k === 'dd·k7' && vp.lbl && vq.lbl) break;
+            }
+            if (vp.a !== 'dd·a1' || vp.k !== 'dd·k7' || vq.a !== vp.a || vq.k !== vp.k) bad.push('名字 ' + JSON.stringify([vp, vq]));
+            if (!/dd·a1/.test(vp.list) || !/dd·k7/.test(vp.list) || !/dd·a1/.test(vq.list) || !/dd·k7/.test(vq.list)) bad.push('名单 ' + vp.list + ' / ' + vq.list);
+            if (vp.lbl !== 'dd·k7' || vq.lbl !== 'dd·a1') bad.push('头顶名字 ' + vp.lbl + ' / ' + vq.lbl);
+            await Q.close();
+            let back = null;
+            for (let i = 0; i < 40; i++) { await W(300); back = await P.eval(`dispNameText(gState.id)`); if (back === 'dd') break; }
+            if (back !== 'dd') bad.push('走了一个还带尾巴 ' + back);
+            if (P.errors.length) bad.push(P.errors.slice(0, 2).join(' / '));
+            await P.close();
+            report('C7 同房间重名加尾巴前两位，两边一致；一个走了恢复不带尾巴', bad.length === 0, bad.join(' / '));
+        }
+
+        {
             // C2：状态栏"在线 N 人"跟着房间名单刷新：两个页面同房间两边都是 2，一个走了另一边回到 1
             const bad = [];
             const st = (tab) => tab.eval(`document.getElementById('net-status').innerText + '|' + roomList.length`);

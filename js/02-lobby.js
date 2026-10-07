@@ -388,9 +388,26 @@
         // resolvePlayerId 加的 #xxxx 小尾巴只是为了后台防撞车，玩家不需要看到它——
         // 显示的时候统一用这个把尾巴去掉（AI 名字是 "本名#xxxx_AI_1" 这种，也要连着摘掉）。
         // 返回的是已经转义过的文本，可以直接拼进 innerHTML（A1）
-        // 名字原文（去掉设备尾巴）：给 innerText、画到画布上、发出去的纯文本用
+        // C7：同一个房间里有人显示名一样（两台设备都叫 d），这几个人名字后面都加设备尾巴的前两位，
+        // 比如"d·a1""d·k7"；前两位也一样就用整个尾巴。没重名就只显示名字。
+        // 只看房间名单里的 ID 算（roomSync 时重算），各端名单一样，算出来就一样。
+        let dispDup = {};   // 显示名 → 房间里用这个显示名、带设备尾巴的 ID（2 个以上才记）
+        function dispNameBase(id) { return String(id || '').replace(/#[0-9a-z]{4}(?=(_AI_\d+)?$)/, ''); }
+        function dispDupRebuild(ids) {
+            let by = {}, next = {};
+            ids.forEach(function (id) { if (!/#[0-9a-z]{4}$/.test(id)) return; let b = dispNameBase(id); (by[b] = by[b] || []).push(id); });
+            Object.keys(by).forEach(function (b) { if (by[b].length > 1) next[b] = by[b].slice().sort(); });
+            let changed = JSON.stringify(next) !== JSON.stringify(dispDup);
+            dispDup = next;
+            return changed;
+        }
+        // 名字原文（去掉设备尾巴，重名时带尾巴前两位）：给 innerText、画到画布上、发出去的纯文本用
         function dispNameText(id) {
-            return String(id || '').replace(/#[0-9a-z]{4}(?=(_AI_\d+)?$)/, '');
+            let s = String(id || ''), base = dispNameBase(s), dup = dispDup[base], m = /#([0-9a-z]{4})$/.exec(s);
+            if (!dup || !m || dup.indexOf(s) < 0) return base;
+            let short = m[1].slice(0, 2);
+            let clash = dup.filter(function (x) { return x.slice(-4, -2) === short; }).length > 1;
+            return base + '·' + (clash ? m[1] : short);
         }
         // 转义后的名字：给拼进 innerHTML 用
         function dispName(id) {

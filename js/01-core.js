@@ -395,7 +395,7 @@
             peerWant = false;
             if (peerRetry) { clearTimeout(peerRetry); peerRetry = null; }
             netDropPeer(); peerIsHost = false;
-            roomPeers = {}; roomList = []; roomRender(); netShownCount = 0;
+            roomPeers = {}; roomList = []; if (dispDupRebuild([])) hubRelabel(); roomRender(); netShownCount = 0;
             if (!quiet) netSetStatus('未连接', '#999');
         }
 
@@ -536,6 +536,7 @@
                 let q = roomPeers[id];
                 if (q.mm && q.mm.mode) mmRoomPool[id] = { mode: q.mm.mode, left: q.mm.left };
             });
+            if (dispDupRebuild(roomList.map(function (r) { return r.id; }))) { if (typeof hubRelabel === 'function') hubRelabel(); }
             roomRender(); netCountSync();
             if (nightMatch) nightMatchTick();
             if (mmActive) mmTick();

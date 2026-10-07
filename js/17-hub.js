@@ -320,6 +320,17 @@
                 fx: +hub.faceDir.x.toFixed(2), fz: +hub.faceDir.z.toFixed(2)
             });
         }
+        // C7：房间里重名的情况变了，大厅里别的真人头顶的名字重画一遍
+        function hubRelabel() {
+            if (!hub) return;
+            Object.keys(hub.realPlayers).forEach(function (id) {
+                let w = hub.realPlayers[id]; if (!w.label) return;
+                w.mesh.remove(w.label);
+                if (w.label.material) { if (w.label.material.map) w.label.material.map.dispose(); w.label.material.dispose(); }
+                w.label = nightMakeLabel(id, 0xff8a65, false, peerTitleOf(id));
+                w.label.position.y = 13.5; w.mesh.add(w.label);
+            });
+        }
         const HUB_REAL_STALE = 6000;   // 这么久没收到更新就当对方离开大厅了
         function hubOnMe(m) {
             if (!hub || !m.sender || m.sender === gState.id) return;
@@ -330,7 +341,7 @@
                 label.position.y = 13.5; mesh.add(label);
                 scene.add(mesh);
                 w = hub.realPlayers[m.sender] = {
-                    name: m.sender, isAI: false, mesh: mesh,
+                    name: m.sender, isAI: false, mesh: mesh, label: label,
                     p: new THREE.Vector3(m.x, m.y || 0, m.z), target: null,
                     faceDir: { x: m.fx || 0, z: m.fz || 1 }, animT: 0, spd: 0
                 };
