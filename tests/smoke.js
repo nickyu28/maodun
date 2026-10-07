@@ -1030,7 +1030,9 @@ async function enterExit(tab, key) {
             // 新开页面加载的时候别的标签页一直在发消息，也不报错（所有文件下载完一口气执行，中间没有空档）
             const r = JSON.parse(await A.eval(`(function(){ let s = performance.getEntriesByType('resource').filter(function (e) { return /\\/js\\/[^?]*\\.js\\?v=/.test(e.name); });
                 return JSON.stringify({ n: s.length, files: GAME_FILES.length, ok: s.every(function (e) { return e.name.slice(-('?v=' + GAME_VERSION).length) === '?v=' + GAME_VERSION; }),
-                    order: s.map(function (e) { return e.name.replace(/^.*\\/(js\\/[^?]*).*$/, '$1'); }).join(',') === GAME_FILES.join(',') }); })()`));
+                    // 文件同时下载，下载完的先后不一定；要看的是执行顺序：<head> 里按执行顺序插入的 <script>，末尾带 sourceURL
+                    order: Array.prototype.map.call(document.head.querySelectorAll('script'), function (x) { let m = /sourceURL=(\\S+)\\s*$/.exec(x.text); return m ? m[1] : null; })
+                        .filter(function (x) { return x; }).join(',') === GAME_FILES.join(',') }); })()`));
             const bad = [];
             if (!r.n || r.n !== r.files || !r.ok || !r.order) bad.push('脚本地址 ' + JSON.stringify(r));
             const F = await openTab(chrome, url, { noLobby: true, failUrl: '?v=' });
