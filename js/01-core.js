@@ -168,8 +168,21 @@
         // netCount 在客人这边永远是 2，看不出真实房间人数。roomList 是靠
         // ROOM_HELLO 经房主转发汇总出来的，房主/客人两边看到的都是真实总数。
         function roomOnlineCount() { return Math.max(1, roomList.length); }
+        let netShownCount = 0;   // 状态栏现在显示的"在线 N 人"（0 = 没在显示人数）
         function netRefreshCount() {
-            netSetStatus((peerIsHost ? '房主' : '已加入') + '　房间 ' + peerRoom + '　在线 ' + roomOnlineCount() + ' 人', '#5cb85c');
+            netShownCount = roomOnlineCount();
+            netSetStatus((peerIsHost ? '房主' : '已加入') + '　房间 ' + peerRoom + '　在线 ' + netShownCount + ' 人', '#5cb85c');
+        }
+        // C2：原来只在房主 open、连接 open/close 时刷新，那时 roomList 还是空的，一直显示 1。
+        // 现在 roomList 每次变（roomSync）都看一下：在房间里、人数变了（或者状态栏被别的提示盖掉了）就刷新。
+        // 房主和客人都靠心跳汇总 roomList，两边都走这里。
+        function netCountSync() {
+            let el = document.getElementById('net-status');
+            let inRoom = roomList.length > 0 || !!(peer && peer.open && (peerIsHost || peerConns.some(function (c) { return c && c.open; })));
+            // 别人都走了、自己也没真连着：把人数改回 1 显示一次就不管了（别一直盖掉"连接出错"之类的提示）
+            if (!inRoom) { if (netShownCount > 1) netRefreshCount(); netShownCount = 0; return; }
+            if (roomOnlineCount() === netShownCount && el && /在线 \d+ 人/.test(el.innerText)) return;
+            netRefreshCount();
         }
 
         function netHookConn(c) {
@@ -382,7 +395,7 @@
             peerWant = false;
             if (peerRetry) { clearTimeout(peerRetry); peerRetry = null; }
             netDropPeer(); peerIsHost = false;
-            roomPeers = {}; roomList = []; roomRender();
+            roomPeers = {}; roomList = []; roomRender(); netShownCount = 0;
             if (!quiet) netSetStatus('未连接', '#999');
         }
 
@@ -523,7 +536,7 @@
                 let q = roomPeers[id];
                 if (q.mm && q.mm.mode) mmRoomPool[id] = { mode: q.mm.mode, left: q.mm.left };
             });
-            roomRender();
+            roomRender(); netCountSync();
             if (nightMatch) nightMatchTick();
             if (mmActive) mmTick();
             voiceMeshSync();

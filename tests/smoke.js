@@ -992,6 +992,24 @@ async function enterExit(tab, key) {
         }
 
         {
+            // C2：状态栏"在线 N 人"跟着房间名单刷新：两个页面同房间两边都是 2，一个走了另一边回到 1
+            const bad = [];
+            const st = (tab) => tab.eval(`document.getElementById('net-status').innerText + '|' + roomList.length`);
+            const B = await openTab(chrome, url);
+            let seenA = '', seenB = '';
+            for (let i = 0; i < 40 && !(/在线 2 人\|2$/.test(seenA) && /在线 2 人\|2$/.test(seenB)); i++) {
+                await W(300); const a = await st(A), b = await st(B); if (!/在线 2 人\|2$/.test(seenA)) seenA = a; if (!/在线 2 人\|2$/.test(seenB)) seenB = b;
+            }
+            if (!/在线 2 人\|2$/.test(seenA) || !/在线 2 人\|2$/.test(seenB)) bad.push('两边应该都是 2：' + seenA + ' / ' + seenB);
+            if (B.errors.length) bad.push(B.errors.slice(0, 2).join(' / '));
+            await B.close();
+            let back = '';
+            for (let i = 0; i < 40 && !/在线 1 人\|0$/.test(back); i++) { await W(300); back = await st(A); }
+            if (!/在线 1 人\|0$/.test(back)) bad.push('走了一个应该回到 1：' + back);
+            report('C2 状态栏在线人数跟着房间名单变（两边都是 2，走一个回到 1）', bad.length === 0, bad.join(' / '));
+        }
+
+        {
             // C6b：大厅"联机诊断"——四项依次出"通/不通/用时"，最后一句结论，有"复制结果"；只读，不动游戏自己的连接
             const bad = [];
             // 测试环境里游戏自己的连接是个一直失败重连的桩，先停掉它，测完看诊断有没有碰它（还应该是 null、没有连接），再连回去
