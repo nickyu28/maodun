@@ -869,9 +869,11 @@
         .bz-card.bz-poor { animation: none; opacity: .45; filter: grayscale(.6); }
         .bz-pop { animation: bzCardPop .38s ease-out; }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- C6a：three.js 和 PeerJS 放在自己仓库的 vendor/ 下（原来从 cdnjs / unpkg 加载，国内不稳）。
+         内容和原版逐字节相同；文件名带库的版本号，换版本就换文件名，浏览器不会拿到旧的。 -->
+    <script src="vendor/three-r128.min.js"></script>
     <!-- 跨电脑联机：PeerJS 自带免费的公共信令服务器，不用自己跑任何东西 -->
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="vendor/peerjs-1.5.4.min.js"></script>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>

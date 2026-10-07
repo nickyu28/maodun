@@ -5,7 +5,7 @@
 //
 // 环境变量：
 //   CHROME_PATH   Chrome / Chromium 可执行文件（不填就在常见位置找）
-//   THREE_LOCAL   three.min.js 的本地路径（填了就不从 CDN 下载，离线时用）
+//   THREE_LOCAL   three.min.js 的本地路径（填了就用它代替 vendor/ 里的那份，一般不用填）
 //   SMOKE_LOG_DIR 填了就把 Chrome 自己的输出写到这个目录的 chrome.log（CI 失败时一起上传）
 //
 // 退出码：0 全过；1 有检查没过；3 Chrome 没起来 / 还没跑到任何检查就退出了（CI 会自动重试一次）
@@ -89,7 +89,7 @@ function jget(port, p, method) {
 async function openTab(chrome, url, opts) {
     const info = await jget(chrome.port, '/json/new?about:blank', 'PUT');
     const ws = new WebSocket(info.webSocketDebuggerUrl);
-    let id = 0; const pending = new Map(); const errors = [];
+    let id = 0; const pending = new Map(); const errors = [], blocked = [];
     const send = (method, params) => new Promise((res) => { const mid = ++id; pending.set(mid, res); ws.send(JSON.stringify({ id: mid, method, params: params || {} })); });
     const stub = fs.readFileSync(path.join(__dirname, 'peerjs-stub.js'));
     const threeLocal = process.env.THREE_LOCAL && fs.existsSync(process.env.THREE_LOCAL) ? fs.readFileSync(process.env.THREE_LOCAL) : null;
@@ -105,6 +105,7 @@ async function openTab(chrome, url, opts) {
         if (msg.method === 'Fetch.requestPaused') {
             const u = msg.params.request.url, rid = msg.params.requestId;
             if (opts && opts.failUrl && u.indexOf(opts.failUrl) >= 0) send('Fetch.failRequest', { requestId: rid, errorReason: 'Failed' });
+            else if (opts && opts.blockHosts && opts.blockHosts.some((h) => u.indexOf(h) >= 0)) { blocked.push(u); send('Fetch.failRequest', { requestId: rid, errorReason: 'BlockedByClient' }); }
             else if (opts && opts.delayUrl && u.indexOf(opts.delayUrl) >= 0) setTimeout(() => send('Fetch.continueRequest', { requestId: rid }), opts.delayMs || 2000);
             else if (/peerjs/i.test(u)) send('Fetch.fulfillRequest', { requestId: rid, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/javascript' }], body: stub.toString('base64') });
             else if (/three(\.min)?\.js/i.test(u) && threeLocal) send('Fetch.fulfillRequest', { requestId: rid, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/javascript' }], body: threeLocal.toString('base64') });
@@ -114,13 +115,13 @@ async function openTab(chrome, url, opts) {
     });
     await new Promise((r) => ws.addEventListener('open', r));
     await send('Runtime.enable'); await send('Page.enable');
-    await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []) });
+    await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []).concat(opts && opts.blockHosts ? opts.blockHosts.map((h) => ({ urlPattern: '*' + h + '*' })) : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
     await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url });
     if (opts && opts.navWait !== undefined) await W(opts.navWait); else await W(2500);
     const tab = {
-        errors,
+        errors, blocked,
         async eval(expr) {
             const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true });
             if (r.result && r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 500));
@@ -988,6 +989,23 @@ async function enterExit(tab, key) {
             if (r !== 0) bad.push('撤离失败腰包还在 ' + r);
             await A.eval(`${HIDE} returnToGarageFromOver(); gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); nav('screen-lobby'); true;`);
             report('H14 腰包自己装东西：容量、展开收起、不能套娃、进图/上交/撤离/扔/卖/整理', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+
+        {
+            // C6a：three.js 和 PeerJS 从自己的 vendor/ 加载，屏蔽 cdnjs 和 unpkg 后照样进大厅；
+            // vendor 里的文件和原版逐字节相同（SHA-256 跟提交说明里一致）
+            const bad = [];
+            const V = await openTab(chrome, url, { blockHosts: ['cdnjs.cloudflare.com', 'unpkg.com'] });
+            const r = JSON.parse(await V.eval(`JSON.stringify({ three: typeof THREE !== 'undefined' && THREE.REVISION, lobby: !document.getElementById('screen-lobby').classList.contains('hidden'),
+                cdn: performance.getEntriesByType('resource').filter(function (e) { return /cdnjs|unpkg/.test(e.name); }).length })`));
+            if (r.three !== '128' || !r.lobby || r.cdn) bad.push(JSON.stringify(r));
+            if (V.blocked.length) bad.push('还在请求 ' + V.blocked.join(', '));
+            if (V.errors.length) bad.push(V.errors.slice(0, 2).join(' / '));
+            const sha = {}; ['vendor/three-r128.min.js', 'vendor/peerjs-1.5.4.min.js'].forEach((f) => { sha[f] = require('crypto').createHash('sha256').update(fs.readFileSync(path.join(ROOT, f))).digest('hex'); });
+            if (sha['vendor/three-r128.min.js'] !== '9274bbcec8d96168626c732b5d31c775aa8cfb7eaa0599bec0c175908a2c1ce2') bad.push('three 内容变了');
+            if (sha['vendor/peerjs-1.5.4.min.js'] !== 'ad5d8870d1e389914f9cba8d35be313c4327c69ee0a221e482e9bf7621136fe5') bad.push('peerjs 内容变了');
+            await V.close();
+            report('C6a three.js / PeerJS 从自己仓库加载，屏蔽 cdnjs、unpkg 也能进大厅', bad.length === 0, bad.join(' / '));
         }
 
         {
