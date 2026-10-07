@@ -1440,6 +1440,11 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026-10-07', date: '10 月 7 日', title: '加载、联机和大厅', items: [
+                    '打开游戏更快了，加载时会显示进度'
+                ]
+            },
+            {
                 id: '2026-10-05-v3', date: '10 月 5 日', title: '寻宝队地图', items: [
                     '寻宝队每两层之间都一定有楼梯了，不会再有上不去的楼层',
                     '信号接收器的蓝线在楼梯口旁边有桌子的地方不会再穿进桌子了',

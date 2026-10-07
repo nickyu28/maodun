@@ -1521,11 +1521,13 @@
         const GAME_VERSION = '2026.10.05-4';
         // B5：脚本拆到 js/ 下面，按这个顺序执行（顺序不能乱，后面的文件要用前面定义的东西）。
         // 地址后面带 ?v=版本号，发新版时浏览器一定拿新文件，不会一半新一半旧。
-        // 先把所有文件都下载下来，再在同一时刻一个接一个执行：中间不留空档，
-        // 不会出现前面的文件收到消息/定时器触发时，后面文件里的函数还没定义。有一个没下载下来就一个都不执行。
+        // L1：所有文件同时下载（异步），页面上显示"加载中 n/17"；全部到齐、页面也解析完以后，
+        // 在同一时刻一个接一个执行：中间不留空档，不会出现前面的文件收到消息/定时器触发时，
+        // 后面文件里的函数还没定义。有一个没下载下来就一个都不执行，盖一层重试提示。
         const GAME_FILES = ['js/01-core.js', 'js/02-lobby.js', 'js/03-world.js', 'js/04-blaze-2v2.js', 'js/05-shop.js', 'js/06-blaze.js', 'js/07-blaze-net.js', 'js/08-night.js', 'js/09-hunt.js', 'js/10-race.js', 'js/11-jail.js', 'js/12-dodge.js', 'js/13-escape.js', 'js/14-park.js', 'js/15-cake.js', 'js/16-modes.js', 'js/17-hub.js'];
         // 哪个文件没下载下来，就盖一层提示，给个重试按钮
         function gameBootFail() {
+            let l = document.getElementById('boot-load'); if (l) l.remove();
             if (document.getElementById('boot-fail')) return;
             let d = document.createElement('div'); d.id = 'boot-fail';
             d.style.cssText = 'position:fixed; left:0; top:0; right:0; bottom:0; z-index:99999; background:rgba(0,0,0,.8); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; font-size:18px;';
@@ -1533,20 +1535,37 @@
             d.querySelector('button').onclick = function () { location.reload(); };
             (document.body || document.documentElement).appendChild(d);
         }
+        // 下载、执行花了多久（毫秒，从这段代码开始算），测试和排查慢的时候看
+        const GAME_BOOT = { start: performance.now(), fetched: 0, done: 0 };
         (function () {
-            let codes = [];
-            try {
-                GAME_FILES.forEach(function (f) {
-                    let x = new XMLHttpRequest(); x.open('GET', f + '?v=' + GAME_VERSION, false); x.send();
-                    if (x.status !== 200 || !x.responseText) throw new Error(f);
-                    codes.push(x.responseText + '\n//# sourceURL=' + f);
-                });
-            } catch (e) {
-                // 直接双击打开本地文件（file://）时浏览器不让这样读，退回普通的 <script src>
-                if (location.protocol === 'file:') { GAME_FILES.forEach(function (f) { document.write('<script src="' + f + '"><\/script>'); }); return; }
-                gameBootFail(); return;
-            }
-            codes.forEach(function (c) { let el = document.createElement('script'); el.text = c; document.head.appendChild(el); });
+            // 直接双击打开本地文件（file://）时浏览器不让这样读，退回普通的 <script src>
+            if (location.protocol === 'file:') { GAME_FILES.forEach(function (f) { document.write('<script src="' + f + '"><\/script>'); }); return; }
+            // 加载进度：盖住整个页面（游戏还没跑起来，按钮点了也没用）
+            let box = document.createElement('div'); box.id = 'boot-load';
+            box.style.cssText = 'position:fixed; left:0; top:0; right:0; bottom:0; z-index:99998; background:#eef3f8; color:#2c5d8f; display:flex; align-items:center; justify-content:center; font-size:18px;';
+            (document.body || document.documentElement).appendChild(box);
+            let got = 0, codes = [], failed = false;
+            let show = function () { box.innerText = '加载中 ' + got + '/' + GAME_FILES.length; };
+            show();
+            let run = function () {
+                box.remove();
+                codes.forEach(function (c) { let el = document.createElement('script'); el.text = c; document.head.appendChild(el); });
+                GAME_BOOT.done = performance.now() - GAME_BOOT.start;
+            };
+            GAME_FILES.forEach(function (f, i) {
+                fetch(f + '?v=' + GAME_VERSION).then(function (r) {
+                    if (!r.ok) throw new Error(f);
+                    return r.text();
+                }).then(function (t) {
+                    if (failed) return;
+                    if (!t) throw new Error(f);
+                    codes[i] = t + '\n//# sourceURL=' + f; got++; show();
+                    if (got < GAME_FILES.length) return;
+                    GAME_BOOT.fetched = performance.now() - GAME_BOOT.start;
+                    // 等页面其余部分也解析完再执行（跟原来一样，游戏代码里没人等 DOMContentLoaded）
+                    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+                }).catch(function () { if (!failed) { failed = true; gameBootFail(); } });
+            });
         })();
     </script>
 

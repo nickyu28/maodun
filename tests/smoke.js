@@ -105,6 +105,7 @@ async function openTab(chrome, url, opts) {
         if (msg.method === 'Fetch.requestPaused') {
             const u = msg.params.request.url, rid = msg.params.requestId;
             if (opts && opts.failUrl && u.indexOf(opts.failUrl) >= 0) send('Fetch.failRequest', { requestId: rid, errorReason: 'Failed' });
+            else if (opts && opts.delayUrl && u.indexOf(opts.delayUrl) >= 0) setTimeout(() => send('Fetch.continueRequest', { requestId: rid }), opts.delayMs || 2000);
             else if (/peerjs/i.test(u)) send('Fetch.fulfillRequest', { requestId: rid, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/javascript' }], body: stub.toString('base64') });
             else if (/three(\.min)?\.js/i.test(u) && threeLocal) send('Fetch.fulfillRequest', { requestId: rid, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/javascript' }], body: threeLocal.toString('base64') });
             else send('Fetch.continueRequest', { requestId: rid });
@@ -113,11 +114,11 @@ async function openTab(chrome, url, opts) {
     });
     await new Promise((r) => ws.addEventListener('open', r));
     await send('Runtime.enable'); await send('Page.enable');
-    await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []) });
+    await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
     await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url });
-    await W(2500);
+    if (opts && opts.navWait !== undefined) await W(opts.navWait); else await W(2500);
     const tab = {
         errors,
         async eval(expr) {
@@ -987,6 +988,26 @@ async function enterExit(tab, key) {
             if (r !== 0) bad.push('撤离失败腰包还在 ' + r);
             await A.eval(`${HIDE} returnToGarageFromOver(); gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); nav('screen-lobby'); true;`);
             report('H14 腰包自己装东西：容量、展开收起、不能套娃、进图/上交/撤离/扔/卖/整理', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+
+        {
+            // L1：17 个文件同时下载，页面显示"加载中 n/17"；其中一个晚到 2 秒，先显示进度、不报错，最后正常进大厅
+            const bad = [];
+            const D = await openTab(chrome, url, { noLobby: true, delayUrl: 'js/09-hunt.js', delayMs: 2000, navWait: 800 });
+            const t1 = await D.eval(`(function(){ let b = document.getElementById('boot-load'); return (b ? b.innerText : '') + '|' + (typeof requestLobbyAccess); })()`);
+            if (!/^加载中 \d+\/17\|undefined$/.test(t1)) bad.push('先显示进度 ' + t1);
+            let ready = false;
+            for (let i = 0; i < 40 && !ready; i++) { await W(250); ready = await D.eval(`typeof requestLobbyAccess === 'function' && !document.getElementById('boot-load')`); }
+            if (!ready) bad.push('文件到齐后没跑起来');
+            await D.eval(`document.getElementById('player-id').value = 'l1' + Date.now() % 10000; requestLobbyAccess(); true;`); await W(1500);
+            const scr = await D.eval(`!document.getElementById('screen-lobby').classList.contains('hidden') && gState.id !== ''`);
+            if (!scr) bad.push('没进大厅');
+            const bt = JSON.parse(await D.eval('JSON.stringify(GAME_BOOT)'));
+            if (bt.fetched < 1900) bad.push('延迟没生效 ' + JSON.stringify(bt));
+            if (D.errors.length) bad.push(D.errors.slice(0, 2).join(' / '));
+            await D.close();
+            const bootA = JSON.parse(await A.eval('JSON.stringify(GAME_BOOT)'));
+            report('L1 文件同时下载、显示进度；一个文件晚到 2 秒也不报错、能进大厅', bad.length === 0, bad.join(' / ') + ' 本页下载 ' + Math.round(bootA.fetched) + 'ms、全部执行完 ' + Math.round(bootA.done) + 'ms');
         }
 
         {
