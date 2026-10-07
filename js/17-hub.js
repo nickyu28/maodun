@@ -55,19 +55,6 @@
             post.position.set(HUB.board.x, 7, HUB.board.z); scene.add(post); hub.meshes.push(post);
             let board = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshBasicMaterial({ map: boardTex }));
             board.position.set(HUB.board.x, 13, HUB.board.z); scene.add(board); hub.meshes.push(board);
-
-            // 顺手加几个长椅/路灯凑个热闹，纯装饰不参与任何判定
-            [[50, 60], [-50, -60], [70, -40]].forEach(function (pos) {
-                let bench = new THREE.Mesh(new THREE.BoxGeometry(10, 2, 4), new THREE.MeshLambertMaterial({ color: 0x8d6e63 }));
-                bench.position.set(pos[0], 1, pos[1]); scene.add(bench); hub.meshes.push(bench);
-            });
-            [[80, 80], [-80, 80], [80, -80], [-80, -80]].forEach(function (pos) {
-                let poleMat = new THREE.MeshLambertMaterial({ color: 0x616161 });
-                let pole = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 16, 8), poleMat);
-                pole.position.set(pos[0], 8, pos[1]); scene.add(pole); hub.meshes.push(pole);
-                let lamp = new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 10), new THREE.MeshBasicMaterial({ color: 0xfff59d }));
-                lamp.position.set(pos[0], 16.5, pos[1]); scene.add(lamp); hub.meshes.push(lamp);
-            });
         }
         // 路人名字要像真玩家会取的 ID，不是"路人猫盾A"这种一看就是机器人的占位名；
         // 同时尽量挑生僻/少见的组合，避免正好跟真玩家自己取的昵称撞名。

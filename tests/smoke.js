@@ -1017,6 +1017,16 @@ async function enterExit(tab, key) {
         }
 
         {
+            // N4：大厅里的长椅和路灯删掉了，公告板还在
+            const r = JSON.parse(await A.eval(`JSON.stringify((function () { let g = hub.meshes.map(function (m) { return m.geometry; });
+                return { lamp: g.filter(function (x) { return x.type === 'SphereGeometry'; }).length,
+                    bench: g.filter(function (x) { return x.type === 'BoxGeometry' && x.parameters.width === 10 && x.parameters.height === 2 && x.parameters.depth === 4; }).length,
+                    pole: g.filter(function (x) { return x.type === 'CylinderGeometry' && x.parameters.height === 16; }).length,
+                    board: g.filter(function (x) { return x.type === 'PlaneGeometry' && x.parameters.width === 16 && x.parameters.height === 8; }).length }; })())`));
+            report('N4 大厅没有长椅和路灯，公告板还在', r.lamp === 0 && r.bench === 0 && r.pole === 0 && r.board === 1, JSON.stringify(r));
+        }
+
+        {
             // C2：状态栏"在线 N 人"跟着房间名单刷新：两个页面同房间两边都是 2，一个走了另一边回到 1
             const bad = [];
             const st = (tab) => tab.eval(`document.getElementById('net-status').innerText + '|' + roomList.length`);
