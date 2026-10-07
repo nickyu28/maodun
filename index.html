@@ -413,6 +413,9 @@
         #joystick-left {
             bottom: 30px;
             left: 30px;
+            /* U2：原来没有 z-index，被画在游戏画面（1）和各页面（.screen 20，大厅底栏在里面）下面，看不见但摸得到。
+               放到它们上面、弹窗下面；大厅里还会抬到底栏上面（chatVisTick） */
+            z-index: 24;
         }
 
         .knob {

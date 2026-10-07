@@ -1042,6 +1042,35 @@ async function enterExit(tab, key) {
         }
 
         {
+            // U2：触屏（pad）时摇杆看得见——摇杆中心点最上层的元素就是摇杆本身；拖动摇杆，大厅和寻宝队里人都会动
+            const bad = [];
+            const top = `(function(){ let j = document.getElementById('joystick-left'), r = j.getBoundingClientRect(); let e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                return JSON.stringify({ c: [r.left + r.width / 2, r.top + r.height / 2], top: e ? (e.id || e.tagName) : null, shown: getComputedStyle(j).display !== 'none' }); })()`;
+            const drag = async (c) => {
+                const tp = (type, p) => A.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 7 }] : [] });
+                await tp('touchStart', c);
+                for (let i = 1; i <= 30; i++) { await tp('touchMove', [c[0], c[1] - Math.min(45, i * 5)]); await W(33); }
+                await tp('touchEnd', null); await W(200);
+            };
+            await A.eval(`${HIDE} selectControl('pad'); true;`); await W(600);
+            let j = JSON.parse(await A.eval(top));
+            if (!j.shown || j.top !== 'joystick-left') bad.push('大厅里摇杆被盖住 ' + JSON.stringify(j));
+            const h0 = await A.eval(`hub.p.x + ',' + hub.p.z`);
+            await drag(j.c);
+            const h1 = await A.eval(`hub.p.x + ',' + hub.p.z`);
+            if (h0 === h1) bad.push('大厅里拖摇杆人没动');
+            await A.eval(`${HIDE} ${MODES.hunt.start}; true;`); await W(2500); await A.eval(`${HIDE} true;`); await W(400);
+            j = JSON.parse(await A.eval(top));
+            if (!j.shown || j.top !== 'joystick-left') bad.push('寻宝队里摇杆被盖住 ' + JSON.stringify(j));
+            const p0 = await A.eval(`camera.position.x.toFixed(2) + ',' + camera.position.z.toFixed(2)`);
+            await drag(j.c);
+            const p1 = await A.eval(`camera.position.x.toFixed(2) + ',' + camera.position.z.toFixed(2)`);
+            if (p0 === p1) bad.push('寻宝队里拖摇杆人没动');
+            await A.eval(`${HIDE} ${MODES.hunt.exit}; selectControl('laptop'); true;`); await W(1000);
+            report('U2 触屏摇杆在最上层看得见，大厅和寻宝队里拖了人会动', bad.length === 0, bad.join(' / '));
+        }
+
+        {
             // C7：同一个房间里两个玩家显示名一样（尾巴不同），两边看到的两个名字不同且一致（名字·尾巴前两位）；
             // 一个走了，剩下的那个恢复成不带尾巴。两个标签页在同一个浏览器，设备尾巴一样，这里直接把 ID 改成两台设备的样子
             const bad = [];

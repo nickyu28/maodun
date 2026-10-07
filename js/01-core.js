@@ -1434,6 +1434,8 @@
             // 正好盖在组队列表和麦克风上。在大厅就整体抬到面板上面。
             let lb = document.getElementById('lobby-bottom');
             let lift = (key === 'hub' && lb && lb.offsetParent) ? lb.offsetHeight + 8 : 14;
+            // U2：摇杆也一样，大厅里抬到底栏上面，别的模式回到左下角
+            if (joy) joy.style.bottom = (key === 'hub' && lb && lb.offsetParent ? lift + 8 : 30) + 'px';
             document.getElementById('chat-log').style.bottom = lift + 'px';
             document.getElementById('chat-panel').style.bottom = lift + 'px';
             // 离开某个模式（回大厅或直接进下一个模式）：局里 AI 队友的喊话（"这块我来站着"之类）
