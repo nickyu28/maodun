@@ -66,6 +66,7 @@
         // 路人颜色池——之前全员统一灰色（0xb0bec5），一群路人挤在一起完全分不清谁是谁，
         // 远处看就是一片灰扑扑的东西。换成从这个色板里随机挑，一眼能看出是好几个人。
         const HUB_WANDER_COLORS = [0xef9a9a, 0x90caf9, 0xa5d6a7, 0xffe082, 0xce93d8, 0xffab91, 0x80cbc4, 0xf48fb1, 0xbcaaa4, 0x9fa8da];
+        const HUB_SPAWN_CLEAR = 70;
         function hubSpawnWanderers() {
             let pool = HUB_BOT_NAMES.slice();
             for (let i = 0; i < HUB.wanderCount; i++) {
@@ -78,7 +79,9 @@
                 let label = nightMakeLabel(name, col, false, aiRandomTitle());
                 label.position.y = 13.5; mesh.add(label);
                 scene.add(mesh);
-                let x = (Math.random() - 0.5) * HUB.plazaHalf, z = (Math.random() - 0.5) * HUB.plazaHalf;
+                // U3：别生在玩家出生点（0, 20）附近，不然一进大厅整屏被一只路人挡住
+                let x, z;
+                do { x = (Math.random() - 0.5) * HUB.plazaHalf; z = (Math.random() - 0.5) * HUB.plazaHalf; } while (Math.hypot(x, z - 20) < HUB_SPAWN_CLEAR);
                 hub.wanderers.push({
                     name: name, isAI: true, mesh: mesh,
                     p: new THREE.Vector3(x, 0, z), faceDir: { x: 0, z: 1 }, animT: 0,

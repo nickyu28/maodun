@@ -1071,6 +1071,29 @@ async function enterExit(tab, key) {
         }
 
         {
+            // U3：大厅左边按钮有半透明底；大厅只剩一个"发言"；路人不生在出生点附近；1180×820 时仓库"返回大厅"不用滚就看得到
+            const bad = [];
+            await A.eval(`${HIDE} nav('screen-lobby'); true;`); await W(500);
+            const bg = await A.eval(`getComputedStyle(document.getElementById('lobby-tl')).backgroundColor`);
+            const m = /rgba?\(([^)]*)\)/.exec(bg), alpha = m ? (m[1].split(',').length > 3 ? +m[1].split(',')[3] : 1) : 0;
+            if (!(alpha >= 0.5)) bad.push('左边按钮没有底色 ' + bg);
+            const talk = await A.eval(`Array.prototype.filter.call(document.querySelectorAll('button, div'), function (e) { return e.children.length === 0 && /^发言/.test(e.innerText.trim()) && e.offsetParent !== null; }).length`);
+            if (talk !== 1) bad.push('大厅里"发言"有 ' + talk + ' 个');
+            let near = 0;
+            for (let k = 0; k < 20; k++) near += await A.eval(`hubExit(); hubBegin(); hub.wanderers.filter(function (w) { return Math.hypot(w.p.x, w.p.z - 20) < 70; }).length`);
+            if (near) bad.push('路人生在出生点附近 ' + near + ' 次');
+            await A.send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 1, mobile: false }); await W(300);
+            await A.eval(GARAGE_SETUP(`Array(6).fill(null)`, `[]`, 0));
+            const r = JSON.parse(await A.eval(`(function(){ let b = document.getElementById('garage-lobby-btn').getBoundingClientRect(); return JSON.stringify([b.top, b.bottom, b.left, b.right, innerHeight, innerWidth]); })()`));
+            if (!(r[0] >= 0 && r[1] <= r[4] && r[2] >= 0 && r[3] <= r[5])) bad.push('仓库"返回大厅"在屏幕外 ' + JSON.stringify(r));
+            await A.eval(`${HIDE} document.getElementById('garage-lobby-btn').click(); true;`); await W(400);
+            if (await A.eval(`document.getElementById('screen-lobby').classList.contains('hidden')`)) bad.push('点了没回大厅');
+            await A.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false }); await W(300);
+            await A.eval(`${HIDE} true;`);
+            report('U3 大厅按钮有底色、只剩一个发言、路人不挡出生点；仓库返回大厅在屏幕里', bad.length === 0, bad.join(' / '));
+        }
+
+        {
             // C7：同一个房间里两个玩家显示名一样（尾巴不同），两边看到的两个名字不同且一致（名字·尾巴前两位）；
             // 一个走了，剩下的那个恢复成不带尾巴。两个标签页在同一个浏览器，设备尾巴一样，这里直接把 ID 改成两台设备的样子
             const bad = [];

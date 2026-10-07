@@ -77,6 +77,8 @@
         /* 固定宽度 190px + 320px 在窄屏（手机竖屏）上会加起来超过屏幕宽度，两块内容
            叠在一起——用 min() 在窄屏上按比例收窄，宽屏（平板/电脑）上还是原来的宽度。 */
         #lobby-tl { left: 14px; width: min(190px, 42vw); }
+        /* U3：左边那排按钮加一层半透明底，后面路人的名字牌不再透出来叠在"清空本地数据""版本号"上 */
+        #lobby-tl { background: rgba(255,255,255,0.88); border-radius: 8px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
         /* 手机横屏：左边那列按钮原来一路排到底下的面板里去了，最后两个被盖住 */
         @media (max-height: 520px) {
             #lobby-tl > button { padding: 4px !important; margin-bottom: 4px !important; font-size: 11px !important; }
@@ -99,8 +101,6 @@
         /* 五栏平分宽度，屏幕够宽就一屏放下；只有窄屏放不下 168px×5 时才横向滚动。
            之前 flex-shrink:0 + 组队那栏说明文字很长，1280 宽也会把麦克风/聊天挤出屏幕，底下多一条滚动条 */
         #lobby-bottom > div { flex: 1 1 0; min-width: 168px; }
-        /* 窄屏（平板竖屏）五栏放不下，聊天那栏被截掉一半还多一条滚动条——右下角本来就有浮着的「发言」，这栏直接收起来 */
-        @media (max-width: 960px) { #lobby-chat-col { display: none; } }
         /* 各模式共用的顶部说明行：原来是浅橘色字直接压在天空/白墙上，只靠一层字影，
            亮的场景里很难看清；而且外层 left:50% 定位，文字最多只能用半个屏宽，
            手机上一句话被拆成两行、「跳跃」「地盘」这种词从中间断开。
@@ -1155,11 +1155,6 @@
                 <button id="lobby-mic-btn" onclick="lobbyToggleMic()" style="width:100%; margin:0; font-size:12px; padding:7px 4px; background:#eceff1; border:1px solid #cfd8dc;">麦克风：关</button>
                 <div style="font-size:10px; color:#999; margin-top:4px;">第一次点会要麦克风权限，房间里其他开了麦的人能互相听见</div>
             </div>
-            <div id="lobby-chat-col">
-                <div style="font-size:12px; color:#666; margin-bottom:4px;">聊天</div>
-                <button onclick="chatSetMode(1)" style="width:100%; margin:0; font-size:12px; padding:7px 4px; background:#00897b; color:#fff; border:none;">发言</button>
-                <div style="font-size:10px; color:#999; margin-top:4px;">也可以按回车。快捷语在「设置」里改</div>
-            </div>
         </div>
     </div>
 
@@ -1185,6 +1180,8 @@
 
     <div id="screen-garage" class="screen hidden">
         <div id="garage-header">
+            <!-- U3：原来在页面最底下，1180×820 时在屏幕外，挪到标题左上角，不用滚就看得到 -->
+            <button id="garage-lobby-btn" onclick="garageBackToLobby()" style="position:absolute; left:0; top:4px; margin:0; background:#78909c; color:#fff; border:none;">返回大厅</button>
             <h1>仓库</h1>
             <div class="funds">资金: $<span id="garage-money">10000</span></div>
         </div>
@@ -1204,7 +1201,6 @@
         <button onclick="bookOpen()" style="background:#5e35b1; color:#fff; border:none;">配方图鉴</button>
         <button onclick="tidyAll()" style="background:#607d8b; color:#fff; border:none;">一键整理</button>
         <button id="start-game-btn" onclick="requestEnterMap()">开始游戏</button>
-        <button id="garage-lobby-btn" onclick="garageBackToLobby()" style="background:#78909c; color:#fff; border:none;">返回大厅</button>
         <div id="race-board" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);
              z-index:60; display:flex; align-items:center; justify-content:center;">
             <div style="background:#fff; border-radius:10px; padding:16px; width:min(92vw,420px); text-align:left;">
