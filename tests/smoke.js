@@ -226,6 +226,15 @@ async function mouseDrag(tab, fromSel, toSel, dist) {
     await ev('mouseReleased', to, 0);
     await W(200);
 }
+// 手指：按下、按 hold 毫秒、沿着 points 移过去（每步 16 毫秒）、松开（CDP 触摸事件，页面上是 pointerType=touch）
+async function touchPath(tab, points, hold) {
+    const tp = (type, p) => tab.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
+    await tp('touchStart', points[0]);
+    if (hold) await W(hold);
+    for (let i = 1; i < points.length; i++) { await tp('touchMove', points[i]); await W(16); }
+    await tp('touchEnd', null);
+    await W(300);
+}
 const INV_SLOT = (i) => `#garage-active-inv .slot:nth-child(${i + 1})`;
 const GAR_SLOT = (i) => `#garage-stash-container .slot:nth-child(${i + 1})`;
 // 进仓库，摆好背包和仓库里的东西
@@ -989,6 +998,47 @@ async function enterExit(tab, key) {
             if (r !== 0) bad.push('撤离失败腰包还在 ' + r);
             await A.eval(`${HIDE} returnToGarageFromOver(); gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); nav('screen-lobby'); true;`);
             report('H14 腰包自己装东西：容量、展开收起、不能套娃、进图/上交/撤离/扔/卖/整理', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+        }
+
+        {
+            // U1：仓库在触屏上——在有物品的格子上往上滑是滚动列表、物品不动；长按后拖动把物品挪到目标格；点一下是选中；
+            // 鼠标拖放跟原来一样；宽屏上列表比原来的 280 像素宽
+            const bad = [];
+            const fill = `(function(){ let g = []; for (let i = 0; i < 80; i++) g.push(L('杯' + i)); return g; })()`;
+            await A.eval(GARAGE_SETUP(`Array(6).fill(null)`, fill, 0));
+            const names = `gState.garage.slice(0, 80).map(function (q) { return q && q.n; }).join(',')`;
+            const n0 = await A.eval(names);
+            const box = await A.eval(`(function(){ let r = document.getElementById('garage-stash-container').getBoundingClientRect(); return [r.width, r.height]; })()`);
+            if (!(box[0] > 300)) bad.push('宽屏列表还是窄的 ' + box[0]);
+            // 1. 上滑：列表滚动，物品没动
+            const c0 = await mouseAt(A, GAR_SLOT(4));
+            const swipe = []; for (let i = 0; i <= 12; i++) swipe.push([c0[0], c0[1] - i * 14]);
+            await touchPath(A, swipe, 0);
+            const st = await A.eval(`document.getElementById('garage-stash-container').scrollTop`);
+            if (!(st > 20)) bad.push('上滑没滚动 scrollTop=' + st);
+            if ((await A.eval(names)) !== n0) bad.push('上滑把物品挪了');
+            // 2. 长按后拖：格子变样子，物品移到目标格
+            await A.eval(`document.getElementById('garage-stash-container').scrollTop = 0; true;`); await W(100);
+            const from = await mouseAt(A, GAR_SLOT(1)), to = await mouseAt(A, GAR_SLOT(6));
+            const tp = (type, p) => A.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
+            await tp('touchStart', from); await W(450);
+            const lifted = await A.eval(`document.querySelector('${GAR_SLOT(1)}').classList.contains('lifting') && isDragging`);
+            if (!lifted) bad.push('长按后没拿起来');
+            for (let i = 1; i <= 8; i++) { await tp('touchMove', [from[0] + (to[0] - from[0]) * i / 8, from[1] + (to[1] - from[1]) * i / 8]); await W(16); }
+            await tp('touchEnd', null); await W(300);
+            const sw = await A.eval(`gState.garage[1].n + ',' + gState.garage[6].n`);
+            if (sw !== '杯6,杯1') bad.push('长按拖动没换过去 ' + sw);
+            // 3. 点一下：选中
+            const t3 = await mouseAt(A, GAR_SLOT(2));
+            await touchPath(A, [t3], 0);
+            const sel = await A.eval(`gState.selectedContainer + ':' + gState.selectedSlot`);
+            if (sel !== 'garage:2') bad.push('点一下没选中 ' + sel);
+            // 4. 鼠标拖放还是原来那样（按下就能拖）
+            await mouseDrag(A, GAR_SLOT(3), GAR_SLOT(4));
+            const ms = await A.eval(`gState.garage[3].n + ',' + gState.garage[4].n`);
+            if (ms !== '杯4,杯3') bad.push('鼠标拖放 ' + ms);
+            await A.eval(`${HIDE} gState.garage = Array(200).fill(null); gState.inv = Array(6).fill(null); nav('screen-lobby'); true;`);
+            report('U1 仓库触屏：上滑滚动不挪东西、长按拖、点一下选中；鼠标照旧；宽屏列表变宽', bad.length === 0, bad.join(' / '));
         }
 
         {

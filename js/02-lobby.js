@@ -1394,11 +1394,25 @@
         // 点了一个格子：点腰包就展开/收起它，点别的格子收起
         function pouchToggleFor(item) { openPouch = (isPouch(item) && openPouch !== item) ? item : null; }
 
+        // U1：仓库里用手指（触屏）时，上下滑是滚动列表；按住约 0.3 秒不动才开始拖，拖起来格子放大发亮；
+        // 点一下还是选中。鼠标、局内（背包/快捷栏扔东西）都跟原来一样。
+        const SLOT_HOLD_MS = 300, SLOT_SCROLL_PX = 10;
         function setupSlotDrag(el, container, idx) {
             el.setAttribute('data-container', container); el.setAttribute('data-idx', idx);
             el.addEventListener('pointerdown', function (e) {
                 let arr = slotArr(container), item = arr && arr[idx]; if (!item) return;
                 slotPress = { el: el, container: container, idx: idx, x: e.clientX, y: e.clientY };
+                if (e.pointerType === 'touch' && !isPlaying) {
+                    let p = slotPress; p.hold = true;
+                    p.timer = setTimeout(function () {
+                        if (slotPress !== p) return;
+                        el.classList.add('lifting');
+                        if (navigator.vibrate) { try { navigator.vibrate(15); } catch (er) { } }
+                        slotBeginDrag(e);
+                        if (dragGhost) { dragGhost.style.left = p.x - 30 + 'px'; dragGhost.style.top = p.y - 30 + 'px'; }
+                    }, SLOT_HOLD_MS);
+                    return;   // 不 preventDefault：让浏览器能滚动列表
+                }
                 e.preventDefault();
             });
             // 点一下已经在 pointerup 里处理了，浏览器随后补发的 click 不再处理第二遍
@@ -1411,10 +1425,15 @@
             dragGhost.innerHTML = p.el.innerHTML; document.body.appendChild(dragGhost);
             p.el.style.opacity = '0.3';
         }
+        function slotPressCancel() { if (slotPress && slotPress.timer) clearTimeout(slotPress.timer); slotPress = null; }
         function moveGhost(e) {
+            // 拖着的时候手指移动不让列表跟着滚
+            if (isDragging && e.type === 'touchmove' && e.cancelable) e.preventDefault();
             if (slotPress) {
                 let x = e.clientX || (e.touches && e.touches[0].clientX) || 0, y = e.clientY || (e.touches && e.touches[0].clientY) || 0;
-                if (Math.hypot(x - slotPress.x, y - slotPress.y) >= SLOT_DRAG_PX) slotBeginDrag(e);
+                let far = Math.hypot(x - slotPress.x, y - slotPress.y);
+                if (slotPress.hold) { if (far >= SLOT_SCROLL_PX) slotPressCancel(); }   // 还没按够就动了：是在滑列表
+                else if (far >= SLOT_DRAG_PX) slotBeginDrag(e);
             }
             if (!isDragging || !dragGhost) return;
             dragGhost.style.left = (e.clientX || (e.touches && e.touches[0].clientX)) - 30 + 'px';
@@ -1430,6 +1449,8 @@
             });
         });
         window.addEventListener('pointerup', endDrag); window.addEventListener('touchend', endDrag);
+        // 浏览器接手去滚动列表了：这次按下作废（已经在拖了就不管，拖的时候不让滚）
+        window.addEventListener('pointercancel', function () { if (slotPress && slotPress.hold) slotPressCancel(); });
 
         // 拖一件东西过去行不行；不行就返回原因（H2、H14）。空格当然可以放。
         // 腰包不能放进腰包（局里局外都管）。
@@ -1448,7 +1469,7 @@
 
         function endDrag(e) {
             if (slotPress) {
-                let p = slotPress; slotPress = null; slotTapAt = performance.now();
+                let p = slotPress; slotPressCancel(); slotTapAt = performance.now();
                 if (p.el.onclick) p.el.onclick();
                 return;
             }
@@ -1472,7 +1493,7 @@
                     if (!inBox(hudBox) && !inBox(bpBox)) { executeThrow(dragSourceObj.idx); }
                 }
             }
-            let allSlots = document.querySelectorAll('.slot'); allSlots.forEach(s => s.style.opacity = '1');
+            let allSlots = document.querySelectorAll('.slot'); allSlots.forEach(s => { s.style.opacity = '1'; s.classList.remove('lifting'); });
             if (isPlaying) updateHUD(); else initGarage();
         }
 

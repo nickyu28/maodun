@@ -567,6 +567,16 @@
             border: 1px solid #ccc;
         }
 
+            /* U1：触屏上仓库里的格子能上下滑动列表（长按 0.3 秒才开始拖，见 setupSlotDrag），拖起来的格子放大发亮 */
+            #screen-garage .slot { touch-action: pan-y; }
+            .slot.lifting { transform: scale(1.12); box-shadow: 0 4px 14px rgba(0,0,0,.35); border: 2px solid #ff9800; background: #fff3e0; }
+            /* 宽屏上仓库列表放宽，一屏多看几行几列 */
+            @media (min-width: 900px) {
+                #garage-workspace { max-width: 900px; }
+                #garage-stash-container { width: min(860px, 90vw); height: auto; max-height: 42vh; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); }
+                #garage-stash-title { max-width: min(860px, 90vw) !important; }
+            }
+
             #garage-stash-container::-webkit-scrollbar {
                 width: 8px;
             }
@@ -1181,7 +1191,7 @@
                 <div id="garage-active-inv"></div>
             </div>
             <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
-                <div class="inv-section-title" style="max-width: 280px;">仓库保管箱 (滑动查看)</div>
+                <div id="garage-stash-title" class="inv-section-title" style="max-width: 280px;">仓库保管箱 (滑动查看)</div>
                 <div id="garage-stash-container"></div>
             </div>
             <div id="sell-btn-container"></div>
