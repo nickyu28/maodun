@@ -1006,7 +1006,10 @@ async function enterExit(tab, key) {
             let back = '';
             for (let i = 0; i < 40 && !/在线 1 人\|0$/.test(back); i++) { await W(300); back = await st(A); }
             if (!/在线 1 人\|0$/.test(back)) bad.push('走了一个应该回到 1：' + back);
-            report('C2 状态栏在线人数跟着房间名单变（两边都是 2，走一个回到 1）', bad.length === 0, bad.join(' / '));
+            // E4：大厅顶部"在线 N 人"只算真人，跟状态栏同一个数（这时只剩自己：1）
+            const top = await A.eval(`hubHud(), document.getElementById('blaze-score').innerText + '|' + hub.wanderers.length`);
+            if (!/^在线 1 人\|[1-9]/.test(top)) bad.push('E4 顶部人数 ' + top);
+            report('C2/E4 在线人数跟着房间名单变（两边都是 2，走一个回到 1）；大厅顶部只算真人', bad.length === 0, bad.join(' / '));
         }
 
         {

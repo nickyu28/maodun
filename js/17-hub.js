@@ -300,11 +300,8 @@
             blazeFlash('已经加 ' + dispNameText(hub.nearby.name) + ' 为好友');
         }
         function hubHud() {
-            // 在线人数 = 真实房间人数（roomOnlineCount）+ 大厅广场路人机器人数量。
-            // 真人部分看真实房间人数，不是路人机器人数量——路人是本地模拟的，
-            // 之前这里写的是 hub.wanderers.length+1，两台设备各自算各自的路人，
-            // 数字永远一样、永远不变，看着就跟假的一样；现在加回路人数只是为了凑热闹感。
-            document.getElementById('blaze-score').innerText = '在线 ' + (roomOnlineCount() + hub.wanderers.length) + ' 人';
+            // E4：在线人数只算真人（roomOnlineCount），跟状态栏同一个数；大厅路人是本地凑热闹的，不算（作者的决定）
+            document.getElementById('blaze-score').innerText = '在线 ' + roomOnlineCount() + ' 人';
             let team = lobbyParty.concat(hub.party);
             document.getElementById('blaze-round').innerText = '队伍：' +
                 (team.length ? team.map(dispNameText).join('、') : '（还没组队）') +
