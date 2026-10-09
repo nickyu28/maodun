@@ -76,7 +76,8 @@
                 let mesh = raceMakeBody(col, 0, true, isP ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()), isP ? myFace() : (q.id ? peerFaceOf(q.id) : aiRandomFace()));
                 nmAdd(mesh);
                 let name = q.id ? dispName(q.id) : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
-                let label = nightMakeLabel(name, col, false, isP ? myTitle() : (q.id ? peerTitleOf(q.id) : aiRandomTitle()));
+                // name 是 dispName() 转义过的（给下面结算弹窗等 innerText/innerHTML 用），画到画布上要用原文，不然名字带 & < 时会显示成 &amp; 这种
+                let label = nightMakeLabel(q.id ? dispNameText(q.id) : name, col, false, isP ? myTitle() : (q.id ? peerTitleOf(q.id) : aiRandomTitle()));
                 label.position.y = 16; mesh.add(label);
                 if (isP) label.visible = false;
                 let sp = spawns[i];
