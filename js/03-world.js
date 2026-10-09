@@ -1440,8 +1440,9 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026-10-09-name-label', date: '10 月 9 日', title: '名字显示修复', items: [
-                    '超燃、松饼、推推乐/彩弹/爬塔里，名字带 & 或 < 的，头顶名字牌不会再显示成乱码了'
+                id: '2026-10-09-name-label', date: '10 月 9 日', title: '名字显示和联机修复', items: [
+                    '超燃、松饼、推推乐/彩弹/爬塔里，名字带 & 或 < 的，头顶名字牌不会再显示成乱码了',
+                    '超燃里镜猫换位技能，联机对局中对方那边现在也会真的换过去了'
                 ]
             },
             {

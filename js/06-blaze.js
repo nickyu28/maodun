@@ -2552,7 +2552,7 @@
             a.swapWindow = BLAZE.mirDashWindow;
             if (a.isPlayer) camera.position.set(a.p.x, BLAZE.eye, a.p.z);
             blazeBurst(a.p.x, a.p.z, 0x7986cb, 6, 13, 0.3);
-            blazeNetEv({ ev: 'swap', i: a.idx, j: e.t.idx, x: a.p.x, z: a.p.z, ex: e.t.p.x, ez: e.t.p.z });
+            blazeNetEv({ ev: 'swap', i: a.idx, j: e.t.idx, x: a.p.x, z: a.p.z, floor: a.floor, ex: e.t.p.x, ez: e.t.p.z, ef: e.t.floor });
         }
 
         // 余像：15 秒攒一层，最多一层（满了就停，存不下第二层）

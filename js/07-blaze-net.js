@@ -121,6 +121,12 @@
             else if (m.ev === 'rewind') {
                 if (a) { a.p.set(m.x, 0, m.z); a.floor = m.floor; a.hp = m.hp; a.path = null; a.skillCd = 0; }
             }
+            else if (m.ev === 'swap') {
+                // 镜猫换位：双方位置和楼层都要同步，眩晕另外靠 blazeStun 自己发的 'stun' 事件同步，这里不用再管
+                let b = blazeActor(m.j);
+                if (a) { a.p.set(m.x, 0, m.z); a.floor = m.floor; a.path = null; }
+                if (b) { b.p.set(m.ex, 0, m.ez); b.floor = m.ef; b.path = null; }
+            }
             else if (m.ev === 'perk') {
                 if (a) {
                     if (m.id === 'lucky') blazeTakeLucky(a, m.r);
