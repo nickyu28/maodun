@@ -790,7 +790,8 @@
                 let sp = spawns[i];
                 let name = q.id ? dispName(q.id) : (pool.length ? pool.splice(Math.floor(seededRandom() * pool.length), 1)[0] : ('猫盾' + (i + 1)));
                 // 头顶名字：联机的时候一堆猫盾身体长得一样，不然根本分不清谁是真人朋友
-                let label = nightMakeLabel(name, col, false, isP ? myTitle() : (q.id ? peerTitleOf(q.id) : aiRandomTitle()));
+                // name 是 dispName() 转义过的，头顶名字画在画布上要用 ID，nightMakeLabel 自己会取原文
+                let label = nightMakeLabel(q.id || name, col, false, isP ? myTitle() : (q.id ? peerTitleOf(q.id) : aiRandomTitle()));
                 label.position.y = 13.5; mesh.add(label);
                 if (isP) label.visible = false;   // 第三人称镜头就在自己背后，自己头顶的名字一直挡在画面正中
                 let a = {

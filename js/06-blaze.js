@@ -1774,7 +1774,8 @@
                 };
                 scene.add(a.mesh);
                 // 头顶名字：混战/联机的时候光看剪影分不出谁是真人朋友、谁是 AI
-                let lbl = nightMakeLabel(a.name, blazeTeamCol(q.team), false, mine ? myTitle() : (q.id ? peerTitleOf(q.id) : aiRandomTitle()));
+                // a.name 是 dispName() 转义过的（战绩榜等 innerHTML 用），头顶名字画在画布上要用 ID，nightMakeLabel 自己会取原文
+                let lbl = nightMakeLabel(q.id || a.name, blazeTeamCol(q.team), false, mine ? myTitle() : (q.id ? peerTitleOf(q.id) : aiRandomTitle()));
                 lbl.position.y = 20; a.mesh.add(lbl);
                 if (mine) lbl.visible = false;   // 自己头顶的名字不用给自己看
                 blaze.actors.push(a);
@@ -2551,7 +2552,7 @@
             a.swapWindow = BLAZE.mirDashWindow;
             if (a.isPlayer) camera.position.set(a.p.x, BLAZE.eye, a.p.z);
             blazeBurst(a.p.x, a.p.z, 0x7986cb, 6, 13, 0.3);
-            blazeNetEv({ ev: 'swap', i: a.idx, j: e.t.idx, x: a.p.x, z: a.p.z, ex: e.t.p.x, ez: e.t.p.z });
+            blazeNetEv({ ev: 'swap', i: a.idx, j: e.t.idx, x: a.p.x, z: a.p.z, floor: a.floor, ex: e.t.p.x, ez: e.t.p.z, ef: e.t.floor });
         }
 
         // 余像：15 秒攒一层，最多一层（满了就停，存不下第二层）

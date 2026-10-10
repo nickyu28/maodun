@@ -1097,6 +1097,31 @@ async function enterExit(tab, key) {
         }
 
         {
+            // 夜间 #20（10-09）：超燃/松饼/新模式框架头顶名字用原文（名字带 & < 不再显示 &amp;）；超燃镜猫换位联机同步（两人位置、楼层，被换的是自己镜头也跟过去）
+            const bad = [];
+            const id0 = await A.eval('gState.id');
+            await A.eval(`${HIDE} gState.id = 'x&y<z'; true;`);
+            const lbl = async (start, exit, list) => {
+                await A.eval(`${HIDE} ${start}; true;`); await W(1200);
+                const r = await A.eval(`(function(){ let a = (${list}).filter(function (q) { return q.isPlayer || q.mine || q.id === gState.id; })[0]; let s = a && a.mesh && a.mesh.children.filter(function (c) { return c.userData && c.userData.label !== undefined; })[0]; return s ? s.userData.label : null; })()`);
+                await A.eval(`${HIDE} ${exit}; true;`); await W(600);
+                return r;
+            };
+            const lb = await lbl(MODES.blaze.start, MODES.blaze.exit, 'blaze.actors');
+            const lc = await lbl(MODES.cake.start, MODES.cake.exit, 'cake.actors');
+            const ln = await lbl(MODES.sumo.start, MODES.sumo.exit, 'nm.actors');
+            if (lb !== 'x&y<z' || lc !== 'x&y<z' || ln !== 'x&y<z') bad.push('头顶名字 超燃=' + lb + ' 松饼=' + lc + ' 推推乐=' + ln);
+            await A.eval(`${HIDE} gState.id = ${JSON.stringify(id0)}; true;`);
+            await A.eval(`${HIDE} ${MODES.blaze.start}; true;`); await W(1200);
+            const sw = await A.eval(`(function(){ let me = blaze.actors.filter(function (q) { return q.isPlayer; })[0], o = blaze.actors.filter(function (q) { return !q.isPlayer; })[0];
+                blazeOnEv({ ev: 'swap', sender: 'someone', i: o.idx, j: me.idx, x: 11, z: 22, floor: 0, ex: 33, ez: 44, ef: 0 });
+                return [o.p.x, o.p.z, me.p.x, me.p.z, Math.round(camera.position.x), Math.round(camera.position.z)].join(','); })()`);
+            if (sw !== '11,22,33,44,33,44') bad.push('换位同步 ' + sw);
+            await A.eval(`${HIDE} ${MODES.blaze.exit}; true;`); await W(600);
+            report('夜间 #20：超燃/松饼/推推乐头顶名字用原文；镜猫换位联机同步', bad.length === 0, bad.join(' / '));
+        }
+
+        {
             // C7：同一个房间里两个玩家显示名一样（尾巴不同），两边看到的两个名字不同且一致（名字·尾巴前两位）；
             // 一个走了，剩下的那个恢复成不带尾巴。两个标签页在同一个浏览器，设备尾巴一样，这里直接把 ID 改成两台设备的样子
             const bad = [];

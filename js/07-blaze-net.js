@@ -121,6 +121,16 @@
             else if (m.ev === 'rewind') {
                 if (a) { a.p.set(m.x, 0, m.z); a.floor = m.floor; a.hp = m.hp; a.path = null; a.skillCd = 0; }
             }
+            else if (m.ev === 'swap') {
+                // 镜猫换位（原来发了没人收，对面看不到换位）：双方位置和楼层都同步；被换的是自己的话镜头也跟过去。
+                // 眩晕另外由 blazeStun 发的 'stun' 同步
+                let b = blazeActor(m.j);
+                [[a, m.x, m.z, m.floor], [b, m.ex, m.ez, m.ef]].forEach(function (s) {
+                    let o = s[0]; if (!o) return;
+                    o.p.set(s[1], 0, s[2]); if (s[3] !== undefined) o.floor = s[3]; o.path = null;
+                    if (o.isPlayer) camera.position.set(o.p.x, BLAZE.eye, o.p.z);
+                });
+            }
             else if (m.ev === 'perk') {
                 if (a) {
                     if (m.id === 'lucky') blazeTakeLucky(a, m.r);

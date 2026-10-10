@@ -217,7 +217,8 @@
         // v3：密室前面插了 8 个入门关，ESC_START 里的关卡号跟旧版对不上了
         // v4：寻宝队箱子、保险柜、信号接收器的东西改成造图时按种子定好（H13），同一个 START_MAP 新旧版本开出来的不一样
         // v5：寻宝队造图保证每两层之间有楼梯、坏图换种子重造（H15），少数种子新旧版本造出来的图不一样
-        const NET_PROTO = 5;
+        // v6：超燃镜猫换位的 'swap' 事件多了楼层字段、收到的一方开始照着换位（原来发了没人收）
+        const NET_PROTO = 6;
         const NET_PREFIX = 'maodun-v' + NET_PROTO + '-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
         // 这一整套匹配等待（matchPool/matchLeader/night-wait 那个浮层）早就写好了，
