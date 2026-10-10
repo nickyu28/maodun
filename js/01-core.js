@@ -1231,7 +1231,7 @@
             let me = { isLeader: (lobbyParty.length === 0 || peerIsHost) };
             if (me && me.isLeader) {
                 let radios = document.querySelector('input[name="map_diff"]:checked');
-                if (radios) gState.mapDifficulty = radios.value;
+                if (radios) { gState.mapDifficulty = radios.value; settingsRemember('mapDiff', radios.value); }
                 bc.postMessage({ type: 'TEAM_SYNC', target: '*', team: gState.team, map: gState.mapDifficulty });
             }
         }

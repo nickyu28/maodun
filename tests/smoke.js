@@ -1316,6 +1316,31 @@ async function enterExit(tab, key) {
         }
 
         {
+            // P1：寻宝队难度、AI 补齐队友、惊魂夜角色刷新后还在（存在 TH_settings）；触屏设备上也测一次（加载时会读设置）
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const pick = await T.eval(`Object.keys(NIGHT_CHARS).filter(function (k) { return k !== 'cat'; })[0]`);
+            await T.eval(`${HIDE} document.querySelector('input[name="map_diff"][value="hard"]').click(); setAiFill(true); selectNightChar(${JSON.stringify(pick)}); true;`);
+            const name = await T.eval('gState.id');
+            const look = `JSON.stringify({ d: gState.mapDifficulty, r: (document.querySelector('input[name="map_diff"]:checked') || {}).value, ai: gState.aiFill, c: gState.nightChar })`;
+            const want = JSON.stringify({ d: 'hard', r: 'hard', ai: true, c: pick });
+            T.errors.length = 0;
+            await T.send('Page.reload'); await W(2500);
+            await T.eval(`document.getElementById('player-id').value = ${JSON.stringify(name.replace(/#.*$/, ''))}; requestLobbyAccess(); true;`); await W(1500);
+            const r1 = await T.eval(look);
+            if (r1 !== want) bad.push('刷新后 ' + r1);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            const M = await openTab(chrome, url, { mobile: true });
+            const r2 = await M.eval(look);
+            if (r2 !== want) bad.push('触屏设备上 ' + r2);
+            if (M.errors.length) bad.push('触屏报错 ' + M.errors.slice(0, 2).join(' / '));
+            await M.eval(`SETTINGS.mapDiff = null; SETTINGS.aiFill = null; SETTINGS.nightChar = null; settingsSave(); true;`);
+            await M.close();
+            report('P1 寻宝队难度、AI 队友、惊魂夜角色刷新后还在（电脑和触屏）', bad.length === 0, bad.join(' / '));
+        }
+
+        {
             // B6：触屏设备启动——加载时 0 个页面错误、能进大厅、能进寻宝队和爬塔（B5 起触屏设备一加载就报 15 个 ReferenceError，进不了游戏）
             const bad = [];
             const M = await openTab(chrome, url, { mobile: true });

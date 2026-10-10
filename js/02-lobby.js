@@ -278,7 +278,8 @@
         // 键盘和触屏一直都能用；"触屏按键"只管屏幕上那些摇杆/按钮显不显示。
         // 没设置过的时候：手指操作的设备（粗指针）或者窄屏触屏默认显示，其它默认隐藏。
         // 灵敏度原来存在 gState 里但 saveProgress 没带上它，每次刷新都回到 1——现在也放这儿存。
-        let SETTINGS = { touch: null, sens: 1, invertY: false, sfx: true, hq: false };
+        // P1：寻宝队难度、AI 补齐队友、惊魂夜选的角色也存在这里（null = 没选过，用默认），进大厅时恢复
+        let SETTINGS = { touch: null, sens: 1, invertY: false, sfx: true, hq: false, mapDiff: null, aiFill: null, nightChar: null };
         function settingsLoad() {
             try { let v = JSON.parse(localStorage.getItem('TH_settings') || 'null'); if (v) Object.keys(SETTINGS).forEach(function (k) { if (v[k] !== undefined) SETTINGS[k] = v[k]; }); } catch (e) { }
         }
@@ -296,6 +297,16 @@
             if (renderer) { renderer.setPixelRatio(SETTINGS.hq ? Math.min(2, window.devicePixelRatio || 1) : 1); renderer.setSize(window.innerWidth, window.innerHeight); }
         }
         function lookY() { return SETTINGS.invertY ? -1 : 1; }
+        // P1：进大厅时把上次的三个选择放回去。不在加载时做：NIGHT_CHARS 定义在这个文件后面
+        function settingsRestoreChoices() {
+            if (['easy', 'med', 'hard'].indexOf(SETTINGS.mapDiff) >= 0) {
+                gState.mapDifficulty = SETTINGS.mapDiff;
+                let r = document.querySelector('input[name="map_diff"][value="' + SETTINGS.mapDiff + '"]'); if (r) r.checked = true;
+            }
+            if (typeof SETTINGS.aiFill === 'boolean') gState.aiFill = SETTINGS.aiFill;
+            if (SETTINGS.nightChar && NIGHT_CHARS[SETTINGS.nightChar]) gState.nightChar = SETTINGS.nightChar;
+        }
+        function settingsRemember(k, v) { if (SETTINGS[k] === v) return; SETTINGS[k] = v; settingsSave(); }
         settingsLoad();
         (function () {
             gState.mouseSensitivity = SETTINGS.sens || 1;
@@ -437,7 +448,7 @@
         function proceedToLobby(pid) {
             let ai1Name = pid + "_AI_1"; let ai2Name = pid + "_AI_2"; gState.id = pid;
             gState.team = [{ id: pid, isLeader: true, isReady: true, isAI: false }, { id: ai1Name, isLeader: false, isReady: true, isAI: true }, { id: ai2Name, isLeader: false, isReady: true, isAI: true }];
-            loadProgress(pid); parkRefundOld(); loadEggs(); friendLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); checkinBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
+            loadProgress(pid); parkRefundOld(); loadEggs(); friendLoad(); settingsRestoreChoices(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); checkinBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
             chatLoad();
             // 之前得自己敲房间号、点"进入"才算联机——两台设备各自打开游戏，
             // 谁都没点那一下，大厅里当然看不到对方，跟单机一样。现在默认自动
@@ -602,7 +613,7 @@
             });
         }
 
-        function setAiFill(v) { gState.aiFill = !!v; }
+        function setAiFill(v) { gState.aiFill = !!v; settingsRemember('aiFill', gState.aiFill); }
         function huntAiOn() { return gState.aiFill !== false; }
 
         const NIGHT_CHARS = {
@@ -656,7 +667,7 @@
             }
         };
 
-        function selectNightChar(c) { gState.nightChar = c; }
+        function selectNightChar(c) { gState.nightChar = c; settingsRemember('nightChar', c); }
 
         function enterNightMatch(side) {
             nightStartMatch(side);
@@ -1174,7 +1185,7 @@
 
         function nightPickChar(k) {
             document.getElementById('night-pick').classList.add('hidden');
-            gState.nightChar = k;
+            gState.nightChar = k; settingsRemember('nightChar', k);
 
             if (netOn()) { netCharWait(k); return; }
             startNightGameSafe(NIGHT_CHARS[k].side, k);
