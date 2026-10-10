@@ -142,7 +142,8 @@ async function openTab(chrome, url, opts) {
 }
 
 // 关掉弹窗。介绍卡片要连排队一起清掉，光藏起来的话 introOpen 一直是 true，单人密室会一直停着
-const HIDE = `document.getElementById('sys-modal').classList.add('hidden'); introQ.length = 0; introOpen = false;`;
+// 注意：它把 introOpen 直接设成 false、清空排队，会盖住"卡片卡死"这类问题——测弹窗本身的检查（I1）不要用它
+const HIDE = `document.getElementById('sys-modal').classList.add('hidden'); introQ.length = 0; introOpen = false; sysModalWait.length = 0;`;
 const MODAL = `(document.getElementById('sys-modal').classList.contains('hidden') ? null : document.getElementById('sys-modal-title').innerText)`;
 const CLICK_OK = `(function(){ let b = document.querySelector('#sys-modal-btns button'); if (b) b.click(); return !!b; })()`;
 
@@ -237,6 +238,14 @@ async function touchPath(tab, points, hold) {
     for (let i = 1; i < points.length; i++) { await tp('touchMove', points[i]); await W(16); }
     await tp('touchEnd', null);
     await W(300);
+}
+// 用真的鼠标点弹窗里的第 n 个按钮（不经过 HIDE / CLICK_OK）；返回点之前的标题，没有弹窗返回 null
+async function clickModal(tab, n) {
+    const t = await tab.eval(MODAL); if (t === null) return null;
+    const p = await mouseAt(tab, '#sys-modal-btns button:nth-child(' + ((n || 0) + 1) + ')'); if (!p) return t;
+    const ev = (type) => tab.send('Input.dispatchMouseEvent', { type, x: p[0], y: p[1], button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 });
+    await ev('mouseMoved'); await ev('mousePressed'); await ev('mouseReleased'); await W(350);
+    return t;
 }
 const INV_SLOT = (i) => `#garage-active-inv .slot:nth-child(${i + 1})`;
 const GAR_SLOT = (i) => `#garage-stash-container .slot:nth-child(${i + 1})`;
@@ -1214,6 +1223,47 @@ async function enterExit(tab, key) {
             if (sha['vendor/peerjs-1.5.4.min.js'] !== 'ad5d8870d1e389914f9cba8d35be313c4327c69ee0a221e482e9bf7621136fe5') bad.push('peerjs 内容变了');
             await V.close();
             report('C6a three.js / PeerJS 从自己仓库加载，屏蔽 cdnjs、unpkg 也能进大厅', bad.length === 0, bad.join(' / '));
+        }
+
+        {
+            // I1：介绍卡片不会被别的弹窗盖掉，不管怎么关 introOpen 都回到 false。这一项不用 HIDE（它会把问题盖住）
+            const bad = [];
+            const N = await openTab(chrome, url, { noLobby: true });
+            await N.eval(`document.getElementById('player-id').value = 'i1' + Date.now() % 100000; requestLobbyAccess(); true;`); await W(1500);
+            // 进大厅可能先有别的弹窗（数据重置之类），真实点掉
+            for (let i = 0; i < 6 && (await N.eval(MODAL)) !== null; i++) await clickModal(N);
+            // 1. 全新存档进寻宝队：规则卡片和新手提示都出现，一张关了出下一张
+            await N.eval(`selectGameMode('hunt'); requestStartGame(); requestEnterMap(); true;`); await W(1500);
+            const seen = [];
+            for (let i = 0; i < 12; i++) { const t = await clickModal(N); if (t === null) { await W(700); if ((await N.eval(MODAL)) === null) break; } else seen.push(t); }
+            const st1 = JSON.parse(await N.eval(`JSON.stringify({ open: introOpen, q: introQ.length, wait: sysModalWait.length })`));
+            if (seen.indexOf('寻宝队 · 规则') < 0 || seen.indexOf('新手提示') < 0) bad.push('寻宝队弹窗 ' + seen.join(' → '));
+            if (st1.open || st1.q || st1.wait) bad.push('点完还卡着 ' + JSON.stringify(st1));
+            // 2. 接着玩单人合作密室：倒计时会走、clock 会涨
+            await N.eval(`chooseLeave(); document.getElementById('game-over').classList.add('hidden'); nav('screen-lobby'); true;`); await W(800);
+            for (let i = 0; i < 6 && (await N.eval(MODAL)) !== null; i++) await clickModal(N);
+            await N.eval(`selectGameMode('escape'); escapeBegin(null, null, 1); true;`); await W(1200);
+            let started = false;
+            for (let i = 0; i < 40 && !started; i++) { if ((await N.eval(MODAL)) !== null) await clickModal(N); else await W(400); started = await N.eval('escapeRoom && escapeRoom.started'); }
+            const c1 = await N.eval('escapeRoom.clock'); await W(1500); const c2 = await N.eval('escapeRoom.clock');
+            if (!started || !(c2 > c1)) bad.push('密室没走起来 ' + JSON.stringify({ started, c1, c2 }));
+            await N.eval(`escapeExit(); true;`); await W(1000);
+            for (let i = 0; i < 6 && (await N.eval(MODAL)) !== null; i++) await clickModal(N);
+            // 3. 卡片开着时调一次普通弹窗：卡片不丢，两个依次关掉
+            await N.eval(`introPush('测试卡片', '一'); showSysModal('普通弹窗', '二', [{ label: '好' }]); true;`); await W(300);
+            const o1 = await clickModal(N), o2 = await clickModal(N), o3 = await N.eval(MODAL);
+            const st3 = JSON.parse(await N.eval(`JSON.stringify({ open: introOpen, q: introQ.length, wait: sysModalWait.length })`));
+            if (o1 !== '测试卡片' || o2 !== '普通弹窗' || o3 !== null || st3.open || st3.q || st3.wait) bad.push('卡片被盖 ' + JSON.stringify([o1, o2, o3, st3]));
+            // 4. 卡片开着时代码直接把弹窗藏起来：introOpen 也回到 false，排队的下一张接着出
+            await N.eval(`introPush('卡 1', 'a'); introPush('卡 2', 'b'); true;`); await W(300);
+            await N.eval(`document.getElementById('sys-modal').classList.add('hidden'); true;`); await W(500);
+            const o4 = await N.eval(`${MODAL} + '|' + introOpen`);
+            if (o4 !== '卡 2|true') bad.push('直接藏起来以后 ' + o4);
+            await clickModal(N);
+            if (await N.eval('introOpen')) bad.push('最后 introOpen 还是 true');
+            if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
+            await N.close();
+            report('I1 介绍卡片不被别的弹窗盖掉、怎么关 introOpen 都会复位；新号寻宝队两张都看到；之后单人密室能走', bad.length === 0, bad.length ? bad.join(' / ') : '寻宝队依次：' + seen.join(' → '));
         }
 
         {

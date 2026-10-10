@@ -1119,7 +1119,7 @@
         function makerAfterGame() {
             if (!makerReturn) return false;
             let k = makerReturn; makerReturn = null;
-            document.getElementById('sys-modal').classList.add('hidden');
+            sysModalCloseNormal();
             makerOpen(k);
             return true;
         }

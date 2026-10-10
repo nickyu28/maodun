@@ -113,14 +113,16 @@
             let R = MODE_RULES[key]; if (!R) return;
             introPush(R.title + ' · 规则', rulesHtml(key));
         }
-        // 弹卡片排队：同时碰到好几样新东西，一张一张来，不互相盖掉
+        // 弹卡片排队：同时碰到好几样新东西，一张一张来，不互相盖掉。
+        // 卡片开着时别的弹窗也盖不掉它（规则见 01-core.js 的 showSysModal / sysModalSync）。
+        // introOpen 由 sysModalSync 维护：弹窗开着、而且开着的是卡片才是 true，不管弹窗是怎么关的都会回到 false
         let introQ = [], introOpen = false;
         function introPush(title, html) { introQ.push({ title: title, html: html }); introPump(); }
         function introPump() {
-            if (introOpen || !introQ.length) return;
-            if (!document.getElementById('sys-modal').classList.contains('hidden')) { setTimeout(introPump, 600); return; }
-            let it = introQ.shift(); introOpen = true;
-            showSysModal(it.title, it.html, [{ label: '知道了', color: '#43a047', onClick: function () { introOpen = false; setTimeout(introPump, 200); } }]);
+            if (!introQ.length) return;
+            if (sysModalVisible()) { if (sysModalKind !== 'intro') setTimeout(introPump, 600); return; }   // 普通弹窗开着：等它关（关的时候也会再叫一次）
+            let it = introQ.shift();
+            sysModalRender(it.title, it.html, [{ label: '知道了', color: '#43a047' }], 'intro');
         }
         // 单人的时候弹卡片会把这一局停住（escape / 乐园 / 新模式单机都看这个）
         function introPaused() { return introOpen; }

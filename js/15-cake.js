@@ -710,7 +710,7 @@
                 let plan = [{ id: gState.id }].concat(cakeInvite.others.map(function (id) { return { id: id }; }));
                 let seed = Math.floor(Math.random() * 1000000);
                 cakeInvite = null;
-                document.getElementById('sys-modal').classList.add('hidden');   // 全票通过，自动开局，不用等你点关闭
+                sysModalCloseNormal();   // 全票通过，自动开局，不用等你点关闭
                 bc.postMessage({ type: 'CK_START', target: '*', sender: gState.id, plan: plan, host: gState.id, seed: seed });
                 cakeBegin(plan, gState.id, seed);
                 return;

@@ -1467,7 +1467,7 @@
             if (!m.plan || !m.plan.some(function (q) { return q.id === gState.id; })) return;
             if (!netStartAllowed('escape', m)) return;
             mmCancel();
-            document.getElementById('sys-modal').classList.add('hidden');   // 上一关的结算框
+            sysModalCloseNormal();   // 上一关的结算框
             escapeBegin(m.plan, m.host, m.lvl || 1);
         }
 

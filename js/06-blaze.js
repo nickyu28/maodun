@@ -1549,7 +1549,7 @@
                 if (blaze.lawT <= 0) {
                     let pool = blaze.lawTable;
                     let pick = pool[Math.floor(Math.random() * pool.length)];
-                    document.getElementById('sys-modal').classList.add('hidden');
+                    sysModalCloseNormal();
                     blazeFlash('没选，随机给你一条：' + pick.name);
                     blazeLawPick(pick.id);
                 }

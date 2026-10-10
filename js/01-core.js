@@ -24,7 +24,34 @@
         let gameSeed = 1;
         function seededRandom() { gameSeed = (gameSeed * 9301 + 49297) % 233280; return gameSeed / 233280; }
 
+        // ── I1：弹窗只有一个（#sys-modal），规则统一在这里 ──
+        // 1. 介绍卡片（introPush 排队弹的）开着的时候，别的 showSysModal 不能把它盖掉：排到 sysModalWait 里，卡片关了再出。
+        // 2. 普通弹窗开着时再调 showSysModal，还是像以前一样直接换成新的（好多流程是"确认 → 结果"这样接着弹）。
+        // 3. 弹窗不管是怎么关的（点按钮、代码直接加 hidden、测试），都由下面的 MutationObserver 收尾：
+        //    introOpen 只在"弹窗开着、而且开着的是卡片"时为 true；关了就先出排队的普通弹窗，再出排队的卡片。
+        let sysModalKind = null;       // 现在开着的是 'intro' 还是 'normal'
+        let sysModalWait = [];         // 卡片开着时排队的普通弹窗
+        function sysModalVisible() { return !document.getElementById('sys-modal').classList.contains('hidden'); }
+        function sysModalNext() {
+            if (sysModalVisible()) return;
+            if (sysModalWait.length) { let m = sysModalWait.shift(); sysModalRender(m[0], m[1], m[2], 'normal'); return; }
+            if (typeof introPump === 'function') introPump();
+        }
+        function sysModalSync() {
+            let vis = sysModalVisible();
+            if (typeof introOpen !== 'undefined') introOpen = vis && sysModalKind === 'intro';
+            if (!vis) { sysModalKind = null; setTimeout(sysModalNext, 150); }
+        }
+        // 代码里要关掉"自己弹的那个普通弹窗"时用这个：开着的是卡片就不动它（它的普通弹窗还在排队，一起撤掉）
+        function sysModalCloseNormal() {
+            if (sysModalKind === 'intro' && sysModalVisible()) { sysModalWait = []; return; }
+            document.getElementById('sys-modal').classList.add('hidden');
+        }
         function showSysModal(title, text, buttons) {
+            if (sysModalKind === 'intro' && sysModalVisible()) { sysModalWait.push([title, text, buttons]); return; }
+            sysModalRender(title, text, buttons, 'normal');
+        }
+        function sysModalRender(title, text, buttons, kind) {
             // 大厅里鼠标一直是指针锁定状态（转视角用），弹窗一开还锁着的话，
             // 想点弹窗按钮鼠标根本不会动，还一直在转镜头——弹窗前先解锁。
             if (document.pointerLockElement) { try { document.exitPointerLock(); } catch (e) { } }
@@ -39,11 +66,17 @@
                 b.style.color = '#fff';
                 // 三个按钮并排时窄屏会把"下一关"挤成两行——宁可整排换行，也别把字拆开
                 b.style.whiteSpace = 'nowrap';
-                b.onclick = () => { document.getElementById('sys-modal').classList.add('hidden'); if (btn.onClick) btn.onClick(); };
+                b.onclick = () => { document.getElementById('sys-modal').classList.add('hidden'); sysModalSync(); if (btn.onClick) btn.onClick(); };
                 btnContainer.appendChild(b);
             });
+            sysModalKind = kind;
             document.getElementById('sys-modal').classList.remove('hidden');
+            sysModalSync();
         }
+        (function () {
+            let el = document.getElementById('sys-modal');
+            if (el && window.MutationObserver) new MutationObserver(sysModalSync).observe(el, { attributes: true, attributeFilter: ['class'] });
+        })();
 
         let peer = null, peerConns = [], peerIsHost = false, peerRoom = '', peerWant = false, peerRetry = null;
         let bcRaw = null;
@@ -1338,7 +1371,7 @@
         }
         function chatPickFriendDone(id) {
             chatChannel = 'friend'; chatDMTarget = id;
-            document.getElementById('sys-modal').classList.add('hidden');
+            sysModalCloseNormal();
             chatRenderChannels();
         }
         function chatPickFriendTarget() {
