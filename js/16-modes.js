@@ -132,8 +132,8 @@
             let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe;
             let n = Math.hypot(mx, mz);
             let jump = !!(keys[' '] || touchBtn.jump); keys[' '] = false; touchBtn.jump = false;
-            let act = !!(keys['lmb'] || keys['e'] || touchBtn.nmAct); keys['e'] = false; touchBtn.nmAct = false;
-            if (nm.def.actHold) act = !!(keys['lmb'] || keys['e']) || act;
+            let act = !!(keys['lmb'] || keys['e'] || touchBtn.nmAct); touchBtn.nmAct = false;
+            if (!nm.def.actHold) keys['e'] = false;
             // 人朝镜头方向（横着走也是面朝前），推/喷都朝镜头看的方向
             return { x: n > 1 ? mx / n : mx, z: n > 1 ? mz / n : mz, jump: jump, act: act, face: a.facing };
         }

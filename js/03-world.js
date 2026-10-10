@@ -911,6 +911,18 @@
                 n++;
             }
 
+            if (deckGate) {
+                let along = (deckGate.axis === 'x') ? [[0, 1], [0, -1]] : [[1, 0], [-1, 0]];
+                for (let vi = 0; vi < along.length && !deckSpare; vi++) {
+                    let nx = deckGate.x + along[vi][0], nz = deckGate.z + along[vi][1];
+
+                    let ok2 = blds.some(function (b) {
+                        return nx > b.x && nx < b.x + b.w - 1 && nz > b.z && nz < b.z + b.h - 1;
+                    });
+                    if (ok2) deckSpare = { x: nx, z: nz };
+                }
+            }
+
             let reachAll = function () {
                 let start = null, total = 0;
                 for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
@@ -1257,18 +1269,6 @@
             })();
 
             if (deckGate) {
-                let along = (deckGate.axis === 'x') ? [[0, 1], [0, -1]] : [[1, 0], [-1, 0]];
-                for (let vi = 0; vi < along.length && !deckSpare; vi++) {
-                    let nx = deckGate.x + along[vi][0], nz = deckGate.z + along[vi][1];
-
-                    let ok2 = blds.some(function (b) {
-                        return nx > b.x && nx < b.x + b.w - 1 && nz > b.z && nz < b.z + b.h - 1;
-                    });
-                    if (ok2) deckSpare = { x: nx, z: nz };
-                }
-            }
-
-            if (deckGate) {
                 let pm2 = nightMakePallet(deckGate.axis, true);
                 pm2.position.set(deckGate.x * TILE, DECK_H, deckGate.z * TILE); scene.add(pm2);
                 gState.pallets.push({
@@ -1439,6 +1439,13 @@
         // 更新公告：只写玩家关心的，一条一句话，按时间合并成几段（原来六十多条，太长没人看）
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
+            {
+                id: '2026-10-10-v2', date: '10 月 10 日', title: '小修复', items: [
+                    '彩弹占地按住 E 喷漆现在会一直喷，不用松开再按',
+                    '超燃组队颜色统一时，手也会跟着变成队伍颜色',
+                    '惊魂夜地图里一处该通的小缺口通了'
+                ]
+            },
             {
                 id: '2026-10-10', date: '10 月 10 日', title: '修复', items: [
                     '修复了 iPad 和手机上进不了游戏的问题',
