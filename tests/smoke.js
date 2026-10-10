@@ -117,7 +117,10 @@ async function openTab(chrome, url, opts) {
     await send('Runtime.enable'); await send('Page.enable');
     await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []).concat(opts && opts.blockHosts ? opts.blockHosts.map((h) => ({ urlPattern: '*' + h + '*' })) : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
-    await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+    if (opts && opts.mobile) {   // 触屏设备：has_touch + is_mobile
+        await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+        await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 2, mobile: true });
+    } else await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url });
     if (opts && opts.navWait !== undefined) await W(opts.navWait); else await W(2500);
     const tab = {
@@ -1186,6 +1189,41 @@ async function enterExit(tab, key) {
         }
 
         {
+            // B6：触屏设备启动——加载时 0 个页面错误、能进大厅、能进寻宝队和爬塔（B5 起触屏设备一加载就报 15 个 ReferenceError，进不了游戏）
+            const bad = [];
+            const M = await openTab(chrome, url, { mobile: true });
+            try {
+            const s0 = JSON.parse(await M.eval(`JSON.stringify({ ctl: gState.control, lobby: !document.getElementById('screen-lobby').classList.contains('hidden'), id: gState.id })`));
+            if (M.errors.length) bad.push('加载时报错 ' + M.errors.length + ' 个：' + M.errors.slice(0, 2).join(' / '));
+            if (s0.ctl !== 'pad' || !s0.lobby || !s0.id) bad.push('没进大厅 ' + JSON.stringify(s0));
+            await M.eval(`${HIDE} ${MODES.hunt.start}; true;`); await W(2500);
+            if (!(await M.eval('isPlaying'))) bad.push('进不了寻宝队');
+            await M.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
+            await M.eval(`${HIDE} ${MODES.tower.start}; true;`); await W(2000);
+            if (!(await M.eval(`!!nm && nm.mode === 'tower'`))) bad.push('进不了爬塔');
+            await M.eval(`${HIDE} ${MODES.tower.exit}; true;`); await W(800);
+            } catch (e) { bad.push('出错：' + String(e.message).slice(0, 200)); }
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('B6 触屏设备启动 0 报错、能进大厅、寻宝队、爬塔', bad.length === 0, bad.join(' / '));
+        }
+        {
+            // B6：电脑但设置里打开了触屏模式——刷新后同样 0 个错误、能进大厅
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`SETTINGS.touch = true; settingsSave(); true;`);
+            T.errors.length = 0;
+            await T.send('Page.reload'); await W(2500);
+            await T.eval(`document.getElementById('player-id').value = 'b6t' + Date.now() % 10000; requestLobbyAccess(); true;`); await W(1500);
+            const s = JSON.parse(await T.eval(`JSON.stringify({ ctl: gState.control, lobby: !document.getElementById('screen-lobby').classList.contains('hidden') })`));
+            if (T.errors.length) bad.push('报错 ' + T.errors.length + ' 个：' + T.errors.slice(0, 2).join(' / '));
+            if (s.ctl !== 'pad' || !s.lobby) bad.push(JSON.stringify(s));
+            await T.eval(`SETTINGS.touch = null; settingsSave(); true;`);
+            await T.close();
+            report('B6 电脑开了触屏模式，刷新后 0 报错、能进大厅', bad.length === 0, bad.join(' / '));
+        }
+
+        {
             // L1：17 个文件同时下载，页面显示"加载中 n/17"；其中一个晚到 2 秒，先显示进度、不报错，最后正常进大厅
             const bad = [];
             const D = await openTab(chrome, url, { noLobby: true, delayUrl: 'js/09-hunt.js', delayMs: 2000, navWait: 800 });
@@ -1225,9 +1263,9 @@ async function enterExit(tab, key) {
             // 新开页面加载的时候别的标签页一直在发消息，也不报错（所有文件下载完一口气执行，中间没有空档）
             const r = JSON.parse(await A.eval(`(function(){ let s = performance.getEntriesByType('resource').filter(function (e) { return /\\/js\\/[^?]*\\.js\\?v=/.test(e.name); });
                 return JSON.stringify({ n: s.length, files: GAME_FILES.length, ok: s.every(function (e) { return e.name.slice(-('?v=' + GAME_VERSION).length) === '?v=' + GAME_VERSION; }),
-                    // 文件同时下载，下载完的先后不一定；要看的是执行顺序：<head> 里按执行顺序插入的 <script>，末尾带 sourceURL
-                    order: Array.prototype.map.call(document.head.querySelectorAll('script'), function (x) { let m = /sourceURL=(\\S+)\\s*$/.exec(x.text); return m ? m[1] : null; })
-                        .filter(function (x) { return x; }).join(',') === GAME_FILES.join(',') }); })()`));
+                    // B6：17 个文件拼成一份、只插一个 <script> 执行；看这份里每个文件开头那行注释的先后
+                    order: (function () { let all = Array.prototype.filter.call(document.head.querySelectorAll('script'), function (x) { return /\\/\\/ ==== js\\//.test(x.text); });
+                        if (all.length !== 1) return false; let seen = []; all[0].text.replace(/^\\/\\/ ==== (js\\/\\S+) ====$/mg, function (m, f) { seen.push(f); return m; }); return seen.join(',') === GAME_FILES.join(','); })() }); })()`));
             const bad = [];
             if (!r.n || r.n !== r.files || !r.ok || !r.order) bad.push('脚本地址 ' + JSON.stringify(r));
             const F = await openTab(chrome, url, { noLobby: true, failUrl: '?v=' });

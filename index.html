@@ -1530,12 +1530,14 @@
 
     <script>
         // B4：版本号。每次发版手动加一（同一天多次发版就把最后的 -N 加一）。B5 拆文件后，脚本地址也带这个版本号。
-        const GAME_VERSION = '2026.10.07-1';
+        const GAME_VERSION = '2026.10.10-1';
         // B5：脚本拆到 js/ 下面，按这个顺序执行（顺序不能乱，后面的文件要用前面定义的东西）。
         // 地址后面带 ?v=版本号，发新版时浏览器一定拿新文件，不会一半新一半旧。
-        // L1：所有文件同时下载（异步），页面上显示"加载中 n/17"；全部到齐、页面也解析完以后，
-        // 在同一时刻一个接一个执行：中间不留空档，不会出现前面的文件收到消息/定时器触发时，
-        // 后面文件里的函数还没定义。有一个没下载下来就一个都不执行，盖一层重试提示。
+        // L1：所有文件同时下载（异步），页面上显示"加载中 n/17"；全部到齐、页面也解析完以后再执行。
+        // B6：必须按顺序拼成一份、只插一个 <script> 执行，跟拆分前的单文件完全等价。
+        // 不能一个文件一个 <script>：函数声明只在自己那个 script 里提前，顶层代码调后面文件里的函数
+        // （比如触屏时 selectControl → applyControlHints → kTxt）会报错，那个文件剩下的部分全都不执行。
+        // 有一个没下载下来就一个都不执行，盖一层重试提示。
         const GAME_FILES = ['js/01-core.js', 'js/02-lobby.js', 'js/03-world.js', 'js/04-blaze-2v2.js', 'js/05-shop.js', 'js/06-blaze.js', 'js/07-blaze-net.js', 'js/08-night.js', 'js/09-hunt.js', 'js/10-race.js', 'js/11-jail.js', 'js/12-dodge.js', 'js/13-escape.js', 'js/14-park.js', 'js/15-cake.js', 'js/16-modes.js', 'js/17-hub.js'];
         // 哪个文件没下载下来，就盖一层提示，给个重试按钮
         function gameBootFail() {
@@ -1550,8 +1552,15 @@
         // 下载、执行花了多久（毫秒，从这段代码开始算），测试和排查慢的时候看
         const GAME_BOOT = { start: performance.now(), fetched: 0, done: 0 };
         (function () {
-            // 直接双击打开本地文件（file://）时浏览器不让这样读，退回普通的 <script src>
-            if (location.protocol === 'file:') { GAME_FILES.forEach(function (f) { document.write('<script src="' + f + '"><\/script>'); }); return; }
+            // 直接双击打开本地文件（file://）时浏览器不让读文件内容，没法拼成一份；
+            // 一个个 <script src> 又不等价（见上面 B6），所以直接说清楚怎么办
+            if (location.protocol === 'file:') {
+                let d = document.createElement('div');
+                d.style.cssText = 'position:fixed; left:0; top:0; right:0; bottom:0; z-index:99999; background:#eef3f8; color:#333; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; font-size:16px; padding:20px; text-align:center;';
+                d.innerText = '直接双击打开文件玩不了。\n请在游戏文件夹里运行 python3 -m http.server 8000，再用浏览器打开 http://localhost:8000';
+                (document.body || document.documentElement).appendChild(d);
+                return;
+            }
             // 加载进度：盖住整个页面（游戏还没跑起来，按钮点了也没用）
             let box = document.createElement('div'); box.id = 'boot-load';
             box.style.cssText = 'position:fixed; left:0; top:0; right:0; bottom:0; z-index:99998; background:#eef3f8; color:#2c5d8f; display:flex; align-items:center; justify-content:center; font-size:18px;';
@@ -1561,7 +1570,7 @@
             show();
             let run = function () {
                 box.remove();
-                codes.forEach(function (c) { let el = document.createElement('script'); el.text = c; document.head.appendChild(el); });
+                let el = document.createElement('script'); el.text = codes.join(''); document.head.appendChild(el);
                 GAME_BOOT.done = performance.now() - GAME_BOOT.start;
             };
             GAME_FILES.forEach(function (f, i) {
@@ -1571,8 +1580,9 @@
                 }).then(function (t) {
                     if (failed) return;
                     if (!t) throw new Error(f);
-                    codes[i] = t + '\n//# sourceURL=' + f; got++; show();
+                    codes[i] = '// ==== ' + f + ' ====\n' + t + (/\n$/.test(t) ? '' : '\n'); got++; show();
                     if (got < GAME_FILES.length) return;
+                    codes.push('//# sourceURL=maodun-game.js\n');
                     GAME_BOOT.fetched = performance.now() - GAME_BOOT.start;
                     // 等页面其余部分也解析完再执行（跟原来一样，游戏代码里没人等 DOMContentLoaded）
                     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();

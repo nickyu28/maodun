@@ -1440,6 +1440,11 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026-10-10', date: '10 月 10 日', title: '修复', items: [
+                    '修复了 iPad 和手机上进不了游戏的问题'
+                ]
+            },
+            {
                 id: '2026-10-07', date: '10 月 7 日', title: '加载、联机和大厅', items: [
                     '打开游戏更快了，加载时会显示进度',
                     '画面和联机用的组件放到自己网站上了，不再从国外网站下载',
