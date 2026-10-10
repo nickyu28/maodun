@@ -1037,7 +1037,9 @@ async function enterExit(tab, key) {
             const c0 = await mouseAt(A, GAR_SLOT(4));
             const swipe = []; for (let i = 0; i <= 12; i++) swipe.push([c0[0], c0[1] - i * 14]);
             await touchPath(A, swipe, 0);
-            const st = await A.eval(`document.getElementById('garage-stash-container').scrollTop`);
+            // 滚动由浏览器的手势处理，机器忙的时候会晚一点才到位：最多等 1.5 秒
+            let st = 0;
+            for (let i = 0; i < 15 && !(st > 20); i++) { st = await A.eval(`document.getElementById('garage-stash-container').scrollTop`); if (!(st > 20)) await W(100); }
             if (!(st > 20)) bad.push('上滑没滚动 scrollTop=' + st);
             if ((await A.eval(names)) !== n0) bad.push('上滑把物品挪了');
             // 2. 长按后拖：格子变样子，物品移到目标格
