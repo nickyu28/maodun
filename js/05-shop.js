@@ -379,7 +379,7 @@
             { id: 'w1', name: '第一次赢', desc: '赢 1 局', stat: 'wins', goal: 1, coin: 10 },
             { id: 'w30', name: '常胜猫', desc: '赢 30 局', stat: 'wins', goal: 30, coin: 40, title: 'winner' },
             { id: 'st5', name: '五连胜', desc: '同一个模式连赢 5 局', stat: 'bestStreak', goal: 5, coin: 30, title: 'streak' },
-            { id: 'all', name: '全都玩过', desc: '每个模式都打完一局', stat: 'modes', goal: 11, coin: 50, title: 'allround' },
+            { id: 'all', name: '全都玩过', desc: '每个模式都打完一局', stat: 'modes', goal: 12, coin: 50, title: 'allround' },
             { id: 'wk5', name: '活动达人', desc: '本周活动模式打 5 局', stat: 'weekly', goal: 5, coin: 20 },
             { id: 'ht10', name: '跑腿专家', desc: '寻宝队小任务完成 10 次', stat: 'huntTask', goal: 10, coin: 30 },
             { id: 'tw30', name: '半山腰', desc: '爬塔爬到第 30 块', stat: 'tower', goal: 30, coin: 20 },

@@ -1341,6 +1341,23 @@ async function enterExit(tab, key) {
         }
 
         {
+            // G1：「全都玩过」12 个模式都算，乐园是最后一个打完时成就也弹出来
+            const bad = [];
+            await A.eval(`${HIDE} window.__ach0 = JSON.stringify(gState.ach || null); let S = achState(); S.modes = {}; delete S.done.all; delete S.got.all;
+                ['hunt', 'night', 'blaze', 'race', 'jail', 'dodge', 'escape', 'cake', 'sumo', 'paint', 'tower'].forEach(function (k) { S.modes[k] = 1; });
+                window.__flash = []; window.__bf = blazeFlash; blazeFlash = function (t) { window.__flash.push(t); return window.__bf.apply(this, arguments); }; true;`);
+            const goal = await A.eval(`ACH_LIST.filter(function (a) { return a.id === 'all'; })[0].goal`);
+            if (goal !== 12) bad.push('goal=' + goal);
+            if (await A.eval(`achCheck('none', {}), !!achState().done.all`)) bad.push('11 个就算完成了');
+            await A.eval(`${HIDE} ${MODES.park.start}; true;`); await W(800); await A.eval(`${HIDE} true;`);
+            await A.eval(`parkEndMatch(true); true;`); await W(2200);
+            const r = JSON.parse(await A.eval(`JSON.stringify({ park: !!achState().modes.park, done: !!achState().done.all, flash: window.__flash.filter(function (t) { return /成就：.*全都玩过/.test(t); }).length })`));
+            if (!r.park || !r.done || !r.flash) bad.push(JSON.stringify(r));
+            await A.eval(`${HIDE} blazeFlash = window.__bf; try { parkExit(); } catch (e) { } gState.ach = JSON.parse(window.__ach0); true;`); await W(800); await A.eval(`${HIDE} true;`);
+            report('G1 全都玩过要 12 个模式，最后打完乐园时成就弹出', bad.length === 0, bad.join(' / '));
+        }
+
+        {
             // B6：触屏设备启动——加载时 0 个页面错误、能进大厅、能进寻宝队和爬塔（B5 起触屏设备一加载就报 15 个 ReferenceError，进不了游戏）
             const bad = [];
             const M = await openTab(chrome, url, { mobile: true });

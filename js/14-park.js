@@ -205,6 +205,8 @@
             let baseReward = Math.round(8 + (park.compiled.winScore || 10) * 1.2 + totalSpeed * 0.3);
             let reward = won ? baseReward : Math.max(1, Math.floor(baseReward * 0.3));
             coinsAdd('park', reward);
+            // G1：乐园也算进"全都玩过"（12 个模式）。乐园不走 coinsSettle，这里自己记一局；乐园是最后一个时成就也会弹
+            if (typeof achCheck === 'function') achCheck('settle', { mode: 'park', won: won });
             if (park.program.creatorId && park.program.creatorId !== gState.id && roomPeers[park.program.creatorId]) {
                 let credit = Math.min(PARK_CREDIT_MAX, Math.round(reward * 0.5));
                 if (credit > 0) bc.postMessage({ type: 'PARK_CREDIT', target: '*', sender: gState.id, to: park.program.creatorId, amount: credit });
