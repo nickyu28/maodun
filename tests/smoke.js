@@ -1142,9 +1142,12 @@ async function enterExit(tab, key) {
             }
             if (!/在线 2 人\|2$/.test(seenA) || !/在线 2 人\|2$/.test(seenB)) bad.push('两边应该都是 2：' + seenA + ' / ' + seenB);
             if (B.errors.length) bad.push(B.errors.slice(0, 2).join(' / '));
+            // 测试环境的联机是个一直失败重连的桩，"连接出错"会很快盖掉状态栏；所以记下每一次写进状态栏的文字，不靠轮询屏幕
+            await A.eval(`window.__st = []; window.__nss = netSetStatus; netSetStatus = function (t, c) { window.__st.push(t + '|' + roomList.length); return window.__nss(t, c); }; true;`);
             await B.close();
             let back = '';
-            for (let i = 0; i < 40 && !/在线 1 人\|0$/.test(back); i++) { await W(300); back = await st(A); }
+            for (let i = 0; i < 40 && !/在线 1 人\|0$/.test(back); i++) { await W(300); back = await A.eval(`window.__st.filter(function (s) { return /在线 1 人\\|0$/.test(s); })[0] || window.__st.slice(-1)[0] || ''`); }
+            await A.eval(`netSetStatus = window.__nss; true;`);
             if (!/在线 1 人\|0$/.test(back)) bad.push('走了一个应该回到 1：' + back);
             // E4：大厅顶部"在线 N 人"只算真人，跟状态栏同一个数（这时只剩自己：1）
             const top = await A.eval(`hubHud(), document.getElementById('blaze-score').innerText + '|' + hub.wanderers.length`);
