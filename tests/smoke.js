@@ -90,6 +90,7 @@ async function openTab(chrome, url, opts) {
     const info = await jget(chrome.port, '/json/new?about:blank', 'PUT');
     const ws = new WebSocket(info.webSocketDebuggerUrl);
     let id = 0; const pending = new Map(); const errors = [], blocked = [];
+    const tabRef = { web3: 'ok', web3Posts: [] };
     const send = (method, params) => new Promise((res) => { const mid = ++id; pending.set(mid, res); ws.send(JSON.stringify({ id: mid, method, params: params || {} })); });
     const stub = fs.readFileSync(path.join(__dirname, 'peerjs-stub.js'));
     const threeLocal = process.env.THREE_LOCAL && fs.existsSync(process.env.THREE_LOCAL) ? fs.readFileSync(process.env.THREE_LOCAL) : null;
@@ -104,7 +105,17 @@ async function openTab(chrome, url, opts) {
         }
         if (msg.method === 'Fetch.requestPaused') {
             const u = msg.params.request.url, rid = msg.params.requestId;
-            if (opts && opts.failUrl && u.indexOf(opts.failUrl) >= 0) send('Fetch.failRequest', { requestId: rid, errorReason: 'Failed' });
+            // A6：反馈服务一律拦下来模拟（一个月只有 250 条额度，测试不能真发）。tab.web3 = 'ok' / 'fail'，发过的内容记在 tab.web3Posts
+            if (/api\.web3forms\.com/.test(u)) {
+                const cors = [{ name: 'Access-Control-Allow-Origin', value: '*' }, { name: 'Access-Control-Allow-Headers', value: '*' }, { name: 'Access-Control-Allow-Methods', value: 'GET, POST, OPTIONS' }];
+                const method = msg.params.request.method;
+                if (method === 'POST') tabRef.web3Posts.push(msg.params.request.postData || '');
+                const ok = tabRef.web3 !== 'fail' || method !== 'POST';
+                send('Fetch.fulfillRequest', { requestId: rid, responseCode: method === 'OPTIONS' ? 204 : ok ? 200 : 500,
+                    responseHeaders: cors.concat([{ name: 'Content-Type', value: 'application/json' }]),
+                    body: Buffer.from(method === 'OPTIONS' ? '' : JSON.stringify({ success: ok, message: ok ? 'ok' : 'mock fail' })).toString('base64') });
+            }
+            else if (opts && opts.failUrl && u.indexOf(opts.failUrl) >= 0) send('Fetch.failRequest', { requestId: rid, errorReason: 'Failed' });
             else if (opts && opts.blockHosts && opts.blockHosts.some((h) => u.indexOf(h) >= 0)) { blocked.push(u); send('Fetch.failRequest', { requestId: rid, errorReason: 'BlockedByClient' }); }
             else if (opts && opts.delayUrl && u.indexOf(opts.delayUrl) >= 0) setTimeout(() => send('Fetch.continueRequest', { requestId: rid }), opts.delayMs || 2000);
             else if (/peerjs/i.test(u)) send('Fetch.fulfillRequest', { requestId: rid, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/javascript' }], body: stub.toString('base64') });
@@ -115,7 +126,7 @@ async function openTab(chrome, url, opts) {
     });
     await new Promise((r) => ws.addEventListener('open', r));
     await send('Runtime.enable'); await send('Page.enable');
-    await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []).concat(opts && opts.blockHosts ? opts.blockHosts.map((h) => ({ urlPattern: '*' + h + '*' })) : []) });
+    await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }, { urlPattern: '*api.web3forms.com*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []).concat(opts && opts.blockHosts ? opts.blockHosts.map((h) => ({ urlPattern: '*' + h + '*' })) : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
     if (opts && opts.mobile) {   // 触屏设备：has_touch + is_mobile
         await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
@@ -124,7 +135,7 @@ async function openTab(chrome, url, opts) {
     await send('Page.navigate', { url });
     if (opts && opts.navWait !== undefined) await W(opts.navWait); else await W(2500);
     const tab = {
-        errors, blocked,
+        errors, blocked, get web3() { return tabRef.web3; }, set web3(v) { tabRef.web3 = v; }, web3Posts: tabRef.web3Posts,
         async eval(expr) {
             const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true });
             if (r.result && r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 500));
@@ -1190,7 +1201,43 @@ async function enterExit(tab, key) {
         }
 
         {
-            // C6b：大厅"联机诊断"——四项依次出"通/不通/用时"，最后一句结论，有"复制结果"；只读，不动游戏自己的连接
+            // A6：游玩记录删掉了；反馈直接发到 Web3Forms（测试里拦下来模拟成功/失败），带名字/模式/版本/时间，
+            // 成功提示"已收到"，失败复制到剪贴板，一分钟内第二条被拦住；页面和 js 文件里搜不到邮箱地址
+            const bad = [];
+            const emailRe = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
+            // 自己的代码（index.html、js/）里一个都不能有。vendor/ 是原样放进来的第三方库（C6a 用 SHA-256 锁死逐字节相同），
+            // PeerJS 里自带它上游贡献者名单（约 70 个公开地址），不归我们改，这里不扫
+            const files = ['index.html'].concat(fs.readdirSync(path.join(ROOT, 'js')).map((f) => 'js/' + f));
+            files.forEach((f) => { const m = fs.readFileSync(path.join(ROOT, f), 'utf8').match(emailRe); if (m) bad.push(f + ' 里有邮箱 ' + m.slice(0, 2).join(', ')); });
+            const gone = JSON.parse(await A.eval(`JSON.stringify({ fn: typeof openPlayLog + typeof playLogSeen + typeof playStatsDigest, btn: Array.prototype.some.call(document.querySelectorAll('button'), function (b) { return /游玩记录/.test(b.innerText); }), stats: 'stats' in roomSelfMsg() })`));
+            if (gone.fn !== 'undefinedundefinedundefined' || gone.btn || gone.stats) bad.push('游玩记录没删干净 ' + JSON.stringify(gone));
+            const send = async (text) => {
+                await A.eval(`${HIDE} openFeedback(); document.getElementById('feedback-text').value = ${JSON.stringify(text)}; window.__clip = null; navigator.clipboard.writeText = function (t) { window.__clip = t; return Promise.resolve(); }; true;`);
+                await W(200); await clickModal(A, 0); await W(800);
+                return await A.eval(`${MODAL} + '|' + document.getElementById('sys-modal-text').innerText`);
+            };
+            await A.eval(`${HIDE} openFeedback(); true;`);
+            if ((await A.eval(`document.getElementById('feedback-text').maxLength`)) !== 500) bad.push('没限 500 字');
+            await A.eval(`localStorage.removeItem('TH_feedback_at'); true;`);
+            A.web3 = 'ok'; const n0 = A.web3Posts.length;
+            const r1 = await send('测试反馈一');
+            if (!/^已收到/.test(r1)) bad.push('成功时提示 ' + r1);
+            const post = A.web3Posts[n0] ? JSON.parse(A.web3Posts[n0]) : {};
+            if (post.access_key !== '8d9d0fe6-b2b8-4487-9b95-3afed9ac7be1' || !post.subject || !/测试反馈一/.test(post.message || '') || !/名字: /.test(post.message) || !/版本: \d{4}\.\d\d\.\d\d-\d+/.test(post.message) || !/时间: /.test(post.message) || !/模式: /.test(post.message)) bad.push('发出去的内容 ' + JSON.stringify(post).slice(0, 200));
+            const r2 = await send('测试反馈二');
+            if (!/一分钟只能发一条/.test(r2) || A.web3Posts.length !== n0 + 1) bad.push('一分钟内第二条没拦住 ' + r2);
+            await A.eval(`localStorage.removeItem('TH_feedback_at'); true;`);
+            A.web3 = 'fail';
+            const r3 = await send('测试反馈三');
+            const clip = await A.eval('window.__clip');
+            if (!/^没发出去/.test(r3) || !/测试反馈三/.test(clip || '')) bad.push('失败时 ' + r3 + ' 剪贴板=' + clip);
+            A.web3 = 'ok';
+            await A.eval(`${HIDE} localStorage.removeItem('TH_feedback_at'); true;`);
+            report('A6 游玩记录删掉；反馈发到 Web3Forms（模拟），成功/失败提示对、一分钟限一条；代码里没有邮箱', bad.length === 0, bad.join(' / '));
+        }
+
+        {
+            // C6b：大厅"联机诊断"——五项（A6 加了第 5 项反馈服务，测试里被拦下来当成通）依次出"通/不通/用时"，最后一句结论，有"复制结果"；只读，不动游戏自己的连接
             const bad = [];
             // 测试环境里游戏自己的连接是个一直失败重连的桩，先停掉它，测完看诊断有没有碰它（还应该是 null、没有连接），再连回去
             await A.eval(`${HIDE} window.__room0 = peerRoom; netLeaveRoom(true); Array.prototype.find.call(document.querySelectorAll('#lobby-tl button'), function (b) { return b.innerText === '联机诊断'; }).click(); true;`);
@@ -1201,11 +1248,11 @@ async function enterExit(tab, key) {
                 same: peer === null && peerConns.length === 0 && !peerWant })`));
             const lines = r.text.split('\n');
             if (!done) bad.push('没测完');
-            if (r.title !== '联机诊断' || r.rows !== 5 || !r.copy) bad.push('界面 ' + JSON.stringify(r));
-            if (!/^1\. 联机组件加载：通/.test(lines[1]) || !lines.slice(1, 5).every((l) => /：(通|不通)/.test(l)) || !/^结论：./.test(lines[5])) bad.push('结果 ' + r.text);
+            if (r.title !== '联机诊断' || r.rows !== 6 || !r.copy) bad.push('界面 ' + JSON.stringify(r));
+            if (!/^1\. 联机组件加载：通/.test(lines[1]) || !lines.slice(1, 6).every((l) => /：(通|不通)/.test(l)) || !/^5\. 反馈服务：通/.test(lines[5]) || !/^结论：./.test(lines[6])) bad.push('结果 ' + r.text);
             if (!r.same) bad.push('动了游戏自己的连接');
             await A.eval(`${HIDE} netJoinRoom(window.__room0); true;`);
-            report('C6b 联机诊断四项都有结果和结论，能复制，不动游戏连接', bad.length === 0, bad.length ? bad.join(' / ') : lines.slice(1).join(' | '));
+            report('C6b 联机诊断五项都有结果和结论，能复制，不动游戏连接', bad.length === 0, bad.length ? bad.join(' / ') : lines.slice(1).join(' | '));
         }
 
         {

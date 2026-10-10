@@ -1444,7 +1444,8 @@
                     '修复了 iPad 和手机上进不了游戏的问题',
                     '超燃、松饼、推推乐这些模式里，名字带 & 或 < 的头顶名字不再显示乱码',
                     '超燃镜猫换位，联机时对面也会真的换过去了',
-                    '第一次玩时规则和新手提示都能看到了，之后也不会再卡住不动'
+                    '第一次玩时规则和新手提示都能看到了，之后也不会再卡住不动',
+                    '反馈改成在游戏里直接发送，不用登录；游玩记录拿掉了'
                 ]
             },
             {
@@ -1652,59 +1653,25 @@
                 '明天继续签到 +' + nextReward + ' 猫盾币。', [{ label: '太好了' }]);
         }
 
-        // 反馈：没有后端，收不到结构化数据，就走最土但最不会掉链子的路——
-        // 拼一封邮件，带上测试者的 ID/模式方便我对上号，发不出邮件就退化成复制文本。
-        // 反馈走 GitHub issue（仓库：nickyu28/maodun），不是随便存个本地文本——
-        // 这样夜里那个自动检查 bug 的云端任务才能真的读到。以前是直接开一个 GitHub
-        // 预填链接让玩家自己提交——但 GitHub 从来不允许匿名开 issue，没账号的玩家
-        // 这条路根本走不通。现在改成打一个 Netlify Function（/.netlify/functions/feedback），
-        // 后端拿开发者自己存的 token 建 issue，玩家不用登录任何东西。那个接口没配好
-        // 或者请求失败的话，自动退回旧的"打开 GitHub 预填页面"方案，反馈不会丢。
-        const FEEDBACK_REPO = 'nickyu28/maodun';
-        const FEEDBACK_EMAIL = 'iway.yu@gmail.com';
-        // 用 mailto 兜底：调起测试者自己手机/电脑上已经登录的邮箱客户端，标题正文都填好，
-        // 点发送就行，不用注册任何新账号。缺点是得设备上真的配了邮箱客户端才弹得出来。
-        function feedbackMailto(subject, body) {
-            location.href = 'mailto:' + FEEDBACK_EMAIL + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
-        }
-        // 提交到后端建 issue；失败（没配 token/网络问题）就退回旧的复制内容 + 打开
-        // GitHub 预填页面那套，至少反馈还能送到——只是又变成需要 GitHub 账号那条路了。
-        function feedbackSubmit(title, body, label, onOk, onFallback) {
-            fetch('/.netlify/functions/feedback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: title, body: body, label: label })
-            }).then(function (res) { if (!res.ok) throw new Error('bad status'); return res.json(); })
-                .then(function () { onOk(); })
-                .catch(function () {
-                    try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
-                    let url = 'https://github.com/' + FEEDBACK_REPO + '/issues/new?title=' + encodeURIComponent(title) +
-                        '&body=' + encodeURIComponent(body) + '&labels=' + label;
-                    window.open(url, '_blank');
-                    onFallback();
-                });
-        }
-        // 反馈涉及哪个/哪些模式让用户自己勾，不再偷偷塞 gState.gameMode——
-        // 那个字段只是"选择模式面板里选中的是哪个"，在大厅里从来没真的进任何模式，
-        // 却一直默认显示寻宝队，反馈里"模式"那一栏全是错的。
+        // ── 反馈（A6，10-10 作者的决定）：游戏里直接发到 Web3Forms，玩家不登录、不跳出游戏 ──
+        // access_key 本来就是公开的（Web3Forms 按登记的网站地址 nickyu28.github.io/maodun 收）。
+        // 一个月只有 250 条额度：同一台设备一分钟最多 1 条，每条最多 500 字。
+        // 发不出去就把内容复制到剪贴板，让玩家直接发给作者。冒烟测试会把这个地址拦下来模拟，不会真发。
+        const WEB3FORMS_URL = 'https://api.web3forms.com/submit';
+        const WEB3FORMS_KEY = '8d9d0fe6-b2b8-4487-9b95-3afed9ac7be1';
+        const FEEDBACK_MAX = 500, FEEDBACK_GAP_MS = 60000;
+        // 大厅推荐模式那里也用这张表的中文名
         const FEEDBACK_MODES = [
             ['hunt', '寻宝队'], ['night', '惊魂夜'], ['blaze', '超燃'], ['race', '竞速'],
             ['jail', '监狱救援'], ['dodge', '躲避球'], ['escape', '密室'], ['park', '猫盾乐园'],
-            ['cake', '松饼大作战'], ['hub', '大厅广场'], ['other', '其他/不确定']
+            ['cake', '松饼大作战'], ['sumo', '推推乐'], ['paint', '彩弹占地'], ['tower', '爬塔'],
+            ['hub', '大厅广场'], ['other', '其他/不确定']
         ];
         function feedbackActiveMode() {
-            if (typeof isPlaying !== 'undefined' && isPlaying) return 'hunt';
-            if (typeof night !== 'undefined' && night) return 'night';
-            if (typeof blaze !== 'undefined' && blaze) return 'blaze';
-            if (typeof race !== 'undefined' && race) return 'race';
-            if (typeof jail !== 'undefined' && jail) return 'jail';
-            if (typeof dodge !== 'undefined' && dodge) return 'dodge';
-            if (typeof escapeRoom !== 'undefined' && escapeRoom) return 'escape';
-            if (typeof park !== 'undefined' && park) return 'park';
-            if (typeof cake !== 'undefined' && cake) return 'cake';
-            if (typeof hub !== 'undefined' && hub) return 'hub';
-            return null;
+            let k = typeof chatActiveModeKey === 'function' ? chatActiveModeKey() : null;
+            return k || null;
         }
+        function feedbackLastAt() { try { return +(localStorage.getItem('TH_feedback_at') || 0); } catch (e) { return 0; } }
         function openFeedback() {
             let active = feedbackActiveMode();
             let modesHtml = '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">' +
@@ -1713,80 +1680,48 @@
                         '<input type="checkbox" class="feedback-mode-cb" value="' + m[0] + '"' + (m[0] === active ? ' checked' : '') + '> ' + m[1] + '</label>';
                 }).join('') + '</div>';
             let html = '<div style="text-align:left;">' +
-                '<textarea id="feedback-text" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
-                '<div style="font-size:11px; color:#999; margin-top:8px;">这条反馈跟哪个/哪些模式有关？（可多选）</div>' + modesHtml +
-                '<div style="font-size:11px; color:#999; margin-top:8px;">会顺便带上你的 ID（' + dispName(gState.id) + '）。直接提交就行，不用注册任何账号；也可以选"用邮件发"。</div>' +
+                '<textarea id="feedback-text" maxlength="' + FEEDBACK_MAX + '" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
+                '<div style="font-size:11px; color:#999; margin-top:8px;">跟哪个模式有关？（可多选）</div>' + modesHtml +
+                '<div style="font-size:11px; color:#999; margin-top:8px;">会带上你的名字、版本号和时间，最多 ' + FEEDBACK_MAX + ' 字。</div>' +
                 '</div>';
             showSysModal('反馈', html, [
-                { label: '提交反馈', color: '#24292e', onClick: function () { feedbackSend(); } },
-                { label: '用邮件发', color: '#5cb85c', onClick: function () { feedbackSend(true); } },
+                { label: '发送', color: '#24292e', onClick: function () { feedbackSend(); } },
                 { label: '取消' }
             ]);
         }
         function feedbackBuildBody(text, modes) {
-            let meta = 'ID: ' + dispNameText(gState.id) + '\n模式: ' + (modes.length ? modes.join('、') : '（没选）') + '\n时间: ' + new Date().toLocaleString();
-            return text + '\n\n——\n' + meta;
+            let names = modes.map(function (k) { return (FEEDBACK_MODES.filter(function (m) { return m[0] === k; })[0] || [k, k])[1]; });
+            return text + '\n\n——\n名字: ' + dispNameText(gState.id) + '\n模式: ' + (names.length ? names.join('、') : '（没选）') +
+                '\n版本: ' + GAME_VERSION + '\n时间: ' + new Date().toLocaleString();
         }
-        function feedbackSend(viaEmail) {
+        function feedbackCopy(body) {
+            try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
+        }
+        function feedbackSend() {
             let box = document.getElementById('feedback-text');
             let text = box ? box.value.trim() : '';
             if (!text) { showSysModal('提示', '写点什么再发吧', [{ label: '确定' }]); return; }
+            if (text.length > FEEDBACK_MAX) { showSysModal('提示', '太长了，最多 ' + FEEDBACK_MAX + ' 字', [{ label: '确定' }]); return; }
+            let wait = FEEDBACK_GAP_MS - (Date.now() - feedbackLastAt());
+            if (wait > 0) { showSysModal('提示', '一分钟只能发一条，' + Math.ceil(wait / 1000) + ' 秒后再试', [{ label: '确定' }]); return; }
             let modes = Array.from(document.querySelectorAll('.feedback-mode-cb:checked')).map(function (cb) { return cb.value; });
             let body = feedbackBuildBody(text, modes);
-            let title = '[反馈] ' + text.slice(0, 40).replace(/\n/g, ' ') + (text.length > 40 ? '…' : '');
-            if (viaEmail) { feedbackMailto(title, body); return; }
-            feedbackSubmit(title, body, 'feedback',
-                function () { blazeFlash('反馈已提交，谢谢！'); },
-                function () { blazeFlash('自动提交失败，已复制内容并打开 GitHub 页面'); });
-        }
-
-        // 游玩记录：只是你自己遇到过的人的本地小名单，不是全网玩家统计——
-        // 没有后端，没法知道谁没跟你联机过就在玩。跟反馈一个套路，
-        // 想真的交给开发者看就点"提交"，走同一条 GitHub issue 预填链接。
-        function openPlayLog() {
-            let ids = Object.keys(playLog).sort(function (a, b) { return playLog[b].lastSeen - playLog[a].lastSeen; });
-            let rows = ids.length ? ids.map(function (id) {
-                let e = playLog[id], s = e.stats || {};
-                let statsTxt = s.mcoin === undefined ? '（还没收到数据）' :
-                    chatEscape(s.mcoin + ' 猫盾币　皮肤 ' + s.skins + '　彩蛋 ' + s.eggs +
-                        '　惊魂夜 ' + s.nightRank + '　超燃 ' + s.blazeRank);
-                return '<tr><td style="padding:4px 8px; border-top:1px solid #eee;">' + dispName(id) + '</td>' +
-                    '<td style="padding:4px 8px; border-top:1px solid #eee; color:#888; font-size:11px;">' +
-                    new Date(e.firstSeen).toLocaleDateString() + '</td>' +
-                    '<td style="padding:4px 8px; border-top:1px solid #eee; color:#888; font-size:11px;">' +
-                    new Date(e.lastSeen).toLocaleString() + '</td>' +
-                    '<td style="padding:4px 8px; border-top:1px solid #eee; text-align:center;">' + e.timesSeen + '</td>' +
-                    '<td style="padding:4px 8px; border-top:1px solid #eee; font-size:11px;">' + statsTxt + '</td></tr>';
-            }).join('') : '<tr><td colspan="5" style="padding:14px; color:#999; text-align:center;">还没遇到过人。跟别人进同一个房间就会记下来。</td></tr>';
-            let html = '<div style="text-align:left;">' +
-                '<div style="font-size:11px; color:#999; margin-bottom:8px;">只记你遇到过的人。</div>' +
-                '<div style="max-height:320px; overflow:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px;">' +
-                '<tr style="color:#888; text-align:left;"><th style="padding:4px 8px;">ID</th><th style="padding:4px 8px;">第一次</th>' +
-                '<th style="padding:4px 8px;">最近一次</th><th style="padding:4px 8px;">次数</th><th style="padding:4px 8px;">上次看到的数据</th></tr>' +
-                rows + '</table></div></div>';
-            showSysModal('游玩记录　共 ' + ids.length + ' 人', html, [
-                { label: '提交给开发者', color: '#24292e', onClick: function () { playLogSubmit(); } },
-                { label: '用邮件发', color: '#5cb85c', onClick: function () { playLogSubmit(true); } },
-                { label: '关闭' }
-            ]);
-        }
-        function playLogSubmit(viaEmail) {
-            let ids = Object.keys(playLog);
-            if (!ids.length) { showSysModal('提示', '还没记录到任何人，先联机玩一会儿再提交', [{ label: '确定' }]); return; }
-            let lines = ids.sort().map(function (id) {
-                let e = playLog[id], s = e.stats || {};
-                return dispNameText(id) + '　首次 ' + new Date(e.firstSeen).toLocaleDateString() +
-                    '　最近 ' + new Date(e.lastSeen).toLocaleString() + '　次数 ' + e.timesSeen +
-                    '　币 ' + (s.mcoin === undefined ? '?' : s.mcoin) + '　皮肤 ' + (s.skins === undefined ? '?' : s.skins) +
-                    '　彩蛋 ' + (s.eggs === undefined ? '?' : s.eggs) +
-                    '　惊魂夜 ' + (s.nightRank || '?') + '　超燃 ' + (s.blazeRank || '?');
-            });
-            let body = '提交者: ' + dispNameText(gState.id) + '\n时间: ' + new Date().toLocaleString() + '\n记录到 ' + ids.length + ' 人\n\n' + lines.join('\n');
-            let title = '[游玩记录] ' + dispNameText(gState.id) + ' 提交，共 ' + ids.length + ' 人';
-            if (viaEmail) { feedbackMailto(title, body); return; }
-            feedbackSubmit(title, body, 'playlog',
-                function () { blazeFlash('游玩记录已提交，谢谢！'); },
-                function () { blazeFlash('自动提交失败，已复制内容并打开 GitHub 页面'); });
+            let subject = '[猫盾反馈] ' + text.slice(0, 30).replace(/\n/g, ' ') + (text.length > 30 ? '…' : '');
+            let fail = function () {
+                feedbackCopy(body);
+                showSysModal('没发出去', '内容已经复制好了，可以直接发给作者。', [{ label: '知道了' }]);
+            };
+            fetch(WEB3FORMS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ access_key: WEB3FORMS_KEY, subject: subject, message: body })
+            }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                .then(function (x) {
+                    if (!x.ok || !x.j || !x.j.success) { fail(); return; }
+                    try { localStorage.setItem('TH_feedback_at', String(Date.now())); } catch (e) { }
+                    showSysModal('已收到', '谢谢！', [{ label: '好' }]);
+                })
+                .catch(fail);
         }
 
         function openEggBook() {

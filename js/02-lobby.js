@@ -437,7 +437,7 @@
         function proceedToLobby(pid) {
             let ai1Name = pid + "_AI_1"; let ai2Name = pid + "_AI_2"; gState.id = pid;
             gState.team = [{ id: pid, isLeader: true, isReady: true, isAI: false }, { id: ai1Name, isLeader: false, isReady: true, isAI: true }, { id: ai2Name, isLeader: false, isReady: true, isAI: true }];
-            loadProgress(pid); parkRefundOld(); loadEggs(); friendLoad(); playLogLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); checkinBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
+            loadProgress(pid); parkRefundOld(); loadEggs(); friendLoad(); updateTeamListUI(); teamRenderUI(); changelogBadgeSync(); checkinBadgeSync(); nav('screen-lobby'); selectGameMode(gState.gameMode || 'hunt');
             chatLoad();
             // 之前得自己敲房间号、点"进入"才算联机——两台设备各自打开游戏，
             // 谁都没点那一下，大厅里当然看不到对方，跟单机一样。现在默认自动

@@ -250,7 +250,8 @@
         // v3：密室前面插了 8 个入门关，ESC_START 里的关卡号跟旧版对不上了
         // v4：寻宝队箱子、保险柜、信号接收器的东西改成造图时按种子定好（H13），同一个 START_MAP 新旧版本开出来的不一样
         // v5：寻宝队造图保证每两层之间有楼梯、坏图换种子重造（H15），少数种子新旧版本造出来的图不一样
-        // v6：超燃镜猫换位的 'swap' 事件多了楼层字段、收到的一方开始照着换位（原来发了没人收）
+        // v6：超燃镜猫换位的 'swap' 事件多了楼层字段、收到的一方开始照着换位（原来发了没人收）；
+        //     同一版 ROOM_HELLO 去掉了 stats 字段（A6 删游玩记录）
         const NET_PROTO = 6;
         const NET_PREFIX = 'maodun-v' + NET_PROTO + '-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
@@ -340,7 +341,8 @@
             ['lib', '联机组件加载', '联机组件没加载上，刷新一下再试。'],
             ['signal', '牵线服务器', '连不上牵线服务器，进不了房间。'],
             ['stun', '探路服务器', '探路服务器没回地址，不在同一个网络时很难直连，只能靠中转。'],
-            ['turn', '中转服务器', '中转服务器没回地址，两边都没法直连时就连不上。']
+            ['turn', '中转服务器', '中转服务器没回地址，两边都没法直连时就连不上。'],
+            ['fb', '反馈服务', '反馈服务连不上，游戏里的反馈发不出去（会改成复制给你）。']
         ];
         let netDiag = null;
         function netDiagText() {
@@ -355,7 +357,7 @@
         }
         function netDiagVerdict() {
             let bad = NET_DIAG_STEPS.filter(function (st) { let r = netDiag.res[st[0]]; return r && !r.ok; });
-            return bad.length ? bad.map(function (st) { return st[2]; }).join('') : '四项都通，联机这边没问题。';
+            return bad.length ? bad.map(function (st) { return st[2]; }).join('') : '全都通，联机这边没问题。';
         }
         function netDiagRender() {
             let el = document.getElementById('net-diag'); if (!el || !netDiag) return;
@@ -422,7 +424,20 @@
                     } catch (e) { end(); }
                 });
             };
-            signal().then(ice).then(function () { if (netDiag !== run) return; run.done = true; netDiagRender(); });
+            // 5. 反馈服务：只看 api.web3forms.com 连不连得上（普通 GET，不提交，不占额度），10 秒为限
+            let fb = function () {
+                return new Promise(function (resolve) {
+                    let t0 = now(), fin = false;
+                    let end = function (r) { if (fin) return; fin = true; clearTimeout(to); set('fb', r); resolve(); };
+                    let to = setTimeout(function () { end({ ok: false, why: '10 秒没回应' }); }, 10000);
+                    try {
+                        fetch('https://api.web3forms.com/', { mode: 'no-cors', cache: 'no-store' })
+                            .then(function () { end({ ok: true, ms: Math.round(now() - t0) }); })
+                            .catch(function () { end({ ok: false, ms: Math.round(now() - t0), why: '连不上' }); });
+                    } catch (e) { end({ ok: false, why: '连不上' }); }
+                });
+            };
+            signal().then(ice).then(fb).then(function () { if (netDiag !== run) return; run.done = true; netDiagRender(); });
         }
 
         function netLeaveRoom(quiet) {
@@ -442,39 +457,7 @@
 
         const ROOM_BEAT = 1200, ROOM_STALE = 5000;
 
-        // 游玩记录：只记你自己联机时真正同房间遇到过的人（没有后端，
-        // 没法知道全网谁在玩），存在本地，"游玩记录"按钮里能看、能提交给开发者。
-        const PLAYLOG_SESSION_GAP = 120000;   // 断线超过这么久再见面，算重新"来玩了一次"
-        let playLog = {};
-        function playLogLoad() {
-            try { playLog = JSON.parse(localStorage.getItem('TH_playlog') || '{}') || {}; }
-            catch (e) { playLog = {}; }
-        }
-        function playLogSave() { try { localStorage.setItem('TH_playlog', JSON.stringify(playLog)); } catch (e) { } }
-        function playLogSeen(id, stats) {
-            if (!id || id === gState.id) return;
-            let now = Date.now();
-            let e = playLog[id];
-            if (!e) { e = playLog[id] = { firstSeen: now, lastSeen: now, timesSeen: 0, stats: null }; }
-            if (now - e.lastSeen > PLAYLOG_SESSION_GAP) e.timesSeen++;
-            e.lastSeen = now;
-            if (stats) e.stats = stats;
-            playLogSave();
-        }
-
         function roomMe() { return roomList.find(function (r) { return r.id === gState.id; }); }
-
-        // 游玩记录：自己这份存档的小摘要，随心跳一起广播出去，让房间里的人
-        // 顺手记一笔"谁玩到什么程度了"。不是完整存档，就几个数，量很小。
-        function playStatsDigest() {
-            return {
-                mcoin: coinsOf(),
-                skins: Object.keys(gState.skins || {}).length,
-                eggs: eggCount(),
-                nightRank: rankTierName('night'),
-                blazeRank: rankTierName('blaze')
-            };
-        }
 
         function roomSelfMsg() {
 
@@ -494,8 +477,7 @@
                 bz: gState.blazeChar || 'bow',
                 acc: gState.acc || null,
                 face: myFace(),
-                title: myTitle(),
-                stats: playStatsDigest()
+                title: myTitle()
             };
         }
 
@@ -521,7 +503,6 @@
                 return;
             }
             friendSeen(m.sender);
-            playLogSeen(m.sender, m.stats);
             roomPeers[m.sender] = {
                 host: !!m.host, matching: !!m.matching,
                 side: m.side || null,
