@@ -609,6 +609,40 @@ async function enterExit(tab, key) {
             report('M2 每日任务：每天 3 个（模式不重复、≤1 寻宝队、≥1 超燃/惊魂夜）；做完 +5，全做完 +10；存档带着', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('M3')) {
+            // M3：超燃 2v2 有快速场（先赢 5 小局、每小局 60 秒后缩圈，默认）和完整场（先赢 10 小局）
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('blaze'); blazeCharOffer('blaze'); true;`); await W(500);
+            const m0 = await T.eval(`document.getElementById('sys-modal-text').innerText`);
+            if (!/快速场/.test(m0) || !/完整场/.test(m0)) bad.push('三选一里没有场次选择 ' + m0.slice(0, 60));
+            const def = await T.eval(`[SETTINGS.blazeFull, document.getElementById('bz-var-q').style.background]`);
+            if (def[0] !== false) bad.push('默认不是快速场 ' + JSON.stringify(def));
+            // 选快速场点第一个角色 → 真的开了快速场
+            await T.eval(`window.mmStart = function (m, n, cb) { cb([gState.id]); }; document.querySelector('#sys-modal-btns button').click(); true;`); await W(1500);
+            const q = JSON.parse(await T.eval(`JSON.stringify({ quick: blaze.quick, win: blazeWinTarget(), delay: blazePoisonDelay(), hud: document.getElementById('blaze-round').innerText })`));
+            if (!q.quick || q.win !== 5 || q.delay !== 60 || !/先赢 5 局/.test(q.hud)) bad.push('快速场参数不对 ' + JSON.stringify(q));
+            // 5 局打完才结束；毒圈 60 秒内不动、之后才缩
+            const r = JSON.parse(await T.eval(`(function(){ blaze.score = [4, 0]; blazeAwardRound(0); let over5 = blaze.over;
+                blazeExit(); blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }]), gState.id, false, false, false, true); blaze.phase = 'live';
+                let r0 = blaze.poison; blaze.poisonT = 0; blazePoisonTick(30); blazePoisonTick(29); let r1 = blaze.poison; blazePoisonTick(2); let r2 = blaze.poison;
+                return JSON.stringify({ over5: over5, still: r0 === r1, shrunk: r2 < r1 }); })()`));
+            if (!r.over5) bad.push('快速场赢第 5 局没结束');
+            // 再来一局还是快速场
+            const again = await T.eval(`(function(){ blazeAgainGo([]); return blaze.quick && !blaze.over; })()`);
+            if (!again) bad.push('再来一局丢了快速场');
+            if (!r.still || !r.shrunk) bad.push('毒圈时间不对 ' + JSON.stringify(r));
+            // 选完整场：先赢 10 局、8 秒后缩圈
+            await T.eval(`${HIDE} blazeExit(); blazeCharOffer('blaze'); true;`); await W(500);
+            await T.eval(`document.getElementById('bz-var-f').click(); document.querySelector('#sys-modal-btns button').click(); true;`); await W(1500);
+            const f = JSON.parse(await T.eval(`JSON.stringify({ quick: blaze.quick, win: blazeWinTarget(), delay: blazePoisonDelay(), saved: SETTINGS.blazeFull,
+                over5: (function(){ blaze.score = [4, 0]; blazeAwardRound(0); return blaze.over; })() })`));
+            if (f.quick || f.win !== 10 || f.delay !== 8 || f.saved !== true || f.over5) bad.push('完整场参数不对 ' + JSON.stringify(f));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('M3 超燃快速场（先赢 5 局、60 秒后缩圈，默认）和完整场（先赢 10 局）', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];

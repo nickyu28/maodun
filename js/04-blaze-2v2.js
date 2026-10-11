@@ -21,6 +21,7 @@
 
         const BLAZE = {
             size: 21, eye: 9, hp: 100, speed: 36, roundsToWin: 10, resetDelay: 0,
+            quickWins: 5, quickPoisonDelay: 60,         // 快速场：先赢 5 小局，每小局 60 秒后才开始缩圈（完整场是 roundsToWin 局、poisonDelay 秒）
             // 普攻：空格。剑/回血/抗伤是近战小挥砍；弓箭手不一样 —— 弓天生是远程，
             // 普攻就该是一箭，不该跟别人一样贴脸砍。
             // 攻击力：所有人的普攻伤害直接等于这个数

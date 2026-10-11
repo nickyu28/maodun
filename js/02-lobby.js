@@ -29,7 +29,7 @@
                 '屏幕中间会提示现在能做什么。'
             ]; } },
             blaze: { title: '超燃', lines: function () { return [
-                '<b>2v2</b>：一条命，一队全灭输一局，先赢 ' + BLAZE.roundsToWin + ' 局。局间能选一项加成。',
+                '<b>2v2</b>：一条命，一队全灭输一局。快速场先赢 ' + BLAZE.quickWins + ' 局（每局 ' + BLAZE.quickPoisonDelay + ' 秒后缩圈），完整场先赢 ' + BLAZE.roundsToWin + ' 局。局间能选一项加成。',
                 '毒圈会收，站在圈外掉血。',
                 '<b>乱斗</b>：16 人混战 5 分钟，死了 10 秒后复活。击杀 +2、助攻 +2、死亡 −1。',
                 '乱斗里会慢慢进账，' + kTxt('按 <b>C</b>', '点 <b>商店</b>') + ' 花钱买卡。',
@@ -332,7 +332,7 @@
         // 没设置过的时候：手指操作的设备（粗指针）或者窄屏触屏默认显示，其它默认隐藏。
         // 灵敏度原来存在 gState 里但 saveProgress 没带上它，每次刷新都回到 1——现在也放这儿存。
         // P1：寻宝队难度、AI 补齐队友、惊魂夜选的角色也存在这里（null = 没选过，用默认），进大厅时恢复
-        let SETTINGS = { touch: null, sens: 1, invertY: false, sfx: true, hq: false, mapDiff: null, aiFill: null, nightChar: null, volMaster: 1, volMusic: 1, volSfx: 1, volVoice: 1 };
+        let SETTINGS = { touch: null, sens: 1, invertY: false, sfx: true, hq: false, mapDiff: null, aiFill: null, nightChar: null, blazeFull: false, volMaster: 1, volMusic: 1, volSfx: 1, volVoice: 1 };
         function settingsLoad() {
             try { let v = JSON.parse(localStorage.getItem('TH_settings') || 'null'); if (v) Object.keys(SETTINGS).forEach(function (k) { if (v[k] !== undefined) SETTINGS[k] = v[k]; });
                 // S1：老设置里“音效关”变成音效音量 0

@@ -65,7 +65,7 @@
             // 上一场打完在结算框上点了「再来一局」：先把旧场收干净（模型、界面），再开新的
             if (blaze && blaze.over) { try { blazeExit(); } catch (e) { } }
             if (blaze) { if (blaze.raf) cancelAnimationFrame(blaze.raf); blaze = null; }
-            blazeBegin(m.plan, m.host, !!m.ffa);
+            blazeBegin(m.plan, m.host, !!m.ffa, false, false, !!m.quick);
             if (m.ffa) blaze.ffaDuo = !!m.duo;
         }
 
@@ -148,7 +148,7 @@
                 }
                 else { blaze.phase = 'between'; blaze.wait = BLAZE.resetDelay; }
                 blazeFlash((m.w === blaze.me.team ? '本局获胜' : '本局失利') + '　' + m.sc[0] + ' : ' + m.sc[1]);
-                if (m.sc[m.w] >= BLAZE.roundsToWin) {
+                if (m.sc[m.w] >= blazeWinTarget()) {
                     blaze.over = true;
                     if (blaze.raf) cancelAnimationFrame(blaze.raf);
                     if (document.pointerLockElement) document.exitPointerLock();
@@ -237,10 +237,10 @@
                 return { team: q.team, id: keep ? q.id : null, key: q.key };
             });
             if (plan.some(function (q) { return q.id && q.id !== gState.id; })) {
-                bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id, ffa: a.ffa, duo: duo });
+                bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id, ffa: a.ffa, duo: duo, quick: !!a.quick });
             }
             blazeExit();
-            blazeBegin(plan, gState.id, a.ffa, a.tomb, a.law);
+            blazeBegin(plan, gState.id, a.ffa, a.tomb, a.law, a.quick);
             if (a.ffa) blaze.ffaDuo = duo;
         }
 

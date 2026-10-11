@@ -486,6 +486,23 @@
 
         // 每局开打之前发三个猫盾，挑一个上场 —— 想一直玩控制猫盾是不行的。
         // 只从你已经拥有的里面发。
+        // 2v2 的场次选择：快速场（默认）/ 完整场，记在设置里
+        function blazeQuickToggleHtml() {
+            let on = function (q) { return (!SETTINGS.blazeFull) === q; };
+            let btn = function (q, label, sub) {
+                return '<button id="bz-var-' + (q ? 'q' : 'f') + '" onclick="blazeVariantSet(' + q + ')" style="margin:0; flex:1; padding:6px 4px; font-size:13px; border:none; border-radius:5px; color:#fff; background:' + (on(q) ? '#ff5722' : '#b0bec5') + ';">' +
+                    label + '<br><span style="font-size:11px; opacity:0.9;">' + sub + '</span></button>';
+            };
+            return '<div style="display:flex; gap:6px; margin-bottom:8px;">' +
+                btn(true, '快速场', '先赢 ' + BLAZE.quickWins + ' 局') + btn(false, '完整场', '先赢 ' + BLAZE.roundsToWin + ' 局') + '</div>';
+        }
+        function blazeVariantSet(quick) {
+            settingsRemember('blazeFull', !quick);
+            [['q', true], ['f', false]].forEach(function (x) {
+                let b = document.getElementById('bz-var-' + x[0]);
+                if (b) b.style.background = (x[1] === quick) ? '#ff5722' : '#b0bec5';
+            });
+        }
         function blazeCharOffer(mode) {
             let owned = BLAZE_ORDER.filter(function (k) { return charOwned('blaze', k); });
             if (!owned.length) owned = ['bow'];
@@ -499,7 +516,8 @@
                 else if (mode === 'law') blazeLawStartGo();
                 else blazeStartGo();
             };
-            let txt = '<div style="font-size:12px; color:#888; margin-bottom:6px;">每局随机发三个，挑一个上场</div>' +
+            let txt = (mode === 'blaze' ? blazeQuickToggleHtml() : '') +
+                '<div style="font-size:12px; color:#888; margin-bottom:6px;">每局随机发三个，挑一个上场</div>' +
                 offer.map(function (k) {
                     let c = BLAZE_CHARS[k];
                     return '<div style="margin:7px 0; text-align:left; border-left:3px solid ' + c.css + '; padding-left:7px;">' +
@@ -1404,8 +1422,9 @@
                     return { id: id, key: id === gState.id ? gState.blazeChar : (blazePeerChar[id] || 'bow') };
                 });
                 let plan = blazePlan(humans);
-                if (ids.length > 1) bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
-                blazeBegin(plan, gState.id);
+                let quick = !SETTINGS.blazeFull;
+                if (ids.length > 1) bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id, quick: quick });
+                blazeBegin(plan, gState.id, false, false, false, quick);
                 return;
             }
             // 没组队：先等最多 15 秒看房间里有没有陌生人也想打这个模式，凑到人就真联机
@@ -1414,8 +1433,9 @@
                     return { id: id, key: id === gState.id ? gState.blazeChar : (blazePeerChar[id] || 'bow') };
                 });
                 let plan = blazePlan(humans);
-                if (ids.length > 1) bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id });
-                blazeBegin(plan, gState.id);
+                let quick = !SETTINGS.blazeFull;
+                if (ids.length > 1) bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id, quick: quick });
+                blazeBegin(plan, gState.id, false, false, false, quick);
             });
         }
         // 组队人数自动挑玩法：1 人乱斗单排，2 人乱斗双人（跟组队的那个人一队），
@@ -1645,7 +1665,7 @@
             });
         }
 
-        function blazeBegin(plan, hostId, ffa, tomb, law) {
+        function blazeBegin(plan, hostId, ffa, tomb, law, quick) {
             // 别的模式的 Begin 都会先退出还开着的其它模式，超燃这里漏了：被联机拉进超燃时旧那局还在后台跑，
             // 两边抢镜头和按键。
             // 放在最前面：这些 Exit 会回大厅、藏起 blaze-hud，得在下面摆超燃自己的界面之前做完。（B2，重做夜间 PR #14；顺带加上后来才有的新模式 nm）
@@ -1701,7 +1721,7 @@
             let spawns = blazeBuildArena(ffa, tomb, law);
 
             blaze = {
-                ffa: !!ffa, tomb: !!tomb, beacons: [], tombWalls: [],
+                ffa: !!ffa, tomb: !!tomb, quick: !!quick && !ffa && !tomb && !law, beacons: [], tombWalls: [],
                 law: !!law, laws: {}, lawBy: {}, lawTable: null, callT: BLAZE.lawCallEvery,
                 ffaLeft: tomb ? BLAZE.tombTime : law ? BLAZE.lawTime : BLAZE.ffaTime, ffaCardOpen: false,
                 ffaMoney: BLAZE.ffaStartMoney, ffaRefreshN: 0,
@@ -1713,7 +1733,7 @@
                 host: hostId, net: plan.some(function (q) { return q.id && q.id !== gState.id; }),
                 poison: blazePoisonStart(), poisonT: 0, ring: null, clock: 0, openingPerk: false, aiming: null,
                 sendSelf: 0, sendWorld: 0, builds: [],
-                again: { plan: JSON.parse(JSON.stringify(plan)), ffa: !!ffa, tomb: !!tomb, law: !!law }
+                again: { plan: JSON.parse(JSON.stringify(plan)), ffa: !!ffa, tomb: !!tomb, law: !!law, quick: !!quick }
             };
             if (againWaitMode) { sysModalCloseNormal(); againStop(); }
             againClicks = {};
@@ -3605,13 +3625,17 @@
             return Math.round(half * 1.45);
         }
 
+        // 2v2 有两种场：快速场（先赢 5 局、每局 60 秒后缩圈）和完整场（原来的 10 局）
+        function blazeWinTarget() { return (blaze && blaze.quick) ? BLAZE.quickWins : BLAZE.roundsToWin; }
+        function blazePoisonDelay() { return blaze.ffa ? BLAZE.ffaPoisonDelay : blaze.quick ? BLAZE.quickPoisonDelay : BLAZE.poisonDelay; }
+
         function blazePoisonTick(dt) {
             // 圈一直画着，哪怕还没开始收 —— 以前只有 live 阶段才画，
             // 前一分钟场上完全看不到边界在哪。
             if (blaze.tomb) { if (blaze.ring) blaze.ring.visible = false; return; }
             if (blaze.ring) {
                 let cc = (mSize - 1) * TILE / 2;
-                let delay0 = blaze.ffa ? BLAZE.ffaPoisonDelay : BLAZE.poisonDelay;
+                let delay0 = blazePoisonDelay();
                 let armed = blaze.poisonT > delay0;
                 blaze.ring.visible = true;
                 blaze.ring.material.color.setHex(armed ? 0xba68c8 : 0x4a3a55);
@@ -3622,7 +3646,7 @@
             if (blaze.phase !== 'live') return;
             blaze.poisonT += dt;
             // 乱斗一局 8 分钟，收得比 2v2 慢一截，前一分钟先不动
-            let delay = blaze.ffa ? BLAZE.ffaPoisonDelay : BLAZE.poisonDelay;
+            let delay = blazePoisonDelay();
             let rate = blaze.ffa ? BLAZE.ffaPoisonRate : BLAZE.poisonRate;
             // 乱斗的圈有下限：以前一路收到 0，最后十几个人全站在同一格上互砍，
             // 什么都看不清。现在收到一个还能走位的场地就停，剩下的交给决赛的命数。
@@ -4156,7 +4180,7 @@
 
         function blazeAwardRound(winner) {
             blaze.score[winner]++;
-            let matchOver = blaze.score[winner] >= BLAZE.roundsToWin;
+            let matchOver = blaze.score[winner] >= blazeWinTarget();
             blaze.phase = matchOver ? 'between' : 'perk';
             blaze.wait = matchOver ? BLAZE.resetDelay : BLAZE.perkPickTime;
             if (!matchOver) {
@@ -4164,7 +4188,7 @@
                 blazeAutoPickPerks(false);   // AI 立刻定好，只剩你一个人在选
             }
             blazeNetEv({ ev: 'round', w: winner, sc: blaze.score.slice(), perk: !matchOver });
-            if (blaze.score[winner] >= BLAZE.roundsToWin) {
+            if (blaze.score[winner] >= blazeWinTarget()) {
                 blaze.over = true;
                 // 隐藏彩蛋：一整场打完，自己一次都没倒下
                 if (blaze.me && !blaze.me.deaths) unlockEgg('blaze_flawless');
@@ -4585,7 +4609,7 @@
         function blazeHud() {
             if (blaze.ffa) { blazeFfaHud(); return; }
             document.getElementById('blaze-score').innerText = blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team];
-            document.getElementById('blaze-round').innerText = '第 ' + blaze.round + ' 局 · 先赢 ' + BLAZE.roundsToWin + ' 局';
+            document.getElementById('blaze-round').innerText = '第 ' + blaze.round + ' 局 · 先赢 ' + blazeWinTarget() + ' 局';
             document.getElementById('blaze-roster').innerHTML = blaze.actors.map(function (a) {
                 let col = a.team === blaze.me.team ? '#81d4fa' : '#ff8a65';
                 return '<div style="opacity:' + (a.alive ? 1 : 0.4) + ';"><span style="color:' + col + ';">■</span> ' +
@@ -4637,7 +4661,7 @@
             }
             let c = (mSize - 1) * TILE / 2;
             document.getElementById('blaze-round').innerText =
-                '第 ' + blazeRoundNo() + ' 局 · 先赢 ' + BLAZE.roundsToWin + ' 局　' + (me.floor + 1) + '楼　毒圈 ' + Math.round(blaze.poison) +
+                '第 ' + blazeRoundNo() + ' 局 · 先赢 ' + blazeWinTarget() + ' 局　' + (me.floor + 1) + '楼　毒圈 ' + Math.round(blaze.poison) +
                 '（你 ' + Math.round(Math.hypot(me.p.x - c, me.p.z - c)) + '）';
 
             if (blazeStatsOpen) {
