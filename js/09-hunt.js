@@ -1199,39 +1199,54 @@
                 m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
                 m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); (parent || g).add(m); return m;
             };
+            // 毛绒玩具风：圆眼睛带高光、软颜色、小嘴；危险靠颜色和动作，不靠吓人
+            let cuteEye = function (x, y, z, r, parent) {
+                let e = new THREE.Group(); e.position.set(x, y, z);
+                let ball = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), bas(0x1a1226)); ball.scale.set(1, 1.12, 0.6); e.add(ball);
+                let h1 = new THREE.Mesh(new THREE.CircleGeometry(r * 0.34, 12), bas(0xffffff)); h1.position.set(r * 0.28, r * 0.38, r * 0.62); e.add(h1);
+                let h2 = new THREE.Mesh(new THREE.CircleGeometry(r * 0.16, 10), bas(0xffffff)); h2.position.set(-r * 0.3, -r * 0.3, r * 0.62); e.add(h2);
+                (parent || g).add(e); return e;
+            };
             if (type === 'angel') {
-                // 凝视者：灰色石球，正中一只发光的大眼睛
-                let stone = new THREE.MeshPhongMaterial({ color: 0x7d858c, flatShading: true, shininess: 2, specular: 0x222222 });
-                add(new THREE.IcosahedronGeometry(4.5, 1), stone, 0, 0, 0);
-                let dark = new THREE.MeshPhongMaterial({ color: 0x3f464b, flatShading: true, specular: 0x111111 });
-                [[-3.3, 2.6, 1.8, 0.9], [3.6, -2.2, 1.4, 0.8], [-1.2, -3.7, 1.9, 0.7], [2.2, 3.4, -1.5, 0.8]].forEach(function (c) { add(new THREE.IcosahedronGeometry(c[3], 0), dark, c[0], c[1], c[2]); });   // 碎石疙瘩
-                let ring = add(new THREE.TorusGeometry(2.75, 0.55, 8, 20), dark, 0, 0.3, 3.45);
+                // 凝视者：灰色圆石球，圆疙瘩，正中一只发光的大眼睛（瞳孔大、带高光）
+                let stone = new THREE.MeshPhongMaterial({ color: 0x8d959c, flatShading: false, shininess: 4, specular: 0x222222 });
+                add(new THREE.IcosahedronGeometry(4.5, 2), stone, 0, 0, 0);
+                let lump = new THREE.MeshPhongMaterial({ color: 0x7a838a, shininess: 4, specular: 0x222222 });
+                [[-3.3, 2.6, 1.8, 1.0], [3.6, -2.2, 1.4, 0.9], [-1.2, -3.7, 1.9, 0.8], [2.2, 3.4, -1.5, 0.9]].forEach(function (c) { add(new THREE.SphereGeometry(c[3], 12, 10), lump, c[0], c[1], c[2]); });
+                let ring = add(new THREE.TorusGeometry(2.75, 0.55, 10, 24), lump, 0, 0.3, 3.45);
                 let halo = add(new THREE.CircleGeometry(3.2, 24), bas(0xffe082, { transparent: true, opacity: 0.3, depthWrite: false }), 0, 0.3, 4.1);
                 let eye = add(new THREE.SphereGeometry(2.35, 20, 14), bas(0xfffde7), 0, 0.3, 3.1);
-                let iris = add(new THREE.CircleGeometry(1.35, 20), bas(0xff9800), 0, 0.3, 5.42);
-                let pupil = add(new THREE.CircleGeometry(0.62, 16), bas(0x1a0d0d), 0, 0.3, 5.46);
+                let iris = add(new THREE.CircleGeometry(1.5, 20), bas(0xff9800), 0, 0.3, 5.42);
+                let pupil = add(new THREE.CircleGeometry(1.0, 18), bas(0x1a0d0d), 0, 0.3, 5.46);
+                add(new THREE.CircleGeometry(0.42, 12), bas(0xffffff), 0.45, 0.85, 5.5);   // 高光
+                add(new THREE.CircleGeometry(0.2, 10), bas(0xffffff), -0.4, -0.2, 5.5);
                 g.userData.eye = { halo: halo, iris: iris, pupil: pupil };
             } else if (type === 'puppet') {
-                // 伪装者：平时像柜子或灯柱，靠近时冒出眼睛
+                // 伪装者：平时像柜子或灯柱，靠近时只冒出一对圆圆的大眼睛，像偷看的小猫
                 let variant = opt.variant !== undefined ? opt.variant : Math.floor(Math.random() * 2);
                 g.userData.variant = variant;
                 let eyes = new THREE.Group(); g.add(eyes);
                 let wood = lam(0x7b4a24), wood2 = lam(0x5a3416);
+                let peek = function (y, z, r) {
+                    [-1, 1].forEach(function (sd) {
+                        let e = cuteEye(sd * r * 1.25, y, z - 0.4, r, eyes); e.userData.rest = z - 0.4; e.userData.out = z + 0.5;
+                        e.scale.setScalar(0.001);
+                    });
+                };
                 if (variant === 0) {
                     add(new THREE.BoxGeometry(5.2, 9.2, 3.8), wood, 0, -0.1, 0);
                     add(new THREE.BoxGeometry(5.8, 0.7, 4.4), wood2, 0, 4.6, 0);
                     add(new THREE.BoxGeometry(5.6, 0.5, 4.2), wood2, 0, -4.6, 0);
                     add(new THREE.BoxGeometry(0.16, 8.2, 0.2), lam(0x2e1a0a), 0, -0.1, 1.95);   // 门缝
                     add(new THREE.SphereGeometry(0.34, 8, 6), lam(0xffc107), -0.7, 0, 2.05); add(new THREE.SphereGeometry(0.34, 8, 6), lam(0xffc107), 0.7, 0, 2.05);
-                    [[-1.2, 2.4], [1.3, 1.0], [0, -1.6]].forEach(function (p) { eyes.add(huntMobEye(p[0], p[1], 1.95)); });
+                    peek(2.0, 1.95, 1.05);
                 } else {
                     add(new THREE.CylinderGeometry(1.1, 1.5, 0.9, 10), lam(0x37474f), 0, -4.5, 0);
                     add(new THREE.CylinderGeometry(0.5, 0.7, 9.0, 10), lam(0x546e7a), 0, -0.2, 0);
                     add(new THREE.ConeGeometry(2.1, 1.4, 12), lam(0x37474f), 0, 4.2, 0);
                     add(new THREE.SphereGeometry(1.5, 14, 10), bas(0xffe082), 0, 3.0, 0);   // 灯泡
-                    [[0, 3.0, 1.2], [-0.2, 0.2, 0.6], [0.2, -1.8, 0.6]].forEach(function (p) { eyes.add(huntMobEye(p[0], p[1], p[2] + 0.1, p[2] > 1 ? 1.1 : 0.75)); });
+                    peek(2.55, 1.35, 0.55);
                 }
-                eyes.children.forEach(function (e) { e.scale.setScalar(0.001); });
                 g.userData.eyes = eyes;
             } else if (type === 'high') {
                 // 高空者：紫色球，带蝙蝠翅膀
@@ -1268,29 +1283,39 @@
                 let shine = add(new THREE.SphereGeometry(1.0, 10, 8), bas(0xffffff, { transparent: true, opacity: 0.55 }), -2.0, 2.4, 2.5); shine.scale.set(1.3, 0.6, 0.6); shine.rotation.z = 0.5;
                 g.userData.blob = blob;
             } else if (type === 'curser') {
-                // 诅咒之灵：半透明黑色幽灵，拖着尾巴，红眼睛
-                let ghost = lam(0x07050b, { transparent: true, opacity: 0.72, emissive: 0x150820, depthWrite: false });
-                let prof = [[0.01, 5.6], [1.6, 5.3], [2.9, 4.4], [3.5, 2.8], [3.5, 1.0], [3.1, -1.0], [2.4, -2.9], [1.5, -4.2], [0.5, -5.0]].map(function (q) { return new THREE.Vector2(q[0], q[1]); });
-                add(new THREE.LatheGeometry(prof, 20), ghost, 0, 0, 0);
-                let tail = [];
-                for (let i = 0; i < 6; i++) { let s = add(new THREE.SphereGeometry(1.9 - i * 0.28, 10, 8), ghost, 0, -3.6 + i * 0.25, -1.4 - i * 1.7); tail.push(s); }
+                // 诅咒之灵：圆滚滚的深紫小幽灵，大黑眼睛带高光、小“o”嘴、腮红，拖一条越来越细的飘带
+                let ghost = lam(0x2f1a58, { transparent: true, opacity: 0.9, emissive: 0x120826, depthWrite: false });
+                let prof = [[0.01, 5.2], [1.8, 5.0], [3.2, 4.0], [3.9, 2.4], [4.0, 0.6], [3.6, -1.3], [2.8, -2.9], [1.6, -3.9], [0.01, -4.2]].map(function (q) { return new THREE.Vector2(q[0], q[1]); });
+                add(new THREE.LatheGeometry(prof, 24), ghost, 0, 0, 0);
                 [-1, 1].forEach(function (s) {
-                    add(new THREE.ConeGeometry(0.7, 3.2, 6), ghost, s * 3.6, -0.8, 0.2).rotation.z = s * 2.5;   // 飘着的袖子
-                    let e = add(new THREE.SphereGeometry(0.85, 10, 8), bas(0xff1744), s * 1.35, 2.6, 3.05); e.scale.set(1, 1.5, 0.5);
-                    add(new THREE.SphereGeometry(1.6, 10, 8), bas(0xff1744, { transparent: true, opacity: 0.2, depthWrite: false }), s * 1.35, 2.6, 2.95);
+                    add(new THREE.SphereGeometry(0.95, 10, 8), ghost, s * 4.0, -0.8, 0.3);   // 小圆手
+                    cuteEye(s * 1.55, 1.7, 3.55, 1.0);
+                    let cheek = add(new THREE.CircleGeometry(0.75, 14), bas(0xff8fb1, { transparent: true, opacity: 0.7, depthWrite: false }), s * 2.6, 0.2, 3.35); cheek.rotation.y = s * 0.6;   // 腮红
                 });
-                add(new THREE.BoxGeometry(1.9, 0.24, 0.2), bas(0xb71c1c), 0, 0.5, 3.4);   // 嘴
-                g.userData.tail = tail;
+                add(new THREE.TorusGeometry(0.34, 0.14, 8, 14), bas(0x21122f), 0, 0.2, 3.95);   // 小“o”嘴
+                // 飘带：一条平的带子，越到末端越细，每帧摆一摆
+                let N = 14, pos = new Float32Array((N + 1) * 2 * 3), idx = [];
+                for (let i = 0; i < N; i++) { let a0 = i * 2; idx.push(a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2); }
+                let rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); rg.setIndex(idx);
+                let ribbon = new THREE.Mesh(rg, new THREE.MeshLambertMaterial({ color: 0x3e2470, emissive: 0x160a2e, side: THREE.DoubleSide, transparent: true, opacity: 0.95 }));
+                ribbon.frustumCulled = false; g.add(ribbon);
+                g.userData.ribbon = { geo: rg, n: N };
+                huntMobRibbon(g.userData.ribbon, 0, g.userData.t0);
             }
             return g;
         }
-        function huntMobEye(x, y, z, size) {
-            let e = new THREE.Group(), s = size || 0.9;
-            e.add(new THREE.Mesh(new THREE.SphereGeometry(s, 12, 10), new THREE.MeshBasicMaterial({ color: 0xfff8e1 })));
-            let iris = new THREE.Mesh(new THREE.CircleGeometry(s * 0.62, 12), new THREE.MeshBasicMaterial({ color: 0xd50000 })); iris.position.z = s * 0.98; e.add(iris);
-            let pup = new THREE.Mesh(new THREE.CircleGeometry(s * 0.28, 10), new THREE.MeshBasicMaterial({ color: 0x120000 })); pup.position.z = s * 0.99 + 0.01; e.add(pup);
-            e.position.set(x, y, z - 0.4); e.userData.rest = z - 0.4; e.userData.out = z + 0.5;
-            return e;
+        // 飘带的形状：沿着身后（-z）一路往下飘，宽度越来越细到一点；t 是时间，摆起来
+        function huntMobRibbon(r, t, t0) {
+            let p = r.geo.attributes.position.array, N = r.n;
+            for (let i = 0; i <= N; i++) {
+                let f = i / N, w = 1.5 * Math.pow(1 - f, 0.9) + 0.02;
+                let cx = 2.0 + f * 2.0 + Math.sin(t * 3 - f * 4 + t0) * (0.2 + f * 1.4), cy = -2.8 - f * 2.4 + Math.sin(t * 2 - f * 3 + t0) * 0.4 * f, cz = -1.0 - f * 3.2;
+                // 带子的宽度朝上下斜着放，从侧面和正面都看得见
+                let wx = w * 0.45, wy = w * 0.9;
+                p[i * 6] = cx - wx; p[i * 6 + 1] = cy - wy; p[i * 6 + 2] = cz;
+                p[i * 6 + 3] = cx + wx; p[i * 6 + 4] = cy + wy; p[i * 6 + 5] = cz;
+            }
+            r.geo.attributes.position.needsUpdate = true; r.geo.computeVertexNormals();
         }
         // 每帧动一动：t 是秒，dist 是离玩家多远（伪装者靠近时冒眼睛）。force 给图鉴用：直接指定冒出来多少（0~1）
         function huntMobAnim(model, t, dist, popForce) {
@@ -1313,7 +1338,7 @@
                 let k = Math.sin(t * 4 + u.t0) * 0.07;
                 u.blob.scale.set(1 - k, 0.8 + k * 1.4, 1 - k);
             } else if (type === 'curser') {
-                u.tail.forEach(function (s, i) { s.position.x = Math.sin(t * 3 - i * 0.7 + u.t0) * (0.4 + i * 0.35); });
+                huntMobRibbon(u.ribbon, t, u.t0);
                 model.position.y = Math.sin(t * 2 + u.t0) * 0.5;
             }
         }

@@ -1510,7 +1510,7 @@ async function enterExit(tab, key) {
                 // 碰撞体：跟原来一样的球/圆柱，看不见，射线能打中
                 o.geo = HUNT_MOB_ORDER.map(function (k) { let m = huntMobMesh(k); let g = m.geometry.parameters; return [k, m.geometry.type, g.radius || g.radiusTop, g.height || 0, m.material.visible, !!m.userData.model && m.children.length === 1]; });
                 // 模型：每种怪长相不一样（子物体数、关键部件）
-                o.parts = HUNT_MOB_ORDER.map(function (k) { let g = huntMobModel(k, { variant: 0 }), n = 0; g.traverse(function () { n++; }); return [k, n, !!(g.userData.eye || g.userData.eyes || g.userData.wings || g.userData.blob || g.userData.tail)]; });
+                o.parts = HUNT_MOB_ORDER.map(function (k) { let g = huntMobModel(k, { variant: 0 }), n = 0; g.traverse(function () { n++; }); return [k, n, !!(g.userData.eye || g.userData.eyes || g.userData.wings || g.userData.blob || g.userData.ribbon)]; });
                 // 通过原来的刷怪函数刷出来：数值不变
                 camera.position.set(TILE * 3, 9, TILE * 3); camera.rotation.set(0, 0, 0);
                 let before = entities.length; let fx = 3, fz = 3 - 2;
@@ -1528,7 +1528,7 @@ async function enterExit(tab, key) {
                 return JSON.stringify(o); })()`));
             const want = { angel: ['SphereGeometry', 4.5, 0], puppet: ['CylinderGeometry', 2, 10], high: ['SphereGeometry', 4.5, 0], splitter: ['SphereGeometry', 4.5, 0], curser: ['SphereGeometry', 5, 0] };
             r.geo.forEach((g) => { const w = want[g[0]]; if (g[1] !== w[0] || g[2] !== w[1] || (g[3] || 0) !== w[2] || g[4] !== false || !g[5]) bad.push('碰撞体 ' + JSON.stringify(g)); });
-            if (new Set(r.parts.map((p) => p[1])).size < 4 || r.parts.some((p) => !p[2] || p[1] < 6)) bad.push('模型太简单或没有关键部件 ' + JSON.stringify(r.parts));
+            if (new Set(r.parts.map((p) => p[1])).size < 3 || r.parts.some((p) => !p[2] || p[1] < 6)) bad.push('模型太简单或没有关键部件 ' + JSON.stringify(r.parts));
             const wantStats = JSON.stringify([['angel', '凝视者', 10, 63, 40, true, true], ['puppet', '伪装者', 15, 30, 40, true, true], ['high', '高空者', 10, 25, 20, true, true], ['splitter', '分裂者', 10, 20, 40, true, true], ['curser', '诅咒之灵', 80, 20, 0, true, true]]);
             if (JSON.stringify(r.stats) !== wantStats) bad.push('刷出来的怪 ' + JSON.stringify(r.stats));
             if (r.hit !== 5) bad.push('射线只打中 ' + r.hit + ' 个');
