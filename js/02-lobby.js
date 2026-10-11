@@ -16,7 +16,7 @@
                 kTxt('<b>1 2 3</b> 换手上的东西　<b>Q</b> 扔　<b>E</b> 背包　<b>Tab</b> 地图　<b>M</b> 静音', '点下面的格子换手上的东西，<b>背包</b> 看全部'),
                 kTxt('<b>Shift</b> 跑　<b>空格</b> 跳', '摇杆推到底就跑　<b>跳</b> 在右下角'),
                 '每个腰包自带 3 格。在背包或仓库里点一下腰包打开，东西拖进拖出；腰包不能放进腰包。',
-                kTxt('手上拿着腰包时按 <b>1 2 3</b> 把里面的东西拿到手上。', '腰包里的东西要拖出来才能用。'),
+                kTxt('按 <b>E</b> 打开背包，点腰包展开，点里面的东西放到手上。', '打开背包，点腰包展开，点里面的东西放到手上。'),
                 '用了信号接收器，跟着蓝线走就能找到那件东西，换楼层也会带路。',
                 kTxt('<b>R</b> 放角色技能（右上有冷却图标）：绿色猫盾 8 秒内每秒回 5 血，黄色猫盾 2 秒内跑得快一倍、不受负重影响。', '点 <b>技能</b> 放角色技能：绿色猫盾 8 秒内每秒回 5 血，黄色猫盾 2 秒内跑得快一倍、不受负重影响。')
             ]; } },
@@ -1671,7 +1671,7 @@
             bag.forEach(function (q, k) {
                 let div = document.createElement('div'); div.className = 'slot' + slotTierClass(q);
                 div.innerHTML = slotLabelHtml(q);
-                setupSlotDrag(div, 'bag', k); div.onclick = function () { rerender(); };
+                setupSlotDrag(div, 'bag', k); div.onclick = function () { if (isPlaying && q) pouchTakeToHand(k); else rerender(); };
                 row.appendChild(div);
             });
         }

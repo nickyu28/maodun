@@ -3870,9 +3870,8 @@
                 if (keyStr === 'tab') { e.preventDefault(); toggleLargeMapUI(); }   // S1：大地图从 M 改到 Tab（M 是一键静音）
                 if (!gState.backpackOpen && !gState.largeMapOpen) {
                     if (keyStr === 'q') { if (gState.selectedSlot >= 0 && gState.selectedSlot <= 2 && gState.inv[gState.selectedSlot]) executeThrow(gState.selectedSlot); }
-                    // 手上拿着腰包时，1～3 改成从腰包里取东西
-                    if (code >= 49 && code <= 51 && pouchOpen()) pouchTake(code - 49);
-                    else if (code >= 49 && code <= 51) selectSlot(code - 49);
+                    // 1～3 永远只切快捷栏（腰包里的东西在背包界面里点开腰包拿）
+                    if (code >= 49 && code <= 51) selectSlot(code - 49);
                 }
                 if (gState.needsLock && !gState.backpackOpen && !gState.largeMapOpen && ['w', 'a', 's', 'd', ' '].includes(keyStr)) { safeLockPointer(); gState.needsLock = false; }
             }

@@ -318,26 +318,28 @@
             drawCapacityCircle();
         }
 
-        // 手上（快捷栏 1～3）拿着腰包的时候，把它的 3 格列出来，按 1～3 把里面的东西拿到手上。
-        // 腰包里的东西不能直接用，得先拿出来。
+        // 手上（快捷栏 1～3）拿着腰包的时候，把它的 3 格列出来看一眼。
+        // 腰包里的东西不能直接用：按 E 打开背包、点开腰包，点一下里面的东西放到手上。
         function pouchOpen() {
             let it = gState.inv[gState.selectedSlot];
             return !!(isPouch(it) && gState.selectedSlot <= 2);
         }
 
-        function pouchTake(n) {
-            if (!pouchOpen()) return;
-            let pi = gState.selectedSlot, bag = pouchBag(gState.inv[pi]);
-            if (n < 0 || n >= POUCH_SLOTS || !bag[n]) return;
-            let to = -1;
-            for (let i = 0; i < 3; i++) if (i !== pi && !gState.inv[i]) { to = i; break; }              // 先找空的手上格
-            if (to < 0) for (let i = 0; i < INV_BASE; i++) if (i !== pi && !gState.inv[i]) { to = i; break; }
-            if (to < 0) for (let i = 0; i < 3; i++) if (i !== pi && !isPouch(gState.inv[i])) { to = i; break; }   // 实在没空位就对换（腰包不能换进腰包）
-            if (to < 0) return;
+        // 点腰包里第 n 格：放到手上的空格；手上没空格，就跟当前手上这格对换（腰包不能放进腰包）
+        function pouchTakeToHand(n) {
+            let bag = pouchBag(openPouch);
+            if (!bag || n < 0 || n >= POUCH_SLOTS || !bag[n]) return;
+            let cur = gState.selectedSlot >= 0 && gState.selectedSlot <= 2 ? gState.selectedSlot : 0, to = -1;
+            if (!gState.inv[cur]) to = cur;
+            else for (let i = 0; i < 3; i++) if (!gState.inv[i]) { to = i; break; }
+            if (to < 0) {
+                if (isPouch(gState.inv[cur])) { blazeFlash('腰包不能放进腰包'); return; }
+                to = cur;
+            }
             let a = bag[n];
             bag[n] = gState.inv[to];
             gState.inv[to] = a;
-            if (to <= 2) selectSlot(to);
+            selectSlot(to);
             updateHUD();
         }
 
@@ -346,7 +348,7 @@
             expandInventory();
             if (!isPlaying || !pouchOpen()) { el.classList.add('hidden'); return; }
             let bag = pouchBag(gState.inv[gState.selectedSlot]);
-            el.innerHTML = '<div style="color:#ffd54f;">腰包（按 1～' + POUCH_SLOTS + ' 拿出来）</div>' +
+            el.innerHTML = '<div style="color:#ffd54f;">腰包（按 E 打开背包拿）</div>' +
                 bag.map(function (it, n) {
                     return '<div>' + (n + 1) + '、' + (it ? it.n + '　重:' + itemWeight(it) : '<span style="color:#888;">空</span>') + '</div>';
                 }).join('');

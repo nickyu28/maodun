@@ -1014,6 +1014,47 @@ async function enterExit(tab, key) {
             report('B7 地上的东西用自己的贴图 + 稀有度光圈（扔腰包是腰包贴图+紫光；开箱、抽奖掉出来的也一样）', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('B8')) {
+            // B8：1～3 永远只切快捷栏（手上拿着腰包也一样）；腰包里的东西在背包界面里点开腰包、点一下放到手上的空格，手上没空格就跟当前手上的换；提示和规则一起改
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const key = async (k, code) => { await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code: 'Digit' + k, windowsVirtualKeyCode: code }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: 'Digit' + k, windowsVirtualKeyCode: code }); await W(250); };
+            const click = async (sel) => { const p = await mouseAt(T, sel); if (!p) throw new Error('找不到 ' + sel);
+                const ev = (type) => T.send('Input.dispatchMouseEvent', { type, x: p[0], y: p[1], button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 });
+                await ev('mouseMoved'); await ev('mousePressed'); await ev('mouseReleased'); await W(300); };
+            // 拿着腰包按 2：选中快捷栏第 2 格，腰包里的东西不动
+            await T.eval(`(function(){ let S = function (n) { return Object.assign({}, shopItems[n], { isShop: true }); };
+                gState.inv = [S('腰包'), S('医疗包'), null, null, null, null]; gState.inv[0].bag = [S('鱼叉'), null, null]; selectSlot(0); updateHUD(); return true; })()`);
+            await key('2', 50);
+            const k2 = JSON.parse(await T.eval(`JSON.stringify({ sel: gState.selectedSlot, inv: gState.inv.map(function (q) { return q && q.n; }), bag: gState.inv[0].bag.map(function (q) { return q && q.n; }) })`));
+            if (k2.sel !== 1 || k2.inv.join() !== '腰包,医疗包,,,,' || k2.bag.join() !== '鱼叉,,') bad.push('拿着腰包按 2 ' + JSON.stringify(k2));
+            await key('1', 49);
+            if ((await T.eval('gState.selectedSlot')) !== 0) bad.push('按 1 没选中第 1 格');
+            await key('3', 51);
+            if ((await T.eval('gState.selectedSlot')) !== 2) bad.push('按 3 没选中第 3 格');
+            // 背包里点开腰包 → 点里面的鱼叉 → 放到手上的空格（第 3 格是空的）
+            await T.eval(`toggleBackpackUI(); selectSlot(0); ${HIDE} true;`); await W(300);
+            await click('#bp-hotbar-slots .slot:nth-child(1)'); await W(200);   // 点腰包展开
+            if (!(await T.eval(`!!document.querySelector('#bp-pouch-row .slot')`))) bad.push('点腰包没展开');
+            await click('#bp-pouch-row > div:nth-child(2)');
+            const t1 = JSON.parse(await T.eval(`JSON.stringify({ inv: gState.inv.slice(0, 3).map(function (q) { return q && q.n; }), bag: gState.inv[0].bag.map(function (q) { return q && q.n; }), sel: gState.selectedSlot })`));
+            if (t1.inv.join() !== '腰包,医疗包,鱼叉' || t1.bag.join() !== ',,') bad.push('点腰包里的东西没放到手上的空格 ' + JSON.stringify(t1));
+            // 手上三格都满了：点腰包里的东西，跟当前手上这格对换
+            await T.eval(`gState.inv[0].bag = [Object.assign({}, shopItems['肾上腺素'], { isShop: true }), null, null]; selectSlot(1); openPouch = gState.inv[0]; updateHUD(); true;`); await W(300);
+            await click('#bp-pouch-row > div:nth-child(2)');
+            const t2 = JSON.parse(await T.eval(`JSON.stringify({ inv: gState.inv.slice(0, 3).map(function (q) { return q && q.n; }), bag: gState.inv[0].bag.map(function (q) { return q && q.n; }), sel: gState.selectedSlot })`));
+            if (t2.inv.join() !== '腰包,肾上腺素,鱼叉' || t2.bag.join() !== '医疗包,,') bad.push('手上满了应该跟当前手上这格对换 ' + JSON.stringify(t2));
+            // 提示和规则
+            const txt = JSON.parse(await T.eval(`JSON.stringify({ rules: Object.keys(MODE_RULES).map(function (k) { return rulesHtml(k); }).join(''), pv: (function () { selectSlot(0); updateHUD(); return document.getElementById('pouch-view').innerText; })() })`));
+            if (/按 ?1 ?2 ?3[^换]*把里面|按 1～/.test(txt.rules + txt.pv)) bad.push('提示里还写着按 1～3 从腰包取 ' + txt.pv);
+            if (!/点里面的东西放到手上/.test(txt.rules)) bad.push('规则没改');
+            await T.eval(`toggleBackpackUI(); true;`);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('B8 1～3 只切快捷栏（拿着腰包也是）；背包里点腰包里的东西放到手上空格、没空格就对换；提示和规则改了', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];
