@@ -262,12 +262,19 @@
             if (!actionTarget) bar.style.display = 'none';
         }
 
+        // H20：上方血条、体力条里直接写数字（如 240/300）；带骑士剑时超出原来上限的那一段显示金色
+        function huntBarsRender() {
+            let max = effectiveMaxHp() || 100, base = gState.maxHp || 100, hp = Math.max(0, gState.hp);
+            let red = Math.min(hp, base), gold = Math.max(0, hp - base);
+            let f = document.getElementById('health-fill'), g = document.getElementById('health-gold'), n = document.getElementById('health-num');
+            if (f) f.style.width = Math.min(100, red / max * 100) + '%';
+            if (g) g.style.width = Math.min(100 - Math.min(100, red / max * 100), gold / max * 100) + '%';
+            if (n) n.innerText = Math.floor(hp) + '/' + max;
+            let sn = document.getElementById('stamina-num'); if (sn) sn.innerText = Math.floor(stamina) + '/100';
+        }
         function updateHUD() {
             pouchViewTick();
-            document.getElementById('hp-txt').innerText = Math.floor(gState.hp);
-            let hpMaxEl = document.getElementById('hp-max-txt');
-            if (hpMaxEl) hpMaxEl.innerText = effectiveMaxHp();
-            document.getElementById('health-fill').style.width = Math.max(0, Math.min(100, gState.hp / (effectiveMaxHp() || 100) * 100)) + '%';
+            huntBarsRender();
             let currentWeight = invWeight();
             document.getElementById('weight-txt').innerText = currentWeight;
 

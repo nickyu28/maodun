@@ -3964,7 +3964,7 @@
             let drainMult = gState.debuff.type === 2 ? 2.5 : 1.0;
             if (isRunning && gState.tutorial) gState.tutorial.runT += dt;
             if (isRunning) { baseMoveSpeed *= staminaBoostMul(stamina, 1.6); stamina = Math.max(0, stamina - 28 * drainMult * dt); } else { stamina = Math.min(100, stamina + 16 * dt); } document.getElementById('stamina-fill').style.width = stamina + '%';
-            let staminaTxt = document.getElementById('stamina-txt'); if (staminaTxt) staminaTxt.innerText = Math.floor(stamina);
+            let staminaTxt = document.getElementById('stamina-num'); if (staminaTxt) staminaTxt.innerText = Math.floor(stamina) + '/100';
 
             let isMovingAllowed = (actionTarget !== 'med' && actionTarget !== 'time_stop');
 

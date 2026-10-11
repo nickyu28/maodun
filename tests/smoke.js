@@ -945,6 +945,31 @@ async function enterExit(tab, key) {
             report('H19 骑士剑血量 +200 带在身上就算（背包/腰包），攻击移速拿在手上才算，上限变了血量按比例换算', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H20')) {
+            // H20：上方血条、体力条里显示数字（240/300），左上角那两行删掉；带骑士剑时超出的部分是金色
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const q = () => T.eval(`JSON.stringify({ hp: document.getElementById('health-num').innerText, st: document.getElementById('stamina-num').innerText,
+                red: document.getElementById('health-fill').style.width, gold: document.getElementById('health-gold').style.width, goldColor: getComputedStyle(document.getElementById('health-gold')).backgroundColor,
+                left: document.getElementById('stats-left').innerText, old: !!document.getElementById('hp-txt') || !!document.getElementById('stamina-txt') })`).then(JSON.parse);
+            await T.eval(`gState.hp = 80; updateHUD(); true;`); await W(300);
+            const a = await q();
+            if (a.hp !== '80/100' || !/^\d+\/100$/.test(a.st) || parseFloat(a.red) !== 80 || parseFloat(a.gold) !== 0) bad.push('没带剑 ' + JSON.stringify(a));
+            if (/生命值|体力值/.test(a.left) || a.old) bad.push('左上角那两行还在 ' + a.left);
+            await T.eval(`gState.inv[4] = { n: '猫盾骑士剑', v: SWORD_V, w: 5, type: 'wep', dmg: 150, spd: 1.15, hp: SWORD_HP }; true;`); await W(500);
+            await T.eval(`gState.hp = 240; updateHUD(); true;`);
+            const b = await q();
+            if (b.hp !== '240/300' || Math.abs(parseFloat(b.red) - 100 / 3) > 0.1 || Math.abs(parseFloat(b.gold) - 140 / 3) > 0.1 || b.goldColor !== 'rgb(255, 193, 7)') bad.push('带剑 ' + JSON.stringify(b));
+            await T.eval(`gState.hp = 60; updateHUD(); true;`);
+            const c = await q();
+            if (c.hp !== '60/300' || parseFloat(c.gold) !== 0) bad.push('带剑掉血 ' + JSON.stringify(c));
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H20 血条/体力条里写数字，左上角两行删了，带骑士剑时超出的部分是金色', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 
