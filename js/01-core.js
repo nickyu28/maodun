@@ -1006,12 +1006,12 @@
             expandInventory();
         }
 
-        // H18：老存档里的猫盾骑士剑（背包、仓库、腰包里的、上交寄存的）一起改成新价格
+        // H18/H19：老存档里的猫盾骑士剑（背包、仓库、腰包里的、上交寄存的）一起改成新价格
         function huntFixSwordValue() {
             let fix = function (arr) {
                 (arr || []).forEach(function (it) {
                     if (!it) return;
-                    if (it.n === '猫盾骑士剑' && it.v !== SWORD_V) it.v = SWORD_V;
+                    if (it.n === '猫盾骑士剑') { if (it.v !== SWORD_V) it.v = SWORD_V; if (it.hp !== SWORD_HP) it.hp = SWORD_HP; }
                     if (Array.isArray(it.bag)) fix(it.bag);
                 });
             };

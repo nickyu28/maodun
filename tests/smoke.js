@@ -900,7 +900,7 @@ async function enterExit(tab, key) {
                 // 老存档：剑 100 万，放在背包、仓库、腰包里
                 let old = { n: '猫盾骑士剑', v: 1000000, w: 5, type: 'wep', dmg: 150, spd: 1.15, hp: 40 };
                 gState.inv[2] = Object.assign({}, old); gState.garage[0] = Object.assign({}, old);
-                gState.inv[3] = { n: '腰包', isShop: true, type: 'pouch', bag: [Object.assign({}, old), null, null] };
+                gState.inv[3] = { n: '腰包', isShop: true, type: 'backpack_ext', bag: [Object.assign({}, old), null, null] };
                 saveProgress();
                 let d = JSON.parse(localStorage.getItem('TH_save_' + gState.id)); d.inv[2].v = 1000000; d.garage[0].v = 1000000; d.inv[3].bag[0].v = 1000000;
                 localStorage.setItem('TH_save_' + gState.id, JSON.stringify(d));
@@ -913,6 +913,36 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('H18 猫盾骑士剑 200 万，老存档里的剑读档时一起改；所有配方产物比原料之和值钱', bad.length === 0, bad.join(' / '));
+        }
+
+                if (want('H19')) {
+            // H19：骑士剑血量 +200，带在身上（背包或腰包里）就算；攻击、移速加成还是拿在手上才算；上限变化时当前血量按比例换算
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const SW = `{ n: '猫盾骑士剑', v: SWORD_V, w: 5, type: 'wep', dmg: 150, spd: 1.15, hp: SWORD_HP }`;
+            // 进图以后（剑是局内合成/捡到的，进图时宝物会先放回仓库）把剑放进背包：血量上限 100 → 300，当前血量按比例 100 → 300
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} gState.hp = 100; gState.inv[4] = ${SW}; true;`); await W(500);
+            const a = JSON.parse(await T.eval(`JSON.stringify({ max: effectiveMaxHp(), hp: gState.hp, spd: weaponSpeedMul(), bonus: weaponHpBonus(), sword: SWORD_HP })`));
+            if (a.sword !== 200 || a.max !== 300 || a.hp !== 300 || a.bonus !== 200 || a.spd !== 1) bad.push('带在背包里 ' + JSON.stringify(a));
+            // 掉了一半血再放下剑：150/300 → 50/100（按比例）
+            await T.eval(`gState.hp = 150; gState.inv[4] = null; true;`); await W(400);
+            const b = JSON.parse(await T.eval(`JSON.stringify({ max: effectiveMaxHp(), hp: gState.hp })`));
+            if (b.max !== 100 || b.hp !== 50) bad.push('放下剑 ' + JSON.stringify(b));
+            // 腰包里的剑也算
+            await T.eval(`gState.inv[3] = { n: '腰包', isShop: true, type: 'backpack_ext', bag: [${SW}, null, null] }; true;`); await W(400);
+            const c = JSON.parse(await T.eval(`JSON.stringify({ max: effectiveMaxHp(), hp: gState.hp, spd: weaponSpeedMul() })`));
+            if (c.max !== 300 || c.hp !== 150 || c.spd !== 1) bad.push('腰包里 ' + JSON.stringify(c));
+            // 拿在手上：移速 ×1.15，血量加成不变不重复
+            await T.eval(`gState.inv[3] = null; gState.inv[0] = ${SW}; gState.selectedSlot = 0; true;`); await W(400);
+            const d = JSON.parse(await T.eval(`JSON.stringify({ max: effectiveMaxHp(), spd: weaponSpeedMul(), hp: gState.hp })`));
+            if (d.max !== 300 || d.spd !== 1.15) bad.push('拿在手上 ' + JSON.stringify(d));
+            // 老存档里的剑（hp 40）读档后改成 200
+            const e = await T.eval(`(function(){ gState.garage[0] = { n: '猫盾骑士剑', v: 1000000, w: 5, type: 'wep', dmg: 150, spd: 1.15, hp: 40 }; huntFixSwordValue(); return gState.garage[0].hp; })()`);
+            if (e !== 200) bad.push('老剑 hp=' + e);
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H19 骑士剑血量 +200 带在身上就算（背包/腰包），攻击移速拿在手上才算，上限变了血量按比例换算', bad.length === 0, bad.join(' / '));
         }
 
         //@@NEW@@

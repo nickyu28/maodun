@@ -170,7 +170,7 @@
             abilityCd = 0; abilityActive = 0; gHpRegenAcc = 0;
             gState.safeOpenedThisGame = false; gState.backpackOpen = false; gState.largeMapOpen = false; gState.monstersSpawned = false; gState.inSafeZone = true; gState.needsLock = false; gState.pAtkCd = 0; gState.timeStop = 0;
             gState.debuff = { type: 0, timer: 0, cooldown: 0 };
-            gState.maxHp = 100;
+            gState.maxHp = 100; gState.hp = effectiveMaxHp(); huntMaxHpSync(true);
             huntLure = null;
             huntLureFx.forEach(function (f) { scene.remove(f.o); }); huntLureFx = [];
             gState.hasLeft = false; gState.deathPos = null; gState.spectating = null; gState.spectateIdx = -1; gState.peerState = {}; hideDeathUI();
@@ -1454,7 +1454,8 @@
                     '寻宝队抽奖机改了：金色有 5% 抽到大金，25% 被销毁；紫色有 15% 变金，25% 被销毁',
                     '组队时，一张图里的大金数量全队一起算，不会各自再多出来',
                     '寻宝队每种难度，第一次单人去的时候宝物会好拿一些',
-                    '猫盾骑士剑涨到 200 万，已经有的也一起涨'
+                    '猫盾骑士剑涨到 200 万，已经有的也一起涨',
+                    '猫盾骑士剑的生命值加成变成 +200，放在背包或腰包里就算，不用拿在手上'
                 ]
             },
             {

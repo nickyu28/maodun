@@ -3407,7 +3407,7 @@
         // 地上的合成表。两件东西扔到一块儿（靠得够近）就自动合。
         // 加新配方就是在这里添一行。
         // H18：合成物必须比原料加起来值钱。骑士团圣剑（40 万）+ 至臻猫盾（80 万）= 120 万，原来的剑才 100 万，亏了。
-        const SWORD_V = 2000000;
+        const SWORD_V = 2000000, SWORD_HP = 200;
         const GROUND_RECIPES = [
             {
                 id: 'gcat', a: '猫盾', b: '小鱼干',
@@ -3426,7 +3426,7 @@
                 // spd/hp 是装备这把剑时的加成（移动速度倍率、额外生命上限）——
                 // 不是随便加在这就生效的，ground-merge 生成物、捡进背包两处都是
                 // 显式一个个字段复制过去的，两边都要照着加，不然装备了也没用。
-                out: { n: '猫盾骑士剑', v: SWORD_V, w: 5, tex: 'sword', c: 0xff4081, main: '#ff4081', detail: '#880e4f', type: 'wep', dmg: 150, spd: 1.15, hp: 40 }
+                out: { n: '猫盾骑士剑', v: SWORD_V, w: 5, tex: 'sword', c: 0xff4081, main: '#ff4081', detail: '#880e4f', type: 'wep', dmg: 150, spd: 1.15, hp: SWORD_HP }
             }
         ];
         const GROUND_MERGE_RANGE = 8;
@@ -3437,7 +3437,19 @@
             return (w && w.type === 'wep') ? w : null;
         }
         function weaponSpeedMul() { let w = huntEquippedWeapon(); return (w && w.spd) || 1; }
-        function weaponHpBonus() { let w = huntEquippedWeapon(); return (w && w.hp) || 0; }
+        // H19：血量加成只要带在身上（背包或腰包里）就算，不用拿在手上；攻击、移速加成还是拿在手上才算
+        function weaponHpBonus() {
+            let best = 0;
+            carriedSlots().forEach(function (sl) { let it = sl[0][sl[1]]; if (it && it.type === 'wep' && it.hp > best) best = it.hp; });
+            return best;
+        }
+        // 带上/放下剑，血量上限跟着变，当前血量按比例换算（100/100 带上 +200 的剑 → 300/300；扔了 → 100/100）
+        let huntBonusSeen = 0;
+        function huntMaxHpSync(reset) {
+            let b = weaponHpBonus(), base = gState.maxHp || 100;
+            if (!reset && b !== huntBonusSeen && gState.hp > 0) gState.hp = Math.max(1, Math.round(gState.hp * (base + b) / (base + huntBonusSeen)));
+            huntBonusSeen = b;
+        }
         function effectiveMaxHp() { return (gState.maxHp || 100) + weaponHpBonus(); }
 
         // ── 配方图鉴 ──
@@ -3748,6 +3760,7 @@
                 document.getElementById('time-txt').innerText = `${dh.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
             }
 
+            huntMaxHpSync();
             if (HUNT_TEST_GOD) { gState.hp = effectiveMaxHp(); stamina = 100; }
 
             let cf = playerFloor();
