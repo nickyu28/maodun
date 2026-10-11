@@ -467,6 +467,29 @@
             right: 120px;
         }
 
+        #skill-btn {
+            bottom: 170px;
+            right: 130px;
+            background: rgba(255, 193, 7, 0.85);
+        }
+
+        /* H23：角色技能的冷却图标，放在快捷栏左边 */
+        #skill-icon {
+            position: relative;
+            width: 54px; height: 54px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-sizing: border-box;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: bold; color: #fff; text-align: center; line-height: 1.2;
+            background: #43a047;
+            overflow: hidden;
+        }
+        #skill-icon.yellow { background: #f9a825; }
+        #skill-icon .cd { position: absolute; inset: 0; border-radius: 50%; }
+        #skill-icon span { position: relative; text-shadow: 0 0 3px #000; }
+        #skill-icon.on { box-shadow: 0 0 10px 3px #fff59d; }
+
         #jump-btn {
             bottom: 100px;
             right: 20px;
@@ -1026,7 +1049,7 @@
         <div id="hunt-only">
         <div style="margin: 0 0 8px;">
             <button onclick="selectChar('green')" id="btn-green" style="color:#5cb85c; border-color:#5cb85c; font-size:12px; padding:7px 8px;">绿色猫盾 (回血)</button>
-            <button onclick="selectChar('yellow')" id="btn-yellow" style="font-size:12px; padding:7px 8px;">黄色猫盾 (滚动)</button>
+            <button onclick="selectChar('yellow')" id="btn-yellow" style="font-size:12px; padding:7px 8px;">黄色猫盾 (冲刺)</button>
         </div>
 
         <div style="margin:6px 0; font-size:12px; color:#666; width:100%; text-align:left; box-sizing:border-box;">
@@ -1306,6 +1329,7 @@
         <div id="crosshair" class="hidden">+</div>
 
         <div id="bottom-ui-wrapper">
+            <div id="skill-icon"><div class="cd"></div><span id="skill-name">技能</span><span id="skill-key">R</span></div>
             <canvas id="cap-circle" width="60" height="60"></canvas>
             <div id="pouch-view" class="hidden" style="position:absolute; bottom:96px; left:50%; transform:translateX(-50%);
                  background:rgba(0,0,0,.72); color:#fff; border-radius:8px; padding:7px 10px; font-size:12px;
@@ -1361,6 +1385,7 @@
         <div class="action-btn" id="interact-btn">互动</div>
         <div class="action-btn" id="jump-btn">跳</div>
         <div class="action-btn" id="ability-btn">道具</div>
+        <div class="action-btn" id="skill-btn">技能</div>
     </div>
 
     <!-- 移动摇杆挪到 ui-layer 外面单独放——ui-layer 只在寻宝队里显示，之前摇杆塞在

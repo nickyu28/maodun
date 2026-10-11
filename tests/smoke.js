@@ -1100,6 +1100,61 @@ async function enterExit(tab, key) {
             report('H22 开箱药水（6/8/10%，立即用）；猫神护身符 25% 藏在桌面或顶楼死角，带着死亡满血站起来、5 米内怪全死、上限 −40', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H23')) {
+            // H23：角色技能——绿色 8 秒内每秒回 5 血；黄色 2 秒内移速 ×2、不受负重影响；电脑按 R，右键只用道具；平板有“技能”按钮；HUD 有冷却图标
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} gState.char = 'green'; selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            // 右键只用道具：按住右键一会儿，技能没放
+            await T.eval(`keys['rmb'] = true; true;`); await W(400); await T.eval(`keys['rmb'] = false; true;`);
+            const a0 = JSON.parse(await T.eval(`JSON.stringify([abilityActive, abilityCd])`));
+            if (a0[0] !== 0 || a0[1] !== 0) bad.push('右键放了技能 ' + a0.join());
+            // 绿色：R
+            await T.eval(`gState.hp = 10; keys['r'] = true; true;`); await W(300);
+            const g1 = JSON.parse(await T.eval(`JSON.stringify([abilityActive, abilityCd, document.getElementById('skill-name').innerText, document.getElementById('skill-icon').className])`));
+            await W(2000);
+            // 无头浏览器帧率低，游戏时间比真实时间慢：用技能剩余时间算游戏里过了多久
+            const g2 = JSON.parse(await T.eval(`JSON.stringify([abilityActive, gState.hp])`));
+            const played = 8 - g2[0];
+            if (!(g1[0] > 7 && g1[0] <= 8 && g1[1] > 39) || !/^\d+秒$/.test(g1[2]) || !/on/.test(g1[3])) bad.push('绿色放技能 ' + g1.join());
+            if (!(played > 0.5 && Math.abs((g2[1] - 10) - 5 * played) < 3)) bad.push('绿色回血：游戏里过了 ' + played.toFixed(2) + ' 秒，血量 10 → ' + g2[1] + '（应该每秒 5）');
+            // 冷却中再按 R 不重新放
+            await T.eval(`abilityActive = 0; keys['r'] = true; true;`); await W(300);
+            if ((await T.eval('abilityActive')) !== 0) bad.push('冷却中又放了');
+            // 黄色：移速
+            await T.eval(`gState.char = 'yellow'; abilityCd = 0; abilityActive = 0; window.__sp = []; (function(){ let h0 = huntPhysics; window.__h0 = h0; huntPhysics = function (dt, mx, mz, sp) { window.__sp.push(sp); return h0.apply(this, arguments); }; })(); keys['w'] = true; true;`); await W(600);
+            const base = await T.eval(`window.__sp.slice(-5)`);
+            await T.eval(`window.__sp = []; keys['r'] = true; true;`); await W(700);
+            const during = await T.eval(`window.__sp.slice(-5)`);
+            for (let i = 0; i < 40 && (await T.eval('abilityActive')) > 0; i++) await W(250);   // 等游戏里的 2 秒走完
+            await T.eval(`window.__sp = []; true;`); await W(500);
+            const after = await T.eval(`window.__sp.slice(-5)`);
+            // 负重：背很重，平时慢，放技能时不受影响
+            await T.eval(`abilityCd = 0; abilityActive = 0; for (let i = 0; i < 6; i++) gState.inv[i] = { n: '铁块' + i, v: 1, w: 12 }; window.__sp = []; true;`); await W(600);
+            const heavy = await T.eval(`window.__sp.slice(-5)`);
+            await T.eval(`window.__sp = []; keys['r'] = true; true;`); await W(600);
+            const heavySkill = await T.eval(`window.__sp.slice(-5)`);
+            await T.eval(`keys['w'] = false; huntPhysics = window.__h0; for (let i = 0; i < 6; i++) gState.inv[i] = null; true;`);
+            const avg = (x) => x.reduce((s, y) => s + y, 0) / Math.max(1, x.length);
+            if (!(avg(during) > avg(base) * 1.9 && avg(during) < avg(base) * 2.1)) bad.push('黄色技能移速 ' + avg(base) + ' → ' + avg(during));
+            if (!(Math.abs(avg(after) - avg(base)) < 0.5)) bad.push('2 秒后没恢复 ' + avg(after));
+            if (!(avg(heavy) < avg(base) * 0.8 && Math.abs(avg(heavySkill) - avg(base) * 2) < 1)) bad.push('负重 平时=' + avg(heavy) + ' 放技能=' + avg(heavySkill) + ' 基础=' + avg(base));
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            // 平板：有“技能”按钮，点它放技能
+            const M = await openTab(chrome, url, { mobile: true });
+            await M.eval(`${HIDE} gState.char = 'green'; selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await M.eval(`${HIDE} true;`);
+            const b = JSON.parse(await M.eval(`JSON.stringify({ btn: !!document.getElementById('skill-btn'), shown: getComputedStyle(document.getElementById('skill-btn')).display, txt: document.getElementById('skill-btn').innerText, key: document.getElementById('skill-key').innerText })`));
+            if (!b.btn || b.shown === 'none' || b.txt !== '技能' || b.key !== '技能') bad.push('平板按钮 ' + JSON.stringify(b));
+            await M.eval(`touchBtn.skill = true; true;`); await W(400);
+            if (!((await M.eval('abilityActive')) > 7)) bad.push('平板点技能没放');
+            await M.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
+            if (M.errors.length) bad.push('平板报错 ' + M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('H23 角色技能：绿 8 秒每秒 5 血、黄 2 秒移速 ×2 无视负重；电脑 R、右键只用道具；平板技能按钮；冷却图标', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 

@@ -913,7 +913,7 @@
         }
 
         setupJoy('joystick-left', 'knob-left', tMove);
-        setupBtn('jump-btn', 'jump'); setupBtn('interact-btn', 'interact'); setupBtn('ability-btn', 'ability');
+        setupBtn('jump-btn', 'jump'); setupBtn('interact-btn', 'interact'); setupBtn('ability-btn', 'ability'); setupBtn('skill-btn', 'skill');
 
         // 平板：惊魂夜和超燃都是靠鼠标左右键 + 键盘触发的，触屏没有这些，
         // 之前完全没接，导致平板上这两个模式点了没反应。直接触发对应函数，

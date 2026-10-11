@@ -3518,6 +3518,22 @@
             }
         }
 
+        // ── 角色技能（H23）──
+        const HUNT_SKILL = {
+            yellow: { name: '冲刺', dur: 2, cd: 40, speedMul: 2 },
+            green: { name: '回血', dur: 8, cd: 40, regen: 5 }
+        };
+        // 快捷栏左边的冷却图标：转圈的暗色是还没好的那一段，中间数字是剩几秒；技能生效时发光
+        function huntSkillIcon(sk) {
+            let el = document.getElementById('skill-icon'); if (!el) return;
+            el.className = (gState.char === 'yellow' ? 'yellow' : '') + (abilityActive > 0 ? ' on' : '');
+            let cd = Math.max(0, abilityCd), cdEl = el.querySelector('.cd');
+            if (cdEl) cdEl.style.background = cd > 0 ? 'conic-gradient(rgba(0,0,0,0.6) ' + Math.round(cd / sk.cd * 360) + 'deg, transparent 0)' : 'none';
+            let n = document.getElementById('skill-name'), k = document.getElementById('skill-key');
+            if (n) n.innerText = cd > 0 ? Math.ceil(cd) + '秒' : sk.name;
+            if (k) k.innerText = padOn() ? '技能' : 'R';
+        }
+
         // ── 药水和猫神护身符（H22）──
         // 开箱时非大金的结果，木箱 6%、银箱 8%、金箱 10% 换成下面三样之一，立即用掉（只对开箱的人生效）。
         const HUNT_POTION_P = { wood: 0.06, silver: 0.08, gold: 0.10 };
@@ -3826,7 +3842,7 @@
         window.addEventListener('mouseup', function (e) { if (e.button === 0) keys['lmb'] = false; if (e.button === 2) keys['rmb'] = false; });
         window.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
-        const tMove = { x: 0, y: 0 }; let touchBtn = { jump: false, interact: false, ability: false, item: false, throw: false };
+        const tMove = { x: 0, y: 0 }; let touchBtn = { jump: false, interact: false, ability: false, skill: false, item: false, throw: false };
         let huntJumpBuf = 0;  // 跳键缓冲：落地前按的那一下留着，落地补上
 
         // R2：平板跑步——摇杆推过半径的 90% 就自动跑（原来右下角有个"跑"开关，寻宝队里被藏起来，监狱/躲避球里大小是 0×0）
@@ -4015,9 +4031,9 @@
 
         function handlePlayerEngine(dt) {
             let w = HUNT_TEST_NOWEIGHT ? 0 : invWeight();
-            let abilityTrigger = keys['rmb'] || touchBtn.ability; let selectedInv = gState.inv[gState.selectedSlot];
+            let useTrigger = keys['rmb'] || touchBtn.ability; let selectedInv = gState.inv[gState.selectedSlot];
 
-            if (abilityTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'signal') {
+            if (useTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'signal') {
                 keys['rmb'] = false; touchBtn.ability = false;
                 if (gState.signal.active) showSysModal('提示', '信号接收器正在工作，找到它指引的物品才算用完。', [{ label: '确定' }]);
                 else if (selectedInv.uses > 0) { gState.signal.active = true; gState.signal.timer = 0; gState.signal.mesh = null; }
@@ -4025,7 +4041,7 @@
                 return;
             }
 
-            if (abilityTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'badge') {
+            if (useTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'badge') {
                 keys['rmb'] = false; touchBtn.ability = false;
                 if (selectedInv.uses > 0) {
                     selectedInv.uses = 0;
@@ -4039,7 +4055,7 @@
                 return;
             }
 
-            if (abilityTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'carriage') {
+            if (useTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'carriage') {
                 keys['rmb'] = false; touchBtn.ability = false;
                 gState.inv[gState.selectedSlot] = null;
                 submitLoot(); gState.safeOpenedThisGame = true; completeExtraction("皇家马车撤离成功"); return;
@@ -4054,17 +4070,22 @@
             }
             let f_w = w <= 10 ? 0 : Math.min(90, w - 10); let speedMult = (100 - f_w) / 100; let wMod = 1 * speedMult;
 
-            if (gState.char === 'yellow') {
-                if (abilityTrigger && abilityCd <= 0) { abilityActive = 2.0; abilityCd = 40; }
-                if (abilityActive > 0) { abilityActive -= dt; wMod = 1; }
-            } else {
-                if (abilityTrigger && abilityCd <= 0) { abilityActive = 15.0; abilityCd = 40; }
-                if (abilityActive > 0) { abilityActive -= dt; gHpRegenAcc += 8 * dt; if (gHpRegenAcc >= 1) { gState.hp = Math.min(effectiveMaxHp(), gState.hp + Math.floor(gHpRegenAcc)); gHpRegenAcc -= Math.floor(gHpRegenAcc); } updateHUD(); }
+            // H23：角色技能（电脑按 R，平板点“技能”；右键/道具键只管用道具）
+            // 黄色：2 秒内移速 ×2、不受负重影响；绿色：8 秒内每秒回 5 血。冷却都是 40 秒
+            let skillTrigger = keys['r'] || touchBtn.skill;
+            if (skillTrigger) { keys['r'] = false; touchBtn.skill = false; }
+            let sk = HUNT_SKILL[gState.char === 'yellow' ? 'yellow' : 'green'], skillMul = 1;
+            if (skillTrigger && abilityCd <= 0 && !gState.isDead) { abilityActive = sk.dur; abilityCd = sk.cd; blazeFlash(sk.name + '！'); }
+            if (abilityActive > 0) {
+                abilityActive -= dt;
+                if (sk.speedMul) { wMod = 1; skillMul = sk.speedMul; }
+                if (sk.regen) { gHpRegenAcc += sk.regen * dt; if (gHpRegenAcc >= 1) { gState.hp = Math.min(effectiveMaxHp(), gState.hp + Math.floor(gHpRegenAcc)); gHpRegenAcc -= Math.floor(gHpRegenAcc); } updateHUD(); }
             }
+            huntSkillIcon(sk);
 
             if (gState.speedT > 0) gState.speedT -= dt;
             if (gState.springT > 0) gState.springT -= dt;
-            let baseMoveSpeed = 42 * wMod * DAILY_MOD.speedMul * bondSpeedMul() * weaponSpeedMul() * huntSpeedPotionMul();
+            let baseMoveSpeed = 42 * wMod * DAILY_MOD.speedMul * bondSpeedMul() * weaponSpeedMul() * huntSpeedPotionMul() * skillMul;
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); let side = new THREE.Vector3(-dir.z, 0, dir.x); let moveX = 0, moveZ = 0;
 
             let fwd = 0; let strafe = 0;
