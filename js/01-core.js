@@ -993,7 +993,7 @@
                         gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.huntDiffPlayed = data.huntDiffPlayed || {}; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {}; gState.escProg = data.escProg || null;
                         gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {}; gState.huntRunActive = !!data.huntRunActive; gState.badgeGiven = !!data.badgeGiven; gState.huntTutorialShown = !!data.huntTutorialShown; gState.weightWarnShown = !!data.weightWarnShown; gState.skinPity = data.skinPity || 0; gState.blazeChar = data.blazeChar || 'bow'; gState.tutDone = data.tutDone === undefined ? 'old' : data.tutDone;
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
-                        expandInventory(); grantBadgeIfMissing();
+                        expandInventory(); huntFixSwordValue(); grantBadgeIfMissing();
                         if (gState.huntRunActive) huntRunAbandoned();
                         return;
                     }
@@ -1006,6 +1006,17 @@
             expandInventory();
         }
 
+        // H18：老存档里的猫盾骑士剑（背包、仓库、腰包里的、上交寄存的）一起改成新价格
+        function huntFixSwordValue() {
+            let fix = function (arr) {
+                (arr || []).forEach(function (it) {
+                    if (!it) return;
+                    if (it.n === '猫盾骑士剑' && it.v !== SWORD_V) it.v = SWORD_V;
+                    if (Array.isArray(it.bag)) fix(it.bag);
+                });
+            };
+            fix(gState.inv); fix(gState.garage); fix(gState.submittedItems);
+        }
         // 寻宝队进图时存档里记着"对局进行中"，结算时清掉（H5）。读档时还在，说明上次没结算就关了页面/刷新了：
         // 按撤离失败算，背包清空，这局的东西都不留，弹一次说明。不靠 beforeunload（手机上经常不触发）。
         function huntRunAbandoned() {

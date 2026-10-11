@@ -881,6 +881,40 @@ async function enterExit(tab, key) {
             report('H17 每种难度第一次单人打是保底局（进图就算用掉），组队不算不记，老存档三个难度各给一次', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H18')) {
+            // H18：猫盾骑士剑 200 万；老存档里的剑读档时一起改；所有配方产物的价值必须大于原料之和
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){
+                let price = {};
+                ['purple', 'gold', 'ultra', 'god'].forEach(function (k) { itemPool[k].forEach(function (it) { price[it.n] = it.v; }); });
+                HUNT_GEMS.forEach(function (g) { price[g.n] = g.v; });
+                allRecipes().forEach(function (r) { if (r.out) price[r.out.n] = r.out.v; });
+                let rows = [], missing = [];
+                GROUND_RECIPES.forEach(function (r) {
+                    if (price[r.a] === undefined) missing.push(r.a); if (price[r.b] === undefined) missing.push(r.b);
+                    rows.push([r.id, r.out.v, (price[r.a] || 0) + (price[r.b] || 0)]);
+                });
+                let crownIn = CROWN_BASE_V + HUNT_GEMS.reduce(function (s, g) { return s + g.v; }, 0);
+                rows.push(['crown', CROWN_FULL_V, crownIn]);
+                // 老存档：剑 100 万，放在背包、仓库、腰包里
+                let old = { n: '猫盾骑士剑', v: 1000000, w: 5, type: 'wep', dmg: 150, spd: 1.15, hp: 40 };
+                gState.inv[2] = Object.assign({}, old); gState.garage[0] = Object.assign({}, old);
+                gState.inv[3] = { n: '腰包', isShop: true, type: 'pouch', bag: [Object.assign({}, old), null, null] };
+                saveProgress();
+                let d = JSON.parse(localStorage.getItem('TH_save_' + gState.id)); d.inv[2].v = 1000000; d.garage[0].v = 1000000; d.inv[3].bag[0].v = 1000000;
+                localStorage.setItem('TH_save_' + gState.id, JSON.stringify(d));
+                gState.inv = []; gState.garage = []; loadProgress(gState.id);
+                return JSON.stringify({ rows: rows, missing: missing, sword: GROUND_RECIPES.filter(function (r) { return r.id === 'catblade'; })[0].out.v, loaded: [gState.inv[2].v, gState.garage[0].v, gState.inv[3].bag[0].v] }); })()`));
+            if (r.sword !== 2000000) bad.push('剑 ' + r.sword);
+            if (r.missing.length) bad.push('配方里有找不到价格的原料 ' + r.missing.join());
+            r.rows.forEach((x) => { if (!(x[1] > x[2])) bad.push(x[0] + ' 产物 ' + x[1] + ' ≤ 原料 ' + x[2]); });
+            if (r.loaded.join() !== '2000000,2000000,2000000') bad.push('老存档里的剑没改 ' + r.loaded.join());
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H18 猫盾骑士剑 200 万，老存档里的剑读档时一起改；所有配方产物比原料之和值钱', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 

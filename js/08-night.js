@@ -3406,6 +3406,8 @@
 
         // 地上的合成表。两件东西扔到一块儿（靠得够近）就自动合。
         // 加新配方就是在这里添一行。
+        // H18：合成物必须比原料加起来值钱。骑士团圣剑（40 万）+ 至臻猫盾（80 万）= 120 万，原来的剑才 100 万，亏了。
+        const SWORD_V = 2000000;
         const GROUND_RECIPES = [
             {
                 id: 'gcat', a: '猫盾', b: '小鱼干',
@@ -3424,7 +3426,7 @@
                 // spd/hp 是装备这把剑时的加成（移动速度倍率、额外生命上限）——
                 // 不是随便加在这就生效的，ground-merge 生成物、捡进背包两处都是
                 // 显式一个个字段复制过去的，两边都要照着加，不然装备了也没用。
-                out: { n: '猫盾骑士剑', v: 1000000, w: 5, tex: 'sword', c: 0xff4081, main: '#ff4081', detail: '#880e4f', type: 'wep', dmg: 150, spd: 1.15, hp: 40 }
+                out: { n: '猫盾骑士剑', v: SWORD_V, w: 5, tex: 'sword', c: 0xff4081, main: '#ff4081', detail: '#880e4f', type: 'wep', dmg: 150, spd: 1.15, hp: 40 }
             }
         ];
         const GROUND_MERGE_RANGE = 8;
