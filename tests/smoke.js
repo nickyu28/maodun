@@ -1434,6 +1434,72 @@ async function enterExit(tab, key) {
             report('C6c 联机诊断：探路服务器每个单独列出、网络类型（好连/难连）、中转单独一项、大白话结论、能复制', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('S1')) {
+            // S1 声音设置：4 个滑条（总音量/音乐/音效/语音）存进 TH_settings 并真的管用；M 键在所有模式里一键静音（再按恢复）；寻宝队大地图改成 Tab；按键提示跟着改
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const key = async (k, code) => { await T.send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code, windowsVirtualKeyCode: code === 'Tab' ? 9 : k.toUpperCase().charCodeAt(0) }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: code === 'Tab' ? 9 : k.toUpperCase().charCodeAt(0) }); await W(150); };
+            // 设置里 4 个滑条，值存进 TH_settings
+            await T.eval(`${HIDE} openSettings(); true;`); await W(300);
+            const ids = JSON.parse(await T.eval(`JSON.stringify(['volMaster', 'volMusic', 'volSfx', 'volVoice'].map(function (k) { let e = document.getElementById('set-' + k); return e ? [e.type, e.value] : null; }))`));
+            if (ids.some((x) => !x || x[0] !== 'range' || x[1] !== '100')) bad.push('滑条 ' + JSON.stringify(ids));
+            await T.eval(`(function(){ [['volMaster', 80], ['volMusic', 50], ['volSfx', 30], ['volVoice', 60]].forEach(function (p) { let e = document.getElementById('set-' + p[0]); e.value = p[1]; e.dispatchEvent(new Event('input')); e.dispatchEvent(new Event('change')); }); return true; })()`);
+            const st = JSON.parse(await T.eval(`localStorage.getItem('TH_settings')`));
+            if (st.volMaster !== 0.8 || st.volMusic !== 0.5 || st.volSfx !== 0.3 || st.volVoice !== 0.6) bad.push('没存进 TH_settings ' + JSON.stringify(st));
+            // 数值真的套到各路声音上
+            const r = JSON.parse(await T.eval(`(function(){
+                let o = {};
+                o.vol = [audioVol('music'), audioVol('sfx'), audioVol('voice')].map(function (x) { return +x.toFixed(3); });
+                // 音效：峰值 = 原来 × 总音量 × 音效音量
+                let peaks = []; let p0 = AudioParam.prototype.linearRampToValueAtTime; AudioParam.prototype.linearRampToValueAtTime = function (v, t) { peaks.push(v); return p0.apply(this, arguments); };
+                sfxPlay([440], 0.2, 0.1, 'sine'); o.peak = peaks.length ? +peaks[0].toFixed(4) : null;
+                SETTINGS.volSfx = 0; peaks.length = 0; sfxPlay([440], 0.2, 0.1, 'sine'); sfxNoise(0.1, 0.1, 500, 400, 1); o.zero = peaks.length;
+                SETTINGS.volSfx = 0.3; AudioParam.prototype.linearRampToValueAtTime = p0;
+                // 语音：别人说话的 <audio> 音量
+                voicePlayStream('v1', new MediaStream()); o.voice = +voiceAudioEls.v1.volume.toFixed(3);
+                SETTINGS.volVoice = 1; audioApply(); o.voice2 = +(voiceAudioEls.v1.volume * 0.8).toFixed(3) === +(0.8).toFixed(3) ? voiceAudioEls.v1.volume : voiceAudioEls.v1.volume;
+                SETTINGS.volVoice = 0.6; audioApply();
+                return JSON.stringify(o); })()`));
+            if (r.vol.join() !== '0.4,0.24,0.48') bad.push('音量 ' + r.vol.join());
+            if (r.peak !== 0.024) bad.push('音效峰值 ' + r.peak + '（应该 0.1×0.8×0.3=0.024）');
+            if (r.zero !== 0) bad.push('音效音量 0 还在响 ' + r.zero);
+            if (r.voice !== 0.48 || r.voice2 !== 0.8) bad.push('语音 ' + r.voice + '/' + r.voice2);
+            // 音乐：进寻宝队，音乐总音量跟着改（setTargetAtTime 的目标 = 0.42 × 总音量 × 音乐）
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const m = JSON.parse(await T.eval(`(function(){ let t = []; let s0 = AudioParam.prototype.setTargetAtTime; AudioParam.prototype.setTargetAtTime = function (v) { t.push(v); return s0.apply(this, arguments); };
+                SETTINGS.volMusic = 0.5; SETTINGS.volMaster = 0.8; audioApply(); let a = t.slice(-1)[0]; audioMuteToggle(); let b = t.slice(-1)[0]; audioMuteToggle(); let c = t.slice(-1)[0];
+                AudioParam.prototype.setTargetAtTime = s0; return JSON.stringify({ bgm: !!bgm, a: +a.toFixed(3), b: b, c: +c.toFixed(3), muted: audioMuted() }); })()`));
+            if (!m.bgm || m.a !== 0.168 || m.b !== 0 || m.c !== 0.168 || m.muted) bad.push('音乐音量 ' + JSON.stringify(m));
+            // M 键：每个模式里都是一键静音，再按恢复；寻宝队里 M 不再开地图，Tab 开
+            const hm = [];
+            await key('m', 'KeyM'); hm.push(await T.eval('audioMuted()')); await key('m', 'KeyM'); hm.push(await T.eval('audioMuted()'));
+            await key('Tab', 'Tab'); hm.push(await T.eval('gState.largeMapOpen')); await key('Tab', 'Tab'); hm.push(await T.eval('gState.largeMapOpen'));
+            if (hm.join() !== 'true,false,true,false') bad.push('寻宝队 M/Tab ' + hm.join());
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1500);
+            for (const k of ['blaze', 'race', 'night', 'jail']) {
+                await T.eval(`${HIDE} selectGameMode('${k}'); ${MODES[k].start}; true;`); await W(2500); await T.eval(`${HIDE} true;`);
+                await key('m', 'KeyM'); const a = await T.eval('audioMuted()'); await key('m', 'KeyM'); const b = await T.eval('audioMuted()');
+                if (a !== true || b !== false) bad.push(k + ' 里 M 静音 ' + a + '/' + b);
+                await T.eval(`${HIDE} ${MODES[k].exit}; true;`); await W(1500); await T.eval(`${HIDE} true;`);
+            }
+            // 在大厅里也行；在输入框里打字不算
+            await key('m', 'KeyM'); const hubA = await T.eval('audioMuted()'); await key('m', 'KeyM');
+            await T.eval(`(function(){ let i = document.createElement('input'); i.id = 'tmp-in'; document.body.appendChild(i); i.focus(); return true; })()`);
+            await key('m', 'KeyM'); const typed = await T.eval('audioMuted()');
+            await T.eval(`document.getElementById('tmp-in').remove(); true;`);
+            if (hubA !== true || typed !== false) bad.push('大厅静音/打字 ' + hubA + '/' + typed);
+            // 刷新后音量还在，静音不存档
+            await T.send('Page.reload'); await W(2500);
+            const back = JSON.parse(await T.eval(`JSON.stringify([SETTINGS.volMaster, SETTINGS.volMusic, SETTINGS.volSfx, SETTINGS.volVoice, audioMuted()])`));
+            if (back.join() !== '0.8,0.5,0.3,0.6,false') bad.push('刷新后 ' + back.join());
+            // 按键提示
+            const rules = await T.eval(`rulesHtml('hunt')`);
+            if (!/Tab/.test(rules) || !/M<\/b> 静音/.test(rules) || /M<\/b> 地图/.test(rules)) bad.push('规则里的按键提示');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('S1 声音：4 个音量滑条存 TH_settings 并真的管用；M 键所有模式一键静音（再按恢复，打字不算）；寻宝队大地图改 Tab；提示跟着改', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 

@@ -4834,7 +4834,6 @@
 
         window.addEventListener('keydown', function (e) {
             if (!blaze || blaze.over) return;
-            if (e.key === 'm' || e.key === 'M') { bgmToggle(); return; }
             if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) blazeAimStart(0); }
             if (BLAZE_TEST_SKIP_KEY && (e.key === 'q' || e.key === 'Q')) { e.preventDefault(); blazeSkipRound(); }
             if (blaze.ffa && (e.key === 'c' || e.key === 'C')) { e.preventDefault(); blazeFfaCardToggle(); }

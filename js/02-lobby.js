@@ -13,7 +13,7 @@
                 '没撤出去（倒下后离开、中途退出、关页面）算失败：上交的和背包里的全没了。',
                 '怪物会追人。倒地了队友能救你，开了 AI 补齐的话 AI 也会来救。',
                 kTxt('<b>F / 左键</b> 开箱子、捡东西、打怪　<b>右键</b> 用手上的东西', '<b>互动</b> 开箱子、捡东西、打怪　<b>道具</b> 用手上的东西'),
-                kTxt('<b>1 2 3</b> 换手上的东西　<b>Q</b> 扔　<b>E</b> 背包　<b>M</b> 地图', '点下面的格子换手上的东西，<b>背包</b> 看全部'),
+                kTxt('<b>1 2 3</b> 换手上的东西　<b>Q</b> 扔　<b>E</b> 背包　<b>Tab</b> 地图　<b>M</b> 静音', '点下面的格子换手上的东西，<b>背包</b> 看全部'),
                 kTxt('<b>Shift</b> 跑　<b>空格</b> 跳', '摇杆推到底就跑　<b>跳</b> 在右下角'),
                 '每个腰包自带 3 格。在背包或仓库里点一下腰包打开，东西拖进拖出；腰包不能放进腰包。',
                 kTxt('手上拿着腰包时按 <b>1 2 3</b> 把里面的东西拿到手上。', '腰包里的东西要拖出来才能用。'),
@@ -332,9 +332,14 @@
         // 没设置过的时候：手指操作的设备（粗指针）或者窄屏触屏默认显示，其它默认隐藏。
         // 灵敏度原来存在 gState 里但 saveProgress 没带上它，每次刷新都回到 1——现在也放这儿存。
         // P1：寻宝队难度、AI 补齐队友、惊魂夜选的角色也存在这里（null = 没选过，用默认），进大厅时恢复
-        let SETTINGS = { touch: null, sens: 1, invertY: false, sfx: true, hq: false, mapDiff: null, aiFill: null, nightChar: null };
+        let SETTINGS = { touch: null, sens: 1, invertY: false, sfx: true, hq: false, mapDiff: null, aiFill: null, nightChar: null, volMaster: 1, volMusic: 1, volSfx: 1, volVoice: 1 };
         function settingsLoad() {
-            try { let v = JSON.parse(localStorage.getItem('TH_settings') || 'null'); if (v) Object.keys(SETTINGS).forEach(function (k) { if (v[k] !== undefined) SETTINGS[k] = v[k]; }); } catch (e) { }
+            try { let v = JSON.parse(localStorage.getItem('TH_settings') || 'null'); if (v) Object.keys(SETTINGS).forEach(function (k) { if (v[k] !== undefined) SETTINGS[k] = v[k]; });
+                // S1：老设置里“音效关”变成音效音量 0
+                if (v && v.sfx === false && v.volSfx === undefined) SETTINGS.volSfx = 0;
+                // S1：老的 TH_mute（只静音乐）变成音乐音量 0；现在 M 键是整个游戏静音，不存档
+                if (localStorage.getItem('TH_mute') === '1') { SETTINGS.volMusic = 0; localStorage.removeItem('TH_mute'); settingsSave(); }
+            } catch (e) { }
         }
         function settingsSave() { try { localStorage.setItem('TH_settings', JSON.stringify(SETTINGS)); } catch (e) { } }
         function touchUiDefault() {
@@ -381,12 +386,16 @@
                 return '<span style="display:flex; gap:4px;">' + btn(true, a) + btn(false, b) + '</span>';
             };
             let sens = SETTINGS.sens || 1;
+            let vol = function (label, key) {
+                let v = Math.round(audioClamp(SETTINGS[key]) * 100);
+                return row(label, '<span style="display:flex; align-items:center; gap:6px;"><input type="range" id="set-' + key + '" min="0" max="100" step="5" value="' + v + '" oninput="settingsVol(\'' + key + '\', this.value)" onchange="settingsVolDone(\'' + key + '\')" style="width:120px;"><span id="set-' + key + '-val" style="font-size:12px; color:#666; width:30px;">' + v + '</span></span>');
+            };
             let body = '<div style="text-align:left; min-width:250px;">' +
                 row('触屏按键', sw('set-touch', touchOn, '显示', '隐藏')) +
                 row('转视角快慢', '<span style="display:flex; align-items:center; gap:6px;"><input type="range" id="set-sens" min="0.3" max="2.5" step="0.05" value="' + sens + '" style="width:110px;" oninput="settingsSens(this.value)"><span id="set-sens-val" style="font-size:12px; color:#777; width:32px;">' + sens.toFixed(2) + '</span></span>') +
                 row('上下视角反转', sw('set-inv', !!SETTINGS.invertY, '开', '关')) +
-                row('背景音乐', sw('set-bgm', !bgmMuted(), '开', '关')) +
-                row('音效', sw('set-sfx', SETTINGS.sfx !== false, '开', '关')) +
+                vol('总音量', 'volMaster') + vol('音乐', 'volMusic') + vol('音效', 'volSfx') + vol('语音（别人说话）', 'volVoice') +
+                '<div style="font-size:12px; color:#888; padding:4px 0 6px;">' + kTxt('按 <b>M</b> 一键静音，再按恢复。', '电脑上按 M 能一键静音。') + '</div>' +
                 row('画面', sw('set-hq', !!SETTINGS.hq, '清晰', '流畅')) +
                 row('新手教程', '<button onclick="tutorialStart()" style="margin:0; padding:4px 12px; font-size:12px; background:#607d8b; color:#fff; border:none; border-radius:4px;">重玩一遍</button>') +
                 row('快捷语', '<button onclick="openChatSetup()" style="margin:0; padding:4px 12px; font-size:12px; background:#607d8b; color:#fff; border:none; border-radius:4px;">改一下</button>') +
@@ -396,15 +405,22 @@
         function settingsPick(id, on) {
             if (id === 'set-touch') SETTINGS.touch = on;
             else if (id === 'set-inv') SETTINGS.invertY = on;
-            else if (id === 'set-sfx') SETTINGS.sfx = on;
             else if (id === 'set-hq') SETTINGS.hq = on;
-            else if (id === 'set-bgm') { if (bgmMuted() === on) bgmToggle(); }
             settingsSave(); settingsApply();
             let a = document.getElementById(id + '-on'), b = document.getElementById(id + '-off');
             if (a && b) {
                 a.style.background = on ? '#5cb85c' : '#eceff1'; a.style.color = on ? '#fff' : '#555';
                 b.style.background = !on ? '#5cb85c' : '#eceff1'; b.style.color = !on ? '#fff' : '#555';
             }
+        }
+        // S1：四个音量滑条。拖的时候马上生效，松手存档，音乐以外的松手时响一声让人听到音量
+        function settingsVol(key, v) {
+            SETTINGS[key] = audioClamp(+v / 100); audioApply();
+            let el = document.getElementById('set-' + key + '-val'); if (el) el.innerText = Math.round(SETTINGS[key] * 100);
+        }
+        function settingsVolDone(key) {
+            settingsSave();
+            if (key === 'volSfx' || key === 'volMaster') sfxPlay([659, 880], 0.2, 0.06, 'triangle');
         }
         function settingsSens(v) {
             SETTINGS.sens = parseFloat(v) || 1; settingsSave(); gState.mouseSensitivity = SETTINGS.sens;

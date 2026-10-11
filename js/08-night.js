@@ -2567,11 +2567,40 @@
 
         window.addEventListener('error', function (ev) { nightShowError(ev.error || ev.message); });
 
+        // ── S1 声音：总音量、音乐、音效、语音四个音量（设置里的滑条，存在 TH_settings）；M 键一键静音（再按恢复，不存档） ──
+        // 语音 = 房间里别人说话的声音（<audio>）。AI 喊话、播报目前只是聊天栏文字，没有声音。
+        let audioMutedNow = false;
+        function audioClamp(v) { v = +v; return isFinite(v) ? Math.max(0, Math.min(1, v)) : 1; }
+        function audioMuted() { return audioMutedNow; }
+        function audioVol(kind) {
+            if (audioMutedNow) return 0;
+            let k = kind === 'music' ? SETTINGS.volMusic : kind === 'voice' ? SETTINGS.volVoice : SETTINGS.volSfx;
+            return audioClamp(SETTINGS.volMaster) * audioClamp(k);
+        }
+        // 音量变了、静音切换了：立刻套到正在响的音乐和别人的语音上（音效每次播放时现取）
+        function audioApply() {
+            try { if (bgm) bgm.master.gain.setTargetAtTime(0.42 * audioVol('music'), bgm.ctx.currentTime, 0.05); } catch (e) { }
+            Object.keys(voiceAudioEls).forEach(function (id) { try { voiceAudioEls[id].volume = audioVol('voice'); } catch (e) { } });
+        }
+        function audioMuteToggle() {
+            audioMutedNow = !audioMutedNow;
+            audioApply();
+            blazeFlash(audioMutedNow ? '已静音（按 M 恢复）' : '声音恢复了');
+        }
+        // M 键在所有模式里都是一键静音；打字（聊天框、输入框）的时候不算
+        window.addEventListener('keydown', function (e) {
+            if (e.repeat || !e.key || e.key.toLowerCase() !== 'm' || e.ctrlKey || e.metaKey || e.altKey) return;
+            let t = e.target && e.target.tagName;
+            if (t === 'INPUT' || t === 'TEXTAREA' || chatMode === 2) return;
+            audioMuteToggle();
+        }, true);
+
         // 音效跟背景音乐分开走：音乐嫌吵关掉了，击杀音还是要有的
         let sfxCtx = null;
         let SFX_ENABLED = SETTINGS.sfx !== false;   // 设置里可以关
         function sfxPlay(freqs, len, peak, type) {
             if (!SFX_ENABLED) return;
+            peak *= audioVol('sfx'); if (peak <= 0.00001) return;
             try {
                 if (!sfxCtx) sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (sfxCtx.state === 'suspended') sfxCtx.resume();
@@ -2607,6 +2636,7 @@
         // 只给一个数字就是不滑动，固定音色。
         function sfxNoise(len, peak, filterFrom, filterTo, q) {
             if (!SFX_ENABLED) return;
+            peak *= audioVol('sfx'); if (peak <= 0.00001) return;
             try {
                 if (!sfxCtx) sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (sfxCtx.state === 'suspended') sfxCtx.resume();
@@ -2655,17 +2685,6 @@
         const BGM_CALM = [329.63, 392.00, 440.00, 587.33];
         const BGM_TENSE = [220.00, 261.63, 220.00, 174.61];
 
-        function bgmMuted() {
-            try { return localStorage.getItem('TH_mute') === '1'; } catch (e) { return false; }
-        }
-        function bgmToggle() {
-            let now = !bgmMuted();
-            try { localStorage.setItem('TH_mute', now ? '1' : '0'); } catch (e) { }
-            if (now) bgmStop();
-            else if ((night && !night.over) || (blaze && !blaze.over) || (race && !race.over)) bgmStart();
-            if (blaze && !blaze.over) blazeFlash(now ? '音乐已关闭' : '音乐已开启');
-            else nightFlash(now ? '音乐已关闭（M 开启）' : '音乐已开启（M 关闭）');
-        }
 
         function bgmPad(ctx, dest, freqs, type) {
             let g = ctx.createGain(); g.gain.value = 0; g.connect(dest);
@@ -2680,7 +2699,7 @@
         }
 
         function bgmStart() {
-            if (!BGM_ENABLED || bgm || bgmMuted()) return;
+            if (!BGM_ENABLED || bgm) return;
             let AC = window.AudioContext || window.webkitAudioContext;
             if (!AC) return;
             let ctx;
@@ -2694,7 +2713,7 @@
             calm.gain.gain.value = 0.05;
             bgm = { ctx: ctx, master: master, calm: calm, tense: tense, next: 0, step: 0, mode: 0 };
             try { ctx.resume(); } catch (e) { }
-            master.gain.linearRampToValueAtTime(0.42, ctx.currentTime + 3);
+            master.gain.linearRampToValueAtTime(0.42 * audioVol('music'), ctx.currentTime + 3);
         }
 
         function bgmStop() {
@@ -3816,7 +3835,6 @@
                 }
                 if (night.c2Cast) { if (keyStr === 'q') nightC2Cycle(-1); if (keyStr === 'e') nightC2Cycle(1); }
                 else if (keyStr === 'e' && night.side === 'hunter') nightHunterBreak();
-                if (keyStr === 'm') { bgmToggle(); return; }
                 if (keyStr === 'f') { if (night.side === 'hunter') nightHunterAttack(); else nightInteract(); }
                 if (keyStr === 'q' && night.side === 'hunter' && night.char === 'hmi') nightCycleTpTarget(1);
                 return;
@@ -3836,7 +3854,7 @@
             }
             if (isPlaying && !gState.isDead) {
                 if (keyStr === 'e') { toggleBackpackUI(); }
-                if (keyStr === 'm') { toggleLargeMapUI(); }
+                if (keyStr === 'tab') { e.preventDefault(); toggleLargeMapUI(); }   // S1：大地图从 M 改到 Tab（M 是一键静音）
                 if (!gState.backpackOpen && !gState.largeMapOpen) {
                     if (keyStr === 'q') { if (gState.selectedSlot >= 0 && gState.selectedSlot <= 2 && gState.inv[gState.selectedSlot]) executeThrow(gState.selectedSlot); }
                     // 手上拿着腰包时，1～3 改成从腰包里取东西

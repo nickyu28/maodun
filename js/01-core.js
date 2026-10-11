@@ -122,6 +122,7 @@
                 voiceAudioEls[id] = el;
             }
             el.srcObject = stream;
+            el.volume = audioVol('voice');
         }
         function voiceCleanupPeer(id) {
             if (voiceCalls[id]) { try { voiceCalls[id].close(); } catch (e) { } delete voiceCalls[id]; }
