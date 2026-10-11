@@ -154,7 +154,7 @@ const CLICK_OK = `(function(){ let b = document.querySelector('#sys-modal-btns b
 
 const MODES = {
     hunt: { start: `(requestStartGame(), requestEnterMap())`, exit: `(function(){ chooseLeave(); document.getElementById('game-over').classList.add('hidden'); nav('screen-lobby'); })()` },
-    night: { start: `(NIGHT_MATCH_WAIT = 0, enterNightMatch('survivor'), nightPickChar('cat'))`, exit: `(endNightGame('测试退出'), setTimeout(function(){ let b = document.querySelector('#sys-modal-btns button'); if (b) b.click(); }, 900))` },
+    night: { start: `(NIGHT_MATCH_WAIT = 0, enterNightMatch('survivor'), nightPickChar('cat'))`, exit: `(endNightGame('测试退出'), setTimeout(function(){ let bs = Array.prototype.slice.call(document.querySelectorAll('#sys-modal-btns button')); let b = bs.filter(function (x) { return x.innerText === '返回大厅'; })[0] || bs[0]; if (b) b.click(); }, 900))` },
     blaze: { start: `blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }]), gState.id, false)`, exit: `blazeExit()` },
     race: { start: `raceStart(false)`, exit: `raceExit()` },
     jail: { start: `jailBegin()`, exit: `jailExit()` },
@@ -893,7 +893,7 @@ async function enterExit(tab, key) {
             if (!/规则/.test(t0 || '') || !open0) bad.push('惊魂夜没弹出规则卡 ' + t0 + '/' + open0);
             await N.eval(`endNightGame('测试退出'); true;`); await W(1200);
             // 回大厅：把还排着的弹窗一张张点掉
-            for (let i = 0; i < 10 && (await N.eval(MODAL)) !== null; i++) await clickModal(N);
+            for (let i = 0; i < 10 && (await N.eval(MODAL)) !== null; i++) await clickModal(N, (await N.eval(MODAL)) === '本局结束' ? 1 : 0);   // 结算框第一个是“再来一局”，要点第二个“返回大厅”
             await W(800);
             const st = JSON.parse(await N.eval(`JSON.stringify({ open: introOpen, q: introQ.length, wait: sysModalWait.length, lobby: !!hub && ${ACTIVE} === null, modal: ${MODAL} })`));
             if (st.open || st.q || st.wait || !st.lobby || st.modal !== null) bad.push('回大厅后还卡着 ' + JSON.stringify(st));
