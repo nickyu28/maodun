@@ -858,6 +858,24 @@
             btn.addEventListener('touchcancel', function (e) { e.preventDefault(); touchBtn[act] = false; }, { passive: false });
         }
 
+        // H16：抽奖机。投金色：5% 大金 / 25% 销毁 / 15% 变紫 / 55% 变金；投紫色：15% 变金 / 60% 变紫 / 25% 销毁。
+        // 大金走 huntTakeBig(huntBigPool('safe'))（占这张图的大金上限），奖励都从 itemPool 里拿，不手写。
+        const HUNT_LOTTERY = {
+            gold: [['big', 0.05], ['destroy', 0.25], ['purple', 0.15], ['gold', 0.55]],
+            purple: [['gold', 0.15], ['purple', 0.60], ['destroy', 0.25]]
+        };
+        function huntLotteryPick(kind, r) {
+            let acc = 0, t = HUNT_LOTTERY[kind];
+            for (let i = 0; i < t.length; i++) { acc += t[i][1]; if (r < acc) return t[i][0]; }
+            return t[t.length - 1][0];
+        }
+        function huntLotteryReward(res) {
+            let pick = function (a) { return a[Math.floor(Math.random() * a.length)]; };
+            if (res === 'big') return huntTakeBig(huntBigPool('safe'), pick);
+            if (res === 'gold') return pick(itemPool.gold);
+            if (res === 'purple') return pick(itemPool.purple);
+            return null;
+        }
         function clickLottery() {
             let slot = gState.selectedSlot; let item = gState.inv[slot];
             if (!item) { showSysModal('提示', '请先在快捷栏选择要用于抽奖的物品', [{ label: '确定' }]); return; }
@@ -867,25 +885,7 @@
             if (!isPurple && !isGold) { showSysModal('提示', '只能投入紫色或金色物品进行抽奖！', [{ label: '确定' }]); return; }
 
             gState.inv[slot] = null; updateHUD();
-            let r = Math.random(); let reward = null;
-
-            if (isPurple) {
-                if (r < 0.10) reward = null;
-                else if (r < 0.30) reward = itemPool.gold[Math.floor(Math.random() * itemPool.gold.length)];
-                else reward = itemPool.purple[Math.floor(Math.random() * itemPool.purple.length)];
-            } else if (isGold) {
-                if (r < 0.10) reward = null;
-                else if (r < 0.20) reward = itemPool.purple[Math.floor(Math.random() * itemPool.purple.length)];
-                else if (r < 0.75) reward = itemPool.gold[Math.floor(Math.random() * itemPool.gold.length)];
-                else {
-                    let uRoll = r - 0.75;
-                    if (uRoll < 0.05) reward = { n: "帝王翡翠", v: 800000, w: 3, tex: 'jade', c: 0x00e676 };
-                    else if (uRoll < 0.10) reward = { n: "王权之心", v: 1000000, w: 4, tex: 'heart', c: 0xff1744 };
-                    else if (uRoll < 0.15) reward = { n: "eggy金条", v: 200000, w: 10, tex: 'statue', c: 0xffb300 };
-                    else if (uRoll < 0.20) reward = { n: "时空沙漏", v: 1000000, w: 4, tex: 'glass', c: 0x00ffff, type: 'time_stop', uses: 3, maxUses: 3 };
-                    else reward = { n: "永恒誓言", v: 2000000, w: 1, tex: 'heart', c: 0xffffff, type: 'amulet' };
-                }
-            }
+            let reward = huntLotteryReward(huntLotteryPick(isGold ? 'gold' : 'purple', Math.random()));
 
             if (reward) {
                 let tObj = createProceduralTexture(reward.tex || 'generic', reward.c || 0x3498db, '#ffffff');

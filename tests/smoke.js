@@ -773,6 +773,32 @@ async function enterExit(tab, key) {
             report('T0 新手教程：新号自动开始、9 步各自做到才算、做完还原背包给 20 猫盾币记 tutDone、能跳过能重玩、教程里不存档、做完前不能组队', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H16')) {
+            // H16：抽奖机概率——金色 5% 大金 / 25% 销毁 / 15% 变紫 / 55% 变金；紫色 15% 变金 / 60% 变紫 / 25% 销毁；大金占这张图的上限，奖励来自 itemPool
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const r = JSON.parse(await T.eval(`(function(){
+                let out = { gold: {}, purple: {} }, N = 20000;
+                ['gold', 'purple'].forEach(function (k) { for (let i = 0; i < N; i++) { let v = huntLotteryPick(k, (i + 0.5) / N); out[k][v] = (out[k][v] || 0) + 1 / N; } });
+                // 奖励来源
+                huntBigLeft = 3; let bigs = []; for (let i = 0; i < 3; i++) bigs.push(huntIsBig(huntLotteryReward('big')));
+                let left = huntBigLeft; let after = huntLotteryReward('big'); let capGold = itemPool.gold.indexOf(after) >= 0 && huntBigLeft === 0;
+                let g = huntLotteryReward('gold'), p = huntLotteryReward('purple');
+                // 真的点一下：金色物品投进去，没了；要么销毁要么有东西弹出来
+                gState.inv[0] = Object.assign({}, itemPool.gold[0]); gState.selectedSlot = 0; let n0 = groundItems.length; huntBigLeft = 4; clickLottery(); let slotGone = !gState.inv[0];
+                return JSON.stringify({ out: out, bigs: bigs, left: left, capGold: capGold, gOk: itemPool.gold.indexOf(g) >= 0, pOk: itemPool.purple.indexOf(p) >= 0, none: huntLotteryReward('destroy'), slotGone: slotGone }); })()`));
+            const near = (a, b) => Math.abs((a || 0) - b) < 0.005;
+            if (!(near(r.out.gold.big, 0.05) && near(r.out.gold.destroy, 0.25) && near(r.out.gold.purple, 0.15) && near(r.out.gold.gold, 0.55))) bad.push('金色 ' + JSON.stringify(r.out.gold));
+            if (!(near(r.out.purple.gold, 0.15) && near(r.out.purple.purple, 0.60) && near(r.out.purple.destroy, 0.25) && !r.out.purple.big)) bad.push('紫色 ' + JSON.stringify(r.out.purple));
+            if (r.bigs.join() !== 'true,true,true' || r.left !== 0 || !r.capGold) bad.push('大金上限 ' + JSON.stringify([r.bigs, r.left, r.capGold]));
+            if (!r.gOk || !r.pOk || r.none !== null || !r.slotGone) bad.push('奖励 ' + JSON.stringify([r.gOk, r.pOk, r.none, r.slotGone]));
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H16 抽奖机：金色 5/25/15/55、紫色 15/60/25，大金占上限，奖励来自 itemPool', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 
