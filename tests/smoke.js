@@ -799,6 +799,53 @@ async function enterExit(tab, key) {
             report('H16 抽奖机：金色 5/25/15/55、紫色 15/60/25，大金占上限，奖励来自 itemPool', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H16b')) {
+            // H16b：大金上限全队共用——队员拿大金先问队长（HUNT_BIG_REQ），队长扣一个再答复；队员本地不扣；3 秒没回音就改出金色；队长只认自己队里的真人
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const r = JSON.parse(await T.eval(`(async function(){
+                let me = gState.id, sent = [], o = {};
+                let oldPost = bc.postMessage.bind(bc); bc.postMessage = function (m) { sent.push(m); };
+                let pick = function (a) { return a[0]; };
+                // 队员：队长是 host-x
+                gState.team = [{ id: me, isLeader: false, isAI: false }, { id: 'host-x', isLeader: true, isAI: false }];
+                huntBigLeft = 3; let got = null; huntTakeBigAsync(huntBigPool('safe'), pick, function (it) { got = it; });
+                let req = sent.filter(function (m) { return m.type === 'HUNT_BIG_REQ'; })[0];
+                o.req = !!req && req.target === 'host-x' && req.sender === me; o.noLocalDeduct = huntBigLeft === 3 && got === null;
+                // 别人（不是队长）冒充答复：不算
+                bc.onmessage({ data: { type: 'HUNT_BIG_ACK', target: me, sender: 'stranger', rid: req.rid, ok: true, left: 0 } });
+                o.fakeIgnored = got === null;
+                bc.onmessage({ data: { type: 'HUNT_BIG_ACK', target: me, sender: 'host-x', rid: req.rid, ok: true, left: 2 } });
+                o.big = huntIsBig(got); o.left = huntBigLeft;
+                // 队长答复没有了
+                got = null; huntTakeBigAsync(huntBigPool('safe'), pick, function (it) { got = it; });
+                req = sent.filter(function (m) { return m.type === 'HUNT_BIG_REQ'; })[1];
+                bc.onmessage({ data: { type: 'HUNT_BIG_ACK', target: me, sender: 'host-x', rid: req.rid, ok: false, left: 0 } });
+                o.goldWhenNone = itemPool.gold.indexOf(got) >= 0 && huntBigLeft === 0;
+                // 没回音：3 秒后改出金色
+                got = null; huntBigLeft = 2; huntTakeBigAsync(huntBigPool('safe'), pick, function (it) { got = it; });
+                await new Promise(function (r) { setTimeout(r, 3300); });
+                o.timeoutGold = itemPool.gold.indexOf(got) >= 0 && huntBigLeft === 2;
+                // 队长：自己扣，答复队员，不认外人
+                gState.team = [{ id: me, isLeader: true, isAI: false }, { id: 'peer-y', isLeader: false, isAI: false }];
+                huntBigLeft = 2; sent.length = 0;
+                bc.onmessage({ data: { type: 'HUNT_BIG_REQ', target: me, sender: 'peer-y', rid: 'r1' } });
+                let ack = sent.filter(function (m) { return m.type === 'HUNT_BIG_ACK'; })[0];
+                o.hostAck = !!ack && ack.ok === true && ack.left === 1 && ack.target === 'peer-y' && huntBigLeft === 1;
+                bc.onmessage({ data: { type: 'HUNT_BIG_REQ', target: me, sender: 'stranger', rid: 'r2' } });
+                o.strangerIgnored = huntBigLeft === 1 && sent.filter(function (m) { return m.type === 'HUNT_BIG_ACK'; }).length === 1;
+                // 队长自己拿：直接扣
+                let mine = null; huntTakeBigAsync(huntBigPool('safe'), pick, function (it) { mine = it; }); o.hostOwn = huntIsBig(mine) && huntBigLeft === 0;
+                bc.postMessage = oldPost;
+                return JSON.stringify(o); })()`));
+            Object.keys(r).forEach((k) => { if (r[k] !== true && !(k === 'left' && r[k] === 2)) bad.push(k + '=' + r[k]); });
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H16b 大金上限全队共用：队员先问队长、队长扣、没回音改出金色、外人的请求和冒充的答复不理', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 

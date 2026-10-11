@@ -252,7 +252,8 @@
         // v5：寻宝队造图保证每两层之间有楼梯、坏图换种子重造（H15），少数种子新旧版本造出来的图不一样
         // v6：超燃镜猫换位的 'swap' 事件多了楼层字段、收到的一方开始照着换位（原来发了没人收）；
         //     同一版 ROOM_HELLO 去掉了 stats 字段（A6 删游玩记录）
-        const NET_PROTO = 6;
+        // v7：寻宝队多了 HUNT_BIG_REQ / HUNT_BIG_ACK（大金上限全队共用，H16b），返魂药水多了 HUNT_REVIVE（H24）
+        const NET_PROTO = 7;
         const NET_PREFIX = 'maodun-v' + NET_PROTO + '-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
         // 这一整套匹配等待（matchPool/matchLeader/night-wait 那个浮层）早就写好了，
@@ -835,6 +836,30 @@
             if (huntBigLeft > 0) { huntBigLeft--; return pick(pool); }
             return pick(itemPool.gold);   // 这张图的大金用完了，改出金色一档
         }
+        // H16b：大金上限全队共用。有真人队友时，只有队长（"房主"）扣剩余数；队员在开局之后要拿大金（抽奖机、运气转换……）
+        // 先问队长（HUNT_BIG_REQ），队长扣一个再答复（HUNT_BIG_ACK）。3 秒没回音就当没有了，改出金色一档。
+        // 造图时按种子定好的那些大金大家本来就一样，剩余数各端起点也一样。
+        let huntBigPend = {};
+        function huntBigLeader() { let m = (gState.team || []).find(function (x) { return x && x.isLeader && !x.isAI; }); return m ? m.id : gState.id; }
+        function huntBigSolo() { return !huntHasHumanMates() || huntBigLeader() === gState.id; }
+        function huntTakeBigAsync(pool, pick, cb) {
+            if (huntBigSolo()) { cb(huntTakeBig(pool, pick)); return; }
+            let rid = Math.random().toString(36).slice(2), to = setTimeout(function () { if (huntBigPend[rid]) { delete huntBigPend[rid]; cb(pick(itemPool.gold)); } }, 3000);
+            huntBigPend[rid] = function (ok, left) { clearTimeout(to); if (typeof left === 'number') huntBigLeft = left; cb(ok ? pick(pool) : pick(itemPool.gold)); };
+            bc.postMessage({ type: 'HUNT_BIG_REQ', target: huntBigLeader(), sender: gState.id, rid: rid });
+        }
+        function huntBigOnReq(m) {
+            if (m.target !== gState.id || !isPlaying || huntBigLeader() !== gState.id || typeof m.rid !== 'string') return;
+            // 只认自己队里的真人（发送者以连接为准，房主转发时已经改写成真实的）
+            if (!(gState.team || []).some(function (x) { return x && !x.isAI && x.id === m.sender && x.id !== gState.id; })) return;
+            let ok = huntBigLeft > 0; if (ok) huntBigLeft--;
+            bc.postMessage({ type: 'HUNT_BIG_ACK', target: m.sender, sender: gState.id, rid: m.rid, ok: ok, left: huntBigLeft });
+        }
+        function huntBigOnAck(m) {
+            if (m.target !== gState.id || m.sender !== huntBigLeader() || typeof m.rid !== 'string') return;
+            let f = huntBigPend[m.rid]; if (!f) return;
+            delete huntBigPend[m.rid]; f(!!m.ok, typeof m.left === 'number' ? m.left : undefined);
+        }
         function huntRollChest(boxType, rnd) {
             rnd = rnd || Math.random;
             let pick = function (a) { return a[Math.floor(rnd() * a.length)]; };
@@ -1062,6 +1087,10 @@
                     let p = entities.find(e => e.userData.type === 'ai' && e.userData.name === msg.sender);
                     if (p) { p.position.x = msg.x; p.position.y = msg.y; p.position.z = msg.z; p.userData.isRealPlayer = true; p.userData.lastSync = performance.now(); if (p.userData.aiTakeover) { p.userData.aiTakeover = false; gState.peerState[msg.sender] = 'active'; } }
                 }
+            } else if (msg.type === 'HUNT_BIG_REQ') {
+                huntBigOnReq(msg);
+            } else if (msg.type === 'HUNT_BIG_ACK') {
+                huntBigOnAck(msg);
             } else if (msg.type === 'CHEST_OPENED') {
                 let chest = chests.find(c => Math.floor(c.position.x / TILE) === msg.cx && Math.floor(c.position.z / TILE) === msg.cz && Math.floor(c.position.y / TILE) === msg.cf);
                 if (chest && !chest.userData.opened) { chest.userData.opened = true; chest.material.color.setHex(0x1a1a1a); }

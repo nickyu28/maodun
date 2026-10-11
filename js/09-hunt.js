@@ -885,8 +885,12 @@
             if (!isPurple && !isGold) { showSysModal('提示', '只能投入紫色或金色物品进行抽奖！', [{ label: '确定' }]); return; }
 
             gState.inv[slot] = null; updateHUD();
-            let reward = huntLotteryReward(huntLotteryPick(isGold ? 'gold' : 'purple', Math.random()));
-
+            let res = huntLotteryPick(isGold ? 'gold' : 'purple', Math.random());
+            // 大金要先问队长（H16b）；别的结果马上有
+            if (res === 'big') huntTakeBigAsync(huntBigPool('safe'), function (a) { return a[Math.floor(Math.random() * a.length)]; }, huntLotteryShow);
+            else huntLotteryShow(huntLotteryReward(res));
+        }
+        function huntLotteryShow(reward) {
             if (reward) {
                 let tObj = createProceduralTexture(reward.tex || 'generic', reward.c || 0x3498db, '#ffffff');
                 let itemMesh = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: tObj }));
