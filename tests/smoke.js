@@ -553,6 +553,32 @@ async function enterExit(tab, key) {
             report('A7 游戏里没有反馈入口；代码里搜不到 web3forms、access_key、邮箱；联机诊断四项', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('I1b')) {
+            // I1b：惊魂夜规则卡开着时 endNightGame，回大厅后 introOpen 是 false，单人密室能正常走（全程真点击，不用 HIDE）
+            const bad = [];
+            const N = await openTab(chrome, url, { noLobby: true });
+            await N.eval(`document.getElementById('player-id').value = 'i1b' + Date.now() % 100000; requestLobbyAccess(); true;`); await W(1500);
+            for (let i = 0; i < 6 && (await N.eval(MODAL)) !== null; i++) await clickModal(N);
+            await N.eval(`selectGameMode('night'); NIGHT_MATCH_WAIT = 0; enterNightMatch('survivor'); nightPickChar('cat'); true;`); await W(2500);
+            const t0 = await N.eval(MODAL), open0 = await N.eval('introOpen');
+            if (!/规则/.test(t0 || '') || !open0) bad.push('惊魂夜没弹出规则卡 ' + t0 + '/' + open0);
+            await N.eval(`endNightGame('测试退出'); true;`); await W(1200);
+            // 回大厅：把还排着的弹窗一张张点掉
+            for (let i = 0; i < 10 && (await N.eval(MODAL)) !== null; i++) await clickModal(N);
+            await W(800);
+            const st = JSON.parse(await N.eval(`JSON.stringify({ open: introOpen, q: introQ.length, wait: sysModalWait.length, lobby: !!hub && ${ACTIVE} === null, modal: ${MODAL} })`));
+            if (st.open || st.q || st.wait || !st.lobby || st.modal !== null) bad.push('回大厅后还卡着 ' + JSON.stringify(st));
+            await N.eval(`selectGameMode('escape'); escapeBegin(null, null, 1); true;`); await W(1200);
+            let started = false;
+            for (let i = 0; i < 40 && !started; i++) { if ((await N.eval(MODAL)) !== null) await clickModal(N); else await W(400); started = await N.eval('escapeRoom && escapeRoom.started'); }
+            const c1 = await N.eval('escapeRoom.clock'); await W(1500); const c2 = await N.eval('escapeRoom.clock');
+            if (!started || !(c2 > c1)) bad.push('密室没走起来 ' + JSON.stringify({ started, c1, c2 }));
+            await N.eval(`escapeExit(); true;`);
+            if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
+            await N.close();
+            report('I1b 惊魂夜规则卡开着时 endNightGame：回大厅后 introOpen 为 false，单人密室能走', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 
