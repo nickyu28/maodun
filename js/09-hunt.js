@@ -1285,14 +1285,28 @@
             } else if (type === 'curser') {
                 // 诅咒之灵：圆滚滚的深紫小幽灵，大黑眼睛带高光、小“o”嘴、腮红，拖一条越来越细的飘带
                 let ghost = lam(0x2f1a58, { transparent: true, opacity: 0.9, emissive: 0x120826, depthWrite: false });
-                let prof = [[0.01, 5.2], [1.8, 5.0], [3.2, 4.0], [3.9, 2.4], [4.0, 0.6], [3.6, -1.3], [2.8, -2.9], [1.6, -3.9], [0.01, -4.2]].map(function (q) { return new THREE.Vector2(q[0], q[1]); });
-                add(new THREE.LatheGeometry(prof, 24), ghost, 0, 0, 0);
+                let profPts = [[0.01, 5.2], [1.8, 5.0], [3.2, 4.0], [3.9, 2.4], [4.0, 0.6], [3.6, -1.3], [2.8, -2.9], [1.6, -3.9], [0.01, -4.2]];
+                add(new THREE.LatheGeometry(profPts.map(function (q) { return new THREE.Vector2(q[0], q[1]); }), 24), ghost, 0, 0, 0);
+                // 脸上的东西贴着脑袋的弧度：按身体在这个高度的半径算出表面位置，往里收 inset，并跟着表面朝向转（侧面看不会伸出轮廓）
+                let rAt = function (y) {
+                    for (let i = 0; i < profPts.length - 1; i++) {
+                        let a = profPts[i], b = profPts[i + 1];
+                        if (y <= a[1] && y >= b[1]) return a[0] + (b[0] - a[0]) * (a[1] - y) / (a[1] - b[1]);
+                    }
+                    return 0.01;
+                };
+                let hug = function (o, x, y, inset) {
+                    let R = rAt(y), slope = (rAt(y + 0.2) - rAt(y - 0.2)) / 0.4, z = Math.sqrt(Math.max(0.01, R * R - x * x));
+                    o.rotation.order = 'YXZ'; o.position.set(x, y, z - inset);
+                    o.rotation.y = Math.atan2(x, z); o.rotation.x = Math.atan(slope);
+                    g.add(o); return o;
+                };
                 [-1, 1].forEach(function (s) {
                     add(new THREE.SphereGeometry(0.95, 10, 8), ghost, s * 4.0, -0.8, 0.3);   // 小圆手
-                    cuteEye(s * 1.55, 1.7, 3.55, 1.0);
-                    let cheek = add(new THREE.CircleGeometry(0.75, 14), bas(0xff8fb1, { transparent: true, opacity: 0.7, depthWrite: false }), s * 2.6, 0.2, 3.35); cheek.rotation.y = s * 0.6;   // 腮红
+                    hug(cuteEye(0, 0, 0, 1.0, new THREE.Group()), s * 1.45, 1.7, 0.52);
+                    hug(new THREE.Mesh(new THREE.CircleGeometry(0.75, 14), bas(0xff8fb1, { transparent: true, opacity: 0.7, depthWrite: false })), s * 2.3, 0.2, 0.02);   // 腮红
                 });
-                add(new THREE.TorusGeometry(0.34, 0.14, 8, 14), bas(0x21122f), 0, 0.2, 3.95);   // 小“o”嘴
+                hug(new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.14, 8, 14), bas(0x21122f)), 0, 0.2, 0.12);   // 小“o”嘴
                 // 飘带：一条平的带子，越到末端越细，每帧摆一摆
                 let N = 14, pos = new Float32Array((N + 1) * 2 * 3), idx = [];
                 for (let i = 0; i < N; i++) { let a0 = i * 2; idx.push(a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2); }
