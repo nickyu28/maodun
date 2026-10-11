@@ -909,8 +909,8 @@
                 let tObj = createProceduralTexture(reward.tex || 'generic', reward.c || 0x3498db, '#ffffff');
                 let itemMesh = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: tObj }));
                 let launchDir = new THREE.Vector3(); camera.getWorldDirection(launchDir); itemMesh.position.copy(camera.position).add(launchDir.clone().multiplyScalar(4)); itemMesh.userData = { ...reward, isItem: true, vel: launchDir.multiplyScalar(60), gravityActive: true }; scene.add(itemMesh); groundItems.push(itemMesh);
-                showSysModal("抽奖结果", `不可思议！抽到了: ${reward.n}! 物品已弹出。`, [{ label: "太棒了" }]);
-            } else { showSysModal('抽奖失败', '很遗憾，抽奖反应失败，物品被销毁了...', [{ label: '确定' }]); }
+                showSysModal("抽奖结果", `抽到了：${reward.n}`, [{ label: "好" }]);
+            } else { showSysModal('抽奖结果', '没抽中，东西没了', [{ label: '好' }]); }
             saveProgress();
         }
 

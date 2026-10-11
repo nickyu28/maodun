@@ -1708,11 +1708,28 @@ async function enterExit(tab, key) {
             if (r.garage.join() !== 'purple,gold,gold,red,gold,blue,purple,blue') bad.push('仓库格子颜色 ' + r.garage.join());
             if (r.inv.join() !== 'gold,blue,red,purple,,purple') bad.push('背包格子颜色 ' + r.inv.join());
             if (r.bg !== 'rgb(255, 210, 210)') bad.push('红色底 ' + r.bg);
-            const shopOrder = JSON.parse(await T.eval(`JSON.stringify(['地窖徽章', '肾上腺素', '返魂药水'].map(function (n) { return [n, shopItems[n].v]; }).sort(function (a, b) { return b[1] - a[1]; }).map(function (x) { return x[0]; }))`));
+            const shopOrder = ['地窖徽章', '肾上腺素', '返魂药水'];   // 商店标价：900000 > 20000 > 10000
             const wantGarage = shopOrder.concat(['红下限', '金上限', '金下限', '紫1', '紫2']);
             if (r.sortedGarage.join() !== wantGarage.join()) bad.push('仓库整理后 ' + r.sortedGarage.join() + '（应该 ' + wantGarage.join() + '）');
             if (r.sortedInv.join() !== '腰包,鱼叉,医疗包,红宝,小金') bad.push('背包整理后 ' + r.sortedInv.join());
             if (!r.hole) bad.push('整理后有空位夹在中间');
+            // 六种道具全放进去：整理后第一个是地窖徽章，然后 腰包 > 鱼叉 > 肾上腺素 > 医疗包 = 返魂药水（同价保持原来的先后，这里放进去时返魂药水在前）；标价跟商店页面上写的一样
+            const t6 = JSON.parse(await T.eval(`(function(){ let sh = function (n) { return Object.assign({}, shopItems[n], { isShop: true }); };
+                gState.inv = [sh('返魂药水'), sh('医疗包'), sh('肾上腺素'), sh('鱼叉'), sh('腰包'), sh('地窖徽章')]; sortInv();
+                let a = gState.inv.filter(Boolean).map(function (x) { return x.n; });
+                gState.inv = [sh('医疗包'), sh('返魂药水'), null, null, null, null]; sortInv(); let b = gState.inv.filter(Boolean).map(function (x) { return x.n; });
+                let html = Array.prototype.map.call(document.querySelectorAll('.shop-item'), function (e) { let m = e.innerText.match(/^(\\S+) \\(\\$([\\d,]+)\\)/); return m ? [m[1], +m[2].replace(/,/g, '')] : null; }).filter(Boolean);
+                return JSON.stringify({ a: a, b: b, html: html.filter(function (x) { return SHOP_PRICE[x[0]] !== undefined; }).every(function (x) { return SHOP_PRICE[x[0]] === x[1]; }), n: html.length }); })()`));
+            if (t6.a.join() !== '地窖徽章,腰包,鱼叉,肾上腺素,返魂药水,医疗包') bad.push('六种道具整理后 ' + t6.a.join());
+            if (t6.b.join() !== '医疗包,返魂药水') bad.push('同价应保持原来的先后 ' + t6.b.join());
+            if (!t6.html || t6.n < 5) bad.push('商店页面价格跟 SHOP_PRICE 对不上 ' + JSON.stringify([t6.html, t6.n]));
+            // H16 抽奖机文案：短、口语
+            const lot = JSON.parse(await T.eval(`(function(){ let o = {}; huntLotteryShow({ n: '银杯', v: 5000, w: 1, tex: 'misc', c: 0xffffff });
+                o.win = [document.getElementById('sys-modal-text').innerText, document.getElementById('sys-modal-btns').innerText];
+                document.getElementById('sys-modal').classList.add('hidden'); huntLotteryShow(null);
+                o.lose = [document.getElementById('sys-modal-text').innerText, document.getElementById('sys-modal-btns').innerText]; return JSON.stringify(o); })()`));
+            if (lot.win[0] !== '抽到了：银杯' || lot.win[1] !== '好') bad.push('抽中文案 ' + JSON.stringify(lot.win));
+            if (lot.lose[0] !== '没抽中，东西没了' || lot.lose[1] !== '好') bad.push('没抽中文案 ' + JSON.stringify(lot.lose));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('H26 格子底色（红/金/紫/蓝，徽章金，鱼叉腰包紫）；一键整理真排序：道具在前按商店价格、宝物在后按价值，从大到小', bad.length === 0, bad.join(' / '));

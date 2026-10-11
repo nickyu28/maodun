@@ -1475,7 +1475,14 @@
 
         // H26：「一键整理」是真排序——道具（商店买的）在前、按商店价格从大到小；宝物在后、按价值从大到小。
         // （tidyInv / tidyGarage 只是把空位挤掉，每次画仓库都会调，不能排序，不然手动摆的位置会被打乱）
-        function huntSortKey(it) { return it.isShop ? [0, (shopItems[it.n] ? shopItems[it.n].v : it.v) || 0] : [1, it.v || 0]; }
+        // 道具按商店标价排（地窖徽章 v=0，不能按 v 排）：地窖徽章 > 腰包 > 鱼叉 > 肾上腺素 > 医疗包 = 返魂药水
+        const SHOP_PRICE = { '医疗包': 10000, '鱼叉': 25000, '腰包': 40000, '返魂药水': 10000, '肾上腺素': 20000 };
+        function shopPriceOf(it) {
+            if (SHOP_PRICE[it.n] !== undefined) return SHOP_PRICE[it.n];
+            if (shopItems[it.n] && shopItems[it.n].price) return shopItems[it.n].price;
+            return (shopItems[it.n] ? shopItems[it.n].v : it.v) || 0;
+        }
+        function huntSortKey(it) { return it.isShop ? [0, shopPriceOf(it)] : [1, it.v || 0]; }
         function huntSortItems(items) {
             return items.map(function (it, i) { return { it: it, i: i, k: huntSortKey(it) }; })
                 .sort(function (a, b) { return a.k[0] - b.k[0] || b.k[1] - a.k[1] || a.i - b.i; }).map(function (x) { return x.it; });
