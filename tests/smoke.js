@@ -1277,6 +1277,42 @@ async function enterExit(tab, key) {
             report('H25 蓝线绿线走在路正中间；绿线换楼层不清掉、跨楼层接着导航；站在楼梯/桌子上也画得出来', bad.length === 0, bad.join(' / ') + ' ' + JSON.stringify(r));
         }
 
+                if (want('H26')) {
+            // H26：格子底色（宝物 ≥200 万红 / 3 万～200 万金 / <3 万紫；道具蓝，地窖徽章金，鱼叉、腰包紫）；一键整理真排序（道具在前按商店价格、宝物在后按价值，从大到小）
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){
+                ${HIDE} selectGameMode('hunt'); requestStartGame();
+                let sh = function (n) { return Object.assign({}, shopItems[n], { isShop: true }); }, tr = function (n, v) { return { n: n, v: v, w: 1, tex: 'misc', c: 0xffffff }; };
+                gState.inv = [tr('小金', 100000), sh('医疗包'), tr('红宝', 2000000), sh('腰包'), null, sh('鱼叉')];
+                gState.garage = Array(200).fill(null);
+                let g = [tr('紫1', 29999), tr('金下限', 30000), tr('金上限', 1999999), tr('红下限', 2000000), sh('地窖徽章'), sh('返魂药水'), tr('紫2', 100), sh('肾上腺素')];
+                g.forEach(function (q, i) { gState.garage[i * 2 + 1] = q; });   // 中间留空位，也不应该被排序（只是挤掉空位）
+                gState.selectedContainer = 'inv'; gState.selectedSlot = -1; initGarage();
+                let cls = function (sel) { return Array.prototype.map.call(document.querySelectorAll(sel), function (e) { return (e.className.match(/t-(\\w+)/) || [, ''])[1]; }); };
+                let o = { garage: cls('#garage-stash-container .slot').slice(0, 8), names: gState.garage.slice(0, 8).map(function (x) { return x ? x.n : null; }) };
+                o.inv = cls('#garage-active-inv .slot');
+                o.bg = getComputedStyle(document.querySelector('#garage-stash-container .slot.t-red')).backgroundColor;
+                // 一键整理
+                tidyAll();
+                o.sortedGarage = gState.garage.filter(Boolean).map(function (x) { return x.n; });
+                o.sortedInv = gState.inv.filter(Boolean).map(function (x) { return x.n; });
+                o.hole = gState.inv.slice(0, o.sortedInv.length).every(Boolean) && gState.garage.slice(0, o.sortedGarage.length).every(Boolean);
+                return JSON.stringify(o); })()`));
+            if (r.names.join() !== '紫1,金下限,金上限,红下限,地窖徽章,返魂药水,紫2,肾上腺素') bad.push('画仓库时被排序了 ' + r.names.join());
+            if (r.garage.join() !== 'purple,gold,gold,red,gold,blue,purple,blue') bad.push('仓库格子颜色 ' + r.garage.join());
+            if (r.inv.join() !== 'gold,blue,red,purple,,purple') bad.push('背包格子颜色 ' + r.inv.join());
+            if (r.bg !== 'rgb(255, 210, 210)') bad.push('红色底 ' + r.bg);
+            const shopOrder = JSON.parse(await T.eval(`JSON.stringify(['地窖徽章', '肾上腺素', '返魂药水'].map(function (n) { return [n, shopItems[n].v]; }).sort(function (a, b) { return b[1] - a[1]; }).map(function (x) { return x[0]; }))`));
+            const wantGarage = shopOrder.concat(['红下限', '金上限', '金下限', '紫1', '紫2']);
+            if (r.sortedGarage.join() !== wantGarage.join()) bad.push('仓库整理后 ' + r.sortedGarage.join() + '（应该 ' + wantGarage.join() + '）');
+            if (r.sortedInv.join() !== '腰包,鱼叉,医疗包,红宝,小金') bad.push('背包整理后 ' + r.sortedInv.join());
+            if (!r.hole) bad.push('整理后有空位夹在中间');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H26 格子底色（红/金/紫/蓝，徽章金，鱼叉腰包紫）；一键整理真排序：道具在前按商店价格、宝物在后按价值，从大到小', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 

@@ -1449,7 +1449,31 @@
             for (let i = 0; i < gState.garage.length; i++) gState.garage[i] = items[i] || null;
         }
 
-        function tidyAll() { tidyInv(); tidyGarage(); if (!isPlaying) initGarage(); else updateHUD(); saveProgress(); }
+        // H26：「一键整理」是真排序——道具（商店买的）在前、按商店价格从大到小；宝物在后、按价值从大到小。
+        // （tidyInv / tidyGarage 只是把空位挤掉，每次画仓库都会调，不能排序，不然手动摆的位置会被打乱）
+        function huntSortKey(it) { return it.isShop ? [0, (shopItems[it.n] ? shopItems[it.n].v : it.v) || 0] : [1, it.v || 0]; }
+        function huntSortItems(items) {
+            return items.map(function (it, i) { return { it: it, i: i, k: huntSortKey(it) }; })
+                .sort(function (a, b) { return a.k[0] - b.k[0] || b.k[1] - a.k[1] || a.i - b.i; }).map(function (x) { return x.it; });
+        }
+        function sortInv() {
+            expandInventory();
+            let items = huntSortItems(gState.inv.filter(function (i) { return i; }));
+            for (let i = 0; i < INV_BASE; i++) gState.inv[i] = items[i] || null;
+        }
+        function sortGarage() {
+            let items = huntSortItems(gState.garage.filter(function (i) { return i; }));
+            for (let i = 0; i < gState.garage.length; i++) gState.garage[i] = items[i] || null;
+        }
+        // H26：格子底色。宝物 ≥200 万红、3 万～200 万金、<3 万紫；商店道具蓝，地窖徽章金，鱼叉、腰包紫
+        function slotTier(it) {
+            if (!it) return '';
+            if (it.isShop) return it.type === 'badge' ? 'gold' : (it.n === '鱼叉' || it.type === 'backpack_ext') ? 'purple' : 'blue';
+            let v = it.v || 0;
+            return v >= 2000000 ? 'red' : v >= 30000 ? 'gold' : 'purple';
+        }
+        function slotTierClass(it) { let t = slotTier(it); return t ? ' t-' + t : ''; }
+        function tidyAll() { sortInv(); sortGarage(); if (!isPlaying) initGarage(); else updateHUD(); saveProgress(); }
 
         let isDragging = false; let dragSourceObj = null; let dragGhost = null;
         // 按下以后移动不到 6 像素就松手，算点一下（选中这格），不算拖（H3）。
@@ -1489,7 +1513,7 @@
         function slotBeginDrag(e) {
             let p = slotPress; slotPress = null;
             isDragging = true; dragSourceObj = { container: p.container, idx: p.idx };
-            dragGhost = document.createElement('div'); dragGhost.className = 'slot'; dragGhost.style.position = 'fixed'; dragGhost.style.pointerEvents = 'none'; dragGhost.style.zIndex = '1000'; dragGhost.style.opacity = '0.8';
+            dragGhost = document.createElement('div'); dragGhost.className = p.el.className.replace(/\bselected\b/, '').trim(); dragGhost.style.position = 'fixed'; dragGhost.style.pointerEvents = 'none'; dragGhost.style.zIndex = '1000'; dragGhost.style.opacity = '0.8';
             dragGhost.innerHTML = p.el.innerHTML; document.body.appendChild(dragGhost);
             p.el.style.opacity = '0.3';
         }
@@ -1607,7 +1631,7 @@
             row.style.cssText = 'display:flex; gap:6px; justify-content:center; align-items:center; margin:6px auto; padding:6px; border:1px dashed #e65100; border-radius:6px; max-width:320px;';
             let t = document.createElement('div'); t.style.cssText = 'font-size:12px; color:#e65100;'; t.innerText = '腰包'; row.appendChild(t);
             bag.forEach(function (q, k) {
-                let div = document.createElement('div'); div.className = 'slot';
+                let div = document.createElement('div'); div.className = 'slot' + slotTierClass(q);
                 div.innerHTML = slotLabelHtml(q);
                 setupSlotDrag(div, 'bag', k); div.onclick = function () { rerender(); };
                 row.appendChild(div);
@@ -1626,14 +1650,14 @@
             tidyGarage();
             if (openPouch && gState.inv.indexOf(openPouch) < 0 && gState.garage.indexOf(openPouch) < 0) openPouch = null;
             for (let i = 0; i < gState.maxInv; i++) {
-                let div = document.createElement('div'); div.className = 'slot' + (gState.selectedContainer === 'inv' && gState.selectedSlot === i ? ' selected' : '');
+                let div = document.createElement('div'); div.className = 'slot' + slotTierClass(gState.inv[i]) + (gState.selectedContainer === 'inv' && gState.selectedSlot === i ? ' selected' : '');
                 div.innerHTML = slotLabelHtml(gState.inv[i]);
                 setupSlotDrag(div, 'inv', i); div.onclick = function () { gState.selectedContainer = 'inv'; gState.selectedSlot = i; pouchToggleFor(gState.inv[i]); initGarage(); }; actDiv.appendChild(div);
             }
             garageRenderPouchRow(actDiv);
 
             for (let i = 0; i < 200; i++) {
-                let div = document.createElement('div'); div.className = 'slot' + (gState.selectedContainer === 'garage' && gState.selectedSlot === i ? ' selected' : '');
+                let div = document.createElement('div'); div.className = 'slot' + slotTierClass(gState.garage[i]) + (gState.selectedContainer === 'garage' && gState.selectedSlot === i ? ' selected' : '');
                 div.innerHTML = slotLabelHtml(gState.garage[i]);
                 setupSlotDrag(div, 'garage', i); div.onclick = function () { gState.selectedContainer = 'garage'; gState.selectedSlot = i; pouchToggleFor(gState.garage[i]); initGarage(); }; sthDiv.appendChild(div);
             }

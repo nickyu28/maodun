@@ -286,7 +286,7 @@
 
             for (let i = 0; i < 3; i++) {
                 let hudSlot = document.getElementById('hud-slot-' + i);
-                hudSlot.className = 'slot' + (gState.selectedSlot === i ? ' selected' : '');
+                hudSlot.className = 'slot' + slotTierClass(gState.inv[i]) + (gState.selectedSlot === i ? ' selected' : '');
                 hudSlot.onclick = function () { selectSlot(i); };
                 // 左上角标上 1/2/3，键盘玩的一看就知道按哪个（数字键不再被快捷语抢走了）
                 let keyTag = '<span style="position:absolute; top:1px; left:4px; font-size:10px; color:#999;">' + (i + 1) + '</span>';
@@ -299,7 +299,7 @@
 
             for (let i = 0; i < gState.maxInv; i++) {
                 let slotEl = document.createElement('div');
-                slotEl.className = 'slot' + (gState.selectedSlot === i ? ' selected' : '');
+                slotEl.className = 'slot' + slotTierClass(gState.inv[i]) + (gState.selectedSlot === i ? ' selected' : '');
                 slotEl.innerHTML = slotLabelHtml(gState.inv[i]);
                 setupSlotDrag(slotEl, 'inv', i);
                 slotEl.onclick = function () { pouchToggleFor(gState.inv[i]); if (i <= 2) selectSlot(i); else updateHUD(); };

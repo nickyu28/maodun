@@ -407,6 +407,13 @@
                 border-width: 2px;
             }
 
+        /* H26：格子底色。红 = 宝物 ≥200 万，金 = 3 万～200 万，紫 = <3 万；蓝 = 商店道具，地窖徽章金，鱼叉、腰包紫 */
+        .slot.t-red { background: #ffd2d2; border-color: #e53935; }
+        .slot.t-gold { background: #fff0b8; border-color: #f9a825; }
+        .slot.t-purple { background: #ead6f5; border-color: #8e24aa; }
+        .slot.t-blue { background: #d3e8fc; border-color: #1e88e5; }
+        .slot.selected.t-red, .slot.selected.t-gold, .slot.selected.t-purple, .slot.selected.t-blue { border-color: #1565c0; border-width: 3px; }
+
         .joystick-zone {
             position: absolute;
             width: 140px;
