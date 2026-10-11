@@ -1500,7 +1500,78 @@ async function enterExit(tab, key) {
             report('S1 声音：4 个音量滑条存 TH_settings 并真的管用；M 键所有模式一键静音（再按恢复，打字不算）；寻宝队大地图改 Tab；提示跟着改', bad.length === 0, bad.join(' / '));
         }
 
-        //@@NEW@@
+                        if (want('G2')) {
+            // G2：5 种怪各有认得出的外形（一个函数造模型，游戏和图鉴共用），碰撞/判定不变；图鉴加“怪物”页：没见过是剪影和 ？？？，第一次出现在视野里解锁，打死数记在存档
+            const bad = [];
+            const N = await openTab(chrome, url, { name: 'g2' + Math.floor(Math.random() * 100000) });
+            await N.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await N.eval(`${HIDE} true;`);
+            const r = JSON.parse(await N.eval(`(function(){
+                let o = {};
+                // 碰撞体：跟原来一样的球/圆柱，看不见，射线能打中
+                o.geo = HUNT_MOB_ORDER.map(function (k) { let m = huntMobMesh(k); let g = m.geometry.parameters; return [k, m.geometry.type, g.radius || g.radiusTop, g.height || 0, m.material.visible, !!m.userData.model && m.children.length === 1]; });
+                // 模型：每种怪长相不一样（子物体数、关键部件）
+                o.parts = HUNT_MOB_ORDER.map(function (k) { let g = huntMobModel(k, { variant: 0 }), n = 0; g.traverse(function () { n++; }); return [k, n, !!(g.userData.eye || g.userData.eyes || g.userData.wings || g.userData.blob || g.userData.tail)]; });
+                // 通过原来的刷怪函数刷出来：数值不变
+                camera.position.set(TILE * 3, 9, TILE * 3); camera.rotation.set(0, 0, 0);
+                let before = entities.length; let fx = 3, fz = 3 - 2;
+                spawnMonstersWithData([1, 2, 3, 4, 5].map(function (t) { return { type: t, fx: fx + (t - 3) * 0.2, fz: fz, fl: 0, wave: 1 }; }));
+                let mobs = entities.slice(before);
+                o.stats = mobs.map(function (e) { let u = e.userData; return [u.type, u.name, u.hp, u.speed, u.dmg, !!u.model, e.parent === scene]; });
+                // 射线打得中本体（互动/攻击靠它）
+                let hit = 0; mobs.forEach(function (e) { e.position.set(camera.position.x, 9, camera.position.z - 12); e.updateMatrixWorld(true); let rc = new THREE.Raycaster(camera.position, new THREE.Vector3(0, 0, -1), 0, 30); if (rc.intersectObjects([e], false)[0]) hit++; });
+                o.hit = hit;
+                // 分裂者越分越小：模型跟着碰撞半径缩
+                let s1 = huntMobMesh('splitter', { radius: 4.5 * 0.7 }), s2 = huntMobMesh('splitter', { radius: 4.5 * 0.49 });
+                o.split = [+s1.geometry.parameters.radius.toFixed(2), +s1.userData.model.scale.x.toFixed(2), +s2.geometry.parameters.radius.toFixed(2), +s2.userData.model.scale.x.toFixed(2)];
+                o.levels = HUNT_MOB_ORDER.map(function (k) { let M = HUNT_MOBS[k]; return k + ':' + huntMobLevel('hp', M.hp) + huntMobLevel('speed', M.speed) + huntMobLevel('dmg', M.dmg); }).join(' ');
+                mobs.forEach(function (e) { scene.remove(e); entities.splice(entities.indexOf(e), 1); });
+                return JSON.stringify(o); })()`));
+            const want = { angel: ['SphereGeometry', 4.5, 0], puppet: ['CylinderGeometry', 2, 10], high: ['SphereGeometry', 4.5, 0], splitter: ['SphereGeometry', 4.5, 0], curser: ['SphereGeometry', 5, 0] };
+            r.geo.forEach((g) => { const w = want[g[0]]; if (g[1] !== w[0] || g[2] !== w[1] || (g[3] || 0) !== w[2] || g[4] !== false || !g[5]) bad.push('碰撞体 ' + JSON.stringify(g)); });
+            if (new Set(r.parts.map((p) => p[1])).size < 4 || r.parts.some((p) => !p[2] || p[1] < 6)) bad.push('模型太简单或没有关键部件 ' + JSON.stringify(r.parts));
+            const wantStats = JSON.stringify([['angel', '凝视者', 10, 63, 40, true, true], ['puppet', '伪装者', 15, 30, 40, true, true], ['high', '高空者', 10, 25, 20, true, true], ['splitter', '分裂者', 10, 20, 40, true, true], ['curser', '诅咒之灵', 80, 20, 0, true, true]]);
+            if (JSON.stringify(r.stats) !== wantStats) bad.push('刷出来的怪 ' + JSON.stringify(r.stats));
+            if (r.hit !== 5) bad.push('射线只打中 ' + r.hit + ' 个');
+            if (r.split.join() !== '3.15,0.7,2.21,0.49') bad.push('分裂缩放 ' + r.split.join());
+            if (r.levels !== 'angel:低高高 puppet:中中高 high:低中中 splitter:低低高 curser:高低低') bad.push('高中低 ' + r.levels);
+            // 第一次出现在视野里就解锁：背对看不见，转过来看见
+            await N.eval(`(function(){ gState.huntMobSeen = {}; gState.huntMobKills = {}; gState.introSeen = Object.assign(gState.introSeen || {}, { 'hunt.mob.angel': 1 }); camera.position.set(TILE * 4, 9, TILE * 4); camera.rotation.set(0, 0, 0); pVel.set(0, 0, 0);
+                let e = huntMobMesh('angel'); e.userData = { type: 'angel', name: '凝视者', hp: 10, maxHp: 10, speed: 0, dmg: 0, atkCd: 0, split: 0, model: e.userData.model }; e.position.set(camera.position.x, 9, camera.position.z + 40); scene.add(e); entities.push(e); window.__ang = e; return true; })()`);
+            await W(1200);
+            const behind = await N.eval('!!gState.huntMobSeen.angel');
+            await N.eval(`camera.rotation.set(0, Math.PI, 0); true;`); await W(1200);
+            const seen = await N.eval('!!gState.huntMobSeen.angel');
+            if (behind || !seen) bad.push('解锁：背对 ' + behind + '，面对 ' + seen + ' ' + await N.eval(`JSON.stringify({ f: viewFrustum.containsPoint(window.__ang.position), d: window.__ang.position.distanceTo(camera.position), dy: window.__ang.position.y - camera.position.y, rot: camera.rotation.y, inList: entities.indexOf(window.__ang), play: isPlaying, model: !!window.__ang.userData.model })`));
+            const saved = await N.eval(`JSON.parse(localStorage.getItem('TH_save_' + gState.id)).huntMobSeen.angel`);
+            if (saved !== 1) bad.push('没存档');
+            // 打死数
+            await N.eval(`huntMobKill(window.__ang); huntMobKill(window.__ang); scene.remove(window.__ang); entities.splice(entities.indexOf(window.__ang), 1); true;`);
+            // 图鉴“怪物”页
+            await N.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1500); await N.eval(`${HIDE} true;`);
+            await N.eval(`bookOpen(); bookTabSet('mob'); true;`); await W(800);
+            const d = JSON.parse(await N.eval(`JSON.stringify({ cards: document.querySelectorAll('#book-body .mobcard').length, unknown: (document.getElementById('book-body').innerText.match(/？？？/g) || []).length,
+                text: document.getElementById('book-body').innerText, tabs: [document.getElementById('book-tab-recipe').innerText, document.getElementById('book-tab-mob').innerText] })`));
+            if (d.cards !== 5 || d.unknown !== 4 || d.tabs.join() !== '配方,怪物') bad.push('图鉴页 ' + JSON.stringify([d.cards, d.unknown, d.tabs]));
+            ['凝视者', '你看着它，它就不动；一转身它就冲过来。', '血量 低', '速度 高', '伤害 高', '怎么对付', '打死过 2 只', '已发现 1 / 5'].forEach((t) => { if (d.text.indexOf(t) < 0) bad.push('图鉴里没有“' + t + '”'); });
+            // 画布：5 个都画出东西了（没见过的是剪影），并且在转
+            const px = () => N.eval(`JSON.stringify(Array.prototype.map.call(document.querySelectorAll('#book-body canvas[data-mob]'), function (c) { let d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data, n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 40) n++; return n; }))`).then(JSON.parse);
+            const p1 = await px(); await W(500); const p2 = await px();
+            if (p1.some((n) => n < 1500)) bad.push('有的画布是空的 ' + p1.join());
+            if (p1.join() === p2.join()) bad.push('模型没在转');
+            // 配方页还在，切回去正常
+            await N.eval(`bookTabSet('recipe'); true;`); await W(300);
+            if (!/配方要自己试/.test(await N.eval(`document.getElementById('book-body').innerText`))) bad.push('配方页坏了');
+            // 刷新后图鉴状态还在
+            const id = await N.eval('gState.id'); await N.send('Page.reload'); await W(2500);
+            await N.eval(`document.getElementById('player-id').value = ${JSON.stringify(id.replace(/#.*$/, ''))}; requestLobbyAccess(); true;`); await W(2500);
+            const back = JSON.parse(await N.eval(`JSON.stringify([gState.huntMobSeen, gState.huntMobKills])`));
+            if (JSON.stringify(back) !== '[{"angel":1},{"angel":2}]') bad.push('刷新后 ' + JSON.stringify(back));
+            if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
+            await N.close();
+            report('G2 五种怪各有外形（碰撞体不变、射线打得中）；图鉴“怪物”页：剪影/？？？、第一次进视野解锁、数值写高中低、打死数、存档', bad.length === 0, bad.join(' / '));
+        }
+
+                //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 12 个模式

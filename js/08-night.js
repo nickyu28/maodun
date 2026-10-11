@@ -3370,19 +3370,14 @@
 
         function spawnMonstersWithData(spawns) {
             if (HUNT_TEST_NOMOB) return;
+            let byNum = { 1: 'angel', 2: 'puppet', 3: 'high', 4: 'splitter', 5: 'curser' };
             spawns.forEach((p) => {
-                let f, type, name, hp, dmg, speed, split = 0, color;
-                if (p.type === 1) { color = 0x95a5a6; name = "凝视者"; hp = 10; speed = 42 * 1.5; dmg = 40; type = 'angel'; }
-                else if (p.type === 2) { color = 0x3498db; name = "伪装者"; hp = 15; speed = 30; dmg = 40; type = 'puppet'; }
-                else if (p.type === 3) { color = 0x8e44ad; name = "高空者"; hp = 10; speed = 25; dmg = 20; type = 'high'; }
-                else if (p.type === 4) { color = 0x2ecc71; name = "分裂者"; hp = 10; speed = 20; dmg = 40; type = 'splitter'; split = 0; }
-                else if (p.type === 5) { color = 0x2c3e50; name = "诅咒之灵"; hp = 80; speed = 20; dmg = 0; type = 'curser'; }
-
-                if (type === 'puppet') { f = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 10), new THREE.MeshLambertMaterial({ color: color })); f.position.set(p.fx * TILE, p.fl * TILE + 5, p.fz * TILE); }
-                else if (type === 'curser') { f = new THREE.Mesh(new THREE.SphereGeometry(5), new THREE.MeshLambertMaterial({ color: color, transparent: true, opacity: 0.7 })); f.position.set(p.fx * TILE, p.fl * TILE + 5, p.fz * TILE); }
-                else { f = new THREE.Mesh(new THREE.SphereGeometry(4.5), new THREE.MeshLambertMaterial({ color: color })); f.position.set(p.fx * TILE, p.fl * TILE + 4.5, p.fz * TILE); }
-
-                f.userData = { type: type, name: name, hp: hp, maxHp: hp, speed: speed, dmg: dmg, atkCd: 0, split: split, attacked: false }; scene.add(f); entities.push(f);
+                let type = byNum[p.type], M = type && HUNT_MOBS[type]; if (!M) return;
+                // G2：本体还是原来的碰撞球/圆柱（位置、大小、判定不变），长相是 huntMobModel
+                let f = huntMobMesh(type, { variant: type === 'puppet' ? (p.fx + p.fz + p.fl) % 2 : undefined });
+                f.position.set(p.fx * TILE, p.fl * TILE + (type === 'puppet' || type === 'curser' ? 5 : 4.5), p.fz * TILE);
+                f.userData = { type: type, name: M.name, hp: M.hp, maxHp: M.hp, speed: M.speed, dmg: M.dmg, atkCd: 0, split: 0, attacked: false, model: f.userData.model };
+                scene.add(f); entities.push(f);
             });
         }
 
@@ -4009,6 +4004,7 @@
                 if (alive) { tpPoseSelf(huntSelf, camera.position.y - 9, camera.rotation.y + Math.PI, dt); huntSelfAnim(dt); }
             }
             huntAgentsAnim(dt);
+            huntMobsAnim();
             huntTaskTick();
             let cf = Math.max(0, Math.min(FLOORS - 1, Math.floor(camera.position.y / TILE)));
             tpRender({
@@ -4231,12 +4227,12 @@
                             let currentWeaponDamage = (equippedWep && equippedWep.type === 'wep') ? (equippedWep.dmg || 5) : 5;
                             activeObj.userData.hp -= currentWeaponDamage;
                             if (activeObj.userData.hp <= 0) {
-                                huntTaskEvent('kill');
+                                huntTaskEvent('kill'); huntMobKill(activeObj);
                                 if (activeObj.userData.type === 'splitter' && activeObj.userData.split < 2) {
                                     for (let i = 0; i < 2; i++) {
-                                        let f = new THREE.Mesh(new THREE.SphereGeometry(4.5 * (0.7 ** (activeObj.userData.split + 1))), new THREE.MeshLambertMaterial({ color: 0x2ecc71 }));
+                                        let f = huntMobMesh('splitter', { radius: 4.5 * (0.7 ** (activeObj.userData.split + 1)) });
                                         f.position.copy(activeObj.position); f.position.x += (Math.random() - 0.5) * 5; f.position.z += (Math.random() - 0.5) * 5;
-                                        f.userData = { type: 'splitter', name: "分裂者", hp: 10, maxHp: 10, speed: 20, dmg: 40, atkCd: 0, split: activeObj.userData.split + 1 };
+                                        f.userData = { type: 'splitter', name: "分裂者", hp: 10, maxHp: 10, speed: 20, dmg: 40, atkCd: 0, split: activeObj.userData.split + 1, model: f.userData.model };
                                         scene.add(f); entities.push(f);
                                     }
                                 }
@@ -4364,6 +4360,7 @@
             entities.forEach(function (entity) {
                 if (aiKillTargets.indexOf(entity) >= 0) return;   // 这一帧已经被打死了
                 let meta = entity.userData;
+                if (meta.model) huntMobSeenCheck(entity);
                 if (HUNT_MOB_INTRO[meta.type] && Math.abs(entity.position.y - camera.position.y) < TILE * 0.6 && entity.position.distanceTo(camera.position) < 45)
                     introOnce('hunt.mob.' + meta.type, meta.name || '怪物', HUNT_MOB_INTRO[meta.type]);
                 if (meta.type === 'ai') {
