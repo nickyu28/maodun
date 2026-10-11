@@ -922,6 +922,52 @@ async function enterExit(tab, key) {
             report('D1 退出一局会释放模型/材质/贴图：大厅 ↔ 寻宝队 ×6 几何体、贴图不增长，场景里不堆东西', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('L2')) {
+            // L2 大厅减负：不动的装饰合并（墙、台阶）；远处的路人合成一次绘制、近处的还是完整猫盾；盖住大厅的全屏面板打开时不画 3D；每帧绘制次数 ≤ 50
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await W(1200);
+            const r = JSON.parse(await T.eval(`(function(){ let o = {};
+                renderer.render(scene, camera); o.calls = renderer.info.render.calls; o.objs = (function () { let n = 0; scene.traverse(function () { n++; }); return n; })();
+                o.statics = hub.meshes.length;
+                // 合并正确：两个盒子合成一个，范围等于两个的并集、三角形数相加
+                let a = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 1 })), b = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 1 }));
+                a.position.set(-5, 1, 0); b.position.set(7, 3, 2);
+                let mm = hubMergeMeshes([a, b]), bb = new THREE.Box3().setFromObject(mm);
+                o.merge = [bb.min.x, bb.max.x, bb.min.y, bb.max.y, bb.max.z, mm.geometry.index.count / 3];
+                // 路人分远近
+                let w0 = hub.wanderers[0], w1 = hub.wanderers[1];
+                w0.p.set(hub.p.x + 300, 0, hub.p.z); w1.p.set(hub.p.x + 20, 0, hub.p.z + 10);
+                hub.wanderers.forEach(function (w, i) { if (i > 1) w.p.set(hub.p.x + 500 + i, 0, hub.p.z); });
+                hubLodTick();
+                o.lod = [w0.mesh.visible, w1.mesh.visible, hub.far.count, hub.wanderers.length - 1];
+                // 远处的走近一点（56，还没到 54）不马上换回来，走到 20 才换回来（边界附近不闪）
+                w1.p.set(hub.p.x + 65, 0, hub.p.z); hubLodTick(); let farAt95 = w1.far; w1.p.set(hub.p.x + 56, 0, hub.p.z); hubLodTick(); let at80 = w1.far; w1.p.set(hub.p.x + 20, 0, hub.p.z); hubLodTick();
+                o.hyst = [farAt95, at80, w1.far];
+                return JSON.stringify(o); })()`));
+            console.log('      L2 大厅：每帧绘制 ' + r.calls + ' 次，场景里 ' + r.objs + ' 个物体，不动的装饰 ' + r.statics + ' 个网格');
+            if (r.calls > 50) bad.push('每帧绘制 ' + r.calls + ' 次（目标 ≤ 50）');
+            if (r.statics > 8) bad.push('不动的装饰还有 ' + r.statics + ' 个网格');
+            if (r.merge[0] !== -6 || r.merge[1] !== 8 || r.merge[2] !== 0 || r.merge[3] !== 4 || r.merge[4] !== 3 || r.merge[5] !== 24) bad.push('合并结果不对 ' + JSON.stringify(r.merge));
+            if (r.lod[0] !== false || r.lod[1] !== true || r.lod[2] !== r.lod[3]) bad.push('远近路人 ' + JSON.stringify(r.lod));
+            if (r.hyst.join() !== 'true,true,false') bad.push('边界滞后 ' + r.hyst.join());
+            // 面板盖住时不画：数 renderer.render 的次数
+            const cnt = async (ms) => JSON.parse(await T.eval(`new Promise(function (res) { let n = 0, rr = renderer.render.bind(renderer); renderer.render = function () { n++; return rr.apply(null, arguments); };
+                setTimeout(function () { renderer.render = rr; res(n); }, ${ms}); })`));
+            const open0 = await cnt(500);
+            await T.eval(`${HIDE} openSettings(); true;`); await W(200);
+            const covered = await cnt(500);
+            await T.eval(`${HIDE} true;`); await W(200);
+            await T.eval(`raceBoardOpen(1); true;`); await W(200);
+            const covered2 = await cnt(500);
+            await T.eval(`raceBoardClose(); true;`); await W(200);
+            const after = await cnt(500);
+            if (!(open0 > 0 && covered === 0 && covered2 === 0 && after > 0)) bad.push('面板盖住时应不画、关了恢复 ' + JSON.stringify([open0, covered, covered2, after]));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('L2 大厅减负：装饰合并、远处路人合成一次绘制、面板盖住时不画 3D；每帧绘制 ≤ 50 次', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];

@@ -137,6 +137,7 @@
         function disposeObject(root) {
             if (!root || !root.traverse) return;
             root.traverse(function (c) {
+                if (c.isInstancedMesh && c.dispose) c.dispose();
                 if (c.geometry && c.geometry.dispose) c.geometry.dispose();
                 let ms = c.material ? (Array.isArray(c.material) ? c.material : [c.material]) : [];
                 ms.forEach(function (m) {

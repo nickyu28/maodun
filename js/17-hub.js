@@ -373,6 +373,73 @@
                 }
             });
         }
+        // ── L2 大厅减负 ──
+        // 1) 不动的装饰按颜色合并成一个网格（墙、台阶），少几十次绘制
+        function hubMergeMeshes(list) {
+            let pos = [], nor = [], uv = [], idx = [], base = 0;
+            list.forEach(function (m) {
+                m.updateMatrix();
+                let g = m.geometry.clone(); g.applyMatrix4(m.matrix);
+                let p = g.attributes.position.array, n = g.attributes.normal.array, u = g.attributes.uv ? g.attributes.uv.array : null;
+                for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); }
+                if (u) for (let i = 0; i < u.length; i++) uv.push(u[i]);
+                let ix = g.index ? g.index.array : null;
+                if (ix) for (let i = 0; i < ix.length; i++) idx.push(ix[i] + base);
+                else for (let i = 0; i < p.length / 3; i++) idx.push(i + base);
+                base += p.length / 3; g.dispose();
+            });
+            let geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+            geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nor), 3));
+            if (uv.length) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+            geo.setIndex(new THREE.BufferAttribute(base > 65535 ? new Uint32Array(idx) : new Uint16Array(idx), 1));
+            return new THREE.Mesh(geo, list[0].material);
+        }
+        function hubMergeStatic() {
+            let moving = {};
+            hub.platforms.forEach(function (p) { if (p.mover || p.crumble) moving[p.mesh.uuid] = 1; });   // 会动、会塌的不合并
+            let groups = {};
+            hub.meshes.forEach(function (m) {
+                if (!m.geometry || m.geometry.type !== 'BoxGeometry' || Array.isArray(m.material) || m.material.map || moving[m.uuid]) return;
+                let k = m.material.color.getHex(); (groups[k] = groups[k] || []).push(m);
+            });
+            Object.keys(groups).forEach(function (k) {
+                let list = groups[k]; if (list.length < 2) return;
+                let merged = hubMergeMeshes(list);
+                list.forEach(function (m) { hub.meshes.splice(hub.meshes.indexOf(m), 1); m.parent && m.parent.remove(m); });
+                scene.add(merged); hub.meshes.push(merged);
+            });
+        }
+        // 2) 远处的路人换成一块带颜色的方块，所有远的合成一次绘制；近处和真人还是完整的猫盾
+        const HUB_LOD_NEAR = 60;
+        let hubLodDummy = null;
+        function hubLodSetup() {
+            hub.far = new THREE.InstancedMesh(new THREE.BoxGeometry(6, 11, 4).translate(0, 5.5, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), HUB.wanderCount + 4);
+            hub.far.frustumCulled = false; hub.far.count = 0; scene.add(hub.far);
+            hub.wanderers.forEach(function (w) { let b = w.mesh.children[0]; w.col = b && b.material ? b.material.color.clone() : new THREE.Color(0xb0bec5); });
+        }
+        function hubLodTick() {
+            if (!hub.far) return;
+            if (!hubLodDummy) hubLodDummy = new THREE.Object3D();
+            let n = 0, near2 = HUB_LOD_NEAR * HUB_LOD_NEAR;
+            hub.wanderers.forEach(function (w) {
+                let dx = w.p.x - hub.p.x, dz = w.p.z - hub.p.z, d2 = dx * dx + dz * dz;
+                let far = d2 > (w.far ? near2 * 0.8 : near2);   // 在边界上别来回闪：变近要多走一段才换回来
+                w.far = far; w.mesh.visible = !far;
+                if (far && n < hub.far.instanceMatrix.count) {
+                    hubLodDummy.position.set(w.p.x, w.p.y, w.p.z);
+                    hubLodDummy.rotation.y = w.faceDir ? Math.atan2(w.faceDir.x, w.faceDir.z) : 0;
+                    hubLodDummy.updateMatrix();
+                    hub.far.setMatrixAt(n, hubLodDummy.matrix); hub.far.setColorAt(n, w.col); n++;
+                }
+            });
+            hub.far.count = n;
+            hub.far.instanceMatrix.needsUpdate = true; if (hub.far.instanceColor) hub.far.instanceColor.needsUpdate = true;
+        }
+        // 3) 全屏面板（弹窗、记录榜、图鉴）盖住大厅的时候不画 3D
+        function hubPanelCovers() {
+            return ['sys-modal', 'race-board', 'book-modal'].some(function (id) { let e = document.getElementById(id); return e && !e.classList.contains('hidden'); });
+        }
         function hubTick(dt) {
             let prevPx = hub.p.x, prevPz = hub.p.z;
             hubPlatformsTick(dt);
@@ -414,7 +481,8 @@
             let camPos = hubCameraPos();
             camera.position.set(camPos.x, camPos.y, camPos.z);
             hubHud();
-            renderer.render(scene, camera);
+            hubLodTick();
+            if (!hubPanelCovers()) renderer.render(scene, camera);
         }
         function hubLoop() {
             if (!hub) return;
@@ -498,7 +566,9 @@
                 last: performance.now(), raf: null, netSelfT: 0, parkourDone: false
             };
             hubBuildWorld();
+            hubMergeStatic();
             hubSpawnWanderers();
+            hubLodSetup();
             camera.rotation.set(0, 0, 0);   // 面朝 -Z，正对着广场中央和跑酷那一侧
 
             document.body.onmousedown = function (e) {
@@ -519,6 +589,7 @@
             hub.wanderers.forEach(function (w) { scene.remove(w.mesh); });
             Object.keys(hub.realPlayers).forEach(function (id) { scene.remove(hub.realPlayers[id].mesh); });
             scene.remove(hub.mesh);
+            if (hub.far) scene.remove(hub.far);
             hub = null;
             hubTouchUI(false);
             let hp = document.getElementById('hub-prompt'); if (hp) hp.style.display = 'none';
