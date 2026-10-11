@@ -1670,6 +1670,7 @@
         function raceLoop() {
             if (!race || race.over) return;
             race.raf = requestAnimationFrame(raceLoop);
+            if (introFrozen()) { race.last = performance.now(); return; }   // R1：单人局，卡片开着整局静止
             raceLoopBody();
         }
 

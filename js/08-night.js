@@ -2850,6 +2850,7 @@
         function nightLoop() {
             if (!night || night.over) return;
             night.raf = requestAnimationFrame(nightLoop);
+            if (introFrozen()) { night.last = performance.now(); return; }   // R1：单人局，卡片开着整局静止
             try { nightLoopBody(); }
             catch (e) {
                 nightShowError(e);
@@ -3721,6 +3722,7 @@
                 ctx.arc(cx, cy, r, startAngle, endAngle); ctx.strokeStyle = i < used ? '#e74c3c' : '#bdc3c7'; ctx.stroke();
             }
             ctx.fillStyle = '#333'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(remain, cx, cy);
+            if (introFrozen()) return;   // R1：单人局，卡片开着整局静止（上面已经把这一帧的时间读掉了，打开后不会跳）
         }
 
         let lastSyncTime = 0;

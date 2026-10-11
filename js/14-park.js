@@ -273,6 +273,7 @@
             let now = performance.now();
             let dt = Math.min(0.05, (now - park.last) / 1000);
             park.last = now;
+            if (introFrozen()) { park.raf = requestAnimationFrame(parkLoop); return; }   // R1：单人局，卡片开着整局静止
             if (!park.over) parkTick(dt);
             park.raf = requestAnimationFrame(parkLoop);
         }

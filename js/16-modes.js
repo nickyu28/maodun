@@ -286,6 +286,7 @@
             let now = performance.now();
             let dt = Math.min(0.05, (now - nm.last) / 1000);
             nm.last = now;
+            if (introFrozen()) { nm.raf = requestAnimationFrame(nmLoop); return; }   // R1：单人局，卡片开着整局静止
             if (!nm.over) nmTick(dt);
             nm.raf = requestAnimationFrame(nmLoop);
         }

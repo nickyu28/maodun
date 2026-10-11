@@ -1200,7 +1200,7 @@
             let R = escapeRoom, host = escIsHost();
             escIntroCheck(R);
             // 单人时弹介绍卡片，这一局先停住（联机停不了，别人还在跑）
-            if (introPaused() && !R.netOn) { escHud(); renderer.render(scene, camera); return; }
+            if (introFrozen()) { escHud(); renderer.render(scene, camera); return; }
             // 开局：规则弹窗（第一次玩才有）关掉之前不开跑，关掉后再 3、2、1——
             // 以前倒计时在弹窗后面就开始走了，AI 也在后台把第一道门开了
             if (!R.started) {

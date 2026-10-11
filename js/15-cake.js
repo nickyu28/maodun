@@ -467,6 +467,7 @@
             let now = performance.now();
             let dt = Math.min(0.05, (now - cake.last) / 1000);
             cake.last = now;
+            if (introFrozen()) { cake.raf = requestAnimationFrame(cakeLoop); return; }   // R1：单人局，卡片开着整局静止
             if (!cake.over) cakeTick(dt);
             cake.raf = requestAnimationFrame(cakeLoop);
         }

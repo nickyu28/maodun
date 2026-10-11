@@ -579,6 +579,74 @@ async function enterExit(tab, key) {
             report('I1b 惊魂夜规则卡开着时 endNightGame：回大厅后 introOpen 为 false，单人密室能走', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('R1')) {
+            // R1：单人局里，提示卡片开着时整局静止（场景里所有东西的位置都不变、按着 W 也走不动、拖鼠标不转视角），关了接着动；
+            // 多人局里卡片变成屏幕上方的提示条，不弹窗、不暂停。12 个模式逐个测
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const SIG = `(function(){ let s = 0, n = 0; scene.traverse(function (o) { n++; s += o.position.x * 1.1 + o.position.y * 1.3 + o.position.z * 1.7 + o.scale.x + o.scale.y + o.scale.z + o.rotation.y; });
+                let M = ({ blaze: blaze, night: night, race: race, jail: jail, dodge: dodge, escape: escapeRoom, park: park, cake: cake, sumo: nm, paint: nm, tower: nm })[chatActiveModeKey()], nums = [];
+                if (M) Object.keys(M).forEach(function (k) { if (typeof M[k] === 'number' && k !== 'last' && k !== 'raf') nums.push(k + ':' + M[k].toFixed(2)); });
+                return JSON.stringify([Math.round(s * 1000), n, camera.position.x.toFixed(3), camera.position.z.toFixed(3), camera.rotation.y.toFixed(3), typeof timeSecs === 'number' ? timeSecs.toFixed(1) : 0, nums]); })()`;
+            for (const key of Object.keys(MODES).filter((k) => !process.env.R1_MODES || process.env.R1_MODES.split(',').indexOf(k) >= 0)) {
+                const before = T.errors.length;
+                await T.eval(`${HIDE} selectGameMode('${key}'); ${MODES[key].start}; true;`); await W(3500);
+                await T.eval(`${HIDE} true;`);
+                await T.eval(`keys['w'] = true; true;`); const m0 = await T.eval(SIG); await W(900); const m1 = await T.eval(SIG); await T.eval(`keys['w'] = false; true;`);
+                const moves = m0 !== m1;
+                await T.eval(`introPush('测试卡片', '一二三'); true;`); await W(700);
+                const open = await T.eval(`introOpen && ${MODAL} === '测试卡片'`);
+                await T.eval(`keys['w'] = true; mouseLook = true; window.dispatchEvent(new MouseEvent('mousemove', { movementX: 60, movementY: 0 })); true;`);
+                const a = await T.eval(SIG); await W(1500); await T.eval(`window.dispatchEvent(new MouseEvent('mousemove', { movementX: 60, movementY: 0 })); true;`); const b = await T.eval(SIG);
+                await T.eval(`keys['w'] = false; mouseLook = false; true;`);
+                if (!open) bad.push(key + ' 卡片没开');
+                if (a !== b) { const pa = JSON.parse(a), pb = JSON.parse(b); bad.push(key + ' 卡片开着还在动 ' + pa.slice(0, 6).join(',') + ' → ' + pb.slice(0, 6).join(',') + ' 变化的字段 ' + pb[6].filter((x, i) => x !== pa[6][i]).join(';')); }
+                await clickModal(T, 0); await W(900);
+                for (let i = 0; i < 4 && (await T.eval(MODAL)) !== null; i++) { await clickModal(T, 0); await W(500); }   // 模式自己排着的新手卡片也点掉
+                const c0 = await T.eval(SIG); await W(700); const c1 = await T.eval(SIG);
+                if (moves && c0 === c1) bad.push(key + ' 关了卡片没接着动');
+                if (!moves) bad.push(key + '（测试本身：没有卡片时画面也不动，这项没测到）');
+                if (await T.eval('introOpen')) bad.push(key + ' 关了 introOpen 还是 true');
+                await T.eval(`${HIDE} ${MODES[key].exit}; true;`); await W(1500); await T.eval(`${HIDE} true;`);
+                if (T.errors.length > before) bad.push(key + ' 报错 ' + T.errors.slice(before, before + 1).join(''));
+            }
+            await T.close();
+            report('R1 单人局卡片开着整局静止（12 个模式：场景、走、转视角都停），关了接着动', bad.length === 0, bad.join(' / '));
+        }
+
+                if (want('R1m')) {
+            // R1m：多人局里卡片变成屏幕上方的提示条——不弹窗、不暂停（局还在走，按着 W 还能走），点一下收起，排队的下一张接着出
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const SIG = `(function(){ let s = 0; scene.traverse(function (o) { s += o.position.x * 1.1 + o.position.y * 1.3 + o.position.z * 1.7 + o.rotation.y; }); let M = ({ blaze: blaze, sumo: nm, paint: nm, tower: nm })[chatActiveModeKey()]; return Math.round(s * 1000) + '|' + camera.position.x.toFixed(2) + '|' + camera.position.z.toFixed(2) + '|' + (M ? M.clock : timeSecs); })()`;
+            const starts = {
+                blaze: `blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }, { id: 'peer-x', key: 'bow' }]), gState.id, false)`,
+                sumo: `nmBegin('sumo', [{ id: gState.id }, { id: 'peer-x' }], gState.id, 5, {})`,
+                hunt: `(requestStartGame(), requestEnterMap(), (gState.team = [{ id: gState.id }, { id: 'peer-x', isAI: false }]))`
+            };
+            for (const key of Object.keys(starts)) {
+                const before = T.errors.length;
+                await T.eval(`${HIDE} selectGameMode('${key}'); ${starts[key]}; true;`); await W(3500);
+                await T.eval(`${HIDE} true;`);
+                const multi = await T.eval('introSessionMulti()');
+                await T.eval(`introPush('卡一', '第一张'); introPush('卡二', '第二张'); true;`); await W(700);
+                const st = JSON.parse(await T.eval(`JSON.stringify({ banner: !document.getElementById('intro-banner').classList.contains('hidden'), title: document.getElementById('intro-banner-title').innerText, modal: sysModalVisible(), open: introOpen, q: introQ.length })`));
+                await T.eval(`keys['w'] = true; true;`); const a = await T.eval(SIG); await W(1200); const b = await T.eval(SIG); await T.eval(`keys['w'] = false; true;`);
+                if (multi !== true) bad.push(key + ' 没当成多人局 ' + multi);
+                if (!st.banner || st.title !== '卡一' || st.modal || st.open || st.q !== 1) bad.push(key + ' 提示条 ' + JSON.stringify(st));
+                if (a === b) bad.push(key + ' 多人局被停住了');
+                await T.eval(`document.getElementById('intro-banner-box').click(); true;`); await W(700);
+                const t2 = await T.eval(`document.getElementById('intro-banner').classList.contains('hidden') ? '' : document.getElementById('intro-banner-title').innerText`);
+                if (t2 !== '卡二') bad.push(key + ' 点掉第一张以后 ' + t2);
+                await T.eval(`document.getElementById('intro-banner-box').click(); true;`); await W(700);
+                if (!(await T.eval(`document.getElementById('intro-banner').classList.contains('hidden') && !sysModalVisible() && !introOpen`))) bad.push(key + ' 全点掉了还有东西');
+                await T.eval(`${HIDE} ${MODES[key].exit}; true;`); await W(1500); await T.eval(`${HIDE} true;`);
+                if (T.errors.length > before) bad.push(key + ' 报错 ' + T.errors.slice(before, before + 1).join(''));
+            }
+            await T.close();
+            report('R1m 多人局卡片变成上方提示条：不弹窗不暂停、点一下收起、下一张接着出', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 

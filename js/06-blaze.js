@@ -4827,6 +4827,7 @@
         function blazeLoop() {
             if (!blaze || blaze.over) return;
             blaze.raf = requestAnimationFrame(blazeLoop);
+            if (introFrozen()) { blaze.last = performance.now(); return; }   // R1：单人局，卡片开着整局静止
             try { blazeLoopBody(); }
             catch (e) { nightShowError(e); try { renderer.render(scene, camera); } catch (e2) { } }
         }

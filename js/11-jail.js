@@ -543,6 +543,7 @@
         function jailLoop() {
             if (!jail) return;
             let now = performance.now();
+            if (introFrozen()) { jail.raf = requestAnimationFrame(jailLoop); return; }   // R1：单人局，卡片开着整局静止
             let dt = Math.min(0.05, (now - jail.last) / 1000);
             jail.last = now;
             if (!jail.over) jailTick(dt);

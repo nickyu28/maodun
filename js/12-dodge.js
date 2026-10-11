@@ -845,6 +845,7 @@
             let now = performance.now();
             let dt = Math.min(0.05, (now - dodge.last) / 1000);
             dodge.last = now;
+            if (introFrozen()) { dodge.raf = requestAnimationFrame(dodgeLoop); return; }   // R1：单人局，卡片开着整局静止
             if (!dodge.over) dodgeTick(dt);
             dodge.raf = requestAnimationFrame(dodgeLoop);
         }

@@ -120,12 +120,65 @@
         function introPush(title, html) { introQ.push({ title: title, html: html }); introPump(); }
         function introPump() {
             if (!introQ.length) return;
+            // R1：多人局里卡片不挡操作也不暂停，改成屏幕上方的提示条；单人局（和不在局里）还是弹窗，开着的时候这一局静止
+            if (introSessionMulti() === true) {
+                if (introBannerCur) return;
+                introBannerShow(introQ.shift());
+                return;
+            }
             if (sysModalVisible()) { if (sysModalKind !== 'intro') setTimeout(introPump, 600); return; }   // 普通弹窗开着：等它关（关的时候也会再叫一次）
             let it = introQ.shift();
             sysModalRender(it.title, it.html, [{ label: '知道了', color: '#43a047' }], 'intro');
         }
-        // 单人的时候弹卡片会把这一局停住（escape / 乐园 / 新模式单机都看这个）
-        function introPaused() { return introOpen; }
+        // 这一局里有没有别的真人：true 有（多人）；false 没有（单人）；null 不在局里（大厅、选人界面）
+        function introSessionMulti() {
+            let k = chatActiveModeKey();
+            if (!k || k === 'hub') return null;
+            if (k === 'hunt') return (gState.team || []).some(function (m) { return !m.isAI && m.id !== gState.id; });
+            if (k === 'night') return !!(night && night.netGame) || netOn();
+            if (k === 'blaze') return !!blaze.net;
+            if (k === 'race') return !!race.net;
+            if (k === 'jail') return !!jail.netOn;
+            if (k === 'dodge') return !!dodge.netOn;
+            if (k === 'escape') return !!escapeRoom.netOn;
+            if (k === 'cake') return !!cake.net;
+            if (k === 'park') return false;
+            if (nm) return !!nm.net;
+            return false;
+        }
+        // R1：单人局里，卡片开着整局静止（走、转视角、怪、AI、计时、岩浆都停）。
+        // 每个模式的主循环开头问一声；卡片刚弹出来先放 2 帧过去，让画面先画出来（不然卡片后面是黑的）
+        let introFreezeFrames = 0;
+        function introHolds() { return introOpen && introSessionMulti() === false; }
+        function introFrozen() {
+            if (!introHolds()) { introFreezeFrames = 0; return false; }
+            if (introFreezeFrames < 2) { introFreezeFrames++; return false; }
+            // 按着的键、点过的按钮先清掉，卡片关了以后不会自己走或自己跳
+            Object.keys(keys).forEach(function (k) { keys[k] = false; });
+            tMove.x = 0; tMove.y = 0;
+            Object.keys(touchBtn).forEach(function (k) { if (touchBtn[k] === true) touchBtn[k] = false; });
+            return true;
+        }
+        // 多人局的提示条：屏幕上方，点一下或过几秒自己收起来
+        let introBannerCur = null, introBannerTimer = null;
+        function introBannerShow(it) {
+            let el = document.getElementById('intro-banner');
+            document.getElementById('intro-banner-title').innerText = it.title;
+            document.getElementById('intro-banner-text').innerHTML = it.html;
+            el.classList.remove('hidden');
+            introBannerCur = it;
+            clearTimeout(introBannerTimer);
+            let len = (document.getElementById('intro-banner-text').innerText || '').length;
+            introBannerTimer = setTimeout(introBannerClose, Math.min(24000, 7000 + len * 90));
+        }
+        function introBannerClose() {
+            clearTimeout(introBannerTimer);
+            introBannerCur = null;
+            let el = document.getElementById('intro-banner'); if (el) el.classList.add('hidden');
+            setTimeout(introPump, 250);
+        }
+        // 单人的时候弹卡片会把这一局停住（旧名字，escape 在用）
+        function introPaused() { return introHolds(); }
         function introOnce(key, title, text) {
             if (!gState.introSeen || typeof gState.introSeen !== 'object') gState.introSeen = {};
             if (gState.introSeen[key]) return;

@@ -84,7 +84,7 @@
         }, { passive: false });
 
         document.addEventListener('touchmove', function (e) {
-            if (!isDraggingCamera || !touchLookActive()) return;
+            if (!isDraggingCamera || !touchLookActive() || introHolds()) return;
             for (let i = 0; i < e.changedTouches.length; i++) {
                 let t = e.changedTouches[i];
                 if (t.identifier === camTouchId) {
@@ -110,7 +110,7 @@
         }, true);
         window.addEventListener('mousemove', function (e) {
             if (!mouseLook || document.pointerLockElement || !camera) return;
-            if (gState.backpackOpen || gState.largeMapOpen) return;
+            if (gState.backpackOpen || gState.largeMapOpen || introHolds()) return;
             let mx = Math.max(-100, Math.min(100, e.movementX || 0)); let my = Math.max(-100, Math.min(100, e.movementY || 0));
             let s = mouseSens();
             camera.rotation.y -= mx * 0.005 * s; camera.rotation.x -= my * 0.005 * s * lookY();
@@ -145,7 +145,7 @@
             const sunLight = new THREE.DirectionalLight(0xffffff, 0.4); sunLight.position.set(30, 60, 30); scene.add(sunLight); scene.add(camera);
 
             document.addEventListener('mousemove', function (e) {
-                if (document.pointerLockElement && !gState.backpackOpen && !gState.largeMapOpen) {
+                if (document.pointerLockElement && !gState.backpackOpen && !gState.largeMapOpen && !introHolds()) {
                     let mx = Math.max(-100, Math.min(100, e.movementX)); let my = Math.max(-100, Math.min(100, e.movementY));
                     let s = mouseSens();
                     camera.rotation.y -= mx * 0.005 * s; camera.rotation.x -= my * 0.005 * s * lookY(); camera.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, camera.rotation.x));
@@ -1444,7 +1444,9 @@
                     '彩弹占地按住 E 会一直喷，不用松开再按',
                     '超燃组队时，队友的手也会跟着变队伍颜色',
                     '惊魂夜地图里一处该通的小缺口通了',
-                    '游戏里的反馈入口去掉了'
+                    '游戏里的反馈入口去掉了',
+                    '单人局里弹出提示卡片时，整局先停住，看完再继续',
+                    '多人局里的提示改成屏幕上方的小条，不挡操作也不暂停'
                 ]
             },
             {

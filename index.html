@@ -741,6 +741,14 @@
             justify-content: center;
         }
 
+        /* R1：多人局里的提示条，在屏幕上方，不挡操作（只有条本身接收点击），点一下收起 */
+        #intro-banner { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 900; width: min(520px, 92vw); pointer-events: none; }
+        #intro-banner.hidden { display: none; }
+        #intro-banner-box { pointer-events: auto; background: rgba(255,255,255,0.94); color: #333; border-radius: 10px; padding: 8px 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.35); font-size: 13px; line-height: 1.5; cursor: pointer; }
+        #intro-banner-title { font-weight: bold; margin-bottom: 4px; }
+        #intro-banner-text { max-height: 30vh; overflow-y: auto; }
+        #intro-banner-text > div { max-height: none !important; }
+
         .sys-modal-box {
             background: #fff;
             padding: 20px;
@@ -897,6 +905,14 @@
             <h3 id="sys-modal-title" style="margin-top:0;">提示</h3>
             <p id="sys-modal-text" style="font-size: 15px; color: #555; margin-bottom: 20px;"></p>
             <div id="sys-modal-btns" style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;"></div>
+        </div>
+    </div>
+
+    <div id="intro-banner" class="hidden">
+        <div id="intro-banner-box" onclick="introBannerClose()">
+            <div id="intro-banner-title"></div>
+            <div id="intro-banner-text"></div>
+            <div style="font-size:11px; color:#999; margin-top:4px;">点一下收起</div>
         </div>
     </div>
 
