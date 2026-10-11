@@ -727,7 +727,7 @@
             // 手臂：肩膀是个可以转的枢轴，跑步甩、抓东西/扔东西/接东西也靠转它——
             // 「所有动作都要有动画」，这两条胳膊是最基础的载体。
             // 改成短短一截、紧贴身体，不再是伸得老远的细长方块（跟松饼大作战那版一个思路）。
-            let arms = [];
+            let arms = [], hands = [];
             [-1, 1].forEach(function (sdir) {
                 let shoulder = new THREE.Group();
                 shoulder.position.set(sdir * 3.1, 9.1, 0);
@@ -735,9 +735,10 @@
                 let hand = new THREE.Mesh(new THREE.CircleGeometry(1.0, 12, 0, Math.PI),
                     new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide }));
                 hand.position.y = -1.0; hand.rotation.z = Math.PI; shoulder.add(hand);
-                g.add(shoulder); arms.push(shoulder);
+                g.add(shoulder); arms.push(shoulder); hands.push(hand);
             });
             g.userData.arms = arms;
+            g.userData.hands = hands;
             // 白描边，远处也认得出轮廓
             let outMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, depthWrite: false });
             let parts = []; g.traverse(function (o) { if (o.isMesh) parts.push(o); });
@@ -785,6 +786,7 @@
             r.col = hex;
             if (r.mesh.userData.body) r.mesh.userData.body.material.color.setHex(hex);
             if (r.mesh.userData.ring) r.mesh.userData.ring.material.color.setHex(hex);
+            if (r.mesh.userData.hands) r.mesh.userData.hands.forEach(function (h) { h.material.color.setHex(hex); });
         }
         function raceTeammateOf(r) {
             if (!race.duo || r.teamIdx === undefined) return null;

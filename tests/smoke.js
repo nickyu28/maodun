@@ -25,6 +25,9 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const EXPECT_GEOMETRY_LEAK = true;   // D1 做完后改成 false
+// 调试用：SMOKE_ONLY=正则 只跑名字对得上的"本批新增"那一段检查（其余检查整个跳过），比如 SMOKE_ONLY='N21|R1'
+const ONLY = process.env.SMOKE_ONLY ? new RegExp(process.env.SMOKE_ONLY) : null;
+const want = (n) => !ONLY || ONLY.test(n);
 
 const ROOT = path.resolve(__dirname, '..');
 const W = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -509,6 +512,35 @@ async function enterExit(tab, key) {
         const A = await openTab(chrome, url);
         const lobby = await A.eval(`!!hub && !document.getElementById('screen-lobby').classList.contains('hidden')`);
         report('启动进大厅', lobby && A.errors.length === 0, A.errors.slice(0, 3).join(' / '));
+
+        // 2a. 新增的检查（每项自己开标签页，互不影响；SMOKE_ONLY 只跑这一段）
+                if (want('N21')) {
+            // 夜间 #21：惊魂夜缺口真的开了；按住 E 彩弹占地一直喷（推推乐那种一次一下的不变）；双人队友的手跟着变色
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('night'); ${MODES.night.start}; true;`); await W(3500);
+            const gaps = await T.eval(`(function(){ let n = 0; for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) { let g0 = maze[0][z][x], g1 = maze[1][z][x]; if (g0 && g0.type === 1 && !g0.crate && g1 && g1.type === 0) n++; } return n; })()`);
+            if (gaps < 1) bad.push('二楼那一格缺口没开 ' + gaps);
+            await T.eval(`${HIDE} ${MODES.night.exit}; true;`); await W(1800);
+            await T.eval(`${HIDE} selectGameMode('paint'); ${MODES.paint.start}; true;`); await W(1500);
+            const hold = await T.eval(`(function(){ keys['e'] = true; let a = nmWish({}), b = nmWish({}); return [a.act, b.act, !!keys['e']]; })()`);
+            await T.eval(`keys['e'] = false; ${MODES.paint.exit}; true;`); await W(1500);
+            if (hold[0] !== true || hold[1] !== true || hold[2] !== true) bad.push('按住 E 只喷一下 ' + JSON.stringify(hold));
+            await T.eval(`${HIDE} selectGameMode('sumo'); ${MODES.sumo.start}; true;`); await W(1500);
+            const tap = await T.eval(`(function(){ keys['e'] = true; let a = nmWish({}), b = nmWish({}); return [a.act, b.act]; })()`);
+            await T.eval(`keys['e'] = false; ${MODES.sumo.exit}; true;`); await W(1500);
+            if (tap[0] !== true || tap[1] !== false) bad.push('推推乐一次按键变了 ' + JSON.stringify(tap));
+            const hands = await T.eval(`(function(){ let g = raceMakeBody(0xff0000, 0, true); let r = { mesh: g, col: 0xff0000 }; raceRecolorRacer(r, 0x2255ee);
+                return JSON.stringify({ n: (g.userData.hands || []).length, ok: (g.userData.hands || []).every(function (h) { return h.material.color.getHex() === 0x2255ee; }) }); })()`);
+            const hr = JSON.parse(hands);
+            if (hr.n !== 2 || !hr.ok) bad.push('队友的手没变色 ' + hands);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('N21 惊魂夜二楼缺口打开；按住 E 彩弹一直喷；双人队友的手跟着变队伍色', bad.length === 0, bad.join(' / '));
+        }
+
+        //@@NEW@@
+        if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 12 个模式
         for (const key of Object.keys(MODES)) {
@@ -1668,6 +1700,7 @@ async function enterExit(tab, key) {
         }
     } catch (e) {
         const d = e.message.match(/"description":"([^"]*)/);
+        if (e.message === 'ONLY_DONE') { /* 只跑了指定的检查 */ } else
         // 一项检查都还没跑就出错了，多半是 Chrome 自己挂了（连不上调试端口、标签页开不出来），算启动失败
         if (results.length === 0) { console.log('STARTUP 还没跑到任何检查就出错了：' + (d ? d[1] : e.message).slice(0, 300)); exitCode = EXIT_STARTUP; }
         else report('测试脚本本身出错', false, (d ? d[1] : e.message).slice(0, 300));
