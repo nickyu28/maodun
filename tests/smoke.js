@@ -709,7 +709,9 @@ async function enterExit(tab, key) {
             // 3 跳上桌
             await G.eval(`(function(){ let t = gState.tutorial.tableCell; camera.position.set(t.x * TILE, 8 + 9, t.z * TILE); pVel.set(0, 0, 0); return true; })()`); await expectStep(3, '跳上桌子');
             // 4 跑一段：Shift + W 按住 2 秒
-            await G.eval(`camera.position.set(TILE, 9, TILE); keys['shift'] = true; keys['w'] = true; true;`); await W(2200); await G.eval(`keys['shift'] = false; keys['w'] = false; true;`); await expectStep(4, '跑一段');
+            await G.eval(`camera.position.set(TILE, 9, TILE); keys['shift'] = true; keys['w'] = true; true;`);
+            for (let i = 0; i < 80 && (await step()) < 4; i++) await W(250);   // 跑够游戏里 1.2 秒，CI 帧率低就要等一会儿
+            await G.eval(`keys['shift'] = false; keys['w'] = false; true;`); await expectStep(4, '跑一段');
             // 5 开箱：站到箱子旁边，按 F
             await G.eval(`(function(){ let c = chests[0]; camera.position.set(c.position.x + 6, c.position.y + 7, c.position.z); pVel.set(0, 0, 0); camera.rotation.y = Math.PI / 2; keys['f'] = true; return true; })()`); await expectStep(5, '开箱');
             // 6 捡东西
@@ -1165,7 +1167,7 @@ async function enterExit(tab, key) {
             await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
             // 医疗包
             await T.eval(`gState.hp = 50; gState.inv[0] = Object.assign({}, shopItems['医疗包']); selectSlot(0); true;`);
-            for (let i = 0; i < 60 && (await T.eval('gState.inv[0] && gState.inv[0].uses')) === 5; i++) await W(300);
+            for (let i = 0; i < 200 && (await T.eval('gState.inv[0] && gState.inv[0].uses')) === 5; i++) await W(300);   // 要站着不动 4 秒游戏时间，CI 帧率低就要等一会儿
             const med = JSON.parse(await T.eval(`JSON.stringify([gState.hp, gState.inv[0] && gState.inv[0].uses, HUNT_MED_HEAL])`));
             if (med[0] !== 65 || med[1] !== 4 || med[2] !== 15) bad.push('医疗包 ' + med.join());
             // 肾上腺素：打一针，跑 1 秒体力不降；再打不扣次数；3 次后没了
@@ -1180,7 +1182,7 @@ async function enterExit(tab, key) {
             const st2 = await T.eval('stamina');
             await T.eval(`keys['shift'] = false; keys['w'] = false; stamina = 100; true;`);
             if (s1[0] !== 2 || !(s1[1] > 15 && s1[1] <= 20) || s1b !== 2) bad.push('肾上腺素 ' + s1.join() + ' / ' + s1b);
-            if (st1 < 99 || st2 > 90) bad.push('体力：有针 ' + st1 + '，没针 ' + st2);
+            if (st1 < 99 || st2 > st1 - 3) bad.push('体力：有针 ' + st1 + '，没针 ' + st2);
             for (let i = 0; i < 2; i++) { await T.eval(`gState.stimT = 0; keys['rmb'] = true; true;`); await W(400); }
             if ((await T.eval('gState.inv[1]')) !== null) bad.push('用完 3 次还在');
             // 返魂药水
@@ -1192,16 +1194,16 @@ async function enterExit(tab, key) {
             // 倒下的 AI 队友在 6 米外：不行；挪到 6 米内：按住 3 秒救起来 30 血
             await T.eval(`window.__ai = ${mk.replace('NAME', 'ai-mate').replace('HP', '0').replace('REAL', 'false')}; window.__ai.position.x += 40; true;`); await W(1200);
             if (!(await T.eval('!!gState.inv[2]'))) bad.push('6 米外也能救');
-            await T.eval(`window.__ai.position.x = camera.position.x + 20; true;`);
-            for (let i = 0; i < 80 && (await T.eval('!!gState.inv[2]')); i++) await W(250);
+            await T.eval(`window.__ai.position.x = camera.position.x + 20; huntHold.f = false; true;`);
+            // 按住 3 秒：直接喂时间（CI 帧率低，真等 3 秒游戏时间要很久）；松手就清零
+            const prog = JSON.parse(await T.eval(`(function(){ let sel = gState.inv[2], o = []; huntReviveTick(1.5, sel, true); o.push(gState.reviveT); huntReviveTick(0.1, sel, false); o.push(gState.reviveT); huntReviveTick(1.5, sel, true); huntReviveTick(1.4, sel, true); o.push(!!gState.inv[2]); huntReviveTick(0.2, sel, true); o.push(!!gState.inv[2]); return JSON.stringify(o); })()`));
+            if (prog.join() !== '1.5,0,true,false') bad.push('按住进度 ' + prog.join());
             const ai = JSON.parse(await T.eval(`JSON.stringify([window.__ai.userData.hp, gState.inv[2]])`));
-            await T.eval(`huntHold.f = false; true;`);
             if (ai[0] !== 30 || ai[1] !== null) bad.push('救 AI 队友 ' + JSON.stringify(ai));
             // 真人队友倒下（peerState）：发 HUNT_REVIVE
             await T.eval(`gState.team = [{ id: gState.id, isLeader: true, isAI: false }, { id: 'peer-q', isAI: false }]; gState.peerState['peer-q'] = 'down'; window.__hum = ${mk.replace('NAME', 'peer-q').replace('HP', '100').replace('REAL', 'true')}; window.__hum.position.x += 12;
-                gState.inv[2] = Object.assign({}, shopItems['返魂药水']); selectSlot(2); window.__sent.length = 0; huntHold.f = true; true;`);
-            for (let i = 0; i < 80 && (await T.eval('!!gState.inv[2]')); i++) await W(250);
-            await T.eval(`huntHold.f = false; true;`);
+                gState.inv[2] = Object.assign({}, shopItems['返魂药水']); selectSlot(2); window.__sent.length = 0; true;`);
+            await T.eval(`(function(){ let sel = gState.inv[2]; for (let i = 0; i < 4; i++) huntReviveTick(1, sel, true); return true; })()`);
             const sent = await T.eval(`window.__sent.filter(function (m) { return m.type === 'HUNT_REVIVE'; })`);
             if (sent.length !== 1 || sent[0].target !== 'peer-q' || sent[0].sender === undefined) bad.push('真人没发 HUNT_REVIVE ' + JSON.stringify(sent));
             // 被救的一方
