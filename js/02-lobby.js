@@ -1616,8 +1616,15 @@
         function bookOpen() { document.getElementById('book-modal').classList.remove('hidden'); bookRender(); }
         function bookClose() { document.getElementById('book-modal').classList.add('hidden'); }
 
+        let bookTab = 'recipe';
+        function bookTabSet(t) { bookTab = t; bookRender(); }
         function bookRender() {
             let el = document.getElementById('book-body'); if (!el) return;
+            [['recipe', '配方'], ['mob', '怪物']].forEach(function (x) {
+                let b = document.getElementById('book-tab-' + x[0]); if (!b) return;
+                b.style.background = bookTab === x[0] ? '#5e35b1' : '#eceff1'; b.style.color = bookTab === x[0] ? '#fff' : '#555';
+            });
+            if (bookTab === 'mob') { el.innerHTML = mobDexPage(); mobDexStart(); return; }
             let list = allRecipes();
             let got = list.filter(function (r) { return huntFoundRecipe(r.id); }).length;
             el.innerHTML =

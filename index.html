@@ -788,6 +788,7 @@
         #intro-banner-text { max-height: 30vh; overflow-y: auto; }
         #intro-banner-text > div { max-height: none !important; }
 
+        .mobstat { background: #ede7f6; border-radius: 3px; padding: 1px 6px; font-weight: bold; color: #5e35b1; font-size: 12px; }
         /* T0 新手教程 */
         #tut-panel { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 850; background: rgba(20,30,50,0.88); color: #fff; border-radius: 10px; padding: 8px 18px; text-align: center; pointer-events: none; min-width: 220px; max-width: min(520px, 76vw); }
         #tut-panel.hidden, #tut-skip.hidden { display: none; }
@@ -1269,7 +1270,7 @@
             <button id="garage-shop-btn" onclick="document.getElementById('shop-modal').classList.remove('hidden')">打开商店</button>
         </div>
         <div style="font-size:12px; color:#e6a23c; margin:4px 0;">宝物放不进背包 —— 只有商店买的道具能带上场</div>
-        <button onclick="bookOpen()" style="background:#5e35b1; color:#fff; border:none;">配方图鉴</button>
+        <button onclick="bookOpen()" style="background:#5e35b1; color:#fff; border:none;">图鉴</button>
         <button onclick="tidyAll()" style="background:#607d8b; color:#fff; border:none;">一键整理</button>
         <button id="start-game-btn" onclick="requestEnterMap()">开始游戏</button>
         <div id="race-board" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);
@@ -1284,7 +1285,11 @@
              z-index:60; display:flex; align-items:center; justify-content:center;">
             <div style="background:#fff; border-radius:10px; padding:16px; width:min(92vw,430px);
                  max-height:86vh; overflow:auto; text-align:left;">
-                <h2 style="margin:0 0 4px; color:#5e35b1;">配方图鉴</h2>
+                <h2 style="margin:0 0 4px; color:#5e35b1;">图鉴</h2>
+                <div style="display:flex; gap:6px; margin:4px 0 8px;">
+                    <button id="book-tab-recipe" onclick="bookTabSet('recipe')" style="margin:0; padding:5px 16px; font-size:13px;">配方</button>
+                    <button id="book-tab-mob" onclick="bookTabSet('mob')" style="margin:0; padding:5px 16px; font-size:13px;">怪物</button>
+                </div>
                 <div id="book-body"></div>
                 <button onclick="bookClose()" style="width:100%; margin-top:12px; background:#888; color:#fff; border:none;">关闭</button>
             </div>

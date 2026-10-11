@@ -1170,3 +1170,284 @@
             if (done && first) { coinsAdd('tutorial', TUT_REWARD); }
             if (done) showSysModal('教程做完了', first ? ('得到 ' + TUT_REWARD + ' 个猫盾币。想再看一遍，在设置里点“新手教程”。') : '想再看一遍，在设置里点“新手教程”。', [{ label: '好', color: '#5cb85c' }]);
         }
+
+        // ══════════════ G2 怪物外形 + 怪物图鉴 ══════════════
+        // 一个函数造模型（huntMobModel），游戏里和图鉴里共用。模型朝 +z，体型对着原来的碰撞球/圆柱（半径 4.5 左右），碰撞和判定不变：
+        // 游戏里的怪本体还是原来那个看不见的球/圆柱（huntMobMesh），模型挂在它下面。
+        const HUNT_MOBS = {
+            angel: { n: 1, name: '凝视者', hp: 10, speed: 63, dmg: 40, tip: '盯着它，它就不动；别背对它，贴脸用武器打。' },
+            puppet: { n: 2, name: '伪装者', hp: 15, speed: 30, dmg: 40, tip: '它在你视野里不会动，背过去才追。看到不对劲的柜子、灯柱，多看两眼再靠近，用武器打。' },
+            high: { n: 3, name: '高空者', hp: 10, speed: 25, dmg: 20, tip: '隔着楼层也能打到你，别在楼梯井下面停；它血少，贴上去打。' },
+            splitter: { n: 4, name: '分裂者', hp: 10, speed: 20, dmg: 40, tip: '打死会分成两个小的，小的还会再分一次。一只一只来，别被围住。' },
+            curser: { n: 5, name: '诅咒之灵', hp: 80, speed: 20, dmg: 0, tip: '血没满时被它看到就中诅咒。先躲开视线，或者带着武器把它打掉；永恒誓言能让它不靠近。' }
+        };
+        const HUNT_MOB_ORDER = ['angel', 'puppet', 'high', 'splitter', 'curser'];
+        // 血量、速度、伤害写成高中低
+        function huntMobLevel(kind, v) {
+            let hi = { hp: 50, speed: 50, dmg: 40 }[kind], mid = { hp: 12, speed: 25, dmg: 20 }[kind];
+            return v >= hi ? '高' : v >= mid ? '中' : '低';
+        }
+        function huntMobModel(type, opt) {
+            opt = opt || {};
+            let g = new THREE.Group(); g.userData = { mobType: type, t0: Math.random() * 10 };
+            let lam = function (c, o) { return new THREE.MeshLambertMaterial(Object.assign({ color: c }, o || {})); };
+            let bas = function (c, o) { return new THREE.MeshBasicMaterial(Object.assign({ color: c }, o || {})); };
+            let add = function (geo, mat, x, y, z, parent) { let m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); (parent || g).add(m); return m; };
+            let bone = function (a, b, r, mat, parent) {
+                let d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), len = d.length();
+                let m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 6), mat);
+                m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+                m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); (parent || g).add(m); return m;
+            };
+            // 毛绒玩具风：圆眼睛带高光、软颜色、小嘴；危险靠颜色和动作，不靠吓人
+            let cuteEye = function (x, y, z, r, parent) {
+                let e = new THREE.Group(); e.position.set(x, y, z);
+                let ball = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), bas(0x1a1226)); ball.scale.set(1, 1.12, 0.6); e.add(ball);
+                let h1 = new THREE.Mesh(new THREE.CircleGeometry(r * 0.34, 12), bas(0xffffff)); h1.position.set(r * 0.28, r * 0.38, r * 0.62); e.add(h1);
+                let h2 = new THREE.Mesh(new THREE.CircleGeometry(r * 0.16, 10), bas(0xffffff)); h2.position.set(-r * 0.3, -r * 0.3, r * 0.62); e.add(h2);
+                (parent || g).add(e); return e;
+            };
+            if (type === 'angel') {
+                // 凝视者：灰色圆石球，圆疙瘩，正中一只发光的大眼睛（瞳孔大、带高光）
+                let stone = new THREE.MeshPhongMaterial({ color: 0x8d959c, flatShading: false, shininess: 4, specular: 0x222222 });
+                add(new THREE.IcosahedronGeometry(4.5, 2), stone, 0, 0, 0);
+                let lump = new THREE.MeshPhongMaterial({ color: 0x7a838a, shininess: 4, specular: 0x222222 });
+                [[-3.3, 2.6, 1.8, 1.0], [3.6, -2.2, 1.4, 0.9], [-1.2, -3.7, 1.9, 0.8], [2.2, 3.4, -1.5, 0.9]].forEach(function (c) { add(new THREE.SphereGeometry(c[3], 12, 10), lump, c[0], c[1], c[2]); });
+                let ring = add(new THREE.TorusGeometry(2.75, 0.55, 10, 24), lump, 0, 0.3, 3.45);
+                let halo = add(new THREE.CircleGeometry(3.2, 24), bas(0xffe082, { transparent: true, opacity: 0.3, depthWrite: false }), 0, 0.3, 4.1);
+                let eye = add(new THREE.SphereGeometry(2.35, 20, 14), bas(0xfffde7), 0, 0.3, 3.1);
+                let iris = add(new THREE.CircleGeometry(1.5, 20), bas(0xff9800), 0, 0.3, 5.42);
+                let pupil = add(new THREE.CircleGeometry(1.0, 18), bas(0x1a0d0d), 0, 0.3, 5.46);
+                add(new THREE.CircleGeometry(0.42, 12), bas(0xffffff), 0.45, 0.85, 5.5);   // 高光
+                add(new THREE.CircleGeometry(0.2, 10), bas(0xffffff), -0.4, -0.2, 5.5);
+                g.userData.eye = { halo: halo, iris: iris, pupil: pupil };
+            } else if (type === 'puppet') {
+                // 伪装者：平时像柜子或灯柱，靠近时只冒出一对圆圆的大眼睛，像偷看的小猫
+                let variant = opt.variant !== undefined ? opt.variant : Math.floor(Math.random() * 2);
+                g.userData.variant = variant;
+                let eyes = new THREE.Group(); g.add(eyes);
+                let wood = lam(0x7b4a24), wood2 = lam(0x5a3416);
+                let peek = function (y, z, r) {
+                    [-1, 1].forEach(function (sd) {
+                        let e = cuteEye(sd * r * 1.25, y, z - 0.4, r, eyes); e.userData.rest = z - 0.4; e.userData.out = z + 0.5;
+                        e.scale.setScalar(0.001);
+                    });
+                };
+                if (variant === 0) {
+                    add(new THREE.BoxGeometry(5.2, 9.2, 3.8), wood, 0, -0.1, 0);
+                    add(new THREE.BoxGeometry(5.8, 0.7, 4.4), wood2, 0, 4.6, 0);
+                    add(new THREE.BoxGeometry(5.6, 0.5, 4.2), wood2, 0, -4.6, 0);
+                    add(new THREE.BoxGeometry(0.16, 8.2, 0.2), lam(0x2e1a0a), 0, -0.1, 1.95);   // 门缝
+                    add(new THREE.SphereGeometry(0.34, 8, 6), lam(0xffc107), -0.7, 0, 2.05); add(new THREE.SphereGeometry(0.34, 8, 6), lam(0xffc107), 0.7, 0, 2.05);
+                    peek(2.0, 1.95, 1.05);
+                } else {
+                    add(new THREE.CylinderGeometry(1.1, 1.5, 0.9, 10), lam(0x37474f), 0, -4.5, 0);
+                    add(new THREE.CylinderGeometry(0.5, 0.7, 9.0, 10), lam(0x546e7a), 0, -0.2, 0);
+                    add(new THREE.ConeGeometry(2.1, 1.4, 12), lam(0x37474f), 0, 4.2, 0);
+                    add(new THREE.SphereGeometry(1.5, 14, 10), bas(0xffe082), 0, 3.0, 0);   // 灯泡
+                    peek(2.55, 1.35, 0.55);
+                }
+                g.userData.eyes = eyes;
+            } else if (type === 'high') {
+                // 高空者：紫色球，带蝙蝠翅膀
+                add(new THREE.SphereGeometry(4.0, 22, 16), lam(0x8e44ad), 0, 0, 0);
+                add(new THREE.SphereGeometry(2.6, 16, 12), lam(0xb57edc), 0, -1.0, 1.9);   // 肚皮
+                [-1, 1].forEach(function (s) {
+                    add(new THREE.ConeGeometry(0.9, 2.2, 6), lam(0x6c3483), s * 2.5, 4.1, 0.2);   // 耳朵
+                    add(new THREE.SphereGeometry(0.85, 10, 8), bas(0xffeb3b), s * 1.45, 1.0, 3.35);
+                    add(new THREE.SphereGeometry(0.34, 8, 6), bas(0x1b1b1b), s * 1.45, 1.0, 4.05);
+                    add(new THREE.ConeGeometry(0.28, 0.9, 5), bas(0xffffff), s * 0.8, -1.7, 3.6).rotation.x = Math.PI;   // 獠牙
+                });
+                let wingMat = new THREE.MeshLambertMaterial({ color: 0x4a235a, side: THREE.DoubleSide }), boneMat = lam(0x2d1236);
+                let shape = new THREE.Shape();
+                [[0, 1], [4.5, 5.6], [11.5, 4.4], [8.6, 1.6], [10.0, -2.0], [6.2, -0.2], [5.4, -3.8], [2.6, -0.9], [0, -1.6]].forEach(function (p, i) { if (i) shape.lineTo(p[0], p[1]); else shape.moveTo(p[0], p[1]); });
+                let wings = [];
+                [-1, 1].forEach(function (s) {
+                    let w = new THREE.Group(); w.position.set(s * 3.4, 1.0, -0.6); w.scale.set(s * 0.85, 0.85, 0.85);
+                    w.add(new THREE.Mesh(new THREE.ShapeGeometry(shape), wingMat));
+                    bone([0, 1, 0.05], [4.5, 5.6, 0.05], 0.3, boneMat, w); [[11.5, 4.4], [10.0, -2.0], [5.4, -3.8]].forEach(function (t) { bone([4.5, 5.6, 0.05], [t[0], t[1], 0.05], 0.18, boneMat, w); });
+                    g.add(w); wings.push(w);
+                });
+                g.userData.wings = wings;
+            } else if (type === 'splitter') {
+                // 分裂者：绿色史莱姆（每分裂一次变小：游戏里按碰撞半径缩放整个模型）
+                let slime = lam(0x3ddc84, { transparent: true, opacity: 0.86 });
+                let blob = add(new THREE.SphereGeometry(4.5, 24, 16), slime, 0, -0.7, 0); blob.scale.set(1, 0.8, 1);
+                add(new THREE.SphereGeometry(2.1, 14, 10), lam(0x1b9a56, { transparent: true, opacity: 0.55 }), 0, -1.0, -0.2);
+                [[-3.6, -3.3, 1.2], [3.3, -3.4, 1.6], [0.4, -3.7, 3.4], [-1.2, -3.6, -3]].forEach(function (p) { add(new THREE.SphereGeometry(1.0, 8, 6), slime, p[0], p[1], p[2]).scale.y = 0.6; });
+                [-1, 1].forEach(function (s) {
+                    add(new THREE.SphereGeometry(1.0, 12, 10), bas(0xffffff), s * 1.7, 0.9, 3.95);
+                    add(new THREE.SphereGeometry(0.5, 10, 8), bas(0x111111), s * 1.7, 0.8, 4.8);
+                });
+                let smile = add(new THREE.TorusGeometry(1.35, 0.24, 6, 14, Math.PI), bas(0x0d3b22), 0, -0.2, 4.45); smile.rotation.z = Math.PI;
+                let shine = add(new THREE.SphereGeometry(1.0, 10, 8), bas(0xffffff, { transparent: true, opacity: 0.55 }), -2.0, 2.4, 2.5); shine.scale.set(1.3, 0.6, 0.6); shine.rotation.z = 0.5;
+                g.userData.blob = blob;
+            } else if (type === 'curser') {
+                // 诅咒之灵：圆滚滚的深紫小幽灵，大黑眼睛带高光、小“o”嘴、腮红，拖一条越来越细的飘带
+                let ghost = lam(0x2f1a58, { transparent: true, opacity: 0.9, emissive: 0x120826, depthWrite: false });
+                let profPts = [[0.01, 5.2], [1.8, 5.0], [3.2, 4.0], [3.9, 2.4], [4.0, 0.6], [3.6, -1.3], [2.8, -2.9], [1.6, -3.9], [0.01, -4.2]];
+                add(new THREE.LatheGeometry(profPts.map(function (q) { return new THREE.Vector2(q[0], q[1]); }), 24), ghost, 0, 0, 0);
+                // 脸上的东西贴着脑袋的弧度：按身体在这个高度的半径算出表面位置，往里收 inset，并跟着表面朝向转（侧面看不会伸出轮廓）
+                let rAt = function (y) {
+                    for (let i = 0; i < profPts.length - 1; i++) {
+                        let a = profPts[i], b = profPts[i + 1];
+                        if (y <= a[1] && y >= b[1]) return a[0] + (b[0] - a[0]) * (a[1] - y) / (a[1] - b[1]);
+                    }
+                    return 0.01;
+                };
+                let hug = function (o, x, y, inset) {
+                    let R = rAt(y), slope = (rAt(y + 0.2) - rAt(y - 0.2)) / 0.4, z = Math.sqrt(Math.max(0.01, R * R - x * x));
+                    o.rotation.order = 'YXZ'; o.position.set(x, y, z - inset);
+                    o.rotation.y = Math.atan2(x, z); o.rotation.x = Math.atan(slope);
+                    g.add(o); return o;
+                };
+                [-1, 1].forEach(function (s) {
+                    add(new THREE.SphereGeometry(0.95, 10, 8), ghost, s * 4.0, -0.8, 0.3);   // 小圆手
+                    hug(cuteEye(0, 0, 0, 1.0, new THREE.Group()), s * 1.45, 1.7, 0.52);
+                    hug(new THREE.Mesh(new THREE.CircleGeometry(0.75, 14), bas(0xff8fb1, { transparent: true, opacity: 0.7, depthWrite: false })), s * 2.3, 0.2, 0.02);   // 腮红
+                });
+                hug(new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.14, 8, 14), bas(0x21122f)), 0, 0.2, 0.12);   // 小“o”嘴
+                // 飘带：一条平的带子，越到末端越细，每帧摆一摆
+                let N = 14, pos = new Float32Array((N + 1) * 2 * 3), idx = [];
+                for (let i = 0; i < N; i++) { let a0 = i * 2; idx.push(a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2); }
+                let rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); rg.setIndex(idx);
+                let ribbon = new THREE.Mesh(rg, new THREE.MeshLambertMaterial({ color: 0x3e2470, emissive: 0x160a2e, side: THREE.DoubleSide, transparent: true, opacity: 0.95 }));
+                ribbon.frustumCulled = false; g.add(ribbon);
+                g.userData.ribbon = { geo: rg, n: N };
+                huntMobRibbon(g.userData.ribbon, 0, g.userData.t0);
+            }
+            return g;
+        }
+        // 飘带的形状：沿着身后（-z）一路往下飘，宽度越来越细到一点；t 是时间，摆起来
+        function huntMobRibbon(r, t, t0) {
+            let p = r.geo.attributes.position.array, N = r.n;
+            for (let i = 0; i <= N; i++) {
+                let f = i / N, w = 1.5 * Math.pow(1 - f, 0.9) + 0.02;
+                let cx = 2.0 + f * 2.0 + Math.sin(t * 3 - f * 4 + t0) * (0.2 + f * 1.4), cy = -2.8 - f * 2.4 + Math.sin(t * 2 - f * 3 + t0) * 0.4 * f, cz = -1.0 - f * 3.2;
+                // 带子的宽度朝上下斜着放，从侧面和正面都看得见
+                let wx = w * 0.45, wy = w * 0.9;
+                p[i * 6] = cx - wx; p[i * 6 + 1] = cy - wy; p[i * 6 + 2] = cz;
+                p[i * 6 + 3] = cx + wx; p[i * 6 + 4] = cy + wy; p[i * 6 + 5] = cz;
+            }
+            r.geo.attributes.position.needsUpdate = true; r.geo.computeVertexNormals();
+        }
+        // 每帧动一动：t 是秒，dist 是离玩家多远（伪装者靠近时冒眼睛）。force 给图鉴用：直接指定冒出来多少（0~1）
+        function huntMobAnim(model, t, dist, popForce) {
+            let u = model.userData, type = u.mobType;
+            if (type === 'angel') {
+                let k = 0.5 + 0.5 * Math.sin(t * 2.2 + u.t0);
+                u.eye.halo.material.opacity = 0.18 + 0.2 * k; u.eye.pupil.scale.setScalar(0.85 + 0.35 * k);
+            } else if (type === 'puppet') {
+                let pop = popForce !== undefined ? popForce : Math.max(0, Math.min(1, (46 - dist) / 22));
+                u.eyes.children.forEach(function (e, i) {
+                    let k = Math.max(0, Math.min(1, pop * 1.4 - i * 0.15));
+                    e.scale.setScalar(Math.max(0.001, k)); e.position.z = e.userData.rest + (e.userData.out - e.userData.rest) * k;
+                });
+                model.position.x = pop > 0.6 ? Math.sin(t * 40) * 0.08 : 0;
+            } else if (type === 'high') {
+                let f = Math.sin(t * 9 + u.t0) * 0.55;
+                u.wings[0].rotation.z = -f; u.wings[1].rotation.z = f;
+                model.position.y = Math.sin(t * 3 + u.t0) * 0.35;
+            } else if (type === 'splitter') {
+                let k = Math.sin(t * 4 + u.t0) * 0.07;
+                u.blob.scale.set(1 - k, 0.8 + k * 1.4, 1 - k);
+            } else if (type === 'curser') {
+                huntMobRibbon(u.ribbon, t, u.t0);
+                model.position.y = Math.sin(t * 2 + u.t0) * 0.5;
+            }
+        }
+        // 游戏里的怪：本体是原来那个看不见的碰撞球/圆柱（碰撞、射线、位置都不变），长相挂在它下面
+        function huntMobMesh(type, opt) {
+            opt = opt || {};
+            let geo = type === 'puppet' ? new THREE.CylinderGeometry(2, 2, 10) : type === 'curser' ? new THREE.SphereGeometry(5) : new THREE.SphereGeometry(opt.radius || 4.5);
+            let root = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ visible: false }));
+            let model = huntMobModel(type, opt);
+            if (opt.radius) model.scale.setScalar(opt.radius / 4.5);
+            root.add(model); root.userData.model = model;
+            return root;
+        }
+        // 每帧给场景里所有怪的长相动一动，并转向玩家
+        function huntMobsAnim() {
+            let t = performance.now() / 1000;
+            entities.forEach(function (e) {
+                let m = e.userData.model; if (!m) return;
+                let d = e.position.distanceTo(camera.position);
+                if (d > 220) return;
+                huntMobAnim(m, t, d);
+                let want = Math.atan2(camera.position.x - e.position.x, camera.position.z - e.position.z);
+                let diff = Math.atan2(Math.sin(want - m.rotation.y), Math.cos(want - m.rotation.y));
+                m.rotation.y += diff * 0.15;
+            });
+        }
+        // 图鉴解锁：怪第一次出现在视野里（在镜头里、不太远、差不多同一层）
+        function huntMobSeenCheck(entity) {
+            let tp = entity.userData.type; if (!HUNT_MOBS[tp]) return;
+            if (!gState.huntMobSeen) gState.huntMobSeen = {};
+            if (gState.huntMobSeen[tp]) return;
+            if (entity.position.distanceTo(camera.position) < 130 && Math.abs(entity.position.y - camera.position.y) < TILE * 1.2 && viewFrustum.containsPoint(entity.position)) {
+                gState.huntMobSeen[tp] = 1; saveProgress();
+                blazeFlash('图鉴新增：' + HUNT_MOBS[tp].name);
+            }
+        }
+        function huntMobKill(entity) {
+            let tp = entity.userData.type; if (!HUNT_MOBS[tp]) return;
+            if (!gState.huntMobKills) gState.huntMobKills = {};
+            gState.huntMobKills[tp] = (gState.huntMobKills[tp] || 0) + 1;
+            if (!gState.huntMobSeen) gState.huntMobSeen = {};
+            gState.huntMobSeen[tp] = 1;
+            saveProgress();
+        }
+
+        // ── 图鉴“怪物”页：没见过的是剪影和 ？？？；见过的有转动的 3D 模型、名字、介绍、血量速度伤害（高中低）、怎么对付、打死几只 ──
+        let mobDex = null;   // { renderer, scene, camera, models, raf }
+        function mobDexRenderer() {
+            if (mobDex) return mobDex;
+            let r = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+            r.setPixelRatio(1); r.setSize(220, 220); r.setClearColor(0x000000, 0);
+            let sc = new THREE.Scene(); sc.add(new THREE.AmbientLight(0xffffff, 0.85));
+            let dl = new THREE.DirectionalLight(0xffffff, 0.7); dl.position.set(8, 14, 12); sc.add(dl);
+            let cam = new THREE.PerspectiveCamera(34, 1, 0.5, 200); cam.position.set(0, 3, 24); cam.lookAt(0, 0.5, 0);
+            mobDex = { renderer: r, scene: sc, camera: cam, models: {}, raf: 0 };
+            return mobDex;
+        }
+        // 把一种怪画到 2D 画布上。yaw 转角；silhouette 为真画成剪影；bg 给截图用
+        function huntMobDraw(canvas, type, yaw, silhouette, t, bg) {
+            let D = mobDexRenderer();
+            if (!D.models[type]) D.models[type] = huntMobModel(type, { variant: 0 });
+            let m = D.models[type]; D.scene.add(m);
+            m.rotation.y = yaw; huntMobAnim(m, t || 0, 9999, 0.5 + 0.5 * Math.sin((t || 0) * 1.6));
+            D.scene.overrideMaterial = silhouette ? new THREE.MeshBasicMaterial({ color: 0x2b2f3a }) : null;
+            D.renderer.setClearColor(bg !== undefined ? bg : 0x000000, bg !== undefined ? 1 : 0);
+            D.renderer.setSize(canvas.width, canvas.height, false); D.camera.aspect = canvas.width / canvas.height; D.camera.updateProjectionMatrix();
+            D.renderer.render(D.scene, D.camera);
+            D.scene.overrideMaterial = null; D.scene.remove(m);
+            let c = canvas.getContext('2d'); c.clearRect(0, 0, canvas.width, canvas.height); c.drawImage(D.renderer.domElement, 0, 0, canvas.width, canvas.height);
+        }
+        function mobDexPage() {
+            let seen = gState.huntMobSeen || {}, kills = gState.huntMobKills || {};
+            let got = HUNT_MOB_ORDER.filter(function (k) { return seen[k]; }).length;
+            let html = '<div style="font-size:12px; color:#888; margin-bottom:8px;">怪物第一次出现在你视野里就会点亮。<br><b>已发现 ' + got + ' / ' + HUNT_MOB_ORDER.length + '</b></div>';
+            HUNT_MOB_ORDER.forEach(function (k) {
+                let M = HUNT_MOBS[k], on = !!seen[k];
+                html += '<div class="mobcard" style="display:flex; gap:10px; margin:6px 0; padding:8px; border-radius:6px; background:' + (on ? '#f3efff' : '#f1f1f1') + ';">' +
+                    '<canvas data-mob="' + k + '" width="220" height="220" style="width:96px; height:96px; flex-shrink:0;"></canvas>' +
+                    '<div style="flex:1; font-size:12px; line-height:1.6; color:#444;">' +
+                    (on ? '<div style="font-size:15px; font-weight:bold; color:#5e35b1;">' + M.name + '</div>' +
+                        '<div>' + (HUNT_MOB_INTRO[k] || '') + '</div>' +
+                        '<div style="margin:2px 0;"><span class="mobstat">血量 ' + huntMobLevel('hp', M.hp) + '</span> <span class="mobstat">速度 ' + huntMobLevel('speed', M.speed) + '</span> <span class="mobstat">伤害 ' + huntMobLevel('dmg', M.dmg) + '</span></div>' +
+                        '<div><b>怎么对付：</b>' + M.tip + '</div>' +
+                        '<div style="color:#888;">打死过 ' + (kills[k] || 0) + ' 只</div>'
+                        : '<div style="font-size:15px; font-weight:bold; color:#aaa;">？？？</div><div style="color:#aaa;">还没见过。</div>') +
+                    '</div></div>';
+            });
+            return html;
+        }
+        // 画布每帧转一转
+        function mobDexLoop() {
+            let body = document.getElementById('book-body');
+            if (!body || document.getElementById('book-modal').classList.contains('hidden') || bookTab !== 'mob') { if (mobDex) mobDex.raf = 0; return; }
+            let t = performance.now() / 1000, seen = gState.huntMobSeen || {};
+            body.querySelectorAll('canvas[data-mob]').forEach(function (cv) { huntMobDraw(cv, cv.getAttribute('data-mob'), 0.5 + t * 0.9, !seen[cv.getAttribute('data-mob')], t); });
+            mobDexRenderer().raf = requestAnimationFrame(mobDexLoop);
+        }
+        function mobDexStart() { let D = mobDexRenderer(); if (!D.raf) D.raf = requestAnimationFrame(mobDexLoop); }
