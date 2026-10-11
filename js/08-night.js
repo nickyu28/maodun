@@ -3451,11 +3451,13 @@
         // 带上/放下剑，血量上限跟着变，当前血量按比例换算（100/100 带上 +200 的剑 → 300/300；扔了 → 100/100）
         let huntBonusSeen = 0;
         function huntMaxHpSync(reset) {
-            let b = weaponHpBonus(), base = gState.maxHp || 100;
+            let b = weaponHpBonus(), base = huntBaseMax();
             if (!reset && b !== huntBonusSeen && gState.hp > 0) gState.hp = Math.max(1, Math.round(gState.hp * (base + b) / (base + huntBonusSeen)));
             huntBonusSeen = b;
         }
-        function effectiveMaxHp() { return (gState.maxHp || 100) + weaponHpBonus(); }
+        // H22：猫神护身符碎掉一次，本局血量上限 −40（最低 30）。huntHpCut 每局归零
+        function huntBaseMax() { return Math.max(30, (gState.maxHp || 100) - (gState.huntHpCut || 0)); }
+        function effectiveMaxHp() { return huntBaseMax() + weaponHpBonus(); }
 
         // ── 配方图鉴 ──
         // 一条配方都不预先告诉你。你把两样东西扔到一块儿、真合出来了，
@@ -3514,6 +3516,64 @@
                 clearTimeout(huntMergeBoom._t);
                 huntMergeBoom._t = setTimeout(function () { el.style.display = 'none'; }, 2200);
             }
+        }
+
+        // ── 药水和猫神护身符（H22）──
+        // 开箱时非大金的结果，木箱 6%、银箱 8%、金箱 10% 换成下面三样之一，立即用掉（只对开箱的人生效）。
+        const HUNT_POTION_P = { wood: 0.06, silver: 0.08, gold: 0.10 };
+        const HUNT_POTIONS = [
+            { id: 'heal', n: '治疗药剂', v: 80000, heal: 50 },
+            { id: 'speed', n: '加速药剂', v: 50000, secs: 20, mul: 1.5 },
+            { id: 'spring', n: '弹簧鞋', v: 50000, secs: 30, mul: 2 }
+        ];
+        const GODCAT_V = 120000, HUNT_M = 5;   // HUNT_M：1 米 = 5 个单位（一格 24 ≈ 5 米）
+        function huntPotionRoll(boxType, loot, r1, r2) {
+            let p = HUNT_POTION_P[boxType]; if (!p || huntIsBig(loot)) return null;
+            return r1 < p ? HUNT_POTIONS[Math.floor(r2 * HUNT_POTIONS.length) % HUNT_POTIONS.length] : null;
+        }
+        function huntPotionUse(p) {
+            if (p.heal) { gState.hp = Math.min(effectiveMaxHp(), gState.hp + p.heal); updateHUD(); blazeFlash('喝了' + p.n + '，回了 ' + p.heal + ' 点血'); }
+            else if (p.id === 'speed') { gState.speedT = p.secs; blazeFlash('喝了' + p.n + '，' + p.secs + ' 秒内跑得更快'); }
+            else if (p.id === 'spring') { gState.springT = p.secs; blazeFlash('穿上了' + p.n + '，' + p.secs + ' 秒内跳得更高'); }
+            sfxPlay([660, 880], 0.3, 0.05, 'triangle');
+        }
+        function huntSpeedPotionMul() { return gState.speedT > 0 ? 1.5 : 1; }
+        function huntJumpVel() { return gState.springT > 0 ? 44 * Math.SQRT2 : 44; }   // 跳得高度 ×2 → 起跳速度 ×√2
+        // 每张图 25% 概率把一个猫神护身符藏在桌面或顶楼死角。造图时用种子定（各端一样）
+        function huntPlaceGodCat() {
+            groundItems = groundItems.filter(function (g) { if (g.userData.type === 'godcat') { scene.remove(g); return false; } return true; });
+            if (gState.tutorial || seededRandom() >= 0.25) return null;
+            let spots = [];
+            for (let f = 0; f < FLOORS; f++) for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
+                let c = maze[f] && maze[f][z] && maze[f][z][x]; if (!c) continue;
+                if (c.type === 2) spots.push({ x: x, z: z, y: f * TILE + HUNT_TABLE_H + 1.5 });
+                else if (f === FLOORS - 1 && c.type === 0 && c.isLeaf) spots.push({ x: x, z: z, y: f * TILE + 1.5 });
+            }
+            if (!spots.length) return null;
+            let s = spots[Math.floor(seededRandom() * spots.length)];
+            let it = { n: '猫神护身符', v: GODCAT_V, w: 1, tex: 'cat_shield', c: 0xfff176, type: 'godcat' };
+            let m = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: createProceduralTexture(it.tex, it.c, '#ffffff') }));
+            m.position.set(s.x * TILE, s.y, s.z * TILE);
+            m.userData = Object.assign({}, it, { isItem: true, vel: new THREE.Vector3(0, 0, 0) });
+            scene.add(m); groundItems.push(m);
+            return m;
+        }
+        // 带着护身符死亡：立刻满血站起来，5 米内的怪全死，护身符碎掉，本局血量上限 −40（最低 30）
+        function huntGodCatSave() {
+            let sl = carriedSlots().filter(function (s) { let it = s[0][s[1]]; return it && it.type === 'godcat'; })[0];
+            if (!sl) return false;
+            sl[0][sl[1]] = null;
+            gState.huntHpCut = (gState.huntHpCut || 0) + 40;
+            gState.hp = effectiveMaxHp(); huntBonusSeen = weaponHpBonus();
+            let r = HUNT_M * 5, killed = 0;
+            entities = entities.filter(function (e) {
+                if (!(e.userData.type in HUNT_GRAB_TYPES) && e.userData.type !== 'fake') return true;
+                if (e.position.distanceTo(camera.position) > r) return true;
+                scene.remove(e); killed++; return false;
+            });
+            updateHUD(); blazeFlash('猫神护身符碎了——你站了起来' + (killed ? '，身边的怪都被震死了' : ''));
+            sfxPlay([392, 523, 784, 1046], 0.5, 0.07, 'triangle');
+            return true;
         }
 
         // ── 运气（H21）──
@@ -4002,7 +4062,9 @@
                 if (abilityActive > 0) { abilityActive -= dt; gHpRegenAcc += 8 * dt; if (gHpRegenAcc >= 1) { gState.hp = Math.min(effectiveMaxHp(), gState.hp + Math.floor(gHpRegenAcc)); gHpRegenAcc -= Math.floor(gHpRegenAcc); } updateHUD(); }
             }
 
-            let baseMoveSpeed = 42 * wMod * DAILY_MOD.speedMul * bondSpeedMul() * weaponSpeedMul();
+            if (gState.speedT > 0) gState.speedT -= dt;
+            if (gState.springT > 0) gState.springT -= dt;
+            let baseMoveSpeed = 42 * wMod * DAILY_MOD.speedMul * bondSpeedMul() * weaponSpeedMul() * huntSpeedPotionMul();
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); let side = new THREE.Vector3(-dir.z, 0, dir.x); let moveX = 0, moveZ = 0;
 
             let fwd = 0; let strafe = 0;
@@ -4038,7 +4100,7 @@
                 if (keys[' '] || touchBtn.jump) { huntJumpBuf = 0.16; keys[' '] = false; touchBtn.jump = false; }
                 if (huntJumpBuf > 0) {
                     huntJumpBuf -= dt;
-                    if (onGround) { pVel.y = 44; onGround = false; huntJumpBuf = 0; }
+                    if (onGround) { pVel.y = huntJumpVel(); onGround = false; huntJumpBuf = 0; }
                 }
                 huntPhysics(dt, moveX, moveZ, baseMoveSpeed);
                 let cf = playerFloor();
@@ -4091,6 +4153,8 @@
                         huntTaskEvent('chest', boxType);
                         if (boxType === 'safe') gState.safeOpenedThisGame = true;
                         let singleLoot = huntChestLoot(activeObj);
+                        let potion = huntPotionRoll(boxType, singleLoot, Math.random(), Math.random());
+                        if (potion) { huntPotionUse(potion); singleLoot = null; }   // 药水立即用掉，不掉东西
 
                         if (singleLoot) {
                             let tObj = createProceduralTexture(singleLoot.tex, singleLoot.c, '#ffffff');

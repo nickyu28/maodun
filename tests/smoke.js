@@ -1037,6 +1037,69 @@ async function enterExit(tab, key) {
             report('H21 运气猫爪：合成立即用掉、层数 +1 不封顶；紫→金 k×50%、金→大金 k×10%、保险柜多抽留贵、抽奖机 +5%/−15%；哪里都不说明；每局归零', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H22')) {
+            // H22：开箱非大金的结果木箱 6% / 银箱 8% / 金箱 10% 换成药水（立即用）；猫神护身符每张图 25% 藏在桌面或顶楼死角，带着它死亡 = 满血站起来、5 米内的怪全死、护身符碎、本局上限 −40（最低 30）
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const r = JSON.parse(await T.eval(`(function(){
+                let o = {}, N = 20000;
+                let frac = function (box, loot) { let n = 0, kinds = {}; for (let i = 0; i < N; i++) { let p = huntPotionRoll(box, loot, (i + 0.5) / N, ((i * 7919) % N + 0.5) / N); if (p) { n++; kinds[p.id] = (kinds[p.id] || 0) + 1; } } return [n / N, kinds]; };
+                let pl = itemPool.purple[0];
+                o.wood = frac('wood', pl); o.silver = frac('silver', pl); o.gold = frac('gold', pl); o.safe = frac('safe', pl)[0]; o.big = frac('gold', itemPool.ultra[0])[0];
+                o.table = HUNT_POTIONS.map(function (p) { return [p.id, p.n, p.v]; });
+                // 效果
+                gState.hp = 20; huntPotionUse(HUNT_POTIONS[0]); o.heal = gState.hp;
+                gState.hp = effectiveMaxHp() - 10; huntPotionUse(HUNT_POTIONS[0]); o.healCap = gState.hp === effectiveMaxHp();
+                huntPotionUse(HUNT_POTIONS[1]); o.speed = [gState.speedT, huntSpeedPotionMul()];
+                huntPotionUse(HUNT_POTIONS[2]); o.spring = [gState.springT, +(huntJumpVel() * huntJumpVel() / (44 * 44)).toFixed(3)];
+                gState.speedT = 0; gState.springT = 0; o.off = [huntSpeedPotionMul(), huntJumpVel()];
+                // 护身符摆放：很多个种子里 25%，在桌面或顶楼死角
+                let hit = 0, S = 400, where = { table: 0, top: 0, other: 0 };
+                let save = gameSeed;
+                for (let s = 1; s <= S; s++) {
+                    gameSeed = s * 7 + 3;
+                    let m = huntPlaceGodCat();
+                    if (m) { hit++; let cx = Math.round(m.position.x / TILE), cz = Math.round(m.position.z / TILE), f = Math.floor((m.position.y - 0.5) / TILE), c = maze[f] && maze[f][cz] && maze[f][cz][cx];
+                        if (c && c.type === 2) where.table++; else if (f === FLOORS - 1 && c && c.type === 0 && c.isLeaf) where.top++; else where.other++; }
+                }
+                gameSeed = save; groundItems = groundItems.filter(function (g) { if (g.userData.type === 'godcat') { scene.remove(g); return false; } return true; });
+                o.place = [hit / S, where];
+                return JSON.stringify(o); })()`));
+            const near = (a, b, t) => Math.abs(a - b) < (t || 0.004);
+            if (!near(r.wood[0], 0.06) || !near(r.silver[0], 0.08) || !near(r.gold[0], 0.10) || r.safe !== 0 || r.big !== 0) bad.push('概率 ' + JSON.stringify([r.wood[0], r.silver[0], r.gold[0], r.safe, r.big]));
+            ['heal', 'speed', 'spring'].forEach((k) => { if (!(r.gold[1][k] > 0.2 * r.gold[0] * 20000)) bad.push('三种药水不均匀 ' + JSON.stringify(r.gold[1])); });
+            if (JSON.stringify(r.table) !== JSON.stringify([['heal', '治疗药剂', 80000], ['speed', '加速药剂', 50000], ['spring', '弹簧鞋', 50000]])) bad.push('药水表 ' + JSON.stringify(r.table));
+            if (r.heal !== 70 || !r.healCap || r.speed.join() !== '20,1.5' || r.spring.join() !== '30,2' || r.off.join() !== '1,44') bad.push('药水效果 ' + JSON.stringify([r.heal, r.healCap, r.speed, r.spring, r.off]));
+            if (!near(r.place[0], 0.25, 0.06) || r.place[1].other !== 0 || r.place[1].table + r.place[1].top === 0) bad.push('护身符摆放 ' + JSON.stringify(r.place));
+            // 死亡：背包里有护身符 → 站起来
+            const d = JSON.parse(await T.eval(`(function(){
+                let o = {}, am = function () { return { n: '猫神护身符', v: GODCAT_V, w: 1, type: 'godcat' }; };
+                let mob = function (type, dx) { let m = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial()); m.position.copy(camera.position); m.position.x += dx; m.userData = { type: type, hp: 10, maxHp: 10, speed: 0, dmg: 0, atkCd: 0, name: 'x' }; scene.add(m); entities.push(m); return m; };
+                gState.huntHpCut = 0; gState.isDead = false; gState.inv[3] = am(); let near1 = mob('angel', 10), far1 = mob('puppet', 80);
+                gState.hp = 0; triggerAgentDeath();
+                o.alive = !gState.isDead && gState.hp === 60 + 0 + 40 - 40 + 0 ? false : null;
+                o.state = [gState.isDead, gState.hp, effectiveMaxHp(), gState.huntHpCut, gState.inv[3] === null, entities.indexOf(near1) < 0, entities.indexOf(far1) >= 0];
+                // 第二次（腰包里）：上限 20 → 最低 30
+                gState.inv[4] = { n: '腰包', isShop: true, type: 'backpack_ext', bag: [am(), null, null] }; gState.hp = 0; triggerAgentDeath();
+                o.second = [gState.isDead, gState.hp, effectiveMaxHp(), gState.huntHpCut, gState.inv[4].bag[0] === null];
+                // 没有护身符：真的倒下
+                gState.hp = 0; triggerAgentDeath(); o.third = gState.isDead;
+                gState.isDead = false; gState.huntHpCut = 0; gState.hp = effectiveMaxHp();
+                return JSON.stringify(o); })()`));
+            if (d.state.join() !== 'false,60,60,40,true,true,true') bad.push('带护身符死亡 ' + d.state.join());
+            if (d.second.join() !== 'false,30,30,80,true') bad.push('第二次 ' + d.second.join());
+            if (d.third !== true) bad.push('没护身符却没死');
+            // 新的一局归零
+            await T.eval(`gState.huntHpCut = 80; gState.speedT = 9; ${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000);
+            if ((await T.eval(`[gState.huntHpCut, gState.speedT, effectiveMaxHp()].join()`)) !== '0,0,100') bad.push('新一局没归零');
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H22 开箱药水（6/8/10%，立即用）；猫神护身符 25% 藏在桌面或顶楼死角，带着死亡满血站起来、5 米内怪全死、上限 −40', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 

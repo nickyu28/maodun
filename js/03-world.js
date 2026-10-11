@@ -171,6 +171,7 @@
             gState.safeOpenedThisGame = false; gState.backpackOpen = false; gState.largeMapOpen = false; gState.monstersSpawned = false; gState.inSafeZone = true; gState.needsLock = false; gState.pAtkCd = 0; gState.timeStop = 0;
             gState.debuff = { type: 0, timer: 0, cooldown: 0 };
             gState.maxHp = 100; gState.hp = effectiveMaxHp(); huntMaxHpSync(true);
+            gState.huntHpCut = 0; gState.speedT = 0; gState.springT = 0;   // H22：血量上限扣减、加速药剂、弹簧鞋的剩余秒数，每局归零
             gState.huntLuck = 0;   // H21：运气层数，每局从 0 开始，不存档
             huntLure = null;
             huntLureFx.forEach(function (f) { scene.remove(f.o); }); huntLureFx = [];
@@ -247,6 +248,7 @@
                 gameSeed = (seed0 + 7919 * (attempt + 1)) % 233280 || 1;
             }
             huntAssignLoot(chests, seededRandom, Math.max(1, (gState.team || []).length));
+            huntPlaceGodCat();
             gState.signalN = 0;
             huntMergeStatic();
             if (gState.tutorial) { gState.huntTask = null; huntTaskHud(); } else huntTaskNew();
@@ -1458,7 +1460,9 @@
                     '猫盾骑士剑涨到 200 万，已经有的也一起涨',
                     '猫盾骑士剑的生命值加成变成 +200，放在背包或腰包里就算，不用拿在手上',
                     '寻宝队上方的血条、体力条里直接显示数字，带骑士剑时多出来的血是金色的；左上角那两行去掉了',
-                    '多了一个神秘配方'
+                    '多了一个神秘配方',
+                    '寻宝队开箱有时会开出药水（回血、加速、跳得更高），直接用掉',
+                    '有的图里，桌子上或顶楼的角落藏着猫神护身符'
                 ]
             },
             {

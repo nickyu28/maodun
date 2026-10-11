@@ -265,7 +265,7 @@
 
         // H20：上方血条、体力条里直接写数字（如 240/300）；带骑士剑时超出原来上限的那一段显示金色
         function huntBarsRender() {
-            let max = effectiveMaxHp() || 100, base = gState.maxHp || 100, hp = Math.max(0, gState.hp);
+            let max = effectiveMaxHp() || 100, base = huntBaseMax(), hp = Math.max(0, gState.hp);
             let red = Math.min(hp, base), gold = Math.max(0, hp - base);
             let f = document.getElementById('health-fill'), g = document.getElementById('health-gold'), n = document.getElementById('health-num');
             if (f) f.style.width = Math.min(100, red / max * 100) + '%';
@@ -794,7 +794,9 @@
         }
 
         function triggerAgentDeath() {
-            if (gState.isDead) return; gState.isDead = true;
+            if (gState.isDead) return;
+            if (!gState.leavingAlive && huntGodCatSave()) return;   // H22：带着猫神护身符，这次不死
+            gState.isDead = true;
 
             gState.deathPos = camera.position.clone(); gState.spectating = null; gState.spectateIdx = -1;
 
