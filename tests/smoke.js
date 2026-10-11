@@ -734,6 +734,24 @@ async function enterExit(tab, key) {
             report('M5 超燃加成图鉴：出现在三选一里就点亮、记选过/选了赢了次数、点满有称号、存档带着', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('M6')) {
+            // M6：惊魂夜被淘汰后，观战条上有“结算回大厅”，点了直接结算，只给打完那一份（不是赢）
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('night'); ${MODES.night.start}; true;`); await W(3000);
+            await T.eval(`night.survivors[0].out = true; true;`); await W(1500);
+            const bar = JSON.parse(await T.eval(`JSON.stringify({ spec: night.spectating, show: document.getElementById('night-spectate-bar').style.display, label: document.getElementById('night-spectate-leave').innerText })`));
+            if (!bar.spec || bar.show !== 'flex' || bar.label !== '结算回大厅') bad.push('观战条不对 ' + JSON.stringify(bar));
+            const c0 = await T.eval(`weeklyMode = function () { return 'hunt'; }; gState.quest = { day: localDayNum(), done: [1, 1, 1], all: 1 }; gState.mcoin || 0`);   // 排除本周活动翻倍、每日任务的加成
+            await T.eval(`${HIDE} document.getElementById('night-spectate-leave').click(); true;`); await W(1500);
+            const r = JSON.parse(await T.eval(`JSON.stringify({ over: night.over, modal: ${MODAL}, parts: coinsLast.parts.map(function (p) { return p[0]; }), gain: coinsLast.gain, coin: (gState.mcoin || 0) })`));
+            if (!r.over || r.modal !== '本局结束') bad.push('没结算 ' + JSON.stringify(r));
+            if (r.parts.join(',') !== '打完' || r.gain !== 3 || r.coin - c0 !== 3) bad.push('只该给打完那一份 ' + JSON.stringify(r) + ' c0=' + c0);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('M6 惊魂夜被淘汰后点“结算回大厅”直接结算，只给打完那一份', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];

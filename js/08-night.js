@@ -1292,7 +1292,7 @@
 
             let p0 = night.survivors[0];
             if (night.side === 'survivor' && (p0.out || p0.escaped) && !night.spectating) {
-                nightEnterSpectate(p0.escaped ? '你已撤离 —— 继续观战队友' : '你已被淘汰 —— 继续观战队友');
+                nightEnterSpectate(p0.escaped ? '你已撤离 —— 可以观战队友，或点“结算回大厅”' : '你已被淘汰 —— 可以观战队友，或点“结算回大厅”（只算打完这局）');
             }
 
             if (night.spectating) {
@@ -2516,8 +2516,8 @@
             let n = night.survivors.filter(function (a) { return a.escaped; }).length;
             // 联机：不管是不是房主，都只是自己回大厅——原来房主一点离开整局就结束了，别人打到一半全被踢回大厅。
             // 房主走的话把房主交给下一个人（nightNetLeave）。
-            if (netOn()) { nightNetLeave('你已离开观战。当前 ' + n + ' 人撤离。队友那局会继续打完。'); return; }
-            endNightGame('你已离开观战。当前 ' + n + ' 人撤离。');
+            if (netOn()) { nightNetLeave('你已结算回大厅。当前 ' + n + ' 人撤离。队友那局会继续打完。'); return; }
+            endNightGame('你已结算回大厅。当前 ' + n + ' 人撤离。');
         }
 
         // 惊魂夜原来只有被抓出局后的观战条里才有"离开"，活着的时候没有任何退出方式。
