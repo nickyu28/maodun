@@ -465,8 +465,32 @@
             fish: { name: '小鱼干爱好者', col: '#ffcc80', buy: 120 },
             shield: { name: '猫盾本盾', col: '#fff176', buy: 200 },
             legend: { name: '传说', col: '#ff5252', buy: 400 },
-            bzbook: { name: '超燃百科', col: '#ff7043', book: 1 }
+            bzbook: { name: '超燃百科', col: '#ff7043', book: 1 },
+            nighthunter: { name: '夜间猎手', col: '#ef5350', night: 'catch' }
         };
+        // ── 惊魂夜奖励（M7）──
+        // 逃出 10 次（逃生者撤离成功）解锁「发光眼」表情；当追捕者累计抓 30 人解锁称号「夜间猎手」。
+        const NIGHT_ESC_GOAL = 10, NIGHT_CATCH_GOAL = 30;
+        function nightStatOf() {
+            let n = gState.nightStat;
+            return { esc: (n && n.esc) || 0, catch: (n && n.catch) || 0 };
+        }
+        function nightStatAdd(kind) {
+            if (gState.tutorial) return;
+            let n = nightStatOf();
+            n[kind]++;
+            gState.nightStat = n;
+            let got = null;
+            if (kind === 'esc' && n.esc === NIGHT_ESC_GOAL) { shopState().faces.glow = 1; got = '表情「发光眼」'; }
+            if (kind === 'catch' && n.catch === NIGHT_CATCH_GOAL) {
+                if (!gState.titles) gState.titles = {};
+                gState.titles.nighthunter = 1; got = '称号「夜间猎手」'; roomHello();
+            }
+            saveProgress();
+            // 逃出是打完才算的，结算框里直接写；抓人是局内的，当场提示
+            if (got && kind === 'catch') setTimeout(function () { nightFlash('解锁：' + got); sfxChime(2); }, 400);
+            return got;
+        }
         function achState() {
             if (!gState.ach || typeof gState.ach !== 'object') gState.ach = { c: {}, done: {}, got: {}, modes: {} };
             ['c', 'done', 'got', 'modes'].forEach(function (k) { if (!gState.ach[k]) gState.ach[k] = {}; });
@@ -566,7 +590,8 @@
                         let right = on ? '<span style="font-size:12px; color:#66bb6a;">戴着</span>' :
                             own ? '<button onclick="titleWear(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#7e57c2; color:#fff; border:none;">戴上</button>' :
                                 T.buy ? '<button onclick="titleBuy(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#e6a23c; color:#fff; border:none;">' + coinBadgeHtml(T.buy, 13) + '</button>' :
-                                    T.book ? '<span style="font-size:11px; color:#9e9e9e;">超燃加成图鉴点满送（' + perkBookLit() + '/' + BLAZE_PERKS.length + '）</span>' :
+                                    T.night ? '<span style="font-size:11px; color:#9e9e9e;">惊魂夜当追捕者累计抓 ' + NIGHT_CATCH_GOAL + ' 人送（' + Math.min(NIGHT_CATCH_GOAL, nightStatOf().catch) + '/' + NIGHT_CATCH_GOAL + '）</span>' :
+                                T.book ? '<span style="font-size:11px; color:#9e9e9e;">超燃加成图鉴点满送（' + perkBookLit() + '/' + BLAZE_PERKS.length + '）</span>' :
                                     T.bz ? '<span style="font-size:11px; color:#9e9e9e;">' + BLAZE_CHARS[T.bz].name + '赢 ' + T.need + ' 场送（' + Math.min(T.need, blazeMasteryOf(T.bz).w) + '/' + T.need + '）</span>' :
                                         '<span style="font-size:11px; color:#9e9e9e;">成就「' + ACH_LIST.filter(function (a) { return a.id === T.ach; })[0].name + '」送</span>';
                         return '<div style="display:flex; align-items:center; gap:8px; padding:6px 4px; border-top:1px solid #eee;">' +
@@ -633,7 +658,9 @@
             angry: { name: '生气', price: 15, eyes: 'slant', mouth: 'frown' },
             blank: { name: '呆滞', price: 15, eyes: 'big', mouth: 'o' },
             smug: { name: '得意', price: 25, eyes: 'wink', mouth: 'smirk' },
-            cry: { name: '哭', price: 25, eyes: 'tear', mouth: 'frown' }
+            cry: { name: '哭', price: 25, eyes: 'tear', mouth: 'frown' },
+            // 商店买不到：惊魂夜逃出 10 次解锁（lock）
+            glow: { name: '发光眼', price: 0, lock: 'escape', eyes: 'glow', mouth: 'smirk' }
         };
 
         function shopState() {
@@ -756,13 +783,14 @@
                 (pet ? (sh.pet ? '宠物跟着你的时候戴这张。' : '还没有宠物，先去「宠物」买一只。') : '所有模式里你都戴这张，别人也看得到。') +
                 '</div></div></div>';
             Object.keys(SHOP_FACES).forEach(function (k) {
-                let d = SHOP_FACES[k], owned = d.price === 0 || !!sh.faces[k], on = cur === k;
+                let d = SHOP_FACES[k], owned = (d.price === 0 && !d.lock) || !!sh.faces[k], on = cur === k;
                 out += shopRow(
                     '<div style="display:flex; justify-content:space-between; align-items:center;">' +
                     '<span style="display:flex; align-items:center; gap:8px;"><b style="display:inline-block; width:3em;">' + d.name + '</b><img src="' + facePreview(k) + '" ' +
                     'style="width:34px; height:34px; vertical-align:middle; background:#cfd8dc; border-radius:6px;"></span>' +
                     (owned
                         ? '<button onclick="shopEquipFace(\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:' + (on ? '#5cb85c' : '#999') + '; color:#fff; border:none;">' + (on ? '使用中' : '换上') + '</button>'
+                        : d.lock ? '<span style="font-size:11px; color:#9e9e9e;">惊魂夜逃出 ' + NIGHT_ESC_GOAL + ' 次解锁（' + Math.min(NIGHT_ESC_GOAL, nightStatOf().esc) + '/' + NIGHT_ESC_GOAL + '）</span>'
                         : '<button onclick="shopBuyFace(\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:#e6a23c; color:#fff; border:none;">' + coinBadgeHtml(d.price, 14) + '</button>') +
                     '</div>');
             });
@@ -833,12 +861,13 @@
         }
         function shopEquipPet(k) { let sh = shopState(); sh.pet = k; saveProgress(); shopTab('pet'); }
         function shopBuyFace(k) {
-            let d = SHOP_FACES[k]; if (!d || !shopSpend(d.price)) return;
+            let d = SHOP_FACES[k]; if (!d || d.lock || !shopSpend(d.price)) return;
             let sh = shopState(); sh.faces[k] = 1; saveProgress();
             shopEquipFace(k);
         }
         function shopEquipFace(k) {
             let sh = shopState();
+            if (SHOP_FACES[k] && SHOP_FACES[k].lock && !sh.faces[k]) return;
             if (shopFaceTarget === 'pet') sh.petFace = k; else sh.face = k;
             saveProgress(); shopTab('face');
         }

@@ -339,6 +339,7 @@
             if (!night.friendly && night.side === 'survivor') {
                 let me = night.survivors && night.survivors[0];
                 nightRecordResult(!!(me && me.escaped));
+                if (me && me.escaped) { let un = nightStatAdd('esc'); if (un) text += '<br>解锁：' + un; }
                 rankAdd('night', !!(me && me.escaped));
             } else if (!night.friendly && night.side === 'hunter') {
                 let out = (night.survivors || []).filter(function (q) { return q.escaped; }).length;

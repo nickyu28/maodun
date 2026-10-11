@@ -1780,7 +1780,7 @@
                 if (d < bd && nightCanHit(h.p, a.p, NIGHT.atkRange + 6)) { bd = d; t = a; }
             });
             if (!t) { nightFlashHunter('附近没有倒地的人'); return; }
-            h.carrying = t; h.recover = 0.5; { nightFlashHunter('已抓起'); introOnce('night.carry', '抓起来了', '扛到椅子边，按 ' + nightKey('space') + ' 挂上去。'); }
+            h.carrying = t; h.recover = 0.5; nightStatAdd('catch'); { nightFlashHunter('已抓起'); introOnce('night.carry', '抓起来了', '扛到椅子边，按 ' + nightKey('space') + ' 挂上去。'); }
         }
 
         function nightHC() { return night.side === 'hunter' ? night.char : (night.hunterChar || 'hunter'); }

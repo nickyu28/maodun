@@ -1067,6 +1067,12 @@
 
             [18, 46].forEach(function (x, i) {
                 if (f.eyes === 'dot') { g.beginPath(); g.arc(x, 26, 4, 0, 7); g.fill(); }
+                else if (f.eyes === 'glow') {
+                    let gl = g.createRadialGradient(x, 26, 1, x, 26, 11);
+                    gl.addColorStop(0, '#ffffff'); gl.addColorStop(0.35, '#ffee58'); gl.addColorStop(1, 'rgba(255,238,88,0)');
+                    g.fillStyle = gl; g.beginPath(); g.arc(x, 26, 11, 0, 7); g.fill();
+                    g.fillStyle = '#1b1b1b';
+                }
                 else if (f.eyes === 'big') { g.beginPath(); g.arc(x, 26, 8, 0, 7); g.stroke(); }
                 else if (f.eyes === 'arc') { g.beginPath(); g.arc(x, 30, 7, Math.PI, 0); g.stroke(); }
                 else if (f.eyes === 'slant') {

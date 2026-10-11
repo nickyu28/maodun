@@ -752,6 +752,50 @@ async function enterExit(tab, key) {
             report('M6 惊魂夜被淘汰后点“结算回大厅”直接结算，只给打完那一份', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('M7')) {
+            // M7：惊魂夜逃出 10 次解锁「发光眼」表情；当追捕者累计抓 30 人解锁称号「夜间猎手」；存档带着；AI 也会戴
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){ let out = {};
+                gState.nightStat = null; shopState();
+                out.lock0 = !!shopState().faces.glow;
+                for (let i = 0; i < 9; i++) nightStatAdd('esc');
+                out.at9 = !!shopState().faces.glow; shopBuyFace('glow'); out.noBuy = !!shopState().faces.glow;
+                shopEquipFace('glow'); out.equip9 = shopState().face;
+                nightStatAdd('esc'); out.at10 = !!shopState().faces.glow; shopEquipFace('glow'); out.equip10 = shopState().face;
+                for (let i = 0; i < 29; i++) nightStatAdd('catch');
+                out.t29 = titleOwned('nighthunter'); nightStatAdd('catch'); out.t30 = titleOwned('nighthunter');
+                saveProgress(); let saved = JSON.stringify(gState.nightStat); gState.nightStat = null; loadProgress(gState.id);
+                out.reload = JSON.stringify(gState.nightStat) === saved && nightStatOf().esc === 10 && nightStatOf().catch === 30;
+                // 脸能画出来；AI 抽表情时池子里有它
+                out.draw = faceCanvas('glow').width === 64;
+                let n = 0; for (let i = 0; i < 3000; i++) if (aiRandomFace() === 'glow') n++; out.ai = n > 0;
+                // 商店页：未解锁写条件，解锁了能换
+                shopFaceTarget = 'me'; out.shopHtml = /发光眼/.test(shopFaceHtml());
+                // 称号列表
+                openAchievements('title'); out.titleList = /夜间猎手/.test(document.getElementById('sys-modal-text').innerText);
+                return JSON.stringify(out); })()`));
+            if (r.lock0 || r.at9 || r.noBuy || r.equip9 === 'glow') bad.push('没到 10 次就解锁了 ' + JSON.stringify([r.lock0, r.at9, r.noBuy, r.equip9]));
+            if (!r.at10 || r.equip10 !== 'glow') bad.push('逃出 10 次没解锁发光眼 ' + JSON.stringify([r.at10, r.equip10]));
+            if (r.t29 || !r.t30) bad.push('抓 30 人称号不对 ' + JSON.stringify([r.t29, r.t30]));
+            if (!r.reload) bad.push('存档读回来不一样');
+            if (!r.draw || !r.ai || !r.shopHtml || !r.titleList) bad.push('脸/AI/页面 ' + JSON.stringify([r.draw, r.ai, r.shopHtml, r.titleList]));
+            // 真打一局：逃生者撤离，次数 +1；追捕者抓起倒地的人，次数 +1
+            await T.eval(`${HIDE} gState.nightStat = null; selectGameMode('night'); ${MODES.night.start}; true;`); await W(3000);
+            await T.eval(`night.survivors[0].escaped = true; endNightGame('测试'); true;`); await W(1500);
+            const esc = await T.eval(`nightStatOf().esc`);
+            if (esc !== 1) bad.push('撤离一局没记上 ' + esc);
+            await T.eval(`${HIDE} nightBackToLobby(); true;`); await W(800);
+            await T.eval(`${HIDE} NIGHT_MATCH_WAIT = 0; enterNightMatch('hunter'); nightPickChar('hunter'); true;`); await W(3500);
+            const grab = JSON.parse(await T.eval(`(function(){ let h = night.hunter; h.recover = 0; h.spearLeft = 0; night.action = null; h.carrying = null;
+                let s = night.survivors.filter(function (a) { return !a.isPlayer; })[0]; s.downed = true; s.onChair = false; s.out = false; s.escaped = false;
+                s.p.copy(h.p); s.gy = h.gy || 0; let before = nightStatOf().catch; nightHunterGrab(); return JSON.stringify({ before: before, after: nightStatOf().catch, carrying: !!h.carrying }); })()`));
+            if (grab.after !== grab.before + 1 || !grab.carrying) bad.push('抓起一个人没记上 ' + JSON.stringify(grab));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('M7 惊魂夜逃出 10 次解锁发光眼表情、当追捕者抓 30 人解锁称号；AI 也会戴；存档带着', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];
