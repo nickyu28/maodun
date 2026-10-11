@@ -1235,7 +1235,21 @@ async function enterExit(tab, key) {
             await T.eval(`${HIDE} gState.mapDifficulty = 'easy'; selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
             const r = JSON.parse(await T.eval(`(function(){
                 let o = { off: 0, pts: 0, stairTry: 0, stairDrawn: 0, stairNeed: 0, needDrawn: 0, tableTry: 0, tableDrawn: 0 };
-                let centered = function (pts) { let bad = 0; pts.forEach(function (p) { let mx = Math.abs(p.x / TILE - Math.round(p.x / TILE)) < 0.01, mz = Math.abs(p.z / TILE - Math.round(p.z / TILE)) < 0.01; if (!mx && !mz) bad++; }); return bad; };
+                // 楼梯格附近（台阶/平台/井边）的点沿台阶和平台的中线走，不在格子正中，不按格子中心算；别处的点必须在格子的中线上
+                let centered = function (pts) {
+                    let bad = 0;
+                    pts.forEach(function (p) {
+                        let mx = Math.abs(p.x / TILE - Math.round(p.x / TILE)) < 0.01, mz = Math.abs(p.z / TILE - Math.round(p.z / TILE)) < 0.01;
+                        if (mx || mz) return;
+                        let f = Math.floor((p.y + 0.5) / TILE), near = false;
+                        for (let ff = f - 1; ff <= f + 1; ff++) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+                            let cx = Math.floor(p.x / TILE + 0.5) + dx, cz = Math.floor(p.z / TILE + 0.5) + dz, c = maze[ff] && maze[ff][cz] && maze[ff][cz][cx];
+                            if (c && c.type === 3 && Math.abs(p.x - cx * TILE) <= TILE && Math.abs(p.z - cz * TILE) <= TILE) near = true;
+                        }
+                        if (!near) bad++;
+                    });
+                    return bad;
+                };
                 // 1 蓝线、绿线都走在格子中线上（站在格子里偏一点的位置出发也一样）
                 let me = { f: 0, x: 1, z: 1 }, far = null, best = -1;
                 for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) if (maze[0][z][x].type === 0) { let d = Math.abs(x - 1) + Math.abs(z - 1); if (d > best && huntRouteFind(me, { f: 0, x: x, z: z })) { best = d; far = { f: 0, x: x, z: z }; } }
@@ -1359,7 +1373,7 @@ async function enterExit(tab, key) {
             report('H27 余额不封顶；开无限只显示“无限”、不扣真实余额、不再把 money 改成 99999999；读档 mcoin<0 改成 0', bad.length === 0, bad.join(' / '));
         }
 
-                //@@NEW@@
+                        //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 12 个模式
