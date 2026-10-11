@@ -424,7 +424,7 @@
         }
         function hubTouchUI(on) {
             ['blaze-skill1-btn', 'blaze-skill2-btn', 'blaze-card-btn', 'blaze-atk-btn',
-                'race-dash-btn', 'race-skill-btn', 'race-item-btn', 'race-jump-btn', 'run-btn'].forEach(function (id) {
+                'race-dash-btn', 'race-skill-btn', 'race-item-btn', 'race-jump-btn'].forEach(function (id) {
                     let e = document.getElementById(id); if (e) e.style.display = 'none';
                 });
             let pad = (gState.control === 'pad');

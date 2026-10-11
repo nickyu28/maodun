@@ -647,6 +647,37 @@ async function enterExit(tab, key) {
             report('R1m 多人局卡片变成上方提示条：不弹窗不暂停、点一下收起、下一张接着出', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('R2')) {
+            // R2：平板跑步——摇杆推过半径 90% 自动跑（耗体力），没推到就走；右下角的"跑"按钮没了。寻宝队、监狱救援、躲避球都测
+            const bad = [];
+            const M = await openTab(chrome, url, { mobile: true });
+            if (await M.eval(`!!document.getElementById('run-btn') || typeof padToggleRun !== 'undefined'`)) bad.push('跑按钮还在');
+            const th = await M.eval(`(function(){ let r = []; [0.5, 0.89, 0.91, 1].forEach(function (v) { tMove.x = v; tMove.y = 0; r.push(padAutoRun()); }); tMove.x = 0.7; tMove.y = 0.7; r.push(padAutoRun()); tMove.x = 0; tMove.y = 0; return r.join(); })()`);
+            if (th !== 'false,false,true,true,true') bad.push('阈值不对 ' + th);
+            const drain = async (key, getStam) => {
+                await M.eval(`${HIDE} selectGameMode('${key}'); ${MODES[key].start}; true;`); await W(3500); await M.eval(`${HIDE} true;`);
+                const out = [];
+                for (const v of [0.6, 0.95]) {
+                    await M.eval(`tMove.x = 0; tMove.y = 0; true;`); await W(1800);   // 先回满体力
+                    const s0 = await M.eval(getStam);
+                    await M.eval(`tMove.x = 0; tMove.y = ${-v}; true;`); await W(1000);
+                    const s1 = await M.eval(getStam);
+                    await M.eval(`tMove.x = 0; tMove.y = 0; true;`);
+                    out.push(+(s0 - s1).toFixed(1));
+                }
+                await M.eval(`${HIDE} ${MODES[key].exit}; true;`); await W(1500); await M.eval(`${HIDE} true;`);
+                return out;
+            };
+            for (const [key, g] of [['hunt', 'stamina'], ['jail', 'jail.me.stamina'], ['dodge', 'dodge.me.stamina']]) {
+                const d = await drain(key, g);
+                // 走（0.6）体力不降，跑（0.95）1 秒降 20 以上
+                if (!(d[0] < 3 && d[1] > 15)) bad.push(key + ' 体力变化 走=' + d[0] + ' 跑=' + d[1]);
+            }
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('R2 平板摇杆推过 90% 自动跑：寻宝队、监狱救援、躲避球推到底耗体力、没推到不耗；没有"跑"按钮', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 

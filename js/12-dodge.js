@@ -509,7 +509,7 @@
             if (fwd === 0 && strafe === 0) { fwd = -tMove.y; strafe = tMove.x; }
             let isMoving = (fwd !== 0 || strafe !== 0);
             // 体力用来跑，跟寻宝队一样：按住 Shift（平板是「跑/走」开关）加速 60%、吃体力。
-            let isRunning = (keys['shift'] || padRun) && isMoving && a.stamina > 0;
+            let isRunning = (keys['shift'] || padAutoRun()) && isMoving && a.stamina > 0;
             let wx = 0, wz = 0;
             if (isMoving) {
                 let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe;
@@ -868,8 +868,6 @@
             if (jb) { jb.innerText = on ? '接' : '跳'; jb.style.right = on ? '120px' : '20px'; jb.style.display = (on && pad) ? 'flex' : 'none'; }
             let jump = document.getElementById('blaze-jump-btn');
             if (jump) { jump.innerText = '跳'; jump.style.display = (on && pad) ? 'flex' : 'none'; }
-            let rb = document.getElementById('run-btn');
-            if (rb) rb.style.display = (on && pad) ? '' : 'none';
             let stats = document.getElementById('blaze-stats-btn'); if (stats) stats.style.display = 'none';
             let skillbar = document.getElementById('blaze-skillbar'); if (skillbar) skillbar.innerHTML = '';
             let skillTxt = document.getElementById('blaze-skill'); if (skillTxt) skillTxt.innerText = '';

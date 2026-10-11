@@ -223,7 +223,7 @@
             let isMoving = (fwd !== 0 || strafe !== 0);
             // 体力用来跑，跟寻宝队完全一套：按住 Shift（平板是「跑/走」开关）加速 60%、吃体力，
             // 松手或体力见底就是正常走路速度，站着/慢走会慢慢回体力。
-            let isRunning = (keys['shift'] || padRun) && isMoving && a.stamina > 0;
+            let isRunning = (keys['shift'] || padAutoRun()) && isMoving && a.stamina > 0;
             let wx = 0, wz = 0;
             if (isMoving) {
                 let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe;
@@ -428,8 +428,6 @@
             let pad = (gState.control === 'pad');
             let jb = document.getElementById('race-jump-btn');
             if (jb) jb.style.display = (on && pad) ? 'flex' : 'none';
-            let rb = document.getElementById('run-btn');
-            if (rb) rb.style.display = (on && pad) ? '' : 'none';
             // 血条那一条改显示体力条；技能条这局用不上，清空免得留字
             let stats = document.getElementById('blaze-stats-btn');
             if (stats) stats.style.display = 'none';

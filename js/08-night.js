@@ -3701,17 +3701,11 @@
         window.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
         const tMove = { x: 0, y: 0 }; let touchBtn = { jump: false, interact: false, ability: false, item: false, throw: false };
-        let padRun = false;   // 平板：跑 / 走的开关（默认走）
         let huntJumpBuf = 0;  // 跳键缓冲：落地前按的那一下留着，落地补上
 
-        function padToggleRun() {
-            padRun = !padRun;
-            let b = document.getElementById('run-btn');
-            if (b) {
-                b.innerText = padRun ? '跑' : '走';
-                b.style.background = padRun ? 'rgba(255,213,79,.9)' : 'rgba(255,255,255,.85)';
-            }
-        }
+        // R2：平板跑步——摇杆推过半径的 90% 就自动跑（原来右下角有个"跑"开关，寻宝队里被藏起来，监狱/躲避球里大小是 0×0）
+        const PAD_RUN_AT = 0.9;
+        function padAutoRun() { return tMove.x * tMove.x + tMove.y * tMove.y >= PAD_RUN_AT * PAD_RUN_AT; }
 
         function drawCapacityCircle() {
             let canvas = document.getElementById('cap-circle'); if (!canvas) return; let ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, 60, 60);
@@ -3950,7 +3944,7 @@
             moveX = dir.x * fwd + side.x * strafe; moveZ = dir.z * fwd + side.z * strafe;
 
             let isMoving = (moveX !== 0 || moveZ !== 0);
-            let isRunning = (keys['shift'] || padRun) && isMoving && stamina > 0;
+            let isRunning = (keys['shift'] || padAutoRun()) && isMoving && stamina > 0;
             let drainMult = gState.debuff.type === 2 ? 2.5 : 1.0;
             if (isRunning) { baseMoveSpeed *= staminaBoostMul(stamina, 1.6); stamina = Math.max(0, stamina - 28 * drainMult * dt); } else { stamina = Math.min(100, stamina + 16 * dt); } document.getElementById('stamina-fill').style.width = stamina + '%';
             let staminaTxt = document.getElementById('stamina-txt'); if (staminaTxt) staminaTxt.innerText = Math.floor(stamina);
