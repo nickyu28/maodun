@@ -62,13 +62,15 @@
             // 顶掉，人卡在选技能选一半的画面上动不了。跟惊魂夜收到 START_NIGHT
             // 先 nightCancelMatch() 一样的道理。
             mmCancel();
+            // 上一场打完在结算框上点了「再来一局」：先把旧场收干净（模型、界面），再开新的
+            if (blaze && blaze.over) { try { blazeExit(); } catch (e) { } }
             if (blaze) { if (blaze.raf) cancelAnimationFrame(blaze.raf); blaze = null; }
             blazeBegin(m.plan, m.host, !!m.ffa);
             if (m.ffa) blaze.ffaDuo = !!m.duo;
         }
 
         function blazeOnMe(m) {
-            if (!blaze || m.sender === gState.id) return;
+            if (!blaze || blaze.over || m.sender === gState.id) return;
             let a = blazeActor(m.i);
             if (!a || a.netId !== m.sender) {
                 a = blaze.actors.filter(function (o) { return o.netId === m.sender; })[0];
@@ -83,7 +85,7 @@
         }
 
         function blazeOnWorld(m) {
-            if (!blaze || blazeIsHost()) return;
+            if (!blaze || blaze.over || blazeIsHost()) return;
             (m.ai || []).forEach(function (q) {
                 let a = blazeActor(q.i); if (!a || a.netId) return;
                 a.target = { x: q.x, z: q.z }; a.floor = q.floor; a.yaw = q.yaw; a.hp = q.hp;
@@ -95,7 +97,7 @@
         }
 
         function blazeOnEv(m) {
-            if (!blaze || m.sender === gState.id) return;
+            if (!blaze || blaze.over || m.sender === gState.id) return;
             let a = blazeActor(m.i);
             if (m.ev === 'dmg') {
                 if (a) {
@@ -155,9 +157,91 @@
                     showSysModal(m.w === blaze.me.team ? '超燃 · 你赢了' : '超燃 · 你输了',
                         '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +
                         '　　猫盾币 +' + gain2 + '（共 ' + coinsShow() + '）',
-                        [{ label: '返回大厅', color: '#ff5722', onClick: blazeExit }]);
+                        blazeEndButtons('#ff5722'));
                 }
             }
+        }
+
+        // ── 再来一局（M1）──
+        // 结算框上点「再来一局」：同一批人、同一批 AI 直接开下一场，不回大厅、不排队。
+        // 联机时各点各的，点了的告诉房主；房主等齐（最多 AGAIN_WAIT 秒）就开，没点的位置换成 AI。
+        const AGAIN_WAIT = 6;
+        let againClicks = {};        // 点了「再来一局」的人 → 时间
+        let againWaitMode = null;    // 我点完在等：'blaze' / 'night'
+        let againHost = null;        // 我是房主、正在等人：{ mode, ids, t0, timer, go }
+        let againTimer = null;
+        let nightAutoPick = false;   // 再来一局开的夜场：直接用上一局的角色，不再选
+
+        function againStop() {
+            againWaitMode = null; nightAutoPick = false;
+            if (againHost) { clearInterval(againHost.timer); againHost = null; }
+            clearTimeout(againTimer); againTimer = null;
+        }
+        function againOnReq(msg) {
+            if (!msg.sender || msg.sender === gState.id) return;
+            againClicks[msg.sender] = Date.now();
+            againHostCheck();
+        }
+        function againHostCheck() {
+            let h = againHost; if (!h) return;
+            let ready = h.ids.filter(function (id) { return againClicks[id]; });
+            if (ready.length >= h.ids.length || Date.now() - h.t0 >= AGAIN_WAIT * 1000) {
+                let go = h.go; againStop();
+                sysModalCloseNormal();
+                go(ready);
+            }
+        }
+        // 点完以后的等待框；回大厅按钮随时能退
+        function againWait(mode, exitFn) {
+            againWaitMode = mode;
+            nightAutoPick = mode === 'night';
+            showSysModal('再来一局', '等其他人点……最多 ' + AGAIN_WAIT + ' 秒', [{ label: '返回大厅', color: '#888', onClick: function () { againStop(); exitFn(); } }]);
+            clearTimeout(againTimer);
+            // 房主那边一直没动静（掉线了）：别让人干等
+            againTimer = setTimeout(function () {
+                if (!againWaitMode || againHost) return;
+                let t = document.getElementById('sys-modal-text');
+                if (t && !document.getElementById('sys-modal').classList.contains('hidden')) t.innerText = '这场没开起来，回大厅吧。';
+            }, (AGAIN_WAIT + 9) * 1000);
+        }
+        // 统一入口：others = 上一场里其他真人的 ID（空 = 单人，直接开）
+        function againStart(mode, others, isHost, go, exitFn) {
+            if (!others.length) { go([]); return; }
+            if (!isHost) {
+                bc.postMessage({ type: 'AGAIN', target: '*', sender: gState.id, mode: mode });
+                againWait(mode, exitFn);
+                return;
+            }
+            againWait(mode, exitFn);
+            againHost = { mode: mode, ids: others, t0: Date.now(), go: go, timer: setInterval(againHostCheck, 250) };
+            againHostCheck();
+        }
+
+        function blazeEndButtons(color) {
+            return [
+                { label: '再来一局', color: '#ff9800', onClick: blazeAgain },
+                { label: '返回大厅', color: color, onClick: function () { blazeExit(); } }
+            ];
+        }
+        function blazeAgain() {
+            if (!blaze || !blaze.again) { blazeExit(); return; }
+            let others = blaze.again.plan.filter(function (q) { return q.id && q.id !== gState.id; }).map(function (q) { return q.id; });
+            againStart('blaze', others, blaze.host === gState.id, blazeAgainGo, blazeExit);
+        }
+        function blazeAgainGo(ready) {
+            if (!blaze || !blaze.again) return;
+            let a = blaze.again, duo = !!blaze.ffaDuo;
+            // 没点的真人换成 AI（角色不变）
+            let plan = a.plan.map(function (q) {
+                let keep = q.id && (q.id === gState.id || ready.indexOf(q.id) >= 0);
+                return { team: q.team, id: keep ? q.id : null, key: q.key };
+            });
+            if (plan.some(function (q) { return q.id && q.id !== gState.id; })) {
+                bc.postMessage({ type: 'BZ_START', target: '*', sender: gState.id, plan: plan, host: gState.id, ffa: a.ffa, duo: duo });
+            }
+            blazeExit();
+            blazeBegin(plan, gState.id, a.ffa, a.tomb, a.law);
+            if (a.ffa) blaze.ffaDuo = duo;
         }
 
         let night = null;
@@ -274,8 +358,34 @@
             document.getElementById('night-spectate-bar').style.display = 'none';
             if (document.pointerLockElement) document.exitPointerLock();
             nightFlushEggs(function () {
-                showSysModal('本局结束', text, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { night = null; nav('screen-lobby'); selectGameMode('night'); } }]);
+                showSysModal('本局结束', text, [
+                    { label: '再来一局', color: '#9b59b6', onClick: nightAgain },
+                    { label: '返回大厅', color: '#5cb85c', onClick: nightBackToLobby }
+                ]);
             });
+        }
+
+        function nightBackToLobby() { night = null; nav('screen-lobby'); selectGameMode('night'); }
+        function nightAgain() {
+            if (!night) { nightBackToLobby(); return; }
+            let roster = night.netGame ? gState.netRoster : null;
+            let others = roster ? Object.keys(roster).filter(function (id) { return id !== gState.id; }) : [];
+            againStart('night', others, netIsHost(), nightAgainGo, nightBackToLobby);
+        }
+        function nightAgainGo(ready) {
+            if (!night) return;
+            let side = night.side, roster = night.netGame ? gState.netRoster : null;
+            let seed = Math.floor(Math.random() * 1000000), variant = Math.floor(Math.random() * 3);
+            let sides = null;
+            if (roster) {
+                sides = {};
+                Object.keys(roster).forEach(function (id) { if (id === gState.id || ready.indexOf(id) >= 0) sides[id] = roster[id]; });
+                if (Object.keys(sides).length < 2) sides = null;
+                else bc.postMessage({ type: 'START_NIGHT', target: '*', sender: gState.id, seed: seed, variant: variant, sides: sides, host: gState.id });
+            }
+            nightAutoPick = true;
+            netMatchSetup(sides, gState.id);
+            nightEnterWith(side, seed, variant);
         }
 
         function nightCellOf(pos) { return { x: Math.floor((pos.x + TILE / 2) / TILE), z: Math.floor((pos.z + TILE / 2) / TILE) }; }

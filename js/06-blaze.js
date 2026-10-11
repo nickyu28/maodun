@@ -1712,8 +1712,11 @@
                 actors: [], me: null, raf: null, last: performance.now(), fx: [], projectiles: [], perkUIActor: null,
                 host: hostId, net: plan.some(function (q) { return q.id && q.id !== gState.id; }),
                 poison: blazePoisonStart(), poisonT: 0, ring: null, clock: 0, openingPerk: false, aiming: null,
-                sendSelf: 0, sendWorld: 0, builds: []
+                sendSelf: 0, sendWorld: 0, builds: [],
+                again: { plan: JSON.parse(JSON.stringify(plan)), ffa: !!ffa, tomb: !!tomb, law: !!law }
             };
+            if (againWaitMode) { sysModalCloseNormal(); againStop(); }
+            againClicks = {};
 
             if (ffa) spawns = blazeFfaSpawns(plan.length);
             plan.forEach(function (q, i) {
@@ -4114,7 +4117,7 @@
             // 结算就报一个名次，别再糊一屏数字
             let txt = '<div style="font-size:34px; font-weight:bold; color:#ff9800;">第 ' + place + ' 名</div>' +
                 '<div style="color:#888; margin-top:4px;">共 ' + list.length + ' 人　猫盾币 +' + gain + '</div>';
-            showSysModal('乱斗结束', txt, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { blazeExit(); } }]);
+            showSysModal('乱斗结束', txt, blazeEndButtons('#5cb85c'));
         }
 
         function blazeFfaEndDuo() {
@@ -4131,7 +4134,7 @@
                 '（' + mvp.kills + '/' + mvp.assists + '/' + mvp.deaths + '）</div>' +
                 '<div style="font-size:12px; color:#aaa; margin-top:3px;">你 ' + blazeFfaScore(blaze.me) + ' 分（' +
                 blaze.me.kills + '/' + blaze.me.assists + '/' + blaze.me.deaths + '）</div>';
-            showSysModal('乱斗结束', txt, [{ label: '返回大厅', color: '#5cb85c', onClick: function () { blazeExit(); } }]);
+            showSysModal('乱斗结束', txt, blazeEndButtons('#5cb85c'));
         }
 
         function blazeRoundCheck() {
@@ -4175,7 +4178,7 @@
                 showSysModal(win ? '超燃 · 你赢了' : '超燃 · 你输了',
                     '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +
                     '　　猫盾币 +' + gain + '（共 ' + coinsShow() + '）',
-                    [{ label: '返回大厅', color: '#ff5722', onClick: blazeExit }]);
+                    blazeEndButtons('#ff5722'));
                 return;
             }
             blazeFlash((winner === blaze.me.team ? '本局获胜' : '本局失利') +

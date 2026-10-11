@@ -530,6 +530,48 @@ async function enterExit(tab, key) {
             report('N21 惊魂夜二楼缺口打开；按住 E 彩弹一直喷；双人队友的手跟着变队伍色', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('M1')) {
+            // M1：超燃、惊魂夜结算框有「再来一局」，点了直接开下一场（不回大厅）；联机时房主等人，没点的位置换成 AI
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('blaze'); ${MODES.blaze.start}; window.__old = blaze; true;`); await W(1500);
+            await T.eval(`blaze.score = [BLAZE.roundsToWin - 1, 0]; blazeAwardRound(0); true;`); await W(500);
+            const labels = await T.eval(`Array.prototype.map.call(document.querySelectorAll('#sys-modal-btns button'), function (b) { return b.innerText; }).join('/')`);
+            if (labels !== '再来一局/返回大厅') bad.push('超燃结算按钮 ' + labels);
+            await T.eval(`${CLICK_OK}`); await W(1500);
+            const r1 = JSON.parse(await T.eval(`JSON.stringify({ fresh: blaze && blaze !== window.__old && !blaze.over, me: blaze && blaze.me && blaze.me.key, round: blaze && blaze.round, modal: ${MODAL} })`));
+            if (!r1.fresh || r1.me !== 'bow' || r1.round !== 1 || r1.modal !== null) bad.push('超燃单人没直接开下一场 ' + JSON.stringify(r1));
+            // 联机（假装有个队友 fakeB）：房主点了先等；fakeB 点了就开，带着 fakeB；这一场 fakeB 不点的话 6 秒后换成 AI
+            await T.eval(`window.__sent = []; let pm = bc.postMessage.bind(bc); bc.postMessage = function (m) { window.__sent.push(m); return pm(m); };
+                blazeExit(); blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }, { id: 'fakeB', key: 'sword' }]), gState.id, false); window.__old = blaze;
+                blaze.score = [BLAZE.roundsToWin - 1, 0]; blazeAwardRound(0); ${CLICK_OK}; true;`); await W(800);
+            const still = await T.eval(`blaze === window.__old && !!againHost && ${MODAL} === '再来一局'`);
+            if (!still) bad.push('房主点了应该先等人');
+            await T.eval(`againOnReq({ sender: 'fakeB' }); true;`); await W(1500);
+            const r2 = JSON.parse(await T.eval(`JSON.stringify({ fresh: blaze !== window.__old, ids: blaze.again.plan.map(function (q) { return q.id; }), sent: window.__sent.filter(function (m) { return m.type === 'BZ_START'; }).length })`));
+            if (!r2.fresh || r2.ids.indexOf('fakeB') < 0 || r2.sent !== 1) bad.push('联机对方点了没一起开 ' + JSON.stringify(r2));
+            await T.eval(`window.__old = blaze; blaze.score = [BLAZE.roundsToWin - 1, 0]; blazeAwardRound(0); ${CLICK_OK}; true;`); await W(7800);
+            const r3 = JSON.parse(await T.eval(`JSON.stringify({ fresh: blaze !== window.__old, ids: blaze.again.plan.map(function (q) { return q.id; }), keys: blaze.again.plan.map(function (q) { return q.key; }), sent: window.__sent.filter(function (m) { return m.type === 'BZ_START'; }).length })`));
+            if (!r3.fresh || r3.ids.indexOf('fakeB') >= 0 || r3.keys.indexOf('sword') < 0 || r3.sent !== 1) bad.push('对方没点，6 秒后应该换成 AI 并只在本机开 ' + JSON.stringify(r3));
+            await T.eval(`blazeExit(); true;`); await W(800);
+            // 惊魂夜：结算框也有，点了直接用上一局的角色开下一场
+            await T.eval(`${HIDE} selectGameMode('night'); ${MODES.night.start}; true;`); await W(3000);
+            await T.eval(`window.__old = night; endNightGame('测试'); true;`); await W(1500);
+            // 本局解锁彩蛋的话先弹一张「收下」，点掉才是结算
+            if (/收下/.test(await T.eval(`document.getElementById('sys-modal-btns').innerText`))) { await T.eval(`${CLICK_OK}`); await W(800); }
+            const nl = await T.eval(`Array.prototype.map.call(document.querySelectorAll('#sys-modal-btns button'), function (b) { return b.innerText; }).join('/')`);
+            if (nl !== '再来一局/返回大厅') bad.push('惊魂夜结算按钮 ' + nl);
+            await T.eval(`${CLICK_OK}`); await W(3000);
+            const n1 = JSON.parse(await T.eval(`JSON.stringify({ fresh: !!night && night !== window.__old && !night.over, ch: night && night.char, pick: document.getElementById('night-pick').classList.contains('hidden') })`));
+            if (!n1.fresh || n1.ch !== 'cat' || !n1.pick) bad.push('惊魂夜没直接开下一场 ' + JSON.stringify(n1));
+            // 联机时刚打完的人接得到房主发来的再来一局
+            const allow = await T.eval(`(function(){ night.netGame = true; gState.netHostId = 'hostX'; let a = netStartAllowed('night', { sender: 'hostX' }), b = netStartAllowed('night', { sender: 'evilY' }); night.netGame = false; return [a, b]; })()`);
+            if (allow[0] !== true || allow[1] !== false) bad.push('刚打完的夜场收不到/乱收开局 ' + JSON.stringify(allow));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('M1 超燃、惊魂夜结算有「再来一局」：单人直接开；联机房主等人、没点的换成 AI', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];

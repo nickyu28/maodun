@@ -1168,6 +1168,8 @@
 
         function nightEnterWith(side, seed, variant) {
             gState.nightSide = (side === 'hunter') ? 'hunter' : 'survivor';
+            if (againWaitMode) { let keep = nightAutoPick; sysModalCloseNormal(); againStop(); nightAutoPick = keep; }
+            againClicks = {};
             ensureScene();
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
@@ -1207,6 +1209,12 @@
             nightPickRender();
             document.getElementById('night-pick-back').style.display = netOn() ? 'none' : '';
             document.getElementById('night-pick').classList.remove('hidden');
+            // 再来一局：直接用上一局的角色
+            if (nightAutoPick) {
+                nightAutoPick = false;
+                let ck = gState.nightChar;
+                if (ck && NIGHT_CHARS[ck] && NIGHT_CHARS[ck].side === gState.nightSide) nightPickChar(ck);
+            }
         }
 
         let nightPickSel = null, nightPickAccent = '#9b59b6';
