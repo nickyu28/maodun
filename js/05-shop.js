@@ -238,6 +238,8 @@
             if (TEST_INFINITE_COINS) return 99999;
             return gState.mcoin || 0;
         }
+        // H27：界面上显示的猫盾币。开了“无限”就写“无限”（真实余额不动、不扣）；余额不封顶，多大都照实显示
+        function coinsShow() { return TEST_INFINITE_COINS ? '无限' : (gState.mcoin || 0); }
         // 猫盾币图案：金色圆底 + 中间一个猫盾轮廓（圆角身子 + 两只尖耳朵），
         // 跟登录页那个猫盾 Logo 一个造型，只是换成金币配色，一看就知道是"钱"。
         function coinIconShapesSvg() {
@@ -496,7 +498,7 @@
                 }).join('') + '</div>';
             } else {
                 let cur = myTitle();
-                html += '<div style="font-size:12px; color:#777; margin-bottom:6px;">戴上以后名字上面会显示。现在有 ' + coinBadgeHtml(coinsOf(), 14) + '</div>';
+                html += '<div style="font-size:12px; color:#777; margin-bottom:6px;">戴上以后名字上面会显示。现在有 ' + coinBadgeHtml(coinsShow(), 14) + '</div>';
                 html += '<div style="max-height:52vh; overflow-y:auto; text-align:left;">' +
                     '<div style="display:flex; align-items:center; padding:6px 4px; border-top:1px solid #eee;"><span style="flex:1; font-size:13px; color:#999;">不戴</span>' +
                     (cur ? '<button onclick="titleWear(null)" style="margin:0; padding:4px 10px; font-size:12px; background:#90a4ae; color:#fff; border:none;">摘掉</button>' : '<span style="font-size:12px; color:#66bb6a;">✓</span>') + '</div>' +
@@ -624,7 +626,7 @@
                 if (b) { b.style.background = (k === t) ? '#e6a23c' : ''; b.style.color = (k === t) ? '#fff' : ''; }
             });
             let w = document.getElementById('shop-wallet');
-            if (w) w.innerHTML = coinBadgeHtml(coinsOf(), 22);
+            if (w) w.innerHTML = coinBadgeHtml(coinsShow(), 22);
             let el = document.getElementById('shop-body'); if (!el) return;
             if (t === 'pet') el.innerHTML = shopPetHtml();
             else if (t === 'face') el.innerHTML = shopFaceHtml();

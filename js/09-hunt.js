@@ -310,8 +310,8 @@
             let hint = document.getElementById('bp-repair-hint');
             if (hint) {
                 let sel = gState.inv[gState.selectedSlot];
-                if (sel && sel.type === 'badge') hint.innerText = `地窖徽章 ${sel.uses}/${sel.maxUses}　维护费 $${BADGE_REPAIR_COST}　资金 $${gState.money}`;
-                else if (sel && sel.type === 'med') hint.innerText = `医疗包 ${sel.uses}/${sel.maxUses}　维护费 $${(sel.maxUses - sel.uses) * 1000}　资金 $${gState.money}`;
+                if (sel && sel.type === 'badge') hint.innerText = `地窖徽章 ${sel.uses}/${sel.maxUses}　维护费 $${BADGE_REPAIR_COST}　资金 ${HUNT_TEST_MONEY ? '无限' : '$' + gState.money}`;
+                else if (sel && sel.type === 'med') hint.innerText = `医疗包 ${sel.uses}/${sel.maxUses}　维护费 $${(sel.maxUses - sel.uses) * 1000}　资金 ${HUNT_TEST_MONEY ? '无限' : '$' + gState.money}`;
                 else hint.innerText = '在快捷栏选中地窖徽章或医疗包后可充能维护';
             }
             drawCapacityCircle();

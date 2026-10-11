@@ -772,7 +772,7 @@
                     c.name + (owned ? '' : '<br><span style="font-size:11px; color:#e6a23c;">' + COIN_PRICE + ' 猫盾币</span>') + '</button>';
             }).join('');
             let cw = document.getElementById('blaze-coins');
-            if (cw) cw.innerText = '猫盾币 ' + coinsOf() + (gState.streak && gState.streak.blaze ? '　连胜 ' + gState.streak.blaze : '');
+            if (cw) cw.innerText = '猫盾币 ' + coinsShow() + (gState.streak && gState.streak.blaze ? '　连胜 ' + gState.streak.blaze : '');
             let c = BLAZE_CHARS[gState.blazeChar];
             document.getElementById('blaze-detail').innerHTML =
                 '<b style="color:' + c.css + ';">' + kTxt('空格', '普攻') + '</b>　' + c.atk +
@@ -4174,7 +4174,7 @@
                 let gain = coinsSettle('blaze', win);
                 showSysModal(win ? '超燃 · 你赢了' : '超燃 · 你输了',
                     '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +
-                    '　　猫盾币 +' + gain + '（共 ' + coinsOf() + '）',
+                    '　　猫盾币 +' + gain + '（共 ' + coinsShow() + '）',
                     [{ label: '返回大厅', color: '#ff5722', onClick: blazeExit }]);
                 return;
             }

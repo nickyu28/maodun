@@ -1313,6 +1313,47 @@ async function enterExit(tab, key) {
             report('H26 格子底色（红/金/紫/蓝，徽章金，鱼叉腰包紫）；一键整理真排序：道具在前按商店价格、宝物在后按价值，从大到小', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H27')) {
+            // H27：余额不封顶；开“无限”只显示“无限”、不扣真实余额、不再把 money 改成 99999999；读档时 mcoin < 0 改成 0
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){
+                let o = {};
+                ${HIDE} selectGameMode('hunt'); requestStartGame();
+                // 资金：不封顶
+                HUNT_TEST_MONEY = false; gState.money = 5000000000; initGarage(); o.big = document.getElementById('garage-money').innerText;
+                gState.money += 7; o.plus = gState.money;
+                // 无限资金：显示“无限”，真实余额不变，买东西不扣
+                HUNT_TEST_MONEY = true; gState.money = 1234; gState.garage = Array(200).fill(null); initGarage();
+                o.inf = document.getElementById('garage-money').innerText; o.kept = gState.money;
+                buy('医疗包', 10000); o.boughtInf = gState.garage.some(function (g) { return g && g.n === '医疗包'; }); o.afterBuy = gState.money;
+                gState.garage.forEach(function (g, i) { if (g && g.type === 'badge') gState.garage[i] = Object.assign({}, g, { uses: 0 }); });
+                HUNT_TEST_MONEY = false; o.noInfBuy = (function () { let m0 = gState.money; buy('医疗包', 10000); return gState.money === m0; })();   // 钱不够：不买
+                // 猫盾币：不封顶；无限只显示
+                TEST_INFINITE_COINS = false; gState.mcoin = 1e12; coinsAdd('x', 5); o.coins = [gState.mcoin, coinsShow(), coinsOf()];
+                TEST_INFINITE_COINS = true; let m1 = gState.mcoin; o.cinf = [coinsShow(), coinsOf(), shopSpend(500), gState.mcoin === m1];
+                shopTab('pet'); o.wallet = document.getElementById('shop-wallet').innerText;
+                TEST_INFINITE_COINS = false;
+                return JSON.stringify(o); })()`));
+            if (r.big !== '5000000000' || r.plus !== 5000000007) bad.push('资金封顶了 ' + r.big + '/' + r.plus);
+            if (r.inf !== '无限' || r.kept !== 1234 || !r.boughtInf || r.afterBuy !== 1234) bad.push('无限资金 ' + JSON.stringify([r.inf, r.kept, r.boughtInf, r.afterBuy]));
+            if (!r.noInfBuy) bad.push('没开无限时钱不够也买了');
+            if (r.coins[0] !== 1e12 + 5 || r.coins[1] !== 1e12 + 5 || r.coins[2] !== 1e12 + 5) bad.push('猫盾币封顶了 ' + r.coins.join());
+            if (r.cinf[0] !== '无限' || r.cinf[1] !== 99999 || r.cinf[2] !== true || r.cinf[3] !== true) bad.push('无限猫盾币 ' + r.cinf.join());
+            if (!/无限/.test(r.wallet)) bad.push('商店钱包 ' + r.wallet);
+            // 读档：mcoin < 0 → 0；money 99999999 不会再被写进存档
+            const l = JSON.parse(await T.eval(`(function(){
+                let o = {}; HUNT_TEST_MONEY = true; gState.money = 4321; saveProgress(); o.saved = JSON.parse(localStorage.getItem('TH_save_' + gState.id)).money; HUNT_TEST_MONEY = false;
+                let d = JSON.parse(localStorage.getItem('TH_save_' + gState.id)); d.mcoin = -37; localStorage.setItem('TH_save_' + gState.id, JSON.stringify(d)); loadProgress(gState.id); o.neg = gState.mcoin;
+                d.mcoin = 250; localStorage.setItem('TH_save_' + gState.id, JSON.stringify(d)); loadProgress(gState.id); o.pos = gState.mcoin;
+                d.mcoin = 'abc'; localStorage.setItem('TH_save_' + gState.id, JSON.stringify(d)); loadProgress(gState.id); o.junk = gState.mcoin;
+                return JSON.stringify(o); })()`));
+            if (l.saved !== 4321 || l.neg !== 0 || l.pos !== 250 || l.junk !== 0) bad.push('存档 ' + JSON.stringify(l));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H27 余额不封顶；开无限只显示“无限”、不扣真实余额、不再把 money 改成 99999999；读档 mcoin<0 改成 0', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 

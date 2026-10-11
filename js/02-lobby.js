@@ -645,7 +645,7 @@
             let mbc = document.getElementById('mode-bar-current'); if (mbc) mbc.innerText = isEscape ? modeName + ' · 第 ' + (escProg().sel || 1) + ' 关' : modeName;
             if (isNight) selectNightChar(gState.nightChar || 'cat');
             if (isBlaze) blazeRenderChars();
-            if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsOf(); }
+            if (isPark) { let pc = document.getElementById('park-coin-disp'); if (pc) pc.innerText = coinsShow(); }
             if (isRace) raceTestCardBtnSync();
             if (isJail || isDodge || isEscape) applyControlHints();
             let cb = document.getElementById('hunt-ai-fill');
@@ -1640,8 +1640,8 @@
         function garageRenderPouchRow(actDiv) { renderPouchSlots(pouchRowEl(actDiv, 'garage-pouch-row'), initGarage); }
 
         function initGarage() {
-            if (HUNT_TEST_MONEY) gState.money = 99999999;
-            document.getElementById('garage-money').innerText = gState.money;
+            // H27：开了“无限资金”只是显示“无限”、买东西不扣钱；不再把真实余额改成 99999999，余额不封顶
+            document.getElementById('garage-money').innerText = HUNT_TEST_MONEY ? '无限' : gState.money;
             let actDiv = document.getElementById('garage-active-inv'); actDiv.innerHTML = '';
             let sthDiv = document.getElementById('garage-stash-container'); sthDiv.innerHTML = '';
             let sellDiv = document.getElementById('sell-btn-container'); sellDiv.innerHTML = '';
@@ -1715,9 +1715,9 @@
 
         function buy(n, cost) {
             let emptyIdx = gState.garage.findIndex(function (item) { return item === null; });
-            if (gState.money < cost) { showSysModal('钱不够', '买' + n + '还差 $' + (cost - gState.money).toLocaleString() + '。', [{ label: '知道了' }]); return; }
+            if (!HUNT_TEST_MONEY && gState.money < cost) { showSysModal('钱不够', '买' + n + '还差 $' + (cost - gState.money).toLocaleString() + '。', [{ label: '知道了' }]); return; }
             if (emptyIdx === -1) { showSysModal('仓库满了', '仓库没空位了，先卖掉点东西再买。', [{ label: '知道了' }]); return; }
-            gState.money -= cost; gState.garage[emptyIdx] = { ...shopItems[n], isShop: true }; initGarage();
+            if (!HUNT_TEST_MONEY) gState.money -= cost; gState.garage[emptyIdx] = { ...shopItems[n], isShop: true }; initGarage();
         }
         function repairSelected() {
 
@@ -1731,9 +1731,10 @@
             else { showSysModal('提示', '该物品无法充能维护', [{ label: '确定' }]); return; }
 
             if (item.uses >= item.maxUses) { showSysModal('提示', '该物品还是满的，不需要维护', [{ label: '确定' }]); return; }
-            if (gState.money < cost) { showSysModal('提示', '钱不够维修！', [{ label: '确定' }]); return; }
+            if (!HUNT_TEST_MONEY && gState.money < cost) { showSysModal('提示', '钱不够维修！', [{ label: '确定' }]); return; }
 
-            gState.money -= cost; item.uses = item.maxUses;
+            if (!HUNT_TEST_MONEY) gState.money -= cost;
+            item.uses = item.maxUses;
             if (isPlaying) { updateHUD(); saveProgress(); } else initGarage();
         }
         window.addEventListener('keydown', function (e) {
