@@ -881,6 +881,24 @@ async function enterExit(tab, key) {
             report('V2 大厅公告板：板子有厚度，杆子在背后、顶端到板子中间，体积不重叠，只有正面贴字', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('V3')) {
+            // V3：更新公告规则——只留最新 3 条；每条最多 5 句、每句一行（不换行、不长）、不提保底/必出；发版的那条 id 跟版本号一致；CLAUDE.md 里写了这条规则
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`JSON.stringify({ n: CHANGELOG.length, items: CHANGELOG.map(function (e) { return e.items; }), ids: CHANGELOG.map(function (e) { return e.id; }), ver: GAME_VERSION })`));
+            if (r.n < 1 || r.n > 3) bad.push('公告条数 ' + r.n + '（最多 3 条）');
+            r.items.forEach(function (it, i) {
+                if (it.length > 5) bad.push('第 ' + (i + 1) + ' 条有 ' + it.length + ' 句（最多 5 句）');
+                it.forEach(function (t) { if (t.length > 32 || /[\n<]/.test(t)) bad.push('太长或带换行：' + t); if (/保底|必出/.test(t)) bad.push('提到了保底/必出：' + t); });
+            });
+            if (r.ids[0] !== r.ver) bad.push('最新一条的 id（' + r.ids[0] + '）跟版本号（' + r.ver + '）不一致');
+            const md = fs.readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8');
+            if (!/每次发版只写一条公告/.test(md) || !/只保留最新 3 条/.test(md)) bad.push('CLAUDE.md 里没写更新公告规则');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('V3 更新公告：只留最新几条（≤3）、每条 ≤5 句、短、不提保底；最新一条 id = 版本号；CLAUDE.md 写了规则', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];
@@ -1376,10 +1394,8 @@ async function enterExit(tab, key) {
             if (!(near(r.lotG.big, 0.05 + 0.05 * r.k3) && near(r.lotG.destroy, 0.25 - 0.15 * r.k3) && near(r.lotG.purple, 0.15) && near((r.lotG.big + r.lotG.destroy + r.lotG.purple + r.lotG.gold), 1))) bad.push('抽奖(金) ' + JSON.stringify(r.lotG));
             if (!(near(r.lotP.destroy, 0.25 - 0.15 * r.k3) && near(r.lotP.purple, 0.6) && !r.lotP.big)) bad.push('抽奖(紫) ' + JSON.stringify(r.lotP));
             if (!r.noLuckSame || r.upgrades < 15 || r.upgrades > 55 || !r.safeKeepsBest) bad.push('实际换位 ' + JSON.stringify([r.noLuckSame, r.upgrades, r.safeKeepsBest]));
-            // 哪里都不说它的作用：公告只写"神秘配方"，规则、介绍、页面上都没有"运气猫爪"和运气层数
+            // 哪里都不说它的作用：规则、介绍、页面上都没有"运气猫爪"和运气层数
             const txt = JSON.parse(await T.eval(`JSON.stringify({ log: JSON.stringify(CHANGELOG), rules: Object.keys(MODE_RULES).map(function (k) { return rulesHtml(k); }).join(''), page: document.body.innerHTML, intro: typeof HUNT_ITEM_INTRO !== 'undefined' ? JSON.stringify(HUNT_ITEM_INTRO) : '' })`));
-            if (/运气|猫爪/.test(txt.log.replace(/运气好/g, '')) && !/神秘配方/.test(txt.log)) bad.push('公告提到了');
-            if (!/多了一个神秘配方/.test(txt.log)) bad.push('公告没写“多了一个神秘配方”');
             ['rules', 'page', 'intro'].forEach((k) => { if (/运气猫爪|运气层|运气值/.test(txt[k])) bad.push(k + ' 里提到了运气'); });
             // 每局归零；运气只在玩家自己开箱/信号接收器两处用（AI 开箱的代码不碰）
             await T.eval(`gState.huntLuck = 7; ${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
