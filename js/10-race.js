@@ -1502,7 +1502,8 @@
         function raceBoardRender() {
             let all = raceRecords();
             let key = 'r' + race_boardSeg;
-            if (!all[key]) { all[key] = raceSeedRecords(race_boardSeg); saveProgress(); }
+            // 第一次打开才造 AI 榜；存档晚一点再写，别让整份存档的序列化和写盘卡在点开这一下里（存档大的时候要好几毫秒）
+            if (!all[key]) { all[key] = raceSeedRecords(race_boardSeg); setTimeout(saveProgress, 400); }
             let list = all[key];
             let tabs = [1, 2, 3, 4, 5].map(function (n) {
                 return '<button onclick="race_boardSeg=' + n + ';raceBoardRender()" style="margin:2px; padding:4px 10px; font-size:12px; ' +

@@ -821,6 +821,43 @@ async function enterExit(tab, key) {
             report('P2 加成“换一批”每小局 1 次，下一小局恢复', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('F2')) {
+            // F2：iPad 触屏尺寸（1180×820）点“记录榜”到面板出来要快：200 毫秒以内（含画出下一帧）
+            const bad = [];
+            const M = await openTab(chrome, url, { mobile: true });
+            await M.eval(`${HIDE} selectGameMode('race'); document.getElementById('mode-detail-panel').classList.remove('hidden'); true;`); await W(1000);
+            const times = [];
+            for (let round = 0; round < 3; round++) {
+                // 每轮清掉榜单缓存，量的是最慢的“第一次打开”
+                await M.eval(`${HIDE} raceBoardClose(); gState.raceRec = {}; window.__f2 = {};
+                    gState.garage = Array(200).fill(null).map(function (_, i) { return { n: '测试物品' + i, v: 5000 + i, w: 1, tex: 'misc', c: 0xffffff, desc: '占点存档大小'.repeat(8) }; });   // 存档做大一点（背包仓库都满），量最坏的情况
+                    document.addEventListener('touchstart', function h() { window.__f2.ts = performance.now(); document.removeEventListener('touchstart', h, true); }, true);
+                    document.addEventListener('touchend', function h2() { window.__f2.t0 = performance.now(); document.removeEventListener('touchend', h2, true); }, true);
+                    document.addEventListener('click', function h3() { window.__f2.tc = performance.now(); document.removeEventListener('click', h3, true); }, true);
+                    (function () { let orig = window.raceBoardOpen; window.raceBoardOpen = function (n) { let a = performance.now(); orig(n); window.__f2.hand = performance.now() - a; }; })();
+                    new MutationObserver(function (_, ob) {
+                        if (!document.getElementById('race-board').classList.contains('hidden') && !window.__f2.t1) {
+                            window.__f2.t1 = performance.now(); ob.disconnect();
+                            requestAnimationFrame(function () { window.__f2.t2 = performance.now(); setTimeout(function () { window.__f2.t3 = performance.now(); }, 0); });
+                        }
+                    }).observe(document.getElementById('race-board'), { attributes: true });
+                    true;`);
+                const p = await mouseAt(M, '#race-only button[onclick^="raceBoardOpen"]');
+                if (!p) { bad.push('找不到记录榜按钮'); break; }
+                await M.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p[0], y: p[1], id: 1 }] });
+                await M.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+                await W(800);
+                const r = JSON.parse(await M.eval(`JSON.stringify(window.__f2)`));
+                if (!r.t3) { bad.push('面板没出来 ' + JSON.stringify(r)); break; }
+                times.push({ end2click: +(r.tc - r.t0).toFixed(1), hand: +r.hand.toFixed(1), logic: +(r.t1 - r.t0).toFixed(1), paint: +(r.t3 - r.t0).toFixed(1), start2end: +(r.t0 - r.ts).toFixed(1) });
+            }
+            console.log('      F2 点击到面板：' + JSON.stringify(times));
+            times.forEach((t) => { if (t.paint > 200 || t.hand > 50) bad.push('点到面板可见要 ' + t.paint + ' 毫秒，点击处理 ' + t.hand + ' 毫秒'); });
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('F2 触屏 iPad 尺寸点“记录榜”到面板可见 ≤ 200 毫秒', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];
