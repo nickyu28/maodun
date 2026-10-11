@@ -876,10 +876,10 @@ async function enterExit(tab, key) {
                 steps: NET_DIAG_STEPS.length })`));
             if (r.fn !== 'undefinedundefinedundefinedundefined') bad.push('函数还在 ' + r.fn);
             if (r.btn.length) bad.push('页面上还有入口 ' + r.btn.join(','));
-            if (r.steps !== 4) bad.push('联机诊断是 ' + r.steps + ' 项');
+            if (r.steps !== 5) bad.push('联机诊断是 ' + r.steps + ' 项（应是五项）');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('A7 游戏里没有反馈入口；代码里搜不到 web3forms、access_key、邮箱；联机诊断四项', bad.length === 0, bad.join(' / '));
+            report('A7 游戏里没有反馈入口；代码里搜不到 web3forms、access_key、邮箱；联机诊断五项', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('I1b')) {
