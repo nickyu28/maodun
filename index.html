@@ -749,6 +749,14 @@
         #intro-banner-text { max-height: 30vh; overflow-y: auto; }
         #intro-banner-text > div { max-height: none !important; }
 
+        /* T0 新手教程 */
+        #tut-panel { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 850; background: rgba(20,30,50,0.88); color: #fff; border-radius: 10px; padding: 8px 18px; text-align: center; pointer-events: none; min-width: 220px; max-width: min(520px, 76vw); }
+        #tut-panel.hidden, #tut-skip.hidden { display: none; }
+        #tut-step { font-size: 11px; color: #90caf9; }
+        #tut-text { font-size: 17px; font-weight: bold; margin: 2px 0; }
+        #tut-hint { font-size: 13px; color: #cfd8dc; }
+        #tut-skip { position: fixed; top: 10px; right: 10px; z-index: 850; margin: 0; padding: 6px 14px; font-size: 13px; background: rgba(0,0,0,0.55); color: #fff; border: 1px solid #aaa; border-radius: 6px; }
+
         .sys-modal-box {
             background: #fff;
             padding: 20px;
@@ -907,6 +915,14 @@
             <div id="sys-modal-btns" style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;"></div>
         </div>
     </div>
+
+    <!-- T0 新手教程：顶部一条提示 + 右上角跳过 -->
+    <div id="tut-panel" class="hidden">
+        <div id="tut-step"></div>
+        <div id="tut-text"></div>
+        <div id="tut-hint"></div>
+    </div>
+    <button id="tut-skip" class="hidden" onclick="tutLeave(false)">跳过</button>
 
     <div id="intro-banner" class="hidden">
         <div id="intro-banner-box" onclick="introBannerClose()">

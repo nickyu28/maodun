@@ -3735,7 +3735,7 @@
             if (gState.timeStop > 0) {
                 gState.timeStop -= dt; if (gState.timeStop <= 0) document.getElementById('time-stop-overlay').style.display = 'none';
             } else {
-                timeSecs += 24 * dt;
+                if (!gState.tutorial) timeSecs += 24 * dt;
                 if (timeSecs >= endTime) { finishGame(false, "时间超出限制。"); return; }
                 for (let wi = 0; wi < MOB_WAVES_AT.length; wi++) {
                     let flag = 'wave' + (wi + 1) + 'Spawned';
@@ -3767,6 +3767,7 @@
             signalRouteTick(false);
             if (!gState.isDead && !gState.hasLeft && !gState.backpackOpen && !gState.largeMapOpen) handlePlayerEngine(dt);
             handleThrownItemsAndEntitiesEngine(dt);
+            if (gState.tutorial) tutTick(dt);
 
             if (gState.isDead) {
                 if (gState.spectating && gState.spectating.parent) { camera.position.set(gState.spectating.position.x, gState.spectating.position.y + 4, gState.spectating.position.z); }
@@ -3946,6 +3947,7 @@
             let isMoving = (moveX !== 0 || moveZ !== 0);
             let isRunning = (keys['shift'] || padAutoRun()) && isMoving && stamina > 0;
             let drainMult = gState.debuff.type === 2 ? 2.5 : 1.0;
+            if (isRunning && gState.tutorial) gState.tutorial.runT += dt;
             if (isRunning) { baseMoveSpeed *= staminaBoostMul(stamina, 1.6); stamina = Math.max(0, stamina - 28 * drainMult * dt); } else { stamina = Math.min(100, stamina + 16 * dt); } document.getElementById('stamina-fill').style.width = stamina + '%';
             let staminaTxt = document.getElementById('stamina-txt'); if (staminaTxt) staminaTxt.innerText = Math.floor(stamina);
 
@@ -4015,6 +4017,7 @@
                     }
                     else if (activeObj.userData.isChest && !activeObj.userData.opened) {
                         activeObj.userData.opened = true; activeObj.material.color.setHex(0x1a1a1a);
+                        tutEvent('chest');
                         bc.postMessage({ type: 'CHEST_OPENED', target: '*', cx: Math.floor(activeObj.position.x / TILE), cz: Math.floor(activeObj.position.z / TILE), cf: Math.floor(activeObj.position.y / TILE) });
 
                         let boxType = activeObj.userData.type;
@@ -4037,6 +4040,7 @@
                         let picked = huntItemFromGround(activeObj.userData), slot = carryFreeSlot(picked);   // 背包满了就放进身上腰包的空格
                         if (slot) {
                             huntItemIntro(activeObj.userData);
+                            tutEvent('pick');
                             slot[0][slot[1]] = picked;
 
                             if (activeObj.userData.fromSignal || activeObj === gState.signal.mesh) {

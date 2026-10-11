@@ -157,12 +157,12 @@
         }
 
         function startGameMap(seed, syncSpawns) {
-            stashLootBeforeRun();   // 宝物留在仓库，只带工具进图
-            mSize = HUNT_SIZE;
-            showModeIntroIfFirstTime('hunt');
+            if (!gState.tutorial) stashLootBeforeRun();   // 宝物留在仓库，只带工具进图
+            mSize = gState.tutorial ? TUT_SIZE : HUNT_SIZE;
+            if (!gState.tutorial) showModeIntroIfFirstTime('hunt');
             gameSeed = seed || 1; nav('none'); document.getElementById('ui-layer').classList.remove('hidden'); document.getElementById('ui-id').innerText = dispNameText(gState.id);
             gState.selectedSlot = 0; gState.selectedContainer = 'inv';   // 仓库和局内快捷栏共用这两个
-            gState.huntRunActive = true; saveProgress();   // H5：没结算就关页面，下次读档按撤离失败算
+            if (!gState.tutorial) { gState.huntRunActive = true; saveProgress(); }   // H5：没结算就关页面，下次读档按撤离失败算
             isPlaying = true; gState.isDead = false; gState.submittedItems = []; gState.hp = 100; timeSecs = 8 * 3600; gState.totalSubmitted = 0; gState.runCash = 0; gState.aiSubmitted = 0; gState.aiChestsTaken = 0; stamina = 100;
             // abilityCd/abilityActive 之前是全局变量，从来没在开新一局的时候清零过——
             // 上一局技能刚用完、冷却还没走完就退出，下一局技能会一直显示"还在冷却"，
@@ -187,12 +187,13 @@
             ensureScene();
             currentNavPath = [];
 
-            buildProceduralMaze(); spawnLobbyAgents();
+            buildProceduralMaze();
+            if (gState.tutorial) tutSetupMap(); else spawnLobbyAgents();
             // 保底用在"这一局"身上——不管这局最后撤没撤出去，用过就是用过了，不然连
             // 续几局都失败/没撤出去的人会一直卡在保底状态，每局都重复吃保底。放在生
             // 成地图之后清零：这局造图的时候两个标记还是 true，能正常生效。
             // 组队局里保底不生效，标记留到下一次自己打的时候
-            if (!huntHasHumanMates()) { gState.isFirstRound = false; gState.pityGuaranteed = false; saveProgress(); }
+            if (!gState.tutorial && !huntHasHumanMates()) { gState.isFirstRound = false; gState.pityGuaranteed = false; saveProgress(); }
 
             if (syncSpawns) gState.preGenSpawns = syncSpawns;
 
@@ -200,7 +201,7 @@
             updateHUD(); bgmStart(); animate();
             // 第一次进寻宝队才弹——新手不知道"捡了东西不代表到手"，得回安全区上交、撤离出去、回仓库卖掉才有钱，
             // 死了/没上交就白捡了，这个规则不解释一下容易被当成 bug。
-            if (!gState.huntTutorialShown) {
+            if (!gState.huntTutorialShown && !gState.tutorial) {
                 gState.huntTutorialShown = true; saveProgress();
                 setTimeout(function () {
                     showSysModal('新手提示', '捡到的东西拿回出生点，站在安全区里按「上交」。撤离出去以后东西进仓库，卖掉才有钱。没撤出去，东西全没。', [{ label: '知道了' }]);
@@ -247,7 +248,7 @@
             huntAssignLoot(chests, seededRandom, Math.max(1, (gState.team || []).length));
             gState.signalN = 0;
             huntMergeStatic();
-            huntTaskNew();
+            if (gState.tutorial) { gState.huntTask = null; huntTaskHud(); } else huntTaskNew();
             camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
             // 出生点在角落的安全屋里，原来一律面朝 -Z——那边正好是地图边墙，开局第一眼
             // 就是贴脸一整面青色的墙，得自己转一圈才找得到路。四个方向各打一条射线，
@@ -278,7 +279,7 @@
             });
         }
         function huntBuildMazeOnce() {
-            mSize = HUNT_SIZE;
+            mSize = gState.tutorial ? TUT_SIZE : HUNT_SIZE;
             clearFootprints3D();
             huntDropMerged();
             // 从躲猫猫/火拼图/松饼切过来时，上一张图的屋顶(roof…roof6)、松饼的楼房/跳台
@@ -534,7 +535,7 @@
             // H12：保底局（新号第一局 / 连续没出货）。简单图不出保险柜，改成多 1 个金箱子、大金概率翻倍；
             // 中等、困难图还是必出保险柜。只在没有真人队友的局里生效（标记是各人自己的，
             // 组队时每人的地图要一模一样，不能因为谁带着保底就多一个箱子）。
-            let pity = huntPityActive();
+            let pity = huntPityActive() && !gState.tutorial;
             huntPityMul = (pity && gState.mapDifficulty === 'easy') ? 2 : 1;
             let cTypes = [];
             if (pity && gState.mapDifficulty === 'easy') cTypes.push('gold');
@@ -1447,7 +1448,9 @@
                     '游戏里的反馈入口去掉了',
                     '单人局里弹出提示卡片时，整局先停住，看完再继续',
                     '多人局里的提示改成屏幕上方的小条，不挡操作也不暂停',
-                    '平板上摇杆推到底会自动跑，右下角的“跑”按钮去掉了'
+                    '平板上摇杆推到底会自动跑，右下角的“跑”按钮去掉了',
+                    '新手教程：新玩家起完名字就会开始，9 步学会走、跳、开箱、上交、撤离，做完 +20 猫盾币；右上角能跳过，设置里能重玩',
+                    '没做完（或跳过）新手教程之前，不能组队，也收不到邀请'
                 ]
             },
             {

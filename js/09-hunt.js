@@ -590,6 +590,7 @@
             });
 
             gState.totalSubmitted += submittedNow;
+            if (submittedNow > 0) tutEvent('submit');
             gState.runCash = (gState.runCash || 0) + cashNow;   // 只给本局任务「上交满 $30000」计数
             huntRefreshSubmitUI();
 
@@ -598,6 +599,7 @@
         }
 
         function completeExtraction(text) {
+            if (gState.tutorial) { tutEvent('extract'); return; }   // T0：教程里的撤离不结算、不进仓库
             // isFirstRound/pityGuaranteed 不在这清零了——进图那一刻（startGameMap）已经
             // 处理过，不然连续撤离失败的人会一直卡在"首次必出"状态出不来。
             gState.matchHistory.push(true); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
@@ -665,6 +667,7 @@
         }
 
         function chooseLeave() {
+            if (gState.tutorial) { tutLeave(false); return; }
             gState.hasLeft = true; gState.spectating = null;
             document.getElementById('death-wait-page').classList.add('hidden');
             document.getElementById('spectate-bar').classList.add('hidden');
@@ -970,3 +973,178 @@
         bindTouchTap('blaze-skill2-btn', function () { if (blaze && !blaze.over) blazeSkill2(blaze.me); });
 
 
+
+        // ══════════════ T0 新手教程 ══════════════
+        // 新玩家起完名字自动开始（右上角能跳过），设置里能重玩。专门一张小图（TUT_SIZE×TUT_SIZE，只有一个木箱），
+        // 没有怪、没有队友、不刷任务，走的是寻宝队同一套移动、开箱、背包、上交、撤离，所以学到的操作跟真打一模一样。
+        // 教程里什么都不存、不进经济：背包开始时备份、结束时还原，saveProgress() 在教程里直接返回，
+        // 撤离不结算不进仓库；只有做完（第一次）给 TUT_REWARD 个猫盾币。gState.tutDone：false 还没做过 / 'skip' 跳过 / 'done' 做完 / 'old' 老存档。
+        const TUT_SIZE = 9, TUT_REWARD = 20, TUT_LOOT_V = 10000;
+        const TUT_STEPS = [
+            { id: 'ring', text: '走进地上发光的圈', hint: function () { return kTxt('<b>WASD</b> 走路', '用左边的摇杆走路'); } },
+            { id: 'mark', text: '转动视角，看向橙色的柱子', hint: function () { return kTxt('移动<b>鼠标</b>转视角', '在屏幕右半边<b>拖动</b>转视角'); } },
+            { id: 'table', text: '跳到灰色的桌子上', hint: function () { return kTxt('<b>空格</b> 跳', '点右下角的 <b>跳</b>'); } },
+            { id: 'run', text: '跑一小段', hint: function () { return kTxt('按住 <b>Shift</b> 再走', '摇杆推到底就会跑'); } },
+            { id: 'chest', text: '走到木箱前，把它打开', hint: function () { return kTxt('准星对着箱子，按 <b>F</b> 或点<b>左键</b>', '走近箱子，点 <b>互动</b>'); } },
+            { id: 'pick', text: '把掉出来的东西捡起来', hint: function () { return kTxt('走近，按 <b>F</b> 或点<b>左键</b>', '走近，点 <b>互动</b>'); } },
+            { id: 'bag', text: '打开背包看一眼', hint: function () { return kTxt('按 <b>E</b>（再按一次关上）', '点屏幕上的 <b>背包</b>'); } },
+            { id: 'submit', text: '回到绿色的出生点，上交', hint: function () { return '站在绿色格子里，点右上角的 <b>上交</b>'; } },
+            { id: 'extract', text: '上交够了，点撤离', hint: function () { return '点右上角出现的 <b>撤离</b>'; } }
+        ];
+        function tutPassed() { return !!gState.tutDone; }
+        function tutAutoStart() {
+            if (gState.tutDone || /[?&]notut\b/.test(location.search)) return;
+            let tries = 0;
+            (function go() {
+                if (gState.tutDone || gState.tutorial || isPlaying) return;
+                if (sysModalVisible() && tries++ < 15) { setTimeout(go, 800); return; }   // 先让"数据重置"之类的提示看完
+                tutorialStart();
+            })();
+        }
+        function tutorialStart() {
+            if (gState.tutorial || isPlaying) return;
+            let k = chatActiveModeKey(); if (k && k !== 'hub') return;   // 只能在大厅里开
+            sysModalCloseNormal();
+            gState.tutorial = {
+                step: 0, runT: 0, ring: null, mark: null, beam: null, tableCell: null,
+                back: { inv: JSON.parse(JSON.stringify(gState.inv)), mapDifficulty: gState.mapDifficulty, extractTarget: gState.extractTarget, team: gState.team, selectedSlot: gState.selectedSlot }
+            };
+            gState.mapDifficulty = 'tutorial'; gState.extractTarget = mapConfigs.tutorial.extr;
+            gState.team = [{ id: gState.id, isLeader: true, isReady: true, isAI: false }];
+            startGameMap(4242, []);
+            let q = document.getElementById('hunt-quit-btn'); if (q) q.style.display = 'none';
+            tutPanelRender();
+        }
+        // 造完图以后：箱子里放练习宝物、摆圈、摆桌子
+        function tutSetupMap() {
+            let T = gState.tutorial;
+            for (let wi = 0; wi < MOB_WAVES_AT.length; wi++) gState['wave' + (wi + 1) + 'Spawned'] = true;   // 没有怪
+            gState.monstersSpawned = true;
+            if (chests[0]) chests[0].userData.loot = { n: '练习宝物', v: TUT_LOOT_V, w: 1, tex: 'disc', c: 0x9c27b0 };
+            gState.extractTarget = TUT_LOOT_V;
+            // 从出生点走得到的地面格子，按走多远分
+            let key = function (n) { return (n.f * 64 + n.z) * 64 + n.x; }, dist = {}, q = [{ f: 0, x: 1, z: 1 }];
+            dist[key(q[0])] = 0;
+            for (let h = 0; h < q.length; h++) huntRouteNbrs(q[h]).forEach(function (m) { let k = key(m); if (dist[k] === undefined) { dist[k] = dist[key(q[h])] + 1; q.push(m); } });
+            let chestCell = chests[0] ? { x: Math.floor((chests[0].position.x + TILE / 2) / TILE), z: Math.floor((chests[0].position.z + TILE / 2) / TILE) } : null;
+            let cells = q.filter(function (n) { return n.f === 0 && huntCellKind(0, n.x, n.z) === 'floor' && !(n.x <= 2 && n.z <= 2) && !(chestCell && n.x === chestCell.x && n.z === chestCell.z); })
+                .map(function (n) { return { x: n.x, z: n.z, d: dist[key(n)] }; });
+            let near = function (d) { return cells.slice().sort(function (a, b) { return Math.abs(a.d - d) - Math.abs(b.d - d); }); };
+            let ringC = near(3)[0] || cells[0];
+            let tableC = near(2).filter(function (c) { return !ringC || c.x !== ringC.x || c.z !== ringC.z; })[0];
+            T.cells = cells;
+            let ring = new THREE.Mesh(new THREE.RingGeometry(4, 6, 32), new THREE.MeshBasicMaterial({ color: 0x00e5ff, side: THREE.DoubleSide, transparent: true, opacity: 0.85 }));
+            ring.rotation.x = -Math.PI / 2;
+            if (ringC) { ring.position.set(ringC.x * TILE, 0.4, ringC.z * TILE); T.ringC = ringC; }
+            mapExtraAdd(ring); T.ring = ring;
+            if (tableC) {
+                let c = maze[0][tableC.z][tableC.x];
+                let tm = new THREE.Mesh(new THREE.BoxGeometry(TILE, 8, TILE), new THREE.MeshLambertMaterial({ map: createProceduralTexture('table', '#7f8c8d', '#95a5a6') }));
+                tm.position.set(tableC.x * TILE, 4, tableC.z * TILE);
+                mapExtraAdd(tm); walkableMeshes.push(tm);
+                c.type = 2; c.table = tm; T.tableCell = tableC;
+            }
+            let beam = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 70, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }));
+            mapExtraAdd(beam); T.beam = beam;
+            tutBeaconFor('ring');
+        }
+        // 当前这一步该去的地方立一根光柱
+        function tutBeaconFor(id) {
+            let T = gState.tutorial; if (!T || !T.beam) return;
+            let at = null, col = 0x00e5ff;
+            if (id === 'ring' && T.ringC) at = { x: T.ringC.x * TILE, z: T.ringC.z * TILE };
+            else if (id === 'mark' && T.mark) { at = { x: T.mark.position.x, z: T.mark.position.z }; col = 0xff9800; }
+            else if (id === 'table' && T.tableCell) at = { x: T.tableCell.x * TILE, z: T.tableCell.z * TILE };
+            else if (id === 'chest' && chests[0]) at = { x: chests[0].position.x, z: chests[0].position.z };
+            else if (id === 'pick' && groundItems[0]) at = { x: groundItems[0].position.x, z: groundItems[0].position.z };
+            else if (id === 'submit') { at = { x: TILE, z: TILE }; col = 0x66bb6a; }
+            T.beam.visible = !!at;
+            if (at) { T.beam.position.set(at.x, 35, at.z); T.beam.material.color.setHex(col); }
+        }
+        // 第 2 步开始时摆橙色柱子：挑一个离玩家几格远、方向跟现在镜头朝向最相反的地面格子，逼着转视角
+        function tutSpawnMarker() {
+            let T = gState.tutorial, p = camera.position, fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+            let best = null, bestDot = 2;
+            (T.cells || []).forEach(function (c) {
+                let dx = c.x * TILE - p.x, dz = c.z * TILE - p.z, d = Math.hypot(dx, dz);
+                if (d < TILE * 3 || d > TILE * 9) return;
+                let dot = (dx * fwd.x + dz * fwd.z) / d;
+                if (dot < bestDot) { bestDot = dot; best = c; }
+            });
+            if (!best) best = { x: 1, z: 1 };
+            let g = new THREE.Group();
+            let pillar = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 60, 12), new THREE.MeshBasicMaterial({ color: 0xff9800 }));
+            pillar.position.y = 30; g.add(pillar);
+            let cap = new THREE.Mesh(new THREE.SphereGeometry(5, 14, 10), new THREE.MeshBasicMaterial({ color: 0xffc107 }));
+            cap.position.y = 64; g.add(cap);
+            g.position.set(best.x * TILE, 0, best.z * TILE);
+            mapExtraAdd(g); T.mark = g;
+        }
+        function tutTick(dt) {
+            let T = gState.tutorial; if (!T) return;
+            let st = TUT_STEPS[T.step]; if (!st) return;
+            let p = camera.position, feet = p.y - 9;
+            if (T.ring && T.ring.visible) { let s = 1 + 0.12 * Math.sin(performance.now() / 260); T.ring.scale.set(s, s, 1); }
+            if (st.id === 'ring') {
+                if (T.ringC && Math.hypot(p.x - T.ringC.x * TILE, p.z - T.ringC.z * TILE) < 6 && feet < 4) tutNext();
+            } else if (st.id === 'mark') {
+                if (T.mark) {
+                    let fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+                    let dx = T.mark.position.x - p.x, dz = T.mark.position.z - p.z, d = Math.hypot(dx, dz) || 1;
+                    if ((dx * fwd.x + dz * fwd.z) / d > Math.cos(18 * Math.PI / 180)) tutNext();
+                }
+            } else if (st.id === 'table') {
+                let tc = T.tableCell;
+                if (!tc || (Math.abs(p.x - tc.x * TILE) < TILE / 2 && Math.abs(p.z - tc.z * TILE) < TILE / 2 && feet >= HUNT_TABLE_H - 0.6)) tutNext();
+            } else if (st.id === 'run') {
+                if (T.runT >= 1.2) tutNext();
+            } else if (st.id === 'pick') {
+                tutBeaconFor('pick');
+            }
+        }
+        function tutEvent(name) {
+            let T = gState.tutorial; if (!T) return;
+            let st = TUT_STEPS[T.step];
+            if (st && st.id === name) tutNext();
+        }
+        function tutNext() {
+            let T = gState.tutorial; if (!T) return;
+            T.step++;
+            if (T.step >= TUT_STEPS.length) { tutLeave(true); return; }
+            let id = TUT_STEPS[T.step].id;
+            if (id === 'mark') { if (T.ring) T.ring.visible = false; tutSpawnMarker(); }
+            if (id === 'table' && T.mark) T.mark.visible = false;
+            tutBeaconFor(id);
+            blazeFlash('✔ 好，下一步');
+            tutPanelRender();
+        }
+        function tutPanelRender() {
+            let T = gState.tutorial, on = !!T;
+            ['tut-panel', 'tut-skip'].forEach(function (id) { let e = document.getElementById(id); if (e) e.classList.toggle('hidden', !on); });
+            if (!on) return;
+            let st = TUT_STEPS[Math.min(T.step, TUT_STEPS.length - 1)];
+            document.getElementById('tut-step').innerText = '新手教程　第 ' + (T.step + 1) + ' / ' + TUT_STEPS.length + ' 步';
+            document.getElementById('tut-text').innerText = st.text;
+            document.getElementById('tut-hint').innerHTML = st.hint();
+        }
+        // 做完或跳过：还原背包，回大厅。done=true 才算做完（第一次做完给猫盾币）
+        function tutLeave(done) {
+            let T = gState.tutorial; if (!T) return;
+            gState.tutorial = null;
+            isPlaying = false; bgmStop(); if (document.pointerLockElement) document.exitPointerLock();
+            gState.inv = T.back.inv; gState.mapDifficulty = T.back.mapDifficulty; gState.extractTarget = T.back.extractTarget; gState.team = T.back.team;
+            gState.selectedSlot = T.back.selectedSlot || 0;
+            gState.totalSubmitted = 0; gState.submittedItems = []; gState.runCash = 0; gState.huntTask = null; gState.huntRunActive = false;
+            gState.backpackOpen = false; gState.largeMapOpen = false; gState.hp = 100; gState.isDead = false;
+            ['backpack-overlay-page', 'large-map-panel', 'ui-layer', 'game-over'].forEach(function (id) { let e = document.getElementById(id); if (e) e.classList.add('hidden'); });
+            let be = document.getElementById('btn-extract'); if (be) be.classList.add('hidden');
+            let q = document.getElementById('hunt-quit-btn'); if (q) q.style.display = '';
+            clearMazeMeshes(); huntTaskHud();
+            let first = gState.tutDone !== 'done';
+            gState.tutDone = done ? 'done' : (gState.tutDone || 'skip');
+            saveProgress();
+            tutPanelRender();
+            nav('screen-lobby');
+            if (done && first) { coinsAdd('tutorial', TUT_REWARD); }
+            if (done) showSysModal('教程做完了', first ? ('得到 ' + TUT_REWARD + ' 个猫盾币。想再看一遍，在设置里点“新手教程”。') : '想再看一遍，在设置里点“新手教程”。', [{ label: '好', color: '#5cb85c' }]);
+        }

@@ -726,6 +726,7 @@
         // 把结果发回给发起人。
         function cakeOnInvite(m) {
             if (!m.ids || m.ids.indexOf(gState.id) < 0) return;
+            if (!tutPassed()) return;   // 新手教程做完（或跳过）之前，收不到邀请
             showSysModal('邀请　松饼大作战', (m.sender ? dispName(m.sender) : '有人') + ' 想现在开始松饼大作战，同意一起玩吗？', [
                 {
                     label: '同意', color: '#5cb85c', onClick: function () {

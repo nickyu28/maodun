@@ -584,12 +584,14 @@
         const PARTY_CAP = 4;   // 算上自己最多 4 个人
         function teamInvite(id) {
             if (!id || id === gState.id) return;
+            if (!tutPassed()) { blazeFlash('先做完新手教程再组队（在设置里可以重玩）'); return; }
             if (lobbyParty.indexOf(id) >= 0) { blazeFlash('已经和 ' + dispNameText(id) + ' 组队了'); return; }
             if (lobbyParty.length >= PARTY_CAP - 1) { blazeFlash('队伍最多 ' + PARTY_CAP + ' 人，满了'); return; }
             bc.postMessage({ type: 'TEAM_INVITE', target: id, sender: gState.id });
             blazeFlash('已经向 ' + dispNameText(id) + ' 发出组队邀请，等 TA 同意');
         }
         function teamOnInviteReceived(fromId) {
+            if (!tutPassed()) return;   // 新手教程做完（或跳过）之前，收不到组队邀请
             if (lobbyParty.length >= PARTY_CAP - 1) {
                 bc.postMessage({ type: 'TEAM_INVITE_ACK', target: fromId, sender: gState.id, accept: false });
                 showSysModal('组队邀请', dispName(fromId) + ' 邀请你组队，但你的队伍已经满了（最多 ' + PARTY_CAP + ' 人），自动拒绝了。', [{ label: '知道了' }]);
@@ -937,7 +939,8 @@
 
             easy: { extr: 140000, gold: 2, silver: 4, wood: 3, hasGoldShop: false, hasSafe: false, hasTables: true, mobs: [1, 2] },
             med: { extr: 170000, gold: 3, silver: 5, wood: 3, hasGoldShop: true, hasSafe: false, hasTables: false, mobs: [1, 2, 3, 4] },
-            hard: { extr: 200000, gold: 4, silver: 6, wood: 3, hasGoldShop: false, hasSafe: true, hasTables: false, mobs: [1, 2, 5] }
+            hard: { extr: 200000, gold: 4, silver: 6, wood: 3, hasGoldShop: false, hasSafe: true, hasTables: false, mobs: [1, 2, 5] },
+            tutorial: { extr: 10000, gold: 0, silver: 0, wood: 1, hasGoldShop: false, hasSafe: false, hasTables: false, mobs: [] }   // T0：新手教程的小图，只有一个木箱
         };
 
         let currentNavPath = []; const FLOORS = 3;
@@ -949,7 +952,8 @@
         const SAVE_VER = 2;
         function saveProgress() {
             if (!gState.id) return;
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntRunActive: !!gState.huntRunActive, badgeGiven: !!gState.badgeGiven, huntTutorialShown: !!gState.huntTutorialShown, weightWarnShown: !!gState.weightWarnShown, skinPity: gState.skinPity || 0, blazeChar: gState.blazeChar || 'bow' };
+            if (gState.tutorial) return;   // T0：教程里什么都不存（背包、任务、进度都是练习用的），做完或跳过时再存
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, isFirstRound: gState.isFirstRound, pityGuaranteed: gState.pityGuaranteed, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, escDaily: gState.escDaily, escDraft: gState.escDraft, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntRunActive: !!gState.huntRunActive, badgeGiven: !!gState.badgeGiven, huntTutorialShown: !!gState.huntTutorialShown, weightWarnShown: !!gState.weightWarnShown, skinPity: gState.skinPity || 0, blazeChar: gState.blazeChar || 'bow', tutDone: gState.tutDone || false };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -960,7 +964,7 @@
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
                         gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.isFirstRound = data.isFirstRound; gState.pityGuaranteed = data.pityGuaranteed; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = data.mcoin || 0; gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {}; gState.escProg = data.escProg || null;
-                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {}; gState.huntRunActive = !!data.huntRunActive; gState.badgeGiven = !!data.badgeGiven; gState.huntTutorialShown = !!data.huntTutorialShown; gState.weightWarnShown = !!data.weightWarnShown; gState.skinPity = data.skinPity || 0; gState.blazeChar = data.blazeChar || 'bow';
+                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {}; gState.huntRunActive = !!data.huntRunActive; gState.badgeGiven = !!data.badgeGiven; gState.huntTutorialShown = !!data.huntTutorialShown; gState.weightWarnShown = !!data.weightWarnShown; gState.skinPity = data.skinPity || 0; gState.blazeChar = data.blazeChar || 'bow'; gState.tutDone = data.tutDone === undefined ? 'old' : data.tutDone;
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); grantBadgeIfMissing();
                         if (gState.huntRunActive) huntRunAbandoned();
@@ -971,7 +975,7 @@
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.isFirstRound = true; gState.pityGuaranteed = false; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
             gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { head: null, waist: null }; gState.ownedAcc = {}; gState.escProg = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
-            gState.dailyWin = {}; gState.towerBest = 0; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false; gState.introSeen = {}; gState.modeIntroShown = {}; gState.huntRunActive = false; gState.badgeGiven = true; gState.huntTutorialShown = false; gState.weightWarnShown = false; gState.skinPity = 0;
+            gState.dailyWin = {}; gState.towerBest = 0; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false; gState.introSeen = {}; gState.modeIntroShown = {}; gState.huntRunActive = false; gState.badgeGiven = true; gState.huntTutorialShown = false; gState.weightWarnShown = false; gState.skinPity = 0; gState.tutDone = false;
             expandInventory();
         }
 

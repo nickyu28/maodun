@@ -125,7 +125,8 @@ async function openTab(chrome, url, opts) {
         await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
         await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 2, mobile: true });
     } else await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
-    await send('Page.navigate', { url });
+    // T0：新号起完名字会自动开新手教程，别的检查都不要被它带走，所以默认带 ?notut=1；测教程本身的检查传 tut: true
+    await send('Page.navigate', { url: (opts && opts.tut) ? url : url + '?notut=1' });
     if (opts && opts.navWait !== undefined) await W(opts.navWait); else await W(2500);
     const tab = {
         errors, blocked,
@@ -676,6 +677,100 @@ async function enterExit(tab, key) {
             if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
             await M.close();
             report('R2 平板摇杆推过 90% 自动跑：寻宝队、监狱救援、躲避球推到底耗体力、没推到不耗；没有"跑"按钮', bad.length === 0, bad.join(' / '));
+        }
+
+                if (want('T0')) {
+            // T0 新手教程：新号起完名字自动开始；9 步各自做到才进下一步（别的动作不算）；做完还原背包、给 20 猫盾币、存档记 tutDone；
+            // 右上角能跳过；设置里能重玩；做完或跳过之前不能组队、收不到邀请；教程里什么都不存
+            const bad = [];
+            const G = await openTab(chrome, url, { tut: true, noLobby: true });
+            const name = 't0' + Date.now() % 100000;
+            await G.eval(`document.getElementById('player-id').value = ${JSON.stringify(name)}; requestLobbyAccess(); true;`); await W(3500);
+            const st0 = JSON.parse(await G.eval(`JSON.stringify({ t: !!gState.tutorial, play: isPlaying, panel: !document.getElementById('tut-panel').classList.contains('hidden'), skip: !document.getElementById('tut-skip').classList.contains('hidden'),
+                step: gState.tutorial && gState.tutorial.step, text: document.getElementById('tut-text').innerText, ents: entities.length, task: gState.huntTask, mSize: mSize, chests: chests.length, tutDone: gState.tutDone })`));
+            if (!st0.t || !st0.play || !st0.panel || !st0.skip || st0.step !== 0 || st0.tutDone !== false) bad.push('没自动开始 ' + JSON.stringify(st0));
+            if (st0.mSize !== 9 || st0.chests !== 1 || st0.task !== null || st0.ents !== 0) bad.push('教程图不对 ' + JSON.stringify(st0));
+            const invBefore = await G.eval(`JSON.stringify(gState.tutorial.back.inv)`);
+            const garBefore = await G.eval(`JSON.stringify(gState.garage)`);
+            const saved0 = await G.eval(`localStorage.getItem('TH_save_' + gState.id)`);
+            const step = () => G.eval(`gState.tutorial ? gState.tutorial.step : -1`);
+            const expectStep = async (n, why) => { await W(500); const s = await step(); if (s !== n) bad.push(why + '：应在第 ' + (n + 1) + ' 步，实际 ' + s); };
+            // 别的动作不算
+            await G.eval(`tutEvent('bag'); tutEvent('chest'); tutEvent('submit'); true;`); await expectStep(0, '做了别的事就进下一步');
+            // 1 光圈
+            await G.eval(`camera.position.set(gState.tutorial.ringC.x * TILE, 9, gState.tutorial.ringC.z * TILE); true;`); await expectStep(1, '走进光圈');
+            // 2 转视角看橙色柱子（先确认没转过去之前不会算）
+            const markOk = await G.eval(`(function(){ let m = gState.tutorial.mark; if (!m) return 'no mark'; let p = camera.position, dx = m.position.x - p.x, dz = m.position.z - p.z;
+                camera.rotation.y = Math.atan2(dx, dz); return 'away'; })()`); await expectStep(1, '背对柱子' + markOk);
+            await G.eval(`(function(){ let m = gState.tutorial.mark, p = camera.position; camera.rotation.y = Math.atan2(-(m.position.x - p.x), -(m.position.z - p.z)); return true; })()`); await expectStep(2, '看向柱子');
+            // 3 跳上桌
+            await G.eval(`(function(){ let t = gState.tutorial.tableCell; camera.position.set(t.x * TILE, 8 + 9, t.z * TILE); pVel.set(0, 0, 0); return true; })()`); await expectStep(3, '跳上桌子');
+            // 4 跑一段：Shift + W 按住 2 秒
+            await G.eval(`camera.position.set(TILE, 9, TILE); keys['shift'] = true; keys['w'] = true; true;`); await W(2200); await G.eval(`keys['shift'] = false; keys['w'] = false; true;`); await expectStep(4, '跑一段');
+            // 5 开箱：站到箱子旁边，按 F
+            await G.eval(`(function(){ let c = chests[0]; camera.position.set(c.position.x + 6, c.position.y + 7, c.position.z); pVel.set(0, 0, 0); camera.rotation.y = Math.PI / 2; keys['f'] = true; return true; })()`); await expectStep(5, '开箱');
+            // 6 捡东西
+            const dropped = await G.eval(`groundItems.length`);
+            await G.eval(`(function(){ let g = groundItems[0]; if (!g) return false; g.userData.vel = new THREE.Vector3(0, 0, 0); camera.position.set(g.position.x + 4, g.position.y + 7, g.position.z); pVel.set(0, 0, 0); keys['f'] = true; return true; })()`); await expectStep(6, '捡东西（掉了 ' + dropped + ' 个）');
+            // 7 背包
+            await G.eval(`toggleBackpackUI(); true;`); await expectStep(7, '开背包'); await G.eval(`toggleBackpackUI(); true;`);
+            // 8 上交：在出生点按上交
+            await G.eval(`camera.position.set(TILE, 9, TILE); pVel.set(0, 0, 0); true;`); await W(1200);
+            await G.eval(`clickSubmit(); true;`); await expectStep(8, '上交');
+            const ext = await G.eval(`!document.getElementById('btn-extract').classList.contains('hidden')`);
+            if (!ext) bad.push('上交够了没出撤离按钮');
+            // 教程里什么都没存
+            if ((await G.eval(`localStorage.getItem('TH_save_' + gState.id)`)) !== saved0) bad.push('教程里写了存档');
+            const coin0 = await G.eval('gState.mcoin || 0');
+            // 9 撤离
+            await G.eval(`clickExtract(); true;`); await W(1500);
+            const end = JSON.parse(await G.eval(`JSON.stringify({ t: !!gState.tutorial, play: isPlaying, inv: JSON.stringify(gState.inv), gar: JSON.stringify(gState.garage), coin: gState.mcoin || 0, done: gState.tutDone, modal: ${MODAL}, panel: !document.getElementById('tut-panel').classList.contains('hidden'),
+                saved: JSON.parse(localStorage.getItem('TH_save_' + gState.id)).tutDone, sub: gState.totalSubmitted, team: gState.team.length, diff: gState.mapDifficulty, lobby: !!hub })`));
+            if (end.t || end.play || end.panel) bad.push('做完还在教程里 ' + JSON.stringify(end));
+            if (end.inv !== invBefore || end.gar !== garBefore) bad.push('背包/仓库没还原');
+            if (end.coin !== coin0 + 20) bad.push('猫盾币 ' + coin0 + ' → ' + end.coin);
+            if (end.done !== 'done' || end.saved !== 'done') bad.push('没记做完 ' + end.done + '/' + end.saved);
+            if (end.modal !== '教程做完了' || !end.lobby || end.sub !== 0 || end.diff === 'tutorial') bad.push('回大厅状态 ' + JSON.stringify(end).slice(0, 200));
+            await clickModal(G, 0);
+            // 刷新后不再自动开
+            await G.send('Page.reload'); await W(2500);
+            await G.eval(`document.getElementById('player-id').value = ${JSON.stringify(name)}; requestLobbyAccess(); true;`); await W(3500);
+            if (await G.eval('!!gState.tutorial || gState.tutDone !== "done"')) bad.push('刷新后又开教程了 ' + (await G.eval('gState.tutDone')));
+            // 设置里重玩（不再给猫盾币）；然后点右上角跳过
+            await G.eval(`${HIDE} openSettings(); true;`); await W(300);
+            const p = await mouseAt(G, '#sys-modal-text button[onclick="tutorialStart()"]');
+            if (!p) bad.push('设置里没有重玩按钮');
+            else { await G.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p[0], y: p[1] }); await G.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p[0], y: p[1], button: 'left', buttons: 1, clickCount: 1 }); await G.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p[0], y: p[1], button: 'left', buttons: 0, clickCount: 1 }); await W(1500); }
+            if (!(await G.eval('!!gState.tutorial && isPlaying'))) bad.push('重玩没开始');
+            const coin1 = await G.eval('gState.mcoin || 0');
+            const sp = await mouseAt(G, '#tut-skip');
+            if (sp) { await G.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: sp[0], y: sp[1] }); await G.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: sp[0], y: sp[1], button: 'left', buttons: 1, clickCount: 1 }); await G.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: sp[0], y: sp[1], button: 'left', buttons: 0, clickCount: 1 }); await W(1200); }
+            const sk = JSON.parse(await G.eval(`JSON.stringify({ t: !!gState.tutorial, play: isPlaying, done: gState.tutDone, coin: gState.mcoin || 0, lobby: !!hub, inv: JSON.stringify(gState.inv) })`));
+            if (sk.t || sk.play || !sk.lobby || sk.done !== 'done' || sk.coin !== coin1 || sk.inv !== invBefore) bad.push('跳过后 ' + JSON.stringify(sk).slice(0, 200));
+            if (G.errors.length) bad.push(G.errors.slice(0, 2).join(' / '));
+            await G.close();
+            // 跳过：新号直接点跳过，记 skip；组队在做完或跳过之前不行
+            const K = await openTab(chrome, url, { tut: true, noLobby: true });
+            const name2 = 't0s' + Date.now() % 100000;
+            await K.eval(`document.getElementById('player-id').value = ${JSON.stringify(name2)}; requestLobbyAccess(); true;`); await W(3500);
+            const gate1 = JSON.parse(await K.eval(`JSON.stringify({ tut: !!gState.tutorial, done: gState.tutDone, passed: tutPassed() })`));
+            if (!gate1.tut || gate1.passed) bad.push('第二个新号没自动开 ' + JSON.stringify(gate1));
+            await K.eval(`window.__sent = []; (function(){ let b = bc.postMessage.bind(bc); bc.postMessage = function (m) { window.__sent.push(m.type); return b(m); }; })(); teamInvite('someone-else'); teamOnInviteReceived('someone-else'); true;`); await W(300);
+            const gate2 = JSON.parse(await K.eval(`JSON.stringify({ sent: window.__sent.filter(function (t) { return t === 'TEAM_INVITE'; }).length, modal: ${MODAL} })`));
+            if (gate2.sent !== 0 || gate2.modal === '组队邀请') bad.push('没做完教程就能组队/收邀请 ' + JSON.stringify(gate2));
+            await K.eval(`tutLeave(false); true;`); await W(1200);
+            await K.eval(`${HIDE} window.__sent = []; teamInvite('someone-else'); teamOnInviteReceived('someone-else'); true;`); await W(300);
+            const gate3 = JSON.parse(await K.eval(`JSON.stringify({ sent: window.__sent.filter(function (t) { return t === 'TEAM_INVITE'; }).length, modal: ${MODAL}, done: gState.tutDone })`));
+            if (gate3.done !== 'skip' || gate3.sent !== 1 || gate3.modal !== '组队邀请') bad.push('跳过后还是不能组队 ' + JSON.stringify(gate3));
+            await K.close();
+            // 触屏设备：自动开始，提示用摇杆/点按钮的说法
+            const Mo = await openTab(chrome, url, { tut: true, noLobby: true, mobile: true });
+            await Mo.eval(`document.getElementById('player-id').value = 't0m' + Date.now() % 100000; requestLobbyAccess(); true;`); await W(3500);
+            const mo = JSON.parse(await Mo.eval(`JSON.stringify({ t: !!gState.tutorial, hint: document.getElementById('tut-hint').innerText, pad: gState.control })`));
+            if (!mo.t || !/摇杆/.test(mo.hint)) bad.push('触屏上教程 ' + JSON.stringify(mo));
+            if (Mo.errors.length) bad.push('触屏报错 ' + Mo.errors.slice(0, 2).join(' / '));
+            await Mo.close();
+            report('T0 新手教程：新号自动开始、9 步各自做到才算、做完还原背包给 20 猫盾币记 tutDone、能跳过能重玩、教程里不存档、做完前不能组队', bad.length === 0, bad.join(' / '));
         }
 
         //@@NEW@@

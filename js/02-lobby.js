@@ -388,6 +388,7 @@
                 row('背景音乐', sw('set-bgm', !bgmMuted(), '开', '关')) +
                 row('音效', sw('set-sfx', SETTINGS.sfx !== false, '开', '关')) +
                 row('画面', sw('set-hq', !!SETTINGS.hq, '清晰', '流畅')) +
+                row('新手教程', '<button onclick="tutorialStart()" style="margin:0; padding:4px 12px; font-size:12px; background:#607d8b; color:#fff; border:none; border-radius:4px;">重玩一遍</button>') +
                 row('快捷语', '<button onclick="openChatSetup()" style="margin:0; padding:4px 12px; font-size:12px; background:#607d8b; color:#fff; border:none; border-radius:4px;">改一下</button>') +
                 '</div>';
             showSysModal('设置', body, [{ label: '好了', color: '#5cb85c' }]);
@@ -513,6 +514,7 @@
                 netJoinRoom(r);
             } catch (e) { }
             dataWipeNotice();
+            tutAutoStart();
             let eb = document.getElementById('btn-egg-book');
             if (eb) eb.innerText = '彩蛋图鉴 ' + eggCount() + ' / ' + Object.keys(EGGS).length;
         }
@@ -1870,7 +1872,7 @@
             if (gState.largeMapOpen) return;
             gState.backpackOpen = !gState.backpackOpen;
             const bpPage = document.getElementById('backpack-overlay-page');
-            if (gState.backpackOpen) { bpPage.classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock(); }
+            if (gState.backpackOpen) { bpPage.classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock(); tutEvent('bag'); }
             else { bpPage.classList.add('hidden'); gState.needsLock = true; }
             updateHUD();
         }
