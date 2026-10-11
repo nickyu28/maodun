@@ -1223,6 +1223,60 @@ async function enterExit(tab, key) {
             report('H24 医疗包回 15；肾上腺素 3 次 20 秒不耗体力；返魂药水给 6 米内倒下的队友、按住互动 3 秒、救起来 30 血（真人走 HUNT_REVIVE）', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H25')) {
+            // H25：路线（蓝线、绿线）走在路正中间；绿线换楼层不清掉、跨楼层接着导航；站在楼梯、桌子上也画得出来
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} gState.mapDifficulty = 'easy'; selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const r = JSON.parse(await T.eval(`(function(){
+                let o = { off: 0, pts: 0, stairTry: 0, stairDrawn: 0, stairNeed: 0, needDrawn: 0, tableTry: 0, tableDrawn: 0 };
+                let centered = function (pts) { let bad = 0; pts.forEach(function (p) { let mx = Math.abs(p.x / TILE - Math.round(p.x / TILE)) < 0.01, mz = Math.abs(p.z / TILE - Math.round(p.z / TILE)) < 0.01; if (!mx && !mz) bad++; }); return bad; };
+                // 1 蓝线、绿线都走在格子中线上（站在格子里偏一点的位置出发也一样）
+                let me = { f: 0, x: 1, z: 1 }, far = null, best = -1;
+                for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) if (maze[0][z][x].type === 0) { let d = Math.abs(x - 1) + Math.abs(z - 1); if (d > best && huntRouteFind(me, { f: 0, x: x, z: z })) { best = d; far = { f: 0, x: x, z: z }; } }
+                camera.position.set(TILE + 7, 9, TILE - 5); pVel.set(0, 0, 0);
+                let rb = huntRouteBuild(huntPlayerNode(), far, camera.position); o.pts = rb.pts.length; o.off = centered(rb.pts);
+                generateFootprintGuide(far.x, far.z); o.green = !!huntNavRoute.mesh; o.greenOff = centered(huntNavRoute.pts);
+                // 2 换楼层：绿线不清掉，从新位置接着往目标走
+                let up = null;
+                for (let z = 1; z < mSize - 1 && !up; z++) for (let x = 1; x < mSize - 1 && !up; x++) if (huntCellKind(1, x, z) === 'floor' && huntRouteFind({ f: 1, x: x, z: z }, far)) up = { x: x, z: z };
+                camera.position.set(up.x * TILE, TILE + 9, up.z * TILE); pVel.set(0, 0, 0); navRouteTick(false);
+                let last = huntNavRoute.pts && huntNavRoute.pts[huntNavRoute.pts.length - 1];
+                o.kept = !!huntNavRoute.mesh && !!last && Math.abs(last.x - far.x * TILE) < 1 && Math.abs(last.z - far.z * TILE) < 1 && last.y < TILE;
+                // 回到目标那一格：清掉
+                camera.position.set(far.x * TILE, 9, far.z * TILE); pVel.set(0, 0, 0); navRouteTick(false); o.cleared = !huntNavRoute.mesh;
+                // 3 站在楼梯上：同一层走不到、要绕别的楼层的目标，也画得出来
+                for (let f = 0; f < FLOORS; f++) for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
+                    let c = maze[f][z][x]; if (!(c.type === 3 && c.stair && c.stair.base === f) || o.stairTry >= 12) continue;
+                    let s = c.stair, t = 6;
+                    camera.position.set(s.axis === 'x' ? s.edge + s.sign * t : x * TILE, huntStepTop(s, t) + 9, s.axis === 'z' ? s.edge + s.sign * t : z * TILE); pVel.set(0, 0, 0);
+                    let from = huntPlayerNode(), tgt = null;
+                    for (let zz = 1; zz < mSize - 1 && !tgt; zz++) for (let xx = 1; xx < mSize - 1 && !tgt; xx++) if (huntCellKind(f, xx, zz) === 'floor' && (xx !== x || zz !== z) && !huntRouteFind(from, { f: f, x: xx, z: zz }, f) && huntRouteFind(from, { f: f, x: xx, z: zz })) tgt = { x: xx, z: zz };
+                    let any = null;
+                    for (let zz = 1; zz < mSize - 1 && !any; zz++) for (let xx = 1; xx < mSize - 1 && !any; xx++) if (huntCellKind(f, xx, zz) === 'floor' && (xx !== x || zz !== z) && huntRouteFind(from, { f: f, x: xx, z: zz })) any = { x: xx, z: zz };
+                    o.stairTry++;
+                    clearFootprints3D(); if (any) { generateFootprintGuide(any.x, any.z); if (huntNavRoute.mesh) o.stairDrawn++; }
+                    if (tgt) { o.stairNeed++; clearFootprints3D(); generateFootprintGuide(tgt.x, tgt.z); if (huntNavRoute.mesh) o.needDrawn++; }
+                }
+                // 4 站在桌子上
+                for (let f = 0; f < FLOORS; f++) for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
+                    if (maze[f][z][x].type !== 2 || o.tableTry >= 6) continue;
+                    camera.position.set(x * TILE + 3, f * TILE + HUNT_TABLE_H + 9, z * TILE - 2); pVel.set(0, 0, 0);
+                    let tg = null; for (let zz = 1; zz < mSize - 1 && !tg; zz++) for (let xx = 1; xx < mSize - 1 && !tg; xx++) if (huntCellKind(f, xx, zz) === 'floor' && huntRouteFind(huntPlayerNode(), { f: f, x: xx, z: zz })) tg = { x: xx, z: zz };
+                    o.tableTry++; clearFootprints3D(); if (tg) { generateFootprintGuide(tg.x, tg.z); if (huntNavRoute.mesh) o.tableDrawn++; }
+                }
+                return JSON.stringify(o); })()`));
+            if (r.off !== 0 || r.greenOff !== 0 || !r.green) bad.push('线没走在中间 ' + r.off + '/' + r.greenOff + '/' + r.green);
+            if (!r.kept) bad.push('换楼层绿线没接着导航');
+            if (!r.cleared) bad.push('到了目标没清掉');
+            if (r.stairDrawn !== r.stairTry || r.needDrawn !== r.stairNeed) bad.push('站在楼梯上画不出 ' + JSON.stringify([r.stairTry, r.stairDrawn, r.stairNeed, r.needDrawn]));
+            if (r.tableDrawn !== r.tableTry) bad.push('站在桌子上画不出 ' + r.tableDrawn + '/' + r.tableTry);
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H25 蓝线绿线走在路正中间；绿线换楼层不清掉、跨楼层接着导航；站在楼梯/桌子上也画得出来', bad.length === 0, bad.join(' / ') + ' ' + JSON.stringify(r));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 
@@ -2263,11 +2317,10 @@ async function enterExit(tab, key) {
                 // 清掉蓝线，绿线不受影响
                 generateFootprintGuide(far.x, far.z); let nm2 = huntNavRoute.mesh;
                 signalRouteClear(); o.navKept = huntNavRoute.mesh === nm2 && nm2.parent === scene;
-                // 换到别的楼层：小地图导航只管这一层，清掉
-                camera.position.y += TILE; navRouteTick(false); o.otherFloorCleared = !huntNavRoute.mesh;
+                // 换楼层以后绿线不清掉、接着导航：见 H25
                 return JSON.stringify(o); })()`));
             await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
-            const ok = r.both && r.colors && r.colors[0] === 0x1e88e5 && r.colors[1] === 0x2ecc71 && r.sameKind && r.sameFloor && r.follows && r.navGone && r.signalKept && r.navKept && r.otherFloorCleared;
+            const ok = r.both && r.colors && r.colors[0] === 0x1e88e5 && r.colors[1] === 0x2ecc71 && r.sameKind && r.sameFloor && r.follows && r.navGone && r.signalKept && r.navKept;
             report('H11 小地图导航绿线和信号蓝线分开：同时在、清一条不影响另一条、只在这一层', ok && A.errors.length === before, ok ? '' : JSON.stringify(r) + A.errors.slice(before, before + 2).join(' / '));
         }
 

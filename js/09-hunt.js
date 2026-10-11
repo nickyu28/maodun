@@ -88,7 +88,7 @@
                 let t = Math.max(0.1, Math.min(s.count * s.depth - 0.1, s.sign * ((s.axis === 'z' ? start.z : start.x) - s.edge)));
                 pts.push(huntStairPt(s, n0.x, n0.z, t, huntStepTop(s, t))); tOn[0] = t;
             }
-            else pts.push(new THREE.Vector3(start ? start.x : n0.x * TILE, huntSurfY(n0.f, n0.x, n0.z), start ? start.z : n0.z * TILE));
+            else pts.push(new THREE.Vector3(n0.x * TILE, huntSurfY(n0.f, n0.x, n0.z), n0.z * TILE));   // H25：线走在路正中间，从所在格子的中心起，不从脚下起
             for (let i = 1; i < path.length; i++) {
                 let a = path[i - 1], b = path[i], ka = huntCellKind(a.f, a.x, a.z), kb = huntCellKind(b.f, b.x, b.z);
                 if (b.via === 'up') {                 // 下层楼梯格 → 爬到上层平台
@@ -223,15 +223,17 @@
             huntNavRoute.to = { f: f, x: tx, z: tz };
             navRouteTick(true);
         }
-        // 每帧：换了格子就从当前位置重算（走过的就没了）；走到了、换了楼层、找不到路就清掉
+        // 每帧：换了格子就从当前位置重算（走过的就没了）；走到了、找不到路就清掉；换了楼层不清，跨楼层接着导航（H25）
         function navRouteTick(force) {
             let to = huntNavRoute.to; if (!to) return;
             let from = huntPlayerNode();
-            if (from.f !== to.f || (from.x === to.x && from.z === to.z)) { clearFootprints3D(); return; }
+            if (from.f === to.f && from.x === to.x && from.z === to.z) { clearFootprints3D(); return; }
             let key = [from.f, from.x, from.z].join(',');
             if (force || key !== huntNavRoute.key) {
                 huntRouteDispose(huntNavRoute);
-                let r = huntRouteBuild(from, to, camera.position, to.f);
+                // H25：同一层走得到就只走这一层；这一层走不到（要绕别的楼层）或者玩家已经换了楼层，就跨楼层接着导航
+                let r = from.f === to.f ? huntRouteBuild(from, to, camera.position, to.f) : null;
+                if (!r) r = huntRouteBuild(from, to, camera.position);
                 if (!r) { clearFootprints3D(); return; }
                 huntNavRoute.key = key; huntNavRoute.pts = r.pts; currentNavPath = r.path;
                 huntNavRoute.mesh = huntRouteMesh(r.pts, 0x2ecc71); if (huntNavRoute.mesh) scene.add(huntNavRoute.mesh);
