@@ -8,8 +8,7 @@
 # 冒烟测试失败时：FAIL 行和最后 40 行写成标注（Actions 页面能直接看），完整日志在 artifact「smoke-logs」里。
 # Chrome 没起来（还没跑到任何检查）自动重试一次，检查没过不重试。见 tests/ci-smoke.sh。
 #
-# 冒烟测试里"几何体泄漏"那一项是已知问题（等 D1），只报告 XFAIL，不会让这里失败。
-# D1 做完后把 tests/smoke.js 里的 EXPECT_GEOMETRY_LEAK 改成 false，它就必须通过。
+# 冒烟测试里"几何体/贴图不增长"那一项（D1）已经是必须通过的。
 
 name: Smoke test and deploy
 

@@ -132,9 +132,33 @@
             return { fx: mSize - 3, fz: mSize - 3, fl: 0 };
         }
 
+        // D1：释放显存。从场景里拿下来的东西，几何体、材质、贴图一起 dispose（GPU 里那份才会真的释放）。
+        // 拿下来又放回去的会在下一帧自动重新上传，只是多花一点点时间，所以不用逐个模式去判断谁还要用。
+        function disposeObject(root) {
+            if (!root || !root.traverse) return;
+            root.traverse(function (c) {
+                if (c.geometry && c.geometry.dispose) c.geometry.dispose();
+                let ms = c.material ? (Array.isArray(c.material) ? c.material : [c.material]) : [];
+                ms.forEach(function (m) {
+                    if (!m) return;
+                    Object.keys(m).forEach(function (k) { let v = m[k]; if (v && v.isTexture && v.dispose) v.dispose(); });
+                    if (m.dispose) m.dispose();
+                });
+            });
+        }
+        // 兜底：进大厅前，把场景里除了灯和镜头以外的东西全扫掉并释放（某个模式退出时漏清的也一起收走）
+        function sceneSweep() {
+            if (!scene) return;
+            scene.children.slice().forEach(function (c) {
+                if (c.isLight || c.isCamera) return;
+                scene.remove(c);
+            });
+        }
         function ensureScene() {
             if (scene) return;
             scene = new THREE.Scene(); scene.background = new THREE.Color(0xf0f0f5); scene.fog = new THREE.FogExp2(0xf0f0f5, 0.004);
+            // scene.remove 一律顺手释放（D1）
+            scene.remove = function () { for (let i = 0; i < arguments.length; i++) { let o = arguments[i]; THREE.Scene.prototype.remove.call(this, o); disposeObject(o); } return this; };
             camera = new THREE.PerspectiveCamera(camFovFor(window.innerWidth / window.innerHeight), window.innerWidth / window.innerHeight, 0.5, 1600); camera.rotation.order = 'YXZ';
             let canvas = document.getElementById('gameCanvas'); renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true }); renderer.setPixelRatio(SETTINGS.hq ? Math.min(2, window.devicePixelRatio || 1) : 1); renderer.setSize(window.innerWidth, window.innerHeight);
             window.addEventListener('resize', function () { if (camera && renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.fov = camFovFor(camera.aspect); camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); } });

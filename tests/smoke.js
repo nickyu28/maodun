@@ -24,7 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
-const EXPECT_GEOMETRY_LEAK = true;   // D1 做完后改成 false
+const EXPECT_GEOMETRY_LEAK = false;   // D1 做完了：几何体/贴图不增长必须通过
 // 调试用：SMOKE_ONLY=正则 只跑名字对得上的"本批新增"那一段检查（其余检查整个跳过），比如 SMOKE_ONLY='N21|R1'
 const ONLY = process.env.SMOKE_ONLY ? new RegExp(process.env.SMOKE_ONLY) : null;
 const want = (n) => !ONLY || ONLY.test(n);
@@ -897,6 +897,29 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('V3 更新公告：只留最新几条（≤3）、每条 ≤5 句、短、不提保底；最新一条 id = 版本号；CLAUDE.md 写了规则', bad.length === 0, bad.join(' / '));
+        }
+
+                if (want('D1')) {
+            // D1：大厅 ↔ 寻宝队来回 6 次，场景里的东西不堆积、几何体和贴图不增长（原来 75 → 611、13 → 69）；
+            // 从场景里拿下来的东西会连同几何体、材质、贴图一起 dispose
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const mem = () => T.eval(`[renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]`);
+            const m0 = await mem(), geo = [], tex = [], kids = [];
+            for (let i = 0; i < 6; i++) { await enterExit(T, 'hunt'); const m = await mem(); geo.push(m[0]); tex.push(m[1]); kids.push(m[2]); }
+            const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length, maxF = (a) => avg(a.slice(0, 3)), maxL = (a) => avg(a.slice(-3));
+            if (maxL(geo) > maxF(geo) * 1.25 + 10) bad.push('几何体在涨 ' + geo.join(' → '));
+            if (maxL(tex) > maxF(tex) * 1.25 + 10) bad.push('贴图在涨 ' + tex.join(' → '));
+            if (Math.max.apply(null, kids) - Math.min.apply(null, kids) > 3) bad.push('场景里的东西在堆积 ' + kids.join(' → '));
+            // 单个：拿下来的东西真的释放了
+            const d = JSON.parse(await T.eval(`(function(){ let g = new THREE.BoxGeometry(1, 1, 1), tx = new THREE.CanvasTexture(document.createElement('canvas')), m = new THREE.MeshBasicMaterial({ map: tx }), mesh = new THREE.Mesh(g, m);
+                let ev = []; g.addEventListener('dispose', function () { ev.push('g'); }); m.addEventListener('dispose', function () { ev.push('m'); }); tx.addEventListener('dispose', function () { ev.push('t'); });
+                let grp = new THREE.Group(); grp.add(mesh); scene.add(grp); scene.remove(grp); return JSON.stringify(ev.sort()); })()`));
+            if (d.join() !== 'g,m,t') bad.push('scene.remove 没有释放几何体/材质/贴图 ' + d.join());
+            console.log('      D1 大厅↔寻宝队 ×6：geometries ' + m0[0] + ' → ' + geo.join(' → ') + ' / textures ' + m0[1] + ' → ' + tex.join(' → '));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('D1 退出一局会释放模型/材质/贴图：大厅 ↔ 寻宝队 ×6 几何体、贴图不增长，场景里不堆东西', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('A7')) {
@@ -3095,15 +3118,19 @@ async function enterExit(tab, key) {
         report('A3 冒充 sender 的 PARK_CREDIT（经房主转发）被拒', (await A.eval('gState.mcoin || 0')) === coins0);
         await B.close();
 
-        // 4. 显存：5 个模式 × 3 轮
+        // 4. 显存：5 个模式 × 3 轮，几何体和贴图都不增长（D1）。每一轮结束后各取一个样；
+        //    大厅里路人的外观是随机的，数字会上下抖一点，所以比较“最后三次的平均”和“最开始三次的平均”，留一点余量
         const loop = ['blaze', 'race', 'dodge', 'cake', 'sumo'];
-        const geo = [await A.eval('renderer.info.memory.geometries')];
+        const memNow = () => A.eval('[renderer.info.memory.geometries, renderer.info.memory.textures]');
+        const geo = [], tex = [];
+        for (let i = 0; i < 2; i++) { await enterExit(A, 'hunt'); const m = await memNow(); geo.push(m[0]); tex.push(m[1]); }   // 先热身两次
         for (let round = 0; round < 3; round++) {
             for (const key of loop) await enterExit(A, key);
-            geo.push(await A.eval('renderer.info.memory.geometries'));
+            const m = await memNow(); geo.push(m[0]); tex.push(m[1]);
         }
-        const grew = geo[3] > geo[1] * 1.05 + 5;
-        report('进出 5 个模式 ×3 轮几何体不增长', !grew, 'geometries ' + geo.join(' → ') + (EXPECT_GEOMETRY_LEAK && grew ? '（D1 前预期失败）' : ''), EXPECT_GEOMETRY_LEAK);
+        const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+        const leaked = (a) => avg(a.slice(-3)) > avg(a.slice(0, 3)) * 1.25 + 10;
+        report('进出 5 个模式 ×3 轮几何体、贴图都不增长', !leaked(geo) && !leaked(tex), 'geometries ' + geo.join(' → ') + ' / textures ' + tex.join(' → '));
 
         report('全程控制台零报错', A.errors.length === 0, A.errors.slice(0, 3).join(' / '));
         await A.close();

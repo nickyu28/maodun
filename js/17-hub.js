@@ -486,6 +486,7 @@
             if (nm) { try { nmTeardown(); } catch (e) { } }
             ensureScene();
             clearMazeMeshes();   // 保险：万一某个模式退出时没清干净，进大厅前兜底扫一遍
+            sceneSweep();
             scene.background = new THREE.Color(0x8fd3f4);
             scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
 
