@@ -51,10 +51,12 @@
             // 放在广场正中间、出生点正前方——一进大厅抬头就能看见，不用到处找。
             // 只用正面（去掉 DoubleSide）：之前背面也贴着同一张贴图，绕到背后看字是镜像反的。
             HUB.board = { x: 0, z: -30 };
-            let post = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 14, 8), new THREE.MeshLambertMaterial({ color: 0x8d6e63 }));
-            post.position.set(HUB.board.x, 7, HUB.board.z); scene.add(post); hub.meshes.push(post);
-            let board = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshBasicMaterial({ map: boardTex }));
+            // 板子有厚度（16×8×0.5），只有正面贴字，其它面是木头色；杆子在板子背后，顶端只到板子中间，从哪边看都不穿模
+            let woodMat = new THREE.MeshLambertMaterial({ color: 0x8d6e63 });
+            let board = new THREE.Mesh(new THREE.BoxGeometry(16, 8, 0.5), [woodMat, woodMat, woodMat, woodMat, new THREE.MeshBasicMaterial({ map: boardTex }), woodMat]);
             board.position.set(HUB.board.x, 13, HUB.board.z); scene.add(board); hub.meshes.push(board);
+            let post = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 13, 8), woodMat);
+            post.position.set(HUB.board.x, 6.5, HUB.board.z - 0.25 - 1.2); scene.add(post); hub.meshes.push(post);
         }
         // 路人名字要像真玩家会取的 ID，不是"路人猫盾A"这种一看就是机器人的占位名；
         // 同时尽量挑生僻/少见的组合，避免正好跟真玩家自己取的昵称撞名。

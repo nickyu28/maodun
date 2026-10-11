@@ -858,6 +858,29 @@ async function enterExit(tab, key) {
             report('F2 触屏 iPad 尺寸点“记录榜”到面板可见 ≤ 200 毫秒', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('V2')) {
+            // V2：大厅公告板有厚度（16×8×0.5），杆子在板子背后、顶端只到板子中间，两个体积不重叠（从正面、侧面、背面看都不穿模）；只有正面贴字
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){ let b = hub.meshes.filter(function (m) { return m.geometry && m.geometry.type === 'BoxGeometry' && m.geometry.parameters.width === 16 && m.geometry.parameters.height === 8; })[0];
+                let p = hub.meshes.filter(function (m) { return m.geometry && m.geometry.type === 'CylinderGeometry' && m.geometry.parameters.height === 13; })[0];
+                if (!b || !p) return JSON.stringify({ missing: [!!b, !!p] });
+                let bb = new THREE.Box3().setFromObject(b), pb = new THREE.Box3().setFromObject(p);
+                let ov = [Math.min(bb.max.x, pb.max.x) - Math.max(bb.min.x, pb.min.x), Math.min(bb.max.y, pb.max.y) - Math.max(bb.min.y, pb.min.y), Math.min(bb.max.z, pb.max.z) - Math.max(bb.min.z, pb.min.z)];
+                return JSON.stringify({ dim: [b.geometry.parameters.depth, bb.min.y, bb.max.y], post: [pb.min.y, pb.max.y], postZ: [pb.min.z, pb.max.z], boardZ: [bb.min.z, bb.max.z], ov: ov, mats: Array.isArray(b.material) ? b.material.filter(function (m) { return m.map; }).length : -1 }); })()`));
+            if (r.missing) bad.push('找不到板子或杆子 ' + JSON.stringify(r.missing));
+            else {
+                if (r.dim[0] !== 0.5 || Math.abs(r.dim[1] - 9) > 1e-6 || Math.abs(r.dim[2] - 17) > 1e-6) bad.push('板子尺寸/位置 ' + JSON.stringify(r.dim));
+                if (r.post[0] < -1e-6 || r.post[1] > 13 + 1e-6) bad.push('杆子高度应是 0～13（到板子中间） ' + JSON.stringify(r.post));
+                if (!(r.postZ[1] <= r.boardZ[0] + 1e-6)) bad.push('杆子应在板子背后（z 更小） ' + JSON.stringify([r.postZ, r.boardZ]));
+                if (Math.min.apply(null, r.ov) > 1e-6) bad.push('杆子和板子体积重叠 ' + JSON.stringify(r.ov));
+                if (r.mats !== 1) bad.push('应该只有正面贴字 ' + r.mats);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('V2 大厅公告板：板子有厚度，杆子在背后、顶端到板子中间，体积不重叠，只有正面贴字', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];
