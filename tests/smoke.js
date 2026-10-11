@@ -1304,7 +1304,7 @@ async function enterExit(tab, key) {
         }
 
                 if (want('H21')) {
-            // H21 运气猫爪：猫盾 + 黄金小鱼干 合成，彩虹光 + "发生了神奇的反应！"，立即用掉（不留东西）、运气层数 +1（不封顶）；
+            // H21 运气猫爪：猫盾 + 黄金小鱼干 合成，彩虹光 + "发生了神奇的反应！"，合成后掉出一件（用了才运气层数 +1，不封顶）；
             // k = 1 − 0.8^L：紫色 k×50% 换金、金色 k×10% 换大金、保险柜 k 概率多抽留贵的、抽奖机大金 +k×5% 销毁 −k×15%；
             // 除合成时那一句，哪里都不说它的作用；AI 开箱不吃运气；每局从 0 开始
             const bad = [];
@@ -1318,7 +1318,7 @@ async function enterExit(tab, key) {
                 // 合成 5 次：原料不限，层数一直涨
                 gState.huntLuck = 0; let before = groundItems.length;
                 for (let i = 0; i < 5; i++) { mk('猫盾'); mk('黄金小鱼干'); executeGroundCombinationsLogic(); }
-                o.L = gState.huntLuck; o.noItem = groundItems.length === before && !groundItems.some(function (g) { return g.userData.n === '运气猫爪'; });
+                o.L = gState.huntLuck; o.claws = groundItems.filter(function (g) { return g.userData.n === '运气猫爪' && g.userData.type === 'luckclaw' && g.userData.v === 100000 && g.userData.w === 1; }).length;
                 o.flash = flashes.filter(function (t) { return t === '发生了神奇的反应！'; }).length;
                 o.found = huntFoundRecipe('luckclaw');
                 o.beams = huntLureFx.length >= 3;
@@ -1342,7 +1342,7 @@ async function enterExit(tab, key) {
                 blazeFlash = bf;
                 return JSON.stringify(o); })()`));
             if (!r.rec) bad.push('配方不对');
-            if (r.L !== 5 || !r.noItem || r.flash !== 5 || !r.found || !r.beams) bad.push('合成 ' + JSON.stringify([r.L, r.noItem, r.flash, r.found, r.beams]));
+            if (r.L !== 0 || r.claws !== 5 || r.flash !== 5 || !r.found || !r.beams) bad.push('合成（只掉出猫爪，运气要用了才涨） ' + JSON.stringify([r.L, r.claws, r.flash, r.found, r.beams]));
             if (r.k.join() !== '0,0.2,0.488') bad.push('k=' + r.k.join());
             const near = (a, b) => Math.abs(a - b) < 0.002;
             if (!near(r.purple[0], r.k3 * 0.5) || r.purple[1] !== 'gold') bad.push('紫→金 ' + JSON.stringify(r.purple));
@@ -1367,11 +1367,69 @@ async function enterExit(tab, key) {
             await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('H21 运气猫爪：合成立即用掉、层数 +1 不封顶；紫→金 k×50%、金→大金 k×10%、保险柜多抽留贵、抽奖机 +5%/−15%；哪里都不说明；每局归零', bad.length === 0, bad.join(' / '));
+            report('H21 运气猫爪：合成掉出物品（用了才 +1）；紫→金 k×50%、金→大金 k×10%、保险柜多抽留贵、抽奖机 +5%/−15%；哪里都不说明；每局归零', bad.length === 0, bad.join(' / '));
+        }
+
+                if (want('H22b')) {
+            // H22b：药水和运气猫爪是掉在地上的宝物，捡进背包，拿在手上按“用道具”才生效（没有读条，按一下马上起效，东西没了）；撤离后进仓库能卖
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const press = async (js) => { await T.eval(js); await W(500); };
+            // 1) 预设箱子开出治疗药剂 → 开箱后地上有这件东西（不是直接喝掉）
+            await T.eval(`window.__roll = huntPotionRoll; huntPotionRoll = function () { return Object.assign({}, HUNT_POTIONS[0]); };
+                gState.hp = 20; window.__n0 = groundItems.length; true;`);
+            await press(`(function(){ let c = chests[0]; camera.position.set(c.position.x + 6, c.position.y + 7, c.position.z); pVel.set(0, 0, 0); camera.rotation.y = Math.PI / 2; keys['f'] = true; return true; })()`);
+            await W(500);
+            const o1 = JSON.parse(await T.eval(`JSON.stringify({ hp: gState.hp, opened: chests[0].userData.opened, potions: groundItems.filter(function (g) { return g.userData.n === '治疗药剂'; }).map(function (g) { return [g.userData.v, g.userData.w, g.userData.type]; }) })`));
+            await T.eval(`huntPotionRoll = window.__roll; true;`);
+            if (!o1.opened) bad.push('箱子没开');
+            if (o1.hp !== 20) bad.push('开箱就喝掉了 hp=' + o1.hp);
+            if (o1.potions.length !== 1 || o1.potions[0].join() !== '80000,1,potion') bad.push('地上没有治疗药剂（或重量/价值不对） ' + JSON.stringify(o1.potions));
+            // 2) 捡起来进背包（还是没喝），选中它按“用道具”才回血、物品消失
+            await press(`(function(){ let g = groundItems.filter(function (x) { return x.userData.n === '治疗药剂'; })[0]; if (!g) return false; g.userData.vel = new THREE.Vector3(0, 0, 0); camera.position.set(g.position.x + 4, g.position.y + 7, g.position.z); pVel.set(0, 0, 0); keys['f'] = true; return true; })()`);
+            await W(500);
+            const o2 = JSON.parse(await T.eval(`(function(){ let idx = gState.inv.findIndex(function (q) { return q && q.n === '治疗药剂'; }); return JSON.stringify({ idx: idx, hp: gState.hp, left: groundItems.filter(function (x) { return x.userData.n === '治疗药剂'; }).length }); })()`));
+            if (o2.idx < 0 || o2.left !== 0) bad.push('没捡进背包 ' + JSON.stringify(o2));
+            if (o2.hp !== 20) bad.push('捡起来就回血了 ' + o2.hp);
+            await T.eval(`(function(){ let idx = gState.inv.findIndex(function (q) { return q && q.n === '治疗药剂'; }); let it = gState.inv[idx]; gState.inv[idx] = null; gState.inv[0] = it; gState.selectedSlot = 0; keys['rmb'] = true; return true; })()`);
+            await W(600);
+            const o3 = JSON.parse(await T.eval(`JSON.stringify({ hp: gState.hp, gone: !gState.inv.some(function (q) { return q && q.n === '治疗药剂'; }) })`));
+            if (o3.hp !== 70 || !o3.gone) bad.push('按用道具没回血/物品还在 ' + JSON.stringify(o3));
+            // 3) 运气猫爪：合成后地上有这件东西 → 捡起来 → 用道具 → huntLuck +1，用的时候没有提示
+            const o4 = JSON.parse(await T.eval(`(function(){ gState.huntLuck = 0; let mk = function (name) { let m = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial()); m.position.set(camera.position.x, camera.position.y - 7, camera.position.z); m.userData = Object.assign({}, (itemPool.purple.concat(itemPool.gold).filter(function (q) { return q.n === name; })[0]) || { n: name, v: 1, w: 1, tex: 'misc', c: 0xffffff }, { isItem: true, vel: new THREE.Vector3(0, 0, 0) }); scene.add(m); groundItems.push(m); return m; };
+                mk('猫盾'); mk('黄金小鱼干'); executeGroundCombinationsLogic();
+                let claw = groundItems.filter(function (g) { return g.userData.n === '运气猫爪'; });
+                return JSON.stringify({ n: claw.length, luck: gState.huntLuck, v: claw[0] && claw[0].userData.v, w: claw[0] && claw[0].userData.w }); })()`));
+            if (o4.n !== 1 || o4.luck !== 0 || o4.v !== 100000 || o4.w !== 1) bad.push('合成后地上应有运气猫爪、运气还是 0 ' + JSON.stringify(o4));
+            await press(`(function(){ let g = groundItems.filter(function (x) { return x.userData.n === '运气猫爪'; })[0]; g.userData.vel = new THREE.Vector3(0, 0, 0); camera.position.set(g.position.x + 4, g.position.y + 7, g.position.z); pVel.set(0, 0, 0); keys['f'] = true; return true; })()`);
+            await W(500);
+            const o5 = JSON.parse(await T.eval(`(function(){ let idx = gState.inv.findIndex(function (q) { return q && q.n === '运气猫爪'; }); return JSON.stringify({ idx: idx, luck: gState.huntLuck }); })()`));
+            if (o5.idx < 0 || o5.luck !== 0) bad.push('猫爪没捡进背包/捡起来运气就涨了 ' + JSON.stringify(o5));
+            await T.eval(`(function(){ window.__fl = []; let bf = blazeFlash; window.__bf = bf; blazeFlash = function (t) { window.__fl.push(t); return bf.apply(this, arguments); };
+                let idx = gState.inv.findIndex(function (q) { return q && q.n === '运气猫爪'; }); let it = gState.inv[idx]; gState.inv[idx] = null; gState.inv[0] = it; gState.selectedSlot = 0; keys['rmb'] = true; return true; })()`);
+            await W(600);
+            const o6 = JSON.parse(await T.eval(`(function(){ blazeFlash = window.__bf; return JSON.stringify({ luck: gState.huntLuck, gone: !gState.inv.some(function (q) { return q && q.n === '运气猫爪'; }), flashes: window.__fl }); })()`));
+            if (o6.luck !== 1 || !o6.gone) bad.push('用了猫爪运气没 +1 / 物品还在 ' + JSON.stringify(o6));
+            if (o6.flashes.length) bad.push('用猫爪的时候不该有提示 ' + JSON.stringify(o6.flashes));
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1500);
+            // 4) 撤离后药水在仓库里，能卖（价值照旧）
+            await T.eval(GARAGE_SETUP(`[null, null, null, null, null, null]`, `[]`, 1000));
+            await T.eval(`${HIDE} requestEnterMap(); true;`); await W(2500); await T.eval(`${HIDE} true;`);
+            await T.eval(`gState.inv[1] = Object.assign({}, HUNT_POTIONS[0]); completeExtraction('撤离成功'); true;`); await W(300);
+            const o7 = JSON.parse(await T.eval(`JSON.stringify({ inGarage: gState.garage.filter(function (q) { return q && q.n === '治疗药剂'; }).length, inInv: gState.inv.filter(function (q) { return q && q.n === '治疗药剂'; }).length })`));
+            if (o7.inGarage !== 1 || o7.inInv !== 0) bad.push('撤离后药水不在仓库里（或还在背包里） ' + JSON.stringify(o7));
+            const m0 = await T.eval('gState.money');
+            await T.eval(`${HIDE} returnToGarageFromOver(); gState.selectedContainer = 'garage'; gState.selectedSlot = gState.garage.findIndex(function (q) { return q && q.n === '治疗药剂'; }); garageSellSelected(); true;`);
+            const m1 = await T.eval('gState.money');
+            if (m1 - m0 !== 80000) bad.push('卖药水应得 80000，实际 ' + (m1 - m0));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H22b 药水、运气猫爪掉在地上、捡进背包，手上按“用道具”才生效（没有提示）；撤离后药水进仓库能卖', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('H22')) {
-            // H22：开箱非大金的结果木箱 6% / 银箱 8% / 金箱 10% 换成药水（立即用）；猫神护身符每张图 25% 藏在桌面或顶楼死角，带着它死亡 = 满血站起来、5 米内的怪全死、护身符碎、本局上限 −40（最低 30）
+            // H22：开箱非大金的结果木箱 6% / 银箱 8% / 金箱 10% 换成药水（掉出来，手上按用道具才生效）；猫神护身符每张图 25% 藏在桌面或顶楼死角，带着它死亡 = 满血站起来、5 米内的怪全死、护身符碎、本局上限 −40（最低 30）
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
@@ -1430,7 +1488,7 @@ async function enterExit(tab, key) {
             await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('H22 开箱药水（6/8/10%，立即用）；猫神护身符 25% 藏在桌面或顶楼死角，带着死亡满血站起来、5 米内怪全死、上限 −40', bad.length === 0, bad.join(' / '));
+            report('H22 开箱药水（6/8/10%，掉出来）；猫神护身符 25% 藏在桌面或顶楼死角，带着死亡满血站起来、5 米内怪全死、上限 −40', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('H23')) {

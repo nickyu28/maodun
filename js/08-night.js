@@ -3441,9 +3441,9 @@
                 out: { n: '丰饶圣餐', v: 250000, w: 5, tex: 'cup', c: 0xffb300, main: '#ffb300', detail: '#e65100' }
             },
             {
-                // H21：合成出来立即用掉（不留东西），本局运气层数 +1；除了合成时那一下，游戏里任何地方都不说它的作用
+                // H21：合成出来掉在地上，捡起来拿在手上按“用道具”，本局运气层数 +1、东西没了；除了合成时那一下，游戏里任何地方都不说它的作用，用的时候也不提示
                 id: 'luckclaw', a: '猫盾', b: '黄金小鱼干',
-                out: { n: '运气猫爪', v: 100000, w: 1, tex: 'cat_shield', c: 0xff80ab, main: '#ff80ab', detail: '#7e57c2', use: 'luck' }
+                out: { n: '运气猫爪', v: 100000, w: 1, tex: 'cat_shield', c: 0xff80ab, main: '#ff80ab', detail: '#7e57c2', type: 'luckclaw' }
             },
             {
                 id: 'catblade', a: '骑士团圣剑', b: '至臻猫盾',
@@ -3602,17 +3602,18 @@
         }
 
         // ── 药水和猫神护身符（H22）──
-        // 开箱时非大金的结果，木箱 6%、银箱 8%、金箱 10% 换成下面三样之一，立即用掉（只对开箱的人生效）。
+        // 开箱时非大金的结果，木箱 6%、银箱 8%、金箱 10% 换成下面三样之一。药水跟别的宝物一样掉在地上、捡进背包（重量 1、值多少钱照旧），
+        // 拿在手上按“用道具”（电脑右键、平板“道具”）才生效，没有读条，按一下马上起效。是宝物，带不进下一局，撤离了进仓库按价值卖。
         const HUNT_POTION_P = { wood: 0.06, silver: 0.08, gold: 0.10 };
         const HUNT_POTIONS = [
-            { id: 'heal', n: '治疗药剂', v: 80000, heal: 50 },
-            { id: 'speed', n: '加速药剂', v: 50000, secs: 20, mul: 1.5 },
-            { id: 'spring', n: '弹簧鞋', v: 50000, secs: 30, mul: 2 }
+            { id: 'heal', n: '治疗药剂', v: 80000, w: 1, tex: 'generic', c: 0xe53935, type: 'potion', heal: 50 },
+            { id: 'speed', n: '加速药剂', v: 50000, w: 1, tex: 'generic', c: 0x29b6f6, type: 'potion', secs: 20, mul: 1.5 },
+            { id: 'spring', n: '弹簧鞋', v: 50000, w: 1, tex: 'generic', c: 0x66bb6a, type: 'potion', secs: 30, mul: 2 }
         ];
         const GODCAT_V = 120000;
         function huntPotionRoll(boxType, loot, r1, r2) {
             let p = HUNT_POTION_P[boxType]; if (!p || huntIsBig(loot)) return null;
-            return r1 < p ? HUNT_POTIONS[Math.floor(r2 * HUNT_POTIONS.length) % HUNT_POTIONS.length] : null;
+            return r1 < p ? Object.assign({}, HUNT_POTIONS[Math.floor(r2 * HUNT_POTIONS.length) % HUNT_POTIONS.length]) : null;
         }
         function huntPotionUse(p) {
             if (p.heal) { gState.hp = Math.min(effectiveMaxHp(), gState.hp + p.heal); updateHUD(); blazeFlash('喝了' + p.n + '，回了 ' + p.heal + ' 点血'); }
@@ -3660,12 +3661,14 @@
         }
 
         // ── 运气（H21）──
-        // 合出运气猫爪就是本局运气层数 L+1（不封顶，原料不限），只对自己生效，每局从 0 开始、不存档。k = 1 − 0.8^L。
+        // 用掉运气猫爪就是本局运气层数 L+1（不封顶，原料不限），只对自己生效，每局从 0 开始、不存档。k = 1 − 0.8^L。
         // 箱子/信号接收器开出的东西：紫色 k×50% 换成金色；金色 k×10% 换成大金（占全队上限，见 huntTakeBigAsync）；
         // 保险柜 k 的概率多抽一件、留贵的；抽奖机大金 +k×5%、销毁 −k×15%。AI 开箱不吃运气。
         function huntLuckK() { return 1 - Math.pow(0.8, gState.huntLuck || 0); }
-        function huntLuckUp(pos) {
-            gState.huntLuck = (gState.huntLuck || 0) + 1;
+        // 用掉运气猫爪：运气 +1，不提示
+        function huntLuckUse() { gState.huntLuck = (gState.huntLuck || 0) + 1; }
+        // 合成运气猫爪那一下的动静（彩虹光柱、引怪、一句话）；运气本身要等拿起来用
+        function huntLuckFx(pos) {
             // 彩虹光：红绿蓝三根光柱绕在一起，几秒就散；动静跟别的合成一样会引怪
             let lvl = Math.max(0, Math.min(1, Math.log10(100000 / 20000) / Math.log10(100)));
             huntLure = { p: pos.clone(), t: 4 + lvl * 6, r: 40 + lvl * 120 };
@@ -3753,7 +3756,6 @@
                         if (ai.position.distanceTo(bi.position) >= GROUND_MERGE_RANGE) continue;
                         consumed.push(ai, bi); scene.remove(ai); scene.remove(bi);
                         let up = rec.out;
-                        if (up.use === 'luck') { huntFindRecipe(rec.id); huntLuckUp(ai.position); break; }
                         let ns = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4),
                             new THREE.MeshLambertMaterial({ map: createProceduralTexture('gold_chest', up.main, up.detail) }));
                         ns.position.copy(ai.position);
@@ -3761,7 +3763,7 @@
                         if (up.type) { ns.userData.type = up.type; ns.userData.dmg = up.dmg; ns.userData.spd = up.spd; ns.userData.hp = up.hp; }
                         scene.add(ns); groundItems.push(ns);
                         huntFindRecipe(rec.id);
-                        huntMergeBoom(ns.position, up.v, up.n);
+                        if (up.type === 'luckclaw') huntLuckFx(ns.position); else huntMergeBoom(ns.position, up.v, up.n);
                         break;
                     }
                 });
@@ -4118,6 +4120,15 @@
                 return;
             }
 
+            // 药水、运气猫爪：拿在手上按“用道具”，没有读条，马上生效、东西没了。运气猫爪用的时候不提示（H21）
+            if (useTrigger && gState.selectedSlot <= 2 && selectedInv && (selectedInv.type === 'potion' || selectedInv.type === 'luckclaw')) {
+                keys['rmb'] = false; touchBtn.ability = false;
+                gState.inv[gState.selectedSlot] = null;
+                if (selectedInv.type === 'potion') huntPotionUse(selectedInv); else huntLuckUse();
+                updateHUD();
+                return;
+            }
+
             if (useTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'badge') {
                 keys['rmb'] = false; touchBtn.ability = false;
                 if (selectedInv.uses > 0) {
@@ -4254,7 +4265,7 @@
                         if (boxType === 'safe') gState.safeOpenedThisGame = true;
                         let singleLoot = huntChestLoot(activeObj);
                         let potion = huntPotionRoll(boxType, singleLoot, Math.random(), Math.random());
-                        if (potion) { huntPotionUse(potion); singleLoot = null; }   // 药水立即用掉，不掉东西
+                        if (potion) singleLoot = potion;   // 药水也是掉在地上的宝物，捡起来、手上按“用道具”才喝
 
                         if (singleLoot) {
                             let tObj = createProceduralTexture(singleLoot.tex, singleLoot.c, '#ffffff');
