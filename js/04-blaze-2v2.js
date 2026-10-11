@@ -204,7 +204,7 @@
             perkLastDmg: 1.20, perkLastCut: 0.30,           // 孤注：队友死光之后
             perkLuckyMul: 1.5,                        // 随机强化卡：抽到的那张效果乘这个数
             perkDrawN: 5,                             // 每回合发这么多张
-            perkRerolls: 100,                           // 每回合能换几次牌
+            perkRerolls: 1,                             // 每小局能换几次牌（测试时调大）
             perkNoRepeat: 3,                          // 最近这几手发过的牌不再出现
             perkHealPct: 0.15,                        // 回血专属：治疗量 +15%
             perkBowStack: 3,                          // 远程专属：被动层数上限 +3

@@ -796,6 +796,31 @@ async function enterExit(tab, key) {
             report('M7 惊魂夜逃出 10 次解锁发光眼表情、当追捕者抓 30 人解锁称号；AI 也会戴；存档带着', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('P2')) {
+            // P2：选加成时“换一批”每小局只有 1 次（原来是测试用的 100 次），下一小局恢复
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){ let out = { cfg: BLAZE.perkRerolls };
+                blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }]), gState.id, false);
+                blaze.score = [1, 0]; blazeAwardRound(0);            // 进入选加成
+                out.phase = blaze.phase; out.left0 = blaze.me.perkRerollsLeft;
+                let d0 = blazePerkDraw(blaze.me).map(function (o) { return o.id; }).join();
+                blazePerkReroll(); out.left1 = blaze.me.perkRerollsLeft; let d1 = blazePerkDraw(blaze.me).map(function (o) { return o.id; }).join(); out.changed = d0 !== d1;
+                blazePerkReroll(); out.left2 = blaze.me.perkRerollsLeft; out.same = blazePerkDraw(blaze.me).map(function (o) { return o.id; }).join() === d1;
+                blazePickPerk(blazePerkDraw(blaze.me)[0].id); blazeStartNextRound();
+                blaze.phase = 'live'; blazeAwardRound(0);              // 下一小局
+                out.again = blaze.me.perkRerollsLeft;
+                return JSON.stringify(out); })()`));
+            if (r.cfg !== 1) bad.push('配置不是 1 ' + r.cfg);
+            if (r.phase !== 'perk' || r.left0 !== 1) bad.push('进选牌时应有 1 次 ' + JSON.stringify([r.phase, r.left0]));
+            if (r.left1 !== 0 || !r.changed) bad.push('换了一次应该变牌、剩 0 次 ' + JSON.stringify([r.left1, r.changed]));
+            if (r.left2 !== 0 || !r.same) bad.push('第二次不该能换 ' + JSON.stringify([r.left2, r.same]));
+            if (r.again !== 1) bad.push('下一小局没恢复成 1 次 ' + r.again);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('P2 加成“换一批”每小局 1 次，下一小局恢复', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];
