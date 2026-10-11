@@ -3422,6 +3422,11 @@
                 out: { n: '丰饶圣餐', v: 250000, w: 5, tex: 'cup', c: 0xffb300, main: '#ffb300', detail: '#e65100' }
             },
             {
+                // H21：合成出来立即用掉（不留东西），本局运气层数 +1；除了合成时那一下，游戏里任何地方都不说它的作用
+                id: 'luckclaw', a: '猫盾', b: '黄金小鱼干',
+                out: { n: '运气猫爪', v: 100000, w: 1, tex: 'cat_shield', c: 0xff80ab, main: '#ff80ab', detail: '#7e57c2', use: 'luck' }
+            },
+            {
                 id: 'catblade', a: '骑士团圣剑', b: '至臻猫盾',
                 // spd/hp 是装备这把剑时的加成（移动速度倍率、额外生命上限）——
                 // 不是随便加在这就生效的，ground-merge 生成物、捡进背包两处都是
@@ -3511,6 +3516,52 @@
             }
         }
 
+        // ── 运气（H21）──
+        // 合出运气猫爪就是本局运气层数 L+1（不封顶，原料不限），只对自己生效，每局从 0 开始、不存档。k = 1 − 0.8^L。
+        // 箱子/信号接收器开出的东西：紫色 k×50% 换成金色；金色 k×10% 换成大金（占全队上限，见 huntTakeBigAsync）；
+        // 保险柜 k 的概率多抽一件、留贵的；抽奖机大金 +k×5%、销毁 −k×15%。AI 开箱不吃运气。
+        function huntLuckK() { return 1 - Math.pow(0.8, gState.huntLuck || 0); }
+        function huntLuckUp(pos) {
+            gState.huntLuck = (gState.huntLuck || 0) + 1;
+            // 彩虹光：红绿蓝三根光柱绕在一起，几秒就散；动静跟别的合成一样会引怪
+            let lvl = Math.max(0, Math.min(1, Math.log10(100000 / 20000) / Math.log10(100)));
+            huntLure = { p: pos.clone(), t: 4 + lvl * 6, r: 40 + lvl * 120 };
+            [0xff1744, 0x00e676, 0x2979ff].forEach(function (col, i) {
+                let mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, fog: false });
+                let beam = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 400, 10, 1, true), mat);
+                let a = i * Math.PI * 2 / 3;
+                beam.position.set(pos.x + Math.cos(a) * 2.4, 200, pos.z + Math.sin(a) * 2.4); beam.renderOrder = 800;
+                scene.add(beam); huntLureFx.push({ o: beam, mat: mat, t: 3.5, life: 3.5 });
+            });
+            sfxPlay([523, 659, 784, 1046], 0.5, 0.07, 'triangle');
+            blazeFlash('发生了神奇的反应！');
+        }
+        // 把地上的东西换成另一件（原来那件已经掉出来了，换的时候用同一个位置和速度）
+        function huntUpgradeItem(mesh, it) {
+            if (!mesh || groundItems.indexOf(mesh) < 0) return;
+            let old = mesh.userData;
+            mesh.userData = Object.assign({}, it, { isItem: true, vel: old.vel, fromSignal: old.fromSignal, gravityActive: old.gravityActive });
+            if (mesh.material) { mesh.material = new THREE.MeshLambertMaterial({ map: createProceduralTexture(it.tex || 'generic', it.c, '#ffffff') }); }
+        }
+        // 一件刚开出来的东西，按运气该不该换：返回 'gold'（紫换金）/ 'big'（金换大金）/ 'extra'（保险柜多抽一件留贵的）/ null。r 是 0~1 的随机数
+        function huntLuckDecide(it, boxType, k, r) {
+            if (boxType === 'safe') return r < k ? 'extra' : null;
+            let purple = itemPool.purple.some(function (p) { return p.n === it.n; });
+            let gold = itemPool.gold.some(function (g) { return g.n === it.n; }) || it.type === 'gem';
+            if (purple) return r < k * 0.5 ? 'gold' : null;
+            if (gold && !huntIsBig(it)) return r < k * 0.1 ? 'big' : null;
+            return null;
+        }
+        // 箱子/信号接收器的东西刚掉出来时调用：按运气看要不要换
+        function huntLuckApply(mesh, boxType) {
+            if (!mesh || !(gState.huntLuck > 0)) return;
+            let it = mesh.userData, pick = function (a) { return a[Math.floor(Math.random() * a.length)]; };
+            let d = huntLuckDecide(it, boxType, huntLuckK(), Math.random());
+            if (d === 'extra') { let extra = pick(huntBigPool('safe')); if (extra && extra.v > (it.v || 0)) huntUpgradeItem(mesh, extra); }
+            else if (d === 'gold') huntUpgradeItem(mesh, pick(itemPool.gold));
+            else if (d === 'big') huntTakeBigAsync(huntBigPool(boxType), pick, function (big) { if (huntIsBig(big)) huntUpgradeItem(mesh, big); });
+        }
+
         function huntLureTick(dt) {
             if (huntLure) { huntLure.t -= dt; if (huntLure.t <= 0) huntLure = null; }
             huntLureFx = huntLureFx.filter(function (f) {
@@ -3559,6 +3610,7 @@
                         if (ai.position.distanceTo(bi.position) >= GROUND_MERGE_RANGE) continue;
                         consumed.push(ai, bi); scene.remove(ai); scene.remove(bi);
                         let up = rec.out;
+                        if (up.use === 'luck') { huntFindRecipe(rec.id); huntLuckUp(ai.position); break; }
                         let ns = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4),
                             new THREE.MeshLambertMaterial({ map: createProceduralTexture('gold_chest', up.main, up.detail) }));
                         ns.position.copy(ai.position);
@@ -4048,6 +4100,7 @@
                             let ang = Math.random() * Math.PI * 2;
                             box.userData = { ...singleLoot, isItem: true, vel: new THREE.Vector3(Math.cos(ang) * 18, 0, Math.sin(ang) * 18) };
                             scene.add(box); groundItems.push(box);
+                            huntLuckApply(box, boxType);
                         }
                     }
                     else if (activeObj.userData.isItem) {

@@ -970,6 +970,73 @@ async function enterExit(tab, key) {
             report('H20 血条/体力条里写数字，左上角两行删了，带骑士剑时超出的部分是金色', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H21')) {
+            // H21 运气猫爪：猫盾 + 黄金小鱼干 合成，彩虹光 + "发生了神奇的反应！"，立即用掉（不留东西）、运气层数 +1（不封顶）；
+            // k = 1 − 0.8^L：紫色 k×50% 换金、金色 k×10% 换大金、保险柜 k 概率多抽留贵的、抽奖机大金 +k×5% 销毁 −k×15%；
+            // 除合成时那一句，哪里都不说它的作用；AI 开箱不吃运气；每局从 0 开始
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const r = JSON.parse(await T.eval(`(function(){
+                let o = {}, flashes = [], bf = blazeFlash; blazeFlash = function (t) { flashes.push(t); return bf.apply(this, arguments); };
+                let mk = function (name) { let m = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial()); m.position.set(camera.position.x, 2, camera.position.z); m.userData = Object.assign({}, (itemPool.purple.concat(itemPool.gold).filter(function (x) { return x.n === name; })[0]) || { n: name, v: 1, w: 1 }, { isItem: true }); scene.add(m); groundItems.push(m); return m; };
+                let rec = GROUND_RECIPES.filter(function (x) { return x.id === 'luckclaw'; })[0];
+                o.rec = !!rec && rec.a === '猫盾' && rec.b === '黄金小鱼干' && rec.out.v === 100000 && rec.out.w === 1;
+                // 合成 5 次：原料不限，层数一直涨
+                gState.huntLuck = 0; let before = groundItems.length;
+                for (let i = 0; i < 5; i++) { mk('猫盾'); mk('黄金小鱼干'); executeGroundCombinationsLogic(); }
+                o.L = gState.huntLuck; o.noItem = groundItems.length === before && !groundItems.some(function (g) { return g.userData.n === '运气猫爪'; });
+                o.flash = flashes.filter(function (t) { return t === '发生了神奇的反应！'; }).length;
+                o.found = huntFoundRecipe('luckclaw');
+                o.beams = huntLureFx.length >= 3;
+                // k 和换位概率（网格取样，精确）
+                let kk = function (L) { gState.huntLuck = L; return huntLuckK(); };
+                o.k = [kk(0), kk(1), kk(3)].map(function (x) { return +x.toFixed(4); });
+                let frac = function (it, box, k) { let n = 0, N = 10000, kinds = {}; for (let i = 0; i < N; i++) { let d = huntLuckDecide(it, box, k, (i + 0.5) / N); if (d) { n++; kinds[d] = 1; } } return [n / N, Object.keys(kinds).join()]; };
+                let k3 = 1 - Math.pow(0.8, 3);
+                o.purple = frac(itemPool.purple[0], 'wood', k3); o.gold = frac(itemPool.gold[0], 'wood', k3); o.safe = frac(itemPool.god[0], 'safe', k3); o.big = frac(itemPool.ultra[0], 'gold', k3);
+                o.k3 = k3;
+                // 抽奖机
+                let lot = function (kind, k) { let N = 20000, c = {}; for (let i = 0; i < N; i++) { let v = huntLotteryPick(kind, (i + 0.5) / N, k); c[v] = (c[v] || 0) + 1 / N; } return c; };
+                o.lotG0 = lot('gold', 0); o.lotG = lot('gold', k3); o.lotP = lot('purple', k3);
+                // 层数 0 时什么都不变；每局开始归零
+                gState.huntLuck = 0; let m = mk(itemPool.purple[0].n); huntLuckApply(m, 'wood'); o.noLuckSame = m.userData.n === itemPool.purple[0].n;
+                gState.huntLuck = 40; let up = 0, tries = 60; for (let i = 0; i < tries; i++) { let mm = mk(itemPool.purple[0].n); huntLuckApply(mm, 'wood'); if (mm.userData.n !== itemPool.purple[0].n) up++; }
+                o.upgrades = up;
+                // 保险柜：留贵的，不会变便宜
+                gState.huntLuck = 40; let cheap = true; for (let i = 0; i < 30; i++) { let mm = mk('x'); mm.userData = Object.assign({}, itemPool.god[3] || itemPool.god[0], { isItem: true }); let v0 = mm.userData.v; huntLuckApply(mm, 'safe'); if (mm.userData.v < v0) cheap = false; }
+                o.safeKeepsBest = cheap;
+                blazeFlash = bf;
+                return JSON.stringify(o); })()`));
+            if (!r.rec) bad.push('配方不对');
+            if (r.L !== 5 || !r.noItem || r.flash !== 5 || !r.found || !r.beams) bad.push('合成 ' + JSON.stringify([r.L, r.noItem, r.flash, r.found, r.beams]));
+            if (r.k.join() !== '0,0.2,0.488') bad.push('k=' + r.k.join());
+            const near = (a, b) => Math.abs(a - b) < 0.002;
+            if (!near(r.purple[0], r.k3 * 0.5) || r.purple[1] !== 'gold') bad.push('紫→金 ' + JSON.stringify(r.purple));
+            if (!near(r.gold[0], r.k3 * 0.1) || r.gold[1] !== 'big') bad.push('金→大金 ' + JSON.stringify(r.gold));
+            if (!near(r.safe[0], r.k3) || r.safe[1] !== 'extra') bad.push('保险柜 ' + JSON.stringify(r.safe));
+            if (r.big[0] !== 0) bad.push('大金还会被换 ' + JSON.stringify(r.big));
+            if (!(near(r.lotG0.big, 0.05) && near(r.lotG0.destroy, 0.25))) bad.push('没运气的抽奖变了 ' + JSON.stringify(r.lotG0));
+            if (!(near(r.lotG.big, 0.05 + 0.05 * r.k3) && near(r.lotG.destroy, 0.25 - 0.15 * r.k3) && near(r.lotG.purple, 0.15) && near((r.lotG.big + r.lotG.destroy + r.lotG.purple + r.lotG.gold), 1))) bad.push('抽奖(金) ' + JSON.stringify(r.lotG));
+            if (!(near(r.lotP.destroy, 0.25 - 0.15 * r.k3) && near(r.lotP.purple, 0.6) && !r.lotP.big)) bad.push('抽奖(紫) ' + JSON.stringify(r.lotP));
+            if (!r.noLuckSame || r.upgrades < 15 || r.upgrades > 55 || !r.safeKeepsBest) bad.push('实际换位 ' + JSON.stringify([r.noLuckSame, r.upgrades, r.safeKeepsBest]));
+            // 哪里都不说它的作用：公告只写"神秘配方"，规则、介绍、页面上都没有"运气猫爪"和运气层数
+            const txt = JSON.parse(await T.eval(`JSON.stringify({ log: JSON.stringify(CHANGELOG), rules: Object.keys(MODE_RULES).map(function (k) { return rulesHtml(k); }).join(''), page: document.body.innerHTML, intro: typeof HUNT_ITEM_INTRO !== 'undefined' ? JSON.stringify(HUNT_ITEM_INTRO) : '' })`));
+            if (/运气|猫爪/.test(txt.log.replace(/运气好/g, '')) && !/神秘配方/.test(txt.log)) bad.push('公告提到了');
+            if (!/多了一个神秘配方/.test(txt.log)) bad.push('公告没写“多了一个神秘配方”');
+            ['rules', 'page', 'intro'].forEach((k) => { if (/运气猫爪|运气层|运气值/.test(txt[k])) bad.push(k + ' 里提到了运气'); });
+            // 每局归零；运气只在玩家自己开箱/信号接收器两处用（AI 开箱的代码不碰）
+            await T.eval(`gState.huntLuck = 7; ${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000);
+            if ((await T.eval('gState.huntLuck')) !== 0) bad.push('新的一局没归零');
+            const callers = ['08-night.js', '09-hunt.js'].map((f) => (fs.readFileSync(path.join(ROOT, 'js', f), 'utf8').match(/huntLuckApply\(/g) || []).length).reduce((a, b) => a + b, 0);
+            if (callers !== 3) bad.push('huntLuckApply 的调用点数量 ' + callers);   // 定义 1 + 玩家开箱 1 + 信号接收器 1
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H21 运气猫爪：合成立即用掉、层数 +1 不封顶；紫→金 k×50%、金→大金 k×10%、保险柜多抽留贵、抽奖机 +5%/−15%；哪里都不说明；每局归零', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 

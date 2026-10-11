@@ -258,6 +258,7 @@
             b.position.set(pos.fx * TILE, pos.fl * TILE + 1.5, pos.fz * TILE);
             b.userData = { ...reward, isItem: true, vel: new THREE.Vector3(0, 0, 0), fromSignal: true };
             scene.add(b); groundItems.push(b); s.mesh = b;
+            huntLuckApply(b, 'signal');
             signalRouteTick(true);
             if (!actionTarget) bar.style.display = 'none';
         }
@@ -867,12 +868,14 @@
 
         // H16：抽奖机。投金色：5% 大金 / 25% 销毁 / 15% 变紫 / 55% 变金；投紫色：15% 变金 / 60% 变紫 / 25% 销毁。
         // 大金走 huntTakeBig(huntBigPool('safe'))（占这张图的大金上限），奖励都从 itemPool 里拿，不手写。
-        const HUNT_LOTTERY = {
-            gold: [['big', 0.05], ['destroy', 0.25], ['purple', 0.15], ['gold', 0.55]],
-            purple: [['gold', 0.15], ['purple', 0.60], ['destroy', 0.25]]
-        };
-        function huntLotteryPick(kind, r) {
-            let acc = 0, t = HUNT_LOTTERY[kind];
+        // 运气（H21）：投金色大金 +k×5%、销毁 −k×15%（余下的 +k×10% 给变金）；投紫色销毁 −k×15%，给变金
+        function huntLotteryTable(kind, k) {
+            k = k || 0;
+            if (kind === 'gold') return [['big', 0.05 + 0.05 * k], ['destroy', 0.25 - 0.15 * k], ['purple', 0.15], ['gold', 0.55 + 0.10 * k]];
+            return [['gold', 0.15 + 0.15 * k], ['purple', 0.60], ['destroy', 0.25 - 0.15 * k]];
+        }
+        function huntLotteryPick(kind, r, k) {
+            let acc = 0, t = huntLotteryTable(kind, k === undefined ? huntLuckK() : k);
             for (let i = 0; i < t.length; i++) { acc += t[i][1]; if (r < acc) return t[i][0]; }
             return t[t.length - 1][0];
         }

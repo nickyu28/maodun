@@ -171,6 +171,7 @@
             gState.safeOpenedThisGame = false; gState.backpackOpen = false; gState.largeMapOpen = false; gState.monstersSpawned = false; gState.inSafeZone = true; gState.needsLock = false; gState.pAtkCd = 0; gState.timeStop = 0;
             gState.debuff = { type: 0, timer: 0, cooldown: 0 };
             gState.maxHp = 100; gState.hp = effectiveMaxHp(); huntMaxHpSync(true);
+            gState.huntLuck = 0;   // H21：运气层数，每局从 0 开始，不存档
             huntLure = null;
             huntLureFx.forEach(function (f) { scene.remove(f.o); }); huntLureFx = [];
             gState.hasLeft = false; gState.deathPos = null; gState.spectating = null; gState.spectateIdx = -1; gState.peerState = {}; hideDeathUI();
@@ -1456,7 +1457,8 @@
                     '寻宝队每种难度，第一次单人去的时候宝物会好拿一些',
                     '猫盾骑士剑涨到 200 万，已经有的也一起涨',
                     '猫盾骑士剑的生命值加成变成 +200，放在背包或腰包里就算，不用拿在手上',
-                    '寻宝队上方的血条、体力条里直接显示数字，带骑士剑时多出来的血是金色的；左上角那两行去掉了'
+                    '寻宝队上方的血条、体力条里直接显示数字，带骑士剑时多出来的血是金色的；左上角那两行去掉了',
+                    '多了一个神秘配方'
                 ]
             },
             {
