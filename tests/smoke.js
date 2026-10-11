@@ -643,6 +643,55 @@ async function enterExit(tab, key) {
             report('M3 超燃快速场（先赢 5 局、60 秒后缩圈，默认）和完整场（先赢 10 局）', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('M4')) {
+            // M4：超燃每个角色记场数、胜场；赢 10 场「xx熟手」称号，30 场专属外观（金环），100 场「xx大师」称号；存档带着
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){ let out = {};
+                gState.blazeMastery = { bow: { n: 12, w: 9 } };
+                blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }]), gState.id, false);
+                blaze.score = [BLAZE.roundsToWin - 1, 0]; blazeAwardRound(blaze.me.team);
+                out.a = blazeMasteryOf('bow'); out.hand = titleOwned('bzh_bow'); out.gold0 = blazeGoldKeys().length; out.name = TITLES.bzh_bow.name;
+                blazeExit();
+                gState.blazeMastery.bow = { n: 40, w: 29 };
+                blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }]), gState.id, false);
+                blaze.score = [BLAZE.roundsToWin - 1, BLAZE.roundsToWin - 1]; blazeAwardRound(1 - blaze.me.team);   // 输一场：场数 +1，胜场不变
+                out.lose = blazeMasteryOf('bow');
+                blazeExit();
+                blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }]), gState.id, false);
+                out.halo0 = blaze.me.mesh.children.some(function (c) { return c.geometry && c.geometry.type === 'TorusGeometry' && c.position.y > 17 && c.material.color.getHex() === 0xffd54f; });
+                blaze.score = [BLAZE.roundsToWin - 1, 0]; blazeAwardRound(blaze.me.team);
+                out.gold = blazeGoldKeys(); out.w30 = blazeMasteryOf('bow').w;
+                blazeExit();
+                blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }]), gState.id, false);
+                out.halo1 = blaze.me.mesh.children.some(function (c) { return c.geometry && c.geometry.type === 'TorusGeometry' && c.position.y > 17 && c.material.color.getHex() === 0xffd54f; });
+                blazeExit();
+                gState.blazeMastery.bow = { n: 130, w: 99 };
+                blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }]), gState.id, false);
+                blaze.score = [BLAZE.roundsToWin - 1, 0]; blazeAwardRound(blaze.me.team);
+                out.master = titleOwned('bzm_bow'); out.masterName = TITLES.bzm_bow.name;
+                blazeExit();
+                saveProgress(); let saved = JSON.stringify(gState.blazeMastery.bow); gState.blazeMastery = null; loadProgress(gState.id);
+                out.reload = JSON.stringify(gState.blazeMastery && gState.blazeMastery.bow) === saved;
+                // 联机：别人房间心跳里报的金环，进他的身体
+                roomPeers['pB'] = { bzgold: ['sword'] }; out.peer = [blazeGoldOf('pB').indexOf('sword') >= 0, blazeGoldOf('pB').indexOf('bow') >= 0];
+                openAchievements('title'); out.list = /熟手/.test(document.getElementById('sys-modal-text').innerText) && /大师/.test(document.getElementById('sys-modal-text').innerText);
+                return JSON.stringify(out); })()`));
+            if (r.a.n !== 13 || r.a.w !== 10) bad.push('赢一场没记上 ' + JSON.stringify(r.a));
+            if (!r.hand || r.name !== '远程熟手') bad.push('赢 10 场没拿到熟手称号 ' + r.hand + r.name);
+            if (r.gold0 !== 0) bad.push('10 场就有专属外观了');
+            if (r.lose.n !== 41 || r.lose.w !== 29) bad.push('输一场记得不对 ' + JSON.stringify(r.lose));
+            if (r.halo0) bad.push('29 场就有金环');
+            if (r.gold.indexOf('bow') < 0 || r.w30 !== 30 || !r.halo1) bad.push('30 场没解锁专属外观 ' + JSON.stringify([r.gold, r.w30, r.halo1]));
+            if (!r.master || r.masterName !== '远程大师') bad.push('100 场没拿到大师称号');
+            if (!r.reload) bad.push('存档读回来不一样');
+            if (!r.peer[0] || r.peer[1]) bad.push('别人的金环没读到 ' + JSON.stringify(r.peer));
+            if (!r.list) bad.push('称号列表里没有熟手/大师');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('M4 超燃角色熟练度：记场数/胜场；赢 10 场熟手称号、30 场金环外观、100 场大师称号；存档带着', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];

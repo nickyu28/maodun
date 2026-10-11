@@ -153,6 +153,7 @@
                     if (blaze.raf) cancelAnimationFrame(blaze.raf);
                     if (document.pointerLockElement) document.exitPointerLock();
                     rankAdd('blaze', m.w === blaze.me.team);
+                    blazeMasteryEnd(m.w === blaze.me.team);
                     let gain2 = coinsSettle('blaze', m.w === blaze.me.team);
                     showSysModal(m.w === blaze.me.team ? '超燃 · 你赢了' : '超燃 · 你输了',
                         '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +

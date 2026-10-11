@@ -565,7 +565,8 @@
                         let right = on ? '<span style="font-size:12px; color:#66bb6a;">戴着</span>' :
                             own ? '<button onclick="titleWear(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#7e57c2; color:#fff; border:none;">戴上</button>' :
                                 T.buy ? '<button onclick="titleBuy(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#e6a23c; color:#fff; border:none;">' + coinBadgeHtml(T.buy, 13) + '</button>' :
-                                    '<span style="font-size:11px; color:#9e9e9e;">成就「' + ACH_LIST.filter(function (a) { return a.id === T.ach; })[0].name + '」送</span>';
+                                    T.bz ? '<span style="font-size:11px; color:#9e9e9e;">' + BLAZE_CHARS[T.bz].name + '赢 ' + T.need + ' 场送（' + Math.min(T.need, blazeMasteryOf(T.bz).w) + '/' + T.need + '）</span>' :
+                                        '<span style="font-size:11px; color:#9e9e9e;">成就「' + ACH_LIST.filter(function (a) { return a.id === T.ach; })[0].name + '」送</span>';
                         return '<div style="display:flex; align-items:center; gap:8px; padding:6px 4px; border-top:1px solid #eee;">' +
                             '<span style="flex:1;"><span style="display:inline-block; padding:1px 8px; border-radius:9px; background:#263238; color:' + T.col + '; font-size:12px; font-weight:bold;">' + T.name + '</span></span>' + right + '</div>';
                     }).join('') + '</div>';

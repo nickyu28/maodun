@@ -470,6 +470,44 @@
             }
         };
         const BLAZE_ORDER = ['bow', 'sword', 'heal', 'tank', 'guard', 'control', 'assassin', 'mage', 'shift', 'engineer', 'mirror'];
+
+        // ── 熟练度（M4）──
+        // 每个角色记场数和胜场：赢 10 场拿「xx熟手」称号，赢 30 场解锁这个角色的专属外观（金边金环），赢 100 场拿「xx大师」称号。
+        // 乱斗里拿第一名算赢。
+        const AI_GOLD_CHANCE = 0.2;   // AI 也会戴专属外观（跟商店的外观一个规矩）
+        const BLAZE_MASTERY_AT = { hand: 10, gold: 30, master: 100 };
+        BLAZE_ORDER.forEach(function (k) {
+            let nm = BLAZE_CHARS[k].name.replace('猫盾', '');
+            TITLES['bzh_' + k] = { name: nm + '熟手', col: BLAZE_CHARS[k].css, bz: k, need: BLAZE_MASTERY_AT.hand };
+            TITLES['bzm_' + k] = { name: nm + '大师', col: BLAZE_CHARS[k].css, bz: k, need: BLAZE_MASTERY_AT.master };
+        });
+        function blazeMasteryOf(k) {
+            let m = gState.blazeMastery && gState.blazeMastery[k];
+            return { n: (m && m.n) || 0, w: (m && m.w) || 0 };
+        }
+        function blazeMasteryAdd(k, won) {
+            if (!BLAZE_CHARS[k] || (gState.tutorial)) return;
+            if (!gState.blazeMastery || typeof gState.blazeMastery !== 'object') gState.blazeMastery = {};
+            let m = gState.blazeMastery[k] = gState.blazeMastery[k] || { n: 0, w: 0 };
+            m.n++; if (won) m.w++;
+            if (!gState.titles) gState.titles = {};
+            let got = [];
+            if (m.w >= BLAZE_MASTERY_AT.hand && !gState.titles['bzh_' + k]) { gState.titles['bzh_' + k] = 1; got.push('称号「' + TITLES['bzh_' + k].name + '」'); }
+            if (m.w >= BLAZE_MASTERY_AT.master && !gState.titles['bzm_' + k]) { gState.titles['bzm_' + k] = 1; got.push('称号「' + TITLES['bzm_' + k].name + '」'); }
+            if (won && m.w === BLAZE_MASTERY_AT.gold) got.push(BLAZE_CHARS[k].name + '的专属外观');
+            saveProgress(); roomHello();
+            if (got.length) setTimeout(function () { blazeFlash('解锁：' + got.join('、')); sfxChime(2); }, 1800);
+        }
+        // 打完一整场调一次（每场只记一次）
+        function blazeMasteryEnd(won) {
+            if (!blaze || blaze.masteryDone || !blaze.me) return;
+            blaze.masteryDone = true;
+            blazeMasteryAdd(blaze.me.key, !!won);
+        }
+        function blazeGoldKeys() { return BLAZE_ORDER.filter(function (k) { return blazeMasteryOf(k).w >= BLAZE_MASTERY_AT.gold; }); }
+        function blazeGoldOf(id) {   // 别人的：看他房间心跳里报的
+            let p = roomPeers[id]; return (p && p.bzgold) || [];
+        }
         // 分配用的强度表：控制最高（一串眩晕接起来是真的能锁死人），
         // 纯输出和位移偏低。发 AI 的时候按这个把两边配平。
         const BLAZE_POWER = {
@@ -796,7 +834,12 @@
                 '<b style="color:' + c.css + ';">' + kTxt('空格', '普攻') + '</b>　' + c.atk +
                 '<br><b style="color:' + c.css + ';">' + kTxt('左键', '1技能') + '</b>　' + c.act +
                 '<br><b style="color:' + c.css + ';">' + kTxt('右键', '2技能') + '</b>　' + c.act2 +
-                '<br><b style="color:' + c.css + ';">被动</b>　' + c.pas;
+                '<br><b style="color:' + c.css + ';">被动</b>　' + c.pas +
+                (function () {
+                    let m = blazeMasteryOf(gState.blazeChar), next = m.w < BLAZE_MASTERY_AT.hand ? BLAZE_MASTERY_AT.hand : m.w < BLAZE_MASTERY_AT.gold ? BLAZE_MASTERY_AT.gold : m.w < BLAZE_MASTERY_AT.master ? BLAZE_MASTERY_AT.master : 0;
+                    return '<br><span style="font-size:12px; color:#999;">打了 ' + m.n + ' 场，赢了 ' + m.w + ' 场' +
+                        (next ? '　（赢到 ' + next + ' 场：' + (next === BLAZE_MASTERY_AT.gold ? '专属外观' : next === BLAZE_MASTERY_AT.hand ? '熟手称号' : '大师称号') + '）' : '　（都解锁了）') + '</span>';
+                })();
         }
         function blazePick(k) {
             if (!charOwned('blaze', k)) { if (!charBuy('blaze', k)) { blazeRenderChars(); return; } }
@@ -1047,7 +1090,7 @@
             return cv;
         }
 
-        function blazeMakeBody(key, team, faceKey, acc) {
+        function blazeMakeBody(key, team, faceKey, acc, gold) {
             let g = new THREE.Group();
             let col = BLAZE_CHARS[key].color;
             let mat = new THREE.MeshLambertMaterial({ color: col });
@@ -1068,7 +1111,13 @@
             // 四个角色除了颜色不一样，剪影完全一样，混战里根本认不出谁是谁。
             // 每个人背/身上加一件专属道具，远处看轮廓就能分：
             // 弓背弓、剑扛剑、回血头顶十字、抗伤举盾牌。
-            let propMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee, emissive: new THREE.Color(col).multiplyScalar(0.25) });
+            let propMat = new THREE.MeshLambertMaterial({ color: gold ? 0xffe082 : 0xeeeeee, emissive: gold ? new THREE.Color(0x8a6a00) : new THREE.Color(col).multiplyScalar(0.25) });
+            // 熟练度专属外观：身体带点金光，头顶一圈金环
+            if (gold) {
+                mat.emissive = new THREE.Color(0x4a3800);
+                let halo = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.35, 6, 18), new THREE.MeshBasicMaterial({ color: 0xffd54f }));
+                halo.rotation.x = Math.PI / 2; halo.position.y = 17.6; g.add(halo);
+            }
             if (key === 'bow') {
                 let bow = new THREE.Mesh(new THREE.TorusGeometry(4, 0.5, 6, 12, Math.PI * 1.3), propMat);
                 bow.rotation.y = Math.PI / 2; bow.position.set(0, 7, -3.2); g.add(bow);
@@ -1793,7 +1842,7 @@
                     invisAtk: 0, invisGrace: 0, burstLock: 0,
                     usedRevive: false, usedPanic: false, stunGrow: 0,
                     floor: 0, teleCd: 0,
-                    mesh: blazeMakeBody(q.key, q.team, mine ? myFace() : (q.id ? peerFaceOf(q.id) : aiRandomFace()), mine ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()))
+                    mesh: blazeMakeBody(q.key, q.team, mine ? myFace() : (q.id ? peerFaceOf(q.id) : aiRandomFace()), mine ? gState.acc : (q.id ? peerAccOf(q.id) : aiRandomAcc()), mine ? blazeMasteryOf(q.key).w >= BLAZE_MASTERY_AT.gold : (q.id ? blazeGoldOf(q.id).indexOf(q.key) >= 0 : Math.random() < AI_GOLD_CHANCE))
                 };
                 scene.add(a.mesh);
                 // 头顶名字：混战/联机的时候光看剪影分不出谁是真人朋友、谁是 AI
@@ -4137,6 +4186,7 @@
             if (blaze.ffaDuo) { blazeFfaEndDuo(); return; }
             let list = blazeFfaRank();
             let place = list.indexOf(blaze.me) + 1;
+            blazeMasteryEnd(place === 1);
             let gain = coinsSettle('blaze', place <= 3);
             // 结算就报一个名次，别再糊一屏数字
             let txt = '<div style="font-size:34px; font-weight:bold; color:#ff9800;">第 ' + place + ' 名</div>' +
@@ -4148,6 +4198,7 @@
             let list = blazeFfaTeamRank();
             let mine = blaze.me.team;
             let place = list.map(function (t) { return t.team; }).indexOf(mine) + 1;
+            blazeMasteryEnd(place === 1);
             let gain = coinsSettle('blaze', place <= 3);
             let mvp = blazeFfaMvp();
             let who = (mvp === blaze.me) ? '你' : (mvp.team === mine ? mvp.name + '（你队友）' : mvp.name);
@@ -4198,6 +4249,7 @@
                 if (document.pointerLockElement) document.exitPointerLock();
                 let win = winner === blaze.me.team;
                 rankAdd('blaze', win);
+                blazeMasteryEnd(win);
                 let gain = coinsSettle('blaze', win);
                 showSysModal(win ? '超燃 · 你赢了' : '超燃 · 你输了',
                     '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +
