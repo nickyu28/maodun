@@ -284,6 +284,8 @@
         // 这个死结解开。
         const PEER_ICE_CONFIG = {
             iceServers: [
+                { urls: 'stun:stun.miwifi.com:3478' },
+                { urls: 'stun:stun.chat.bilibili.com:3478' },
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
                 { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
@@ -336,36 +338,70 @@
             });
         }
 
-        // ── C6b 联机诊断：一项项测，显示"通 / 不通 / 用时"，最后说哪一环不通。
-        // 只读：自己另开一个临时的 Peer 和 RTCPeerConnection，测完就关，不碰游戏正在用的连接。
+        // ── C6b/C6c 联机诊断：一项项测，大白话写出通不通、哪一环有问题，能复制结果发给作者。
+        // 只读：自己另开临时的 Peer 和 RTCPeerConnection，测完就关，不碰游戏正在用的连接。
+        // 探路服务器（STUN）每个单独测，列出名字、通/不通、拿到的公网地址；再拿通的两个看公网端口一不一样，判断网络好不好连；
+        // 中转服务器（TURN）单独一项：拿没拿到中转地址。
+        const NET_DIAG_STUNS = [
+            ['小米', 'stun.miwifi.com:3478'],
+            ['B站', 'stun.chat.bilibili.com:3478'],
+            ['谷歌', 'stun.l.google.com:19302'],
+            ['谷歌二号', 'stun1.l.google.com:19302'],
+            ['Cloudflare', 'stun.cloudflare.com:3478']
+        ];
         const NET_DIAG_STEPS = [
-            ['lib', '联机组件加载', '联机组件没加载上，刷新一下再试。'],
-            ['signal', '牵线服务器', '连不上牵线服务器，进不了房间。'],
-            ['stun', '探路服务器', '探路服务器没回地址，不在同一个网络时很难直连，只能靠中转。'],
-            ['turn', '中转服务器', '中转服务器没回地址，两边都没法直连时就连不上。']
+            ['lib', '联机组件加载'],
+            ['signal', '牵线服务器'],
+            ['stun', '探路服务器（STUN，每个单独测）'],
+            ['nat', '网络类型（好不好直连）'],
+            ['turn', '中转服务器（TURN）']
         ];
         let netDiag = null;
+        // 一行结果的大白话
+        function netDiagLine(k, r) {
+            if (!r) return '测试中…';
+            if (k === 'stun') return r.ok ? '通了 ' + r.list.filter(function (x) { return x.ok; }).length + ' 个，共 ' + r.list.length + ' 个' : '一个都不通';
+            if (k === 'nat') return r.type === 'easy' ? '好连（两个探路服务器看到的公网端口一样）' : r.type === 'hard' ? '难连，对称型（两个探路服务器看到的公网端口不一样）' : '测不出来（' + r.why + '）';
+            if (k === 'turn') return r.ok ? '通，拿到了中转地址' + (r.addr ? ' ' + r.addr : '') + (r.ms !== undefined ? '　' + r.ms + ' 毫秒' : '') : '不通（' + (r.why || '没拿到中转地址') + '）';
+            return (r.ok ? '通' : '不通') + (r.ms !== undefined ? '　' + r.ms + ' 毫秒' : '') + (r.why ? '（' + r.why + '）' : '');
+        }
+        function netDiagStunLine(x) {
+            return x.name + ' ' + x.host + '：' + (x.ok ? '通　公网地址 ' + x.addr + '　' + x.ms + ' 毫秒' : '不通（' + x.why + '）');
+        }
         function netDiagText() {
             if (!netDiag) return '';
             let lines = ['联机诊断　版本 ' + GAME_VERSION + '　' + new Date().toLocaleString()];
             NET_DIAG_STEPS.forEach(function (st, i) {
                 let r = netDiag.res[st[0]];
-                lines.push((i + 1) + '. ' + st[1] + '：' + (!r ? '测试中…' : (r.ok ? '通' : '不通') + (r.ms !== undefined ? '　' + r.ms + ' 毫秒' : '') + (r.why ? '（' + r.why + '）' : '')));
+                lines.push((i + 1) + '. ' + st[1] + '：' + netDiagLine(st[0], r));
+                if (st[0] === 'stun' && r) r.list.forEach(function (x) { lines.push('　· ' + netDiagStunLine(x)); });
             });
             lines.push(netDiag.done ? '结论：' + netDiagVerdict() : '还在测…');
             return lines.join('\n');
         }
         function netDiagVerdict() {
-            let bad = NET_DIAG_STEPS.filter(function (st) { let r = netDiag.res[st[0]]; return r && !r.ok; });
-            return bad.length ? bad.map(function (st) { return st[2]; }).join('') : '四项都通，联机这边没问题。';
+            let R = netDiag.res, out = [];
+            if (R.lib && !R.lib.ok) return '联机组件没加载上，刷新一下再试。';
+            if (R.signal && !R.signal.ok) out.push('连不上牵线服务器，进不了房间。');
+            let stunOk = R.stun && R.stun.ok, relay = R.turn && R.turn.ok;
+            if (!stunOk) out.push('探路服务器一个都不通，两边不在同一个网络时很难直连，只能靠中转。');
+            else if (R.nat && R.nat.type === 'hard') out.push('你的网络是难连的类型（对称型），多半要靠中转才连得上别人。');
+            else if (R.nat && R.nat.type === 'easy') out.push('你的网络是好连的类型，多数情况能直连。');
+            if (!relay) out.push((!stunOk || (R.nat && R.nat.type === 'hard')) ? '中转服务器也拿不到地址，这样很可能连不上别人。' : '中转服务器拿不到地址，直连打不通时就没有退路了。');
+            return out.length ? out.join('') : '都通，联机这边没问题。';
         }
         function netDiagRender() {
             let el = document.getElementById('net-diag'); if (!el || !netDiag) return;
+            let row = 'display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-bottom:1px solid #eee;';
             el.innerHTML = NET_DIAG_STEPS.map(function (st, i) {
                 let r = netDiag.res[st[0]];
-                let state = !r ? '<span style="color:#999;">测试中…</span>' : r.ok ? '<b style="color:#2e7d32;">通</b>' : '<b style="color:#d9534f;">不通</b>';
-                return '<div style="display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-bottom:1px solid #eee;"><span>' + (i + 1) + '. ' + st[1] + '</span><span>' + state +
-                    (r && r.ms !== undefined ? ' <span style="color:#888;">' + r.ms + ' 毫秒</span>' : '') + (r && r.why ? ' <span style="color:#888;">' + chatEscape(r.why) + '</span>' : '') + '</span></div>';
+                let good = r && (st[0] === 'nat' ? r.type === 'easy' : r.ok), bad = r && !good && !(st[0] === 'nat' && r.type !== 'hard');
+                let col = !r ? '#999' : good ? '#2e7d32' : bad ? '#d9534f' : '#e65100';
+                let html = '<div style="' + row + '"><span>' + (i + 1) + '. ' + st[1] + '</span><span style="color:' + col + '; font-weight:bold; text-align:right;">' + chatEscape(netDiagLine(st[0], r)) + '</span></div>';
+                if (st[0] === 'stun' && r) html += r.list.map(function (x) {
+                    return '<div style="padding:2px 0 2px 14px; font-size:12px; color:' + (x.ok ? '#2e7d32' : '#b71c1c') + ';">· ' + chatEscape(netDiagStunLine(x)) + '</div>';
+                }).join('');
+                return html;
             }).join('') + '<div id="net-diag-verdict" style="margin-top:8px; font-weight:bold;">' + (netDiag.done ? chatEscape(netDiagVerdict()) : '还在测…') + '</div>' +
                 '<button onclick="netDiagCopy()" style="margin-top:8px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:6px 14px;">复制结果</button>';
         }
@@ -377,10 +413,55 @@
             };
             try { navigator.clipboard.writeText(t).then(ok, fallback); } catch (e) { fallback(); }
         }
+        // 候选地址字符串里取 ip 和端口：candidate:… 1 udp 优先级 IP 端口 typ srflx …
+        function netDiagParseCand(c, typ) {
+            let m = new RegExp(' (\\S+) (\\d+) typ ' + typ).exec(c || '');
+            return m ? { ip: m[1], port: +m[2] } : null;
+        }
+        // 开一个临时 RTCPeerConnection 收集候选地址，到点或收集完就结束。onCand(候选, 服务器地址) 里返回 true 表示够了
+        function netDiagGather(servers, ms, onCand) {
+            return new Promise(function (resolve) {
+                let pc = null, fin = false, t0 = performance.now();
+                let end = function () { if (fin) return; fin = true; clearTimeout(to); try { if (pc) pc.close(); } catch (e) { } resolve(); };
+                let to = setTimeout(end, ms);
+                try {
+                    pc = new RTCPeerConnection({ iceServers: servers });
+                    pc.createDataChannel('diag');
+                    pc.onicecandidate = function (e) {
+                        if (!e.candidate) { end(); return; }
+                        if (onCand(e.candidate.candidate || '', e.candidate.url || e.url || '', Math.round(performance.now() - t0))) end();
+                    };
+                    pc.createOffer().then(function (o) { return pc.setLocalDescription(o); }).catch(end);
+                } catch (e) { end(); }
+            });
+        }
+        function netDiagStunOne(name, host) {
+            let r = { name: name, host: host, ok: false, why: '没有返回地址' }, srv = [{ urls: 'stun:' + host }];
+            return netDiagGather(srv, 6000, function (c, url, ms) {
+                let a = netDiagParseCand(c, 'srflx');
+                if (a) { r.ok = true; r.why = ''; r.ms = ms; r.ip = a.ip; r.port = a.port; r.addr = a.ip + ':' + a.port; return true; }
+                return false;
+            }).then(function () { return r; });
+        }
+        // 网络类型：拿通的两个探路服务器放进同一个连接里，同一个本地端口分别问它们。
+        // 两边看到的公网端口一样（浏览器只会报出一个地址）→ 好连；不一样（报出两个）→ 对称型，难连
+        function netDiagNat(a, b) {
+            return new Promise(function (resolve) {
+                let seen = {}, n = 0;
+                netDiagGather([{ urls: 'stun:' + a.host }, { urls: 'stun:' + b.host }], 6000, function (c) {
+                    let x = netDiagParseCand(c, 'srflx');
+                    if (x) { let k = x.ip + ':' + x.port; if (!seen[k]) { seen[k] = 1; n++; } }
+                    return false;
+                }).then(function () {
+                    if (n === 0) resolve({ type: 'unknown', why: '再问一次没有拿到地址' });
+                    else resolve({ type: n === 1 ? 'easy' : 'hard', ports: Object.keys(seen) });
+                });
+            });
+        }
         function openNetDiag() {
             let run = { res: {}, done: false };
             netDiag = run;
-            showSysModal('联机诊断', '<div id="net-diag" style="text-align:left; font-size:13px; min-width:260px;"></div>', [{ label: '关闭', color: '#666' }]);
+            showSysModal('联机诊断', '<div id="net-diag" style="text-align:left; font-size:13px; min-width:280px; max-height:60vh; overflow-y:auto;"></div>', [{ label: '关闭', color: '#666' }]);
             netDiagRender();
             let set = function (k, r) { if (netDiag !== run) return; run.res[k] = r; netDiagRender(); };
             let now = function () { return performance.now(); };
@@ -400,31 +481,25 @@
                     p.on('error', function (e) { end({ ok: false, ms: Math.round(now() - t0), why: String((e && e.type) || '出错') }); });
                 });
             };
-            // 3、4. 探路（srflx）和中转（relay）：临时 RTCPeerConnection 收集候选地址，10 秒为限
-            let ice = function () {
-                return new Promise(function (resolve) {
-                    let t0 = now(), got = {}, pc = null, fin = false;
-                    let end = function () {
-                        if (fin) return; fin = true; clearTimeout(to); try { if (pc) pc.close(); } catch (e) { }
-                        set('stun', got.srflx !== undefined ? { ok: true, ms: got.srflx } : { ok: false, why: '没有返回地址' });
-                        set('turn', got.relay !== undefined ? { ok: true, ms: got.relay } : { ok: false, why: '没有返回地址' });
-                        resolve();
-                    };
-                    let to = setTimeout(end, 10000);
-                    try {
-                        pc = new RTCPeerConnection(PEER_ICE_CONFIG);
-                        pc.createDataChannel('diag');
-                        pc.onicecandidate = function (e) {
-                            if (!e.candidate) { end(); return; }
-                            let m = / typ (srflx|relay)/.exec(e.candidate.candidate || '');
-                            if (m && got[m[1]] === undefined) got[m[1]] = Math.round(now() - t0);
-                            if (got.srflx !== undefined && got.relay !== undefined) end();
-                        };
-                        pc.createOffer().then(function (o) { return pc.setLocalDescription(o); }).catch(end);
-                    } catch (e) { end(); }
+            // 3、4. 探路服务器每个单独测（同时测），再拿通的两个判断网络类型
+            let stun = function () {
+                return Promise.all(NET_DIAG_STUNS.map(function (s) { return netDiagStunOne(s[0], s[1]); })).then(function (list) {
+                    set('stun', { ok: list.some(function (x) { return x.ok; }), list: list });
+                    let good = list.filter(function (x) { return x.ok; });
+                    if (good.length < 2) { set('nat', { type: 'unknown', why: good.length ? '只有一个探路服务器通，没法对比' : '没有探路服务器通' }); return; }
+                    return netDiagNat(good[0], good[1]).then(function (r) { set('nat', r); });
                 });
             };
-            signal().then(ice).then(function () { if (netDiag !== run) return; run.done = true; netDiagRender(); });
+            // 5. 中转服务器：只放 TURN，看拿没拿到中转地址
+            let turn = function () {
+                let srv = PEER_ICE_CONFIG.iceServers.filter(function (s) { return /^turns?:/.test(s.urls); }), r = { ok: false, why: '没有返回地址' };
+                return netDiagGather(srv, 8000, function (c, url, ms) {
+                    let a = netDiagParseCand(c, 'relay');
+                    if (a) { r.ok = true; r.why = ''; r.ms = ms; r.addr = a.ip + ':' + a.port; return true; }
+                    return false;
+                }).then(function () { set('turn', r); });
+            };
+            signal().then(stun).then(turn).then(function () { if (netDiag !== run) return; run.done = true; netDiagRender(); });
         }
 
         function netLeaveRoom(quiet) {

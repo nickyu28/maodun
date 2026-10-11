@@ -1373,7 +1373,68 @@ async function enterExit(tab, key) {
             report('H27 余额不封顶；开无限只显示“无限”、不扣真实余额、不再把 money 改成 99999999；读档 mcoin<0 改成 0', bad.length === 0, bad.join(' / '));
         }
 
-                        //@@NEW@@
+                                if (want('C6c')) {
+            // C6c：联机诊断加细——每个探路服务器单独列名字/通不通/公网地址；两个通的看公网端口一样（好连）还是不一样（难连，对称型）；中转单独一项；大白话 + 复制
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const FAKE = `(function(){
+                window.__RTC0 = window.__RTC0 || window.RTCPeerConnection; window.__pcN = 0;
+                window.RTCPeerConnection = function (cfg) {
+                    let self = this, id = ++window.__pcN, base = 40000 + id * 10; this.cfg = cfg;
+                    this.createDataChannel = function () { }; this.close = function () { };
+                    this.createOffer = function () { return Promise.resolve({}); };
+                    this.setLocalDescription = function () {
+                        setTimeout(function () {
+                            let seen = {}, i = 0;
+                            (cfg.iceServers || []).forEach(function (s) {
+                                let u = String(s.urls), host = u.replace(/^(stun|turns?):/, '');
+                                if (/^stun:/.test(u)) {
+                                    let m = window.__stuns[host]; i++;
+                                    if (!m) return;
+                                    let port = window.__sym ? base + i : base, a = m + ' ' + port;
+                                    if (seen[a]) return; seen[a] = 1;
+                                    self.onicecandidate({ candidate: { candidate: 'candidate:1 1 udp 1686052607 ' + a + ' typ srflx raddr 0.0.0.0 rport 0', url: u } });
+                                } else if (window.__relay && !seen.relay) { seen.relay = 1; self.onicecandidate({ candidate: { candidate: 'candidate:2 1 udp 41885439 9.9.9.9 ' + (50000 + id) + ' typ relay raddr 0.0.0.0 rport 0', url: u } }); }
+                            });
+                            self.onicecandidate({ candidate: null });
+                        }, 40);
+                        return Promise.resolve();
+                    };
+                };
+                return true; })()`;
+            await T.eval(FAKE);
+            const run = async (stuns, sym, relay) => {
+                await T.eval(`window.__stuns = ${JSON.stringify(stuns)}; window.__sym = ${sym}; window.__relay = ${relay}; ${HIDE} openNetDiag(); true;`);
+                for (let i = 0; i < 100 && !(await T.eval('netDiag.done')); i++) await W(200);
+                return JSON.parse(await T.eval(`JSON.stringify({ text: netDiagText(), done: netDiag.done, nat: netDiag.res.nat, turn: netDiag.res.turn, verdict: netDiagVerdict() })`));
+            };
+            // 1. 小米、B站通，谷歌、Cloudflare 不通；好连；中转通
+            const a = await run({ 'stun.miwifi.com:3478': '1.2.3.4', 'stun.chat.bilibili.com:3478': '1.2.3.4' }, false, true);
+            if (!a.done || a.nat.type !== 'easy' || !a.turn.ok) bad.push('好连 ' + JSON.stringify([a.done, a.nat, a.turn]));
+            if (!/小米 stun\.miwifi\.com:3478：通　公网地址 1\.2\.3\.4:\d+/.test(a.text) || !/B站 stun\.chat\.bilibili\.com:3478：通　公网地址 1\.2\.3\.4:\d+/.test(a.text) || !/谷歌 stun\.l\.google\.com:19302：不通/.test(a.text) || !/Cloudflare[^\n]*：不通/.test(a.text)) bad.push('每个探路服务器一行 ' + a.text);
+            if (!/4\. 网络类型（好不好直连）：好连/.test(a.text) || !/5\. 中转服务器（TURN）：通，拿到了中转地址 9\.9\.9\.9:/.test(a.text) || !/好连的类型/.test(a.verdict)) bad.push('好连的文字 ' + a.text);
+            // 2. 公网端口不一样：难连（对称型）；中转通
+            const b = await run({ 'stun.miwifi.com:3478': '1.2.3.4', 'stun.chat.bilibili.com:3478': '1.2.3.4' }, true, true);
+            if (b.nat.type !== 'hard' || !/难连，对称型/.test(b.text) || !/对称型/.test(b.verdict)) bad.push('难连 ' + JSON.stringify(b.nat) + b.verdict);
+            // 3. 难连 + 中转也不通：话说重一点
+            const c = await run({ 'stun.miwifi.com:3478': '1.2.3.4', 'stun.l.google.com:19302': '1.2.3.4' }, true, false);
+            if (c.turn.ok || !/很可能连不上别人/.test(c.verdict) || !/5\. 中转服务器（TURN）：不通/.test(c.text)) bad.push('难连又没中转 ' + c.verdict);
+            // 4. 只有一个探路服务器通：网络类型测不出
+            const d = await run({ 'stun.miwifi.com:3478': '1.2.3.4' }, false, true);
+            if (d.nat.type !== 'unknown' || !/测不出来/.test(d.text)) bad.push('只通一个 ' + JSON.stringify(d.nat));
+            // 5. 一个都不通
+            const e = await run({}, false, false);
+            if (!/一个都不通/.test(e.text) || !/探路服务器一个都不通/.test(e.verdict)) bad.push('全不通 ' + e.verdict);
+            // 复制：剪贴板里是同一份文字
+            const copied = await T.eval(`(function(){ window.__clip = null; navigator.clipboard.writeText = function (t) { window.__clip = t; return Promise.resolve(); }; netDiagCopy(); return true; })()`); await W(300);
+            const cut = (t) => String(t).split('\n').slice(1).join('\n');   // 第一行有时间，不比
+            if (cut(await T.eval('window.__clip')) !== cut(await T.eval('netDiagText()')) || !(await T.eval('window.__clip'))) bad.push('复制的和显示的不一样');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('C6c 联机诊断：探路服务器每个单独列出、网络类型（好连/难连）、中转单独一项、大白话结论、能复制', bad.length === 0, bad.join(' / '));
+        }
+
+        //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 12 个模式
@@ -2069,22 +2130,24 @@ async function enterExit(tab, key) {
         }
 
         {
-            // C6b：大厅"联机诊断"——四项依次出"通/不通/用时"，最后一句结论，有"复制结果"；只读，不动游戏自己的连接
+            // C6b：大厅"联机诊断"——五项依次出结果（探路服务器每个单独一行），最后一句结论，有"复制结果"；只读，不动游戏自己的连接
             const bad = [];
             // 测试环境里游戏自己的连接是个一直失败重连的桩，先停掉它，测完看诊断有没有碰它（还应该是 null、没有连接），再连回去
             await A.eval(`${HIDE} window.__room0 = peerRoom; netLeaveRoom(true); Array.prototype.find.call(document.querySelectorAll('#lobby-tl button'), function (b) { return b.innerText === '联机诊断'; }).click(); true;`);
             let done = false;
             for (let i = 0; i < 100 && !done; i++) { await W(300); done = await A.eval(`!!netDiag && netDiag.done`); }
-            const r = JSON.parse(await A.eval(`JSON.stringify({ title: document.getElementById('sys-modal-title').innerText, rows: document.querySelectorAll('#net-diag > div').length,
+            const r = JSON.parse(await A.eval(`JSON.stringify({ title: document.getElementById('sys-modal-title').innerText, rows: document.querySelectorAll('#net-diag > div').length, stunRows: document.querySelectorAll('#net-diag > div[style*="padding:2px 0 2px 14px"]').length,
                 text: netDiagText(), copy: !!Array.prototype.find.call(document.querySelectorAll('#net-diag button'), function (b) { return b.innerText === '复制结果'; }),
                 same: peer === null && peerConns.length === 0 && !peerWant })`));
             const lines = r.text.split('\n');
             if (!done) bad.push('没测完');
-            if (r.title !== '联机诊断' || r.rows !== 5 || !r.copy) bad.push('界面 ' + JSON.stringify(r));
-            if (!/^1\. 联机组件加载：通/.test(lines[1]) || !lines.slice(1, 5).every((l) => /：(通|不通)/.test(l)) || !/^结论：./.test(lines[5])) bad.push('结果 ' + r.text);
+            if (r.title !== '联机诊断' || r.rows !== 11 || r.stunRows !== 5 || !r.copy) bad.push('界面 ' + JSON.stringify(r));
+            // 1 组件、2 牵线、3 探路（下面 5 个服务器各一行）、4 网络类型、5 中转，最后一行结论
+            if (!/^1\. 联机组件加载：通/.test(lines[1]) || !/^2\. 牵线服务器：(通|不通)/.test(lines[2]) || !/^3\. 探路服务器/.test(lines[3]) || !/^4\. 网络类型/.test(lines[9]) || !/^5\. 中转服务器/.test(lines[10]) || !/^结论：./.test(lines[11])) bad.push('结果 ' + r.text);
+            ['小米 stun.miwifi.com:3478', 'B站 stun.chat.bilibili.com:3478'].forEach((n) => { if (r.text.indexOf(n + '：') < 0) bad.push('少了 ' + n); });
             if (!r.same) bad.push('动了游戏自己的连接');
             await A.eval(`${HIDE} netJoinRoom(window.__room0); true;`);
-            report('C6b 联机诊断四项都有结果和结论，能复制，不动游戏连接', bad.length === 0, bad.length ? bad.join(' / ') : lines.slice(1).join(' | '));
+            report('C6b 联机诊断五项都有结果和结论（探路服务器每个一行），能复制，不动游戏连接', bad.length === 0, bad.length ? bad.join(' / ') : lines.slice(1).join(' | '));
         }
 
         {
