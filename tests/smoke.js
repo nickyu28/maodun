@@ -25,7 +25,8 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const EXPECT_GEOMETRY_LEAK = false;   // D1 做完了：几何体/贴图不增长必须通过
-// 调试用：SMOKE_ONLY=正则 只跑名字对得上的"本批新增"那一段检查（其余检查整个跳过），比如 SMOKE_ONLY='N21|R1'
+// 快速档：SMOKE_ONLY=正则 只跑名字对得上的那几项检查（其余整个跳过），比如 SMOKE_ONLY='N21|R1'；总会先跑两项启动检查（电脑、触屏设备）。
+// 全量：不设 SMOKE_ONLY。每个提交跑快速档，一批做完、推送前跑一次全量（CLAUDE.md 里有写）。
 const ONLY = process.env.SMOKE_ONLY ? new RegExp(process.env.SMOKE_ONLY) : null;
 const want = (n) => !ONLY || ONLY.test(n);
 
@@ -505,6 +506,17 @@ async function enterExit(tab, key) {
         report('启动进大厅', lobby && A.errors.length === 0, A.errors.slice(0, 3).join(' / '));
 
         // 2a. 新增的检查（每项自己开标签页，互不影响；SMOKE_ONLY 只跑这一段）
+        // 快速档（T1）：只要设了 SMOKE_ONLY，就先固定跑两项启动检查——上面那项（电脑）和这项（触屏设备：0 报错、进大厅）——再跑跟改动相关的检查；
+        // 不设 SMOKE_ONLY 是全量，触屏启动在后面的 B6 里测，这里不重复
+        if (ONLY) {
+            const bad = [];
+            const M = await openTab(chrome, url, { mobile: true });
+            const s0 = JSON.parse(await M.eval(`JSON.stringify({ ctl: gState.control, lobby: !document.getElementById('screen-lobby').classList.contains('hidden'), id: gState.id })`));
+            if (M.errors.length) bad.push('加载时报错 ' + M.errors.length + ' 个：' + M.errors.slice(0, 2).join(' / '));
+            if (s0.ctl !== 'pad' || !s0.lobby || !s0.id) bad.push('没进大厅 ' + JSON.stringify(s0));
+            await M.close();
+            report('启动（触屏设备）0 报错、进大厅', bad.length === 0, bad.join(' / '));
+        }
                 if (want('N21')) {
             // 夜间 #21：惊魂夜缺口真的开了；按住 E 彩弹占地一直喷（推推乐那种一次一下的不变）；双人队友的手跟着变色
             const bad = [];
