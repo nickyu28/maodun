@@ -692,6 +692,48 @@ async function enterExit(tab, key) {
             report('M4 超燃角色熟练度：记场数/胜场；赢 10 场熟手称号、30 场金环外观、100 场大师称号；存档带着', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('M5')) {
+            // M5：加成图鉴——全部加成卡（现在 66 张）出现在你的三选一里就点亮；选过几次、选了赢了几次；全点亮有「超燃百科」称号；存档带着
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){ let out = { total: BLAZE_PERKS.length };
+                gState.perkBook = null; gState.blazeMastery = null;
+                blazeBegin(blazePlan([{ id: gState.id, key: 'bow' }]), gState.id, false);
+                blaze.score = [1, 0]; blaze.phase = 'perk'; blaze.me.pickedPerk = false; blaze.me.perkDraw = null;
+                let draw = blazePerkDraw(blaze.me); out.drawN = draw.length;
+                out.lit1 = perkBookLit(); out.seenDrawn = draw.every(function (o) { return perkBookState().seen[o.id]; });
+                let id = draw[0].id; blazePickPerk(id);
+                out.pick = perkBookState().pick[id];
+                blaze.score = [BLAZE.roundsToWin - 1, 0]; blazeAwardRound(blaze.me.team);   // 赢了这一整场
+                out.win = perkBookState().win[id];
+                out.noPickWin = Object.keys(perkBookState().win).length;
+                blazeExit();
+                // 换一批也会点亮新的
+                blazeBegin(blazePlan([{ id: gState.id, key: 'sword' }]), gState.id, false);
+                blaze.phase = 'perk'; blaze.me.perkDraw = null; blaze.me.perkRerollsLeft = 1; blazePerkDraw(blaze.me); let n0 = perkBookLit(); blazePerkReroll(); out.reroll = perkBookLit() >= n0;
+                blazeExit();
+                // 页面：已点亮的有字、没点亮的是问号；专属卡带角色名
+                perkBookSee(BLAZE_PERKS.filter(function (o) { return o.only === 'tank'; }));
+                openPerkBook(); let html = document.getElementById('sys-modal-text').innerHTML;
+                out.q = (html.match(/？/g) || []).length; out.lit = perkBookLit(); out.tag = /抗伤猫盾/.test(html); out.count = /选过 1 次 · 选了赢了 1 次/.test(html);
+                out.noTitle = !titleOwned('bzbook');
+                // 存档
+                saveProgress(); let saved = JSON.stringify(gState.perkBook); gState.perkBook = null; loadProgress(gState.id); out.reload = JSON.stringify(gState.perkBook) === saved;
+                perkBookSee(BLAZE_PERKS); out.title = titleOwned('bzbook') && TITLES.bzbook.name === '超燃百科';
+                return JSON.stringify(out); })()`));
+            if (r.total < 63) bad.push('卡少了 ' + r.total);
+            if (!r.drawN || !r.seenDrawn || r.lit1 !== r.drawN) bad.push('三选一出现的没点亮 ' + JSON.stringify([r.drawN, r.lit1, r.seenDrawn]));
+            if (r.pick !== 1 || r.win !== 1 || r.noPickWin !== 1) bad.push('选过/选了赢了 记得不对 ' + JSON.stringify([r.pick, r.win, r.noPickWin]));
+            if (!r.reroll) bad.push('换一批后图鉴数变少了');
+            if (r.q + r.lit !== r.total || !r.tag || !r.count) bad.push('图鉴页面不对 ' + JSON.stringify([r.q, r.lit, r.tag, r.count]));
+            if (!r.noTitle) bad.push('没点满就有称号了');
+            if (!r.reload) bad.push('存档读回来不一样');
+            if (!r.title) bad.push('点满没拿到「超燃百科」');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('M5 超燃加成图鉴：出现在三选一里就点亮、记选过/选了赢了次数、点满有称号、存档带着', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];

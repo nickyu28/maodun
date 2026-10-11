@@ -464,7 +464,8 @@
             paint: { name: '颜料桶', col: '#f48fb1', buy: 80 },
             fish: { name: '小鱼干爱好者', col: '#ffcc80', buy: 120 },
             shield: { name: '猫盾本盾', col: '#fff176', buy: 200 },
-            legend: { name: '传说', col: '#ff5252', buy: 400 }
+            legend: { name: '传说', col: '#ff5252', buy: 400 },
+            bzbook: { name: '超燃百科', col: '#ff7043', book: 1 }
         };
         function achState() {
             if (!gState.ach || typeof gState.ach !== 'object') gState.ach = { c: {}, done: {}, got: {}, modes: {} };
@@ -565,6 +566,7 @@
                         let right = on ? '<span style="font-size:12px; color:#66bb6a;">戴着</span>' :
                             own ? '<button onclick="titleWear(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#7e57c2; color:#fff; border:none;">戴上</button>' :
                                 T.buy ? '<button onclick="titleBuy(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#e6a23c; color:#fff; border:none;">' + coinBadgeHtml(T.buy, 13) + '</button>' :
+                                    T.book ? '<span style="font-size:11px; color:#9e9e9e;">超燃加成图鉴点满送（' + perkBookLit() + '/' + BLAZE_PERKS.length + '）</span>' :
                                     T.bz ? '<span style="font-size:11px; color:#9e9e9e;">' + BLAZE_CHARS[T.bz].name + '赢 ' + T.need + ' 场送（' + Math.min(T.need, blazeMasteryOf(T.bz).w) + '/' + T.need + '）</span>' :
                                         '<span style="font-size:11px; color:#9e9e9e;">成就「' + ACH_LIST.filter(function (a) { return a.id === T.ach; })[0].name + '」送</span>';
                         return '<div style="display:flex; align-items:center; gap:8px; padding:6px 4px; border-top:1px solid #eee;">' +
@@ -932,6 +934,59 @@
         function blazeRoundNo() { return blaze ? (blaze.score[0] + blaze.score[1] + 1) : 1; }
 
         // 单数回合给功能卡，偶数回合给数值卡。
+        // ── 加成图鉴（M5）──
+        // 63 张加成卡：出现在你的三选一（或乱斗货架）里就点亮，不用选；没出现过显示问号。
+        // 每张记：选过几次，选了赢了几次（选过这张的那一整场赢了算一次）。全部点亮送称号「超燃百科」。
+        function perkBookState() {
+            if (!gState.perkBook || typeof gState.perkBook !== 'object') gState.perkBook = { seen: {}, pick: {}, win: {} };
+            ['seen', 'pick', 'win'].forEach(function (k) { if (!gState.perkBook[k]) gState.perkBook[k] = {}; });
+            return gState.perkBook;
+        }
+        function perkBookLit() { let b = perkBookState(); return BLAZE_PERKS.filter(function (o) { return b.seen[o.id]; }).length; }
+        function perkBookSee(list) {
+            if (gState.tutorial) return;
+            let b = perkBookState(), fresh = 0;
+            (list || []).forEach(function (o) { if (o && o.id && !b.seen[o.id]) { b.seen[o.id] = 1; fresh++; } });
+            if (!fresh) return;
+            if (perkBookLit() >= BLAZE_PERKS.length) {
+                if (!gState.titles) gState.titles = {};
+                if (!gState.titles.bzbook) {
+                    gState.titles.bzbook = 1;
+                    setTimeout(function () { blazeFlash('解锁称号「超燃百科」'); sfxChime(2); }, 1800);
+                    roomHello();
+                }
+            }
+            saveProgress();
+        }
+        function perkBookPick(id) {
+            if (gState.tutorial) return;
+            let b = perkBookState();
+            b.seen[id] = 1; b.pick[id] = (b.pick[id] || 0) + 1;
+            if (blaze) { blaze.bookPicks = blaze.bookPicks || {}; blaze.bookPicks[id] = 1; }
+            saveProgress();
+        }
+        function perkBookEnd(won) {
+            if (!blaze || !blaze.bookPicks) return;
+            if (won) { let b = perkBookState(); Object.keys(blaze.bookPicks).forEach(function (id) { b.win[id] = (b.win[id] || 0) + 1; }); saveProgress(); }
+            blaze.bookPicks = null;
+        }
+        function openPerkBook() {
+            let b = perkBookState();
+            let cells = BLAZE_PERKS.map(function (o) {
+                if (!b.seen[o.id]) {
+                    return '<div style="background:#eceff1; border-radius:6px; padding:8px 6px; text-align:center; color:#b0bec5; font-size:20px;">？</div>';
+                }
+                let tag = o.only ? '<span style="font-size:10px; color:#fff; background:' + BLAZE_CHARS[o.only].css + '; border-radius:3px; padding:0 4px; margin-right:4px;">' + BLAZE_CHARS[o.only].name + '</span>' : '';
+                return '<div style="background:#fff8e1; border:1px solid #ffe082; border-radius:6px; padding:6px 7px; text-align:left;">' +
+                    '<div style="font-size:12px; color:#444; line-height:1.4;">' + tag + o.label + '</div>' +
+                    '<div style="font-size:11px; color:#999; margin-top:3px;">选过 ' + (b.pick[o.id] || 0) + ' 次 · 选了赢了 ' + (b.win[o.id] || 0) + ' 次</div></div>';
+            }).join('');
+            showSysModal('加成图鉴 ' + perkBookLit() + '/' + BLAZE_PERKS.length,
+                '<div style="font-size:12px; color:#777; margin-bottom:6px;">在选加成时出现过的卡会点亮，全点亮有称号。</div>' +
+                '<div style="max-height:56vh; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:6px;">' + cells + '</div>',
+                [{ label: '关闭', color: '#666' }]);
+        }
+
         function blazePerkKindFor(round) { return (round % 2 === 1) ? 'func' : 'stat'; }
 
         // 这些常量是门槛、周期或计数，随机强化卡不能拿它们乘 1.5
@@ -999,6 +1054,7 @@
             }
             a.perkSeen = hist.concat([out.map(function (o) { return o.id; })]).slice(-BLAZE.perkNoRepeat);
             a.perkDraw = out;
+            if (a.isPlayer) perkBookSee(out);
             return out;
         }
 
@@ -1018,6 +1074,7 @@
         // 买到/拿到一张牌并广播。「奇遇」（lucky）不能直接 blazeApplyPerk——它在 blazeApplyPerkBody 里没有分支，
         // 直接套等于白花钱；要先随机抽一张别的牌再按 ×1.5 套上（跟局间选牌那条路一样）。（B2，重做夜间 PR #12）
         function blazeApplyPerkNet(a, id) {
+            if (blaze && a === blaze.me) perkBookPick(id);
             if (id === 'lucky') {
                 let rolled = blazeRollLucky(a);
                 blazeTakeLucky(a, rolled);
@@ -1083,6 +1140,7 @@
                 out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
             }
             blaze.ffaDraw = out;
+            perkBookSee(out);
             return out;
         }
 
@@ -1095,6 +1153,7 @@
                 out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
             }
             blaze.ffaFree = out;
+            perkBookSee(out);
             return out;
         }
 

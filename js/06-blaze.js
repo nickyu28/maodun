@@ -503,6 +503,7 @@
             if (!blaze || blaze.masteryDone || !blaze.me) return;
             blaze.masteryDone = true;
             blazeMasteryAdd(blaze.me.key, !!won);
+            perkBookEnd(!!won);
         }
         function blazeGoldKeys() { return BLAZE_ORDER.filter(function (k) { return blazeMasteryOf(k).w >= BLAZE_MASTERY_AT.gold; }); }
         function blazeGoldOf(id) {   // 别人的：看他房间心跳里报的
@@ -4273,11 +4274,13 @@
                 let pick = opts[Math.floor(Math.random() * opts.length)];
                 a.pickedPerk = true;
                 if (pick.id === 'lucky') {
+                    if (a.isPlayer) perkBookPick('lucky');
                     let rolled = blazeRollLucky(a);
                     blazeTakeLucky(a, rolled);
                     blazeNetEv({ ev: 'perk', i: a.idx, id: 'lucky', r: rolled });
                     return;
                 }
+                if (a.isPlayer) perkBookPick(pick.id);
                 blazeApplyPerk(a, pick.id);
                 blazeNetEv({ ev: 'perk', i: a.idx, id: pick.id });
             });
@@ -4291,6 +4294,7 @@
         function blazePickPerk(id) {
             if (!blaze || blaze.phase !== 'perk' || !blaze.me || blaze.me.pickedPerk) return;
             if (id === 'lucky') {
+                perkBookPick('lucky');
                 let rolled = blazeRollLucky(blaze.me);
                 blazeTakeLucky(blaze.me, rolled);
                 blaze.me.pickedPerk = true;
@@ -4301,6 +4305,7 @@
                 setTimeout(function () { blazeFlash(luckyMsg); }, 80);
                 return;
             }
+            perkBookPick(id);
             blazeApplyPerk(blaze.me, id);
             blaze.me.pickedPerk = true;
             blazeNetEv({ ev: 'perk', i: blaze.me.idx, id: id });
