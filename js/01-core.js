@@ -1100,6 +1100,8 @@
                     let p = entities.find(e => e.userData.type === 'ai' && e.userData.name === msg.sender);
                     if (p) { p.position.x = msg.x; p.position.y = msg.y; p.position.z = msg.z; p.userData.isRealPlayer = true; p.userData.lastSync = performance.now(); if (p.userData.aiTakeover) { p.userData.aiTakeover = false; gState.peerState[msg.sender] = 'active'; } }
                 }
+            } else if (msg.type === 'HUNT_REVIVE') {
+                huntOnRevive(msg);
             } else if (msg.type === 'HUNT_BIG_REQ') {
                 huntBigOnReq(msg);
             } else if (msg.type === 'HUNT_BIG_ACK') {

@@ -3518,6 +3518,54 @@
             }
         }
 
+        // ── 医疗包、肾上腺素、返魂药水（H24）──
+        const HUNT_M = 5;   // 1 米 = 5 个单位（一格 24 ≈ 5 米）
+        const HUNT_MED_HEAL = 15, HUNT_STIM_SECS = 20, HUNT_REVIVE_RANGE = 6 * HUNT_M, HUNT_REVIVE_SECS = 3, HUNT_REVIVE_HP = 30;
+        // 倒下的队友：真人（队友告诉过我他倒了，身体停在他倒下的地方）或 AI（血量 ≤ 0），6 米内最近的一个
+        function huntReviveTarget() {
+            let best = null, bd = HUNT_REVIVE_RANGE + 1;
+            entities.forEach(function (e) {
+                if (e.userData.type !== 'ai') return;
+                let human = e.userData.isRealPlayer, down = human ? gState.peerState[e.userData.name] === 'down' : e.userData.hp <= 0;
+                if (!down) return;
+                let d = e.position.distanceTo(camera.position);
+                if (d <= HUNT_REVIVE_RANGE && d < bd) { bd = d; best = { e: e, id: e.userData.name, human: !!human }; }
+            });
+            return best;
+        }
+        // 手上拿着返魂药水、旁边有倒下的队友、按住互动 3 秒 → 把他救起来（30 血），药水用掉。只能给队友用
+        function huntReviveTick(dt, sel, held) {
+            let t = (sel && sel.type === 'revive' && gState.selectedSlot <= 2) ? huntReviveTarget() : null;
+            if (!t || !held) { if (gState.reviveT > 0) { gState.reviveT = 0; let b = document.getElementById('progress-bg'); if (b && !actionTarget) b.style.display = 'none'; } return; }
+            gState.reviveT = (gState.reviveT || 0) + dt;
+            let b = document.getElementById('progress-bg'); if (b && !actionTarget) { b.style.display = 'block'; document.getElementById('progress-fill').style.width = Math.min(100, gState.reviveT / HUNT_REVIVE_SECS * 100) + '%'; }
+            if (gState.reviveT < HUNT_REVIVE_SECS) return;
+            gState.reviveT = 0; if (b && !actionTarget) b.style.display = 'none';
+            gState.inv[gState.selectedSlot] = null; updateHUD();
+            if (t.human) bc.postMessage({ type: 'HUNT_REVIVE', target: t.id, sender: gState.id });
+            else { t.e.userData.hp = HUNT_REVIVE_HP; }
+            blazeFlash('把 ' + (t.human ? dispNameText(t.id) : '队友') + ' 救起来了');
+        }
+        // 被救的人这边：只认自己队里真人发来的（发送者以连接为准，房主转发时已经改写成真实的）
+        function huntOnRevive(m) {
+            if (m.target !== gState.id || !isPlaying || !gState.isDead || gState.hasLeft) return;
+            if (!(gState.team || []).some(function (x) { return x && !x.isAI && x.id === m.sender && x.id !== gState.id; })) return;
+            gState.isDead = false; gState.hp = Math.min(HUNT_REVIVE_HP, effectiveMaxHp());
+            camera.position.copy(gState.deathPos || camera.position);
+            gState.spectating = null; gState.spectateIdx = -1; hideDeathUI();
+            bc.postMessage({ type: 'PLAYER_REVIVED', sender: gState.id, target: '*' });
+            gState.needsLock = true; updateHUD();
+            blazeFlash(dispNameText(m.sender) + ' 把你救起来了');
+        }
+        // 按住的状态：engine 每帧会把 keys['f'] / keys['lmb'] / touchBtn.interact 当一次点击吃掉，按住要另外记
+        let huntHold = { f: false, lmb: false, touch: false };
+        window.addEventListener('keydown', function (e) { if (e.key && e.key.toLowerCase() === 'f') huntHold.f = true; });
+        window.addEventListener('keyup', function (e) { if (e.key && e.key.toLowerCase() === 'f') huntHold.f = false; });
+        window.addEventListener('mousedown', function (e) { if (e.button === 0) huntHold.lmb = true; });
+        window.addEventListener('mouseup', function (e) { if (e.button === 0) huntHold.lmb = false; });
+        window.addEventListener('blur', function () { huntHold.f = false; huntHold.lmb = false; huntHold.touch = false; });
+        function huntHeld() { return huntHold.f || huntHold.lmb || huntHold.touch; }
+
         // ── 角色技能（H23）──
         const HUNT_SKILL = {
             yellow: { name: '冲刺', dur: 2, cd: 40, speedMul: 2 },
@@ -3542,7 +3590,7 @@
             { id: 'speed', n: '加速药剂', v: 50000, secs: 20, mul: 1.5 },
             { id: 'spring', n: '弹簧鞋', v: 50000, secs: 30, mul: 2 }
         ];
-        const GODCAT_V = 120000, HUNT_M = 5;   // HUNT_M：1 米 = 5 个单位（一格 24 ≈ 5 米）
+        const GODCAT_V = 120000;
         function huntPotionRoll(boxType, loot, r1, r2) {
             let p = HUNT_POTION_P[boxType]; if (!p || huntIsBig(loot)) return null;
             return r1 < p ? HUNT_POTIONS[Math.floor(r2 * HUNT_POTIONS.length) % HUNT_POTIONS.length] : null;
@@ -3920,7 +3968,7 @@
             huntRender(dt);
 
             let now = Date.now();
-            if (now - lastSyncTime > 50) { bc.postMessage({ type: 'POS_SYNC', sender: gState.id, target: '*', x: camera.position.x, y: camera.position.y, z: camera.position.z }); lastSyncTime = now; }
+            if (now - lastSyncTime > 50) { let pa = playerAnchor(); bc.postMessage({ type: 'POS_SYNC', sender: gState.id, target: '*', x: pa.x, y: pa.y, z: pa.z }); lastSyncTime = now; }
         }
 
         let huntSelf = null;
@@ -4041,6 +4089,17 @@
                 return;
             }
 
+            if (useTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'stim') {
+                keys['rmb'] = false; touchBtn.ability = false;
+                if (gState.stimT > 0) blazeFlash('肾上腺素还在起效');
+                else {
+                    selectedInv.uses--; gState.stimT = HUNT_STIM_SECS;
+                    if (selectedInv.uses <= 0) gState.inv[gState.selectedSlot] = null;
+                    updateHUD(); blazeFlash('打了一针肾上腺素，' + HUNT_STIM_SECS + ' 秒内跑步不耗体力');
+                }
+                return;
+            }
+
             if (useTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'badge') {
                 keys['rmb'] = false; touchBtn.ability = false;
                 if (selectedInv.uses > 0) {
@@ -4098,7 +4157,8 @@
             let isRunning = (keys['shift'] || padAutoRun()) && isMoving && stamina > 0;
             let drainMult = gState.debuff.type === 2 ? 2.5 : 1.0;
             if (isRunning && gState.tutorial) gState.tutorial.runT += dt;
-            if (isRunning) { baseMoveSpeed *= staminaBoostMul(stamina, 1.6); stamina = Math.max(0, stamina - 28 * drainMult * dt); } else { stamina = Math.min(100, stamina + 16 * dt); } document.getElementById('stamina-fill').style.width = stamina + '%';
+            if (gState.stimT > 0) gState.stimT -= dt;
+            if (isRunning) { baseMoveSpeed *= staminaBoostMul(stamina, 1.6); if (!(gState.stimT > 0)) stamina = Math.max(0, stamina - 28 * drainMult * dt); } else { stamina = Math.min(100, stamina + 16 * dt); } document.getElementById('stamina-fill').style.width = stamina + '%';
             let staminaTxt = document.getElementById('stamina-num'); if (staminaTxt) staminaTxt.innerText = Math.floor(stamina) + '/100';
 
             let isMovingAllowed = (actionTarget !== 'med' && actionTarget !== 'time_stop');
@@ -4108,7 +4168,7 @@
                     actionTimer += dt; document.getElementById('progress-bg').style.display = 'block';
                     let needed = actionTarget === 'med' ? 4 : 1.5; document.getElementById('progress-fill').style.width = (actionTimer / needed) * 100 + '%';
                     if (actionTimer >= needed) {
-                        if (actionTarget === 'med') gState.hp = Math.min(effectiveMaxHp(), gState.hp + 40);
+                        if (actionTarget === 'med') gState.hp = Math.min(effectiveMaxHp(), gState.hp + HUNT_MED_HEAL);
                         if (actionTarget === 'time_stop') { gState.timeStop = 30.0; document.getElementById('time-stop-overlay').style.display = 'block'; }
                         let currentItem = gState.inv[gState.selectedSlot]; if (currentItem) { currentItem.uses--; if (currentItem.uses <= 0) gState.inv[gState.selectedSlot] = null; }
                         actionTimer = 0; actionTarget = null; document.getElementById('progress-bg').style.display = 'none'; updateHUD();
@@ -4132,6 +4192,7 @@
                 gState.inSafeZone = inSafeZone;
             }
 
+            huntReviveTick(dt, selectedInv, huntHeld());
             let executeClick = keys['f'] || keys['lmb'] || touchBtn.interact;
             if (executeClick) { keys['f'] = false; keys['lmb'] = false; touchBtn.interact = false; }
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); let interactions = raycaster.intersectObjects([...chests, ...groundItems, ...entities]);

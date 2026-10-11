@@ -171,7 +171,7 @@
             gState.safeOpenedThisGame = false; gState.backpackOpen = false; gState.largeMapOpen = false; gState.monstersSpawned = false; gState.inSafeZone = true; gState.needsLock = false; gState.pAtkCd = 0; gState.timeStop = 0;
             gState.debuff = { type: 0, timer: 0, cooldown: 0 };
             gState.maxHp = 100; gState.hp = effectiveMaxHp(); huntMaxHpSync(true);
-            gState.huntHpCut = 0; gState.speedT = 0; gState.springT = 0;   // H22：血量上限扣减、加速药剂、弹簧鞋的剩余秒数，每局归零
+            gState.huntHpCut = 0; gState.speedT = 0; gState.springT = 0; gState.stimT = 0; gState.reviveT = 0;   // H22：血量上限扣减、加速药剂、弹簧鞋的剩余秒数，每局归零
             gState.huntLuck = 0;   // H21：运气层数，每局从 0 开始，不存档
             huntLure = null;
             huntLureFx.forEach(function (f) { scene.remove(f.o); }); huntLureFx = [];
@@ -1463,7 +1463,8 @@
                     '多了一个神秘配方',
                     '寻宝队开箱有时会开出药水（回血、加速、跳得更高），直接用掉',
                     '有的图里，桌子上或顶楼的角落藏着猫神护身符',
-                    '寻宝队角色技能改了：电脑按 R 放（右键只用道具），平板有“技能”按钮；绿色 8 秒每秒回 5 血，黄色 2 秒内跑得快一倍、不受负重影响；快捷栏旁有冷却图标'
+                    '寻宝队角色技能改了：电脑按 R 放（右键只用道具），平板有“技能”按钮；绿色 8 秒每秒回 5 血，黄色 2 秒内跑得快一倍、不受负重影响；快捷栏旁有冷却图标',
+                    '医疗包每次回 15 血；肾上腺素能用 3 次，每次 20 秒内跑步不耗体力；返魂药水可以救队友：走到倒下的队友身边，按住互动 3 秒，救起来 30 血'
                 ]
             },
             {

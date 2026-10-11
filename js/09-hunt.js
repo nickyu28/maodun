@@ -913,6 +913,10 @@
         }
 
         setupJoy('joystick-left', 'knob-left', tMove);
+        (function () {
+            let ib = document.getElementById('interact-btn');
+            if (ib) { ib.addEventListener('touchstart', function () { huntHold.touch = true; }, { passive: true }); ['touchend', 'touchcancel'].forEach(function (t) { ib.addEventListener(t, function () { huntHold.touch = false; }, { passive: true }); }); }
+        })();
         setupBtn('jump-btn', 'jump'); setupBtn('interact-btn', 'interact'); setupBtn('ability-btn', 'ability'); setupBtn('skill-btn', 'skill');
 
         // 平板：惊魂夜和超燃都是靠鼠标左右键 + 键盘触发的，触屏没有这些，

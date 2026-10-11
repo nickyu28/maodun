@@ -1155,6 +1155,74 @@ async function enterExit(tab, key) {
             report('H23 角色技能：绿 8 秒每秒 5 血、黄 2 秒移速 ×2 无视负重；电脑 R、右键只用道具；平板技能按钮；冷却图标', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H24')) {
+            // H24：医疗包每次回 15；肾上腺素 3 次、每次 20 秒内跑步不耗体力；返魂药水只能给倒下的队友（6 米内、按住互动 3 秒、救起来 30 血，真人走 HUNT_REVIVE）
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            // 医疗包
+            await T.eval(`gState.hp = 50; gState.inv[0] = Object.assign({}, shopItems['医疗包']); selectSlot(0); true;`);
+            for (let i = 0; i < 60 && (await T.eval('gState.inv[0] && gState.inv[0].uses')) === 5; i++) await W(300);
+            const med = JSON.parse(await T.eval(`JSON.stringify([gState.hp, gState.inv[0] && gState.inv[0].uses, HUNT_MED_HEAL])`));
+            if (med[0] !== 65 || med[1] !== 4 || med[2] !== 15) bad.push('医疗包 ' + med.join());
+            // 肾上腺素：打一针，跑 1 秒体力不降；再打不扣次数；3 次后没了
+            await T.eval(`gState.inv[0] = null; gState.inv[1] = Object.assign({}, shopItems['肾上腺素']); selectSlot(1); stamina = 100; keys['rmb'] = true; true;`); await W(400);
+            const s1 = JSON.parse(await T.eval(`JSON.stringify([gState.inv[1].uses, gState.stimT])`));
+            await T.eval(`keys['rmb'] = true; true;`); await W(400);
+            const s1b = await T.eval('gState.inv[1].uses');
+            await T.eval(`keys['shift'] = true; keys['w'] = true; true;`); await W(1200);
+            const st1 = await T.eval('stamina');
+            await T.eval(`keys['shift'] = false; keys['w'] = false; gState.stimT = 0; stamina = 100; true;`);
+            await T.eval(`keys['shift'] = true; keys['w'] = true; true;`); await W(1200);
+            const st2 = await T.eval('stamina');
+            await T.eval(`keys['shift'] = false; keys['w'] = false; stamina = 100; true;`);
+            if (s1[0] !== 2 || !(s1[1] > 15 && s1[1] <= 20) || s1b !== 2) bad.push('肾上腺素 ' + s1.join() + ' / ' + s1b);
+            if (st1 < 99 || st2 > 90) bad.push('体力：有针 ' + st1 + '，没针 ' + st2);
+            for (let i = 0; i < 2; i++) { await T.eval(`gState.stimT = 0; keys['rmb'] = true; true;`); await W(400); }
+            if ((await T.eval('gState.inv[1]')) !== null) bad.push('用完 3 次还在');
+            // 返魂药水
+            const mk = `(function(){ let m = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial()); m.position.copy(camera.position); m.position.y -= 4; m.userData = { type: 'ai', name: 'NAME', hp: HP, hasRev: false, isRealPlayer: REAL }; scene.add(m); entities.push(m); return m; })()`;
+            await T.eval(`gState.inv[2] = Object.assign({}, shopItems['返魂药水']); selectSlot(2); window.__sent = []; (function(){ let b = bc.postMessage.bind(bc); window.__bp = b; bc.postMessage = function (m) { window.__sent.push(m); return b(m); }; })(); true;`);
+            // 旁边没人倒下：按住也没用
+            await T.eval(`huntHold.f = true; true;`); await W(1500);
+            if (!(await T.eval('!!gState.inv[2]'))) bad.push('没人倒下药水却用掉了');
+            // 倒下的 AI 队友在 6 米外：不行；挪到 6 米内：按住 3 秒救起来 30 血
+            await T.eval(`window.__ai = ${mk.replace('NAME', 'ai-mate').replace('HP', '0').replace('REAL', 'false')}; window.__ai.position.x += 40; true;`); await W(1200);
+            if (!(await T.eval('!!gState.inv[2]'))) bad.push('6 米外也能救');
+            await T.eval(`window.__ai.position.x = camera.position.x + 20; true;`);
+            for (let i = 0; i < 80 && (await T.eval('!!gState.inv[2]')); i++) await W(250);
+            const ai = JSON.parse(await T.eval(`JSON.stringify([window.__ai.userData.hp, gState.inv[2]])`));
+            await T.eval(`huntHold.f = false; true;`);
+            if (ai[0] !== 30 || ai[1] !== null) bad.push('救 AI 队友 ' + JSON.stringify(ai));
+            // 真人队友倒下（peerState）：发 HUNT_REVIVE
+            await T.eval(`gState.team = [{ id: gState.id, isLeader: true, isAI: false }, { id: 'peer-q', isAI: false }]; gState.peerState['peer-q'] = 'down'; window.__hum = ${mk.replace('NAME', 'peer-q').replace('HP', '100').replace('REAL', 'true')}; window.__hum.position.x += 12;
+                gState.inv[2] = Object.assign({}, shopItems['返魂药水']); selectSlot(2); window.__sent.length = 0; huntHold.f = true; true;`);
+            for (let i = 0; i < 80 && (await T.eval('!!gState.inv[2]')); i++) await W(250);
+            await T.eval(`huntHold.f = false; true;`);
+            const sent = await T.eval(`window.__sent.filter(function (m) { return m.type === 'HUNT_REVIVE'; })`);
+            if (sent.length !== 1 || sent[0].target !== 'peer-q' || sent[0].sender === undefined) bad.push('真人没发 HUNT_REVIVE ' + JSON.stringify(sent));
+            // 被救的一方
+            const rv = JSON.parse(await T.eval(`(function(){
+                let o = {}, me = gState.id;
+                gState.isDead = true; gState.deathPos = camera.position.clone(); gState.hp = 0;
+                bc.onmessage({ data: { type: 'HUNT_REVIVE', target: me, sender: 'stranger' } }); o.stranger = gState.isDead;
+                bc.onmessage({ data: { type: 'HUNT_REVIVE', target: 'someone-else', sender: 'peer-q' } }); o.wrongTarget = gState.isDead;
+                bc.onmessage({ data: { type: 'HUNT_REVIVE', target: me, sender: 'peer-q' } }); o.alive = !gState.isDead; o.hp = gState.hp;
+                bc.onmessage({ data: { type: 'HUNT_REVIVE', target: me, sender: 'peer-q' } }); o.notDeadIgnored = gState.hp;
+                return JSON.stringify(o); })()`));
+            if (rv.stranger !== true || rv.wrongTarget !== true || rv.alive !== true || rv.hp !== 30 || rv.notDeadIgnored !== 30) bad.push('被救的一方 ' + JSON.stringify(rv));
+            // 倒下的人，身体停在倒下的地方（别人要走到他身边）：倒下后 POS_SYNC 发的是倒地位置，不是正在观战的人的位置
+            await T.eval(`(function(){ let sp = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial()); sp.position.set(camera.position.x + 200, 9, camera.position.z + 200); scene.add(sp);
+                window.__dp = { x: camera.position.x, z: camera.position.z }; gState.peerState['peer-q'] = 'active'; gState.isDead = true; gState.deathPos = camera.position.clone(); gState.spectating = sp; window.__sent.length = 0; return true; })()`); await W(400);
+            const ps = await T.eval(`window.__sent.filter(function (m) { return m.type === 'POS_SYNC'; }).slice(-1)[0]`);
+            await T.eval(`gState.isDead = false; gState.spectating = null; bc.postMessage = window.__bp; true;`);
+            if (!ps || Math.abs(ps.x - (await T.eval('window.__dp.x'))) > 1) bad.push('倒下后 POS_SYNC 还跟着观战的人 ' + JSON.stringify(ps));
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H24 医疗包回 15；肾上腺素 3 次 20 秒不耗体力；返魂药水给 6 米内倒下的队友、按住互动 3 秒、救起来 30 血（真人走 HUNT_REVIVE）', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 
