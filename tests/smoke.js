@@ -572,6 +572,43 @@ async function enterExit(tab, key) {
             report('M1 超燃、惊魂夜结算有「再来一局」：单人直接开；联机房主等人、没点的换成 AI', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('M2')) {
+            // M2：每天 3 个任务（最多 1 个寻宝队、至少 1 个超燃或惊魂夜，模式不重复）；做完一个 +5，三个都做完再 +10；存档里带着
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){ let real = localDayNum, out = { bad: [], n: 0 };
+                for (let d = 20000; d < 20400; d++) {
+                    localDayNum = function () { return d; };
+                    let q = questToday(), ms = q.map(function (t) { return t.mode; });
+                    out.n++;
+                    if (q.length !== 3 || new Set(ms).size !== 3) out.bad.push(d + ' 重复 ' + ms);
+                    if (ms.filter(function (m) { return m === 'hunt'; }).length > 1) out.bad.push(d + ' 寻宝队多于 1');
+                    if (!ms.some(function (m) { return m === 'blaze' || m === 'night'; })) out.bad.push(d + ' 没有超燃/惊魂夜');
+                    if (JSON.stringify(q) !== JSON.stringify(questToday())) out.bad.push(d + ' 同一天不一样');
+                }
+                localDayNum = real; return JSON.stringify({ bad: out.bad.slice(0, 3), n: out.n }); })()`));
+            if (r.bad.length) bad.push(r.bad.join(' / '));
+            const g = JSON.parse(await T.eval(`(function(){ gState.quest = null; let q = questToday(), c0 = gState.mcoin || 0, res = [];
+                // 先打一个不在任务里的模式：不该多给
+                let other = QUEST_MODES.filter(function (m) { return !q.some(function (t) { return t.mode === m; }); })[0];
+                let a = gState.mcoin; coinsSettle(other, true); let base = gState.mcoin - a;
+                // 任务里的，一个个做（输了的话 win 类不算；赢了才算）
+                let gains = [], labs = [];
+                q.forEach(function (t, i) { if (t.kind === 'win') { let b = gState.mcoin; coinsSettle(t.mode, false); res.push(gState.mcoin - b); } let b2 = gState.mcoin; coinsSettle(t.mode, true); gains.push(gState.mcoin - b2); labs.push(coinsLast.parts.map(function (p) { return p[0] + p[1]; }).join(',')); });
+                saveProgress(); let saved = JSON.stringify(gState.quest); gState.quest = null; loadProgress(gState.id);
+                return JSON.stringify({ base: base, lostWin: res, gains: gains, labs: labs, done: questDoneCount(), all: gState.quest.all, saved: saved, loaded: JSON.stringify(gState.quest), text: q.map(questText) }); })()`));
+            if (g.lostWin.some(function (x) { return x > 3; })) bad.push('输了的“赢”任务也算了 ' + JSON.stringify(g.lostWin));
+            if (g.done !== 3 || g.all !== 1) bad.push('三个没都记上 ' + JSON.stringify(g));
+            if (g.saved !== g.loaded) bad.push('存档读回来不一样 ' + g.saved + ' vs ' + g.loaded);
+            if (g.labs.filter(function (x) { return /每日任务5/.test(x); }).length !== 3) bad.push('每个任务 +5 没都给 ' + JSON.stringify(g.labs));
+            if (!/三个任务全做完10/.test(g.labs[2] || '') || g.labs.slice(0, 2).some(function (x) { return /全做完/.test(x); })) bad.push('+10 只该在第三个给 ' + JSON.stringify(g.labs));
+            const ui = await T.eval(`(function(){ openQuests(); let t = document.getElementById('sys-modal-title').innerText + '|' + document.getElementById('sys-modal-text').innerText; return t; })()`);
+            if (!/今日任务 3\/3/.test(ui) || !/✔/.test(ui)) bad.push('任务弹窗 ' + ui);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('M2 每日任务：每天 3 个（模式不重复、≤1 寻宝队、≥1 超燃/惊魂夜）；做完 +5，全做完 +10；存档带着', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];

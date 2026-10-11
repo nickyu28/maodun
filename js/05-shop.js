@@ -356,12 +356,70 @@
             } else gState.streak[mode] = 0;
             let gain = parts.reduce(function (a, p) { return a + p[1]; }, 0);
             if (weeklyMode() === mode) { parts.push(['本周活动', '×2']); gain *= 2; }
+            // 每日任务的奖励不跟着翻倍
+            questTick(mode, won).forEach(function (p) { parts.push(p); gain += p[1]; });
             coinsAdd(mode, gain);
             if (typeof achCheck === 'function') achCheck('settle', { mode: mode, won: won });
             coinsLast = { gain: gain, parts: parts };
             saveProgress();
             return gain;
         }
+        // ══════════════ 每日任务（告示板）══════════════
+        // 每天 3 个：至少 1 个超燃或惊魂夜，寻宝队最多 1 个，模式不重复。全世界当天的任务一样（按日期算）。
+        // 每个做完 +5，三个都做完再 +10。打完一局时 coinsSettle 顺手检查。
+        const QUEST_COIN = 5, QUEST_ALL = 10;
+        const QUEST_MODES = ['hunt', 'night', 'blaze', 'race', 'jail', 'dodge', 'escape', 'cake', 'sumo', 'paint', 'tower'];
+        function questToday() {
+            let day = localDayNum(), seed = (day * 7919 + 13) % 233280;
+            let rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+            let first = rnd() < 0.5 ? 'blaze' : 'night';
+            let pool = QUEST_MODES.filter(function (m) { return m !== first; });
+            let picks = [first];
+            while (picks.length < 3) picks.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+            // 打乱位置，别总是超燃/惊魂夜排第一
+            for (let i = picks.length - 1; i > 0; i--) { let j = Math.floor(rnd() * (i + 1)); let t = picks[i]; picks[i] = picks[j]; picks[j] = t; }
+            return picks.map(function (m) { return { mode: m, kind: rnd() < 0.5 ? 'win' : 'play' }; });
+        }
+        function questText(t) {
+            let n = MODE_CN[t.mode] || t.mode;
+            if (t.mode === 'hunt') return n + (t.kind === 'win' ? ' 撤离 1 次' : ' 打完 1 局');
+            return n + (t.kind === 'win' ? ' 赢 1 局' : ' 打完 1 局');
+        }
+        function questState() {
+            let day = localDayNum();
+            if (!gState.quest || gState.quest.day !== day) gState.quest = { day: day, done: [0, 0, 0], all: 0 };
+            return gState.quest;
+        }
+        function questDoneCount() { return questState().done.filter(Boolean).length; }
+        function questTick(mode, won) {
+            let q = questState(), parts = [];
+            questToday().forEach(function (t, i) {
+                if (q.done[i] || t.mode !== mode) return;
+                if (t.kind === 'win' && !won) return;
+                q.done[i] = 1; parts.push(['每日任务', QUEST_COIN]);
+            });
+            if (!q.all && q.done.every(Boolean)) { q.all = 1; parts.push(['三个任务全做完', QUEST_ALL]); }
+            questBadgeSync();
+            return parts;
+        }
+        function questBadgeSync() {
+            let b = document.getElementById('quest-count');
+            if (b) b.innerText = questDoneCount() + '/3';
+        }
+        function openQuests() {
+            let q = questState();
+            let rows = questToday().map(function (t, i) {
+                return '<div style="display:flex; align-items:center; gap:8px; padding:8px 4px; border-top:1px solid #eee; opacity:' + (q.done[i] ? 0.6 : 1) + ';">' +
+                    '<div style="font-size:18px; width:22px; color:' + (q.done[i] ? '#43a047' : '#bbb') + ';">' + (q.done[i] ? '✔' : '○') + '</div>' +
+                    '<div style="flex:1; font-size:14px; text-align:left;">' + questText(t) + '</div>' +
+                    '<div>' + coinBadgeHtml('+' + QUEST_COIN, 13) + '</div></div>';
+            }).join('');
+            let html = '<div style="font-size:12px; color:#777; margin-bottom:6px;">每天换一批。打完一局自动算，奖励自动发。</div>' + rows +
+                '<div style="padding:8px 4px; border-top:1px solid #eee; font-size:13px; color:' + (q.all ? '#43a047' : '#e6a23c') + ';">' +
+                (q.all ? '✔ 三个都做完了' : '三个都做完再 ' + coinBadgeHtml('+' + QUEST_ALL, 13)) + '</div>';
+            showSysModal('今日任务 ' + questDoneCount() + '/3', html, [{ label: '关闭', color: '#666' }]);
+        }
+
         function coinsBreakText() {
             if (!coinsLast) return '';
             return '猫盾币 +' + coinsLast.gain + '（' + coinsLast.parts.map(function (p) { return p[0] + ' ' + (typeof p[1] === 'number' ? '+' + p[1] : p[1]); }).join('，') + '）';

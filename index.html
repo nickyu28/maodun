@@ -1014,6 +1014,7 @@
         <div id="lobby-tl">
             <button onclick="openShop()" style="width:100%; margin:0 0 6px; background:#e6a23c; color:#fff; border:none; font-size:13px; padding:8px 4px;">商店</button>
             <button onclick="openChangelog()" style="width:100%; margin:0 0 6px; background:#2c5d8f; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">更新公告<span id="changelog-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
+            <button onclick="openQuests()" style="width:100%; margin:0 0 6px; background:#43a047; color:#fff; border:none; font-size:12px; padding:7px 4px;">今日任务 <span id="quest-count">0/3</span></button>
             <button onclick="openCheckin()" style="width:100%; margin:0 0 6px; background:#ff9800; color:#fff; border:none; font-size:12px; padding:7px 4px; position:relative;">每日签到<span id="checkin-badge" style="display:none; position:absolute; top:2px; right:6px; width:8px; height:8px; border-radius:50%; background:#ff5252;"></span></button>
             <button id="btn-egg-book" onclick="openEggBook()" style="width:100%; margin:0 0 6px; background:#9b59b6; color:#fff; border:none; font-size:12px; padding:7px 4px;">彩蛋图鉴</button>
             <button onclick="openSettings()" style="width:100%; margin:0 0 6px; background:#546e7a; color:#fff; border:none; font-size:12px; padding:7px 4px;">设置</button>
@@ -1471,7 +1472,8 @@
             </div>
         </div>
         <div id="hub-board-prompt" style="position:absolute; bottom:190px; left:50%; transform:translateX(-50%); display:none; pointer-events:auto;">
-            <button onclick="openChangelog()" style="margin:0; background:#2c5d8f; color:#fff; border:none; padding:8px 16px; font-size:14px;">查看公告板</button>
+            <button onclick="openChangelog()" style="margin:0 4px 0 0; background:#2c5d8f; color:#fff; border:none; padding:8px 16px; font-size:14px;">查看公告板</button>
+            <button onclick="openQuests()" style="margin:0; background:#43a047; color:#fff; border:none; padding:8px 16px; font-size:14px;">今日任务</button>
         </div>
         <div id="blaze-score-wrap" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center;">
             <div id="blaze-score" style="font-size:26px; font-weight:bold; color:#fff; text-shadow:0 2px 6px #000;"></div>
