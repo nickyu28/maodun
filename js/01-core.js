@@ -341,8 +341,7 @@
             ['lib', '联机组件加载', '联机组件没加载上，刷新一下再试。'],
             ['signal', '牵线服务器', '连不上牵线服务器，进不了房间。'],
             ['stun', '探路服务器', '探路服务器没回地址，不在同一个网络时很难直连，只能靠中转。'],
-            ['turn', '中转服务器', '中转服务器没回地址，两边都没法直连时就连不上。'],
-            ['fb', '反馈服务', '反馈服务连不上，游戏里的反馈发不出去（会改成复制给你）。']
+            ['turn', '中转服务器', '中转服务器没回地址，两边都没法直连时就连不上。']
         ];
         let netDiag = null;
         function netDiagText() {
@@ -357,7 +356,7 @@
         }
         function netDiagVerdict() {
             let bad = NET_DIAG_STEPS.filter(function (st) { let r = netDiag.res[st[0]]; return r && !r.ok; });
-            return bad.length ? bad.map(function (st) { return st[2]; }).join('') : '全都通，联机这边没问题。';
+            return bad.length ? bad.map(function (st) { return st[2]; }).join('') : '四项都通，联机这边没问题。';
         }
         function netDiagRender() {
             let el = document.getElementById('net-diag'); if (!el || !netDiag) return;
@@ -424,20 +423,7 @@
                     } catch (e) { end(); }
                 });
             };
-            // 5. 反馈服务：只看 api.web3forms.com 连不连得上（普通 GET，不提交，不占额度），10 秒为限
-            let fb = function () {
-                return new Promise(function (resolve) {
-                    let t0 = now(), fin = false;
-                    let end = function (r) { if (fin) return; fin = true; clearTimeout(to); set('fb', r); resolve(); };
-                    let to = setTimeout(function () { end({ ok: false, why: '10 秒没回应' }); }, 10000);
-                    try {
-                        fetch('https://api.web3forms.com/', { mode: 'no-cors', cache: 'no-store' })
-                            .then(function () { end({ ok: true, ms: Math.round(now() - t0) }); })
-                            .catch(function () { end({ ok: false, ms: Math.round(now() - t0), why: '连不上' }); });
-                    } catch (e) { end({ ok: false, why: '连不上' }); }
-                });
-            };
-            signal().then(ice).then(fb).then(function () { if (netDiag !== run) return; run.done = true; netDiagRender(); });
+            signal().then(ice).then(function () { if (netDiag !== run) return; run.done = true; netDiagRender(); });
         }
 
         function netLeaveRoom(quiet) {
@@ -706,7 +692,7 @@
 
         function lobbySuggestModeToHost(mode) {
             let hostEntry = roomList.filter(function (r) { return r.host; })[0];
-            let modeName = (FEEDBACK_MODES.filter(function (p) { return p[0] === mode; })[0] || [mode, mode])[1];
+            let modeName = (MODE_NAME_LIST.filter(function (p) { return p[0] === mode; })[0] || [mode, mode])[1];
             bc.postMessage({ type: 'MODE_SUGGEST', target: hostEntry ? hostEntry.id : '*', sender: gState.id, mode: mode, modeName: modeName });
             blazeFlash('已经告诉房主你想玩"' + modeName + '"了');
         }

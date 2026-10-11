@@ -34,7 +34,7 @@
 | 主力设备 | 未定 |
 | 主打模式 | 寻宝队、惊魂夜、超燃。只推荐，不限制其他模式 |
 | 正式站点 | GitHub Pages。Netlify 有用量限制、无法更新，下线 |
-| 游玩记录和反馈（10-10 改） | 游玩记录删掉。反馈保留，改成游戏里直接发到 Web3Forms（玩家不登录、不跳出游戏），同一设备一分钟 1 条、每条 500 字以内，发不出去就复制给玩家。代码里不能出现任何邮箱地址，GitHub issue 和邮件那两条路都删掉 |
+| 游玩记录和反馈（10-11 再改） | 游玩记录删掉；游戏里的反馈功能也全删（按钮、表单、Web3Forms 代码和 access_key、联机诊断第 5 项）。代码里不能出现邮箱和 web3forms。以后不再提 |
 | 首次进入 | 不改，还是先进大厅 |
 | 分支 | 合进 `main`；夜间 PR 在新 `main` 上重跑 |
 | 拆文件 | 按模式拆，不用打包工具 |
@@ -249,7 +249,7 @@
 - 现状：`voiceMeshSync` 开麦后向房间列表里的所有人拨号。语音是两两直连，10 人全开要 45 条连接。
 - 改哪里：`voiceMeshSync`、`chatSend`、`CHAT` 分支。
 
-**A6 删掉游玩记录，反馈改走 Web3Forms**（10-10 完成，按作者改过的决定：反馈保留）
+**A6 删掉游玩记录，反馈改走 Web3Forms**（10-10 完成，按作者改过的决定：反馈保留）；10-11 A7 又把游戏里的反馈功能整个删了
 - 游玩记录：心跳里的 `stats` 字段（`playStatsDigest`、`roomSelfMsg`），`playLogSeen`，`openPlayLog`，`playLogSubmit`，以及界面入口。
 - 反馈：`openFeedback`、`feedbackSend`、`feedbackSubmit`、界面入口，以及 `netlify/functions/feedback.js` 和 `netlify.toml`（10-03 作者确认一起删）。
 - 做 A6 时先停下来问作者要不要停掉「Maodun Feedback Triage」定时任务。

@@ -1443,7 +1443,8 @@
                 id: '2026-10-11', date: '10 月 11 日', title: '更新', items: [
                     '彩弹占地按住 E 会一直喷，不用松开再按',
                     '超燃组队时，队友的手也会跟着变队伍颜色',
-                    '惊魂夜地图里一处该通的小缺口通了'
+                    '惊魂夜地图里一处该通的小缺口通了',
+                    '游戏里的反馈入口去掉了'
                 ]
             },
             {
@@ -1452,7 +1453,6 @@
                     '超燃、松饼、推推乐这些模式里，名字带 & 或 < 的头顶名字不再显示乱码',
                     '超燃镜猫换位，联机时对面也会真的换过去了',
                     '第一次玩时规则和新手提示都能看到了，之后也不会再卡住不动',
-                    '反馈改成在游戏里直接发送，不用登录；游玩记录拿掉了',
                     '寻宝队难度、AI 队友开关、惊魂夜选的角色，刷新以后还记得',
                     '「全都玩过」成就现在要 12 个模式都玩过，乐园也算'
                 ]
@@ -1582,8 +1582,7 @@
             {
                 id: '2026-09-27', date: '9 月 27 日', title: '竞速联机', items: [
                     '竞速可以联机了（还在测）',
-                    '第一次进一个模式会先讲规则',
-                    '反馈不用登录 GitHub 了'
+                    '第一次进一个模式会先讲规则'
                 ]
             },
             {
@@ -1662,76 +1661,12 @@
                 '明天继续签到 +' + nextReward + ' 猫盾币。', [{ label: '太好了' }]);
         }
 
-        // ── 反馈（A6，10-10 作者的决定）：游戏里直接发到 Web3Forms，玩家不登录、不跳出游戏 ──
-        // access_key 本来就是公开的（Web3Forms 按登记的网站地址 nickyu28.github.io/maodun 收）。
-        // 一个月只有 250 条额度：同一台设备一分钟最多 1 条，每条最多 500 字。
-        // 发不出去就把内容复制到剪贴板，让玩家直接发给作者。冒烟测试会把这个地址拦下来模拟，不会真发。
-        const WEB3FORMS_URL = 'https://api.web3forms.com/submit';
-        const WEB3FORMS_KEY = '8d9d0fe6-b2b8-4487-9b95-3afed9ac7be1';
-        const FEEDBACK_MAX = 500, FEEDBACK_GAP_MS = 60000;
-        // 大厅推荐模式那里也用这张表的中文名
-        const FEEDBACK_MODES = [
+        // 模式的中文名（大厅里"推荐给房主"用）
+        const MODE_NAME_LIST = [
             ['hunt', '寻宝队'], ['night', '惊魂夜'], ['blaze', '超燃'], ['race', '竞速'],
             ['jail', '监狱救援'], ['dodge', '躲避球'], ['escape', '密室'], ['park', '猫盾乐园'],
-            ['cake', '松饼大作战'], ['sumo', '推推乐'], ['paint', '彩弹占地'], ['tower', '爬塔'],
-            ['hub', '大厅广场'], ['other', '其他/不确定']
+            ['cake', '松饼大作战'], ['sumo', '推推乐'], ['paint', '彩弹占地'], ['tower', '爬塔']
         ];
-        function feedbackActiveMode() {
-            let k = typeof chatActiveModeKey === 'function' ? chatActiveModeKey() : null;
-            return k || null;
-        }
-        function feedbackLastAt() { try { return +(localStorage.getItem('TH_feedback_at') || 0); } catch (e) { return 0; } }
-        function openFeedback() {
-            let active = feedbackActiveMode();
-            let modesHtml = '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">' +
-                FEEDBACK_MODES.map(function (m) {
-                    return '<label style="font-size:12px; background:#f0f0f0; border-radius:4px; padding:4px 8px;">' +
-                        '<input type="checkbox" class="feedback-mode-cb" value="' + m[0] + '"' + (m[0] === active ? ' checked' : '') + '> ' + m[1] + '</label>';
-                }).join('') + '</div>';
-            let html = '<div style="text-align:left;">' +
-                '<textarea id="feedback-text" maxlength="' + FEEDBACK_MAX + '" placeholder="想说什么都行——卡住了、看不懂、觉得哪里不好玩……" style="width:100%; box-sizing:border-box; height:100px; font-size:13px; padding:8px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>' +
-                '<div style="font-size:11px; color:#999; margin-top:8px;">跟哪个模式有关？（可多选）</div>' + modesHtml +
-                '<div style="font-size:11px; color:#999; margin-top:8px;">会带上你的名字、版本号和时间，最多 ' + FEEDBACK_MAX + ' 字。</div>' +
-                '</div>';
-            showSysModal('反馈', html, [
-                { label: '发送', color: '#24292e', onClick: function () { feedbackSend(); } },
-                { label: '取消' }
-            ]);
-        }
-        function feedbackBuildBody(text, modes) {
-            let names = modes.map(function (k) { return (FEEDBACK_MODES.filter(function (m) { return m[0] === k; })[0] || [k, k])[1]; });
-            return text + '\n\n——\n名字: ' + dispNameText(gState.id) + '\n模式: ' + (names.length ? names.join('、') : '（没选）') +
-                '\n版本: ' + GAME_VERSION + '\n时间: ' + new Date().toLocaleString();
-        }
-        function feedbackCopy(body) {
-            try { navigator.clipboard.writeText(body).catch(function () { }); } catch (e) { }
-        }
-        function feedbackSend() {
-            let box = document.getElementById('feedback-text');
-            let text = box ? box.value.trim() : '';
-            if (!text) { showSysModal('提示', '写点什么再发吧', [{ label: '确定' }]); return; }
-            if (text.length > FEEDBACK_MAX) { showSysModal('提示', '太长了，最多 ' + FEEDBACK_MAX + ' 字', [{ label: '确定' }]); return; }
-            let wait = FEEDBACK_GAP_MS - (Date.now() - feedbackLastAt());
-            if (wait > 0) { showSysModal('提示', '一分钟只能发一条，' + Math.ceil(wait / 1000) + ' 秒后再试', [{ label: '确定' }]); return; }
-            let modes = Array.from(document.querySelectorAll('.feedback-mode-cb:checked')).map(function (cb) { return cb.value; });
-            let body = feedbackBuildBody(text, modes);
-            let subject = '[猫盾反馈] ' + text.slice(0, 30).replace(/\n/g, ' ') + (text.length > 30 ? '…' : '');
-            let fail = function () {
-                feedbackCopy(body);
-                showSysModal('没发出去', '内容已经复制好了，可以直接发给作者。', [{ label: '知道了' }]);
-            };
-            fetch(WEB3FORMS_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({ access_key: WEB3FORMS_KEY, subject: subject, message: body })
-            }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-                .then(function (x) {
-                    if (!x.ok || !x.j || !x.j.success) { fail(); return; }
-                    try { localStorage.setItem('TH_feedback_at', String(Date.now())); } catch (e) { }
-                    showSysModal('已收到', '谢谢！', [{ label: '好' }]);
-                })
-                .catch(fail);
-        }
 
         function openEggBook() {
             if (!gState.eggs) loadEggs();
