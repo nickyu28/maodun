@@ -256,9 +256,10 @@
             if (!reward) reward = Math.random() < 0.6 / 0.9 ? itemPool.purple[Math.floor(Math.random() * itemPool.purple.length)] : itemPool.gold[Math.floor(Math.random() * itemPool.gold.length)];
 
             let pos = getHiddenSpawnPos();
-            let b = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: createProceduralTexture(reward.tex || 'generic', reward.c, '#ffffff') }));
+            let b = huntGroundMesh(reward);
             b.position.set(pos.fx * TILE, pos.fl * TILE + 1.5, pos.fz * TILE);
             b.userData = { ...reward, isItem: true, vel: new THREE.Vector3(0, 0, 0), fromSignal: true };
+            huntItemGlow(b);
             scene.add(b); groundItems.push(b); s.mesh = b;
             huntLuckApply(b, 'signal');
             signalRouteTick(true);
@@ -804,9 +805,9 @@
 
             gState.inv.forEach(function (d, idx) {
                 if (!d || d.type === 'backpack_ext') return;
-                let box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 0xff0000 }));
+                let box = huntGroundMesh(d, 2);
                 box.position.copy(camera.position).add(new THREE.Vector3((Math.random() - 0.5) * 12, -4, (Math.random() - 0.5) * 12));
-                box.userData = { ...d, isItem: true }; scene.add(box); groundItems.push(box); gState.inv[idx] = null;
+                box.userData = { ...d, isItem: true }; huntItemGlow(box); scene.add(box); groundItems.push(box); gState.inv[idx] = null;
             });
 
             updateHUD(); saveProgress(); if (document.pointerLockElement) document.exitPointerLock();
@@ -906,9 +907,8 @@
         }
         function huntLotteryShow(reward) {
             if (reward) {
-                let tObj = createProceduralTexture(reward.tex || 'generic', reward.c || 0x3498db, '#ffffff');
-                let itemMesh = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: tObj }));
-                let launchDir = new THREE.Vector3(); camera.getWorldDirection(launchDir); itemMesh.position.copy(camera.position).add(launchDir.clone().multiplyScalar(4)); itemMesh.userData = { ...reward, isItem: true, vel: launchDir.multiplyScalar(60), gravityActive: true }; scene.add(itemMesh); groundItems.push(itemMesh);
+                let itemMesh = huntGroundMesh(reward);
+                let launchDir = new THREE.Vector3(); camera.getWorldDirection(launchDir); itemMesh.position.copy(camera.position).add(launchDir.clone().multiplyScalar(4)); itemMesh.userData = { ...reward, isItem: true, vel: launchDir.multiplyScalar(60), gravityActive: true }; huntItemGlow(itemMesh); scene.add(itemMesh); groundItems.push(itemMesh);
                 showSysModal("抽奖结果", `抽到了：${reward.n}`, [{ label: "好" }]);
             } else { showSysModal('抽奖结果', '没抽中，东西没了', [{ label: '好' }]); }
             saveProgress();

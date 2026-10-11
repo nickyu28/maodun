@@ -3398,14 +3398,28 @@
             delete it.isItem; delete it.vel; delete it.fromSignal; delete it.loot;
             return it;
         }
+        // B7：地上的东西用自己的贴图（tex、c），外面一圈稀有度颜色的光；颜色规则跟背包格子（H26）同一个函数 slotTier
+        const HUNT_GLOW = { red: 0xff5252, gold: 0xffd54f, purple: 0xb388ff, blue: 0x64b5f6 };
+        function huntItemGlow(mesh) {
+            let old = mesh.children.filter(function (c) { return c.name === 'glow'; })[0];
+            if (old) { mesh.remove(old); disposeObject(old); }
+            let tier = slotTier(mesh.userData); if (!tier) return;
+            let r = (mesh.geometry && mesh.geometry.parameters && mesh.geometry.parameters.width || 3) * 1.05;
+            let g = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), new THREE.MeshBasicMaterial({ color: HUNT_GLOW[tier], transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending }));
+            g.name = 'glow'; mesh.add(g);
+        }
+        function huntGroundMesh(it, size) {
+            size = size || 3;
+            let m = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshLambertMaterial({ map: createProceduralTexture(it.tex || 'generic', (it.c !== undefined && it.c !== null) ? it.c : 0x9b59b6, '#ffffff') }));
+            m.userData = { type: it.type, v: it.v, n: it.n, isShop: it.isShop };   // 先带上算颜色要的字段，调用方随后会换成完整的 userData
+            huntItemGlow(m); return m;
+        }
         function executeThrow(idx) {
             if (idx < 0 || idx >= gState.maxInv) return; let itemData = gState.inv[idx]; if (!itemData) return;
             if (openPouch === itemData) openPouch = null;   // 腰包扔出去，里面的东西跟着它走（it.bag）
             gState.inv[idx] = null; updateHUD();
 
-            let blockColor = itemData.v >= 30000 ? (itemData.v >= 200000 ? '#e74c3c' : '#f1c40f') : '#9b59b6';
-            let tObj = createProceduralTexture('generic', blockColor, '#ffffff');
-            let itemMesh = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: tObj }));
+            let itemMesh = huntGroundMesh(itemData);
             let launchDir = new THREE.Vector3(); camera.getWorldDirection(launchDir); itemMesh.position.copy(camera.position).add(launchDir.clone().multiplyScalar(4)); itemMesh.userData = { ...itemData, isItem: true, vel: launchDir.multiplyScalar(60), gravityActive: true }; scene.add(itemMesh); groundItems.push(itemMesh);
         }
 
@@ -3631,9 +3645,10 @@
             if (!spots.length) return null;
             let s = spots[Math.floor(seededRandom() * spots.length)];
             let it = { n: '猫神护身符', v: GODCAT_V, w: 1, tex: 'cat_shield', c: 0xfff176, type: 'godcat' };
-            let m = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: createProceduralTexture(it.tex, it.c, '#ffffff') }));
+            let m = huntGroundMesh(it);
             m.position.set(s.x * TILE, s.y, s.z * TILE);
             m.userData = Object.assign({}, it, { isItem: true, vel: new THREE.Vector3(0, 0, 0) });
+            huntItemGlow(m);
             scene.add(m); groundItems.push(m);
             return m;
         }
@@ -3683,6 +3698,7 @@
             let old = mesh.userData;
             mesh.userData = Object.assign({}, it, { isItem: true, vel: old.vel, fromSignal: old.fromSignal, gravityActive: old.gravityActive });
             if (mesh.material) { mesh.material = new THREE.MeshLambertMaterial({ map: createProceduralTexture(it.tex || 'generic', it.c, '#ffffff') }); }
+            huntItemGlow(mesh);
         }
         // 一件刚开出来的东西，按运气该不该换：返回 'gold'（紫换金）/ 'big'（金换大金）/ 'extra'（保险柜多抽一件留贵的）/ null。r 是 0~1 的随机数
         function huntLuckDecide(it, boxType, k, r) {
@@ -3756,7 +3772,7 @@
                         ns.position.copy(ai.position);
                         ns.userData = { n: up.n, v: up.v, w: up.w, tex: up.tex, c: up.c, isItem: true, feeds: 0 };
                         if (up.type) { ns.userData.type = up.type; ns.userData.dmg = up.dmg; ns.userData.spd = up.spd; ns.userData.hp = up.hp; }
-                        scene.add(ns); groundItems.push(ns);
+                        huntItemGlow(ns); scene.add(ns); groundItems.push(ns);
                         huntFindRecipe(rec.id);
                         if (up.type === 'luckclaw') huntLuckFx(ns.position); else huntMergeBoom(ns.position, up.v, up.n);
                         break;
@@ -4264,13 +4280,12 @@
                         if (potion) singleLoot = potion;   // 药水也是掉在地上的宝物，捡起来、手上按“用道具”才喝
 
                         if (singleLoot) {
-                            let tObj = createProceduralTexture(singleLoot.tex, singleLoot.c, '#ffffff');
-                            let box = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: tObj }));
+                            let box = huntGroundMesh(singleLoot);
                             box.position.copy(activeObj.position).add(new THREE.Vector3(0, activeObj.userData.type === 'safe' ? 4 : 1.5, 0));
 
                             let ang = Math.random() * Math.PI * 2;
                             box.userData = { ...singleLoot, isItem: true, vel: new THREE.Vector3(Math.cos(ang) * 18, 0, Math.sin(ang) * 18) };
-                            scene.add(box); groundItems.push(box);
+                            huntItemGlow(box); scene.add(box); groundItems.push(box);
                             huntLuckApply(box, boxType);
                         }
                     }
