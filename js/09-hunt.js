@@ -600,7 +600,7 @@
 
         function completeExtraction(text) {
             if (gState.tutorial) { tutEvent('extract'); return; }   // T0：教程里的撤离不结算、不进仓库
-            // isFirstRound/pityGuaranteed 不在这清零了——进图那一刻（startGameMap）已经
+            // huntDiffPlayed/pityGuaranteed 不在这清零了——进图那一刻（startGameMap）已经
             // 处理过，不然连续撤离失败的人会一直卡在"首次必出"状态出不来。
             gState.matchHistory.push(true); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
 

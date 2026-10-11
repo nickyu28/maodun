@@ -193,7 +193,7 @@
             // 续几局都失败/没撤出去的人会一直卡在保底状态，每局都重复吃保底。放在生
             // 成地图之后清零：这局造图的时候两个标记还是 true，能正常生效。
             // 组队局里保底不生效，标记留到下一次自己打的时候
-            if (!gState.tutorial && !huntHasHumanMates()) { gState.isFirstRound = false; gState.pityGuaranteed = false; saveProgress(); }
+            if (!gState.tutorial && !huntHasHumanMates()) { if (!gState.huntDiffPlayed) gState.huntDiffPlayed = {}; gState.huntDiffPlayed[gState.mapDifficulty] = true; gState.pityGuaranteed = false; saveProgress(); }
 
             if (syncSpawns) gState.preGenSpawns = syncSpawns;
 
@@ -1452,7 +1452,8 @@
                     '新手教程：新玩家起完名字就会开始，9 步学会走、跳、开箱、上交、撤离，做完 +20 猫盾币；右上角能跳过，设置里能重玩',
                     '没做完（或跳过）新手教程之前，不能组队，也收不到邀请',
                     '寻宝队抽奖机改了：金色有 5% 抽到大金，25% 被销毁；紫色有 15% 变金，25% 被销毁',
-                    '组队时，一张图里的大金数量全队一起算，不会各自再多出来'
+                    '组队时，一张图里的大金数量全队一起算，不会各自再多出来',
+                    '寻宝队每种难度，第一次单人去的时候宝物会好拿一些'
                 ]
             },
             {

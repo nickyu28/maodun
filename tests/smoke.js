@@ -846,6 +846,41 @@ async function enterExit(tab, key) {
             report('H16b 大金上限全队共用：队员先问队长、队长扣、没回音改出金色、外人的请求和冒充的答复不理', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('H17')) {
+            // H17：每种难度第一次单人打都是保底局；记在存档 huntDiffPlayed，进图就算用掉；组队不算、不记；老存档（没这个字段）三个难度各给一次
+            const bad = [];
+            const N = await openTab(chrome, url, { name: 'h17' + Math.floor(Math.random() * 100000) });
+            const run = async (diff, mate) => {
+                await N.eval(`${HIDE} gState.aiFill = false; gState.mapDifficulty = '${diff}'; selectGameMode('hunt'); requestStartGame(); ${mate ? `gState.team = [{ id: gState.id, isLeader: true, isAI: false }, { id: 'peer-z', isAI: false }];` : ''} true;`);
+                const before = await N.eval(`huntPityActive()`);
+                await N.eval(`requestEnterMap(); true;`); await W(2500);
+                const r = JSON.parse(await N.eval(`JSON.stringify({ before: ${before}, played: JSON.stringify(gState.huntDiffPlayed), mul: huntPityMul })`));
+                await N.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1500); await N.eval(`${HIDE} true;`);
+                return r;
+            };
+            const a1 = await run('easy'), a2 = await run('easy'), m1 = await run('med');
+            if (!a1.before || a1.played !== '{"easy":true}' || a1.mul !== 2) bad.push('easy 第一局 ' + JSON.stringify(a1));
+            if (a2.before || a2.mul !== 1) bad.push('easy 第二局还是保底 ' + JSON.stringify(a2));
+            if (!m1.before || !/"med":true/.test(m1.played)) bad.push('med 第一局 ' + JSON.stringify(m1));
+            const h1 = await run('hard', true);   // 组队：不是保底局，也不记
+            if (h1.before || /"hard"/.test(h1.played)) bad.push('组队的局算了 ' + JSON.stringify(h1));
+            const h2 = await run('hard');
+            if (!h2.before || !/"hard":true/.test(h2.played)) bad.push('hard 第一次单人 ' + JSON.stringify(h2));
+            // 存下来、刷新读回来
+            const id = await N.eval('gState.id');
+            const saved = await N.eval(`JSON.parse(localStorage.getItem('TH_save_' + gState.id)).huntDiffPlayed`);
+            if (!saved || !saved.easy || !saved.med || !saved.hard) bad.push('存档里 ' + JSON.stringify(saved));
+            // 老存档：没有这个字段（也没有 isFirstRound）→ 三个难度各给一次
+            await N.eval(`(function(){ let d = JSON.parse(localStorage.getItem('TH_save_' + gState.id)); delete d.huntDiffPlayed; delete d.isFirstRound; localStorage.setItem('TH_save_' + gState.id, JSON.stringify(d)); return true; })()`);
+            await N.send('Page.reload'); await W(2500);
+            await N.eval(`document.getElementById('player-id').value = ${JSON.stringify(id.replace(/#.*$/, ''))}; requestLobbyAccess(); true;`); await W(2500);
+            const old = JSON.parse(await N.eval(`JSON.stringify(['easy', 'med', 'hard'].map(function (d) { gState.mapDifficulty = d; gState.team = [{ id: gState.id, isLeader: true, isAI: false }]; return huntPityActive(); }))`));
+            if (old.join() !== 'true,true,true') bad.push('老存档 ' + old.join());
+            if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
+            await N.close();
+            report('H17 每种难度第一次单人打是保底局（进图就算用掉），组队不算不记，老存档三个难度各给一次', bad.length === 0, bad.join(' / '));
+        }
+
         //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 
@@ -1257,13 +1292,13 @@ async function enterExit(tab, key) {
             const N = await openTab(chrome, url, { name: 'h12' + Math.floor(Math.random() * 100000) });
             const run = async (diff) => {
                 await N.eval(`${HIDE} gState.aiFill = false; gState.mapDifficulty = '${diff}'; selectGameMode('hunt'); requestStartGame(); requestEnterMap(); true;`); await W(2500);
-                const r = JSON.parse(await N.eval(`JSON.stringify({ gold: chests.filter(function (c) { return c.userData.type === 'gold'; }).length, safe: chests.filter(function (c) { return c.userData.type === 'safe'; }).length, first: gState.isFirstRound, pity: gState.pityGuaranteed, mul: huntPityMul })`));
+                const r = JSON.parse(await N.eval(`JSON.stringify({ gold: chests.filter(function (c) { return c.userData.type === 'gold'; }).length, safe: chests.filter(function (c) { return c.userData.type === 'safe'; }).length, played: !!gState.huntDiffPlayed.easy, pity: gState.pityGuaranteed, mul: huntPityMul })`));
                 await N.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1500); await N.eval(`${HIDE} true;`);
                 return r;
             };
             const easyGold = await N.eval(`mapConfigs.easy.gold`);
             const r1 = await run('easy');
-            if (r1.safe !== 0 || r1.gold !== easyGold + 1 || r1.mul !== 2 || r1.first) bad.push('第一局 ' + JSON.stringify(r1));
+            if (r1.safe !== 0 || r1.gold !== easyGold + 1 || r1.mul !== 2 || !r1.played) bad.push('第一局 ' + JSON.stringify(r1));
             const r2 = await run('easy');
             if (r2.safe !== 0 || r2.gold !== easyGold || r2.mul !== 1) bad.push('第二局 ' + JSON.stringify(r2));
             await N.eval(`gState.pityGuaranteed = true; true;`);
