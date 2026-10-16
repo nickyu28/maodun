@@ -767,7 +767,7 @@
             else if (m === 'escape') escapeStartGo();
             else if (m === 'park') parkBegin(PARK_BUILTIN.easy);
             else if (m === 'cake') cakeStartGo();
-            else if (m === 'sumo' || m === 'paint') nmStartGo(m);
+            else if (m === 'sumo') nmStartGo(m);
             else if (m === 'tower') nmStartGo('tower', { kind: 'solo' });
         }
 

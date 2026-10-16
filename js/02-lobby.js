@@ -87,12 +87,6 @@
                 kTxt('<b>左键 / E</b> 往前一撞，面前的人会飞出去。', '<b>推</b> 往前一撞，面前的人会飞出去。'),
                 '掉下去就出局，最后站着的赢。时间到了比谁推下去的多。'
             ]; } },
-            paint: { title: '彩弹占地', lines: function () { return [
-                '4v4，走过的地方变成你们队的颜色。',
-                kTxt('<b>左键 / E</b> 扔颜料，落地炸开一片。', '<b>喷</b> 扔颜料，落地炸开一片。'),
-                '砸中对面的人他会愣一下。踩在对面颜色上走得慢。',
-                '2 分钟后地盘大的队赢。'
-            ]; } },
             tower: { title: '爬塔', lines: function () { return [
                 '跳台绕着柱子往上盘，底下的岩浆一直在涨，越往后涨得越快。',
                 '<b>单人</b>：看你能爬多高。',
@@ -208,7 +202,7 @@
         }
         let mmActive = null;      // 我自己在等：{ mode, cap, t0, left, onResolve, timer }
         let mmRoomPool = {};      // roomSync() 每次心跳都重新算一遍：{ id: { mode, left } }
-        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速', escape: '合作密室', jail: '监狱救援', dodge: '躲避球', sumo: '推推乐', paint: '彩弹占地', tower: '爬塔' };
+        const MM_MODE_LABEL = { blaze: '超燃 · 2v2', blazeffa: '超燃 · 乱斗', cake: '松饼大作战', race: '竞速', escape: '合作密室', jail: '监狱救援', dodge: '躲避球', sumo: '推推乐', tower: '爬塔' };
         function mmMinLeft() {
             let v = mmActive ? mmActive.left : Infinity;
             Object.keys(mmRoomPool).forEach(function (id) {
@@ -631,11 +625,12 @@
             if (p) p.classList.toggle('hidden');
         }
         function selectGameMode(m) {
+            if (m === 'paint') m = 'hunt';   // 这个模式下架了，老存档里记着的模式改回寻宝队
             gState.gameMode = m;
             refreshRankUI();
             renderDailyModBanner();
             let isHunt = m === 'hunt', isNight = m === 'night', isBlaze = m === 'blaze', isRace = m === 'race', isJail = m === 'jail', isDodge = m === 'dodge', isEscape = m === 'escape', isPark = m === 'park', isCake = m === 'cake';
-            ['sumo', 'paint', 'tower'].forEach(function (k) { let e = document.getElementById(k + '-only'); if (e) e.classList.toggle('hidden', m !== k); });
+            ['sumo', 'tower'].forEach(function (k) { let e = document.getElementById(k + '-only'); if (e) e.classList.toggle('hidden', m !== k); });
             if (m === 'tower') { let tb = document.getElementById('tower-best'); if (tb) tb.innerText = gState.towerBest ? '你的最好成绩：第 ' + gState.towerBest + ' 块' : ''; }
             document.getElementById('hunt-only').classList.toggle('hidden', !isHunt);
             document.getElementById('night-only').classList.toggle('hidden', !isNight);
@@ -676,7 +671,6 @@
             ['btn-mode-park', isPark, '#ad1457'],
             ['btn-mode-cake', isCake, '#f57f17'],
             ['btn-mode-sumo', m === 'sumo', '#e65100'],
-            ['btn-mode-paint', m === 'paint', '#0277bd'],
             ['btn-mode-tower', m === 'tower', '#4527a0']].forEach(function (e) {
                 let b = document.getElementById(e[0]); if (!b) return;
                 b.style.borderColor = e[1] ? e[2] : '#ccc';

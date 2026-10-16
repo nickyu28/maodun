@@ -12,7 +12,7 @@
 //
 // 检查项：
 //   1. 无头启动进大厅，控制台零报错
-//   2. 12 个模式都能进、能退回大厅
+//   2. 11 个模式都能进、能退回大厅
 //   3. TASKS.md 附录里的伪造消息（A1 昵称注入、A2 强行开局、A3 加币扣币）全部被拒，
 //      另外模拟经 PeerJS 房主转发、冒充别人 sender 的 START_NIGHT 和 PARK_CREDIT
 //   4. 依次进出 5 个模式、循环 3 轮，renderer.info.memory.geometries 不增长
@@ -143,7 +143,7 @@ async function openTab(chrome, url, opts) {
     const pid = (opts && opts.name) || ('smoke' + Math.floor(Math.random() * 100000));
     await tab.eval(`document.getElementById('player-id').value = ${JSON.stringify(pid)}; requestLobbyAccess(); true;`);
     await W(1500);
-    await tab.eval(`gState.modeIntroShown = { hunt:1, night:1, blaze:1, race:1, jail:1, dodge:1, escape:1, park:1, cake:1, sumo:1, paint:1, tower:1 }; ${HIDE} true;`);
+    await tab.eval(`gState.modeIntroShown = { hunt:1, night:1, blaze:1, race:1, jail:1, dodge:1, escape:1, park:1, cake:1, sumo:1, tower:1 }; ${HIDE} true;`);
     return tab;
 }
 
@@ -164,7 +164,6 @@ const MODES = {
     park: { start: `parkBegin(PARK_BUILTIN.easy)`, exit: `parkExit()` },
     cake: { start: `cakeBegin()`, exit: `cakeExit()` },
     sumo: { start: `nmBegin('sumo', [{ id: gState.id }], gState.id, 5, {})`, exit: `nmExit()` },
-    paint: { start: `nmBegin('paint', [{ id: gState.id }], gState.id, 5, {})`, exit: `nmExit()` },
     tower: { start: `nmBegin('tower', [{ id: gState.id }], gState.id, 5, { kind: 'solo' })`, exit: `nmExit()` }
 };
 // H1 的楼梯模拟：在页面里跑，直接调 huntPhysics。台阶顶按身体中心算，跟游戏代码分开写一份
@@ -518,17 +517,13 @@ async function enterExit(tab, key) {
             report('启动（触屏设备）0 报错、进大厅', bad.length === 0, bad.join(' / '));
         }
                 if (want('N21')) {
-            // 夜间 #21：惊魂夜缺口真的开了；按住 E 彩弹占地一直喷（推推乐那种一次一下的不变）；双人队友的手跟着变色
+            // 夜间 #21：惊魂夜缺口真的开了；推推乐按一下只推一次；双人队友的手跟着变色
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} selectGameMode('night'); ${MODES.night.start}; true;`); await W(3500);
             const gaps = await T.eval(`(function(){ let n = 0; for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) { let g0 = maze[0][z][x], g1 = maze[1][z][x]; if (g0 && g0.type === 1 && !g0.crate && g1 && g1.type === 0) n++; } return n; })()`);
             if (gaps < 1) bad.push('二楼那一格缺口没开 ' + gaps);
             await T.eval(`${HIDE} ${MODES.night.exit}; true;`); await W(1800);
-            await T.eval(`${HIDE} selectGameMode('paint'); ${MODES.paint.start}; true;`); await W(1500);
-            const hold = await T.eval(`(function(){ keys['e'] = true; let a = nmWish({}), b = nmWish({}); return [a.act, b.act, !!keys['e']]; })()`);
-            await T.eval(`keys['e'] = false; ${MODES.paint.exit}; true;`); await W(1500);
-            if (hold[0] !== true || hold[1] !== true || hold[2] !== true) bad.push('按住 E 只喷一下 ' + JSON.stringify(hold));
             await T.eval(`${HIDE} selectGameMode('sumo'); ${MODES.sumo.start}; true;`); await W(1500);
             const tap = await T.eval(`(function(){ keys['e'] = true; let a = nmWish({}), b = nmWish({}); return [a.act, b.act]; })()`);
             await T.eval(`keys['e'] = false; ${MODES.sumo.exit}; true;`); await W(1500);
@@ -539,7 +534,7 @@ async function enterExit(tab, key) {
             if (hr.n !== 2 || !hr.ok) bad.push('队友的手没变色 ' + hands);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('N21 惊魂夜二楼缺口打开；按住 E 彩弹一直喷；双人队友的手跟着变队伍色', bad.length === 0, bad.join(' / '));
+            report('N21 惊魂夜二楼缺口打开；推推乐一次按键一次；双人队友的手跟着变队伍色', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('M1')) {
@@ -1115,6 +1110,31 @@ async function enterExit(tab, key) {
             report('B9 局里把东西拖出背包窗口 = 扔到面前地上（鼠标、触屏；腰包里的东西单独扔，腰包本身带着里面的走）；仓库里拖出窗口不扔', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('D2')) {
+            // D2：彩弹占地（paint）下架——入口、规则、模式名、每周活动、每日任务池、框架里的定义都没了；老存档里记着 paint 的回到寻宝队；“全都玩过”目标 11
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){ let o = {};
+                o.btn = !!document.getElementById('btn-mode-paint') || !!document.getElementById('paint-only');
+                o.defs = [typeof PAINT, typeof NM_DEFS.paint, MODE_CN.paint === undefined, WEEKLY_MODES.indexOf('paint'), QUEST_MODES.indexOf('paint'), MODE_NAME_LIST.filter(function (x) { return x[0] === 'paint'; }).length, typeof MM_MODE_LABEL.paint, !!MODE_RULES.paint];
+                selectGameMode('paint'); o.mode = gState.gameMode;
+                o.pool = (function () { let real = localDayNum, n = 0; for (let d = 20000; d < 20400; d++) { localDayNum = function () { return d; }; if (questToday().some(function (t) { return t.mode === 'paint'; })) n++; } localDayNum = real; return n; })();
+                o.ach = ACH_LIST.filter(function (a) { return a.id === 'all'; })[0].goal;
+                o.html = document.body.innerHTML.indexOf('彩弹占地');
+                return JSON.stringify(o); })()`));
+            if (r.btn) bad.push('页面上还有入口');
+            if (r.defs.join() !== 'undefined,undefined,true,-1,-1,0,undefined,false') bad.push('代码里还有定义 ' + r.defs.join());
+            if (r.mode !== 'hunt') bad.push('老存档里的 paint 没回到寻宝队 ' + r.mode);
+            if (r.pool !== 0) bad.push('每日任务还会出 paint ' + r.pool);
+            if (r.ach !== 11) bad.push('全都玩过目标 ' + r.ach);
+            if (r.html >= 0) bad.push('页面里还有“彩弹占地”');
+            const src = ['index.html'].concat(fs.readdirSync(path.join(ROOT, 'js')).map((f) => 'js/' + f)).filter((f) => /彩弹占地|PAINT\b|paintShoot|NM_DEFS\.paint/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+            if (src.length) bad.push('源码里还有 ' + src.join(','));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('D2 彩弹占地下架：入口、规则、模式名、每周活动、每日任务池、框架定义都删了；老存档的 paint 回寻宝队；全都玩过目标 11', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];
@@ -1167,11 +1187,11 @@ async function enterExit(tab, key) {
 
                 if (want('R1')) {
             // R1：单人局里，提示卡片开着时整局静止（场景里所有东西的位置都不变、按着 W 也走不动、拖鼠标不转视角），关了接着动；
-            // 多人局里卡片变成屏幕上方的提示条，不弹窗、不暂停。12 个模式逐个测
+            // 多人局里卡片变成屏幕上方的提示条，不弹窗、不暂停。11 个模式逐个测
             const bad = [];
             const T = await openTab(chrome, url);
             const SIG = `(function(){ let s = 0, n = 0; scene.traverse(function (o) { n++; s += o.position.x * 1.1 + o.position.y * 1.3 + o.position.z * 1.7 + o.scale.x + o.scale.y + o.scale.z + o.rotation.y; });
-                let M = ({ blaze: blaze, night: night, race: race, jail: jail, dodge: dodge, escape: escapeRoom, park: park, cake: cake, sumo: nm, paint: nm, tower: nm })[chatActiveModeKey()], nums = [];
+                let M = ({ blaze: blaze, night: night, race: race, jail: jail, dodge: dodge, escape: escapeRoom, park: park, cake: cake, sumo: nm, tower: nm })[chatActiveModeKey()], nums = [];
                 if (M) Object.keys(M).forEach(function (k) { if (typeof M[k] === 'number' && k !== 'last' && k !== 'raf') nums.push(k + ':' + M[k].toFixed(2)); });
                 return JSON.stringify([Math.round(s * 1000), n, camera.position.x.toFixed(3), camera.position.z.toFixed(3), camera.rotation.y.toFixed(3), typeof timeSecs === 'number' ? timeSecs.toFixed(1) : 0, nums]); })()`;
             for (const key of Object.keys(MODES).filter((k) => !process.env.R1_MODES || process.env.R1_MODES.split(',').indexOf(k) >= 0)) {
@@ -1200,7 +1220,7 @@ async function enterExit(tab, key) {
                 if (T.errors.length > before) bad.push(key + ' 报错 ' + T.errors.slice(before, before + 1).join(''));
             }
             await T.close();
-            report('R1 单人局卡片开着整局静止（12 个模式：场景、走、转视角都停），关了接着动', bad.length === 0, bad.join(' / '));
+            report('R1 单人局卡片开着整局静止（11 个模式：场景、走、转视角都停），关了接着动', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('R1m')) {
@@ -2232,7 +2252,7 @@ async function enterExit(tab, key) {
                 //@@NEW@@
         if (ONLY) throw new Error('ONLY_DONE');
 
-        // 2. 12 个模式
+        // 2. 11 个模式
         for (const key of Object.keys(MODES)) {
             const before = A.errors.length;
             let r;
@@ -2254,7 +2274,7 @@ async function enterExit(tab, key) {
                 const closed = await A.eval(`${MODAL} === null && !introOpen`);
                 if (t !== want || !closed) bad.push(key + (t !== want ? ' 标题=' + t : ' 关不掉'));
             }
-            report('规则按钮 12 个模式都能打开、关闭', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
+            report('规则按钮 11 个模式都能打开、关闭', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
         }
         {
             const before = A.errors.length;
@@ -3029,10 +3049,10 @@ async function enterExit(tab, key) {
         }
 
         {
-            // G1：「全都玩过」12 个模式都算，乐园是最后一个打完时成就也弹出来
+            // G1：「全都玩过」11 个模式都算，乐园是最后一个打完时成就也弹出来
             const bad = [];
             await A.eval(`${HIDE} window.__ach0 = JSON.stringify(gState.ach || null); let S = achState(); S.modes = {}; delete S.done.all; delete S.got.all;
-                ['hunt', 'night', 'blaze', 'race', 'jail', 'dodge', 'escape', 'cake', 'sumo', 'paint', 'tower'].forEach(function (k) { S.modes[k] = 1; });
+                ['hunt', 'night', 'blaze', 'race', 'jail', 'dodge', 'escape', 'cake', 'sumo', 'tower'].forEach(function (k) { S.modes[k] = 1; });
                 window.__flash = []; window.__bf = blazeFlash; blazeFlash = function (t) { window.__flash.push(t); return window.__bf.apply(this, arguments); }; true;`);
             const goal = await A.eval(`ACH_LIST.filter(function (a) { return a.id === 'all'; })[0].goal`);
             if (goal !== 12) bad.push('goal=' + goal);
@@ -3042,7 +3062,7 @@ async function enterExit(tab, key) {
             const r = JSON.parse(await A.eval(`JSON.stringify({ park: !!achState().modes.park, done: !!achState().done.all, flash: window.__flash.filter(function (t) { return /成就：.*全都玩过/.test(t); }).length })`));
             if (!r.park || !r.done || !r.flash) bad.push(JSON.stringify(r));
             await A.eval(`${HIDE} blazeFlash = window.__bf; try { parkExit(); } catch (e) { } gState.ach = JSON.parse(window.__ach0); true;`); await W(800); await A.eval(`${HIDE} true;`);
-            report('G1 全都玩过要 12 个模式，最后打完乐园时成就弹出', bad.length === 0, bad.join(' / '));
+            report('G1 全都玩过要 11 个模式，最后打完乐园时成就弹出', bad.length === 0, bad.join(' / '));
         }
 
         {

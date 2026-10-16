@@ -1540,7 +1540,7 @@
         const MODE_NAME_LIST = [
             ['hunt', '寻宝队'], ['night', '惊魂夜'], ['blaze', '超燃'], ['race', '竞速'],
             ['jail', '监狱救援'], ['dodge', '躲避球'], ['escape', '密室'], ['park', '猫盾乐园'],
-            ['cake', '松饼大作战'], ['sumo', '推推乐'], ['paint', '彩弹占地'], ['tower', '爬塔']
+            ['cake', '松饼大作战'], ['sumo', '推推乐'], ['tower', '爬塔']
         ];
 
         function openEggBook() {
