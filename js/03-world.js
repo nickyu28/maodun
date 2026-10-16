@@ -1468,6 +1468,15 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026.10.16-1', date: '10 月 16 日', title: '最近更新', items: [
+                    '推推乐有道具了，还能按住蓄力撞',
+                    '推推乐的台子每局不一样',
+                    '爬塔多了几种台子，路上还能捡币',
+                    '爬塔有捷径了，大厅能看今日最高',
+                    '彩弹占地下架了'
+                ]
+            },
+            {
                 id: '2026.10.11-3', date: '10 月 11 日', title: '最近更新', items: [
                     '打完能“再来一局”；超燃多了快速场、熟练度、图鉴',
                     '大厅多了“今日任务”，做完给猫盾币',
