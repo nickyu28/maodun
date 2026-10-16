@@ -343,6 +343,7 @@
         function weekNum() { return Math.floor((localDayNum() + 3) / 7); }   // 周一换
         function weeklyMode() { return WEEKLY_MODES[weekNum() % WEEKLY_MODES.length]; }
         let coinsLast = null;
+        let coinsBonus = null;   // 局里额外捡到的币（爬塔路上的币），下一次结算时加进去，不跟着本周活动翻倍
         function coinsSettle(mode, won) {
             if (!gState.streak) gState.streak = {};
             if (!gState.dailyWin) gState.dailyWin = {};
@@ -358,6 +359,8 @@
             if (weeklyMode() === mode) { parts.push(['本周活动', '×2']); gain *= 2; }
             // 每日任务的奖励不跟着翻倍
             questTick(mode, won).forEach(function (p) { parts.push(p); gain += p[1]; });
+            if (coinsBonus && coinsBonus.mode === mode && coinsBonus.n > 0) { parts.push(['路上的币', coinsBonus.n]); gain += coinsBonus.n; }
+            coinsBonus = null;
             coinsAdd(mode, gain);
             if (typeof achCheck === 'function') achCheck('settle', { mode: mode, won: won });
             coinsLast = { gain: gain, parts: parts };

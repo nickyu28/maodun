@@ -23,7 +23,8 @@
             let cap = def.count(opt);
             let go = function (ids) {
                 let plan = ids.slice(0, cap).map(function (id) { return { id: id }; });
-                let seed = Math.floor(Math.random() * 1000000) || 1;
+                // 爬塔按日期定种子：当天所有人爬的是同一座塔（排行榜才公平）
+                let seed = mode === 'tower' ? towerDaySeed() : (Math.floor(Math.random() * 1000000) || 1);
                 if (plan.length > 1) bc.postMessage({ type: 'NM_START', target: '*', sender: gState.id, mode: mode, plan: plan, host: gState.id, seed: seed, opt: opt });
                 nmBegin(mode, plan, gState.id, seed, opt);
             };
@@ -181,7 +182,7 @@
             if (def.carry) def.carry(nm, a, dt);
             let g = def.groundAt(nm, a.p.x, a.p.z, prevY);
             let onG = g > -1e8 && a.p.y <= g + 0.05;
-            if (w.jump && (onG || a.coyote > 0)) { a.vy = def.jumpV * DAILY_MOD.jumpMul; onG = false; a.coyote = 0; }
+            if (w.jump && (onG || a.coyote > 0)) { a.vy = def.jumpV * DAILY_MOD.jumpMul * (def.jumpMul ? def.jumpMul(nm, a) : 1); onG = false; a.coyote = 0; }
             a.vy -= def.gravity * dt;
             a.p.y += a.vy * dt;
             g = def.groundAt(nm, a.p.x, a.p.z, prevY);
@@ -796,7 +797,64 @@
         //   多人：谁先到顶谁赢。
         // 存档点（T2）：起点和每面绿旗。站上更高的绿旗就更新，只升不降。掉进岩浆时岩浆还没淹到存档点台面，
         // 就回存档点接着爬；淹过了：单人结束、多人出局、双人倒下等队友救。AI 一样。
-        const TOWER = { steps: 60, flagEvery: 10, speed: 40, jumpV: 50, gravity: 140, lava0: -40, rise0: 2.2, rise1: 5, riseRamp: 100, grace: 6 };
+        // 变数（S3）：台子有 6 种——普通、左右晃的、易碎（踩上去 1 秒后掉，5 秒后长回来）、弹床（跳得高 ×1.6）、
+// 传送带、转动的横杆（碰到被打飞，跳起来能躲）。下 1/3 只有普通台，中间 1/3 三成半是特殊的，顶上 1/3 一半是特殊的；
+// 存档点旗子和塔顶永远是普通台。路上有 10 个猫盾币（每人自己捡，一局最多 10 个）。塔里有 2~3 处捷径：从 i 直接助跑跳到 i+5，
+// 要是不跳就得沿着绕出去的小路慢慢走。塔按日期定种子，当天所有人爬的一样。
+const TOWER = { steps: 60, flagEvery: 10, speed: 40, jumpV: 50, gravity: 140, lava0: -40, rise0: 2.2, rise1: 5, riseRamp: 100, grace: 6,
+    specialP: [0, 0.35, 0.5], kinds: [['move', 0.28], ['crumble', 0.24], ['spring', 0.16], ['belt', 0.16], ['bar', 0.16]],
+    moveGapMax: 12, beltV: 14, crumbleT: 1, crumbleBack: 5, springMul: 1.6, barV: 1.5, barHit: 2.4, coins: 10 };
+function towerDaySeed() { return (localDayNum() * 7919 + 31) % 999983 + 1; }
+// 爬塔不管几个人：把走过的台子按"这一块"算——脚下是哪一块（跳起来的瞬间也算）
+function towerStepUnder(g, a) {
+    for (let i = 0; i < g.steps.length; i++) {
+        let s = g.steps[i];
+        if (Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half && Math.abs(a.p.y - s.y) < 0.6) return s;
+    }
+    return null;
+}
+// 在空中：按剩下的飞行时间算还要多快才落在目标台子中间（人是松开方向键让自己落准，AI 也这么干，不然跳得高/远的日子会飞过头）
+function towerAirK(a, t, d) {
+    let disc = a.vy * a.vy + 2 * TOWER.gravity * (a.p.y - t.y);
+    if (disc < 0) return 1;
+    let tau = (a.vy + Math.sqrt(disc)) / TOWER.gravity;
+    if (tau < 0.05) return 0.1;
+    return Math.max(0.1, Math.min(1, d / tau / (TOWER.speed * DAILY_MOD.speedMul)));
+}
+function towerGone(g, s) { return s.cs !== undefined && g.clock - s.cs >= TOWER.crumbleT && g.clock - s.cs < TOWER.crumbleT + TOWER.crumbleBack; }
+// 今日排行：AI 的成绩按日期算（每天一样），再把自己今天单人爬的最高放进去，旁边写自己的历史最好
+function towerBoardList() {
+    let seed = (localDayNum() * 104729 + 7) % 233280;
+    let rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    let out = [];
+    for (let k = 0; k < 20; k++) {
+        let h = 60 - Math.floor(Math.pow(k / 19, 1.25) * 52);
+        if (k >= 2) h = Math.max(4, Math.min(60, h + Math.floor(rnd() * 5) - 2));
+        out.push({ n: RACE_AI_NAMES[(k * 7 + Math.floor(rnd() * 3)) % RACE_AI_NAMES.length] + (k >= RACE_AI_NAMES.length ? '2' : ''), h: h });
+    }
+    out.sort(function (a, b) { return b.h - a.h; });
+    let td = gState.towerDay && gState.towerDay.d === localDayNum() ? gState.towerDay.h : 0;
+    if (td > 0) {
+        let at = out.filter(function (e) { return e.h > td; }).length;
+        out.splice(at, 0, { n: gState.id || '你', h: td, me: 1 });
+    }
+    return { list: out, today: td };
+}
+function towerBoardOpen() {
+    let b = towerBoardList(), total = TOWER.steps;
+    let rows = b.list.map(function (e, i) {
+        return '<div style="display:flex; justify-content:space-between; padding:3px 8px; font-size:13px; border-radius:4px;' +
+            (e.me ? 'background:#fff3e0; font-weight:bold; color:#e65100;' : 'color:#555;') + '">' +
+            '<span>' + (i + 1) + '. ' + e.n + '</span><span>' + (e.h >= total ? '到顶' : '第 ' + e.h + ' 块') + '</span></div>';
+    }).join('');
+    document.getElementById('tower-board-body').innerHTML =
+        '<div style="font-size:12px; color:#888; margin-bottom:6px;">今天这座塔，单人爬到的最高。每天换一座。</div>' +
+        '<div style="font-size:13px; margin-bottom:6px; color:#4527a0;">你今天：' + (b.today ? '第 ' + b.today + ' 块' : '还没爬过') +
+        '　历史最好：' + (gState.towerBest ? '第 ' + gState.towerBest + ' 块' : '没有') + '</div>' +
+        '<div style="max-height:52vh; overflow:auto;">' + rows + '</div>';
+    document.getElementById('tower-board').classList.remove('hidden');
+}
+function towerBoardClose() { document.getElementById('tower-board').classList.add('hidden'); }
         function towerTop(g) { return g.steps[g.steps.length - 1]; }
         // T1：塔按当天的每日效果生成。跳得矮/跑得慢的日子，台子高度差按最高跳高缩（跳高 ∝ jumpMul²），
         // 空隙按能飞多远缩（∝ speedMul × jumpMul），岩浆也相应放慢；变强的日子塔不变。
@@ -825,23 +883,98 @@
             build: function (g) {
                 g.steps = [];
                 let sc = towerScale(); g.sc = sc;
-                let ang = 0, y = 0, r = 68, prevHalf = 26;
-                g.steps.push({ x: 0, z: 70, y: 0, half: 26, mv: 0 });   // 起点大平台
+                let ang = 0, y = 0, r = 68, prevHalf = 26, prevKind = 'normal';
+                g.steps.push({ x: 0, z: 70, y: 0, half: 26, mv: 0, kind: 'normal' });   // 起点大平台
+                // 捷径：2~3 处，每处从第 i 块直接跳到第 i+5 块（绕出去的小路也能走，只是慢）
+                let scStart = {};
+                [[11, 16], [27, 32], [42, 47]].slice(0, 2 + (seededRandom() < 0.5 ? 1 : 0)).forEach(function (w) { scStart[w[0] + Math.floor(seededRandom() * (w[1] - w[0] + 1))] = 1; });
                 for (let i = 1; i <= TOWER.steps; i++) {
                     // 按"边到边的空隙"来排，而不是随便转个角度——之前角度+半径都随机，有的两块离了 40 格，根本跳不过去。
                     // 满力跳大概能飞 20 格，空隙控制在 5~11，越往上越宽一点。
-                    let half = i === TOWER.steps ? 16 : Math.max(5.5, 10 - i * 0.06 - seededRandom() * 2);
+                    let top = i === TOWER.steps, flag = i % TOWER.flagEvery === 0;
+                    let half = top ? 16 : Math.max(5.5, 10 - i * 0.06 - seededRandom() * 2);
                     let gap = (5 + seededRandom() * 4 + Math.min(2, i * 0.04)) * sc.r;
                     r = Math.max(60, Math.min(76, r + (seededRandom() - 0.5) * 6));
                     ang += (prevHalf + half + gap) / r;
                     prevHalf = half;
                     y += (5 + seededRandom() * 2.6) * sc.h;
-                    let mv = (i > 8 && i % 7 === 0) ? (6 + seededRandom() * 6) * sc.r : 0;   // 每隔几块有一块左右晃
-                    g.steps.push({ x: Math.sin(ang) * r, z: Math.cos(ang) * r, y: y, half: half, mv: mv, ph: seededRandom() * 6, flag: i % TOWER.flagEvery === 0 });
+                    // 台子种类：旗子、塔顶、捷径起点永远是普通台
+                    let kind = 'normal', pr = seededRandom(), pk = seededRandom();
+                    if (!top && !flag && !scStart[i] && pr < TOWER.specialP[Math.min(2, Math.ceil(i / (TOWER.steps / 3)) - 1)]) {
+                        let acc = 0; kind = TOWER.kinds[TOWER.kinds.length - 1][0];
+                        for (let k = 0; k < TOWER.kinds.length; k++) { acc += TOWER.kinds[k][1]; if (pk < acc) { kind = TOWER.kinds[k][0]; break; } }
+                        if (kind === 'move' && prevKind === 'move') kind = 'crumble';   // 两块晃的挨着，空隙会拉大
+                        if (kind === 'bar' && half < 6.2) kind = 'spring';              // 太小的台子放不下横杆
+                    }
+                    prevKind = kind;
+                    let mv = kind === 'move' ? (6 + seededRandom() * 6) * sc.r : 0;
+                    g.steps.push({ x: Math.sin(ang) * r, z: Math.cos(ang) * r, y: y, half: half, mv: mv, ph: seededRandom() * 6, flag: flag, kind: kind, w: (seededRandom() < 0.5 ? -1 : 1) * TOWER.barV });
+                    if (scStart[i] && i + 5 < TOWER.steps) {
+                        // 绕出去的小路：4 块小台子往外绕一圈，第 i+5 块在 i 的正前方，两块之间是一段稍长的空隙（要助跑）。
+                        // 台子是方的，斜着排的时候空隙会被缩掉，所以每一跳都按"方块之间的实际空隙"量，不在 4.5~11 之间就把步长放大/缩小重排。
+                        let P0 = g.steps[i], tx = Math.cos(ang), tz = -Math.sin(ang), nx = Math.sin(ang), nz = Math.cos(ang);
+                        let half5 = Math.max(6, 9 - seededRandom() * 1.5);
+                        let D = P0.half + half5 + (12.5 + seededRandom() * 1.5) * sc.r;
+                        let loc = function (u, v) { return { x: P0.x + tx * u + nx * v, z: P0.z + tz * u + nz * v }; };
+                        let sq = function (p, hp, q, hq) { return Math.hypot(Math.max(0, Math.abs(p.x - q.x) - hp - hq), Math.max(0, Math.abs(p.z - q.z) - hp - hq)); };
+                        let pad = null, P5 = loc(D, 0), unit = function (deg) { let r2 = deg * Math.PI / 180; return [Math.sin(r2), Math.cos(r2)]; };   // 0 度 = 正外侧，90 度 = 沿前进方向
+                        for (let rr = 17; rr <= 27 && !pad; rr += 0.5) {
+                            for (let th1 = 0; th1 < 4 && !pad; th1++) for (let al = 20; al <= 80 && !pad; al += 15) for (let be = 0; be <= 45 && !pad; be += 15) {
+                                let u1 = unit([0, 12, -12, 24][th1]), u2 = unit(al), u4 = unit(be);
+                                let A1 = loc(u1[0] * rr, u1[1] * rr), a2 = loc(u1[0] * rr + u2[0] * rr, u1[1] * rr + u2[1] * rr), A4 = loc(D + u4[0] * rr, u4[1] * rr);
+                                // A3 取离 A2、A4 都是 rr 的那个点（外侧的一个）
+                                let mx = (a2.x + A4.x) / 2, mz = (a2.z + A4.z) / 2, dx = A4.x - a2.x, dz = A4.z - a2.z, dd = Math.hypot(dx, dz);
+                                if (dd > rr * 2 - 1) continue;
+                                let q = Math.sqrt(rr * rr - dd * dd / 4), px = -dz / dd, pz = dx / dd;
+                                let c1 = { x: mx + px * q, z: mz + pz * q }, c2 = { x: mx - px * q, z: mz - pz * q };
+                                let outward = function (c) { return (c.x - P0.x) * nx + (c.z - P0.z) * nz; };
+                                let A3 = outward(c1) > outward(c2) ? c1 : c2;
+                                let list = [P0, A1, a2, A3, A4, P5], hs = [P0.half, 6, 6, 6, 6, half5], ok = true;
+                                for (let k = 0; k < 5 && ok; k++) { let gp = sq(list[k], hs[k], list[k + 1], hs[k + 1]); if (gp < 4.5 || gp > 11 * sc.r) ok = false; }
+                                // 小路上的台子之间、跟起点终点之间都不能叠（隔一块的也不行）
+                                for (let k = 0; k < 6 && ok; k++) for (let m = k + 2; m < 6 && ok; m++) if (Math.abs(list[k].x - list[m].x) < hs[k] + hs[m] + 2 && Math.abs(list[k].z - list[m].z) < hs[k] + hs[m] + 2) ok = false;
+                                if (ok) pad = [A1, a2, A3, A4];
+                            }
+                        }
+                        if (!pad) { prevKind = 'normal'; continue; }   // 排不下（极少）：这一处不做捷径，接着按普通路走
+                        pad.forEach(function (c, k) {
+                            g.steps.push({ x: c.x, z: c.z, y: y + [1.8, 3.6, 5.4, 6.8][k] * sc.h, half: 6, mv: 0, ph: 0, flag: (i + 1 + k) % TOWER.flagEvery === 0, kind: 'normal', w: 1, ring: true });
+                        });
+                        let px = P5.x, pz = P5.z;
+                        y = P0.y + 7 * sc.h;
+                        g.steps.push({ x: px, z: pz, y: y, half: half5, mv: 0, ph: 0, flag: (i + 5) % TOWER.flagEvery === 0, kind: 'normal', w: 1, scEnd: true });
+                        P0.scTo = i + 5;
+                        ang = Math.atan2(px, pz); r = Math.hypot(px, pz); prevHalf = half5; prevKind = 'normal';
+                        i += 5;
+                    }
                 }
+                // 晃的台子：晃到最远的时候，跟前后两块的空隙也得跳得过去——不行就把幅度收小
+                g.steps.forEach(function (s, i) {
+                    if (!s.mv) return;
+                    let nb = [g.steps[i - 1], g.steps[i + 1]];
+                    let worst = function (m) {
+                        let w = 0;
+                        nb.forEach(function (n) {
+                            [-m, m].forEach(function (o) {
+                                let gx = Math.max(0, Math.abs(s.x + o - n.x) - s.half - n.half), gz = Math.max(0, Math.abs(s.z - n.z) - s.half - n.half);
+                                w = Math.max(w, Math.hypot(gx, gz));
+                            });
+                        });
+                        return w;
+                    };
+                    while (s.mv > 2 && worst(s.mv) > TOWER.moveGapMax * sc.r) s.mv -= 0.5;
+                    if (worst(s.mv) > TOWER.moveGapMax * sc.r) { s.mv = 0; s.kind = 'crumble'; }
+                });
+                // 传送带的方向：朝下一块（六成）或朝回走（四成）
+                g.steps.forEach(function (s, i) {
+                    if (s.kind !== 'belt') return;
+                    let nx = g.steps[i + 1], dx = nx.x - s.x, dz = nx.z - s.z, d = Math.hypot(dx, dz) || 1, sg = seededRandom() < 0.6 ? 1 : -1;
+                    s.bx = dx / d * sg; s.bz = dz / d * sg;
+                });
+                let KIND_COL = { move: 0x80deea, crumble: 0xd7b98e, spring: 0xff8a65, belt: 0x546e7a };
                 g.steps.forEach(function (s, i) {
                     let top = i === g.steps.length - 1;
-                    let m = new THREE.Mesh(new THREE.BoxGeometry(s.half * 2, 3, s.half * 2), new THREE.MeshLambertMaterial({ color: top ? 0xffd54f : (s.mv ? 0x80deea : (i % 2 ? 0xb39ddb : 0x9575cd)) }));
+                    let m = new THREE.Mesh(new THREE.BoxGeometry(s.half * 2, 3, s.half * 2), new THREE.MeshLambertMaterial({ color: top ? 0xffd54f : (KIND_COL[s.kind] || (i % 2 ? 0xb39ddb : 0x9575cd)) }));
                     m.position.set(s.x, s.y - 1.5, s.z); nmAdd(m); s.mesh = m; s.x0 = s.x;
                     if (s.flag) {
                         let pole = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 12), new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
@@ -849,7 +982,31 @@
                         let fl = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 0.4), new THREE.MeshBasicMaterial({ color: 0x66bb6a }));
                         fl.position.set(2.5, 12, 0); m.add(fl); s.flagMesh = fl;
                     }
+                    if (s.kind === 'spring') {
+                        let rg = new THREE.Mesh(new THREE.TorusGeometry(s.half * 0.45, 0.7, 6, 20), new THREE.MeshBasicMaterial({ color: 0xffeb3b }));
+                        rg.rotation.x = Math.PI / 2; rg.position.y = 1.7; m.add(rg);
+                    } else if (s.kind === 'belt') {
+                        let sh = new THREE.Shape(); sh.moveTo(0, 3); sh.lineTo(2.4, 0); sh.lineTo(0.9, 0); sh.lineTo(0.9, -3); sh.lineTo(-0.9, -3); sh.lineTo(-0.9, 0); sh.lineTo(-2.4, 0); sh.closePath();
+                        [-0.4, 0.4].forEach(function (off) {
+                            let holder = new THREE.Group(); holder.rotation.y = Math.atan2(-s.bx, -s.bz); holder.position.set(s.bx * s.half * off, 1.6, s.bz * s.half * off);
+                            let ar = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshBasicMaterial({ color: 0xffeb3b, side: THREE.DoubleSide }));
+                            ar.rotation.x = -Math.PI / 2; holder.add(ar); m.add(holder);
+                        });
+                    } else if (s.kind === 'bar') {
+                        let bar = new THREE.Mesh(new THREE.BoxGeometry(s.half * 2, 3, 1.4), new THREE.MeshLambertMaterial({ color: 0xef5350 }));
+                        bar.position.y = 3; m.add(bar); s.bar = bar;
+                    }
                 });
+                // 路上的币：10 个，从下往上大致均匀撒在台子上（每人自己捡）
+                g.coins = []; let used = {};
+                for (let k = 0; k < TOWER.coins; k++) {
+                    let idx = Math.min(TOWER.steps - 2, Math.max(3, Math.round(3 + k * 5.6 + seededRandom() * 3)));
+                    while (used[idx] && idx < TOWER.steps - 1) idx++;
+                    used[idx] = 1;
+                    let grp = new THREE.Group(), disc = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 0.6, 16), new THREE.MeshBasicMaterial({ color: 0xffca28 }));
+                    disc.rotation.x = Math.PI / 2; grp.add(disc); nmAdd(grp);
+                    g.coins.push({ i: idx, grp: grp, got: false });
+                }
                 let pillar = new THREE.Mesh(new THREE.CylinderGeometry(30, 34, towerTop(g).y + 60, 24), new THREE.MeshLambertMaterial({ color: 0x4527a0 }));
                 pillar.position.y = (towerTop(g).y + 60) / 2 - 40; nmAdd(pillar);
                 g.lavaY = TOWER.lava0 * sc.h;
@@ -868,32 +1025,42 @@
             groundAt: function (g, x, z, prevY) {
                 let best = -1e9;
                 g.steps.forEach(function (s) {
-                    if (Math.abs(x - s.x) <= s.half && Math.abs(z - s.z) <= s.half && s.y <= prevY + 0.6 && s.y > best) best = s.y;
+                    if (Math.abs(x - s.x) <= s.half && Math.abs(z - s.z) <= s.half && s.y <= prevY + 0.6 && s.y > best && !(s.kind === 'crumble' && towerGone(g, s))) best = s.y;
                 });
                 return best;
             },
-            carry: function (g, a) {   // 站在晃动的台子上跟着走
+            jumpMul: function (g, a) { let s = towerStepUnder(g, a); return s && s.kind === 'spring' ? TOWER.springMul : 1; },   // 弹床：跳得高
+            carry: function (g, a, dt) {   // 站在晃动的台子上跟着走；传送带把人往一个方向带
                 if (!a.onGround) return;
                 g.steps.forEach(function (s) {
-                    if (s.mv && Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half && Math.abs(a.p.y - s.y) < 0.2) a.p.x += s.dx || 0;
+                    if (Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half && Math.abs(a.p.y - s.y) < 0.2) {
+                        if (s.mv) a.p.x += s.dx || 0;
+                        if (s.kind === 'belt') { a.p.x += s.bx * TOWER.beltV * dt; a.p.z += s.bz * TOWER.beltV * dt; }
+                    }
                 });
             },
             ai: function (g, a, dt) {
                 let w = { x: 0, z: 0, jump: false, act: false };
                 // 站着的台子编号：往上找最近的一块当目标
                 g.steps.forEach(function (s, i) { if (a.onGround && Math.abs(a.p.y - s.y) < 0.3 && Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half) a.si = i; });
-                let t = g.steps[Math.min(g.steps.length - 1, a.si + 1)];
+                // 有捷径的那一块：技术好的 AI 经常直接跳过去
+                let cur = g.steps[a.si];
+                if (cur && cur.scTo && a.scPick !== a.si) { a.scPick = a.si; a.useSc = Math.random() < 0.2 + a.skill * 0.4; }
+                let t = g.steps[Math.min(g.steps.length - 1, (cur && cur.scTo && a.useSc && a.scPick === a.si) ? cur.scTo : a.si + 1)];
                 let dx = t.x - a.p.x, dz = t.z - a.p.z, d = Math.hypot(dx, dz) || 1;
                 if (a.si === g.steps.length - 1) return w;
+                let onCr = cur && cur.kind === 'crumble';
                 // 双人合作：AI 队友领先太多就停下等你
                 if (g.opt.kind === 'duo') {
                     let mate = g.actors.filter(function (b) { return b !== a; })[0];
                     if (mate && !mate.downed && a.si - mate.si > 4 && a.onGround) return w;
                 }
                 // 偶尔站一下再跳，像人在瞄
-                if (a.pauseT > 0) { a.pauseT -= dt; return w; }
-                if (a.onGround && Math.random() < dt * (0.5 - a.skill * 0.3)) { a.pauseT = 0.3 + Math.random() * 0.6; return w; }
+                if (a.pauseT > 0 && !onCr) { a.pauseT -= dt; return w; }
+                if (a.onGround && !onCr && Math.random() < dt * (0.5 - a.skill * 0.3)) { a.pauseT = 0.3 + Math.random() * 0.6; return w; }
                 w.x = dx / d; w.z = dz / d;
+                // 在空中飞到目标台子上头就松开方向（人也会这么做），不然跳得高/跳得远的时候会飞过头
+                if (!a.onGround) { let k = towerAirK(a, t, d); w.x *= k; w.z *= k; }
                 a.aiT -= dt;
                 // 离目标台子边缘不远了就起跳；偶尔起跳时机没掐好（AI 也会失误）
                 // 脚下马上没地了就跳（看 0.12 秒后的位置），比按距离算稳——之前一群 AI 在起点边上直接走下去
@@ -918,9 +1085,48 @@
                 }
                 g.lava.position.y = g.lavaY;
                 g.glow.position.set(g.me.p.x, g.lavaY + 20, g.me.p.z);
+                // 易碎台：踩上去 1 秒后掉，再过 5 秒长回来（掉落时间按局内时钟算，大家看到的一样）
+                g.steps.forEach(function (s) {
+                    if (s.kind === 'crumble') {
+                        let d = s.cs === undefined ? -1 : g.clock - s.cs, gone = towerGone(g, s), shake = d >= 0 && d < TOWER.crumbleT;
+                        s.mesh.visible = !gone;
+                        s.mesh.position.x = s.x + (shake ? Math.sin(g.clock * 70) * 0.5 : 0);
+                        if (s.shaking !== shake) { s.shaking = shake; s.mesh.material.color.setHex(shake ? 0xe57373 : 0xd7b98e); }
+                    } else if (s.kind === 'bar') {
+                        let th = g.clock * s.w + s.ph; s.bar.rotation.y = -th;
+                        g.actors.forEach(function (a) {
+                            if (a.out || a.downed || a.barT > 0 || !nmMine(a)) return;
+                            let dy = a.p.y - s.y; if (dy < -0.5 || dy > 3.2) return;
+                            let ux = Math.cos(th), uz = Math.sin(th), rx = a.p.x - s.x, rz = a.p.z - s.z;
+                            let al = rx * ux + rz * uz, cl = Math.max(-s.half, Math.min(s.half, al));
+                            if (Math.hypot(rx - ux * cl, rz - uz * cl) > TOWER.barHit) return;
+                            let sg = (al >= 0 ? 1 : -1) * (s.w > 0 ? 1 : -1);
+                            nmKnock(a, -Math.sin(th) * sg * 55, Math.cos(th) * sg * 55, null, 14); a.barT = 0.8;
+                        });
+                    }
+                });
+                // 币：悬在台子中间，转着；只有自己捡得到
+                g.coins.forEach(function (c) {
+                    let s = g.steps[c.i], me = g.me;
+                    c.grp.position.set(s.x, s.y + 7, s.z); c.grp.rotation.y = g.clock * 3;
+                    if (c.got || me.out || me.downed) return;
+                    if (Math.hypot(me.p.x - s.x, me.p.z - s.z) < 6 && me.p.y < s.y + 9 && me.p.y > s.y - 7) {
+                        c.got = true; c.grp.visible = false; me.runCoins = (me.runCoins || 0) + 1;
+                        blazeFlash('猫盾币 +1（' + me.runCoins + ' / ' + TOWER.coins + '）');
+                    }
+                });
                 g.actors.forEach(function (a) {
                     if (a.out || a.downed) return;
-                    g.steps.forEach(function (s, i) { if (a.onGround && Math.abs(a.p.y - s.y) < 0.3 && Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half) { a.si = i; if (i > a.best) a.best = i; } });
+                    if (a.barT > 0) a.barT -= dt;
+                    g.steps.forEach(function (s, i) {
+                        if (a.onGround && Math.abs(a.p.y - s.y) < 0.3 && Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half) {
+                            a.si = i; if (i > a.best) a.best = i;
+                            if (s.kind === 'crumble' && nmMine(a) && (s.cs === undefined || g.clock >= s.cs + TOWER.crumbleT + TOWER.crumbleBack)) {
+                                s.cs = g.clock;
+                                if (g.net) bc.postMessage({ type: 'NM_EV', target: '*', sender: gState.id, mode: 'tower', ev: 'cr', k: i, t: +g.clock.toFixed(2) });
+                            }
+                        }
+                    });
                     let st = g.steps[a.si];
                     if (st && st.flag && a.si > (a.cp || 0)) towerSetCp(g, a, a.si);
                     // 存档点被岩浆淹了：提醒一次（再掉下去就结束了）
@@ -971,6 +1177,7 @@
                 nmOut(a, g.opt.kind === 'solo' ? '岩浆淹过了存档点，游戏结束' : '岩浆淹过了存档点，出局了');
             },
             onEv: function (g, m) {
+                if (m.ev === 'cr') { let s = g.steps[m.k]; if (s && s.kind === 'crumble') s.cs = m.t; return; }
                 let a = g.actors[m.i]; if (!a) return;
                 if (m.ev === 'down') { a.downed = true; a.downAt = m.at; a.mesh.visible = false; }
                 else if (m.ev === 'up') { a.downed = false; a.mesh.visible = true; }
@@ -1009,16 +1216,26 @@
                 let h = g.me.best;
                 let rec = gState.towerBest || 0;
                 return '你爬到第 ' + h + ' 块（共 ' + (g.steps.length - 1) + ' 块）' + (h > rec ? '，新纪录！' : '，最好 ' + rec + ' 块') +
-                    '<br>掉下去 ' + (g.me.falls || 0) + ' 次';
+                    '<br>掉下去 ' + (g.me.falls || 0) + ' 次　捡了 ' + (g.me.runCoins || 0) + ' 个币';
             },
-            afterEnd: function (g) { if ((g.me.best || 0) > (gState.towerBest || 0)) { gState.towerBest = g.me.best; saveProgress(); } },
+            afterEnd: function (g) {
+                let h = g.me.best || 0;
+                if (h > (gState.towerBest || 0)) gState.towerBest = h;
+                if (g.opt.kind === 'solo') {   // 单人：记今天爬的最高（今日排行用）
+                    let d = localDayNum();
+                    if (!gState.towerDay || gState.towerDay.d !== d) gState.towerDay = { d: d, h: 0 };
+                    if (h > gState.towerDay.h) gState.towerDay.h = h;
+                }
+                if (g.me.runCoins > 0) coinsBonus = { mode: 'tower', n: Math.min(TOWER.coins, g.me.runCoins) };
+                saveProgress();
+            },
             hud: function (g) {
                 let me = g.me, total = g.steps.length - 1;
                 let gap = Math.max(0, Math.round(me.p.y - g.lavaY));
                 let kindTxt = g.opt.kind === 'solo' ? '单人' : g.opt.kind === 'duo' ? '双人合作' : '多人';
                 let mate = g.opt.kind === 'duo' ? g.actors.filter(function (b) { return b !== me; })[0] : null;
                 let flooded = g.lavaY > g.steps[me.cp || 0].y;
-                nmHudText('第 ' + me.best + ' / ' + total + ' 块　离岩浆 ' + gap,
+                nmHudText('第 ' + me.best + ' / ' + total + ' 块　离岩浆 ' + gap + '　币 ' + (me.runCoins || 0) + '/' + TOWER.coins,
                     (flooded && !me.out && !me.downed ? '⚠ 存档点被淹了，再掉下去' + towerLoseWord(g) + '　' : '存档点：' + (me.cp ? '第 ' + me.cp + ' 块' : '起点') + '　') +
                     kindTxt + (g.clock < TOWER.grace ? '　' + Math.ceil(TOWER.grace - g.clock) + ' 秒后岩浆开始涨' : '　岩浆在涨') +
                     (mate ? '　队友：' + mate.name + (mate.downed ? '（掉下去了）' : mate.done ? '（到顶了）' : '') : '') +

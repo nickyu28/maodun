@@ -438,7 +438,7 @@
         }
         // 3) 全屏面板（弹窗、记录榜、图鉴）盖住大厅的时候不画 3D
         function hubPanelCovers() {
-            return ['sys-modal', 'race-board', 'book-modal'].some(function (id) { let e = document.getElementById(id); return e && !e.classList.contains('hidden'); });
+            return ['sys-modal', 'race-board', 'tower-board', 'book-modal'].some(function (id) { let e = document.getElementById(id); return e && !e.classList.contains('hidden'); });
         }
         function hubTick(dt) {
             let prevPx = hub.p.x, prevPz = hub.p.z;

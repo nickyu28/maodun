@@ -1164,6 +1164,7 @@
                 <button onclick="nmStartGo('tower', { kind: 'duo' })" style="flex:1; margin:0; background:#5e35b1; color:#fff; border:none; padding:9px 0; font-size:13px;">双人合作</button>
                 <button onclick="nmStartGo('tower', { kind: 'multi' })" style="flex:1; margin:0; background:#4527a0; color:#fff; border:none; padding:9px 0; font-size:13px;">多人</button>
             </div>
+            <button onclick="towerBoardOpen()" style="width:100%; margin:6px 0 0; background:#455a64; color:#fff; border:none; padding:8px 0; font-size:13px;">今日爬塔最高</button>
         </div>
         <div id="cake-only" class="hidden" style="width:100%; box-sizing:border-box; margin:0 0 8px; background:#fff8e1; border:1px solid #ffca28; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#f57f17; font-weight:bold; margin-bottom:2px;">松饼大作战 · 自由混战</div>
@@ -1273,6 +1274,14 @@
                 <h2 style="margin:0 0 4px; color:#00897b;">竞速·记录榜</h2>
                 <div id="race-board-body"></div>
                 <button onclick="raceBoardClose()" style="width:100%; margin-top:12px; background:#888; color:#fff; border:none;">关闭</button>
+            </div>
+        </div>
+        <div id="tower-board" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);
+             z-index:60; display:flex; align-items:center; justify-content:center;">
+            <div style="background:#fff; border-radius:10px; padding:16px; width:min(92vw,420px); text-align:left;">
+                <h2 style="margin:0 0 4px; color:#4527a0;">爬塔·今日最高</h2>
+                <div id="tower-board-body"></div>
+                <button onclick="towerBoardClose()" style="width:100%; margin-top:12px; background:#888; color:#fff; border:none;">关闭</button>
             </div>
         </div>
         <div id="book-modal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);

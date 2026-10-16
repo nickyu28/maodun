@@ -325,50 +325,102 @@ function TABLE_SIM() {
 }
 // T1：6 种每日效果各生成 20 座塔，模拟角色（朝下一块跑、到边缘起跳、空中朝目标修正）逐块验证能不能上去；
 // 再不失误连续跑一遍，看到顶时岩浆占塔高的比例。在大厅里跑（nm 临时换成一个假的局）
-function TOWER_SIM(nTowers) {
-    let mods = {}; DAILY_MODIFIERS.forEach(function (m) { mods[m.id] = { speedMul: m.speedMul, jumpMul: m.jumpMul }; });
+function TOWER_SIM(nTowers, onlyIds, seedBase) {
+    let mods = {}; DAILY_MODIFIERS.forEach(function (m) { if (!onlyIds || onlyIds.indexOf(m.id) >= 0) mods[m.id] = { speedMul: m.speedMul, jumpMul: m.jumpMul }; });
     let keep = { speedMul: DAILY_MOD.speedMul, jumpMul: DAILY_MOD.jumpMul }, oldNm = nm, oldAdd = window.nmAdd, out = {};
-    let moveSteps = function (g) { g.steps.forEach(function (s) { if (!s.mv) return; let nx = s.x0 + Math.sin(g.clock * 1.3 + s.ph) * s.mv; s.dx = nx - s.x; s.x = nx; }); };
+    let moveSteps = function (g) { if (g.freeze) return; g.steps.forEach(function (s) { if (!s.mv) return; let nx = s.x0 + Math.sin(g.clock * 1.3 + s.ph) * s.mv; s.dx = nx - s.x; s.x = nx; }); };
     let onStep = function (a, s) { return a.onGround && Math.abs(a.p.y - s.y) < 0.3 && Math.abs(a.p.x - s.x) <= s.half && Math.abs(a.p.z - s.z) <= s.half; };
     let at = function (s) { return { p: new THREE.Vector3(s.x, s.y, s.z), mvx: 0, mvz: 0, kx: 0, kz: 0, vy: 0, onGround: true, coyote: 0, actCd: 0, stunT: 0, isPlayer: true, facing: 0 }; };
-    let hop = function (g, a, i) {
-        let t = g.steps[i + 1];
+    // 从第 i 块跳到第 to 块：跟 AI 一样走过去、脚下没地了才跳；在空中飞到目标上头就松开方向
+    let hop = function (g, a, i, to) {
+        let t = g.steps[to === undefined ? i + 1 : to];
         for (let T = 0; T < 6; T += 1 / 60) {
             moveSteps(g);
             let dx = t.x - a.p.x, dz = t.z - a.p.z, d = Math.hypot(dx, dz) || 1;
             let edge = a.onGround && NM_DEFS.tower.groundAt(g, a.p.x + a.mvx * 0.12, a.p.z + a.mvz * 0.12, a.p.y) < a.p.y - 0.5;
-            nmPhysics(a, { x: dx / d, z: dz / d, jump: edge, act: false }, 1 / 60); g.clock += 1 / 60;
+            let k = !a.onGround ? towerAirK(a, t, d) : 1;
+            nmPhysics(a, { x: dx / d * k, z: dz / d * k, jump: edge, act: false }, 1 / 60); g.clock += 1 / 60;
             if (onStep(a, t)) return true;
+            if (a.onGround && g.steps.some(function (q, j) { return j > (to === undefined ? i + 1 : to) && onStep(a, q); })) return true;   // 跳高了落在更高的台子上，也算过去了
             if (a.onGround && Math.abs(a.p.y - g.steps[i].y) > 0.3) return false;
             if (a.p.y < t.y - 30) return false;
         }
         return false;
     };
+    let bad = [];
     try {
         window.nmAdd = function () { };
         Object.keys(mods).forEach(function (id) {
             DAILY_MOD.speedMul = mods[id].speedMul; DAILY_MOD.jumpMul = mods[id].jumpMul;
-            let bad = 0, frac = 0;
+            let nbad = 0, frac = 0;
             for (let k = 0; k < nTowers; k++) {
-                gameSeed = 1000 + k * 7919;
+                gameSeed = (seedBase || 1000) + k * 7919;
                 let g = { opt: { kind: 'solo' }, clock: 0, actors: [], def: NM_DEFS.tower, mode: 'tower', fx: [] };
                 NM_DEFS.tower.build(g); nm = g;
+                // 每一跳（含捷径那一跳）：晃的台子停在最不利的位置（两端各试），都要过得去
                 for (let i = 0; i < g.steps.length - 1; i++) {
-                    let ok = false;
-                    for (let tr = 0; tr < 3 && !ok; tr++) { g.clock = tr * 1.7; moveSteps(g); ok = hop(g, at(g.steps[i]), i); }
-                    if (!ok) bad++;
+                    let tgts = [i + 1]; if (g.steps[i].scTo) tgts.push(g.steps[i].scTo);
+                    tgts.forEach(function (to) {
+                        let ms = [g.steps[i], g.steps[to]].filter(function (s) { return s.mv; });
+                        let combos = ms.length === 0 ? [[]] : ms.length === 1 ? [[-1], [1]] : [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+                        let ok = combos.every(function (c) {
+                            g.freeze = true; g.clock = 0;
+                            ms.forEach(function (s, q) { s.x = s.x0 + c[q] * s.mv; });
+                            let res = hop(g, at(g.steps[i]), i, to);
+                            ms.forEach(function (s) { s.x = s.x0; });
+                            g.freeze = false; return res;
+                        });
+                        if (!ok) { nbad++; if (bad.length < 6) bad.push(id + ' 塔' + k + ' ' + i + '>' + to + '(' + g.steps[i].kind + '>' + g.steps[to].kind + ')'); }
+                    });
                 }
-                g.clock = 0; moveSteps(g);
+                g.clock = 0; g.freeze = false; moveSteps(g);
                 let a = at(g.steps[0]);
                 for (let i = 0; i < g.steps.length - 1; i++) if (!hop(g, a, i)) a = at(g.steps[i + 1]);
                 let L = TOWER.lava0 * g.sc.h;
                 for (let c = 0; c < g.clock; c += 1 / 60) if (c > TOWER.grace) L += (TOWER.rise0 + (TOWER.rise1 - TOWER.rise0) * Math.min(1, (c - TOWER.grace) / TOWER.riseRamp)) * g.sc.lava / 60;
                 frac += L / towerTop(g).y / nTowers;
             }
-            out[id] = { bad: bad, frac: +frac.toFixed(3) };
+            out[id] = { bad: nbad, frac: +frac.toFixed(3) };
         });
     } finally { DAILY_MOD.speedMul = keep.speedMul; DAILY_MOD.jumpMul = keep.jumpMul; nm = oldNm; window.nmAdd = oldAdd; }
+    out.badAt = bad;
     return JSON.stringify(out);
+}
+// S3：造 n 座塔，数各种台子占比、捷径、币、台子有没有叠在一起
+function TOWER_STAT(n) {
+    let oldNm = nm, oldAdd = window.nmAdd, res = { n: n, thirds: [[0, 0], [0, 0], [0, 0]], kinds: {}, flagSpecial: 0, topSpecial: 0, startSpecial: 0, sc: [], coins: [], overlap: 0, scBadRise: 0, steps: [], seedAll: 0 };
+    try {
+        window.nmAdd = function () { };
+        for (let k = 0; k < n; k++) {
+            gameSeed = 500 + k * 6151; let seed0 = gameSeed;
+            let g = { opt: { kind: 'solo' }, clock: 0, actors: [], def: NM_DEFS.tower, mode: 'tower', fx: [] };
+            NM_DEFS.tower.build(g);
+            let nSc = 0;
+            g.steps.forEach(function (s, i) {
+                res.kinds[s.kind] = (res.kinds[s.kind] || 0) + 1;
+                if (s.kind !== 'normal') {
+                    if (s.flag) res.flagSpecial++;
+                    if (i === g.steps.length - 1) res.topSpecial++;
+                    if (i === 0) res.startSpecial++;
+                }
+                if (i >= 1 && !s.flag && i < g.steps.length - 1 && !s.ring && !s.scEnd && !(g.steps[i].scTo)) {
+                    let th = Math.min(2, Math.ceil(i / (TOWER.steps / 3)) - 1);
+                    res.thirds[th][0]++; if (s.kind !== 'normal') res.thirds[th][1]++;
+                }
+                if (s.scTo) { nSc++; let e = g.steps[s.scTo]; if (e.y - s.y > 7.6 || e.y - s.y < 5) res.scBadRise++; }
+                for (let j = i + 1; j < g.steps.length; j++) {
+                    let t = g.steps[j];
+                    // 一圈圈往上盘，隔一圈的台子在平面上本来就对着；上下相邻的台子也有落差；只看高度差不到 3 的（站在同一层、真会挤在一起的）
+                    if (Math.abs(t.y - s.y) < 3 && Math.abs(t.x0 - s.x0) < s.half + t.half && Math.abs(t.z - s.z) < s.half + t.half) res.overlap++;
+                }
+            });
+            let ks = {}; g.steps.forEach(function (q) { ks[q.kind] = 1; });
+            if (!res.seedAll && ks.crumble && ks.spring && ks.belt && ks.bar) res.seedAll = seed0;
+            res.sc.push(nSc); res.coins.push(g.coins.length);
+            res.steps.push(g.steps.length);
+        }
+    } finally { nm = oldNm; window.nmAdd = oldAdd; }
+    return JSON.stringify(res);
 }
 // E1：竞速在每种每日效果下最远能跳多远（数值从页面读，在 Node 里按竞速的移动规则算）
 function raceReach(R, sm, jm) {
@@ -2398,6 +2450,99 @@ async function enterExit(tab, key) {
             if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
             await M.eval(`${HIDE} nmExit(); true;`); await M.close();
             report('S2 推推乐变数：四种台面能开能打完；道具掉落/捡/用（大锤、香蕉皮、护盾、弹簧，AI 也会）；蓄力撞按住 ×2、点一下普通；触屏按住和“道具”键', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('S3')) {
+            // S3 爬塔变数：台子种类的占比、旗子/塔顶/起点是普通台、捷径、币、台子不叠；每一跳都过得去（晃的台子停在最不利的位置）；
+            // 易碎/弹床/传送带/横杆/币真的起作用；塔按日期定种子；今日排行
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const st = JSON.parse(await T.eval(`${HIDE} (${TOWER_STAT.toString()})(50)`));
+            const ratio = (a) => a[1] / Math.max(1, a[0]);
+            if (st.thirds[0][1] !== 0) bad.push('下 1/3 出现了特殊台 ' + st.thirds[0][1]);
+            if (ratio(st.thirds[1]) < 0.27 || ratio(st.thirds[1]) > 0.43) bad.push('中间 1/3 特殊台占比 ' + ratio(st.thirds[1]).toFixed(2) + '（应约 0.35）');
+            if (ratio(st.thirds[2]) < 0.42 || ratio(st.thirds[2]) > 0.58) bad.push('顶上 1/3 特殊台占比 ' + ratio(st.thirds[2]).toFixed(2) + '（应约 0.5）');
+            if (st.flagSpecial || st.topSpecial || st.startSpecial) bad.push('旗子/塔顶/起点不是普通台 ' + [st.flagSpecial, st.topSpecial, st.startSpecial]);
+            ['move', 'crumble', 'spring', 'belt', 'bar'].forEach((k) => { if (!st.kinds[k]) bad.push('50 座塔里没出现过 ' + k); });
+            if (st.sc.some((n) => n < 2 || n > 3)) bad.push('每座塔应有 2~3 处捷径 ' + st.sc.join());
+            if (st.coins.some((n) => n !== 10)) bad.push('每座塔应有 10 个币 ' + st.coins.join());
+            if (st.steps.some((n) => n !== 61)) bad.push('台子数不是 61 ' + st.steps.join());
+            if (st.overlap) bad.push('有 ' + st.overlap + ' 对台子叠在一起');
+            if (!st.seedAll) bad.push('50 座塔里没有同时有易碎/弹床/传送带/横杆的');
+            if (st.scBadRise) bad.push('捷径落差不对 ' + st.scBadRise);
+            const sim = JSON.parse(await T.eval(`${HIDE} (${TOWER_SIM.toString()})(50, ['normal'], 3000)`));
+            if (sim.normal.bad > 0) bad.push('平常日子 50 座塔里有 ' + sim.normal.bad + ' 跳过不去 ' + sim.badAt.join(' | '));
+            // 塔按日期定种子
+            await T.eval(`${HIDE} selectGameMode('tower'); nmStartGo('tower', { kind: 'solo' }); true;`);
+            await until(T, `nm && nm.steps && nm.steps.length === 61`);
+            const d1 = JSON.parse(await T.eval(`JSON.stringify({ seed: nm.seed, want: towerDaySeed(), h: nm.steps.map(function (s) { return [Math.round(s.x0), Math.round(s.z), Math.round(s.y), s.kind]; }) })`));
+            await T.eval(`nmTeardown(); nmStartGo('tower', { kind: 'solo' }); true;`);
+            await until(T, `nm && nm.steps && nm.steps.length === 61`);
+            const d2 = JSON.parse(await T.eval(`JSON.stringify({ seed: nm.seed, h: nm.steps.map(function (s) { return [Math.round(s.x0), Math.round(s.z), Math.round(s.y), s.kind]; }) })`));
+            if (d1.seed !== d1.want || JSON.stringify(d1.h) !== JSON.stringify(d2.h)) bad.push('塔不是按日期定的 ' + d1.seed + '/' + d1.want);
+            await T.eval(`nmTeardown(); true;`);
+            // 台子机制
+            await T.eval(`${HIDE} selectGameMode('tower'); nmBegin('tower', [{ id: gState.id }], gState.id, ${st.seedAll}, { kind: 'solo' }); nm.def.ai = function () { return {}; }; window.__pick = function (k) { return nm.steps.findIndex(function (s) { return s.kind === k; }); }; true;`);
+            const idx = JSON.parse(await T.eval(`JSON.stringify({ c: __pick('crumble'), sp: __pick('spring'), b: __pick('belt'), bar: __pick('bar') })`));
+            if (idx.c < 0 || idx.sp < 0 || idx.b < 0 || idx.bar < 0) bad.push('这座塔里缺某种台子 ' + JSON.stringify(idx));
+            else {
+                // 易碎：踩上去 1 秒后掉，5 秒后长回来
+                await T.eval(`(function(){ let s = nm.steps[${idx.c}]; nm.me.p.set(s.x, s.y, s.z); nm.me.vy = 0; })(); true;`);
+                if (!(await until(T, `nm.steps[${idx.c}].cs !== undefined`))) bad.push('踩上易碎台没开始计时');
+                const c0 = await T.eval(`nm.steps[${idx.c}].mesh.visible`);
+                await T.eval(`nm.clock = nm.steps[${idx.c}].cs + 1.2; nm.def.tick(nm, 0.016); true;`);
+                const c1 = JSON.parse(await T.eval(`JSON.stringify({ v: nm.steps[${idx.c}].mesh.visible, g: nm.def.groundAt(nm, nm.steps[${idx.c}].x, nm.steps[${idx.c}].z, nm.steps[${idx.c}].y + 0.6) })`));
+                await T.eval(`nm.clock = nm.steps[${idx.c}].cs + 6.5; nm.def.tick(nm, 0.016); true;`);
+                const c2 = JSON.parse(await T.eval(`JSON.stringify({ v: nm.steps[${idx.c}].mesh.visible, g: nm.def.groundAt(nm, nm.steps[${idx.c}].x, nm.steps[${idx.c}].z, nm.steps[${idx.c}].y + 0.6), y: nm.steps[${idx.c}].y })`));
+                if (!c0 || c1.v || c1.g > c2.y - 1 || !c2.v || c2.g !== c2.y) bad.push('易碎台 掉/长回来不对 ' + JSON.stringify([c0, c1, c2]));
+                // 弹床：跳得高 ×1.6（高度 ≈ ×2.56）
+                const jh = JSON.parse(await T.eval(`(function(){
+                    let hop = function (si) { let s = nm.steps[si], a = nm.me; a.p.set(s.x, s.y, s.z); a.vy = 0; a.mvx = a.mvz = a.kx = a.kz = 0; a.onGround = true; a.coyote = 0.1; let mx = 0;
+                        for (let t = 0; t < 120; t++) { nmPhysics(a, { x: 0, z: 0, jump: t === 0, act: false }, 1 / 60); mx = Math.max(mx, a.p.y - s.y); } return mx; };
+                    return JSON.stringify({ spring: hop(${idx.sp}), plain: hop(1), mul: nm.def.jumpMul(nm, { p: new THREE.Vector3(nm.steps[${idx.sp}].x, nm.steps[${idx.sp}].y, nm.steps[${idx.sp}].z) }) }); })()`));
+                if (jh.mul !== 1.6 || jh.spring / jh.plain < 2.3 || jh.spring / jh.plain > 2.8) bad.push('弹床高度不对 ' + JSON.stringify(jh));
+                // 传送带：站上去被带着走（14/秒）
+                const bt = JSON.parse(await T.eval(`(function(){ let s = nm.steps[${idx.b}], a = nm.me; a.p.set(s.x, s.y, s.z); a.vy = 0; a.mvx = a.mvz = a.kx = a.kz = 0; a.onGround = true;
+                    for (let t = 0; t < 30; t++) nm.def.carry(nm, a, 1 / 60);
+                    return JSON.stringify({ dx: a.p.x - s.x, dz: a.p.z - s.z, bx: s.bx, bz: s.bz }); })()`));
+                if (Math.abs(bt.dx - bt.bx * 7) > 0.2 || Math.abs(bt.dz - bt.bz * 7) > 0.2) bad.push('传送带速度/方向不对 ' + JSON.stringify(bt));
+                // 横杆：站在杆上被打飞，跳起来躲得过
+                const br = JSON.parse(await T.eval(`(function(){ let s = nm.steps[${idx.bar}], a = nm.me, out = {};
+                    nm.clock = 3; let th = nm.clock * s.w + s.ph, ux = Math.cos(th), uz = Math.sin(th);
+                    a.p.set(s.x + ux * 3, s.y + 6, s.z + uz * 3); a.kx = a.kz = 0; a.barT = 0; a.out = false; a.downed = false;
+                    nm.def.tick(nm, 0.001); out.high = Math.hypot(a.kx, a.kz);
+                    a.p.set(s.x + ux * 3, s.y, s.z + uz * 3); a.kx = a.kz = 0; a.barT = 0; a.onGround = true;
+                    nm.def.tick(nm, 0.001); out.low = Math.hypot(a.kx, a.kz); return JSON.stringify(out); })()`));
+                if (br.high > 1 || br.low < 30) bad.push('横杆没打飞站着的人/跳起来也被打 ' + JSON.stringify(br));
+                // 币：10 个，碰到就捡，最多 10 个；结算多出来的币
+                await T.eval(`(function(){ let a = nm.me; a.barT = 0; a.out = false; a.downed = false; })(); true;`);
+                for (let k = 0; k < 12; k++) await T.eval(`(function(){ let c = nm.coins[${k} % nm.coins.length], s = nm.steps[c.i]; nm.me.p.set(s.x, s.y, s.z); nm.me.vy = 0; nm.me.kx = nm.me.kz = 0; nm.clock += 0.01; nm.def.tick(nm, 0.001); })(); true;`);
+                const cn = JSON.parse(await T.eval(`JSON.stringify({ n: nm.me.runCoins, got: nm.coins.filter(function (c) { return c.got; }).length, vis: nm.coins.filter(function (c) { return c.grp.visible; }).length })`));
+                if (cn.n !== 10 || cn.got !== 10 || cn.vis !== 0) bad.push('路上的币 ' + JSON.stringify(cn));
+                const m0 = await T.eval(`gState.mcoin || 0`);
+                await T.eval(`nm.me.best = 37; nmEnd({ w: -1, h: 37 }); true;`);
+                const cs = JSON.parse(await T.eval(`JSON.stringify({ gain: coinsLast.gain, parts: coinsLast.parts, m: gState.mcoin, day: gState.towerDay, best: gState.towerBest })`));
+                const bonus = cs.parts.filter((q) => q[0] === '路上的币')[0];
+                if (!bonus || bonus[1] !== 10 || cs.m - m0 !== cs.gain) bad.push('结算没给路上的币 ' + JSON.stringify(cs));
+                // 今日排行：单人爬到的最高记下来、存档里有、榜上有自己
+                if (!cs.day || cs.day.h !== 37 || cs.day.d !== await T.eval(`localDayNum()`)) bad.push('今天的最高没记 ' + JSON.stringify(cs.day));
+                await T.eval(`saveProgress(); gState.towerDay = null; loadProgress(gState.id); true;`);
+                if (!(await T.eval(`gState.towerDay && gState.towerDay.h === 37`))) bad.push('今天的最高刷新后没了');
+                await T.eval(`${HIDE} towerBoardOpen(); true;`);
+                const bd = JSON.parse(await T.eval(`JSON.stringify({ t: document.getElementById('tower-board-body').innerText, rows: document.querySelectorAll('#tower-board-body div[style*="space-between"]').length, mine: document.querySelectorAll('#tower-board-body div[style*="fff3e0"]').length, hidden: document.getElementById('tower-board').classList.contains('hidden') })`));
+                if (bd.hidden || bd.rows !== 21 || bd.mine !== 1 || !/你今天：第 37 块/.test(bd.t)) bad.push('今日排行不对 ' + JSON.stringify(bd).slice(0, 200));
+                await T.eval(`towerBoardClose(); true;`);
+            }
+            // 联机：易碎台踩了发消息，别人的消息能让台子掉
+            await T.eval(`${HIDE} if (nm) nmTeardown(); selectGameMode('tower'); nmBegin('tower', [{ id: gState.id }, { id: 'peer-x' }], gState.id, ${st.seedAll}, { kind: 'duo' }); window.__sent = []; bc.postMessage = function (m) { window.__sent.push(m); }; nm.def.ai = function () { return {}; }; true;`);
+            const ci = await T.eval(`nm.steps.findIndex(function (s) { return s.kind === 'crumble'; })`);
+            await T.eval(`(function(){ let s = nm.steps[${ci}]; nm.me.p.set(s.x, s.y, s.z); nm.me.vy = 0; })(); true;`);
+            if (!(await until(T, `window.__sent.some(function (m) { return m.type === 'NM_EV' && m.ev === 'cr' && m.k === ${ci}; })`))) bad.push('联机：踩易碎台没发消息');
+            await T.eval(`${HIDE} nmTeardown(); selectGameMode('tower'); nmBegin('tower', [{ id: 'peer-x' }, { id: gState.id }], 'peer-x', ${st.seedAll}, { kind: 'duo' }); nmOnEv({ type: 'NM_EV', mode: 'tower', sender: 'peer-x', ev: 'cr', k: ${ci}, t: 4 }); nm.clock = 5.5; nm.def.tick(nm, 0.001); true;`);
+            if (await T.eval(`nm.steps[${ci}].mesh.visible`)) bad.push('联机：别人踩了我这边的易碎台没掉');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.eval(`${HIDE} nmTeardown(); true;`); await T.close();
+            report('S3 爬塔变数：台子种类占比（下 1/3 全普通、中 3.5 成、上半数）；旗子/塔顶是普通台；2~3 处捷径；10 个币；每一跳过得去（含晃的台子最不利位置）；易碎/弹床/传送带/横杆/币起作用；按日期定种子；今日排行', bad.length === 0, bad.join(' / '));
         }
 
         if (ONLY) throw new Error('ONLY_DONE');
