@@ -1610,10 +1610,15 @@
                 if (why) showSysModal('放不了', why, [{ label: '知道了' }]);
                 else { srcArr[dragSourceObj.idx] = destArr[destIdx]; destArr[destIdx] = temp; }
             } else {
-                if (isPlaying && !gState.isDead && dragSourceObj.container === 'inv') {
+                // 局里把东西拖出背包窗口（白框）松手 = 扔到面前地上，跟按 Q 一样；腰包里的东西单独扔那一件，扔腰包本身里面的东西跟着走。
+                // 大厅仓库里拖出窗口不扔，东西留在原位（下面照常重画）。
+                if (isPlaying && !gState.isDead && (dragSourceObj.container === 'inv' || dragSourceObj.container === 'bag')) {
                     let hudBox = document.getElementById('hud-hotbar-container'); let bpBox = document.getElementById('backpack-grid-box');
                     let inBox = function (box) { if (!box || box.offsetParent === null) return false; let rect = box.getBoundingClientRect(); return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom; };
-                    if (!inBox(hudBox) && !inBox(bpBox)) { executeThrow(dragSourceObj.idx); }
+                    if (!inBox(hudBox) && !inBox(bpBox)) {
+                        if (dragSourceObj.container === 'inv') executeThrow(dragSourceObj.idx);
+                        else { let bag = slotArr('bag'), it = bag && bag[dragSourceObj.idx]; if (it) { bag[dragSourceObj.idx] = null; huntThrowItem(it); } }
+                    }
                 }
             }
             let allSlots = document.querySelectorAll('.slot'); allSlots.forEach(s => { s.style.opacity = '1'; s.classList.remove('lifting'); });

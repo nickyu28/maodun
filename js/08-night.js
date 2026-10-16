@@ -3418,7 +3418,10 @@
             if (idx < 0 || idx >= gState.maxInv) return; let itemData = gState.inv[idx]; if (!itemData) return;
             if (openPouch === itemData) openPouch = null;   // 腰包扔出去，里面的东西跟着它走（it.bag）
             gState.inv[idx] = null; updateHUD();
-
+            huntThrowItem(itemData);
+        }
+        // 把一件东西扔到面前地上（背包里扔、腰包里的东西拖出窗口，都走这里）
+        function huntThrowItem(itemData) {
             let itemMesh = huntGroundMesh(itemData);
             let launchDir = new THREE.Vector3(); camera.getWorldDirection(launchDir); itemMesh.position.copy(camera.position).add(launchDir.clone().multiplyScalar(4)); itemMesh.userData = { ...itemData, isItem: true, vel: launchDir.multiplyScalar(60), gravityActive: true }; scene.add(itemMesh); groundItems.push(itemMesh);
         }

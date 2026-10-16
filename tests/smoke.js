@@ -1055,6 +1055,66 @@ async function enterExit(tab, key) {
             report('B8 1～3 只切快捷栏（拿着腰包也是）；背包里点腰包里的东西放到手上空格、没空格就对换；提示和规则改了', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('B9')) {
+            // B9：局里在背包界面把东西拖出窗口（白框外）松手 = 扔到面前地上（跟 Q 一样；腰包里的东西单独扔那一件）；触屏也行；大厅仓库里拖出窗口不扔
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const state = () => T.eval(`JSON.stringify({ inv: gState.inv.slice(0, 6).map(function (q) { return q && q.n; }), bag: gState.inv[1] && gState.inv[1].bag ? gState.inv[1].bag.map(function (q) { return q && q.n; }) : null, ground: groundItems.map(function (g) { return g.userData.n; }) })`).then(JSON.parse);
+            const setup = () => T.eval(`(function(){ let S = function (n) { return Object.assign({}, shopItems[n], { isShop: true }); }, L = function (n, v) { return { n: n, v: v, w: 1, tex: 'misc', c: 0xffffff }; };
+                groundItems.forEach(function (g) { scene.remove(g); }); groundItems.length = 0;
+                gState.inv = [S('鱼叉'), S('腰包'), null, L('银杯', 5000), L('金杯', 50000), null]; gState.inv[1].bag = [L('袋里的杯', 7000), null, null]; openPouch = null;
+                if (!gState.backpackOpen) toggleBackpackUI(); ${HIDE} updateHUD(); return true; })()`);
+            const dragOut = async (sel) => { const p = await mouseAt(T, sel); if (!p) throw new Error('找不到 ' + sel); await mouseDrag(T, sel, null, 40 - p[0]); await W(300); };
+            // 1) 背包里一件宝物拖到窗口外：背包少了它，地上多了它
+            await setup();
+            await dragOut('#bp-backpack-slots .slot:nth-child(1)');   // 背包空间第 1 格 = inv[3] 银杯
+            let st = await state();
+            if (st.inv[3] !== null || st.ground.join() !== '银杯') bad.push('鼠标拖出窗口没扔 ' + JSON.stringify(st));
+            // 2) 拖到窗口里面别的格子：不扔
+            await setup();
+            await mouseDrag(T, '#bp-backpack-slots .slot:nth-child(1)', '#bp-backpack-slots .slot:nth-child(3)'); await W(300);
+            st = await state();
+            if (st.ground.length !== 0 || st.inv[3] !== null && st.inv[5] !== null && st.inv[3] !== '银杯') bad.push('拖进窗口里的格子不该扔 ' + JSON.stringify(st));
+            // 3) 腰包里的东西拖出窗口：只扔那一件，腰包还在
+            await setup();
+            await T.eval(`openPouch = gState.inv[1]; updateHUD(); true;`); await W(300);
+            await dragOut('#bp-pouch-row > div:nth-child(2)');
+            st = await state();
+            if (st.bag.join() !== ',,' || st.ground.join() !== '袋里的杯' || st.inv[1] !== '腰包') bad.push('腰包里的东西拖出窗口 ' + JSON.stringify(st));
+            // 4) 把腰包本身拖出去：里面的东西跟着腰包走
+            await setup();
+            await dragOut('#bp-hotbar-slots .slot:nth-child(2)');
+            st = await state();
+            const thrown = await T.eval(`(function(){ let g = groundItems.filter(function (x) { return x.userData.n === '腰包'; })[0]; return g ? JSON.stringify(g.userData.bag.map(function (q) { return q && q.n; })) : null; })()`);
+            if (st.inv[1] !== null || st.ground.join() !== '腰包' || thrown !== '["袋里的杯",null,null]') bad.push('拖出腰包 ' + JSON.stringify([st, thrown]));
+            await T.eval(`toggleBackpackUI(); true;`);
+            // 5) 大厅仓库（另开一个页面，没进过局）：拖出窗口不扔，东西还在原位
+            const G = await openTab(chrome, url);
+            await G.eval(GARAGE_SETUP(`[S('鱼叉'), null, null, null, null, null]`, `[L('银杯')]`, 1000));
+            await W(500);
+            const g0 = await mouseAt(G, GAR_SLOT(0));
+            await mouseDrag(G, GAR_SLOT(0), null, 3 - g0[0]); await W(300);
+            const gs = JSON.parse(await G.eval(`JSON.stringify({ garage: gState.garage.slice(0, 3).map(function (q) { return q && q.n; }), ground: groundItems.length })`));
+            if (gs.garage[0] !== '银杯' || gs.ground !== 0) bad.push('仓库里拖出窗口东西没回原位 ' + JSON.stringify(gs));
+            if (G.errors.length) bad.push(G.errors.slice(0, 2).join(' / '));
+            await G.close();
+            // 6) 触屏：用手指拖出去也扔
+            const M = await openTab(chrome, url, { mobile: true });
+            await M.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await M.eval(`${HIDE} true;`);
+            await M.eval(`(function(){ let L = function (n, v) { return { n: n, v: v, w: 1, tex: 'misc', c: 0xffffff }; };
+                groundItems.forEach(function (g) { scene.remove(g); }); groundItems.length = 0; gState.inv = [null, null, null, L('银杯', 5000), null, null]; if (!gState.backpackOpen) toggleBackpackUI(); ${HIDE} updateHUD(); return true; })()`);
+            const tp = await mouseAt(M, '#bp-backpack-slots .slot:nth-child(1)');
+            const pts = []; for (let i = 0; i <= 8; i++) pts.push([tp[0] + (30 - tp[0]) * i / 8, tp[1]]);
+            await touchPath(M, pts, 0); await W(300);
+            const ts = JSON.parse(await M.eval(`JSON.stringify({ inv3: gState.inv[3] && gState.inv[3].n, ground: groundItems.map(function (g) { return g.userData.n; }) })`));
+            if (ts.inv3 !== null || ts.ground.join() !== '银杯') bad.push('触屏拖出窗口没扔 ' + JSON.stringify(ts));
+            await M.close();
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('B9 局里把东西拖出背包窗口 = 扔到面前地上（鼠标、触屏；腰包里的东西单独扔，腰包本身带着里面的走）；仓库里拖出窗口不扔', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('A7')) {
             // A7：游戏里的反馈功能全删——页面上没有反馈入口，代码里搜不到 web3forms / access_key / 邮箱；游玩记录也没有；联机诊断只有四项
             const bad = [];
