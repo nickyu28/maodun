@@ -256,9 +256,10 @@
             if (!reward) reward = Math.random() < 0.6 / 0.9 ? itemPool.purple[Math.floor(Math.random() * itemPool.purple.length)] : itemPool.gold[Math.floor(Math.random() * itemPool.gold.length)];
 
             let pos = getHiddenSpawnPos();
-            let b = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: createProceduralTexture(reward.tex || 'generic', reward.c, '#ffffff') }));
+            let b = huntGroundMesh(reward);
             b.position.set(pos.fx * TILE, pos.fl * TILE + 1.5, pos.fz * TILE);
             b.userData = { ...reward, isItem: true, vel: new THREE.Vector3(0, 0, 0), fromSignal: true };
+            huntItemGlow(b);
             scene.add(b); groundItems.push(b); s.mesh = b;
             huntLuckApply(b, 'signal');
             signalRouteTick(true);
@@ -317,26 +318,28 @@
             drawCapacityCircle();
         }
 
-        // 手上（快捷栏 1～3）拿着腰包的时候，把它的 3 格列出来，按 1～3 把里面的东西拿到手上。
-        // 腰包里的东西不能直接用，得先拿出来。
+        // 手上（快捷栏 1～3）拿着腰包的时候，把它的 3 格列出来看一眼。
+        // 腰包里的东西不能直接用：按 E 打开背包、点开腰包，点一下里面的东西放到手上。
         function pouchOpen() {
             let it = gState.inv[gState.selectedSlot];
             return !!(isPouch(it) && gState.selectedSlot <= 2);
         }
 
-        function pouchTake(n) {
-            if (!pouchOpen()) return;
-            let pi = gState.selectedSlot, bag = pouchBag(gState.inv[pi]);
-            if (n < 0 || n >= POUCH_SLOTS || !bag[n]) return;
-            let to = -1;
-            for (let i = 0; i < 3; i++) if (i !== pi && !gState.inv[i]) { to = i; break; }              // 先找空的手上格
-            if (to < 0) for (let i = 0; i < INV_BASE; i++) if (i !== pi && !gState.inv[i]) { to = i; break; }
-            if (to < 0) for (let i = 0; i < 3; i++) if (i !== pi && !isPouch(gState.inv[i])) { to = i; break; }   // 实在没空位就对换（腰包不能换进腰包）
-            if (to < 0) return;
+        // 点腰包里第 n 格：放到手上的空格；手上没空格，就跟当前手上这格对换（腰包不能放进腰包）
+        function pouchTakeToHand(n) {
+            let bag = pouchBag(openPouch);
+            if (!bag || n < 0 || n >= POUCH_SLOTS || !bag[n]) return;
+            let cur = gState.selectedSlot >= 0 && gState.selectedSlot <= 2 ? gState.selectedSlot : 0, to = -1;
+            if (!gState.inv[cur]) to = cur;
+            else for (let i = 0; i < 3; i++) if (!gState.inv[i]) { to = i; break; }
+            if (to < 0) {
+                if (isPouch(gState.inv[cur])) { blazeFlash('腰包不能放进腰包'); return; }
+                to = cur;
+            }
             let a = bag[n];
             bag[n] = gState.inv[to];
             gState.inv[to] = a;
-            if (to <= 2) selectSlot(to);
+            selectSlot(to);
             updateHUD();
         }
 
@@ -345,7 +348,7 @@
             expandInventory();
             if (!isPlaying || !pouchOpen()) { el.classList.add('hidden'); return; }
             let bag = pouchBag(gState.inv[gState.selectedSlot]);
-            el.innerHTML = '<div style="color:#ffd54f;">腰包（按 1～' + POUCH_SLOTS + ' 拿出来）</div>' +
+            el.innerHTML = '<div style="color:#ffd54f;">腰包（按 E 打开背包拿）</div>' +
                 bag.map(function (it, n) {
                     return '<div>' + (n + 1) + '、' + (it ? it.n + '　重:' + itemWeight(it) : '<span style="color:#888;">空</span>') + '</div>';
                 }).join('');
@@ -804,9 +807,9 @@
 
             gState.inv.forEach(function (d, idx) {
                 if (!d || d.type === 'backpack_ext') return;
-                let box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 0xff0000 }));
+                let box = huntGroundMesh(d, 2);
                 box.position.copy(camera.position).add(new THREE.Vector3((Math.random() - 0.5) * 12, -4, (Math.random() - 0.5) * 12));
-                box.userData = { ...d, isItem: true }; scene.add(box); groundItems.push(box); gState.inv[idx] = null;
+                box.userData = { ...d, isItem: true }; huntItemGlow(box); scene.add(box); groundItems.push(box); gState.inv[idx] = null;
             });
 
             updateHUD(); saveProgress(); if (document.pointerLockElement) document.exitPointerLock();
@@ -906,9 +909,8 @@
         }
         function huntLotteryShow(reward) {
             if (reward) {
-                let tObj = createProceduralTexture(reward.tex || 'generic', reward.c || 0x3498db, '#ffffff');
-                let itemMesh = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial({ map: tObj }));
-                let launchDir = new THREE.Vector3(); camera.getWorldDirection(launchDir); itemMesh.position.copy(camera.position).add(launchDir.clone().multiplyScalar(4)); itemMesh.userData = { ...reward, isItem: true, vel: launchDir.multiplyScalar(60), gravityActive: true }; scene.add(itemMesh); groundItems.push(itemMesh);
+                let itemMesh = huntGroundMesh(reward);
+                let launchDir = new THREE.Vector3(); camera.getWorldDirection(launchDir); itemMesh.position.copy(camera.position).add(launchDir.clone().multiplyScalar(4)); itemMesh.userData = { ...reward, isItem: true, vel: launchDir.multiplyScalar(60), gravityActive: true }; huntItemGlow(itemMesh); scene.add(itemMesh); groundItems.push(itemMesh);
                 showSysModal("抽奖结果", `抽到了：${reward.n}`, [{ label: "好" }]);
             } else { showSysModal('抽奖结果', '没抽中，东西没了', [{ label: '好' }]); }
             saveProgress();
