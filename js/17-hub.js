@@ -8,10 +8,145 @@
             plazaHalf: 650, moveSpeed: 44, jumpV: 48, gravity: 140,
             wanderCount: 30, proximityRange: 14
         };
+        // ══════════════ L3 大厅背景：天空、远景、地面 ══════════════
+        // 毛绒玩具的画风：圆滚滚、颜色软。全是只能看、走不进去的东西，都在广场围墙外面，不挡任何路。
+        // 绘制次数：天空 1 + 云 1 + 山丘 1 + 树 1（实例化）+ 房子 1 = 5。
+        const HUB_MODE_PATH = [['hunt', '#43a047'], ['night', '#3949ab'], ['blaze', '#e53935'], ['race', '#00897b'], ['jail', '#78909c'],
+            ['dodge', '#fb8c00'], ['escape', '#ab47bc'], ['cake', '#fbc02d'], ['sumo', '#ef6c00'], ['tower', '#7e57c2']];
+        let hubGroundCv = null, hubBgSeed = 20261016;
+        function hubBgRand() { hubBgSeed = (hubBgSeed * 1664525 + 1013904223) % 4294967296; return hubBgSeed / 4294967296; }
+        // 地面画在一张贴图上：草地（深浅不一的大块斑）、中间一圈石砖广场、十条通向各模式的路（各模式一个颜色）。不加任何额外物体。
+        function hubGroundTexture() {
+            if (!hubGroundCv) {
+                hubBgSeed = 20261016;
+                const N = 2048, S = N / (HUB.plazaHalf * 2), cv = document.createElement('canvas'); cv.width = cv.height = N;
+                const c = cv.getContext('2d'), P = function (v) { return (v + HUB.plazaHalf) * S; };
+                c.fillStyle = '#74ae48'; c.fillRect(0, 0, N, N);   // 灯光比 1 亮，贴图颜色要比想看到的深一档
+                for (let i = 0; i < 1100; i++) {   // 深浅两种草的大斑块
+                    c.globalAlpha = 0.25 + hubBgRand() * 0.3; c.fillStyle = hubBgRand() < 0.5 ? '#86c056' : '#5d9a38';
+                    c.beginPath(); c.arc(hubBgRand() * N, hubBgRand() * N, 18 + hubBgRand() * 80, 0, Math.PI * 2); c.fill();
+                }
+                c.globalAlpha = 1;
+                for (let i = 0; i < 700; i++) {   // 小花点
+                    c.fillStyle = ['#fff59d', '#f48fb1', '#e8f5e9'][Math.floor(hubBgRand() * 3)];
+                    c.beginPath(); c.arc(hubBgRand() * N, hubBgRand() * N, 1.5 + hubBgRand() * 2, 0, Math.PI * 2); c.fill();
+                }
+                // 十条路：从广场边通到 260 远的地方，终点是一个圆圈
+                c.lineCap = 'round';
+                HUB_MODE_PATH.forEach(function (m, k) {
+                    const a = (k / HUB_MODE_PATH.length) * Math.PI * 2 + 0.31, x0 = Math.sin(a) * 90, z0 = -Math.cos(a) * 90, x1 = Math.sin(a) * 270, z1 = -Math.cos(a) * 270;
+                    c.strokeStyle = 'rgba(0,0,0,0.18)'; c.lineWidth = 22 * S; c.beginPath(); c.moveTo(P(x0), P(z0)); c.lineTo(P(x1), P(z1)); c.stroke();
+                    c.strokeStyle = m[1]; c.lineWidth = 17 * S; c.beginPath(); c.moveTo(P(x0), P(z0)); c.lineTo(P(x1), P(z1)); c.stroke();
+                    c.strokeStyle = 'rgba(255,255,255,0.45)'; c.lineWidth = 2.5 * S; c.setLineDash([10 * S, 12 * S]); c.beginPath(); c.moveTo(P(x0), P(z0)); c.lineTo(P(x1), P(z1)); c.stroke(); c.setLineDash([]);
+                    c.fillStyle = m[1]; c.beginPath(); c.arc(P(x1), P(z1), 24 * S, 0, Math.PI * 2); c.fill();
+                    c.strokeStyle = '#ffffff'; c.lineWidth = 3 * S; c.beginPath(); c.arc(P(x1), P(z1), 17 * S, 0, Math.PI * 2); c.stroke();
+                });
+                // 中间的石砖广场
+                c.save(); c.beginPath(); c.arc(P(0), P(0), 112 * S, 0, Math.PI * 2); c.clip();
+                c.fillStyle = '#7d756b'; c.fillRect(0, 0, N, N);
+                const T = 9 * S;
+                for (let gx = -130; gx < 130; gx += 9) for (let gz = -130; gz < 130; gz += 9) {
+                    const sh = 0.9 + hubBgRand() * 0.14;
+                    c.fillStyle = 'rgb(' + Math.round(168 * sh) + ',' + Math.round(160 * sh) + ',' + Math.round(150 * sh) + ')';
+                    c.fillRect(P(gx) + 1, P(gz) + 1, T - 2, T - 2);
+                }
+                c.restore();
+                c.strokeStyle = '#6d5a50'; c.lineWidth = 5 * S; c.beginPath(); c.arc(P(0), P(0), 112 * S, 0, Math.PI * 2); c.stroke();
+                hubGroundCv = cv;
+            }
+            const tex = new THREE.CanvasTexture(hubGroundCv);
+            tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+            return tex;
+        }
+        // 把很多小零件（几何体 + 位置/缩放/颜色）合成一个带顶点色的网格：一次绘制
+        function hubMergeParts(parts) {
+            const pos = [], nor = [], col = [], idx = [], m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), c = new THREE.Color();
+            let base = 0;
+            parts.forEach(function (p) {
+                e.set(p.rx || 0, p.ry || 0, p.rz || 0); q.setFromEuler(e);
+                m4.compose(new THREE.Vector3(p.x, p.y, p.z), q, new THREE.Vector3(p.sx || 1, p.sy || 1, p.sz || 1));
+                const g = p.geo.clone(); g.applyMatrix4(m4);
+                const pa = g.attributes.position.array, na = g.attributes.normal.array, ia = g.index ? g.index.array : null;
+                c.setHex(p.color);
+                for (let i = 0; i < pa.length; i += 3) { pos.push(pa[i], pa[i + 1], pa[i + 2]); nor.push(na[i], na[i + 1], na[i + 2]); col.push(c.r, c.g, c.b); }
+                if (ia) for (let i = 0; i < ia.length; i++) idx.push(ia[i] + base);
+                else for (let i = 0; i < pa.length / 3; i++) idx.push(i + base);
+                base += pa.length / 3; g.dispose(); p.geo.dispose();
+            });
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+            geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nor), 3));
+            geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3));
+            geo.setIndex(new THREE.BufferAttribute(base > 65535 ? new Uint32Array(idx) : new Uint16Array(idx), 1));
+            return geo;
+        }
+        function hubBuildBackdrop() {
+            hubBgSeed = 777;
+            const R = hubBgRand, out = {};
+            const add = function (m, name) { m.name = name; m.frustumCulled = false; scene.add(m); hub.meshes.push(m); out[name] = m; return m; };
+            // 1) 天空：上面深蓝、下面浅蓝的大球（只画里面），跟着玩家走，永远够不着
+            const sg = new THREE.SphereGeometry(1400, 24, 14), cols = [], top = new THREE.Color(0x2a5db0), mid = new THREE.Color(0x6fb7ec), hor = new THREE.Color(0xbfe6fb), cc = new THREE.Color();
+            const pa = sg.attributes.position;
+            for (let i = 0; i < pa.count; i++) {
+                const h = pa.getY(i) / 1400;
+                if (h <= 0) cc.copy(hor); else if (h < 0.35) cc.copy(hor).lerp(mid, h / 0.35); else cc.copy(mid).lerp(top, Math.min(1, (h - 0.35) / 0.65));
+                cols.push(cc.r, cc.g, cc.b);
+            }
+            sg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cols), 3));
+            const sky = add(new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })), 'sky');
+            sky.renderOrder = -10;
+            // 2) 云：10 朵，每朵几个圆球攒起来，合成一个模型，慢慢绕着转
+            const cloudParts = [];
+            for (let i = 0; i < 10; i++) {
+                const a = R() * Math.PI * 2, d = 480 + R() * 650, cx = Math.sin(a) * d, cz = -Math.cos(a) * d, cy = 170 + R() * 150, s = 0.8 + R() * 0.8;
+                for (let k = 0, n = 4 + Math.floor(R() * 3); k < n; k++) {
+                    const r = (24 + R() * 22) * s;
+                    cloudParts.push({ geo: new THREE.SphereGeometry(1, 10, 8), x: cx + (k - n / 2) * 30 * s + (R() - 0.5) * 12, y: cy + (R() - 0.5) * 14 + (k % 2) * 8, z: cz + (R() - 0.5) * 24, sx: r * 1.15, sy: r * 0.8, sz: r, color: k % 2 ? 0xffffff : 0xf1f7ff });
+                }
+            }
+            add(new THREE.Mesh(hubMergeParts(cloudParts), new THREE.MeshBasicMaterial({ vertexColors: true, fog: false })), 'clouds');
+            // 3) 山丘：围墙外面一圈矮矮圆圆的小山（半个椭球），一个模型
+            const hillParts = [], hills = [], greens = [0x8bc34a, 0x7cb342, 0xa5d66b, 0x6aa84f, 0x9ccc65];
+            for (let i = 0; i < 30; i++) {
+                const a = (i / 30) * Math.PI * 2 + (R() - 0.5) * 0.08, rx = 110 + R() * 90, d = HUB.plazaHalf + 20 + rx + R() * 40, h = 38 + R() * 42;   // 山脚离围墙至少 20，不进广场
+                hills.push({ x: Math.sin(a) * d, z: -Math.cos(a) * d, rx: rx, h: h });
+                hillParts.push({ geo: new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), x: Math.sin(a) * d, y: 0, z: -Math.cos(a) * d, sx: rx, sy: h, sz: rx, ry: R() * 3, color: greens[Math.floor(R() * greens.length)] });
+            }
+            add(new THREE.Mesh(hubMergeParts(hillParts), new THREE.MeshLambertMaterial({ vertexColors: true })), 'hills');
+            // 4) 棒棒糖树：细细的杆子 + 圆圆的树冠，种在小山顶上，实例化一次画完
+            const tg = hubMergeParts([
+                { geo: new THREE.CylinderGeometry(1.3, 1.7, 16, 6), x: 0, y: 8, z: 0, color: 0xd7b99a },
+                { geo: new THREE.SphereGeometry(8.5, 10, 8), x: 0, y: 22, z: 0, color: 0x5fbf6a }
+            ]);
+            const trees = [];
+            hills.forEach(function (hl) { for (let k = 0, n = 2 + Math.floor(R() * 3); k < n; k++) { const ang = R() * Math.PI * 2, rr = R() * 0.55; trees.push({ x: hl.x + Math.cos(ang) * rr * hl.rx, z: hl.z + Math.sin(ang) * rr * hl.rx * 0.9, y: hl.h * Math.sqrt(1 - rr * rr) * 0.96, s: 1.4 + R() * 1.0 }); } });
+            const tm = add(new THREE.InstancedMesh(tg, new THREE.MeshLambertMaterial({ vertexColors: true }), trees.length), 'trees'), dm = new THREE.Object3D();
+            trees.forEach(function (t, i) { dm.position.set(t.x, t.y - 2, t.z); dm.scale.setScalar(t.s); dm.rotation.y = R() * 6; dm.updateMatrix(); tm.setMatrixAt(i, dm.matrix); });
+            tm.instanceMatrix.needsUpdate = true;
+            // 5) 更远处的小房子剪影：猫耳朵屋顶，粉粉嫩嫩的，一个模型
+            const houseParts = [], walls = [0xffcdd2, 0xfff3c4, 0xc8e6c9, 0xbbdefb, 0xf8bbd0, 0xffe0b2], roofs = [0xef9a9a, 0xffb74d, 0x81c784, 0x64b5f6, 0xf06292];
+            for (let i = 0; i < 16; i++) {
+                const a = (i / 16) * Math.PI * 2 + (R() - 0.5) * 0.2, d = 980 + R() * 150, hx = Math.sin(a) * d, hz = -Math.cos(a) * d, w = 36 + R() * 20, hgt = 30 + R() * 16, ry = -a + (R() - 0.5) * 0.4, rc = roofs[Math.floor(R() * roofs.length)];
+                houseParts.push({ geo: new THREE.BoxGeometry(1, 1, 1), x: hx, y: hgt / 2, z: hz, sx: w, sy: hgt, sz: w * 0.85, ry: ry, color: walls[Math.floor(R() * walls.length)] });
+                houseParts.push({ geo: new THREE.BoxGeometry(1, 1, 1), x: hx, y: hgt + 3, z: hz, sx: w * 1.12, sy: 6, sz: w * 0.97, ry: ry, color: rc });
+                [-1, 1].forEach(function (sd) {   // 两只猫耳朵
+                    houseParts.push({ geo: new THREE.ConeGeometry(1, 1, 3), x: hx + Math.cos(ry) * sd * w * 0.38, y: hgt + 12, z: hz - Math.sin(ry) * sd * w * 0.38, sx: w * 0.2, sy: 14, sz: w * 0.2, ry: ry, color: rc });
+                });
+            }
+            add(new THREE.Mesh(hubMergeParts(houseParts), new THREE.MeshLambertMaterial({ vertexColors: true })), 'houses');
+            hub.bg = out;
+        }
+        function hubBackdropTick(dt) {
+            if (!hub.bg) return;
+            hub.bg.sky.position.set(hub.p.x, 0, hub.p.z);
+            hub.bg.clouds.position.set(hub.p.x * 0.9, 0, hub.p.z * 0.9);   // 云比人走得慢一点，有点远近的感觉
+            hub.bg.clouds.rotation.y += dt * 0.012;
+        }
         function hubBuildWorld() {
             let floor = new THREE.Mesh(new THREE.PlaneGeometry(HUB.plazaHalf * 2, HUB.plazaHalf * 2),
-                new THREE.MeshLambertMaterial({ color: 0xc8e6c9 }));
+                new THREE.MeshLambertMaterial({ map: hubGroundTexture() }));
             floor.rotation.x = -Math.PI / 2; scene.add(floor); hub.meshes.push(floor);
+            hubBuildBackdrop();
             // 跑酷：加过一版移动/销毁平台+更窄间隔，试了下太难了，退回原来的静态台阶——
             // 每一步都跳得到，不用死记机关规律。台阶数从 7 块加到 9 块，course 更长一点，
             // 但每一步的宽度/间隔还是原来那套好跳的参数，不是"更长更难"。
@@ -415,7 +550,10 @@
         let hubLodDummy = null;
         function hubLodSetup() {
             hub.far = new THREE.InstancedMesh(new THREE.BoxGeometry(6, 11, 4).translate(0, 5.5, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), HUB.wanderCount + 4);
-            hub.far.frustumCulled = false; hub.far.count = 0; scene.add(hub.far);
+            hub.far.frustumCulled = false; scene.add(hub.far);
+            // 实例颜色要在第一次画之前就建好：着色器按"有没有实例颜色"编译，第一帧一个都没有的话后面设的颜色全不生效，远处的人就成了黑块
+            let white = new THREE.Color(0xffffff); for (let i = 0; i < hub.far.instanceMatrix.count; i++) hub.far.setColorAt(i, white);
+            hub.far.count = 0;
             hub.wanderers.forEach(function (w) { let b = w.mesh.children[0]; w.col = b && b.material ? b.material.color.clone() : new THREE.Color(0xb0bec5); });
         }
         function hubLodTick() {
@@ -444,6 +582,7 @@
             let prevPx = hub.p.x, prevPz = hub.p.z;
             hubPlatformsTick(dt);
             hubPlayerMove(dt);
+            hubBackdropTick(dt);
             hub.spd = Math.hypot(hub.p.x - prevPx, hub.p.z - prevPz) / dt;
             hub.wanderers.forEach(function (w) {
                 let px0 = w.p.x, pz0 = w.p.z;
@@ -556,7 +695,7 @@
             clearMazeMeshes();   // 保险：万一某个模式退出时没清干净，进大厅前兜底扫一遍
             sceneSweep();
             scene.background = new THREE.Color(0x8fd3f4);
-            scene.fog = new THREE.FogExp2(0x8fd3f4, 0.0015);
+            scene.fog = new THREE.FogExp2(0xa9dcf7, 0.0006);
 
             let mesh = raceMakeBody(mySkinColor(0x66bb6a), 0, true, gState.acc, myFace());
             scene.add(mesh);

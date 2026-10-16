@@ -994,7 +994,7 @@ async function enterExit(tab, key) {
             await W(1200);
             const r = JSON.parse(await T.eval(`(function(){ let o = {};
                 renderer.render(scene, camera); o.calls = renderer.info.render.calls; o.objs = (function () { let n = 0; scene.traverse(function () { n++; }); return n; })();
-                o.statics = hub.meshes.length;
+                o.statics = hub.meshes.filter(function (m) { return !hub.bg || Object.keys(hub.bg).every(function (n) { return hub.bg[n] !== m; }); }).length;   // 背景（天空、云、山丘、树、房子）单算，见 L3
                 // 合并正确：两个盒子合成一个，范围等于两个的并集、三角形数相加
                 let a = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 1 })), b = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 1 }));
                 a.position.set(-5, 1, 0); b.position.set(7, 3, 2);
@@ -2543,6 +2543,60 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.eval(`${HIDE} nmTeardown(); true;`); await T.close();
             report('S3 爬塔变数：台子种类占比（下 1/3 全普通、中 3.5 成、上半数）；旗子/塔顶是普通台；2~3 处捷径；10 个币；每一跳过得去（含晃的台子最不利位置）；易碎/弹床/传送带/横杆/币起作用；按日期定种子；今日排行', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('L3')) {
+            // L3 大厅背景：天空、云、山丘、树、房子一共 5 个绘制；全在围墙外面、不能走上去；云会慢慢转；地面是一张带草斑/石砖/十条路的贴图
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} true;`);
+            if (!(await until(T, `hub && hub.bg && hub.bg.houses`))) bad.push('大厅里没有背景');
+            const r = JSON.parse(await T.eval(`(function(){
+                const names = ['sky', 'clouds', 'hills', 'trees', 'houses'], out = { names: names.filter(function (n) { return !!hub.bg[n]; }) };
+                renderer.render(scene, camera); const all = renderer.info.render.calls;
+                names.forEach(function (n) { hub.bg[n].visible = false; });
+                renderer.render(scene, camera); const none = renderer.info.render.calls;
+                names.forEach(function (n) { hub.bg[n].visible = true; });
+                out.calls = all - none; out.total = all;
+                // 离广场中心最近的点（山丘、房子看顶点，树看根）
+                const near = function (m) { const pa = m.geometry.attributes.position, p = m.position; let best = 1e9; m.updateMatrixWorld(); const v = new THREE.Vector3();
+                    for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i).applyMatrix4(m.matrixWorld); best = Math.min(best, Math.hypot(v.x, v.z)); } return best; };
+                out.hills = near(hub.bg.hills); out.houses = near(hub.bg.houses);
+                const t = hub.bg.trees, mt = new THREE.Matrix4(); let tn = 1e9; for (let i = 0; i < t.count; i++) { t.getMatrixAt(i, mt); tn = Math.min(tn, Math.hypot(mt.elements[12], mt.elements[14])); } out.trees = tn;
+                out.treeN = t.count; out.inst = !!t.isInstancedMesh;
+                out.plat = hub.platforms.some(function (p) { return Object.keys(hub.bg).some(function (n) { return hub.bg[n] === p.mesh; }); });
+                out.half = HUB.plazaHalf; out.y = hub.p.y;
+                const fl = scene.children.filter(function (c) { return c.geometry && c.geometry.type === 'PlaneGeometry' && c.material.map; });
+                out.floor = fl.length; out.floorTex = fl.length ? !!fl[0].material.map.image : false;
+                out.skyOrder = hub.bg.sky.renderOrder; out.skyBack = hub.bg.sky.material.side === THREE.BackSide;
+                return JSON.stringify(out); })()`));
+            if (r.names.length !== 5) bad.push('背景不是 5 个 ' + r.names);
+            if (r.calls > 5 || r.calls < 4) bad.push('背景绘制次数 ' + r.calls + '（应 ≤5）');
+            if (r.total > 50) bad.push('大厅每帧绘制 ' + r.total);
+            if (r.hills < r.half + 10 || r.houses < r.half + 10 || r.trees < r.half) bad.push('背景伸进广场了 ' + [r.hills, r.houses, r.trees].map(Math.round));
+            if (r.plat || r.treeN < 40 || !r.inst) bad.push('树/背景当成可站的平台了或树太少 ' + r.treeN);
+            if (r.floor !== 1 || !r.floorTex) bad.push('地面没有贴图 ' + r.floor);
+            if (!r.skyBack || r.skyOrder >= 0) bad.push('天空画法不对');
+            // 云慢慢转
+            const a0 = await T.eval(`hub.bg.clouds.rotation.y`);
+            if (!(await until(T, `hub.bg.clouds.rotation.y > ${a0} + 0.0005`, 8000))) bad.push('云没动');
+            // 天空跟着玩家，走远了也不会走出天空
+            await T.eval(`hub.p.x = 300; hub.p.z = -200; true;`);
+            if (!(await until(T, `Math.abs(hub.bg.sky.position.x - 300) < 1 && Math.abs(hub.bg.sky.position.z + 200) < 1`))) bad.push('天空没跟着玩家');
+            // 地面贴图里有十条路的颜色、石砖、草
+            const px = JSON.parse(await T.eval(`(function(){ const cv = hubGroundCv, c = cv.getContext('2d'), N = cv.width, S = N / (HUB.plazaHalf * 2), out = {};
+                const at = function (x, z) { const d = c.getImageData(Math.round((x + HUB.plazaHalf) * S), Math.round((z + HUB.plazaHalf) * S), 1, 1).data; return [d[0], d[1], d[2]]; };
+                out.path = HUB_MODE_PATH.map(function (m, k) { const a = (k / HUB_MODE_PATH.length) * Math.PI * 2 + 0.31; return at(Math.sin(a) * 180 + Math.cos(a) * 5, -Math.cos(a) * 180 + Math.sin(a) * 5); });   // 离开中间那条白虚线
+                out.stone = at(0, 60); out.grass = at(600, 600); out.want = HUB_MODE_PATH.map(function (m) { return m[1]; }); return JSON.stringify(out); })()`));
+            const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+            const colorsOk = px.path.every((c, i) => { const w = px.want[i], wr = parseInt(w.slice(1, 3), 16), wg = parseInt(w.slice(3, 5), 16), wb = parseInt(w.slice(5, 7), 16); return Math.abs(c[0] - wr) + Math.abs(c[1] - wg) + Math.abs(c[2] - wb) < 90; });
+            if (!colorsOk) bad.push('十条路的颜色不对 ' + px.path.map(hex).join(','));
+            if (new Set(px.path.map(hex)).size < 9) bad.push('各模式的路颜色应该互不相同');
+            if (!(px.stone[0] > 120 && px.stone[0] < 200 && px.stone[0] >= px.stone[2] && px.stone[0] - px.stone[2] < 40)) bad.push('广场中间不是石砖 ' + hex(px.stone));
+            if (!(px.grass[1] > px.grass[0] && px.grass[1] > px.grass[2])) bad.push('外面不是草地 ' + hex(px.grass));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('L3 大厅背景：天空/云/山丘/树/房子共 5 次绘制、全在围墙外且不能站、云会转；地面一张贴图（草斑、石砖广场、十条各模式颜色的路）', bad.length === 0, bad.join(' / '));
         }
 
         if (ONLY) throw new Error('ONLY_DONE');
