@@ -995,6 +995,7 @@ async function enterExit(tab, key) {
             const r = JSON.parse(await T.eval(`(function(){ let o = {};
                 renderer.render(scene, camera); o.calls = renderer.info.render.calls; o.objs = (function () { let n = 0; scene.traverse(function () { n++; }); return n; })();
                 o.statics = hub.meshes.length;
+                o.farColor = !!hub.far.instanceColor;
                 // 合并正确：两个盒子合成一个，范围等于两个的并集、三角形数相加
                 let a = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 1 })), b = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 1 }));
                 a.position.set(-5, 1, 0); b.position.set(7, 3, 2);
@@ -1012,6 +1013,7 @@ async function enterExit(tab, key) {
                 return JSON.stringify(o); })()`));
             console.log('      L2 大厅：每帧绘制 ' + r.calls + ' 次，场景里 ' + r.objs + ' 个物体，不动的装饰 ' + r.statics + ' 个网格');
             if (r.calls > 50) bad.push('每帧绘制 ' + r.calls + ' 次（目标 ≤ 50）');
+            if (!r.farColor) bad.push('远处路人的实例颜色没建（会画成黑块）');
             if (r.statics > 8) bad.push('不动的装饰还有 ' + r.statics + ' 个网格');
             if (r.merge[0] !== -6 || r.merge[1] !== 8 || r.merge[2] !== 0 || r.merge[3] !== 4 || r.merge[4] !== 3 || r.merge[5] !== 24) bad.push('合并结果不对 ' + JSON.stringify(r.merge));
             if (r.lod[0] !== false || r.lod[1] !== true || r.lod[2] !== r.lod[3]) bad.push('远近路人 ' + JSON.stringify(r.lod));

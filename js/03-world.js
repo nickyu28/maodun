@@ -1468,6 +1468,11 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026.10.16-2', date: '10 月 16 日', title: '最近更新', items: [
+                    '大厅里远处的人不再是黑块了'
+                ]
+            },
+            {
                 id: '2026.10.16-1', date: '10 月 16 日', title: '最近更新', items: [
                     '推推乐有道具了，还能按住蓄力撞',
                     '推推乐的台子每局不一样',

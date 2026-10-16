@@ -415,7 +415,10 @@
         let hubLodDummy = null;
         function hubLodSetup() {
             hub.far = new THREE.InstancedMesh(new THREE.BoxGeometry(6, 11, 4).translate(0, 5.5, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), HUB.wanderCount + 4);
-            hub.far.frustumCulled = false; hub.far.count = 0; scene.add(hub.far);
+            hub.far.frustumCulled = false; scene.add(hub.far);
+            // 实例颜色要在第一次画之前就建好：着色器按"有没有实例颜色"编译，第一帧一个都没有的话后面设的颜色全不生效，远处的人就成了黑块
+            let white = new THREE.Color(0xffffff); for (let i = 0; i < hub.far.instanceMatrix.count; i++) hub.far.setColorAt(i, white);
+            hub.far.count = 0;
             hub.wanderers.forEach(function (w) { let b = w.mesh.children[0]; w.col = b && b.material ? b.material.color.clone() : new THREE.Color(0xb0bec5); });
         }
         function hubLodTick() {
