@@ -13,6 +13,10 @@
         function nmIsHost() { return !nm || !nm.net || nm.host === gState.id; }
         function nmMine(a) { return a.isPlayer || (!a.netId && nmIsHost()); }
 
+        // 按键按得比一帧还短也算按过（蓄力模式靠这个补一帧）
+        window.addEventListener('keydown', function (e) { if (nm && nm.def.charge && e.key && e.key.toLowerCase() === 'e') nm.latch = true; });
+        window.addEventListener('mousedown', function (e) { if (nm && nm.def.charge && e.button === 0) nm.latch = true; });
+
         function nmStartGo(mode, opt) {
             opt = opt || {};
             let def = NM_DEFS[mode];
@@ -112,6 +116,12 @@
             let jb = document.getElementById('race-jump-btn'); if (jb) { jb.innerText = '跳'; jb.style.display = (on && pad) ? 'flex' : 'none'; }
             let ab = document.getElementById('nm-act-btn');
             if (ab) { ab.innerText = on && nm ? (nm.def.actLabel || '') : ''; ab.style.display = (on && pad && nm && nm.def.actLabel) ? 'flex' : 'none'; }
+            let ib = document.getElementById('race-item-btn');
+            if (ib) {
+                let show = on && pad && nm && nm.def.useItem;
+                ib.innerText = '道具'; ib.style.display = show ? 'flex' : 'none';
+                if (show) { ib.style.bottom = '290px'; ib.style.right = '30px'; }   // 躲开“推”那颗键
+            }
             ['blaze-stats-btn'].forEach(function (id) { let e = document.getElementById(id); if (e) e.style.display = 'none'; });
             let sb = document.getElementById('blaze-skillbar'); if (sb) sb.innerHTML = '';
             let st = document.getElementById('blaze-skill'); if (st) st.innerText = '';
@@ -132,24 +142,35 @@
             let mx = dir.x * fwd + side.x * strafe, mz = dir.z * fwd + side.z * strafe;
             let n = Math.hypot(mx, mz);
             let jump = !!(keys[' '] || touchBtn.jump); keys[' '] = false; touchBtn.jump = false;
-            let act = !!(keys['lmb'] || keys['e'] || touchBtn.nmAct); touchBtn.nmAct = false;
+            let down = !!(keys['lmb'] || keys['e'] || touchBtn.nmHold);
+            let tapped = !!touchBtn.nmAct; touchBtn.nmAct = false;
+            let act = down || tapped;
+            // 按住：蓄力模式要知道键现在是不是按着；按得太快（一帧内按下又松开）靠 latch 补上一帧
+            let held = down || tapped || !!nm.latch; nm.latch = false;
             if (!nm.def.actHold) keys['e'] = false;
+            let item = !!(keys['q'] || touchBtn.item); keys['q'] = false; touchBtn.item = false;
             // 人朝镜头方向（横着走也是面朝前），推/喷都朝镜头看的方向
-            return { x: n > 1 ? mx / n : mx, z: n > 1 ? mz / n : mz, jump: jump, act: act, face: a.facing };
+            return { x: n > 1 ? mx / n : mx, z: n > 1 ? mz / n : mz, jump: jump, act: act, held: held, item: item, face: a.facing };
         }
         function nmPhysics(a, w, dt) {
             let def = nm.def;
             if (a.actCd > 0) a.actCd -= dt;
-            if (a.stunT > 0) { a.stunT -= dt; w = { x: 0, z: 0, jump: false, act: false, face: w.face }; }
+            if (a.slipT > 0) a.slipT -= dt;
+            if (a.stunT > 0 || a.slipT > 0) {   // 被定住 / 踩了香蕉皮：不能动、不能推、蓄的力也没了
+                if (a.stunT > 0) a.stunT -= dt;
+                a.chargeT = 0;
+                w = { x: 0, z: 0, jump: false, act: false, held: false, item: false, face: w.face };
+            }
             let sp = def.speed * (def.speedMul ? def.speedMul(nm, a) : 1) * DAILY_MOD.speedMul;
             let wx = w.x * sp, wz = w.z * sp;
-            let rate = (Math.abs(wx) + Math.abs(wz) > 0.01 ? 1 / 0.16 : 1 / 0.14) * (a.onGround ? 1 : 0.45);
+            let grip = def.grip ? def.grip(nm, a) : 1;   // 冰面 < 1：起步和刹车都慢
+            let rate = (Math.abs(wx) + Math.abs(wz) > 0.01 ? 1 / 0.16 : 1 / 0.14) * (a.onGround ? 1 : 0.45) * grip;
             let k = Math.min(1, rate * dt);
             a.mvx += (wx - a.mvx) * k; a.mvz += (wz - a.mvz) * k;
             if (w.face !== undefined) a.facing = w.face;
             else if (w.x || w.z) a.facing = Math.atan2(w.x, w.z);
             // 击退冲量单独算，慢慢衰减——被推的那一下是"飞出去"，不是被自己的移动抵消
-            let kd = Math.pow(0.08, dt);
+            let kd = Math.pow(0.08, dt * Math.sqrt(grip));
             a.kx *= kd; a.kz *= kd;
             let dx = (a.mvx + a.kx) * dt, dz = (a.mvz + a.kz) * dt;
             let prevY = a.p.y;
@@ -166,11 +187,17 @@
             g = def.groundAt(nm, a.p.x, a.p.z, prevY);
             if (g > -1e8 && a.p.y <= g && prevY >= g - 0.8) { a.p.y = g; a.vy = 0; a.onGround = true; a.coyote = 0.1; }
             else { if (a.onGround) a.coyote = 0.1; a.onGround = false; if (a.coyote > 0) a.coyote -= dt; }
-            if (w.act && a.actCd <= 0 && def.act) def.act(nm, a);
+            if (def.charge) {
+                // 蓄力：按住攒力（最多 def.charge 秒），松手才推；按一下就是普通推
+                if (w.held && a.actCd <= 0) a.chargeT = Math.min(def.charge, (a.chargeT || 0) + dt);
+                else if (a.chargeT > 0) { let c = a.chargeT; a.chargeT = 0; if (a.actCd <= 0 && def.act) def.act(nm, a, c); }
+            } else if (w.act && a.actCd <= 0 && def.act) def.act(nm, a);
+            if (w.item && def.useItem) def.useItem(nm, a);
         }
         function nmKnock(b, ix, iz, by, hop) {
             if (!b || b.out) return;
             if (nmMine(b)) {
+                if (b.shield && nm.def.popShield) { nm.def.popShield(nm, b); return; }   // 护盾挡掉这一下
                 b.kx += ix; b.kz += iz; b.vy = Math.max(b.vy, hop || 16); b.onGround = false;
                 if (by) { b.lastHitBy = by.idx; b.lastHitT = nm.clock; }
             } else if (nm.net) {
@@ -314,7 +341,7 @@
                 a.spd = Math.hypot(a.p.x - px0[i].x, a.p.z - px0[i].z) / Math.max(dt, 0.001);
                 a.mesh.position.set(a.p.x, a.p.y, a.p.z);
                 if (a.out) return;
-                a.mesh.rotation.y = a.facing || 0;
+                a.mesh.rotation.y = (a.facing || 0) + (a.slipT > 0 ? a.slipT * 18 : 0);
                 let run = Math.min(1, a.spd / def.speed);
                 a.animT += dt * (2 + run * 16);
                 let u = a.mesh.userData;
@@ -413,22 +440,191 @@
         // ══════════════ 推推乐 ══════════════
         // 一块圆台子，开局 20 秒后开始往里缩。按「推」往前一撞，面前的人被撞飞；掉下台子就出局。
         // 最后站着的赢，时间到就看谁推下去的人多。
+        // 变数（S2）：
+        //   台子每局随机一种：普通 / 冰面 / 跷跷板 / 中间开洞（联机里按同一个种子，大家一样）。
+        //   蓄力撞：按住攒力（最多 1.5 秒，力气最多 ×2，攒力时走得慢一半），松手才推；点一下是普通推。
+        //   道具：每 10 秒掉一个（场上最多 2 个），走过去自动捡，一人拿一个，按 Q（触屏点“道具”）用。
+        //     大锤 5 秒内推人力气 ×2；香蕉皮放在脚下，踩到的人滑出去 3 个身位；护盾挡一次推；弹簧原地弹得很高。
         const SUMO = {
             count: 8, r0: 110, rMin: 34, shrinkAt: 20, shrinkRate: 0.55, time: 150,
-            speed: 42, jumpV: 40, gravity: 140, pushRange: 12, pushCos: 0.5, pushPower: 105, pushCd: 1.1
+            speed: 42, jumpV: 40, gravity: 140, pushRange: 12, pushCos: 0.5, pushPower: 105, pushCd: 1.1,
+            charge: 1.5, chargeTap: 0.25, chargeSlow: 0.5,
+            itemFirst: 5, itemEvery: 10, itemMax: 2, itemR: 8, hammerT: 5, hammerMul: 2, slipV: 45, slipT: 0.7, springV: 80,
+            holeW: 4.4, holeMaxK: 19, holeK0: 3, holeRate: 0.7, tiltMax: 12, tiltSlide: 240
         };
+        const SUMO_KINDS = ['normal', 'ice', 'seesaw', 'hole'];
+        const SUMO_HINT = { normal: '普通台子，把人推下去', ice: '冰面！起步和刹车都慢，别滑出去', seesaw: '跷跷板！人多的那边会往下沉', hole: '中间有个洞，台子从中间往外塌' };
+        const SUMO_ITEMS = { hammer: { n: '大锤', c: 0xe53935 }, banana: { n: '香蕉皮', c: 0xffeb3b }, shield: { n: '护盾', c: 0x42a5f5 }, spring: { n: '弹簧', c: 0x66bb6a } };
+        const SUMO_ITEM_KEYS = ['hammer', 'banana', 'shield', 'spring'];
         function sumoRadius(t) { return t < SUMO.shrinkAt ? SUMO.r0 : Math.max(SUMO.rMin, SUMO.r0 - (t - SUMO.shrinkAt) * SUMO.shrinkRate); }
+        // 开洞的台子：由 25 圈环拼成，洞从中间一圈一圈往外扩（第 k 圈之内都是洞）
+        function sumoHoleK(t) { return Math.min(SUMO.holeMaxK, SUMO.holeK0 + Math.floor(Math.max(0, t - SUMO.shrinkAt) * SUMO.holeRate / SUMO.holeW)); }
+        // AI 和道具要知道"能站的范围"：[内圈, 外圈]
+        function sumoBand(g) { return g.kind === 'hole' ? [sumoHoleK(g.clock) * SUMO.holeW, SUMO.r0] : [0, sumoRadius(g.clock)]; }
+
+        function sumoItemMesh(kind) {
+            let grp = new THREE.Group(), sym = new THREE.Group(), c = SUMO_ITEMS[kind].c;
+            let mat = function (col, o) { return new THREE.MeshLambertMaterial(Object.assign({ color: col }, o || {})); };
+            if (kind === 'hammer') {
+                let h = new THREE.Mesh(new THREE.BoxGeometry(0.9, 7, 0.9), mat(0x8d6e63)); sym.add(h);
+                let hd = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 3), mat(c)); hd.position.y = 3.5; sym.add(hd);
+                sym.rotation.z = 0.5;
+            } else if (kind === 'banana') {
+                let b = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.9, 6, 14, Math.PI * 1.25), mat(c)); b.rotation.z = Math.PI * 0.4; sym.add(b);
+            } else if (kind === 'shield') {
+                let b = new THREE.Mesh(new THREE.SphereGeometry(3.4, 12, 8), mat(c, { transparent: true, opacity: 0.8 })); sym.add(b);
+            } else {
+                for (let i = 0; i < 3; i++) { let t = new THREE.Mesh(new THREE.TorusGeometry(2, 0.55, 6, 12), mat(c)); t.rotation.x = Math.PI / 2; t.position.y = -2 + i * 2; sym.add(t); }
+            }
+            sym.position.y = 5; grp.add(sym); grp.userData.sym = sym;
+            let base = new THREE.Mesh(new THREE.RingGeometry(3.2, 4.4, 20), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
+            base.rotation.x = -Math.PI / 2; base.position.y = 0.4; grp.add(base);
+            return grp;
+        }
+        function sumoAddItem(g, id, kind, x, z) {
+            if (g.items.some(function (it) { return it.id === id; })) return;
+            let mesh = sumoItemMesh(kind); mesh.position.set(x, 0, z); g.pg.add(mesh);
+            g.items.push({ id: id, kind: kind, x: x, z: z, mesh: mesh, t: Math.random() * 6 });
+        }
+        function sumoDropMesh(g, mesh) { g.pg.remove(mesh); disposeObject(mesh); }
+        function sumoRemoveItem(g, id) {
+            g.items = g.items.filter(function (it) { if (it.id !== id) return true; sumoDropMesh(g, it.mesh); return false; });
+        }
+        function sumoRandPoint(g) {
+            let b = sumoBand(g);
+            for (let i = 0; i < 20; i++) {
+                let ang = Math.random() * Math.PI * 2, r = b[0] + 10 + Math.random() * Math.max(1, b[1] - b[0] - 22);
+                if (r < b[1] - 10) return { x: Math.cos(ang) * r, z: Math.sin(ang) * r };
+            }
+            return { x: Math.cos(0) * (b[0] + b[1]) / 2, z: 0 };
+        }
+        function sumoSend(g, o) { if (g.net) bc.postMessage(Object.assign({ type: 'NM_EV', target: '*', sender: gState.id, mode: 'sumo' }, o)); }
+
+        // 大锤 / 护盾 的样子挂在身上（所有人都看得到）
+        function sumoHammerVis(a, on) {
+            if (a.hammerMesh) { a.mesh.remove(a.hammerMesh); disposeObject(a.hammerMesh); a.hammerMesh = null; }
+            if (!on) return;
+            let m = sumoItemMesh('hammer'); m.userData.sym.position.y = 0; m.children[1].visible = false;
+            m.position.set(6, 9, 2); m.scale.setScalar(1.1); a.mesh.add(m); a.hammerMesh = m;
+        }
+        function sumoShieldVis(a, on) {
+            if (a.shieldMesh) { a.mesh.remove(a.shieldMesh); disposeObject(a.shieldMesh); a.shieldMesh = null; }
+            if (!on) return;
+            let m = new THREE.Mesh(new THREE.SphereGeometry(10, 14, 10), new THREE.MeshBasicMaterial({ color: 0x64b5f6, transparent: true, opacity: 0.28 }));
+            m.position.y = 7; a.mesh.add(m); a.shieldMesh = m;
+        }
+        function sumoPopShield(g, b) {
+            b.shield = false; sumoShieldVis(b, false);
+            nmBurst(b.p.x, b.p.y, b.p.z, 0x64b5f6);
+            if (b.isPlayer) blazeFlash('护盾挡住了！');
+            sumoSend(g, { ev: 'pop', i: b.idx });
+        }
+        // 用道具（物主那台机器执行，别的机器靠 'use' 消息跟着显示）
+        function sumoApplyUse(g, a, m) {
+            if (m.k === 'hammer') { a.hammerT = SUMO.hammerT; sumoHammerVis(a, true); }
+            else if (m.k === 'shield') { a.shield = true; sumoShieldVis(a, true); }
+            else if (m.k === 'banana') {
+                if (g.bananas.some(function (b) { return b.id === m.id; })) return;
+                let mesh = sumoItemMesh('banana'); mesh.userData.sym.position.y = 0.8; mesh.userData.sym.rotation.x = -Math.PI / 2; mesh.children[1].visible = false;
+                mesh.position.set(m.x, 0.3, m.z); g.pg.add(mesh);
+                g.bananas.push({ id: m.id, x: m.x, z: m.z, owner: a.idx, t: 0, mesh: mesh });
+            }
+        }
+        function sumoUseItem(g, a) {
+            if (!a.item || a.out) return;
+            let k = a.item; a.item = null;
+            if (k === 'spring') { a.vy = SUMO.springV; a.onGround = false; a.coyote = 0; nmBurst(a.p.x, a.p.y, a.p.z, 0x66bb6a); return; }
+            let m = { ev: 'use', i: a.idx, k: k };
+            if (k === 'banana') { m.id = 'b' + a.idx + '-' + Math.floor(g.clock * 10); m.x = +a.p.x.toFixed(1); m.z = +a.p.z.toFixed(1); }
+            sumoApplyUse(g, a, m);
+            sumoSend(g, m);
+        }
+        function sumoTakeItem(g, a, it) {
+            g.taken[it.id] = 1; sumoRemoveItem(g, it.id);
+            a.item = it.kind; a.itemT = 1 + Math.random() * 2;
+            if (a.isPlayer) blazeFlash('拿到' + SUMO_ITEMS[it.kind].n + (gState.control === 'pad' ? '，点“道具”用' : '，按 Q 用'));
+            sumoSend(g, { ev: 'pick', id: it.id, i: a.idx });
+        }
+        function sumoItemsTick(g, dt) {
+            // 房主定时掉道具
+            if (nmIsHost() && !g.over) {
+                g.itemT -= dt;
+                if (g.itemT <= 0) {
+                    g.itemT = SUMO.itemEvery;
+                    if (g.items.length < SUMO.itemMax) {
+                        let p = sumoRandPoint(g), kind = SUMO_ITEM_KEYS[Math.floor(Math.random() * SUMO_ITEM_KEYS.length)];
+                        sumoAddItem(g, 'i' + (++g.itemSeq), kind, p.x, p.z);
+                    }
+                }
+            }
+            let b = sumoBand(g);
+            g.items.slice().forEach(function (it) {
+                it.t += dt; it.mesh.userData.sym.position.y = 5 + Math.sin(it.t * 3) * 1.2; it.mesh.userData.sym.rotation.y = it.t * 2;
+                let d = Math.hypot(it.x, it.z);
+                if (nmIsHost() && (d > b[1] - 3 || d < b[0] + 3)) { sumoRemoveItem(g, it.id); return; }   // 台子缩到它那儿了
+                if (g.over) return;
+                for (let i = 0; i < g.actors.length; i++) {
+                    let a = g.actors[i];
+                    if (a.out || a.item || !nmMine(a)) continue;
+                    if (Math.hypot(a.p.x - it.x, a.p.z - it.z) < SUMO.itemR && Math.abs(a.p.y - sumoGroundY(g, it.x, it.z)) < 12) { sumoTakeItem(g, a, it); break; }
+                }
+            });
+            // 香蕉皮：谁归我模拟谁由我判
+            g.bananas = g.bananas.filter(function (bn) {
+                bn.t += dt;
+                let hit = null;
+                if (bn.t > 40) hit = 'old';
+                else g.actors.forEach(function (a) {
+                    if (hit || a.out || !nmMine(a) || !a.onGround || a.slipT > 0 || (a.idx === bn.owner && bn.t < 1.5)) return;
+                    if (Math.hypot(a.p.x - bn.x, a.p.z - bn.z) < 5) hit = a;
+                });
+                if (!hit) return true;
+                if (hit !== 'old') {
+                    let a = hit, sp = Math.hypot(a.mvx, a.mvz), dx = sp > 4 ? a.mvx / sp : Math.sin(a.facing), dz = sp > 4 ? a.mvz / sp : Math.cos(a.facing);
+                    a.kx += dx * SUMO.slipV; a.kz += dz * SUMO.slipV; a.slipT = SUMO.slipT;
+                    if (a.isPlayer) blazeFlash('踩到香蕉皮了！');
+                    sumoSend(g, { ev: 'bgone', id: bn.id });
+                }
+                sumoDropMesh(g, bn.mesh);
+                return false;
+            });
+        }
+        function sumoGroundY(g, x, z) { let y = NM_DEFS.sumo.groundAt(g, x, z); return y > -1e8 ? y : 0; }
+
         NM_DEFS.sumo = {
             sky: 0xb3e5fc, fog: 0.0016, speed: SUMO.speed, jumpV: SUMO.jumpV, gravity: SUMO.gravity,
-            camBack: 34, camUp: 20, actLabel: '推', fxY: 0,
+            camBack: 34, camUp: 20, actLabel: '推', fxY: 0, actHold: true, charge: SUMO.charge,
             count: function () { return SUMO.count; },
             build: function (g) {
-                let plat = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 8, 64), new THREE.MeshLambertMaterial({ color: 0xffe0b2 }));
-                plat.position.y = -4; nmAdd(plat); g.plat = plat;
+                let kind = g.opt && g.opt.plat !== undefined ? SUMO_KINDS[g.opt.plat] : SUMO_KINDS[g.seed % 4];
+                g.kind = kind || 'normal';
+                g.tilt = 0; g.tiltDx = 1; g.tiltDz = 0; g.tvx = 0; g.tvz = 0;
+                g.items = []; g.bananas = []; g.taken = {}; g.itemSeq = 0; g.itemT = SUMO.itemFirst; g.hinted = false;
+                let pg = new THREE.Group(); nmAdd(pg); g.pg = pg;   // 台子和台子上的东西挂在一起，跷跷板整个一起歪
+                let ice = g.kind === 'ice', top = ice ? 0xd9f2fb : (g.kind === 'seesaw' ? 0xffcc80 : 0xffe0b2);
+                if (g.kind === 'hole') {
+                    g.holeMat = new THREE.MeshLambertMaterial({ color: top }); g.holeFlash = new THREE.MeshLambertMaterial({ color: 0xffeb3b });
+                    g.holeRings = [];
+                    for (let i = 0; i < SUMO.r0 / SUMO.holeW; i++) {
+                        let a0 = i * SUMO.holeW, a1 = (i + 1) * SUMO.holeW;
+                        let pts = [new THREE.Vector2(a0, 0), new THREE.Vector2(a1, 0), new THREE.Vector2(a1, -8), new THREE.Vector2(a0, -8), new THREE.Vector2(a0, 0)];
+                        let m = new THREE.Mesh(new THREE.LatheGeometry(pts, 40), g.holeMat);
+                        pg.add(m); g.holeRings.push(m);
+                    }
+                    g.holeLast = -1;
+                } else {
+                    let plat = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 8, 64), new THREE.MeshLambertMaterial({ color: top }));
+                    plat.position.y = -4; pg.add(plat); g.plat = plat;
+                }
                 let ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 6, 64), new THREE.MeshBasicMaterial({ color: 0xe53935 }));
-                ring.rotation.x = -Math.PI / 2; ring.position.y = 0.3; nmAdd(ring); g.ring = ring;
-                let rings = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.24, 48), new THREE.MeshBasicMaterial({ color: 0xffcc80, side: THREE.DoubleSide }));
-                rings.rotation.x = -Math.PI / 2; rings.position.y = 0.05; rings.scale.setScalar(SUMO.r0); nmAdd(rings);
+                ring.rotation.x = -Math.PI / 2; ring.position.y = 0.3; pg.add(ring); g.ring = ring;
+                if (g.kind === 'hole') ring.scale.set(SUMO.r0, SUMO.r0, 1);
+                let rings = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.24, 48), new THREE.MeshBasicMaterial({ color: ice ? 0xffffff : 0xffcc80, side: THREE.DoubleSide }));
+                rings.rotation.x = -Math.PI / 2; rings.position.y = 0.05; rings.scale.setScalar(SUMO.r0); pg.add(rings);
+                if (g.kind === 'seesaw') {   // 台子底下的支点，让人一眼看出它会歪
+                    let fu = new THREE.Mesh(new THREE.ConeGeometry(22, 34, 20), new THREE.MeshLambertMaterial({ color: 0x8d6e63 }));
+                    fu.position.y = -25; nmAdd(fu);
+                }
                 let sea = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshLambertMaterial({ color: 0x4fc3f7 }));
                 sea.rotation.x = -Math.PI / 2; sea.position.y = -70; nmAdd(sea);
             },
@@ -441,39 +637,132 @@
                 return out;
             },
             camYaw: function (g) { return g.me.facing + Math.PI; },
-            groundAt: function (g, x, z) { return Math.hypot(x, z) <= sumoRadius(g.clock) ? 0 : -1e9; },
-            act: function (g, a) {
+            groundAt: function (g, x, z) {
+                let d = Math.hypot(x, z);
+                if (g.kind === 'hole') return (d <= SUMO.r0 && d >= sumoHoleK(g.clock) * SUMO.holeW) ? 0 : -1e9;
+                if (d > sumoRadius(g.clock)) return -1e9;
+                return g.kind === 'seesaw' ? -(x * g.tiltDx + z * g.tiltDz) * Math.tan(g.tilt) : 0;
+            },
+            grip: function (g, a) { return g.kind === 'ice' && a.onGround ? 0.3 : 1; },
+            speedMul: function (g, a) { return a.chargeT > 0 ? SUMO.chargeSlow : 1; },
+            carry: function (g, a, dt) {   // 跷跷板：站在歪的台子上会往低的那边滑
+                if (g.kind === 'seesaw' && g.tilt > 0.005 && a.onGround) {
+                    let s = Math.sin(g.tilt) * SUMO.tiltSlide * dt;
+                    a.kx += g.tiltDx * s; a.kz += g.tiltDz * s;
+                }
+            },
+            act: function (g, a, charged) {
+                let c = charged || 0;
+                let power = (c >= SUMO.chargeTap ? 1 + Math.min(c, SUMO.charge) / SUMO.charge : 1) * (a.hammerT > 0 ? SUMO.hammerMul : 1);
                 a.actCd = SUMO.pushCd; a.gestureT = 0.35;
                 let fx = Math.sin(a.facing), fz = Math.cos(a.facing);
-                a.kx += fx * 45; a.kz += fz * 45;   // 自己往前一冲
+                a.kx += fx * 45 * (1 + (power - 1) * 0.5); a.kz += fz * 45 * (1 + (power - 1) * 0.5);   // 自己往前一冲
                 g.actors.forEach(function (b) {
                     if (b === a || b.out) return;
                     let dx = b.p.x - a.p.x, dz = b.p.z - a.p.z, d = Math.hypot(dx, dz);
                     if (d > SUMO.pushRange || d < 0.01 || Math.abs(b.p.y - a.p.y) > 8) return;
                     if ((dx / d) * fx + (dz / d) * fz < SUMO.pushCos) return;
-                    nmKnock(b, dx / d * SUMO.pushPower, dz / d * SUMO.pushPower, a, 22);
-                    nmBurst(b.p.x, b.p.y, b.p.z, 0xffffff);
+                    nmKnock(b, dx / d * SUMO.pushPower * power, dz / d * SUMO.pushPower * power, a, 22);
+                    nmBurst(b.p.x, b.p.y, b.p.z, power > 1.5 ? 0xff7043 : 0xffffff);
                 });
             },
+            useItem: function (g, a) { sumoUseItem(g, a); },
+            popShield: sumoPopShield,
             ai: function (g, a, dt) {
-                let r = sumoRadius(g.clock), dc = Math.hypot(a.p.x, a.p.z);
-                let w = { x: 0, z: 0, jump: false, act: false };
+                let b = sumoBand(g), dc = Math.hypot(a.p.x, a.p.z);
+                let w = { x: 0, z: 0, jump: false, act: false, held: false, item: false };
                 a.aiT -= dt;
-                if (dc > r - 16) { w.x = -a.p.x / (dc || 1); w.z = -a.p.z / (dc || 1); return w; }   // 太靠边，先回中间
+                if (dc > b[1] - 16) { w.x = -a.p.x / (dc || 1); w.z = -a.p.z / (dc || 1); a.aiHold = 0; return w; }   // 太靠边，先往里走
+                if (dc < b[0] + 14) { w.x = a.p.x / (dc || 1); w.z = a.p.z / (dc || 1); if (dc < 1) w.x = 1; a.aiHold = 0; return w; }   // 太靠洞，往外走
                 let t = nmNearest(a);
                 if (!t) return w;
                 let dx = t.b.p.x - a.p.x, dz = t.b.p.z - a.p.z, d = t.d || 1;
                 w.x = dx / d; w.z = dz / d;
-                if (a.aiT <= 0 && d < SUMO.pushRange - 1 && nmFacingDot(a, t.b) > 0.6) { w.act = true; a.aiT = 0.3 + Math.random() * 0.6; }
+                // 没拿道具就去捡近处的
+                if (!a.item) {
+                    let best = null, bd = 45;
+                    g.items.forEach(function (it) { let dd = Math.hypot(it.x - a.p.x, it.z - a.p.z); if (dd < bd) { bd = dd; best = it; } });
+                    if (best) { let l = bd || 1; w.x = (best.x - a.p.x) / l; w.z = (best.z - a.p.z) / l; }
+                }
+                // 蓄力：按住一会儿再松手
+                if (a.aiHold > 0) { a.aiHold -= dt; w.held = true; }
+                else if (a.aiT <= 0 && d < SUMO.pushRange + 4 && nmFacingDot(a, t.b) > 0.6 && a.actCd <= 0) {
+                    a.aiHold = Math.random() < 0.5 ? 0.05 : 0.4 + Math.random() * 1.0; a.aiT = 0.3 + Math.random() * 0.6; w.held = true;
+                }
+                // 用道具
+                if (a.item) {
+                    a.itemT -= dt;
+                    let k = a.item;
+                    if (k === 'shield') w.item = true;
+                    else if (k === 'hammer') { if (d < SUMO.pushRange + 6) w.item = true; }
+                    else if (a.itemT <= 0) {
+                        if (k === 'banana' && d < 26) w.item = true;
+                        if (k === 'spring' && Math.random() < dt * 0.5) w.item = true;
+                    }
+                }
                 if (Math.random() < dt * 0.15) w.jump = true;
                 return w;
             },
-            tick: function (g) {
-                let r = sumoRadius(g.clock);
-                g.plat.scale.set(r, 1, r);
-                g.ring.scale.set(r, r, 1);
-                g.ring.material.color.setHex(g.clock > SUMO.shrinkAt - 3 && Math.sin(g.clock * 8) > 0 ? 0xffeb3b : 0xe53935);
+            tick: function (g, dt) {
+                let t = g.clock;
+                if (g.kind === 'hole') {
+                    let k = sumoHoleK(t);
+                    if (k !== g.holeLast) { g.holeRings.forEach(function (m, i) { m.visible = i >= k; }); g.holeLast = k; }
+                    let u = (t - SUMO.shrinkAt) * SUMO.holeRate / SUMO.holeW, frac = u - Math.floor(u);
+                    let blink = k < SUMO.holeMaxK && frac > 0.75 && Math.sin(t * 10) > 0;
+                    g.holeRings[k].material = blink ? g.holeFlash : g.holeMat;
+                } else {
+                    let r = sumoRadius(t);
+                    g.plat.scale.set(r, 1, r);
+                    g.ring.scale.set(r, r, 1);
+                    g.ring.material.color.setHex(t > SUMO.shrinkAt - 3 && Math.sin(t * 8) > 0 ? 0xffeb3b : 0xe53935);
+                }
+                if (g.kind === 'seesaw') {   // 人多的那边往下沉，最多 12 度
+                    let sx = 0, sz = 0, n = 0;
+                    g.actors.forEach(function (a) { if (!a.out) { sx += a.p.x; sz += a.p.z; n++; } });
+                    let r = Math.max(30, sumoRadius(t)), tx = n ? sx / n / (0.4 * r) : 0, tz = n ? sz / n / (0.4 * r) : 0, m = Math.hypot(tx, tz);
+                    if (m > 1) { tx /= m; tz /= m; }
+                    let kk = Math.min(1, dt * 2);
+                    g.tvx += (tx - g.tvx) * kk; g.tvz += (tz - g.tvz) * kk;
+                    let mag = Math.hypot(g.tvx, g.tvz);
+                    g.tilt = mag * SUMO.tiltMax * Math.PI / 180;
+                    if (mag > 0.001) { g.tiltDx = g.tvx / mag; g.tiltDz = g.tvz / mag; }
+                    g.pg.quaternion.setFromAxisAngle(new THREE.Vector3(g.tiltDz, 0, -g.tiltDx), g.tilt);
+                }
+                if (!g.hinted && t > 0.3) { g.hinted = true; blazeFlash(SUMO_HINT[g.kind]); }
+                g.actors.forEach(function (a) {
+                    if (a.hammerT > 0) { a.hammerT -= dt; if (a.hammerT <= 0) { a.hammerT = 0; sumoHammerVis(a, false); } }
+                    if (a.shield && a.out) { a.shield = false; sumoShieldVis(a, false); }
+                });
+                sumoItemsTick(g, dt);
+                // 蓄力条
+                let cb = g.chargeBar;
+                if (!cb) {
+                    cb = g.chargeBar = document.createElement('div');
+                    cb.id = 'sumo-charge'; cb.style.cssText = 'position:fixed; left:50%; bottom:22%; width:160px; height:12px; margin-left:-80px; border:2px solid #fff; border-radius:8px; background:rgba(0,0,0,0.35); z-index:6; display:none; pointer-events:none;';
+                    cb.innerHTML = '<div style="height:100%; width:0; background:#ff7043; border-radius:5px;"></div>';
+                    document.body.appendChild(cb);
+                }
+                let c = g.me.chargeT || 0;
+                cb.style.display = c >= SUMO.chargeTap ? 'block' : 'none';
+                cb.firstChild.style.width = Math.min(100, c / SUMO.charge * 100) + '%';
             },
+            worldState: function (g) { return { it: g.items.map(function (it) { return [it.id, SUMO_ITEM_KEYS.indexOf(it.kind), +it.x.toFixed(1), +it.z.toFixed(1)]; }) }; },
+            applyWorld: function (g, s) {
+                let ids = {};
+                (s.it || []).forEach(function (q) { ids[q[0]] = 1; if (!g.taken[q[0]]) sumoAddItem(g, q[0], SUMO_ITEM_KEYS[q[1]], q[2], q[3]); });
+                g.items.slice().forEach(function (it) { if (!ids[it.id]) sumoRemoveItem(g, it.id); });
+            },
+            onEv: function (g, m) {
+                if (m.ev === 'pick') { g.taken[m.id] = 1; sumoRemoveItem(g, m.id); }
+                else if (m.ev === 'use') { let a = g.actors[m.i]; if (a) sumoApplyUse(g, a, m); }
+                else if (m.ev === 'pop') { let a = g.actors[m.i]; if (a) { a.shield = false; sumoShieldVis(a, false); nmBurst(a.p.x, a.p.y, a.p.z, 0x64b5f6); } }
+                else if (m.ev === 'bgone') {
+                    g.bananas = g.bananas.filter(function (b) { if (b.id !== m.id) return true; sumoDropMesh(g, b.mesh); return false; });
+                }
+            },
+            afterEnd: function (g) { if (g.chargeBar) g.chargeBar.style.display = 'none'; },
+            teardown: function (g) { if (g.chargeBar && g.chargeBar.parentNode) g.chargeBar.parentNode.removeChild(g.chargeBar); },
             fallCheck: function (g, a) { return a.p.y < -50 ? '掉下去了' : null; },
             checkEnd: function (g) {
                 let alive = g.actors.filter(function (a) { return !a.out; });
@@ -492,9 +781,11 @@
             hud: function (g) {
                 let alive = g.actors.filter(function (a) { return !a.out; }).length;
                 let t = Math.max(0, Math.ceil(SUMO.time - g.clock));
+                let it = g.me.item ? '　道具：' + SUMO_ITEMS[g.me.item].n : (g.me.hammerT > 0 ? '　大锤 ' + Math.ceil(g.me.hammerT) + 's' : '');
+                let first = g.kind === 'hole' ? (g.clock < SUMO.shrinkAt ? Math.ceil(SUMO.shrinkAt - g.clock) + ' 秒后洞开始变大　' : '洞在变大　')
+                    : (g.clock < SUMO.shrinkAt ? Math.ceil(SUMO.shrinkAt - g.clock) + ' 秒后台子开始缩　' : '台子在缩　');
                 nmHudText('存活 ' + alive + ' / ' + g.actors.length + '　' + t + 's',
-                    (g.clock < SUMO.shrinkAt ? Math.ceil(SUMO.shrinkAt - g.clock) + ' 秒后台子开始缩　' : '台子在缩　') + '推下去 ' + g.me.kills + ' 人' +
-                    (g.me.out ? '　出局了，在观战' : ''));
+                    first + '推下去 ' + g.me.kills + ' 人' + it + (g.me.out ? '　出局了，在观战' : ''));
             }
         };
 

@@ -32,6 +32,12 @@ const want = (n) => !ONLY || ONLY.test(n);
 
 const ROOT = path.resolve(__dirname, '..');
 const W = (ms) => new Promise((r) => setTimeout(r, ms));
+// 等条件成立（表达式在页面里算），不靠固定等待
+async function until(T, expr, ms) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < (ms || 10000)) { if (await T.eval(`!!(${expr})`)) return true; await W(80); }
+    return false;
+}
 const results = [];
 function report(name, ok, detail, xfail) {
     let tag = ok ? 'PASS' : (xfail ? 'XFAIL' : 'FAIL');
@@ -517,7 +523,7 @@ async function enterExit(tab, key) {
             report('启动（触屏设备）0 报错、进大厅', bad.length === 0, bad.join(' / '));
         }
                 if (want('N21')) {
-            // 夜间 #21：惊魂夜缺口真的开了；推推乐按一下只推一次；双人队友的手跟着变色
+            // 夜间 #21：惊魂夜缺口真的开了；推推乐按住才算按着、松开就松；双人队友的手跟着变色
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} selectGameMode('night'); ${MODES.night.start}; true;`); await W(3500);
@@ -525,16 +531,16 @@ async function enterExit(tab, key) {
             if (gaps < 1) bad.push('二楼那一格缺口没开 ' + gaps);
             await T.eval(`${HIDE} ${MODES.night.exit}; true;`); await W(1800);
             await T.eval(`${HIDE} selectGameMode('sumo'); ${MODES.sumo.start}; true;`); await W(1500);
-            const tap = await T.eval(`(function(){ keys['e'] = true; let a = nmWish({}), b = nmWish({}); return [a.act, b.act]; })()`);
+            const tap = await T.eval(`(function(){ keys['e'] = true; let a = nmWish({}); keys['e'] = false; let b = nmWish({}); return [a.act, a.held, b.act, b.held]; })()`);
             await T.eval(`keys['e'] = false; ${MODES.sumo.exit}; true;`); await W(1500);
-            if (tap[0] !== true || tap[1] !== false) bad.push('推推乐一次按键变了 ' + JSON.stringify(tap));
+            if (tap.join() !== 'true,true,false,false') bad.push('推推乐按住/松开的状态不对 ' + JSON.stringify(tap));
             const hands = await T.eval(`(function(){ let g = raceMakeBody(0xff0000, 0, true); let r = { mesh: g, col: 0xff0000 }; raceRecolorRacer(r, 0x2255ee);
                 return JSON.stringify({ n: (g.userData.hands || []).length, ok: (g.userData.hands || []).every(function (h) { return h.material.color.getHex() === 0x2255ee; }) }); })()`);
             const hr = JSON.parse(hands);
             if (hr.n !== 2 || !hr.ok) bad.push('队友的手没变色 ' + hands);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('N21 惊魂夜二楼缺口打开；推推乐一次按键一次；双人队友的手跟着变队伍色', bad.length === 0, bad.join(' / '));
+            report('N21 惊魂夜二楼缺口打开；推推乐按住才算按着、松开就松；双人队友的手跟着变队伍色', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('M1')) {
@@ -2250,6 +2256,150 @@ async function enterExit(tab, key) {
         }
 
                 //@@NEW@@
+        if (want('S2')) {
+            // S2 推推乐变数：四种台面都能开局、打完；道具会掉、会捡、会用；蓄力撞按住变强、点一下是普通推；触屏按住也行
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`window.__ai0 = NM_DEFS.sumo.ai; true;`);   // 测试里会把 AI 换成站着不动的，真 AI 留一份
+            const begin = (plat, extra) => T.eval(`${HIDE} selectGameMode('sumo'); nmBegin('sumo', [{ id: gState.id }], gState.id, 5, { plat: ${plat} }); ${extra || ''} true;`);
+            const names = ['normal', 'ice', 'seesaw', 'hole'];
+            for (let k = 0; k < 4; k++) {
+                await begin(k);
+                if (!(await until(T, `nm && nm.hinted`))) bad.push(names[k] + ' 没提示');
+                const kind = await T.eval(`nm.kind`);
+                if (kind !== names[k]) bad.push('台面种类 ' + kind + ' 应为 ' + names[k]);
+                if (names[k] === 'ice') {
+                    const gr = await T.eval(`nm.def.grip(nm, nm.me)`);
+                    if (gr !== 0.3) bad.push('冰面抓地 ' + gr);
+                }
+                if (names[k] === 'seesaw') {
+                    await T.eval(`nm.actors.forEach(function (a) { a.p.set(50, 0, 0); }); nm.def.ai = function () { return { x: 0, z: 0, jump: false, act: false, held: false, item: false }; }; true;`);
+                    await until(T, `nm.tilt > 0.15`);
+                    const o = JSON.parse(await T.eval(`JSON.stringify({ t: nm.tilt, lo: nm.def.groundAt(nm, 50, 0), hi: nm.def.groundAt(nm, -50, 0) })`));
+                    if (o.t < 0.15 || o.t > 12.01 * Math.PI / 180 || o.lo > -5 || o.hi < 5) bad.push('跷跷板没往人多的一边歪（最多 12 度） ' + JSON.stringify(o));
+                }
+                if (names[k] === 'hole') {
+                    await T.eval(`nm.clock = 60; true;`);
+                    await until(T, `nm.holeLast === sumoHoleK(60)`);
+                    const o = JSON.parse(await T.eval(`JSON.stringify({ c: nm.def.groundAt(nm, 0, 0), m: nm.def.groundAt(nm, 30, 0), e: nm.def.groundAt(nm, 60, 0), vis: nm.holeRings.filter(function (m) { return m.visible; }).length, k: sumoHoleK(60) })`));
+                    if (o.c > -1e8 || o.m > -1e8 || o.e !== 0 || o.vis !== 25 - o.k) bad.push('开洞的台子洞不对 ' + JSON.stringify(o));
+                }
+                await T.eval(`nm.clock = SUMO.time - 0.3; true;`);
+                if (!(await until(T, `nm.over`, 8000))) bad.push(names[k] + ' 没打完');
+                await T.eval(`${HIDE} nmExit(); true;`); await W(300);
+            }
+            // 道具：每 10 秒掉一个、场上最多 2 个、走过去自动捡、按 Q 用
+            await begin(0, `nm.def.ai = function () { return { x: 0, z: 0, jump: false, act: false, held: false, item: false }; };`);
+            await T.eval(`nm.itemT = 0.01; true;`);
+            await until(T, `nm.items.length === 1`);
+            await T.eval(`nm.itemT = 0.01; true;`);
+            await until(T, `nm.items.length === 2`);
+            await T.eval(`nm.itemT = 0.01; true;`);
+            await until(T, `nm.itemT > 5`);
+            const cnt = await T.eval(`nm.items.length`);
+            if (cnt !== 2) bad.push('场上道具应最多 2 个 ' + cnt);
+            const gap = await T.eval(`SUMO.itemEvery`);
+            if (gap !== 10) bad.push('掉落间隔 ' + gap);
+            await T.eval(`(function(){ let it = nm.items[0]; nm.me.p.set(it.x, 0, it.z); window.__k = it.kind; })(); true;`);
+            if (!(await until(T, `nm.me.item === window.__k`))) bad.push('走过去没自动捡');
+            if (!(await T.eval(`nm.items.length === 1`))) bad.push('捡了道具还在场上');
+            // AI 也会捡
+            await T.eval(`(function(){ let it = nm.items[0]; nm.actors[1].p.set(it.x, 0, it.z); window.__k2 = it.kind; })(); true;`);
+            if (!(await until(T, `nm.actors[1].item === window.__k2`))) bad.push('AI 没捡到道具');
+            // 逐个用
+            await T.eval(`nm.me.item = 'hammer'; keys['q'] = true; true;`);
+            if (!(await until(T, `nm.me.hammerT > 4 && !nm.me.item`))) bad.push('大锤没生效');
+            await T.eval(`nm.me.item = 'shield'; keys['q'] = true; true;`);
+            if (!(await until(T, `nm.me.shield === true`))) bad.push('护盾没生效');
+            await T.eval(`window.__kx0 = nm.me.kx; nmKnock(nm.me, 100, 0, nm.actors[1], 22); true;`);
+            const sh = JSON.parse(await T.eval(`JSON.stringify({ s: nm.me.shield, kx: nm.me.kx - window.__kx0 })`));
+            if (sh.s || Math.abs(sh.kx) > 0.5) bad.push('护盾没挡住这一下 ' + JSON.stringify(sh));
+            await T.eval(`nmKnock(nm.me, 100, 0, nm.actors[1], 22); true;`);
+            if (!(await T.eval(`Math.abs(nm.me.kx) > 50`))) bad.push('护盾用完后应该能被推');
+            await T.eval(`nm.me.kx = 0; nm.me.kz = 0; nm.me.item = 'spring'; window.__hy = 0; keys['q'] = true; true;`);
+            await until(T, `(window.__hy = Math.max(window.__hy, nm.me.p.y)) > 15`, 4000);
+            if (!(await T.eval(`window.__hy > 15`))) bad.push('弹簧没弹高 ' + await T.eval(`window.__hy`));
+            await until(T, `nm.me.onGround`);
+            // 香蕉皮：放在脚下，别人踩到滑出去约 3 个身位（≈18）
+            await T.eval(`nm.me.p.set(0, 0, 0); nm.actors[1].p.set(40, 0, 0); nm.me.item = 'banana'; keys['q'] = true; true;`);
+            if (!(await until(T, `nm.bananas.length === 1`))) bad.push('香蕉皮没放下');
+            await T.eval(`nm.me.p.set(-60, 0, 0); nm.bananas[0].t = 2; (function(){ let b = nm.bananas[0], v = nm.actors[1]; v.p.set(b.x + 2, 0, b.z); v.mvx = 0; v.mvz = 0; v.facing = Math.PI / 2; window.__b0 = { x: b.x, z: b.z }; })(); true;`);
+            if (!(await until(T, `nm.actors[1].slipT > 0`))) bad.push('踩到香蕉皮没滑');
+            await until(T, `nm.actors[1].slipT <= 0 && Math.hypot(nm.actors[1].kx, nm.actors[1].kz) < 1`);
+            const sl = JSON.parse(await T.eval(`JSON.stringify({ d: Math.hypot(nm.actors[1].p.x - window.__b0.x, nm.actors[1].p.z - window.__b0.z), gone: nm.bananas.length })`));
+            if (sl.d < 12 || sl.d > 26 || sl.gone !== 0) bad.push('香蕉皮滑出的距离/消失不对 ' + JSON.stringify(sl));
+            // AI 会用道具
+            await T.eval(`nm.def.ai = window.__ai0; nm.actors[1].item = 'shield'; nm.actors[1].itemT = 0; true;`);
+            if (!(await until(T, `nm.actors[1].shield === true`))) bad.push('AI 没用护盾');
+            await T.eval(`${HIDE} nmExit(); true;`); await W(300);
+            // 蓄力撞：点一下 = 普通推，按住攒力（走得慢一半），松手推得更远，大锤再 ×2
+            await begin(0, `nm.def.ai = function () { return { x: 0, z: 0, jump: false, act: false, held: false, item: false }; }; window.__pushes = []; (function () { let orig = nmKnock; window.nmKnock = function (b, ix, iz, by, hop) { window.__pushes.push(Math.hypot(ix, iz)); return orig(b, ix, iz, by, hop); }; })();`);
+            const setup = `nm.actors.forEach(function (a, i) { if (i > 1) { a.out = true; a.mesh.visible = false; } }); nm.me.p.set(0, 0, 0); nm.actors[1].p.set(0, 0, 8); nm.actors[1].kx = 0; nm.actors[1].kz = 0; nm.me.kx = 0; nm.me.kz = 0; camera.rotation.set(0, Math.PI, 0); nm.me.actCd = 0; window.__pushes.length = 0; true;`;
+            await T.eval(setup);
+            await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' })); window.dispatchEvent(new KeyboardEvent('keyup', { key: 'e' })); true;`);
+            if (!(await until(T, `window.__pushes.length === 1`))) bad.push('点一下没推出去');
+            const tapP = await T.eval(`window.__pushes[0]`);
+            if (Math.abs(tapP - 105) > 1) bad.push('点一下应是普通推 105，实际 ' + tapP);
+            await until(T, `nm.me.actCd <= 0`);
+            await T.eval(setup);
+            await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' })); true;`);
+            if (!(await until(T, `nm.me.chargeT > 0.4`))) bad.push('按住没攒力');
+            const slow = JSON.parse(await T.eval(`JSON.stringify({ m: nm.def.speedMul(nm, nm.me), bar: document.getElementById('sumo-charge').style.display })`));
+            if (slow.m !== 0.5 || slow.bar !== 'block') bad.push('攒力时没变慢/没蓄力条 ' + JSON.stringify(slow));
+            await until(T, `nm.me.chargeT >= SUMO.charge - 0.05`);
+            await T.eval(`window.dispatchEvent(new KeyboardEvent('keyup', { key: 'e' })); true;`);
+            if (!(await until(T, `window.__pushes.length === 1`))) bad.push('松手没推出去');
+            const holdP = await T.eval(`window.__pushes[0]`);
+            if (holdP < 195 || holdP > 211) bad.push('攒满力应约 ×2（≈210），实际 ' + holdP);
+            await until(T, `nm.me.actCd <= 0`);
+            await T.eval(setup);
+            await T.eval(`nm.me.hammerT = 5; window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' })); window.dispatchEvent(new KeyboardEvent('keyup', { key: 'e' })); true;`);
+            await until(T, `window.__pushes.length === 1`);
+            const hamP = await T.eval(`window.__pushes[0]`);
+            if (Math.abs(hamP - 210) > 1) bad.push('大锤点一下应 ×2（210），实际 ' + hamP);
+            await T.eval(`${HIDE} nmExit(); true;`); await W(300);
+            // 联机：房主把道具放进世界状态、捡/用道具发消息；别人的消息能让道具出现/消失，香蕉皮、大锤、护盾跟着显示
+            await T.eval(`${HIDE} selectGameMode('sumo'); nmBegin('sumo', [{ id: gState.id }, { id: 'peer-x' }], gState.id, 5, { plat: 0 }); window.__sent = []; bc.postMessage = function (m) { window.__sent.push(m); }; nm.def.ai = function () { return { x: 0, z: 0, jump: false, act: false, held: false, item: false }; }; nm.itemT = 0.01; true;`);
+            if (!(await until(T, `window.__sent.some(function (m) { return m.type === 'NM_W' && m.s && m.s.it && m.s.it.length === 1; })`))) bad.push('联机：世界状态里没有道具');
+            await T.eval(`(function(){ let it = nm.items[0]; nm.me.p.set(it.x, 0, it.z); })(); true;`);
+            if (!(await until(T, `window.__sent.some(function (m) { return m.type === 'NM_EV' && m.ev === 'pick'; })`))) bad.push('联机：捡道具没发消息');
+            await T.eval(`nm.me.item = 'banana'; keys['q'] = true; true;`);
+            if (!(await until(T, `window.__sent.some(function (m) { return m.type === 'NM_EV' && m.ev === 'use' && m.k === 'banana' && m.id; })`))) bad.push('联机：用道具没发消息');
+            await T.eval(`${HIDE} nmExit(); selectGameMode('sumo'); nmBegin('sumo', [{ id: 'peer-x' }, { id: gState.id }], 'peer-x', 5, { plat: 0 }); true;`);
+            await T.eval(`nmOnWorld({ type: 'NM_W', mode: 'sumo', sender: 'peer-x', clock: 3, a: [], s: { it: [['i1', 0, 20, 10], ['i2', 3, -20, 10]] } }); true;`);
+            const n1 = JSON.parse(await T.eval(`JSON.stringify({ n: nm.items.length, k: nm.items.map(function (i) { return i.kind; }) })`));
+            if (n1.n !== 2 || n1.k.join() !== 'hammer,spring') bad.push('联机：收到世界状态道具没出现 ' + JSON.stringify(n1));
+            await T.eval(`nmOnEv({ type: 'NM_EV', mode: 'sumo', sender: 'peer-x', ev: 'pick', id: 'i1', i: 0 }); nmOnWorld({ type: 'NM_W', mode: 'sumo', sender: 'peer-x', clock: 3.1, a: [], s: { it: [['i1', 0, 20, 10], ['i2', 3, -20, 10]] } }); true;`);
+            if (!(await T.eval(`nm.items.length === 1 && nm.items[0].id === 'i2'`))) bad.push('联机：别人捡走后道具没消失/又冒出来了');
+            await T.eval(`nmOnEv({ type: 'NM_EV', mode: 'sumo', sender: 'peer-x', ev: 'use', i: 0, k: 'banana', id: 'b0-5', x: 10, z: 10 });
+                nmOnEv({ type: 'NM_EV', mode: 'sumo', sender: 'peer-x', ev: 'use', i: 0, k: 'hammer' });
+                nmOnEv({ type: 'NM_EV', mode: 'sumo', sender: 'peer-x', ev: 'use', i: 0, k: 'shield' }); true;`);
+            const u = JSON.parse(await T.eval(`JSON.stringify({ b: nm.bananas.length, h: nm.actors[0].hammerT > 4 && !!nm.actors[0].hammerMesh, s: nm.actors[0].shield === true && !!nm.actors[0].shieldMesh })`));
+            if (u.b !== 1 || !u.h || !u.s) bad.push('联机：别人用道具我这边没显示 ' + JSON.stringify(u));
+            await T.eval(`nmOnEv({ type: 'NM_EV', mode: 'sumo', sender: 'peer-x', ev: 'bgone', id: 'b0-5' }); nmOnEv({ type: 'NM_EV', mode: 'sumo', sender: 'peer-x', ev: 'pop', i: 0 }); true;`);
+            const u2 = JSON.parse(await T.eval(`JSON.stringify({ b: nm.bananas.length, s: nm.actors[0].shield, m: !!nm.actors[0].shieldMesh })`));
+            if (u2.b !== 0 || u2.s || u2.m) bad.push('联机：香蕉皮被踩/护盾破了没跟着消失 ' + JSON.stringify(u2));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.eval(`${HIDE} nmExit(); true;`); await T.close();
+            // 触屏：按住“推”那颗键攒力，松手推出去；有“道具”键
+            const M = await openTab(chrome, url, { mobile: true });
+            await M.eval(`${HIDE} selectGameMode('sumo'); nmBegin('sumo', [{ id: gState.id }], gState.id, 5, { plat: 0 }); nm.def.ai = function () { return { x: 0, z: 0, jump: false, act: false, held: false, item: false }; }; window.__pushes = []; (function () { let orig = nmKnock; window.nmKnock = function (b, ix, iz, by, hop) { window.__pushes.push(Math.hypot(ix, iz)); return orig(b, ix, iz, by, hop); }; })(); true;`);
+            await M.eval(setup);
+            const ui = JSON.parse(await M.eval(`JSON.stringify({ act: document.getElementById('nm-act-btn').style.display, item: document.getElementById('race-item-btn').style.display })`));
+            if (ui.act !== 'flex' || ui.item !== 'flex') bad.push('触屏没有“推”/“道具”键 ' + JSON.stringify(ui));
+            await M.eval(`document.getElementById('nm-act-btn').dispatchEvent(new Event('touchstart', { cancelable: true })); true;`);
+            if (!(await until(M, `nm.me.chargeT > 0.6`))) bad.push('触屏按住没攒力');
+            await M.eval(`document.getElementById('nm-act-btn').dispatchEvent(new Event('touchend')); true;`);
+            if (!(await until(M, `window.__pushes.length === 1`))) bad.push('触屏松手没推出去');
+            const tp = await M.eval(`window.__pushes[0]`);
+            if (tp < 140) bad.push('触屏攒力后应比普通推更强 ' + tp);
+            await M.eval(`nm.me.item = 'hammer'; document.getElementById('race-item-btn').dispatchEvent(new Event('touchstart', { cancelable: true })); true;`);
+            if (!(await until(M, `nm.me.hammerT > 4`))) bad.push('触屏“道具”键没用出来');
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.eval(`${HIDE} nmExit(); true;`); await M.close();
+            report('S2 推推乐变数：四种台面能开能打完；道具掉落/捡/用（大锤、香蕉皮、护盾、弹簧，AI 也会）；蓄力撞按住 ×2、点一下普通；触屏按住和“道具”键', bad.length === 0, bad.join(' / '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式

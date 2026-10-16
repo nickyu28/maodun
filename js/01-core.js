@@ -254,7 +254,7 @@
         // v6：超燃镜猫换位的 'swap' 事件多了楼层字段、收到的一方开始照着换位（原来发了没人收）；
         //     同一版 ROOM_HELLO 去掉了 stats 字段（A6 删游玩记录）
         // v7：寻宝队多了 HUNT_BIG_REQ / HUNT_BIG_ACK（大金上限全队共用，H16b），返魂药水多了 HUNT_REVIVE（H24）
-        const NET_PROTO = 8;
+        const NET_PROTO = 9;
         const NET_PREFIX = 'maodun-v' + NET_PROTO + '-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
         // 这一整套匹配等待（matchPool/matchLeader/night-wait 那个浮层）早就写好了，

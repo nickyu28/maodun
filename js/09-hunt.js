@@ -933,7 +933,11 @@
         }
 
         bindTouchTap('esc-act-btn', function () { touchBtn.interact = true; });
-        bindTouchTap('nm-act-btn', function () { touchBtn.nmAct = true; });
+        bindTouchTap('nm-act-btn', function () { touchBtn.nmAct = true; touchBtn.nmHold = true; });
+        ['touchend', 'touchcancel'].forEach(function (t) {
+            let b = document.getElementById('nm-act-btn');
+            if (b) b.addEventListener(t, function () { touchBtn.nmHold = false; }, { passive: true });
+        });
         bindTouchTap('night-atk-btn', function () {
             if (!night || night.over || night.spectating) return;
             if (night.side === 'hunter') nightHunterAttack(); else nightInteract();
