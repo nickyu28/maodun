@@ -2761,7 +2761,7 @@ async function enterExit(tab, key) {
                 return { lamp: g.filter(function (x) { return x.type === 'SphereGeometry'; }).length,
                     bench: g.filter(function (x) { return x.type === 'BoxGeometry' && x.parameters.width === 10 && x.parameters.height === 2 && x.parameters.depth === 4; }).length,
                     pole: g.filter(function (x) { return x.type === 'CylinderGeometry' && x.parameters.height === 16; }).length,
-                    board: g.filter(function (x) { return x.type === 'PlaneGeometry' && x.parameters.width === 16 && x.parameters.height === 8; }).length }; })())`));
+                    board: g.filter(function (x) { return x.type === 'BoxGeometry' && x.parameters.width === 16 && x.parameters.height === 8 && x.parameters.depth === 0.5; }).length }; })())`));
             report('N4 大厅没有长椅和路灯，公告板还在', r.lamp === 0 && r.bench === 0 && r.pole === 0 && r.board === 1, JSON.stringify(r));
         }
 
