@@ -1186,7 +1186,7 @@ async function enterExit(tab, key) {
             if (r.pool !== 0) bad.push('每日任务还会出 paint ' + r.pool);
             if (r.ach !== 11) bad.push('全都玩过目标 ' + r.ach);
             if (r.html >= 0) bad.push('页面里还有“彩弹占地”');
-            const src = ['index.html'].concat(fs.readdirSync(path.join(ROOT, 'js')).map((f) => 'js/' + f)).filter((f) => /彩弹占地|PAINT\b|paintShoot|NM_DEFS\.paint/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+            const src = ['index.html'].concat(fs.readdirSync(path.join(ROOT, 'js')).map((f) => 'js/' + f)).filter((f) => /彩弹占地|PAINT\b|paintShoot|NM_DEFS\.paint/.test(fs.readFileSync(path.join(ROOT, f), 'utf8').split('\n').filter((l) => !/下架/.test(l)).join('\n')));   // 更新公告里写“下架了”不算
             if (src.length) bad.push('源码里还有 ' + src.join(','));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -3344,14 +3344,14 @@ async function enterExit(tab, key) {
         }
 
         {
-            // G1：「全都玩过」11 个模式都算，乐园是最后一个打完时成就也弹出来
+            // G1：「全都玩过」11 个模式都算（先玩过 10 个），乐园是最后一个打完时成就也弹出来
             const bad = [];
             await A.eval(`${HIDE} window.__ach0 = JSON.stringify(gState.ach || null); let S = achState(); S.modes = {}; delete S.done.all; delete S.got.all;
                 ['hunt', 'night', 'blaze', 'race', 'jail', 'dodge', 'escape', 'cake', 'sumo', 'tower'].forEach(function (k) { S.modes[k] = 1; });
                 window.__flash = []; window.__bf = blazeFlash; blazeFlash = function (t) { window.__flash.push(t); return window.__bf.apply(this, arguments); }; true;`);
             const goal = await A.eval(`ACH_LIST.filter(function (a) { return a.id === 'all'; })[0].goal`);
-            if (goal !== 12) bad.push('goal=' + goal);
-            if (await A.eval(`achCheck('none', {}), !!achState().done.all`)) bad.push('11 个就算完成了');
+            if (goal !== 11) bad.push('goal=' + goal);
+            if (await A.eval(`achCheck('none', {}), !!achState().done.all`)) bad.push('10 个就算完成了');
             await A.eval(`${HIDE} ${MODES.park.start}; true;`); await W(800); await A.eval(`${HIDE} true;`);
             await A.eval(`parkEndMatch(true); true;`); await W(2200);
             const r = JSON.parse(await A.eval(`JSON.stringify({ park: !!achState().modes.park, done: !!achState().done.all, flash: window.__flash.filter(function (t) { return /成就：.*全都玩过/.test(t); }).length })`));
