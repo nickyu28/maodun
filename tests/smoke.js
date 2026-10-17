@@ -1996,7 +1996,8 @@ async function enterExit(tab, key) {
             if (rv.stranger !== true || rv.wrongTarget !== true || rv.alive !== true || rv.hp !== 30 || rv.notDeadIgnored !== 30) bad.push('被救的一方 ' + JSON.stringify(rv));
             // 倒下的人，身体停在倒下的地方（别人要走到他身边）：倒下后 POS_SYNC 发的是倒地位置，不是正在观战的人的位置
             await T.eval(`(function(){ let sp = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial()); sp.position.set(camera.position.x + 200, 9, camera.position.z + 200); scene.add(sp);
-                window.__dp = { x: camera.position.x, z: camera.position.z }; gState.peerState['peer-q'] = 'active'; gState.isDead = true; gState.deathPos = camera.position.clone(); gState.spectating = sp; window.__sent.length = 0; return true; })()`); await W(400);
+                window.__dp = { x: camera.position.x, z: camera.position.z }; gState.peerState['peer-q'] = 'active'; gState.isDead = true; gState.deathPos = camera.position.clone(); gState.spectating = sp; window.__sent.length = 0; return true; })()`);
+            await until(T, `window.__sent.some(function (m) { return m.type === 'POS_SYNC'; })`, 20000);
             const ps = await T.eval(`window.__sent.filter(function (m) { return m.type === 'POS_SYNC'; }).slice(-1)[0]`);
             await T.eval(`gState.isDead = false; gState.spectating = null; bc.postMessage = window.__bp; true;`);
             if (!ps || Math.abs(ps.x - (await T.eval('window.__dp.x'))) > 1) bad.push('倒下后 POS_SYNC 还跟着观战的人 ' + JSON.stringify(ps));
