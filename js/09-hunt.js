@@ -640,8 +640,7 @@
 
         function completeExtraction(text) {
             if (gState.tutorial) { tutEvent('extract'); return; }   // T0：教程里的撤离不结算、不进仓库
-            // huntDiffPlayed/pityGuaranteed 不在这清零了——进图那一刻（startGameMap）已经
-            // 处理过，不然连续撤离失败的人会一直卡在"首次必出"状态出不来。
+            // huntDiffPlayed 不在这清零了——进图那一刻（startGameMap）已经处理过。
             gState.matchHistory.push(true); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
 
             gState.inv.forEach(function (i) { if (i) nightTreasureEgg(i.n); });
@@ -782,9 +781,7 @@
 
         function teamExtractWithoutYou() {
             gState.matchHistory.push(false); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
-            // 这个分支之前漏了保底判断——你倒下算这局没拿到货，跟 forfeitRun 是一回事，
-            // 不然连续几局都是"队友撤了但你倒下"的人永远攒不出保底。
-            if (huntConsecutiveFails() >= 5) gState.pityGuaranteed = true;
+            huntSafeAddFail();   // S4：你倒下了，这算死亡一次
             tidyGarage();
             let saved = (gState.submittedItems || []).slice();
             gState.submittedItems = [];
@@ -799,20 +796,12 @@
                 ' 件东西保住了，身上带的全丢了。');
         }
 
-        // 保底提示写的是"连续几把没出货了"，但原来的判断是"最近 10 把里失败次数
-        // ≥5"——赢一把输一把交替来，10 把里凑够 5 输一样触发，跟"连续"对不上。
-        // 改成从最近一把往前数真正连续失败了几把，碰到一次成功就停。
-        function huntConsecutiveFails() {
-            let h = gState.matchHistory, n = 0;
-            for (let i = h.length - 1; i >= 0 && !h[i]; i--) n++;
-            return n;
-        }
         // 没撤出去：这局上交过的东西全部没收，返回没收了几件。上交本来就不给钱，所以不扣钱（H4）
         function forfeitRun() {
             let confiscated = (gState.submittedItems || []).length;
             gState.submittedItems = [];
             gState.matchHistory.push(false); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
-            if (huntConsecutiveFails() >= 5) gState.pityGuaranteed = true;
+            if (!gState.quitNoPay) huntSafeAddFail();   // S4：死了（倒下后离开 / 全队阵亡）算一次；活着中途退出（quitNoPay）不加
             // 撤离失败：背包里剩下的全部丢掉，腰包和徽章也一样（H5）
             gState.inv = new Array(INV_BASE).fill(null); expandInventory();
 

@@ -220,7 +220,7 @@
             // 续几局都失败/没撤出去的人会一直卡在保底状态，每局都重复吃保底。放在生
             // 成地图之后清零：这局造图的时候两个标记还是 true，能正常生效。
             // 组队局里保底不生效，标记留到下一次自己打的时候
-            if (!gState.tutorial && !huntHasHumanMates()) { if (!gState.huntDiffPlayed) gState.huntDiffPlayed = {}; gState.huntDiffPlayed[gState.mapDifficulty] = true; gState.pityGuaranteed = false; saveProgress(); }
+            if (!gState.tutorial && !huntHasHumanMates()) { if (!gState.huntDiffPlayed) gState.huntDiffPlayed = {}; gState.huntDiffPlayed[gState.mapDifficulty] = true; saveProgress(); }
 
             if (syncSpawns) gState.preGenSpawns = syncSpawns;
 
@@ -560,13 +560,12 @@
             let validLeaves = allLeaves.filter(l => !(l.f === 0 && l.x <= 2 && l.z <= 2) && maze[l.f][l.z][l.x].type === 0 && !(l.f === 0 && l.x === goldShopLoc.x && l.z === goldShopLoc.z));
             for (let i = validLeaves.length - 1; i > 0; i--) { let j = Math.floor(seededRandom() * (i + 1)); let temp = validLeaves[i]; validLeaves[i] = validLeaves[j]; validLeaves[j] = temp; }
 
-            // H12：保底局（新号第一局 / 连续没出货）。简单图不出保险柜，改成多 1 个金箱子、大金概率翻倍；
-            // 中等、困难图还是必出保险柜。只在没有真人队友的局里生效（标记是各人自己的，
-            // 组队时每人的地图要一模一样，不能因为谁带着保底就多一个箱子）。
+            // H17：每种图第一次单人打：多 1 个金箱子、大金概率翻倍（所有图一样）。只在没有真人队友的局里生效
+            // （标记是各人自己的，组队时每人的地图要一模一样，不能因为谁的标记多一个箱子）。
             let pity = huntPityActive() && !gState.tutorial;
-            huntPityMul = (pity && gState.mapDifficulty === 'easy') ? 2 : 1;
+            huntPityMul = pity ? 2 : 1;
             let cTypes = [];
-            if (pity && gState.mapDifficulty === 'easy') cTypes.push('gold');
+            if (pity) cTypes.push('gold');
             for (let i = 0; i < conf.gold; i++) cTypes.push('gold'); for (let i = 0; i < conf.silver; i++) cTypes.push('silver'); for (let i = 0; i < conf.wood; i++) cTypes.push('wood');
 
             for (let i = cTypes.length - 1; i > 0; i--) { let j = Math.floor(seededRandom() * (i + 1)); let t = cTypes[i]; cTypes[i] = cTypes[j]; cTypes[j] = t; }
@@ -602,11 +601,10 @@
                 let c = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 4), new THREE.MeshLambertMaterial({ map: goldChestTex })); c.position.set(goldShopLoc.x * TILE - 8, 2, goldShopLoc.z * TILE + 8); c.userData = { isChest: true, type: 'gold', opened: false }; scene.add(c); chests.push(c);
             }
 
-            // 简单图永远不出保险柜——这是作者的决定（10-05，记在 TASKS.md「作者的决定」），不要改回去。
-            // 简单图的保底换成上面那个多出来的金箱子 + 大金概率翻倍。中等、困难图保底局必出保险柜。
-            let safePity = pity && gState.mapDifficulty !== 'easy';
-            if (gState.mapDifficulty !== 'easy' && (conf.hasSafe || safePity)) {
-                let prob = safePity ? 1.0 : 0.1;
+            // 简单图（地图 1）永远不出保险柜——作者的决定（10-05）。别的图按 huntSafeProb：基础概率 + 死亡累加（S4，见 js/01-core.js）。
+            let safeProb = gState.tutorial ? 0 : huntSafeProb();
+            if (safeProb > 0) {
+                let prob = safeProb;
                 let roll = seededRandom();
                 let l = roll < prob ? takeSpreadLeaf() : null;
                 if (l) {

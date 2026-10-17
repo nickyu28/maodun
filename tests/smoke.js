@@ -451,18 +451,18 @@ function raceReach(R, sm, jm) {
 // H13：按造图时的箱子配置模拟 n 张图（同一个 huntAssignLoot），统计单箱大金概率、每张图大金个数
 function LOOT_SIM(diff, n, pity, teamSize) {
     let keepD = gState.mapDifficulty, keepMul = huntPityMul;
-    gState.mapDifficulty = diff; huntPityMul = (pity && diff === 'easy') ? 2 : 1;
+    gState.mapDifficulty = diff; huntPityMul = pity ? 2 : 1;
     let conf = mapConfigs[diff], st = { wood: [0, 0], silver: [0, 0], gold: [0, 0], safe: [0, 0] };
     let sum = 0, any = 0, max = 0, maxAll = 0, over = 0;
     try {
         for (let m = 0; m < n; m++) {
             let types = [];
-            if (pity && diff === 'easy') types.push('gold');
+            if (pity) types.push('gold');
             for (let i = 0; i < conf.gold; i++) types.push('gold');
             for (let i = 0; i < conf.silver; i++) types.push('silver');
             for (let i = 0; i < conf.wood; i++) types.push('wood');
             if (conf.hasGoldShop) types.push('gold');
-            if (diff !== 'easy' && (pity || (conf.hasSafe && Math.random() < 0.1))) types.push('safe');
+            if (Math.random() < huntSafeProb(diff)) types.push('safe');
             let boxes = types.map(function (t) { return { userData: { type: t } }; });
             huntAssignLoot(boxes, Math.random, teamSize);
             let k = 0;
@@ -1588,7 +1588,7 @@ async function enterExit(tab, key) {
             const a1 = await run('easy'), a2 = await run('easy'), m1 = await run('med');
             if (!a1.before || a1.played !== '{"easy":true}' || a1.mul !== 2) bad.push('easy 第一局 ' + JSON.stringify(a1));
             if (a2.before || a2.mul !== 1) bad.push('easy 第二局还是保底 ' + JSON.stringify(a2));
-            if (!m1.before || !/"med":true/.test(m1.played)) bad.push('med 第一局 ' + JSON.stringify(m1));
+            if (!m1.before || !/"med":true/.test(m1.played) || m1.mul !== 2) bad.push('med 第一局（所有图都是多一个金箱子 + 大金 ×2） ' + JSON.stringify(m1));
             const h1 = await run('hard', true);   // 组队：不是保底局，也不记
             if (h1.before || /"hard"/.test(h1.played)) bad.push('组队的局算了 ' + JSON.stringify(h1));
             const h2 = await run('hard');
@@ -1605,7 +1605,7 @@ async function enterExit(tab, key) {
             if (old.join() !== 'true,true,true') bad.push('老存档 ' + old.join());
             if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
             await N.close();
-            report('H17 每种难度第一次单人打是保底局（进图就算用掉），组队不算不记，老存档三个难度各给一次', bad.length === 0, bad.join(' / '));
+            report('H17 每种难度第一次单人打是“多一个金箱子 + 大金 ×2”的局（所有图一样，进图就算用掉），组队不算不记，老存档三个难度各给一次', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('H18')) {
@@ -2367,6 +2367,58 @@ async function enterExit(tab, key) {
         }
 
                 //@@NEW@@
+        if (want('S4')) {
+            // S4 保险柜：基础概率 地图 1 没有 / 地图 2 15% / 地图 3 25%；每死一次（撤离失败）+15% 累加到 100%、存档记着；中途退出不加；开到保险柜清零；第一局不再必出保险柜
+            const bad = [];
+            const N = await openTab(chrome, url, { name: 's4' + Math.floor(Math.random() * 100000) });
+            await N.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await N.eval(`${HIDE} true;`);
+            const p0 = JSON.parse(await N.eval(`JSON.stringify(['easy', 'med', 'hard'].map(function (d) { gState.safeBoost = 0; gState.team = []; return huntSafeProb(d); }))`));
+            if (p0.join() !== '0,0.15,0.25') bad.push('基础概率 ' + p0.join());
+            // 连续死 3 次：基础 + 45%
+            const d3 = JSON.parse(await N.eval(`(function(){ gState.safeBoost = 0; gState.team = []; let out = [];
+                for (let i = 0; i < 3; i++) { gState.quitNoPay = false; gState.submittedItems = []; forfeitRun(); }
+                out.push(gState.safeBoost, +huntSafeProb('med').toFixed(2), +huntSafeProb('hard').toFixed(2), huntSafeProb('easy'));
+                return JSON.stringify(out); })()`));
+            if (d3.join() !== '0.45,0.6,0.7,0') bad.push('死 3 次后 ' + d3.join());
+            // 存档里记着
+            const sv = await N.eval(`(saveProgress(), JSON.parse(localStorage.getItem('TH_save_' + gState.id)).safeBoost)`);
+            if (sv !== 0.45) bad.push('存档里的累加值 ' + sv);
+            // 中途退出（活着离开）不变
+            const q = await N.eval(`(function(){ gState.quitNoPay = true; gState.submittedItems = []; forfeitRun(); gState.quitNoPay = false; return gState.safeBoost; })()`);
+            if (q !== 0.45) bad.push('中途退出不该加 ' + q);
+            // 封顶 100%
+            const cap = JSON.parse(await N.eval(`(function(){ for (let i = 0; i < 10; i++) { gState.quitNoPay = false; gState.submittedItems = []; forfeitRun(); } return JSON.stringify([gState.safeBoost, huntSafeProb('med'), huntSafeProb('hard')]); })()`));
+            if (cap.join() !== '1,1,1') bad.push('封顶 ' + cap.join());
+            // 有真人队友：只用基础概率（地图要一样）
+            const tm = JSON.parse(await N.eval(`(function(){ gState.team = [{ id: gState.id, isLeader: true, isAI: false }, { id: 'peer-z', isAI: false }]; let r = [huntSafeProb('med'), huntSafeProb('hard')]; gState.team = []; return JSON.stringify(r); })()`));
+            if (tm.join() !== '0.15,0.25') bad.push('组队该只用基础概率 ' + tm.join());
+            // 开到保险柜清零；死亡路径都接上了（队友撤了你倒下、被扣在 forfeitRun）
+            await N.eval(`gState.safeBoost = 0.6; huntOnChestOpened('wood'); true;`);
+            if ((await N.eval(`gState.safeBoost`)) !== 0.6) bad.push('开普通箱子不该清零');
+            await N.eval(`huntOnChestOpened('safe'); true;`);
+            if ((await N.eval(`gState.safeBoost`)) !== 0) bad.push('开到保险柜没清零');
+            const wired = JSON.parse(await N.eval(`JSON.stringify({ engine: handlePlayerEngine.toString().indexOf('huntOnChestOpened(boxType)') >= 0, team: teamExtractWithoutYou.toString().indexOf('huntSafeAddFail') >= 0, forfeit: forfeitRun.toString().indexOf('huntSafeAddFail') >= 0 })`));
+            if (!wired.engine || !wired.team || !wired.forfeit) bad.push('钩子没接全 ' + JSON.stringify(wired));
+            // 地图里真按概率出：概率 1 时中等图一定有保险柜，0 时简单图永远没有；第一局不再必出
+            await N.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1500); await N.eval(`${HIDE} true;`);
+            const gen = async (diff, boost, first) => {
+                await N.eval(`${HIDE} gState.aiFill = false; gState.team = []; gState.mapDifficulty = '${diff}'; gState.safeBoost = ${boost}; gState.huntDiffPlayed = ${first ? '{}' : "{ easy: 1, med: 1, hard: 1 }"}; selectGameMode('hunt'); requestStartGame(); requestEnterMap(); true;`); await W(2500);
+                const r = JSON.parse(await N.eval(`JSON.stringify({ safe: chests.filter(function (c) { return c.userData.type === 'safe'; }).length })`));
+                await N.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1500); await N.eval(`${HIDE} true;`);
+                return r.safe;
+            };
+            if ((await gen('med', 1, false)) !== 1) bad.push('概率 100% 中等图没出保险柜');
+            if ((await gen('easy', 1, false)) !== 0) bad.push('简单图不该出保险柜');
+            // 概率 15% 的中等图第一局：不再必出（连开几张，至少有一张没有）
+            let noSafe = 0; for (let i = 0; i < 6; i++) if ((await gen('med', 0, true)) === 0) noSafe++;
+            if (noSafe === 0) bad.push('中等图第一局 6 张全有保险柜，像还是必出');
+            const words = await N.eval(`/保底|必出/.test(document.body.innerText)`);
+            if (words) bad.push('页面上出现了不该写的词');
+            if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
+            await N.close();
+            report('S4 保险柜：基础概率 0/15%/25%；每死一次 +15%（死 3 次 +45%）、封顶 100%、存档记；中途退出不加；开到保险柜清零；组队只用基础概率；第一局不再必出', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('H28')) {
             // H28 大金上限覆盖所有来源，合成也算：原料里没大金、产物是大金（至臻猫盾、丰饶圣餐、皇冠）+1；骑士剑（原料已有大金）不另算；满了不合成并提示；组队问队长
             const bad = [];
@@ -3339,7 +3391,7 @@ async function enterExit(tab, key) {
             const N = await openTab(chrome, url, { name: 'h12' + Math.floor(Math.random() * 100000) });
             const run = async (diff) => {
                 await N.eval(`${HIDE} gState.aiFill = false; gState.mapDifficulty = '${diff}'; selectGameMode('hunt'); requestStartGame(); requestEnterMap(); true;`); await W(2500);
-                const r = JSON.parse(await N.eval(`JSON.stringify({ gold: chests.filter(function (c) { return c.userData.type === 'gold'; }).length, safe: chests.filter(function (c) { return c.userData.type === 'safe'; }).length, played: !!gState.huntDiffPlayed.easy, pity: gState.pityGuaranteed, mul: huntPityMul })`));
+                const r = JSON.parse(await N.eval(`JSON.stringify({ gold: chests.filter(function (c) { return c.userData.type === 'gold'; }).length, safe: chests.filter(function (c) { return c.userData.type === 'safe'; }).length, played: !!gState.huntDiffPlayed.easy, mul: huntPityMul })`));
                 await N.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1500); await N.eval(`${HIDE} true;`);
                 return r;
             };
@@ -3348,12 +3400,12 @@ async function enterExit(tab, key) {
             if (r1.safe !== 0 || r1.gold !== easyGold + 1 || r1.mul !== 2 || !r1.played) bad.push('第一局 ' + JSON.stringify(r1));
             const r2 = await run('easy');
             if (r2.safe !== 0 || r2.gold !== easyGold || r2.mul !== 1) bad.push('第二局 ' + JSON.stringify(r2));
-            await N.eval(`gState.pityGuaranteed = true; true;`);
+            const medGold = await N.eval(`mapConfigs.med.gold + (mapConfigs.med.hasGoldShop ? 1 : 0)`);
             const r3 = await run('med');
-            if (r3.safe !== 1 || r3.pity) bad.push('中等图保底 ' + JSON.stringify(r3));
+            if (r3.gold !== medGold + 1 || r3.mul !== 2) bad.push('中等图第一局也该多 1 个金箱子、大金 ×2 ' + JSON.stringify(r3));
             if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
             await N.close();
-            report('H12 简单图不出保险柜，保底局多 1 个金箱子；中等图保底还是保险柜', bad.length === 0, bad.join(' / ') + ' 第一局 ' + JSON.stringify(r1) + ' 第二局 ' + JSON.stringify(r2));
+            report('H12 简单图不出保险柜，第一局多 1 个金箱子；中等图第一局也是多 1 个金箱子（不再必出保险柜）', bad.length === 0, bad.join(' / ') + ' 第一局 ' + JSON.stringify(r1) + ' 第二局 ' + JSON.stringify(r2));
         }
 
         {

@@ -4193,6 +4193,10 @@
             el.style.color = t.done ? '#43a047' : '#e65100';
         }
 
+        // 玩家开了一个箱子。开到保险柜：记下这局开过，并把 S4 累加的概率清零
+        function huntOnChestOpened(boxType) {
+            if (boxType === 'safe') { gState.safeOpenedThisGame = true; huntSafeReset(); }
+        }
         function handlePlayerEngine(dt) {
             let w = HUNT_TEST_NOWEIGHT ? 0 : invWeight();
             let useTrigger = keys['rmb'] || touchBtn.ability; let selectedInv = gState.inv[gState.selectedSlot];
@@ -4358,7 +4362,7 @@
 
                         let boxType = activeObj.userData.type;
                         huntTaskEvent('chest', boxType);
-                        if (boxType === 'safe') gState.safeOpenedThisGame = true;
+                        huntOnChestOpened(boxType);
                         let singleLoot = huntChestLoot(activeObj);
                         let potion = huntPotionRoll(boxType, singleLoot, Math.random(), Math.random());
                         if (potion) singleLoot = potion;   // 药水也是掉在地上的宝物，捡起来、手上按“用道具”才喝
