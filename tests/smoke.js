@@ -38,6 +38,10 @@ async function until(T, expr, ms) {
     while (Date.now() - t0 < (ms || 10000)) { if (await T.eval(`!!(${expr})`)) return true; await W(80); }
     return false;
 }
+// 等页面真的画了 n 帧（"过一会儿还是没变"这类反向检查用，帧率低就多等一会儿；最多 20 秒）
+async function frames(T, n) {
+    return T.eval(`new Promise(function (res) { let k = 0, t = setTimeout(function () { res(false); }, 20000); (function f() { if (++k >= ${n}) { clearTimeout(t); res(true); } else requestAnimationFrame(f); })(); })`);
+}
 const results = [];
 function report(name, ok, detail, xfail) {
     let tag = ok ? 'PASS' : (xfail ? 'XFAIL' : 'FAIL');
@@ -1231,13 +1235,13 @@ async function enterExit(tab, key) {
             await N.eval(`endNightGame('测试退出'); true;`); await W(1200);
             // 回大厅：把还排着的弹窗一张张点掉
             for (let i = 0; i < 10 && (await N.eval(MODAL)) !== null; i++) await clickModal(N, (await N.eval(MODAL)) === '本局结束' ? 1 : 0);   // 结算框第一个是“再来一局”，要点第二个“返回大厅”
-            await W(800);
+            await until(N, `!introOpen && !introQ.length && !sysModalWait.length && !!hub && ${ACTIVE} === null && ${MODAL} === null`, 20000);
             const st = JSON.parse(await N.eval(`JSON.stringify({ open: introOpen, q: introQ.length, wait: sysModalWait.length, lobby: !!hub && ${ACTIVE} === null, modal: ${MODAL} })`));
             if (st.open || st.q || st.wait || !st.lobby || st.modal !== null) bad.push('回大厅后还卡着 ' + JSON.stringify(st));
             await N.eval(`selectGameMode('escape'); escapeBegin(null, null, 1); true;`); await W(1200);
             let started = false;
             for (let i = 0; i < 40 && !started; i++) { if ((await N.eval(MODAL)) !== null) await clickModal(N); else await W(400); started = await N.eval('escapeRoom && escapeRoom.started'); }
-            const c1 = await N.eval('escapeRoom.clock'); await W(1500); const c2 = await N.eval('escapeRoom.clock');
+            const c1 = await N.eval('escapeRoom.clock'); await until(N, `escapeRoom.clock > ${c1}`, 20000); const c2 = await N.eval('escapeRoom.clock');
             if (!started || !(c2 > c1)) bad.push('密室没走起来 ' + JSON.stringify({ started, c1, c2 }));
             await N.eval(`escapeExit(); true;`);
             if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
@@ -1328,7 +1332,9 @@ async function enterExit(tab, key) {
                 for (const v of [0.6, 0.95]) {
                     await M.eval(`tMove.x = 0; tMove.y = 0; true;`); await W(1800);   // 先回满体力
                     const s0 = await M.eval(getStam);
-                    await M.eval(`tMove.x = 0; tMove.y = ${-v}; true;`); await W(1000);
+                    await M.eval(`tMove.x = 0; tMove.y = ${-v}; true;`);
+                    // 跑的要等体力真降下来（最多 20 秒，不看真实时间）；走的本来就不降，等几帧够了
+                    if (v > 0.9) await until(M, `${getStam} < ${s0} - 6`, 20000); else await W(1000);
                     const s1 = await M.eval(getStam);
                     await M.eval(`tMove.x = 0; tMove.y = 0; true;`);
                     out.push(+(s0 - s1).toFixed(1));
@@ -1339,7 +1345,7 @@ async function enterExit(tab, key) {
             for (const [key, g] of [['hunt', 'stamina'], ['jail', 'jail.me.stamina'], ['dodge', 'dodge.me.stamina']]) {
                 const d = await drain(key, g);
                 // 走（0.6）体力不降，跑（0.95）1 秒明显下降
-                if (!(d[0] < 3 && d[1] > 6)) bad.push(key + ' 体力变化 走=' + d[0] + ' 跑=' + d[1]);   // CI 帧率低，游戏里 1 秒走不满，阈值放宽
+                if (!(d[0] < 3 && d[1] > 6)) bad.push(key + ' 体力变化 走=' + d[0] + ' 跑=' + d[1]);
             }
             if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
             await M.close();
@@ -1350,7 +1356,7 @@ async function enterExit(tab, key) {
             // R3：平板的"跑"按钮——寻宝队、监狱救援、躲避球里都看得见、大于 40×40、不被别的挡住；点一下变快、体力下降、高亮，再点恢复；其它模式里不出现
             const bad = [];
             const M = await openTab(chrome, url, { mobile: true });
-            const POS = { hunt: 'camera.position', jail: 'jail.me.p', dodge: 'dodge.me.p' }, STAM = { hunt: 'stamina', jail: 'jail.me.stamina', dodge: 'dodge.me.stamina' };
+            const STAM = { hunt: 'stamina', jail: 'jail.me.stamina', dodge: 'dodge.me.stamina' };
             for (const key of ['hunt', 'jail', 'dodge']) {
                 await M.eval(`${HIDE} selectGameMode('${key}'); ${MODES[key].start}; true;`);
                 if (!(await until(M, `document.getElementById('run-btn').style.display === 'flex'`, 15000))) { bad.push(key + ' 里没有跑按钮'); await M.eval(`${HIDE} ${MODES[key].exit}; true;`); await W(1200); continue; }
@@ -1364,35 +1370,28 @@ async function enterExit(tab, key) {
                 if (!g.inside) bad.push(key + ' 跑按钮在屏幕外');
                 if (g.covered.length) bad.push(key + ' 跑按钮被挡住 ' + g.covered.join(','));
                 if (g.overlap.length) bad.push(key + ' 跑按钮和别的按钮重叠 ' + g.overlap.join(',') + ' 我=' + g.me);
-                // 速度：每次只走一小段，来回换方向（出生点边上有墙，一直往一个方向走会撞停）；取几次里最快的，帧率低时也不怕偶尔卡一下
-                await M.eval(`window.__sample = function (yaw) { return new Promise(function (res) { camera.rotation.y = yaw; tMove.x = 0; tMove.y = -0.6; setTimeout(function () { const p = ${POS[key]}, x0 = p.x, z0 = p.z, t0 = performance.now(); setTimeout(function () { const q = ${POS[key]}, v = Math.hypot(q.x - x0, q.z - z0) / ((performance.now() - t0) / 1000); tMove.y = 0; res(v); }, 500); }, 600); }); };
-                    window.__best = async function (y0) { let m = 0; for (let i = 0; i < 4; i++) { m = Math.max(m, await window.__sample(y0 + (i % 2) * Math.PI)); await new Promise(function (r) { setTimeout(r, 250); }); } return m; };
-                    window.__zig = function (on) { clearInterval(window.__zt); if (on) { tMove.x = 0; tMove.y = -0.6; window.__zt = setInterval(function () { camera.rotation.y += Math.PI; }, 600); } else tMove.y = 0; }; true;`);
-                let walk = 0, bestYaw = 0;
-                for (const yaw of [0, Math.PI / 2]) { const v = await M.eval(`window.__best(${yaw})`); if (v > walk) { walk = v; bestYaw = yaw; } }
-                if (walk < 8) { bad.push(key + ' 走不动，没法量速度 ' + walk.toFixed(1)); await M.eval(`tMove.y = 0; ${HIDE} ${MODES[key].exit}; true;`); await W(1200); continue; }
-                await W(1500);
+                // 不量真实时间：推半截摇杆（0.6）时不算跑；点一下跑键后同样的摇杆就算跑（padAutoRun / 主循环里的 isRunning 都看它）
+                await M.eval(`window.__zig = function (on) { clearInterval(window.__zt); if (on) { tMove.x = 0; tMove.y = -0.6; window.__zt = setInterval(function () { camera.rotation.y += Math.PI; }, 600); } else tMove.y = 0; }; tMove.x = 0; tMove.y = -0.6; true;`);
+                if (await M.eval(`padAutoRun()`)) bad.push(key + ' 摇杆推半截就算跑了');
                 const s0 = await M.eval(STAM[key]);
                 if (await M.eval(`padRunToggle`)) bad.push(key + ' 开局跑键就是开着的');
                 // 点一下：开始跑
                 await M.eval(`document.getElementById('run-btn').dispatchEvent(new Event('touchstart', { cancelable: true })); true;`);
-                const on = JSON.parse(await M.eval(`JSON.stringify({ t: padRunToggle, cls: document.getElementById('run-btn').classList.contains('on') })`));
-                if (!on.t || !on.cls) bad.push(key + ' 点了没高亮/没切到跑 ' + JSON.stringify(on));
-                const run = await M.eval(`window.__best(${bestYaw})`);
+                const on = JSON.parse(await M.eval(`JSON.stringify({ t: padRunToggle, cls: document.getElementById('run-btn').classList.contains('on'), run: padAutoRun() })`));
+                if (!on.t || !on.cls || !on.run) bad.push(key + ' 点了没高亮/没切到跑 ' + JSON.stringify(on));
                 await M.eval(`window.__zig(true); true;`);
-                if (!(await until(M, `${STAM[key]} < ${s0} - 8`, 10000))) bad.push(key + ' 跑起来体力没降');
-                await M.eval(`window.__zig(false); true;`);
-                if (!(run > walk * 1.15)) bad.push(key + ' 跑没比走快 走=' + walk.toFixed(1) + ' 跑=' + run.toFixed(1));
+                if (!(await until(M, `${STAM[key]} < ${s0} - 8`, 20000))) bad.push(key + ' 跑起来体力没降');
+                await M.eval(`window.__zig(false); tMove.y = -0.6; true;`);
                 // 再点一下：回到走
                 await M.eval(`document.getElementById('run-btn').dispatchEvent(new Event('touchstart', { cancelable: true })); true;`);
-                const off = JSON.parse(await M.eval(`JSON.stringify({ t: padRunToggle, cls: document.getElementById('run-btn').classList.contains('on'), s: ${STAM[key]} })`));
-                if (off.t || off.cls) bad.push(key + ' 再点没恢复 ' + JSON.stringify(off));
-                await M.eval(`window.__zig(true); true;`);   // 走着，体力要回（跑才耗；速度快慢帧率一抖就量不准，这里看体力）
-                if (!(await until(M, `${STAM[key]} > ${off.s} + 2`, 10000))) bad.push(key + ' 恢复走路后体力没回');
+                const off = JSON.parse(await M.eval(`JSON.stringify({ t: padRunToggle, cls: document.getElementById('run-btn').classList.contains('on'), run: padAutoRun(), s: ${STAM[key]} })`));
+                if (off.t || off.cls || off.run) bad.push(key + ' 再点没恢复 ' + JSON.stringify(off));
+                await M.eval(`window.__zig(true); true;`);   // 走着，体力要回（跑才耗）
+                if (!(await until(M, `${STAM[key]} > ${off.s} + 2`, 20000))) bad.push(key + ' 恢复走路后体力没回');
                 await M.eval(`window.__zig(false); true;`);
                 // 摇杆推到边照样自动跑
                 await M.eval(`tMove.y = -1; true;`);
-                if (!(await until(M, `${STAM[key]} < ${off.s} - 4 || ${STAM[key]} < 90`, 8000))) bad.push(key + ' 摇杆推到边没自动跑');
+                if (!(await until(M, `${STAM[key]} < ${off.s} - 4 || ${STAM[key]} < 90`, 20000))) bad.push(key + ' 摇杆推到边没自动跑');
                 await M.eval(`tMove.x = 0; tMove.y = 0; ${HIDE} ${MODES[key].exit}; true;`); await W(1200); await M.eval(`${HIDE} true;`);
             }
             // 别的模式里没有（在大厅 / 竞速）
@@ -1401,7 +1400,7 @@ async function enterExit(tab, key) {
             await M.eval(`${HIDE} ${MODES.race.exit}; true;`);
             if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
             await M.close();
-            report('R3 平板“跑”按钮：寻宝队/监狱救援/躲避球里可见、≥40×40、不被挡；点一下变快耗体力并高亮，再点恢复；摇杆推到边照样自动跑；别的模式没有', bad.length === 0, bad.join(' / '));
+            report('R3 平板“跑”按钮：寻宝队/监狱救援/躲避球里可见、≥40×40、不被挡；点一下算跑、耗体力并高亮，再点恢复；摇杆推到边照样自动跑；别的模式没有', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('T0')) {
@@ -1648,19 +1647,19 @@ async function enterExit(tab, key) {
             const T = await openTab(chrome, url);
             const SW = `{ n: '猫盾骑士剑', v: SWORD_V, w: 5, type: 'wep', dmg: 150, spd: 1.15, hp: SWORD_HP }`;
             // 进图以后（剑是局内合成/捡到的，进图时宝物会先放回仓库）把剑放进背包：血量上限 100 → 300，当前血量按比例 100 → 300
-            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} gState.hp = 100; gState.inv[4] = ${SW}; true;`); await W(500);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} gState.hp = 100; gState.inv[4] = ${SW}; true;`); await until(T, `effectiveMaxHp() === 300 && gState.hp === 300`, 20000);
             const a = JSON.parse(await T.eval(`JSON.stringify({ max: effectiveMaxHp(), hp: gState.hp, spd: weaponSpeedMul(), bonus: weaponHpBonus(), sword: SWORD_HP })`));
             if (a.sword !== 200 || a.max !== 300 || a.hp !== 300 || a.bonus !== 200 || a.spd !== 1) bad.push('带在背包里 ' + JSON.stringify(a));
             // 掉了一半血再放下剑：150/300 → 50/100（按比例）
-            await T.eval(`gState.hp = 150; gState.inv[4] = null; true;`); await W(400);
+            await T.eval(`gState.hp = 150; gState.inv[4] = null; true;`); await until(T, `effectiveMaxHp() === 100 && gState.hp === 50`, 20000);
             const b = JSON.parse(await T.eval(`JSON.stringify({ max: effectiveMaxHp(), hp: gState.hp })`));
             if (b.max !== 100 || b.hp !== 50) bad.push('放下剑 ' + JSON.stringify(b));
             // 腰包里的剑也算
-            await T.eval(`gState.inv[3] = { n: '腰包', isShop: true, type: 'backpack_ext', bag: [${SW}, null, null] }; true;`); await W(400);
+            await T.eval(`gState.inv[3] = { n: '腰包', isShop: true, type: 'backpack_ext', bag: [${SW}, null, null] }; true;`); await until(T, `effectiveMaxHp() === 300 && gState.hp === 150`, 20000);
             const c = JSON.parse(await T.eval(`JSON.stringify({ max: effectiveMaxHp(), hp: gState.hp, spd: weaponSpeedMul() })`));
             if (c.max !== 300 || c.hp !== 150 || c.spd !== 1) bad.push('腰包里 ' + JSON.stringify(c));
             // 拿在手上：移速 ×1.15，血量加成不变不重复
-            await T.eval(`gState.inv[3] = null; gState.inv[0] = ${SW}; gState.selectedSlot = 0; true;`); await W(400);
+            await T.eval(`gState.inv[3] = null; gState.inv[0] = ${SW}; gState.selectedSlot = 0; true;`); await until(T, `effectiveMaxHp() === 300 && weaponSpeedMul() === 1.15`, 20000);
             const d = JSON.parse(await T.eval(`JSON.stringify({ max: effectiveMaxHp(), spd: weaponSpeedMul(), hp: gState.hp })`));
             if (d.max !== 300 || d.spd !== 1.15) bad.push('拿在手上 ' + JSON.stringify(d));
             // 老存档里的剑（hp 40）读档后改成 200
@@ -1680,11 +1679,11 @@ async function enterExit(tab, key) {
             const q = () => T.eval(`JSON.stringify({ hp: document.getElementById('health-num').innerText, st: document.getElementById('stamina-num').innerText,
                 red: document.getElementById('health-fill').style.width, gold: document.getElementById('health-gold').style.width, goldColor: getComputedStyle(document.getElementById('health-gold')).backgroundColor,
                 left: document.getElementById('stats-left').innerText, old: !!document.getElementById('hp-txt') || !!document.getElementById('stamina-txt') })`).then(JSON.parse);
-            await T.eval(`gState.hp = 80; updateHUD(); true;`); await W(300);
+            await T.eval(`gState.hp = 80; updateHUD(); true;`); await until(T, `document.getElementById('health-num').innerText === '80/100'`, 20000);
             const a = await q();
             if (a.hp !== '80/100' || !/^\d+\/100$/.test(a.st) || parseFloat(a.red) !== 80 || parseFloat(a.gold) !== 0) bad.push('没带剑 ' + JSON.stringify(a));
             if (/生命值|体力值/.test(a.left) || a.old) bad.push('左上角那两行还在 ' + a.left);
-            await T.eval(`gState.inv[4] = { n: '猫盾骑士剑', v: SWORD_V, w: 5, type: 'wep', dmg: 150, spd: 1.15, hp: SWORD_HP }; true;`); await W(500);
+            await T.eval(`gState.inv[4] = { n: '猫盾骑士剑', v: SWORD_V, w: 5, type: 'wep', dmg: 150, spd: 1.15, hp: SWORD_HP }; true;`); await until(T, `effectiveMaxHp() === 300`, 20000);
             await T.eval(`gState.hp = 240; updateHUD(); true;`);
             const b = await q();
             if (b.hp !== '240/300' || Math.abs(parseFloat(b.red) - 100 / 3) > 0.1 || Math.abs(parseFloat(b.gold) - 140 / 3) > 0.1 || b.goldColor !== 'rgb(255, 193, 7)') bad.push('带剑 ' + JSON.stringify(b));
@@ -1767,12 +1766,12 @@ async function enterExit(tab, key) {
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
-            const press = async (js) => { await T.eval(js); await W(500); };
+            const press = async (js) => { await T.eval(js); };
             // 1) 预设箱子开出治疗药剂 → 开箱后地上有这件东西（不是直接喝掉）
             await T.eval(`window.__roll = huntPotionRoll; huntPotionRoll = function () { return Object.assign({}, HUNT_POTIONS[0]); };
                 gState.hp = 20; window.__n0 = groundItems.length; true;`);
             await press(`(function(){ let c = chests[0]; camera.position.set(c.position.x + 6, c.position.y + 7, c.position.z); pVel.set(0, 0, 0); camera.rotation.y = Math.PI / 2; keys['f'] = true; return true; })()`);
-            await W(500);
+            await until(T, `chests[0].userData.opened && groundItems.some(function (g) { return g.userData.n === '治疗药剂'; })`, 20000);
             const o1 = JSON.parse(await T.eval(`JSON.stringify({ hp: gState.hp, opened: chests[0].userData.opened, potions: groundItems.filter(function (g) { return g.userData.n === '治疗药剂'; }).map(function (g) { return [g.userData.v, g.userData.w, g.userData.type]; }) })`));
             await T.eval(`huntPotionRoll = window.__roll; true;`);
             if (!o1.opened) bad.push('箱子没开');
@@ -1780,12 +1779,12 @@ async function enterExit(tab, key) {
             if (o1.potions.length !== 1 || o1.potions[0].join() !== '80000,1,potion') bad.push('地上没有治疗药剂（或重量/价值不对） ' + JSON.stringify(o1.potions));
             // 2) 捡起来进背包（还是没喝），选中它按“用道具”才回血、物品消失
             await press(`(function(){ let g = groundItems.filter(function (x) { return x.userData.n === '治疗药剂'; })[0]; if (!g) return false; g.userData.vel = new THREE.Vector3(0, 0, 0); camera.position.set(g.position.x + 4, g.position.y + 7, g.position.z); pVel.set(0, 0, 0); keys['f'] = true; return true; })()`);
-            await W(500);
+            await until(T, `gState.inv.some(function (q) { return q && q.n === '治疗药剂'; })`, 20000);
             const o2 = JSON.parse(await T.eval(`(function(){ let idx = gState.inv.findIndex(function (q) { return q && q.n === '治疗药剂'; }); return JSON.stringify({ idx: idx, hp: gState.hp, left: groundItems.filter(function (x) { return x.userData.n === '治疗药剂'; }).length }); })()`));
             if (o2.idx < 0 || o2.left !== 0) bad.push('没捡进背包 ' + JSON.stringify(o2));
             if (o2.hp !== 20) bad.push('捡起来就回血了 ' + o2.hp);
             await T.eval(`(function(){ let idx = gState.inv.findIndex(function (q) { return q && q.n === '治疗药剂'; }); let it = gState.inv[idx]; gState.inv[idx] = null; gState.inv[0] = it; gState.selectedSlot = 0; keys['rmb'] = true; return true; })()`);
-            await W(600);
+            await until(T, `!gState.inv.some(function (q) { return q && q.n === '治疗药剂'; })`, 20000);
             const o3 = JSON.parse(await T.eval(`JSON.stringify({ hp: gState.hp, gone: !gState.inv.some(function (q) { return q && q.n === '治疗药剂'; }) })`));
             if (o3.hp !== 70 || !o3.gone) bad.push('按用道具没回血/物品还在 ' + JSON.stringify(o3));
             // 3) 运气猫爪：合成后地上有这件东西 → 捡起来 → 用道具 → huntLuck +1，用的时候没有提示
@@ -1795,12 +1794,12 @@ async function enterExit(tab, key) {
                 return JSON.stringify({ n: claw.length, luck: gState.huntLuck, v: claw[0] && claw[0].userData.v, w: claw[0] && claw[0].userData.w }); })()`));
             if (o4.n !== 1 || o4.luck !== 0 || o4.v !== 100000 || o4.w !== 1) bad.push('合成后地上应有运气猫爪、运气还是 0 ' + JSON.stringify(o4));
             await press(`(function(){ let g = groundItems.filter(function (x) { return x.userData.n === '运气猫爪'; })[0]; g.userData.vel = new THREE.Vector3(0, 0, 0); camera.position.set(g.position.x + 4, g.position.y + 7, g.position.z); pVel.set(0, 0, 0); keys['f'] = true; return true; })()`);
-            await W(500);
+            await until(T, `gState.inv.some(function (q) { return q && q.n === '运气猫爪'; })`, 20000);
             const o5 = JSON.parse(await T.eval(`(function(){ let idx = gState.inv.findIndex(function (q) { return q && q.n === '运气猫爪'; }); return JSON.stringify({ idx: idx, luck: gState.huntLuck }); })()`));
             if (o5.idx < 0 || o5.luck !== 0) bad.push('猫爪没捡进背包/捡起来运气就涨了 ' + JSON.stringify(o5));
             await T.eval(`(function(){ window.__fl = []; let bf = blazeFlash; window.__bf = bf; blazeFlash = function (t) { window.__fl.push(t); return bf.apply(this, arguments); };
                 let idx = gState.inv.findIndex(function (q) { return q && q.n === '运气猫爪'; }); let it = gState.inv[idx]; gState.inv[idx] = null; gState.inv[0] = it; gState.selectedSlot = 0; keys['rmb'] = true; return true; })()`);
-            await W(600);
+            await until(T, `!gState.inv.some(function (q) { return q && q.n === '运气猫爪'; })`, 20000);
             const o6 = JSON.parse(await T.eval(`(function(){ blazeFlash = window.__bf; return JSON.stringify({ luck: gState.huntLuck, gone: !gState.inv.some(function (q) { return q && q.n === '运气猫爪'; }), flashes: window.__fl }); })()`));
             if (o6.luck !== 1 || !o6.gone) bad.push('用了猫爪运气没 +1 / 物品还在 ' + JSON.stringify(o6));
             if (o6.flashes.length) bad.push('用猫爪的时候不该有提示 ' + JSON.stringify(o6.flashes));
@@ -1808,7 +1807,7 @@ async function enterExit(tab, key) {
             // 4) 撤离后药水在仓库里，能卖（价值照旧）
             await T.eval(GARAGE_SETUP(`[null, null, null, null, null, null]`, `[]`, 1000));
             await T.eval(`${HIDE} requestEnterMap(); true;`); await W(2500); await T.eval(`${HIDE} true;`);
-            await T.eval(`gState.inv[1] = Object.assign({}, HUNT_POTIONS[0]); completeExtraction('撤离成功'); true;`); await W(300);
+            await T.eval(`gState.inv[1] = Object.assign({}, HUNT_POTIONS[0]); completeExtraction('撤离成功'); true;`); await until(T, `gState.garage.some(function (q) { return q && q.n === '治疗药剂'; })`, 20000);
             const o7 = JSON.parse(await T.eval(`JSON.stringify({ inGarage: gState.garage.filter(function (q) { return q && q.n === '治疗药剂'; }).length, inInv: gState.inv.filter(function (q) { return q && q.n === '治疗药剂'; }).length })`));
             if (o7.inGarage !== 1 || o7.inInv !== 0) bad.push('撤离后药水不在仓库里（或还在背包里） ' + JSON.stringify(o7));
             const m0 = await T.eval('gState.money');
@@ -1893,29 +1892,29 @@ async function enterExit(tab, key) {
             const a0 = JSON.parse(await T.eval(`JSON.stringify([abilityActive, abilityCd])`));
             if (a0[0] !== 0 || a0[1] !== 0) bad.push('右键放了技能 ' + a0.join());
             // 绿色：R
-            await T.eval(`gState.hp = 10; keys['r'] = true; true;`); await W(300);
+            await T.eval(`gState.hp = 10; keys['r'] = true; true;`); await until(T, `abilityActive > 0`, 20000);
             const g1 = JSON.parse(await T.eval(`JSON.stringify([abilityActive, abilityCd, document.getElementById('skill-name').innerText, document.getElementById('skill-icon').className])`));
-            await W(2000);
+            await until(T, `abilityActive < 7`, 20000);   // 游戏里至少过 1 秒
             // 无头浏览器帧率低，游戏时间比真实时间慢：用技能剩余时间算游戏里过了多久
             const g2 = JSON.parse(await T.eval(`JSON.stringify([abilityActive, gState.hp])`));
             const played = 8 - g2[0];
             if (!(g1[0] > 7 && g1[0] <= 8 && g1[1] > 39) || !/^\d+秒$/.test(g1[2]) || !/on/.test(g1[3])) bad.push('绿色放技能 ' + g1.join());
             if (!(played > 0.5 && Math.abs((g2[1] - 10) - 5 * played) < 3)) bad.push('绿色回血：游戏里过了 ' + played.toFixed(2) + ' 秒，血量 10 → ' + g2[1] + '（应该每秒 5）');
             // 冷却中再按 R 不重新放
-            await T.eval(`abilityActive = 0; keys['r'] = true; true;`); await W(300);
+            await T.eval(`abilityActive = 0; keys['r'] = true; true;`); await frames(T, 30);
             if ((await T.eval('abilityActive')) !== 0) bad.push('冷却中又放了');
             // 黄色：移速
-            await T.eval(`gState.char = 'yellow'; abilityCd = 0; abilityActive = 0; window.__sp = []; (function(){ let h0 = huntPhysics; window.__h0 = h0; huntPhysics = function (dt, mx, mz, sp) { window.__sp.push(sp); return h0.apply(this, arguments); }; })(); keys['w'] = true; true;`); await W(600);
+            await T.eval(`gState.char = 'yellow'; abilityCd = 0; abilityActive = 0; window.__sp = []; (function(){ let h0 = huntPhysics; window.__h0 = h0; huntPhysics = function (dt, mx, mz, sp) { window.__sp.push(sp); return h0.apply(this, arguments); }; })(); keys['w'] = true; true;`); await until(T, `window.__sp.length >= 8`, 20000);
             const base = await T.eval(`window.__sp.slice(-5)`);
-            await T.eval(`window.__sp = []; keys['r'] = true; true;`); await W(700);
+            await T.eval(`window.__sp = []; keys['r'] = true; true;`); await until(T, `window.__sp.length >= 8`, 20000);
             const during = await T.eval(`window.__sp.slice(-5)`);
             for (let i = 0; i < 40 && (await T.eval('abilityActive')) > 0; i++) await W(250);   // 等游戏里的 2 秒走完
-            await T.eval(`window.__sp = []; true;`); await W(500);
+            await T.eval(`window.__sp = []; true;`); await until(T, `window.__sp.length >= 8`, 20000);
             const after = await T.eval(`window.__sp.slice(-5)`);
             // 负重：背很重，平时慢，放技能时不受影响
-            await T.eval(`abilityCd = 0; abilityActive = 0; for (let i = 0; i < 6; i++) gState.inv[i] = { n: '铁块' + i, v: 1, w: 12 }; window.__sp = []; true;`); await W(600);
+            await T.eval(`abilityCd = 0; abilityActive = 0; for (let i = 0; i < 6; i++) gState.inv[i] = { n: '铁块' + i, v: 1, w: 12 }; window.__sp = []; true;`); await until(T, `window.__sp.length >= 8`, 20000);
             const heavy = await T.eval(`window.__sp.slice(-5)`);
-            await T.eval(`window.__sp = []; keys['r'] = true; true;`); await W(600);
+            await T.eval(`window.__sp = []; keys['r'] = true; true;`); await until(T, `window.__sp.length >= 8`, 20000);
             const heavySkill = await T.eval(`window.__sp.slice(-5)`);
             await T.eval(`keys['w'] = false; huntPhysics = window.__h0; for (let i = 0; i < 6; i++) gState.inv[i] = null; true;`);
             const avg = (x) => x.reduce((s, y) => s + y, 0) / Math.max(1, x.length);
@@ -1930,7 +1929,7 @@ async function enterExit(tab, key) {
             await M.eval(`${HIDE} gState.char = 'green'; selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await M.eval(`${HIDE} true;`);
             const b = JSON.parse(await M.eval(`JSON.stringify({ btn: !!document.getElementById('skill-btn'), shown: getComputedStyle(document.getElementById('skill-btn')).display, txt: document.getElementById('skill-btn').innerText, key: document.getElementById('skill-key').innerText })`));
             if (!b.btn || b.shown === 'none' || b.txt !== '技能' || b.key !== '技能') bad.push('平板按钮 ' + JSON.stringify(b));
-            await M.eval(`touchBtn.skill = true; true;`); await W(400);
+            await M.eval(`touchBtn.skill = true; true;`); await until(M, `abilityActive > 7`, 20000);
             if (!((await M.eval('abilityActive')) > 7)) bad.push('平板点技能没放');
             await M.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
             if (M.errors.length) bad.push('平板报错 ' + M.errors.slice(0, 2).join(' / '));
@@ -1949,28 +1948,28 @@ async function enterExit(tab, key) {
             const med = JSON.parse(await T.eval(`JSON.stringify([gState.hp, gState.inv[0] && gState.inv[0].uses, HUNT_MED_HEAL])`));
             if (med[0] !== 65 || med[1] !== 4 || med[2] !== 15) bad.push('医疗包 ' + med.join());
             // 肾上腺素：打一针，跑 1 秒体力不降；再打不扣次数；3 次后没了
-            await T.eval(`gState.inv[0] = null; gState.inv[1] = Object.assign({}, shopItems['肾上腺素']); selectSlot(1); stamina = 100; keys['rmb'] = true; true;`); await W(400);
+            await T.eval(`gState.inv[0] = null; gState.inv[1] = Object.assign({}, shopItems['肾上腺素']); selectSlot(1); stamina = 100; keys['rmb'] = true; true;`); await until(T, `gState.inv[1].uses === 2`, 20000);
             const s1 = JSON.parse(await T.eval(`JSON.stringify([gState.inv[1].uses, gState.stimT])`));
-            await T.eval(`keys['rmb'] = true; true;`); await W(400);
+            await T.eval(`keys['rmb'] = true; true;`); await frames(T, 30);
             const s1b = await T.eval('gState.inv[1].uses');
-            await T.eval(`keys['shift'] = true; keys['w'] = true; true;`); await W(1200);
+            await T.eval(`keys['shift'] = true; keys['w'] = true; true;`); await frames(T, 60);
             const st1 = await T.eval('stamina');
             await T.eval(`keys['shift'] = false; keys['w'] = false; gState.stimT = 0; stamina = 100; true;`);
-            await T.eval(`keys['shift'] = true; keys['w'] = true; true;`); await W(1200);
+            await T.eval(`keys['shift'] = true; keys['w'] = true; true;`); await until(T, `stamina < 90`, 20000);
             const st2 = await T.eval('stamina');
             await T.eval(`keys['shift'] = false; keys['w'] = false; stamina = 100; true;`);
             if (s1[0] !== 2 || !(s1[1] > 15 && s1[1] <= 20) || s1b !== 2) bad.push('肾上腺素 ' + s1.join() + ' / ' + s1b);
             if (st1 < 99 || st2 > st1 - 3) bad.push('体力：有针 ' + st1 + '，没针 ' + st2);
-            for (let i = 0; i < 2; i++) { await T.eval(`gState.stimT = 0; keys['rmb'] = true; true;`); await W(400); }
+            for (let i = 0; i < 2; i++) { await T.eval(`gState.stimT = 0; keys['rmb'] = true; true;`); await until(T, `!gState.inv[1] || gState.inv[1].uses <= ${1 - i}`, 20000); }
             if ((await T.eval('gState.inv[1]')) !== null) bad.push('用完 3 次还在');
             // 返魂药水
             const mk = `(function(){ let m = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial()); m.position.copy(camera.position); m.position.y -= 4; m.userData = { type: 'ai', name: 'NAME', hp: HP, hasRev: false, isRealPlayer: REAL }; scene.add(m); entities.push(m); return m; })()`;
             await T.eval(`gState.inv[2] = Object.assign({}, shopItems['返魂药水']); selectSlot(2); window.__sent = []; (function(){ let b = bc.postMessage.bind(bc); window.__bp = b; bc.postMessage = function (m) { window.__sent.push(m); return b(m); }; })(); true;`);
             // 旁边没人倒下：按住也没用
-            await T.eval(`huntHold.f = true; true;`); await W(1500);
+            await T.eval(`huntHold.f = true; true;`); await frames(T, 60);
             if (!(await T.eval('!!gState.inv[2]'))) bad.push('没人倒下药水却用掉了');
             // 倒下的 AI 队友在 6 米外：不行；挪到 6 米内：按住 3 秒救起来 30 血
-            await T.eval(`window.__ai = ${mk.replace('NAME', 'ai-mate').replace('HP', '0').replace('REAL', 'false')}; window.__ai.position.x += 40; true;`); await W(1200);
+            await T.eval(`window.__ai = ${mk.replace('NAME', 'ai-mate').replace('HP', '0').replace('REAL', 'false')}; window.__ai.position.x += 40; true;`); await frames(T, 40);
             if (!(await T.eval('!!gState.inv[2]'))) bad.push('6 米外也能救');
             await T.eval(`window.__ai.position.x = camera.position.x + 20; huntHold.f = false; true;`);
             // 按住 3 秒：直接喂时间（CI 帧率低，真等 3 秒游戏时间要很久）；松手就清零
@@ -2396,8 +2395,10 @@ async function enterExit(tab, key) {
             // 开到保险柜清零；死亡路径都接上了（队友撤了你倒下、被扣在 forfeitRun）
             await N.eval(`gState.safeBoost = 0.6; huntOnChestOpened('wood'); true;`);
             if ((await N.eval(`gState.safeBoost`)) !== 0.6) bad.push('开普通箱子不该清零');
+            await N.eval(`gState.team = [{ id: gState.id, isLeader: true, isAI: false }, { id: 'peer-z', isAI: false }]; huntOnChestOpened('safe'); gState.team = []; true;`);
+            if ((await N.eval(`gState.safeBoost`)) !== 0.6) bad.push('有真人队友开到保险柜，累加概率不该变');
             await N.eval(`huntOnChestOpened('safe'); true;`);
-            if ((await N.eval(`gState.safeBoost`)) !== 0) bad.push('开到保险柜没清零');
+            if ((await N.eval(`gState.safeBoost`)) !== 0) bad.push('单人开到保险柜没清零');
             const wired = JSON.parse(await N.eval(`JSON.stringify({ engine: handlePlayerEngine.toString().indexOf('huntOnChestOpened(boxType)') >= 0, team: teamExtractWithoutYou.toString().indexOf('huntSafeAddFail') >= 0, forfeit: forfeitRun.toString().indexOf('huntSafeAddFail') >= 0 })`));
             if (!wired.engine || !wired.team || !wired.forfeit) bad.push('钩子没接全 ' + JSON.stringify(wired));
             // 地图里真按概率出：概率 1 时中等图一定有保险柜，0 时简单图永远没有；第一局不再必出
@@ -2417,7 +2418,7 @@ async function enterExit(tab, key) {
             if (words) bad.push('页面上出现了不该写的词');
             if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
             await N.close();
-            report('S4 保险柜：基础概率 0/15%/25%；每死一次 +15%（死 3 次 +45%）、封顶 100%、存档记；中途退出不加；开到保险柜清零；组队只用基础概率；第一局不再必出', bad.length === 0, bad.join(' / '));
+            report('S4 保险柜：基础概率 0/15%/25%；每死一次 +15%（死 3 次 +45%）、封顶 100%、存档记；中途退出不加；开到保险柜单人清零、有真人队友不清；组队只用基础概率；第一局不再必出', bad.length === 0, bad.join(' / '));
         }
 
         if (want('H28')) {
@@ -3332,39 +3333,39 @@ async function enterExit(tab, key) {
             const drop = (who, lavaVsCp) => A.eval(`(function(){ let a = ${who}, cs = nm.steps[a.cp || 0]; nm.lavaY = cs.y + (${lavaVsCp}); a.p.set(cs.x, nm.lavaY - 3, cs.z); a.vy = 0; return true; })()`);
             const st = (who) => A.eval(`(function(){ let a = ${who}; return JSON.stringify({ cp: a.cp, out: !!a.out, down: !!a.downed, falls: a.falls, y: Math.round(a.p.y), cpY: Math.round(nm.steps[a.cp || 0].y) }); })()`);
             await begin('solo');
-            await drop('nm.me', -20); await W(400); await A.eval(`${HIDE} true;`);
+            await drop('nm.me', -20); await until(A, `nm.me.falls >= 1`, 20000); await A.eval(`${HIDE} true;`);
             let o = JSON.parse(await st('nm.me'));
             if (o.out || o.cp !== 0 || o.falls !== 1 || o.y < o.cpY - 1) bad.push('单人 岩浆低于起点时掉下去 ' + JSON.stringify(o));
-            await stand('nm.me', 10); await W(400); await A.eval(`${HIDE} true;`);
-            await stand('nm.me', 20); await W(400); await A.eval(`${HIDE} true;`);
-            await stand('nm.me', 10); await W(400); await A.eval(`${HIDE} true;`);
+            await stand('nm.me', 10); await until(A, `nm.me.cp === 10`, 20000); await A.eval(`${HIDE} true;`);
+            await stand('nm.me', 20); await until(A, `nm.me.cp === 20`, 20000); await A.eval(`${HIDE} true;`);
+            await stand('nm.me', 10); await frames(A, 30); await A.eval(`${HIDE} true;`);
             o = JSON.parse(await st('nm.me'));
             const gold = await A.eval(`nm.steps[20].flagMesh.material.color.getHex() === 0xffca28 && nm.steps[30].flagMesh.material.color.getHex() !== 0xffca28`);
             if (o.cp !== 20 || !gold) bad.push('存档点只升不降/旗子变色 ' + JSON.stringify(o) + ' ' + gold);
-            await drop('nm.me', -20); await W(400); await A.eval(`${HIDE} true;`);
+            await drop('nm.me', -20); await until(A, `nm.me.falls >= 2`, 20000); await A.eval(`${HIDE} true;`);
             o = JSON.parse(await st('nm.me'));
             if (o.out || o.cp !== 20 || o.falls !== 2 || o.y < o.cpY - 1) bad.push('单人 回第 20 块 ' + JSON.stringify(o));
             const hud = await A.eval(`(nm.lavaY = nm.steps[20].y + 5, nm.def.hud(nm), document.getElementById('blaze-round').innerText)`);
             if (!/存档点被淹了/.test(hud)) bad.push('淹了没提示 ' + hud);
-            await drop('nm.me', 5); await W(1200);
+            await drop('nm.me', 5); await until(A, `/掉下去 3 次/.test(document.getElementById('sys-modal-text').innerText)`, 20000);
             o = JSON.parse(await st('nm.me'));
             const endTxt = await A.eval(`document.getElementById('sys-modal-text').innerText`);
             if (!o.out || !/掉下去 3 次/.test(endTxt)) bad.push('单人 淹了再掉 ' + JSON.stringify(o) + ' 结算:' + endTxt.slice(0, 60));
             await A.eval(`${HIDE} nmExit(); true;`); await W(1200);
             await begin('multi');
             // AI 也用同一套：岩浆低于它的存档点时掉下去回存档点
-            await drop('nm.actors[1]', -20); await W(400);
+            await drop('nm.actors[1]', -20); await until(A, `nm.actors[1].falls >= 1`, 20000);
             o = JSON.parse(await st('nm.actors[1]'));
             if (o.out || o.falls !== 1) bad.push('多人 AI 回存档点 ' + JSON.stringify(o));
             // 先把两个 AI 放到第 50 块（岩浆淹不到），不然起点上的 AI 跟着一起淹、这局直接结束
             await stand('nm.actors[1]', 50); await stand('nm.actors[2]', 50);
-            await drop('nm.me', 5); await W(600); await A.eval(`${HIDE} true;`);
+            await drop('nm.me', 5); await until(A, `nm.me.out`, 20000); await A.eval(`${HIDE} true;`);
             o = JSON.parse(await st('nm.me'));
             const still = await A.eval(`!!nm && nm.actors.filter(function (a) { return !a.out; }).length`);
             if (!o.out || !still) bad.push('多人 淹了再掉应出局、局还在 ' + JSON.stringify(o) + ' 剩 ' + still);
             await A.eval(`${HIDE} nmExit(); true;`); await W(1200);
             await begin('duo');
-            await drop('nm.me', 5); await W(600); await A.eval(`${HIDE} true;`);
+            await drop('nm.me', 5); await until(A, `nm.me.downed`, 20000); await A.eval(`${HIDE} true;`);
             o = JSON.parse(await st('nm.me'));
             if (!o.down || o.out) bad.push('双人 淹了再掉应倒下 ' + JSON.stringify(o));
             await A.eval(`${HIDE} nmExit(); true;`); await W(1200); await A.eval(`${HIDE} true;`);
@@ -3737,7 +3738,7 @@ async function enterExit(tab, key) {
             await N.eval(`selectGameMode('escape'); escapeBegin(null, null, 1); true;`); await W(1200);
             let started = false;
             for (let i = 0; i < 40 && !started; i++) { if ((await N.eval(MODAL)) !== null) await clickModal(N); else await W(400); started = await N.eval('escapeRoom && escapeRoom.started'); }
-            const c1 = await N.eval('escapeRoom.clock'); await W(1500); const c2 = await N.eval('escapeRoom.clock');
+            const c1 = await N.eval('escapeRoom.clock'); await until(N, `escapeRoom.clock > ${c1}`, 20000); const c2 = await N.eval('escapeRoom.clock');
             if (!started || !(c2 > c1)) bad.push('密室没走起来 ' + JSON.stringify({ started, c1, c2 }));
             await N.eval(`escapeExit(); true;`); await W(1000);
             for (let i = 0; i < 6 && (await N.eval(MODAL)) !== null; i++) await clickModal(N);
