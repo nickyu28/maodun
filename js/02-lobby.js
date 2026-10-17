@@ -648,15 +648,6 @@
             if (isEscape) { escRenderLevels(); escDailyInfoRender(); }
             document.getElementById('park-only').classList.toggle('hidden', !isPark);
             document.getElementById('cake-only').classList.toggle('hidden', !isCake);
-            // 保底之前完全是黑箱，连续输几把之后悄悄给你保底，玩家自己感觉不到，
-            // 只会觉得"这把运气真好"或者怀疑概率是不是假的——露出来一点，让人知道
-            // 这不是纯随机，是系统在补偿连续没出货的人。
-            let pityHint = document.getElementById('hunt-pity-hint');
-            if (pityHint) {
-                let showPity = false;
-                pityHint.style.display = showPity ? 'block' : 'none';
-                if (showPity) pityHint.innerText = '';   // 不告诉玩家有保底
-            }
             let modeName = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : MODE_CN[m] && NM_DEFS[m] ? MODE_CN[m] : '超燃');
             document.getElementById('lobby-title').innerText = modeName;
             let mbc = document.getElementById('mode-bar-current'); if (mbc) mbc.innerText = isEscape ? modeName + ' · 第 ' + (escProg().sel || 1) + ' 关' : modeName;
@@ -1635,7 +1626,7 @@
             if (isPlaying) updateHUD(); else initGarage();
         }
 
-        function bookOpen() { document.getElementById('book-modal').classList.remove('hidden'); bookRender(); }
+        function bookOpen(tab) { if (tab) bookTab = tab; document.getElementById('book-modal').classList.remove('hidden'); bookRender(); }
         function bookClose() { document.getElementById('book-modal').classList.add('hidden'); }
 
         let bookTab = 'recipe';

@@ -1055,11 +1055,6 @@
             </div>
 
         <div id="hunt-only">
-        <div style="margin: 0 0 8px;">
-            <button onclick="selectChar('green')" id="btn-green" style="color:#5cb85c; border-color:#5cb85c; font-size:12px; padding:7px 8px;">绿色猫盾 (回血)</button>
-            <button onclick="selectChar('yellow')" id="btn-yellow" style="font-size:12px; padding:7px 8px;">黄色猫盾 (冲刺)</button>
-        </div>
-
         <div style="margin:6px 0; font-size:12px; color:#666; width:100%; text-align:left; box-sizing:border-box;">
             <label><input type="checkbox" id="hunt-ai-fill" onchange="setAiFill(this.checked)"> AI 补齐队友</label>
             <div style="font-size:11px; color:#999; line-height:1.6; margin-top:4px;">
@@ -1068,12 +1063,6 @@
             </div>
         </div>
 
-        <div class="map-select" id="map-select-ui">
-            <label><input type="radio" name="map_diff" value="easy" checked onchange="broadcastMapDiff()"> 简单模式</label>
-            <label><input type="radio" name="map_diff" value="med" onchange="broadcastMapDiff()"> 中等模式</label>
-            <label><input type="radio" name="map_diff" value="hard" onchange="broadcastMapDiff()"> 困难模式</label>
-        </div>
-        <div id="hunt-pity-hint" style="display:none; font-size:11px; color:#e65100; background:#fff3e0; border:1px solid #ffcc80; border-radius:5px; padding:5px 6px; margin-top:6px;"></div>
         </div>
 
         <div id="night-only" class="hidden" style="text-align:center; margin:0 0 8px;">
@@ -1253,6 +1242,20 @@
             <div class="funds">资金: $<span id="garage-money">10000</span></div>
         </div>
         <div id="garage-workspace">
+            <!-- U7：寻宝队的角色、地图、合成配方放在仓库里（原来在大厅面板上） -->
+            <div id="garage-hunt-setup" style="width:100%; box-sizing:border-box; margin:0 0 4px; text-align:center;">
+                <div class="inv-section-title">出发前</div>
+                <div style="margin: 0 0 8px;">
+                    <button onclick="selectChar('green')" id="btn-green" style="color:#5cb85c; border-color:#5cb85c; font-size:12px; padding:7px 8px;">绿色猫盾 (回血)</button>
+                    <button onclick="selectChar('yellow')" id="btn-yellow" style="font-size:12px; padding:7px 8px;">黄色猫盾 (冲刺)</button>
+                </div>
+                <div class="map-select" id="map-select-ui">
+                    <label><input type="radio" name="map_diff" value="easy" checked onchange="broadcastMapDiff()"> 简单模式</label>
+                    <label><input type="radio" name="map_diff" value="med" onchange="broadcastMapDiff()"> 中等模式</label>
+                    <label><input type="radio" name="map_diff" value="hard" onchange="broadcastMapDiff()"> 困难模式</label>
+                </div>
+                <button id="garage-recipe-btn" onclick="bookOpen('recipe')" style="background:#5e35b1; color:#fff; border:none; font-size:12px; padding:7px 14px; margin:0;">合成配方</button>
+            </div>
             <div style="width: 100%;">
                 <div class="inv-section-title">背包</div>
                 <div id="garage-active-inv"></div>

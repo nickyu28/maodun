@@ -2367,6 +2367,41 @@ async function enterExit(tab, key) {
         }
 
                 //@@NEW@@
+        if (want('U7')) {
+            // U7：寻宝队的角色、地图、合成配方在仓库界面里（大厅面板上没了）；点得到、有用；触屏尺寸下不用滚就看得见
+            const bad = [];
+            for (const mobile of [false, true]) {
+                const tag = mobile ? '触屏' : '电脑';
+                const T = await openTab(chrome, url, mobile ? { mobile: true } : {});
+                await T.eval(`${HIDE} selectGameMode('hunt'); true;`);
+                const lob = JSON.parse(await T.eval(`JSON.stringify({ chars: !!document.querySelector('#hunt-only #btn-green, #hunt-only #btn-yellow'), map: !!document.querySelector('#hunt-only input[name="map_diff"]'), recipe: /合成配方/.test(document.getElementById('hunt-only').innerText), setup: !!document.querySelector('#screen-garage #garage-hunt-setup #btn-green') && !!document.querySelector('#screen-garage #btn-yellow') && document.querySelectorAll('#screen-garage input[name="map_diff"]').length === 3 && !!document.querySelector('#screen-garage #garage-recipe-btn') })`));
+                if (lob.chars || lob.map || lob.recipe) bad.push(tag + ' 大厅面板上还有 ' + JSON.stringify(lob));
+                if (!lob.setup) bad.push(tag + ' 仓库里没有角色/地图/合成配方');
+                await T.eval(`nav('screen-garage'); initGarage(); true;`); await W(500);
+                const vis = JSON.parse(await T.eval(`JSON.stringify(['btn-green', 'btn-yellow', 'garage-recipe-btn'].concat(Array.prototype.map.call(document.querySelectorAll('input[name="map_diff"]'), function (r, i) { r.id = 'md' + i; return r.id; })).map(function (id) {
+                    const e = document.getElementById(id), r = e.getBoundingClientRect(), t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                    return { id: id, ok: r.width > 8 && r.height > 8 && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && !!t && (t === e || e.contains(t) || (e.parentNode && e.parentNode.contains(t))) }; }))`));
+                vis.filter((v) => !v.ok).forEach((v) => bad.push(tag + ' 仓库里 ' + v.id + ' 看不见/被挡/要滚动才看得到'));
+                // 真点：黄色猫盾、中等地图、合成配方
+                const click = async (sel) => { const p = await mouseAt(T, sel); if (!p) throw new Error('找不到 ' + sel);
+                    const ev = (type) => T.send('Input.dispatchMouseEvent', { type, x: p[0], y: p[1], button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 });
+                    await ev('mouseMoved'); await ev('mousePressed'); await ev('mouseReleased'); await W(250); };
+                await click('#btn-yellow');
+                if ((await T.eval(`gState.char`)) !== 'yellow') bad.push(tag + ' 点黄色猫盾没选上');
+                await click('#btn-green');
+                if ((await T.eval(`gState.char`)) !== 'green') bad.push(tag + ' 点绿色猫盾没选上');
+                await click('#md1');
+                if ((await T.eval(`document.querySelector('input[name="map_diff"]:checked').value`)) !== 'med') bad.push(tag + ' 点中等模式没选上');
+                await T.eval(`document.querySelector('input[name="map_diff"][value="easy"]').click(); true;`);
+                await click('#garage-recipe-btn');
+                const bk = JSON.parse(await T.eval(`JSON.stringify({ open: !document.getElementById('book-modal').classList.contains('hidden'), tab: bookTab })`));
+                if (!bk.open || bk.tab !== 'recipe') bad.push(tag + ' 点合成配方没打开配方页 ' + JSON.stringify(bk));
+                if (T.errors.length) bad.push(tag + ' ' + T.errors.slice(0, 2).join(' / '));
+                await T.close();
+            }
+            report('U7 寻宝队的角色、地图、合成配方在仓库界面里（大厅面板上没了）：点得到、有用，触屏尺寸下不用滚动就看得见', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('U6')) {
             // U6：小地图的“全览”按钮在小地图左下角里面，不挡右下角；电脑和触屏都在小地图框里、没被别的盖住、点得到
             const bad = [];
