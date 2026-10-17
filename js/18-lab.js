@@ -930,3 +930,5 @@
 
         // 调试用：清空地上的东西（只在 ?labdebug=1 时有用，冒烟测试用）
         function labClear() { if (!labDebugOn() || !lab) return; lab.ground.slice().forEach(labKill); }
+        // 调试用：不等真实时间，直接把实验室往前推 secs 秒（每步 0.05 秒；冒烟测试用，不依赖帧率）
+        function labAdvance(secs) { if (!labDebugOn() || !lab) return; for (let t = 0; t < secs - 1e-9 && lab && !lab.over; t += 0.05) labTick(0.05); }
