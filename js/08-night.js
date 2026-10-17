@@ -4193,9 +4193,9 @@
             el.style.color = t.done ? '#43a047' : '#e65100';
         }
 
-        // 玩家开了一个箱子。开到保险柜：记下这局开过，并把 S4 累加的概率清零
+        // 玩家开了一个箱子。开到保险柜：记下这局开过，单人时把 S4 累加的概率清零（有真人队友时累加概率不起作用，也不清零）
         function huntOnChestOpened(boxType) {
-            if (boxType === 'safe') { gState.safeOpenedThisGame = true; huntSafeReset(); }
+            if (boxType === 'safe') { gState.safeOpenedThisGame = true; if (!huntHasHumanMates()) huntSafeReset(); }
         }
         function handlePlayerEngine(dt) {
             let w = HUNT_TEST_NOWEIGHT ? 0 : invWeight();
