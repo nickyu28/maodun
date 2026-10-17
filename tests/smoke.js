@@ -2367,6 +2367,30 @@ async function enterExit(tab, key) {
         }
 
                 //@@NEW@@
+        if (want('U6')) {
+            // U6：小地图的“全览”按钮在小地图左下角里面，不挡右下角；电脑和触屏都在小地图框里、没被别的盖住、点得到
+            const bad = [];
+            for (const mobile of [false, true]) {
+                const T = await openTab(chrome, url, mobile ? { mobile: true } : {});
+                await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+                const r = JSON.parse(await T.eval(`(function(){ const b = document.getElementById('minimap-expand'), c = document.getElementById('minimap-container'), br = b.getBoundingClientRect(), cr = c.getBoundingClientRect();
+                    const e = document.elementFromPoint(br.left + br.width / 2, br.top + br.height / 2);
+                    return JSON.stringify({ w: br.width, h: br.height, inBox: br.left >= cr.left - 1 && br.right <= cr.right + 1 && br.top >= cr.top - 1 && br.bottom <= cr.bottom + 1,
+                        left: br.right <= cr.left + cr.width / 2, bottom: br.top >= cr.top + cr.height / 2 - 1, covered: !(e && e.closest('#minimap-expand')),
+                        rightBottomFree: br.right <= cr.left + cr.width / 2 }); })()`));
+                const tag = mobile ? '触屏' : '电脑';
+                if (r.w < 20 || r.h < 14) bad.push(tag + ' 全览按钮太小 ' + r.w + '×' + r.h);
+                if (!r.inBox) bad.push(tag + ' 全览按钮跑出小地图框');
+                if (!r.left || !r.bottom) bad.push(tag + ' 全览按钮不在小地图左下角');
+                if (r.covered) bad.push(tag + ' 全览按钮被盖住');
+                await T.eval(`document.getElementById('minimap-expand').click(); true;`);
+                if (!(await until(T, `gState.largeMapOpen`, 3000))) bad.push(tag + ' 点全览没打开大地图');
+                if (T.errors.length) bad.push(tag + ' ' + T.errors.slice(0, 2).join(' / '));
+                await T.close();
+            }
+            report('U6 小地图“全览”按钮挪到小地图左下角里面：电脑和触屏都在框里、点得到', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('U5')) {
             // U5：腰包按键——1～3 快捷栏，4～6 对应腰包 3 格（手上拿着腰包用它，没拿就用背包里第一个），按了把那件拿到手上（手上有空格放空格，满了跟当前手上的对换）；触屏：有腰包时快捷栏旁边多 3 个小格
             const bad = [];
