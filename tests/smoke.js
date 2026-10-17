@@ -2670,11 +2670,14 @@ async function enterExit(tab, key) {
                 return JSON.stringify({ popped: d.out, hp: me.hp, down: me.downed }); })()`));
             if (!hit.popped || hit.hp !== 2 || hit.down) bad.push('追捕者打到假身：假身该消失、人不掉血 ' + JSON.stringify(hit));
             if (!(await until(T, `night.decoys.length === 0`, 5000))) bad.push('假身没被收走');
-            // 隐身 2 秒后恢复、假身 3 秒后消失
-            await T.eval(`night.c3Cd = 0; night.survivors[0].invisUntil = 0; nightSurvivorSkill(); window.__t0 = performance.now(); true;`);
-            if (!(await until(T, `night.decoys.length === 0`, 8000))) bad.push('假身过了 3 秒还在');
-            const dt1 = await T.eval(`performance.now() - window.__t0`);
-            if (dt1 < 2500 || dt1 > 15000) bad.push('假身存在时间不对 ' + Math.round(dt1) + 'ms');
+            // 假身 3 秒、隐身 2 秒（时间按局内时钟走，帧率低时真实时间会更长，所以量刚放出来时剩多少，再把时间拨到只剩一点看它会不会收走）
+            await T.eval(`night.c3Cd = 0; night.survivors[0].invisUntil = 0; nightSurvivorSkill(); true;`);
+            const tm = JSON.parse(await T.eval(`JSON.stringify({ left: night.decoys[0].left, inv: night.survivors[0].invisUntil - performance.now() })`));
+            if (tm.left < 2.5 || tm.left > 3.01) bad.push('假身时长 ' + tm.left);
+            if (tm.inv < 1700 || tm.inv > 2050) bad.push('隐身时长 ' + tm.inv);
+            await T.eval(`night.decoys[0].left = 0.05; true;`);
+            if (!(await until(T, `night.decoys.length === 0`, 15000))) bad.push('假身时间到了没收走');
+            await T.eval(`night.survivors[0].invisUntil = performance.now() - 1; true;`);
             if (!(await until(T, `!nightInvisible(night.survivors[0])`, 4000))) bad.push('隐身没结束');
             // AI 7 号：被追捕者盯上就放技能
             const ai = JSON.parse(await T.eval(`(function(){ const a = night.survivors[1], h = night.hunter; a.charKey = 'c3'; a.skillCd = 0; a.reactT = 0; a.hp = 2; night.decoys.length = 0;
@@ -3643,7 +3646,7 @@ async function enterExit(tab, key) {
 
         {
             // N4：大厅里的长椅和路灯删掉了，公告板还在
-            const r = JSON.parse(await A.eval(`JSON.stringify((function () { let g = hub.meshes.map(function (m) { return m.geometry; });
+            const r = JSON.parse(await A.eval(`JSON.stringify((function () { let g = hub.meshes.filter(function (m) { return !hub.bg || Object.keys(hub.bg).every(function (n) { return hub.bg[n] !== m; }); }).map(function (m) { return m.geometry; });   // 背景（天空是个球）不算路灯
                 return { lamp: g.filter(function (x) { return x.type === 'SphereGeometry'; }).length,
                     bench: g.filter(function (x) { return x.type === 'BoxGeometry' && x.parameters.width === 10 && x.parameters.height === 2 && x.parameters.depth === 4; }).length,
                     pole: g.filter(function (x) { return x.type === 'CylinderGeometry' && x.parameters.height === 16; }).length,
