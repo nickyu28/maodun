@@ -921,6 +921,11 @@
             let ib = document.getElementById('interact-btn');
             if (ib) { ib.addEventListener('touchstart', function () { huntHold.touch = true; }, { passive: true }); ['touchend', 'touchcancel'].forEach(function (t) { ib.addEventListener(t, function () { huntHold.touch = false; }, { passive: true }); }); }
         })();
+        (function () {   // R3：跑键——点一下切换跑/走（触屏用 touchstart，鼠标/触屏模拟用 click，两边不会重复触发）
+            let rb = document.getElementById('run-btn'); if (!rb) return;
+            rb.addEventListener('touchstart', function (e) { e.preventDefault(); padRunSet(!padRunToggle); }, { passive: false });
+            rb.addEventListener('click', function () { padRunSet(!padRunToggle); });
+        })();
         setupBtn('jump-btn', 'jump'); setupBtn('interact-btn', 'interact'); setupBtn('ability-btn', 'ability'); setupBtn('skill-btn', 'skill');
 
         // 平板：惊魂夜和超燃都是靠鼠标左右键 + 键盘触发的，触屏没有这些，

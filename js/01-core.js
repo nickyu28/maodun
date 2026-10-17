@@ -1560,6 +1560,7 @@
             // 之后单独用这个 tick 管显示，跟聊天面板一样跟着"是不是在局内"走。
             let joy = document.getElementById('joystick-left');
             if (joy) joy.style.display = (on && gState.control === 'pad') ? 'flex' : 'none';
+            padRunSync(key);
             // 大厅广场底下压着一条白色的组队/联机面板，聊天记录和"发言"按钮原来一样贴着屏幕底 14px，
             // 正好盖在组队列表和麦克风上。在大厅就整体抬到面板上面。
             let lb = document.getElementById('lobby-bottom');

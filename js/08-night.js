@@ -3926,9 +3926,23 @@
         const tMove = { x: 0, y: 0 }; let touchBtn = { jump: false, interact: false, ability: false, skill: false, item: false, throw: false };
         let huntJumpBuf = 0;  // 跳键缓冲：落地前按的那一下留着，落地补上
 
-        // R2：平板跑步——摇杆推过半径的 90% 就自动跑（原来右下角有个"跑"开关，寻宝队里被藏起来，监狱/躲避球里大小是 0×0）
+        // R2：平板跑步——摇杆推过半径的 90% 就自动跑
         const PAD_RUN_AT = 0.9;
-        function padAutoRun() { return tMove.x * tMove.x + tMove.y * tMove.y >= PAD_RUN_AT * PAD_RUN_AT; }
+        // R3：右下角有个"跑"键，点一下切换跑/走（跑时高亮）；摇杆推到边照样自动跑。寻宝队、监狱救援、躲避球能跑
+        let padRunToggle = false;
+        function padAutoRun() { return padRunToggle || tMove.x * tMove.x + tMove.y * tMove.y >= PAD_RUN_AT * PAD_RUN_AT; }
+        function padRunSet(on) {
+            padRunToggle = !!on;
+            let b = document.getElementById('run-btn');
+            if (b) { b.classList.toggle('on', padRunToggle); b.style.background = padRunToggle ? 'rgba(255,152,0,0.95)' : ''; b.style.color = padRunToggle ? '#fff' : ''; b.style.borderColor = padRunToggle ? '#e65100' : ''; }
+        }
+        let padRunKey = null;
+        function padRunSync(key) {   // 只在能跑的模式里、平板/触屏下露出来；换了模式就回到"走"
+            let b = document.getElementById('run-btn'); if (!b) return;
+            let on = gState.control === 'pad' && (key === 'hunt' || key === 'jail' || key === 'dodge');
+            b.style.display = on ? 'flex' : 'none';
+            if (key !== padRunKey) { padRunKey = key; if (padRunToggle) padRunSet(false); }
+        }
 
         function drawCapacityCircle() {
             let canvas = document.getElementById('cap-circle'); if (!canvas) return; let ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, 60, 60);

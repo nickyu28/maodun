@@ -1320,7 +1320,6 @@ async function enterExit(tab, key) {
             // R2：平板跑步——摇杆推过半径 90% 自动跑（耗体力），没推到就走；右下角的"跑"按钮没了。寻宝队、监狱救援、躲避球都测
             const bad = [];
             const M = await openTab(chrome, url, { mobile: true });
-            if (await M.eval(`!!document.getElementById('run-btn') || typeof padToggleRun !== 'undefined'`)) bad.push('跑按钮还在');
             const th = await M.eval(`(function(){ let r = []; [0.5, 0.89, 0.91, 1].forEach(function (v) { tMove.x = v; tMove.y = 0; r.push(padAutoRun()); }); tMove.x = 0.7; tMove.y = 0.7; r.push(padAutoRun()); tMove.x = 0; tMove.y = 0; return r.join(); })()`);
             if (th !== 'false,false,true,true,true') bad.push('阈值不对 ' + th);
             const drain = async (key, getStam) => {
@@ -1344,7 +1343,65 @@ async function enterExit(tab, key) {
             }
             if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
             await M.close();
-            report('R2 平板摇杆推过 90% 自动跑：寻宝队、监狱救援、躲避球推到底耗体力、没推到不耗；没有"跑"按钮', bad.length === 0, bad.join(' / '));
+            report('R2 平板摇杆推过 90% 自动跑：寻宝队、监狱救援、躲避球推到底耗体力、没推到不耗', bad.length === 0, bad.join(' / '));
+        }
+
+                if (want('R3')) {
+            // R3：平板的"跑"按钮——寻宝队、监狱救援、躲避球里都看得见、大于 40×40、不被别的挡住；点一下变快、体力下降、高亮，再点恢复；其它模式里不出现
+            const bad = [];
+            const M = await openTab(chrome, url, { mobile: true });
+            const POS = { hunt: 'camera.position', jail: 'jail.me.p', dodge: 'dodge.me.p' }, STAM = { hunt: 'stamina', jail: 'jail.me.stamina', dodge: 'dodge.me.stamina' };
+            for (const key of ['hunt', 'jail', 'dodge']) {
+                await M.eval(`${HIDE} selectGameMode('${key}'); ${MODES[key].start}; true;`);
+                if (!(await until(M, `document.getElementById('run-btn').style.display === 'flex'`, 15000))) { bad.push(key + ' 里没有跑按钮'); await M.eval(`${HIDE} ${MODES[key].exit}; true;`); await W(1200); continue; }
+                await M.eval(`${HIDE} true;`);
+                const g = JSON.parse(await M.eval(`(function(){ const b = document.getElementById('run-btn'), r = b.getBoundingClientRect(), out = { w: r.width, h: r.height, covered: [], inside: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight };
+                    [[0.5, 0.5], [0.2, 0.2], [0.8, 0.2], [0.2, 0.8], [0.8, 0.8]].forEach(function (f) { const e = document.elementFromPoint(r.left + r.width * f[0], r.top + r.height * f[1]); if (!e || !e.closest('#run-btn')) out.covered.push(e ? (e.id || e.className || e.tagName) : 'null'); });
+                    out.overlap = Array.prototype.filter.call(document.querySelectorAll('.action-btn, #chat-toggle, #joystick-left'), function (o) { if (o === b || o.offsetParent === null || getComputedStyle(o).display === 'none') return false; const q = o.getBoundingClientRect(); return q.width > 0 && q.left < r.right && q.right > r.left && q.top < r.bottom && q.bottom > r.top; })
+                    .map(function (o) { const q = o.getBoundingClientRect(); return o.id + '[' + [q.left, q.top, q.right, q.bottom].map(Math.round) + ']'; }); out.me = [r.left, r.top, r.right, r.bottom].map(Math.round);
+                    return JSON.stringify(out); })()`));
+                if (g.w < 40 || g.h < 40) bad.push(key + ' 跑按钮太小 ' + g.w + '×' + g.h);
+                if (!g.inside) bad.push(key + ' 跑按钮在屏幕外');
+                if (g.covered.length) bad.push(key + ' 跑按钮被挡住 ' + g.covered.join(','));
+                if (g.overlap.length) bad.push(key + ' 跑按钮和别的按钮重叠 ' + g.overlap.join(',') + ' 我=' + g.me);
+                // 速度：每次只走一小段，来回换方向（出生点边上有墙，一直往一个方向走会撞停）；取几次里最快的，帧率低时也不怕偶尔卡一下
+                await M.eval(`window.__sample = function (yaw) { return new Promise(function (res) { camera.rotation.y = yaw; tMove.x = 0; tMove.y = -0.6; setTimeout(function () { const p = ${POS[key]}, x0 = p.x, z0 = p.z, t0 = performance.now(); setTimeout(function () { const q = ${POS[key]}, v = Math.hypot(q.x - x0, q.z - z0) / ((performance.now() - t0) / 1000); tMove.y = 0; res(v); }, 500); }, 600); }); };
+                    window.__best = async function (y0) { let m = 0; for (let i = 0; i < 4; i++) { m = Math.max(m, await window.__sample(y0 + (i % 2) * Math.PI)); await new Promise(function (r) { setTimeout(r, 250); }); } return m; };
+                    window.__zig = function (on) { clearInterval(window.__zt); if (on) { tMove.x = 0; tMove.y = -0.6; window.__zt = setInterval(function () { camera.rotation.y += Math.PI; }, 600); } else tMove.y = 0; }; true;`);
+                let walk = 0, bestYaw = 0;
+                for (const yaw of [0, Math.PI / 2]) { const v = await M.eval(`window.__best(${yaw})`); if (v > walk) { walk = v; bestYaw = yaw; } }
+                if (walk < 8) { bad.push(key + ' 走不动，没法量速度 ' + walk.toFixed(1)); await M.eval(`tMove.y = 0; ${HIDE} ${MODES[key].exit}; true;`); await W(1200); continue; }
+                await W(1500);
+                const s0 = await M.eval(STAM[key]);
+                if (await M.eval(`padRunToggle`)) bad.push(key + ' 开局跑键就是开着的');
+                // 点一下：开始跑
+                await M.eval(`document.getElementById('run-btn').dispatchEvent(new Event('touchstart', { cancelable: true })); true;`);
+                const on = JSON.parse(await M.eval(`JSON.stringify({ t: padRunToggle, cls: document.getElementById('run-btn').classList.contains('on') })`));
+                if (!on.t || !on.cls) bad.push(key + ' 点了没高亮/没切到跑 ' + JSON.stringify(on));
+                const run = await M.eval(`window.__best(${bestYaw})`);
+                await M.eval(`window.__zig(true); true;`);
+                if (!(await until(M, `${STAM[key]} < ${s0} - 8`, 10000))) bad.push(key + ' 跑起来体力没降');
+                await M.eval(`window.__zig(false); true;`);
+                if (!(run > walk * 1.15)) bad.push(key + ' 跑没比走快 走=' + walk.toFixed(1) + ' 跑=' + run.toFixed(1));
+                // 再点一下：回到走
+                await M.eval(`document.getElementById('run-btn').dispatchEvent(new Event('touchstart', { cancelable: true })); true;`);
+                const off = JSON.parse(await M.eval(`JSON.stringify({ t: padRunToggle, cls: document.getElementById('run-btn').classList.contains('on'), s: ${STAM[key]} })`));
+                if (off.t || off.cls) bad.push(key + ' 再点没恢复 ' + JSON.stringify(off));
+                await M.eval(`window.__zig(true); true;`);   // 走着，体力要回（跑才耗；速度快慢帧率一抖就量不准，这里看体力）
+                if (!(await until(M, `${STAM[key]} > ${off.s} + 2`, 10000))) bad.push(key + ' 恢复走路后体力没回');
+                await M.eval(`window.__zig(false); true;`);
+                // 摇杆推到边照样自动跑
+                await M.eval(`tMove.y = -1; true;`);
+                if (!(await until(M, `${STAM[key]} < ${off.s} - 4 || ${STAM[key]} < 90`, 8000))) bad.push(key + ' 摇杆推到边没自动跑');
+                await M.eval(`tMove.x = 0; tMove.y = 0; ${HIDE} ${MODES[key].exit}; true;`); await W(1200); await M.eval(`${HIDE} true;`);
+            }
+            // 别的模式里没有（在大厅 / 竞速）
+            await M.eval(`${HIDE} selectGameMode('race'); ${MODES.race.start}; true;`); await W(1500);
+            if (await M.eval(`document.getElementById('run-btn').style.display !== 'none'`)) bad.push('竞速里不该有跑按钮');
+            await M.eval(`${HIDE} ${MODES.race.exit}; true;`);
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('R3 平板“跑”按钮：寻宝队/监狱救援/躲避球里可见、≥40×40、不被挡；点一下变快耗体力并高亮，再点恢复；摇杆推到边照样自动跑；别的模式没有', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('T0')) {
