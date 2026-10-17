@@ -1102,7 +1102,7 @@ async function enterExit(tab, key) {
             if (t2.inv.join() !== '腰包,肾上腺素,鱼叉' || t2.bag.join() !== '医疗包,,') bad.push('手上满了应该跟当前手上这格对换 ' + JSON.stringify(t2));
             // 提示和规则
             const txt = JSON.parse(await T.eval(`JSON.stringify({ rules: Object.keys(MODE_RULES).map(function (k) { return rulesHtml(k); }).join(''), pv: (function () { selectSlot(0); updateHUD(); return document.getElementById('pouch-view').innerText; })() })`));
-            if (/按 ?1 ?2 ?3[^换]*把里面|按 1～/.test(txt.rules + txt.pv)) bad.push('提示里还写着按 1～3 从腰包取 ' + txt.pv);
+            if (/按 ?1 ?2 ?3[^换]*把里面|按 1～|按 E 打开背包拿/.test(txt.rules + txt.pv)) bad.push('提示里还写着按 1～3 从腰包取 ' + txt.pv);
             if (!/点里面的东西放到手上/.test(txt.rules)) bad.push('规则没改');
             await T.eval(`toggleBackpackUI(); true;`);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
@@ -2367,6 +2367,69 @@ async function enterExit(tab, key) {
         }
 
                 //@@NEW@@
+        if (want('U5')) {
+            // U5：腰包按键——1～3 快捷栏，4～6 对应腰包 3 格（手上拿着腰包用它，没拿就用背包里第一个），按了把那件拿到手上（手上有空格放空格，满了跟当前手上的对换）；触屏：有腰包时快捷栏旁边多 3 个小格
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const key = async (k) => { await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code: 'Digit' + k, windowsVirtualKeyCode: 48 + (+k) }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: 'Digit' + k, windowsVirtualKeyCode: 48 + (+k) }); await W(200); };
+            const st = async () => JSON.parse(await T.eval(`JSON.stringify({ inv: gState.inv.map(function (q) { return q ? q.n : ''; }), bag: (gState.inv.filter(isPouch)[0] ? pouchBag(gState.inv.filter(isPouch)[0]) : []).map(function (q) { return q ? q.n : ''; }), sel: gState.selectedSlot })`));
+            const setup = (inv, bag, sel) => T.eval(`(function(){ let S = function (n) { return n ? Object.assign({}, shopItems[n], { isShop: true }) : null; };
+                gState.inv = ${JSON.stringify(inv)}.map(function (n) { return n === '腰包' ? Object.assign(S('腰包'), { bag: ${JSON.stringify(bag)}.map(S) }) : S(n); }); openPouch = null; selectSlot(${sel}); updateHUD(); return true; })()`);
+            // 1) 手上拿着腰包，手上有空格：按 4 把第 1 格放到空格
+            await setup(['腰包', '', '', '', '', ''], ['鱼叉', '医疗包', ''], 0);
+            await key('4');
+            let r = await st();
+            if (r.inv.slice(0, 3).join() !== '腰包,鱼叉,' || r.bag.join() !== ',医疗包,' || r.sel !== 1) bad.push('按 4 没把腰包第 1 格放到手上空格 ' + JSON.stringify(r));
+            // 2) 手上满了：按 5 跟当前手上（第 2 格）对换
+            await setup(['腰包', '鱼叉', '医疗包', '', '', ''], ['', '肾上腺素', ''], 1);
+            await key('5');
+            r = await st();
+            if (r.inv.slice(0, 3).join() !== '腰包,肾上腺素,医疗包' || r.bag.join() !== ',鱼叉,' || r.sel !== 1) bad.push('按 5 手满了没对换 ' + JSON.stringify(r));
+            // 3) 手上没拿腰包：用背包里第一个腰包，按 6 拿第 3 格
+            await setup(['鱼叉', '', '', '腰包', '', ''], ['', '', '医疗包'], 0);
+            await key('6');
+            r = await st();
+            if (r.inv.slice(0, 3).join() !== '鱼叉,医疗包,' || r.bag.join() !== ',,') bad.push('手上没腰包，按 6 没用背包里的腰包 ' + JSON.stringify(r));
+            // 4) 空格子 / 没有腰包：不变
+            await setup(['腰包', '', '', '', '', ''], ['鱼叉', '', ''], 0);
+            await key('5');
+            r = await st();
+            if (r.inv.slice(0, 3).join() !== '腰包,,' || r.bag.join() !== '鱼叉,,') bad.push('空格子不该变 ' + JSON.stringify(r));
+            await setup(['鱼叉', '', '', '', '', ''], [], 0);
+            await key('4');
+            r = await st();
+            if (r.inv.slice(0, 3).join() !== '鱼叉,,') bad.push('没腰包不该变 ' + JSON.stringify(r));
+            // 5) 1～3 还是切快捷栏
+            await setup(['腰包', '鱼叉', '医疗包', '', '', ''], ['', '', ''], 0);
+            await key('3'); if ((await st()).sel !== 2) bad.push('按 3 没选第 3 格');
+            // 提示：电脑上写按 4/5/6；小格不显示
+            await setup(['腰包', '', '', '', '', ''], ['鱼叉', '', ''], 0);
+            await W(400);
+            const hint = JSON.parse(await T.eval(`JSON.stringify({ t: document.getElementById('pouch-view').innerText, hidden: document.getElementById('pouch-view').classList.contains('hidden'), cells: document.getElementById('pouch-cells').style.display })`));
+            if (hint.hidden || !/4 ?\/ ?5 ?\/ ?6/.test(hint.t) || /按 E 打开背包拿/.test(hint.t) || hint.cells !== 'none') bad.push('电脑上的提示不对 ' + JSON.stringify(hint));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            // 触屏：有腰包才有小格；点一下效果一样
+            const M = await openTab(chrome, url, { mobile: true });
+            await M.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await M.eval(`${HIDE} true;`);
+            await M.eval(`(function(){ let S = function (n) { return n ? Object.assign({}, shopItems[n], { isShop: true }) : null; }; gState.inv = [S('鱼叉'), null, null, null, null, null]; selectSlot(0); updateHUD(); })(); true;`);
+            if (!(await until(M, `document.getElementById('pouch-cells').style.display === 'none'`, 3000))) bad.push('触屏：没腰包也有小格');
+            await M.eval(`(function(){ let S = function (n) { return n ? Object.assign({}, shopItems[n], { isShop: true }) : null; }; gState.inv = [S('鱼叉'), null, null, Object.assign(S('腰包'), { bag: [S('医疗包'), null, S('肾上腺素')] }), null, null]; selectSlot(0); updateHUD(); })(); true;`);
+            if (!(await until(M, `document.getElementById('pouch-cells').style.display === 'flex'`, 3000))) bad.push('触屏：有腰包没出小格');
+            const cg = JSON.parse(await M.eval(`JSON.stringify((function(){ const cs = Array.prototype.slice.call(document.querySelectorAll('#pouch-cells .pouch-cell')), hb = document.getElementById('hud-hotbar-container').getBoundingClientRect();
+                return { n: cs.length, sizes: cs.map(function (c) { const r = c.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }), txt: cs.map(function (c) { return c.innerText.trim(); }), side: cs[0].getBoundingClientRect().left >= hb.right - 2,
+                    free: cs.map(function (c) { const r = c.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!(e && e.closest('.pouch-cell')); }) }; })())`));
+            if (cg.n !== 3 || cg.sizes.some((z) => z[0] < 40 || z[1] < 40) || !cg.side || cg.free.some((f) => !f)) bad.push('触屏小格大小/位置/被挡 ' + JSON.stringify(cg));
+            if (cg.txt.join('|') !== '医疗包|空|肾上腺素') bad.push('小格内容 ' + cg.txt.join('|'));
+            await M.eval(`document.querySelectorAll('#pouch-cells .pouch-cell')[2].dispatchEvent(new Event('touchstart', { cancelable: true })); true;`);
+            const tr = JSON.parse(await M.eval(`JSON.stringify({ inv: gState.inv.slice(0, 3).map(function (q) { return q ? q.n : ''; }), bag: pouchBag(gState.inv[3]).map(function (q) { return q ? q.n : ''; }) })`));
+            if (tr.inv.join() !== '鱼叉,肾上腺素,' || tr.bag.join() !== '医疗包,,') bad.push('点小格没把第 3 格拿到手上 ' + JSON.stringify(tr));
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('U5 腰包按键 4/5/6：拿到手上（有空格放空格，满了对换）、手上没腰包用背包里第一个；触屏有腰包时快捷栏旁 3 个小格，点一下一样；提示改了', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('U4')) {
             // U4：背包、腰包、仓库格子里，宝物除了名字和重量再显示价值；≥1 万用“万”
             const bad = [];

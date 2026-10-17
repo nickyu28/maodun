@@ -318,16 +318,26 @@
             drawCapacityCircle();
         }
 
-        // 手上（快捷栏 1～3）拿着腰包的时候，把它的 3 格列出来看一眼。
-        // 腰包里的东西不能直接用：按 E 打开背包、点开腰包，点一下里面的东西放到手上。
-        function pouchOpen() {
-            let it = gState.inv[gState.selectedSlot];
-            return !!(isPouch(it) && gState.selectedSlot <= 2);
+        // U5：腰包的 3 格对应按键 4/5/6（触屏是快捷栏旁边的 3 个小格）。用哪个腰包：手上（快捷栏）选中的是腰包就用它，不然用背包里第一个腰包。
+        // 腰包里的东西不能直接用：按键/点小格把那件拿到手上（手上有空格放空格，没有就跟当前手上的对换）。
+        function pouchActive() {
+            let held = gState.inv[gState.selectedSlot];
+            if (gState.selectedSlot >= 0 && gState.selectedSlot <= 2 && isPouch(held)) return held;
+            for (let i = 0; i < gState.inv.length; i++) if (isPouch(gState.inv[i])) return gState.inv[i];
+            return null;
+        }
+        function pouchOpen() { return !!pouchActive(); }
+        function pouchKeyTake(n) {
+            let p = pouchActive();
+            if (!p) { blazeFlash('身上没有腰包'); return; }
+            if (!pouchBag(p)[n]) { blazeFlash('腰包第 ' + (n + 1) + ' 格是空的'); return; }
+            pouchTakeToHand(n, p);
         }
 
         // 点腰包里第 n 格：放到手上的空格；手上没空格，就跟当前手上这格对换（腰包不能放进腰包）
-        function pouchTakeToHand(n) {
-            let bag = pouchBag(openPouch);
+        function pouchTakeToHand(n, src) {
+            src = src || openPouch;
+            let bag = pouchBag(src);
             if (!bag || n < 0 || n >= POUCH_SLOTS || !bag[n]) return;
             let cur = gState.selectedSlot >= 0 && gState.selectedSlot <= 2 ? gState.selectedSlot : 0, to = -1;
             if (!gState.inv[cur]) to = cur;
@@ -336,6 +346,7 @@
                 if (isPouch(gState.inv[cur])) { blazeFlash('腰包不能放进腰包'); return; }
                 to = cur;
             }
+            if (isPouch(gState.inv[to])) { blazeFlash('腰包不能放进腰包'); return; }
             let a = bag[n];
             bag[n] = gState.inv[to];
             gState.inv[to] = a;
@@ -346,11 +357,27 @@
         function pouchViewTick() {
             let el = document.getElementById('pouch-view'); if (!el) return;
             expandInventory();
-            if (!isPlaying || !pouchOpen()) { el.classList.add('hidden'); return; }
-            let bag = pouchBag(gState.inv[gState.selectedSlot]);
-            el.innerHTML = '<div style="color:#ffd54f;">腰包（按 E 打开背包拿）</div>' +
+            let cells = document.getElementById('pouch-cells');
+            let p = isPlaying ? pouchActive() : null;
+            if (!p) { el.classList.add('hidden'); if (cells) cells.style.display = 'none'; return; }
+            let bag = pouchBag(p);
+            if (padOn()) {   // 触屏：快捷栏旁边 3 个小格，点一下把那件拿到手上
+                el.classList.add('hidden');
+                if (cells) {
+                    cells.style.display = 'flex';
+                    Array.prototype.forEach.call(cells.children, function (c, n) {
+                        let it = bag[n];
+                        c.className = 'slot pouch-cell' + slotTierClass(it);
+                        c.innerHTML = it ? '<div>' + it.n + '</div>' : '<div style="color:#aaa;">空</div>';
+                        if (!c._wired) { c._wired = true; c.addEventListener('touchstart', function (e) { e.preventDefault(); pouchKeyTake(n); }, { passive: false }); c.addEventListener('click', function () { pouchKeyTake(n); }); }
+                    });
+                }
+                return;
+            }
+            if (cells) cells.style.display = 'none';
+            el.innerHTML = '<div style="color:#ffd54f;">腰包（按 4 / 5 / 6 拿到手上）</div>' +
                 bag.map(function (it, n) {
-                    return '<div>' + (n + 1) + '、' + (it ? it.n + '　重:' + itemWeight(it) : '<span style="color:#888;">空</span>') + '</div>';
+                    return '<div>' + (n + 4) + '、' + (it ? it.n + '　重:' + itemWeight(it) : '<span style="color:#888;">空</span>') + '</div>';
                 }).join('');
             el.classList.remove('hidden');
         }
