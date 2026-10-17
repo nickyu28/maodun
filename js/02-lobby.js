@@ -1690,6 +1690,7 @@
         function garageRenderPouchRow(actDiv) { renderPouchSlots(pouchRowEl(actDiv, 'garage-pouch-row'), initGarage); }
 
         function initGarage() {
+            if (typeof labRefreshButtons === 'function') labRefreshButtons();   // 实验室：藏起来的时候一个按钮都不显示
             // H27：开了“无限资金”只是显示“无限”、买东西不扣钱；不再把真实余额改成 99999999，余额不封顶
             document.getElementById('garage-money').innerText = HUNT_TEST_MONEY ? '无限' : gState.money;
             let actDiv = document.getElementById('garage-active-inv'); actDiv.innerHTML = '';

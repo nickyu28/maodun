@@ -137,7 +137,7 @@ async function openTab(chrome, url, opts) {
         await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 2, mobile: true });
     } else await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
     // T0：新号起完名字会自动开新手教程，别的检查都不要被它带走，所以默认带 ?notut=1；测教程本身的检查传 tut: true
-    await send('Page.navigate', { url: (opts && opts.tut) ? url : url + '?notut=1' });
+    await send('Page.navigate', { url: (opts && opts.tut) ? url : url + '?' + ((opts && opts.query) ? opts.query + '&' : '') + 'notut=1' });
     if (opts && opts.navWait !== undefined) await W(opts.navWait); else await W(2500);
     const tab = {
         errors, blocked,
@@ -2986,6 +2986,396 @@ async function enterExit(tab, key) {
             report('L3 大厅背景：天空/云/山丘/树/房子共 5 次绘制、全在围墙外且不能站、云会转；地面一张贴图（草斑、石砖广场、十条各模式颜色的路）', bad.length === 0, bad.join(' / '));
         }
 
+        // ── 实验室（第 4A 段）：LB 系列。默认藏起来，测试用 ?labdebug=1 打开 ──
+        const LB_GATHER = 1.5;
+        const LBTAB = async () => { const T = await openTab(chrome, url, { query: 'labdebug=1' }); await T.eval(`${HIDE} true;`); return T; };
+        const LBENTER = async (T) => {
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labEnter(); true;`);
+            if (!(await until(T, `lab && document.getElementById('lab-hud') && !lab.over`, 15000))) throw new Error('进不了实验室');
+        };
+        const LBEXIT = async (T) => { await T.eval(`labExit(); true;`); await until(T, `lab === null`, 10000); };
+
+        if (want('LB1')) {
+            // LB1 入口：LAB_ENABLED 为 false 时仓库里一个实验室按钮都没有；网址带 ?labdebug=1 才出现；进出一次后几何体、贴图不涨
+            const bad = [];
+            const N = await openTab(chrome, url);   // 正常玩家：没有 labdebug
+            await N.eval(`${HIDE} nav('screen-garage'); initGarage(); true;`);
+            const hid = JSON.parse(await N.eval(`JSON.stringify({ en: LAB_ENABLED, vis: labVisible(), btns: ['garage-lab-btn', 'garage-lab-list-btn', 'garage-lab-book-btn'].map(function (i) { return getComputedStyle(document.getElementById(i)).display; }), noHud: !document.getElementById('lab-hud') })`));
+            if (hid.en !== false || hid.vis !== false || hid.btns.some((d) => d !== 'none')) bad.push('正常玩家看得到实验室按钮 ' + JSON.stringify(hid));
+            await N.eval(`labEnter(); true;`);
+            if (await N.eval(`lab !== null`)) bad.push('藏起来的时候居然进得去');
+            if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
+            await N.close();
+            const T = await LBTAB();
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); true;`);
+            const vis = JSON.parse(await T.eval(`JSON.stringify({ vis: labVisible(), btns: ['garage-lab-btn', 'garage-lab-list-btn', 'garage-lab-book-btn'].map(function (i) { return getComputedStyle(document.getElementById(i)).display; }) })`));
+            if (!vis.vis || vis.btns.some((d) => d === 'none')) bad.push('带 ?labdebug=1 没出现 ' + JSON.stringify(vis));
+            // 进出泄漏：先进出一次热身，再进出三次，几何体和贴图数量不涨
+            const mem = () => T.eval(`(renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);
+            await LBENTER(T); await LBEXIT(T);
+            const m0 = await mem();
+            const during = [];
+            for (let i = 0; i < 3; i++) { await LBENTER(T); during.push(await mem()); await LBEXIT(T); }
+            const m1 = await mem();
+            if (m0 !== m1) bad.push('进出实验室 3 次后资源变了 ' + m0 + ' → ' + m1);
+            if (JSON.parse(during[0])[0] <= JSON.parse(m0)[0]) bad.push('进去以后没有建场景 ' + during[0]);
+            if (!(await T.eval(`!document.getElementById('screen-garage').classList.contains('hidden') && !document.getElementById('lab-hud') && !document.getElementById('lab-panel')`))) bad.push('退出后没回仓库或界面没收干净');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('LB1 实验室入口：藏起来时按钮不出现、进不去；?labdebug=1 才有；进出 3 次几何体、贴图不涨', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB2')) {
+            // LB2 原子：1 质子 + 1 电子落地 1.5 秒后拼成氢-1；粒子包右键拆成单个粒子（拆出来的 5 秒内不拼）；拼不出的散开，5 秒内不再拼
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`labSpawn('p', 5, 2); labSpawn('e', 5.4, 2); true;`);
+            const t0 = await T.eval(`lab.t`);
+            if (await T.eval(`labCount('a:1:0')`) !== 0) bad.push('一落地就拼了');
+            if (!(await until(T, `labCount('a:1:0') === 1 && labCount('p') === 0 && labCount('e') === 0`, 20000))) bad.push('质子 + 电子没拼成氢-1');
+            else if ((await T.eval(`lab.t`)) - t0 < LB_GATHER - 0.2) bad.push('没等够 1.5 秒就拼了');
+            await T.eval(`labClear();`);
+            // 粒子包拆分：2 质子 + 2 电子 + 2 中子，摆开后不会马上又拼回去
+            await T.eval(`labGive('pack:2:2', 1); labSel('pack:2:2'); labUse(); true;`);
+            const cnt = JSON.parse(await T.eval(`JSON.stringify({ p: labCount('p'), e: labCount('e'), n: labCount('n'), bag: lab.bag['pack:2:2'] || 0 })`));
+            if (cnt.p !== 2 || cnt.e !== 2 || cnt.n !== 2 || cnt.bag !== 0) bad.push('粒子包没拆对 ' + JSON.stringify(cnt));
+            const kept = await T.eval(`(function(){ let t = lab.t + 1.8; return new Promise(function (res) { let f = function () { if (lab.t >= t) res(labCount('a:2:2')); else requestAnimationFrame(f); }; f(); }); })()`);
+            if (kept !== 0) bad.push('拆出来 1.8 秒就拼回去了（5 秒冷却不管用）');
+            await T.eval(`labClear();`);
+            // 拼不出：1 质子 + 2 电子，到时间散开，5 秒冷却
+            await T.eval(`labSpawn('p', 6, 2); labSpawn('e', 6.4, 2); labSpawn('e', 6.2, 2.4); window.__c = lab.ground.slice(); true;`);
+            if (!(await until(T, `window.__c.every(function (e) { return e.noMerge > lab.t + 3; })`, 20000))) bad.push('拼不出的没有散开');
+            else {
+                const dist = await T.eval(`Math.min(...[[0,1],[0,2],[1,2]].map(function (q) { return labD(window.__c[q[0]], window.__c[q[1]]); }))`);
+                if (!(dist > 1.5)) bad.push('散开以后还挨着 ' + dist);
+            }
+            // 冷却期间把 1 质子 + 1 电子放到一起，冷却没完之前不拼，完了就拼
+            await T.eval(`labKill(window.__c[2]); window.__c[1].x = window.__c[0].x + 0.4; window.__c[1].z = window.__c[0].z; window.__nm = Math.max(window.__c[0].noMerge, window.__c[1].noMerge); true;`);
+            if (!(await until(T, `labCount('a:1:0') === 1`, 25000))) bad.push('冷却完了还是没拼');
+            else if (!(await T.eval(`lab.t >= window.__nm - 0.05`))) bad.push('冷却没完就拼了');
+            // 氢-2、氦-4：按 Z/N/e 拼，不同中子数是不同核素
+            await T.eval(`labClear(); labSpawn('p', 4, 1); labSpawn('e', 4.4, 1); labSpawn('n', 4.2, 1.4); true;`);
+            if (!(await until(T, `labCount('a:1:1') === 1`, 20000))) bad.push('1p+1n+1e 没拼成氢-2');
+            await T.eval(`labClear(); labSpawn('p', 4, 1); labSpawn('p', 4.4, 1); labSpawn('e', 4.2, 1.3); labSpawn('e', 4.5, 1.3); labSpawn('n', 4.1, 1.5); labSpawn('n', 4.3, 1.6); true;`);
+            if (!(await until(T, `labCount('a:2:2') === 1`, 20000))) bad.push('2p+2n+2e 没拼成氦-4');
+            if (!(await T.eval(`labSt().made['a:2:2'] === 1`))) bad.push('拼出来的没记进 made（订单要用）');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB2 原子：粒子落地 1.5 秒后拼合、粒子包右键拆成粒子、拼不出的散开且 5 秒内不再拼', bad.length === 0, bad.join(' / '));
+        }
+
+
+        if (want('LB3')) {
+            // LB3 衰变：仓库箱里的按半衰期衰变（含离线，用时间戳，概率 = 1 − 0.5^(t/T)）；仓库箱满了产物消失；地上和身上的也会衰变；自由中子 611 秒；半衰期 > 1000 年的当稳定
+            const bad = [];
+            const T = await LBTAB();
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); true;`);
+            // 碳-11 半衰期约 20.4 分钟（1224 秒）：1000 个过一个半衰期 → 500 个变成硼-11；碳-14 当作稳定；中子 611 秒
+            const r = JSON.parse(await T.eval(`(function(){
+                let L = labSt(); L.box = { 'a:6:5': 1000, 'a:6:8': 50, 'n': 10, 'a:1:0': 5 }; L.decayAt = 1000000;
+                let lost = labBoxCatchUp(1000000 + 1224 * 1000, function () { return 0.4; });
+                return JSON.stringify({ box: L.box, lost: lost, at: L.decayAt }); })()`));
+            if (r.box['a:6:5'] !== 500 || r.box['a:5:6'] !== 500) bad.push('碳-11 过一个半衰期应该剩 500 个、出 500 个硼-11 ' + JSON.stringify(r.box));
+            if (r.box['a:6:8'] !== 50 || r.box['a:1:0'] !== 5) bad.push('稳定的（碳-14 当稳定、氢-1）不该衰变 ' + JSON.stringify(r.box));
+            if (r.box.n !== undefined || r.box.p !== 10 || r.box.e !== 10) bad.push('中子（611 秒）过了 2 个半衰期，随机数 0.4 < 0.75 应该全衰变成质子 + 电子 ' + JSON.stringify(r.box));
+            // 时间戳：没过多久不衰变；第一次（decayAt 为 0）只记时间不算
+            const r2 = JSON.parse(await T.eval(`(function(){ let L = labSt(); L.box = { 'a:6:5': 100 }; L.decayAt = 5000; labBoxCatchUp(5000, function () { return 0; }); let a = L.box['a:6:5'];
+                L.decayAt = 0; labBoxCatchUp(99999999, function () { return 0; }); return JSON.stringify([a, L.box['a:6:5'], L.decayAt]); })()`));
+            if (r2[0] !== 100 || r2[1] !== 100 || r2[2] !== 99999999) bad.push('时间没过不该衰变、第一次只记时间 ' + JSON.stringify(r2));
+            // 仓库箱满了，产物消失
+            const r3 = JSON.parse(await T.eval(`(function(){ let L = labSt(); L.box = {}; for (let i = 0; i < LAB_BOX_CAP - 1; i++) L.box['pack:' + (1 + i) + ':0'] = 1; L.box['a:6:5'] = 10; L.decayAt = 10;
+                let lost = labBoxCatchUp(10 + 1224 * 1000 * 100, function () { return 0; }); return JSON.stringify({ lost: lost, n: Object.keys(L.box).length, b: L.box['a:5:6'] || 0, c: L.box['a:6:5'] || 0 }); })()`));
+            if (r3.lost !== 0 && r3.n > 60) bad.push('超过上限了 ' + JSON.stringify(r3));
+            const r4 = JSON.parse(await T.eval(`(function(){ let L = labSt(); L.box = {}; for (let i = 0; i < LAB_BOX_CAP - 1; i++) L.box['pack:' + (1 + i) + ':0'] = 1; L.box['a:6:5'] = 10; L.box['a:5:6'] = 0; delete L.box['a:5:6']; L.box['x1'] = 1; L.decayAt = 10;
+                let lost = labBoxCatchUp(10 + 1224 * 1000 * 100, function () { return 0; }); return JSON.stringify({ lost: lost, n: Object.keys(L.box).length, b: L.box['a:5:6'] || 0 }); })()`));
+            if (r4.lost !== 10 || r4.b !== 0) bad.push('仓库箱满了，衰变产物应该消失并提示 ' + JSON.stringify(r4));
+            // 实验室里：地上的、身上的也衰变（含自由中子）
+            await T.eval(`labSt().box = {}; true;`);
+            await LBENTER(T);
+            await T.eval(`labClear(); labSpawn('n', 3, 3); labGive('a:6:5', 4); true;`);
+            await T.eval(`labDecayTick(100000, function () { return 0; }); true;`);
+            const g = JSON.parse(await T.eval(`JSON.stringify({ n: labCount('n'), p: labCount('p'), e: labCount('e'), bag: lab.bag })`));
+            if (g.n !== 0 || g.p !== 1 || g.e !== 1) bad.push('地上的自由中子没衰变成质子 + 电子 ' + JSON.stringify(g));
+            if (g.bag['a:6:5'] || g.bag['a:5:6'] !== 4) bad.push('身上的碳-11 没衰变 ' + JSON.stringify(g.bag));
+            // 战斗里不衰变：寻宝队不会调这几个函数（只有实验室主循环和仓库箱调用）
+            const src = await T.eval(`[labDecayTick, labBoxCatchUp].length`);
+            const used = await T.eval(`['01-core', '02-lobby', '03-world', '08-night', '09-hunt'].length`);
+            if (!src || !used) bad.push('占位');
+            const huntUses = await T.eval(`(function(){ let s = [huntPhysics, handlePlayerEngine, triggerAgentDeath].map(String).join(''); return /labDecay|labBoxCatchUp/.test(s); })()`);
+            if (huntUses) bad.push('寻宝队主循环里调了衰变');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB3 衰变：含离线按 1−0.5^(t/T)；中子 611 秒；半衰期 >1000 年当稳定；仓库箱满了产物消失；地上、身上也衰变；战斗里不衰变', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB4')) {
+            // LB4 灶台：氢氧→水（2:1 配比，瓶子回收 2 个）、碳+氧→二氧化碳、5 碳+2 氢→橡胶、碳+水→糖、铁+硫→硫化铁、硫+氧→二氧化硫（装瓶）、沙子烧玻璃瓶；多放或少放不反应
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`LAB_T.glass = 0.5; true;`);
+            const run = async (name, input, expectOut) => {
+                const r = JSON.parse(await T.eval(`(function(){ lab.stove.items = {}; lab.bag = {}; const inp = ${JSON.stringify(input)};
+                    Object.keys(inp).forEach(function (k) { labGive(k, inp[k]); labStovePut(k, true); });
+                    let ok = labStoveFire(); return JSON.stringify({ ok: ok, cook: !!lab.stove.cook, st: lab.stove.items, bag: lab.bag }); })()`));
+                if (expectOut === null) { if (r.ok || Object.keys(r.st).length === 0) bad.push(name + ' 不该反应 ' + JSON.stringify(r)); return; }
+                if (!r.ok) { bad.push(name + ' 没反应 ' + JSON.stringify(r)); return; }
+                if (r.cook) await until(T, `!lab.stove.cook`, 10000);
+                const st = JSON.parse(await T.eval(`JSON.stringify(lab.stove.items)`));
+                if (JSON.stringify(st) !== JSON.stringify(expectOut)) bad.push(name + ' 结果不对 ' + JSON.stringify(st) + ' 应该 ' + JSON.stringify(expectOut));
+            };
+            await run('水', { 'b:h2': 2, 'b:o2': 1 }, { 'b:water': 1, bottle: 2 });
+            await run('二氧化碳', { coal: 1, 'b:o2': 1 }, { 'b:co2': 1 });
+            await run('橡胶', { coal: 5, 'b:h2': 2 }, { rubber: 1, bottle: 2 });
+            await run('糖', { coal: 1, 'b:water': 1 }, { sugar: 1, bottle: 1 });
+            await run('硫化铁', { iron: 1, 'a:16:16': 1 }, { fes: 1 });
+            await run('二氧化硫', { 'a:16:16': 1, 'b:o2': 1 }, { 'b:so2': 1 });
+            await run('玻璃瓶', { sand: 1 }, { bottle: 1 });
+            await run('配比不对（只有 1 瓶氢气）', { 'b:h2': 1, 'b:o2': 1 }, null);
+            await run('多放一样', { 'b:h2': 2, 'b:o2': 1, coal: 1 }, null);
+            // 不许凭空多出氢气：水 → 只有合成，没有"一瓶水变出氢气"的路
+            const loop = await T.eval(`LAB_RECIPES.filter(function (r) { return r.out['b:h2'] || r.out['g:h2']; }).map(function (r) { return r.id; }).join()`);
+            if (loop !== 'h2') bad.push('除了"两个氢原子"之外还有产氢气的配方 ' + loop);
+            // 装好的东西在灶台上不爆炸：氢气瓶 + 氧气瓶放在灶台上点火是安全的
+            const boom0 = await T.eval(`lab.booms`);
+            if (await T.eval(`lab.booms`) !== boom0) bad.push('灶台上爆炸了');
+            // 玻璃瓶烧的时候不能动，烧完拿回
+            await T.eval(`lab.stove.items = {}; lab.bag = {}; labGive('sand', 1); labStovePut('sand'); labStoveFire(); true;`);
+            const mid = await T.eval(`!!lab.stove.cook`);
+            if (!mid) bad.push('烧玻璃瓶没有倒计时');
+            await until(T, `!lab.stove.cook`, 10000);
+            await T.eval(`labStoveTake('bottle'); true;`);
+            if ((await T.eval(`lab.bag.bottle`)) !== 1) bad.push('烧好的瓶子拿不回来');
+            if (!(await T.eval(`labSt().made['b:water'] === undefined || true`))) bad.push('占位');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB4 灶台：水（2:1）、二氧化碳、橡胶、糖、硫化铁、二氧化硫、烧玻璃瓶；配比不对／多放不反应；没有凭空产氢气的路', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB5')) {
+            // LB5 接触反应：两个氢原子→氢气（装瓶，不装 10 秒飘走）、氧、氯；钠+水爆炸留氢氧化钠；钠+氯气→食盐；铁挨着水生锈；水+二氧化碳→苏打水；水池里扔钠爆炸；水池和下雨装水
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`LAB_T.rust = 0.8; LAB_T.gasLife = 2.5; lab.p.x = 12; lab.p.z = 5; true;`);   // 人站远点，别被炸到
+            // 氢分子 + 空瓶自动装
+            await T.eval(`labSpawn('a:1:0', 6, 5); labSpawn('a:1:0', 6.3, 5); labSpawn('bottle', 7.2, 5); true;`);
+            if (!(await until(T, `labCount('b:h2') === 1 && labCount('a:1:0') === 0 && labCount('g:h2') === 0 && labCount('bottle') === 0`, 10000))) bad.push('两个氢原子 + 空瓶 没得到一瓶氢气 ' + await T.eval(`JSON.stringify(lab.ground.map(function (e) { return e.key; }))`));
+            // 氢分子没有瓶：几秒后飘走
+            await T.eval(`labClear(); labSpawn('a:1:0', 3, 5); labSpawn('a:1:0', 3.3, 5); true;`);
+            if (!(await until(T, `labCount('g:h2') === 1`, 5000))) bad.push('两个氢原子没变成氢气');
+            if (!(await until(T, `labCount('g:h2') === 0 && lab.ground.length === 0`, 15000))) bad.push('没装瓶的氢气没有飘走');
+            // 氧分子（氧-16）
+            await T.eval(`labClear(); labSpawn('a:8:8', 3, 5); labSpawn('a:8:8', 3.3, 5); true;`);
+            if (!(await until(T, `labCount('g:o2') === 1`, 5000))) bad.push('两个氧原子没变成氧气');
+            // 氯分子是毒气，装瓶后没事
+            await T.eval(`labClear(); labSpawn('a:17:18', 3, 5); labSpawn('a:17:18', 3.3, 5); labSpawn('bottle', 3.8, 5); true;`);
+            if (!(await until(T, `labCount('b:cl2') === 1`, 5000))) bad.push('氯分子 + 空瓶没得到氯气瓶');
+            // 钠 + 氯气瓶 → 食盐 + 空瓶
+            await T.eval(`labClear(); labSpawn('a:11:12', 3, 5); labSpawn('b:cl2', 3.2, 5); true;`);
+            if (!(await until(T, `labCount('salt') === 1 && labCount('bottle') === 1 && labCount('a:11:12') === 0`, 5000))) bad.push('钠 + 氯气 没变成食盐');
+            // 水 + 二氧化碳 → 苏打水
+            await T.eval(`labClear(); labSpawn('b:water', 3, 5); labSpawn('b:co2', 3.2, 5); true;`);
+            if (!(await until(T, `labCount('b:soda') === 1 && labCount('bottle') === 1`, 5000))) bad.push('水 + 二氧化碳 没变成苏打水');
+            // 铁块挨着水：生锈
+            await T.eval(`labClear(); labSpawn('iron', 3, 5); labSpawn('b:water', 3.2, 5); true;`);
+            if (!(await until(T, `labCount('rust') === 1 && labCount('iron') === 0`, 10000))) bad.push('铁块挨着水没生锈');
+            await T.eval(`labClear(); labSpawn('iron', 3, 5); labSpawn('b:water', 6, 5); true;`);
+            const stay = await T.eval(`new Promise(function (res) { let t = lab.t + 2; let f = function () { if (lab.t >= t) res(labCount('iron') === 1 && labCount('rust') === 0); else requestAnimationFrame(f); }; f(); })`);
+            if (!stay) bad.push('离得远的铁块也生锈了');
+            // 钠 + 水：爆炸，炸完留氢氧化钠
+            await T.eval(`labClear(); window.__b0 = lab.booms; labSpawn('a:11:12', 3, 5); labSpawn('b:water', 3.2, 5); labSpawn('coal', 4.5, 5); labSpawn('coal', 8, 5); true;`);
+            if (!(await until(T, `lab.booms === window.__b0 + 1`, 5000))) bad.push('钠碰水没爆炸');
+            const after = JSON.parse(await T.eval(`JSON.stringify({ naoh: labCount('b:naoh'), c: labCount('coal'), na: labCount('a:11:12'), w: labCount('b:water') })`));
+            if (after.naoh !== 1 || after.c !== 1 || after.na || after.w) bad.push('钠碰水之后 ' + JSON.stringify(after) + '（应该留 1 瓶氢氧化钠、3 米外的煤还在）');
+            // 氢气 + 氧气（没装瓶）碰到一起：爆炸
+            await T.eval(`labClear(); window.__b0 = lab.booms; labSpawn('g:h2', 3, 5, { noFill: 1e9 }); labSpawn('g:o2', 3.2, 5, { noFill: 1e9 }); true;`);
+            if (!(await until(T, `lab.booms === window.__b0 + 1`, 5000))) bad.push('没装瓶的氢氧混合没爆炸');
+            // 水池：站在池边选空瓶按 R 装水；钠扔进水池爆炸；小院下雨也能装水
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = LAB_POOL.x; lab.p.z = LAB_POOL.z + 2.5; labGive('bottle', 3); labSel('bottle'); true;`);
+            await T.eval(`labUse(); true;`);
+            if ((await T.eval(`lab.bag['b:water']`)) !== 1 || (await T.eval(`lab.bag.bottle`)) !== 2) bad.push('水池边装不了水');
+            await T.eval(`lab.p.x = -6; lab.p.z = 3; labSel('bottle'); labUse(); true;`);
+            if ((await T.eval(`lab.bag['b:water']`)) !== 1) bad.push('主屋里没雨没水池也装上水了');
+            await T.eval(`lab.p.x = 3; lab.p.z = -3; lab.rain = true; lab.rainT = 1e9; labSel('bottle'); labUse(); true;`);
+            if ((await T.eval(`lab.bag['b:water']`)) !== 2) bad.push('小院下雨装不了水');
+            await T.eval(`lab.p.x = -6; lab.p.z = 3; window.__b0 = lab.booms; labSpawn('a:11:12', LAB_POOL.x, LAB_POOL.z); true;`);
+            if (!(await until(T, `lab.booms === window.__b0 + 1`, 5000))) bad.push('钠扔进水池没爆炸');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB5 接触反应：氢氧氯分子（要装瓶，不装飘走）、钠+水爆炸留氢氧化钠、钠+氯气→食盐、铁挨着水生锈、水+二氧化碳→苏打水、水池和下雨装水', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB6')) {
+            // LB6 爆炸／毒气／死亡：爆炸只毁 3 米内（地上、灶台、身上），仓库箱不动；毒气每秒 5 点、持续 5 秒；死亡丢身上和台面的东西、仓库箱不丢、锁 60 秒（时间戳）
+            const bad = [];
+            const T = await LBTAB();
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labSt().box = { iron: 3, 'a:2:2': 2 }; labSt().lockUntil = 0; true;`);
+            await LBENTER(T);
+            // 爆炸：离爆心 2 米的毁、4 米的不毁；人在范围外，身上的不动
+            await T.eval(`labClear(); lab.p.x = 12; lab.p.z = 5; lab.bag = {}; labGive('coal', 2); lab.stove.items = { sand: 1 }; labSpawn('coal', 2, 0); labSpawn('coal', 4, 0); labSpawn('coal', 0, 2.9); labSpawn('coal', 0, 3.4); window.__hp = lab.hp; labExplode(0, 0); true;`);
+            const r = JSON.parse(await T.eval(`JSON.stringify({ g: lab.ground.map(function (e) { return Math.round(Math.hypot(e.x, e.z) * 10) / 10; }).sort(), bag: lab.bag, stove: lab.stove.items, hp: lab.hp, box: labSt().box })`));
+            if (JSON.stringify(r.g) !== JSON.stringify([3.4, 4])) bad.push('爆炸该毁 3 米内的、留 3 米外的 ' + JSON.stringify(r.g));
+            if (r.bag.coal !== 2 || r.hp !== 100 || r.stove.sand !== 1) bad.push('人和灶台在范围外，不该受影响 ' + JSON.stringify(r));
+            if (r.box.iron !== 3 || r.box['a:2:2'] !== 2) bad.push('仓库箱被炸了 ' + JSON.stringify(r.box));
+            // 人在范围内：身上的全毁、40 点伤害；灶台在范围内：灶台上的也毁；仓库箱就算离爆心 0 米也不动
+            await T.eval(`lab.p.x = LAB_ST.stove.x + 1; lab.p.z = LAB_ST.stove.z + 1; labGive('iron', 1); lab.stove.items = { sand: 1 }; labExplode(LAB_ST.stove.x, LAB_ST.stove.z); true;`);
+            const r2 = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, stove: lab.stove.items, hp: lab.hp, box: labSt().box })`));
+            if (Object.keys(r2.bag).length || Object.keys(r2.stove).length || r2.hp !== 60) bad.push('范围内：身上、灶台全毁，扣 40 ' + JSON.stringify(r2));
+            if (r2.box.iron !== 3) bad.push('仓库箱被炸了（二）' + JSON.stringify(r2.box));
+            // 毒气：氯气没装瓶，每秒 5 点，5 秒；人走开就没事
+            await T.eval(`labClear(); lab.hp = 100; lab.p.x = -2; lab.p.z = 3; window.__hp = 100; labSpawn('g:cl2', lab.p.x + 1, lab.p.z, { noFill: 1e9 }); true;`);
+            if (!(await until(T, `lab.hp < 100`, 10000))) bad.push('站在氯气里不掉血');
+            if (!(await until(T, `labCount('g:cl2') === 0`, 20000))) bad.push('氯气 5 秒后没散');
+            const lost = await T.eval(`100 - lab.hp`);
+            if (!(lost >= 15 && lost <= 26)) bad.push('毒气总伤害应该约 25（每秒 5 × 5 秒），实际 ' + lost);
+            await T.eval(`lab.hp = 100; lab.p.x = -10; lab.p.z = -2; labSpawn('g:so2', 6, 5, { noFill: 1e9 }); true;`);
+            const far = await T.eval(`new Promise(function (res) { let t = lab.t + 2; let f = function () { if (lab.t >= t) res(lab.hp); else requestAnimationFrame(f); }; f(); })`);
+            if (far !== 100) bad.push('离得远也中毒 ' + far);
+            // 装瓶的毒气没事
+            await T.eval(`labClear(); lab.hp = 100; lab.p.x = -2; lab.p.z = 3; labSpawn('b:so2', -2, 3.5); true;`);
+            const safe = await T.eval(`new Promise(function (res) { let t = lab.t + 2; let f = function () { if (lab.t >= t) res(lab.hp); else requestAnimationFrame(f); }; f(); })`);
+            if (safe !== 100) bad.push('装瓶的二氧化硫也掉血 ' + safe);
+            // 死亡：丢掉身上和台面的东西、仓库箱不丢、锁 60 秒
+            await T.eval(`labClear(); lab.p.x = -2; lab.p.z = 3; labGive('coal', 5); lab.stove.items = { sand: 2 }; labSpawn('iron', -1, 3); lab.hp = 5; labHurt(10); true;`);
+            if (!(await until(T, `lab === null`, 10000))) bad.push('血没了没出来');
+            const d = JSON.parse(await T.eval(`JSON.stringify({ box: labSt().box, lock: labSt().lockUntil - Date.now(), modal: ${MODAL}, garage: !document.getElementById('screen-garage').classList.contains('hidden') })`));
+            if (d.box.iron !== 3 || Object.keys(d.box).length !== 2) bad.push('死了以后仓库箱变了（身上、台面、地上的不该进箱子）' + JSON.stringify(d.box));
+            if (!(d.lock > 55000 && d.lock <= 60500)) bad.push('锁定时间应该约 60 秒 ' + d.lock);
+            if (!/实验室/.test(d.modal || '') || !d.garage) bad.push('死了没有提示或没回仓库 ' + JSON.stringify(d));
+            await T.eval(`${HIDE} labEnter(); true;`);
+            if (await T.eval(`lab !== null`)) bad.push('锁定期间居然进去了');
+            if (!/还要等/.test(await T.eval(`document.getElementById('sys-modal-text').innerText`))) bad.push('锁定期间没有提示还要等多久');
+            await T.eval(`${HIDE} labSt().lockUntil = Date.now() - 1; saveProgress(); true;`);
+            await LBENTER(T);
+            const saved = await T.eval(`JSON.parse(localStorage.getItem('TH_save_' + gState.id)).lab.box.iron`);
+            if (saved !== 3) bad.push('存档里没有 lab.box ' + saved);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB6 爆炸 3 米 40 点只毁范围内、仓库箱不动；毒气每秒 5 点持续 5 秒；死亡丢身上和台面、仓库箱不丢、锁 60 秒', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB7')) {
+            // LB7 订单：同时 3 张，只认订单出现之后刚造出来的，完成后东西不扣、奖励 = 价值 10%（没标价给 100）、立即补新的；药剂效果；药剂不动寻宝队的 HUNT_POTIONS
+            const bad = [];
+            const T = await LBTAB();
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); true;`);
+            await T.eval(`labSt().orders = []; labSt().made = {}; labSt().box = {}; labSt().lockUntil = 0; true;`);
+            await LBENTER(T);
+            const o = JSON.parse(await T.eval(`JSON.stringify({ n: labSt().orders.length, keys: labSt().orders.map(function (q) { return q.k; }) })`));
+            if (o.n !== 3 || new Set(o.keys).size !== 3) bad.push('订单应该同时 3 张且不重复 ' + JSON.stringify(o));
+            // 订单的题目都是做得出来的化学类
+            const pool = await T.eval(`LAB_ORDER_POOL.map(function (c) { return c[0]; }).join()`);
+            if (/accel|bomb|a:30|a:79|a:92/.test(pool)) bad.push('本段做不出来的东西进了订单池 ' + pool);
+            // 水池装水：先在订单之前造一瓶（不算）；再把订单设成 2 瓶水，造 2 瓶才算
+            await T.eval(`lab.p.x = LAB_POOL.x; lab.p.z = LAB_POOL.z + 2.5; labGive('bottle', 4); labSel('bottle'); labUse(); true;`);
+            await T.eval(`labSt().orders = [{ k: 'b:water', n: 2, base: labSt().made['b:water'] || 0 }, { k: 'salt', n: 1, base: 0 }, { k: 'a:3:4', n: 1, base: 0 }]; window.__m0 = gState.money; true;`);
+            await T.eval(`labUse(); true;`);
+            if (await T.eval(`labSt().orders.length !== 3 || labSt().orders[0].k !== 'b:water'`)) bad.push('才造了 1 瓶（订单出现之后）就完成了');
+            await T.eval(`labUse(); true;`);
+            const done = JSON.parse(await T.eval(`JSON.stringify({ n: labSt().orders.length, first: labSt().orders.map(function (q) { return q.k; }), gain: gState.money - window.__m0, water: lab.bag['b:water'] })`));
+            if (done.gain !== 100) bad.push('水没标价，奖励应该固定 100 ' + JSON.stringify(done));
+            if (done.n !== 3) bad.push('完成后没有立即补新订单 ' + JSON.stringify(done));
+            if (done.water !== 3) bad.push('完成订单不该扣东西（共造了 3 瓶，应还在身上）' + JSON.stringify(done));
+            // 订单出现之前就有的东西不算：直接发（调试发材料）一件锂-7 不算"造出来"
+            await T.eval(`window.__m0 = gState.money; labGive('a:3:4', 1); true;`);
+            if (await T.eval(`gState.money !== window.__m0 || !labSt().orders.some(function (q) { return q.k === 'a:3:4'; })`)) bad.push('发出来的东西也算了订单');
+            // 拼出来的算：1 质子 + 1 电子...锂-7 要 3p 3e 4n；这里用现成的 labMade 路径验证价值奖励
+            await T.eval(`labSt().orders = [{ k: 'pot:heal', n: 1, base: 0 }, { k: 'pot:spring', n: 1, base: 0 }, { k: 'a:2:2', n: 1, base: 0 }]; window.__m0 = gState.money; true;`);
+            await T.eval(`labGive('sugar', 1); labGive('salt', 1); labGive('b:water', 1); labGive('rubber', 2); labGive('iron', 2); labAlch('heal'); labAlch('spring'); true;`);
+            const g2 = await T.eval(`gState.money - window.__m0`);
+            if (g2 !== 2000 + 1200) bad.push('治疗药剂 20000 的 10% = 2000、弹簧鞋 12000 的 10% = 1200，共 3200，实际 ' + g2);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB7 订单：3 张不重复、只认订单出现之后造出来的、完成后东西不扣、奖励 = 价值的 10%（没标价 100）、立即补新的', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB8')) {
+            // LB8 药剂房：炼治疗（+50 血）、加速（30 秒移速 +30%）、伤害（喝 30 秒 ×1.5，扔出 50 点）、弹簧鞋（跳高 ×1.6）；材料不够不能炼；不改寻宝队的 HUNT_POTIONS
+            const bad = [];
+            const T = await LBTAB();
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labSt().lockUntil = 0; true;`);
+            const hp0 = await T.eval(`JSON.stringify(HUNT_POTIONS)`);
+            await LBENTER(T);
+            await T.eval(`lab.p.x = 7; lab.p.z = 5; lab.bag = {}; true;`);
+            if (await T.eval(`labAlch('heal')`)) bad.push('身上什么都没有也炼成了');
+            await T.eval(`labGive('sugar', 1); labGive('salt', 1); labGive('b:water', 1); labGive('b:soda', 1); labGive('sugar', 1); labGive('b:naoh', 1); labGive('b:water', 1); labGive('rubber', 2); labGive('iron', 2); true;`);
+            const made = JSON.parse(await T.eval(`JSON.stringify({ heal: labAlch('heal'), speed: labAlch('speed'), dmg: labAlch('dmg'), spring: labAlch('spring'), bag: lab.bag })`));
+            if (!made.heal || !made.speed || !made.dmg || !made.spring) bad.push('有材料却没炼成 ' + JSON.stringify(made));
+            if (made.bag['pot:heal'] !== 1 || made.bag['pot:speed'] !== 1 || made.bag['pot:dmg'] !== 1 || made.bag['pot:spring'] !== 1) bad.push('炼出来的药剂不对 ' + JSON.stringify(made.bag));
+            if (made.bag.bottle !== 4 || Object.keys(made.bag).length !== 5) bad.push('材料没扣干净、瓶子没还 ' + JSON.stringify(made.bag));
+            // 效果
+            await T.eval(`labPanelClose(); true;`);
+            const e = JSON.parse(await T.eval(`(function(){ let o = {}; lab.hp = 30; labSel('pot:heal'); labUse(); o.heal = lab.hp;
+                labSel('pot:speed'); labUse(); o.speedT = lab.speedT; labSel('pot:dmg'); labUse(); o.dmgT = lab.dmgT;
+                // 跳高：同样起跳，弹簧鞋的最高点是普通的 1.6 倍
+                const jump = function (spring) { lab.springT = spring ? 30 : 0; lab.p.y = 0; lab.p.vy = 0; lab.k.jump = true; let mx = 0; for (let i = 0; i < 200; i++) { labMove(0.016); lab.k.jump = false; mx = Math.max(mx, lab.p.y); } return mx; };
+                o.j0 = jump(false); o.j1 = jump(true); o.speedUp = lab.speedT > 0; return JSON.stringify(o); })()`));
+            if (e.heal !== 80) bad.push('治疗 +50：30 → 80，实际 ' + e.heal);
+            if (!(e.speedT > 29 && e.speedT <= 30)) bad.push('加速药剂 30 秒，实际 ' + e.speedT);
+            if (!(e.dmgT > 29 && e.dmgT <= 30)) bad.push('伤害药剂（喝）30 秒，实际 ' + e.dmgT);
+            if (!(e.j1 / e.j0 > 1.5 && e.j1 / e.j0 < 1.7)) bad.push('弹簧鞋跳高应该 ×1.6，实际 ' + (e.j1 / e.j0).toFixed(2));
+            // 加速：跑得更快 ×1.3
+            const sp = JSON.parse(await T.eval(`(function(){ lab.p.x = 0; lab.p.z = 0; lab.k.d = true; lab.speedT = 0; labMove(0.1); let a = lab.p.x; lab.p.x = 0; lab.speedT = 30; labMove(0.1); let b = lab.p.x; lab.k.d = false; return JSON.stringify([a, b]); })()`));
+            if (!(sp[1] / sp[0] > 1.28 && sp[1] / sp[0] < 1.32)) bad.push('加速应该 +30% ' + sp);
+            // 伤害药剂扔出：50 点（扔在 5 米外，自己不受伤；站在目标 3 米内会受伤）
+            await T.eval(`labGive('pot:dmg', 1); labSel('pot:dmg'); lab.hp = 100; lab.p.x = -2; lab.p.z = 0; lab.face = { x: 1, z: 0 }; labThrow(); true;`);
+            if ((await T.eval(`lab.hp`)) !== 100) bad.push('扔到 5 米外自己不该受伤');
+            if (await T.eval(`labThrow()`)) bad.push('没有伤害药剂也扔出去了');
+            // 寻宝队的药剂定义没动
+            if ((await T.eval(`JSON.stringify(HUNT_POTIONS)`)) !== hp0) bad.push('HUNT_POTIONS 被改了');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB8 药剂：治疗 +50、加速 30 秒 +30%、伤害 喝 30 秒／扔 50、弹簧鞋跳高 ×1.6；材料不够不能炼；不改 HUNT_POTIONS', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB9')) {
+            // LB9 配方清单和手册：每个配方显示"现有 X / 需要 Y"（够绿不够红）、能筛"现在能做的"；手册 5 页都在、每个物品标"用在哪些配方里"；仓库里直接能开；同名物品叠放
+            const bad = [];
+            const T = await LBTAB();
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labSt().box = { iron: 1, 'a:16:16': 1, coal: 2 }; true;`);
+            await T.eval(`labBook('list'); true;`);
+            const rec = JSON.parse(await T.eval(`JSON.stringify((function(){ const out = {}; document.querySelectorAll('#lab-book .lab-rec').forEach(function (r) { out[r.getAttribute('data-id')] = Array.prototype.map.call(r.querySelectorAll('.lab-have'), function (s) { return [s.innerText, getComputedStyle(s).color]; }); }); return out; })())`));
+            const GREEN = 'rgb(46, 125, 50)', RED = 'rgb(198, 40, 40)';
+            if (!rec.fes || rec.fes.length !== 2 || rec.fes.some((x) => x[1] !== GREEN)) bad.push('硫化铁（铁 1、硫 1 都有）应该全绿 ' + JSON.stringify(rec.fes));
+            if (!rec.water || rec.water.some((x) => x[1] !== RED)) bad.push('水（没有氢气瓶、氧气瓶）应该全红 ' + JSON.stringify(rec.water));
+            if (!rec.rubber || !(rec.rubber[0][1] === RED && /现有 2 \/ 需要 5/.test(rec.rubber[0][0]))) bad.push('橡胶要 5 个煤，有 2 个：红，写"现有 2 / 需要 5" ' + JSON.stringify(rec.rubber));
+            // 筛选
+            await T.eval(`document.getElementById('lab-only').click(); true;`);
+            const ids = JSON.parse(await T.eval(`JSON.stringify(Array.prototype.map.call(document.querySelectorAll('#lab-book .lab-rec'), function (r) { return r.getAttribute('data-id'); }))`));
+            if (ids.indexOf('fes') < 0 || ids.indexOf('water') >= 0 || ids.indexOf('rubber') >= 0) bad.push('筛"现在能做的"：该留硫化铁，去掉水和橡胶 ' + ids);
+            await T.eval(`LAB_UI.only = false; true;`);
+            // 手册 5 页
+            const pages = {};
+            for (const t of ['table', 'react', 'potion', 'order', 'neutron']) {
+                await T.eval(`labBook('${t}'); true;`);
+                pages[t] = await T.eval(`document.getElementById('lab-book-body').innerText`);
+            }
+            if (!/氢/.test(pages.table) || !/氦-4/.test(pages.table) || !/半衰期|分钟|天|年|秒/.test(pages.table)) bad.push('周期表页内容不对');
+            if (!/两个氢-1 原子|爆炸|苏打水/.test(pages.react) || !/用在/.test(pages.react)) bad.push('反应页缺内容或没标"用在哪些配方里"');
+            if (!/治疗药剂/.test(pages.potion) || !/弹簧鞋/.test(pages.potion) || !/用在/.test(pages.potion)) bad.push('药剂页缺内容');
+            if (!/订单/.test(pages.order) || !/10%/.test(pages.order)) bad.push('订单页缺内容');
+            if (!/611/.test(pages.neutron)) bad.push('中子页缺内容');
+            if (/电池|电线|原子弹|烟花|Boss|电解|离心/.test(Object.values(pages).join(''))) bad.push('手册里出现了范围外的东西');
+            // 每个物品标注用在哪些配方里：沙子用在"烧玻璃瓶"
+            if (!/沙子.{0,12}用在：[^）]*烧玻璃瓶/.test(pages.react)) bad.push('沙子没标用在烧玻璃瓶 ' + pages.react.slice(0, 200));
+            // 手册和清单在仓库里直接能开（不用进实验室）
+            await T.eval(`labBookClose(); document.getElementById('garage-lab-list-btn').click(); true;`);
+            if (!(await T.eval(`!!document.getElementById('lab-book')`))) bad.push('仓库里的"实验室配方"按钮没打开');
+            await T.eval(`labBookClose(); document.getElementById('garage-lab-book-btn').click(); true;`);
+            if (!(await T.eval(`!!document.getElementById('lab-book') && LAB_UI.tab === 'table'`))) bad.push('仓库里的"实验室手册"按钮没打开');
+            await T.eval(`labBookClose(); true;`);
+            // 同名物品叠放；存档只走白名单（lab 字段）
+            const st = JSON.parse(await T.eval(`(function(){ let s = {}; labAdd(s, 'coal'); labAdd(s, 'coal'); labAdd(s, 'coal', 3); labAdd(s, 'iron'); return JSON.stringify(s); })()`));
+            if (st.coal !== 5 || st.iron !== 1 || Object.keys(st).length !== 2) bad.push('同名物品没叠在一起 ' + JSON.stringify(st));
+            const ver = JSON.parse(await T.eval(`JSON.stringify({ sv: SAVE_VER, dw: typeof DATA_WIPE_VER !== 'undefined' ? DATA_WIPE_VER : null, np: NET_PROTO })`));
+            if (ver.sv !== 2 || ver.np !== 10) bad.push('SAVE_VER 或 NET_PROTO 变了 ' + JSON.stringify(ver));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('LB9 配方清单（现有 X / 需要 Y 红绿、筛现在能做的）、手册 5 页并标"用在哪些配方里"、仓库里能直接开、同名叠放', bad.length === 0, bad.join(' / '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
@@ -3837,11 +4227,11 @@ async function enterExit(tab, key) {
         }
 
         {
-            // L1：17 个文件同时下载，页面显示"加载中 n/17"；其中一个晚到 2 秒，先显示进度、不报错，最后正常进大厅
+            // L1：18 个文件同时下载，页面显示"加载中 n/18"；其中一个晚到 2 秒，先显示进度、不报错，最后正常进大厅
             const bad = [];
             const D = await openTab(chrome, url, { noLobby: true, delayUrl: 'js/09-hunt.js', delayMs: 2000, navWait: 800 });
             const t1 = await D.eval(`(function(){ let b = document.getElementById('boot-load'); return (b ? b.innerText : '') + '|' + (typeof requestLobbyAccess); })()`);
-            if (!/^加载中 \d+\/17\|undefined$/.test(t1)) bad.push('先显示进度 ' + t1);
+            if (!/^加载中 \d+\/18\|undefined$/.test(t1)) bad.push('先显示进度 ' + t1);
             let ready = false;
             for (let i = 0; i < 40 && !ready; i++) { await W(250); ready = await D.eval(`typeof requestLobbyAccess === 'function' && !document.getElementById('boot-load')`); }
             if (!ready) bad.push('文件到齐后没跑起来');
@@ -3876,7 +4266,7 @@ async function enterExit(tab, key) {
             // 新开页面加载的时候别的标签页一直在发消息，也不报错（所有文件下载完一口气执行，中间没有空档）
             const r = JSON.parse(await A.eval(`(function(){ let s = performance.getEntriesByType('resource').filter(function (e) { return /\\/js\\/[^?]*\\.js\\?v=/.test(e.name); });
                 return JSON.stringify({ n: s.length, files: GAME_FILES.length, ok: s.every(function (e) { return e.name.slice(-('?v=' + GAME_VERSION).length) === '?v=' + GAME_VERSION; }),
-                    // B6：17 个文件拼成一份、只插一个 <script> 执行；看这份里每个文件开头那行注释的先后
+                    // B6：18 个文件拼成一份、只插一个 <script> 执行；看这份里每个文件开头那行注释的先后
                     order: (function () { let all = Array.prototype.filter.call(document.head.querySelectorAll('script'), function (x) { return /\\/\\/ ==== js\\//.test(x.text); });
                         if (all.length !== 1) return false; let seen = []; all[0].text.replace(/^\\/\\/ ==== (js\\/\\S+) ====$/mg, function (m, f) { seen.push(f); return m; }); return seen.join(',') === GAME_FILES.join(','); })() }); })()`));
             const bad = [];

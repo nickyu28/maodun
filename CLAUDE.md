@@ -1,7 +1,7 @@
 # 猫盾の游戏 · 项目约定
 
 网页游戏（Three.js r128），不用打包工具。`index.html` 是页面和加载器，脚本按模式拆在 `js/` 下
-（`01-core.js` … `17-hub.js`），按 `index.html` 里 `GAME_FILES` 的顺序加载。跟作者沟通用中文。
+（`01-core.js` … `18-lab.js`），按 `index.html` 里 `GAME_FILES` 的顺序加载。跟作者沟通用中文。
 
 - 文件之间共用顶层的函数和变量（普通 `<script>`，不是模块）。新加文件要加进 `GAME_FILES`；
   文件顶层直接执行的代码只能用到它前面文件里定义的东西。
