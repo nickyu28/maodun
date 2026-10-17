@@ -3816,6 +3816,8 @@
                     if (isConsumed(gi) || gi === bi || gi.userData.type !== 'gem') return;
                     if (bi.userData.type !== 'base') return;   // 已经镶满变皇冠了就不再吃
                     if (bi.position.distanceTo(gi.position) >= GROUND_MERGE_RANGE) return;
+                    // H28：镶上这一颗就满了（变皇冠 = 一个大金）：先占一个大金名额，满了就不镶
+                    if (crownSockCount(bi.userData) >= HUNT_GEMS.length - 1 && !(bi.userData.sock && bi.userData.sock[gi.userData.gem]) && huntBigGate(bi, gi) !== 'go') return;
                     if (!crownSocketGem(bi.userData, gi.userData.gem)) return;
                     consumed.push(gi); scene.remove(gi);
                     huntMergeBoom(bi.position, bi.userData.v, bi.userData.n);
@@ -3832,6 +3834,7 @@
                         let ai = as[k];
                         if (isConsumed(ai)) continue;
                         if (ai.position.distanceTo(bi.position) >= GROUND_MERGE_RANGE) continue;
+                        if (huntRecipeBigCost(rec) && huntBigGate(ai, bi) !== 'go') continue;   // H28
                         consumed.push(ai, bi); scene.remove(ai); scene.remove(bi);
                         let up = rec.out;
                         let ns = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4),

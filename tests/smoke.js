@@ -2367,6 +2367,67 @@ async function enterExit(tab, key) {
         }
 
                 //@@NEW@@
+        if (want('H28')) {
+            // H28 大金上限覆盖所有来源，合成也算：原料里没大金、产物是大金（至臻猫盾、丰饶圣餐、皇冠）+1；骑士剑（原料已有大金）不另算；满了不合成并提示；组队问队长
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            await T.eval(`window.__flash = []; window.__bf = blazeFlash; blazeFlash = function (t) { window.__flash.push(t); }; window.__mk = function (u, x) { let m = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), new THREE.MeshBasicMaterial()); m.userData = Object.assign({ isItem: true, feeds: 0 }, u); m.position.set(500 + (x || 0), 1, 500); scene.add(m); groundItems.push(m); return m; };
+                window.__has = function (n) { return groundItems.some(function (g) { return g.userData.n === n; }); };
+                window.__clear = function () { groundItems.slice().forEach(function (g) { scene.remove(g); }); groundItems.length = 0; window.__flash.length = 0; }; true;`);
+            const run = (js) => T.eval(`(function(){ window.__clear(); ${js}; executeGroundCombinationsLogic(); executeGroundCombinationsLogic(); return true; })()`);
+            const st = async (names) => JSON.parse(await T.eval(`JSON.stringify({ left: huntBigLeft, has: ${JSON.stringify(names)}.map(window.__has), flash: window.__flash.slice(-1)[0] || '' })`));
+            // 上限剩 0：黄金猫盾 + 黄金小鱼干 不合成，弹提示
+            await T.eval(`huntBigLeft = 0; true;`);
+            await run(`window.__mk({ n: '黄金猫盾', v: 50000, w: 1 }, 0); window.__mk({ n: '黄金小鱼干', v: 30000, w: 1 }, 2)`);
+            let r = await st(['黄金猫盾', '黄金小鱼干', '至臻猫盾']);
+            if (r.has.join() !== 'true,true,false' || !/大金已经满了/.test(r.flash) || r.left !== 0) bad.push('上限 0 时黄金猫盾+黄金小鱼干该不合成并提示 ' + JSON.stringify(r));
+            // 上限剩 1：合一次，变 0
+            await T.eval(`huntBigLeft = 1; true;`);
+            await run(`window.__mk({ n: '黄金猫盾', v: 50000, w: 1 }, 0); window.__mk({ n: '黄金小鱼干', v: 30000, w: 1 }, 2)`);
+            r = await st(['黄金猫盾', '黄金小鱼干', '至臻猫盾']);
+            if (r.has.join() !== 'false,false,true' || r.left !== 0) bad.push('上限 1 时该合一次变 0 ' + JSON.stringify(r));
+            // 不是大金的配方不受限：猫盾+小鱼干=黄金猫盾（0 上限也合）
+            await T.eval(`huntBigLeft = 0; true;`);
+            await run(`window.__mk({ n: '猫盾', v: 1000, w: 1 }, 0); window.__mk({ n: '小鱼干', v: 1000, w: 1 }, 2)`);
+            r = await st(['猫盾', '小鱼干', '黄金猫盾']);
+            if (r.has.join() !== 'false,false,true' || r.left !== 0) bad.push('普通配方不该受上限 ' + JSON.stringify(r));
+            // 原料里已有大金（骑士团圣剑 + 至臻猫盾 → 骑士剑）不另算，上限 0 也合
+            await run(`window.__mk({ n: '骑士团圣剑', v: 400000, w: 5 }, 0); window.__mk({ n: '至臻猫盾', v: 800000, w: 2 }, 2)`);
+            r = await st(['骑士团圣剑', '至臻猫盾', '猫盾骑士剑']);
+            if (r.has.join() !== 'false,false,true' || r.left !== 0) bad.push('骑士剑不该占名额 ' + JSON.stringify(r));
+            // 丰饶圣餐（25 万）算
+            await run(`window.__mk({ n: '金苹果', v: 50000, w: 2 }, 0); window.__mk({ n: '黄金圣杯', v: 100000, w: 2 }, 2)`);
+            r = await st(['金苹果', '黄金圣杯', '丰饶圣餐']);
+            if (r.has.join() !== 'true,true,false') bad.push('上限 0 时丰饶圣餐该不合成 ' + JSON.stringify(r));
+            await T.eval(`huntBigLeft = 1; true;`);
+            await run(`window.__mk({ n: '金苹果', v: 50000, w: 2 }, 0); window.__mk({ n: '黄金圣杯', v: 100000, w: 2 }, 2)`);
+            r = await st(['金苹果', '黄金圣杯', '丰饶圣餐']);
+            if (r.has.join() !== 'false,false,true' || r.left !== 0) bad.push('上限 1 时丰饶圣餐该合出来 ' + JSON.stringify(r));
+            // 皇冠：镶最后一颗宝石算一个
+            const crown = (left) => T.eval(`(function(){ huntBigLeft = ${left}; window.__clear(); let b = crownBaseItem(); HUNT_GEMS.slice(0, 5).forEach(function (g) { crownSocketGem(b, g.id); }); let bm = window.__mk(b, 0); window.__mk(huntGemItem(HUNT_GEMS[5]), 2); executeGroundCombinationsLogic(); executeGroundCombinationsLogic();
+                return JSON.stringify({ left: huntBigLeft, crown: window.__has('皇冠'), gem: window.__has(HUNT_GEMS[5].n), flash: window.__flash.slice(-1)[0] || '' }); })()`);
+            let c0 = JSON.parse(await crown(0));
+            if (c0.crown || !c0.gem || !/已经满了/.test(c0.flash)) bad.push('上限 0 时最后一颗宝石不该镶 ' + JSON.stringify(c0));
+            let c1 = JSON.parse(await crown(1));
+            if (!c1.crown || c1.gem || c1.left !== 0) bad.push('上限 1 时该镶成皇冠、名额变 0 ' + JSON.stringify(c1));
+            // 组队（不是队长）：先问队长，答复可以才合
+            const team = JSON.parse(await T.eval(`(function(){ window.__clear(); window.__sent = []; let post = bc.postMessage; bc.postMessage = function (m) { window.__sent.push(m); };
+                gState.team = [{ id: 'leader-x', isLeader: true, isAI: false }, { id: gState.id, isAI: false }]; huntBigLeft = 4;
+                window.__mk({ n: '黄金猫盾', v: 50000, w: 1 }, 0); window.__mk({ n: '黄金小鱼干', v: 30000, w: 1 }, 2); executeGroundCombinationsLogic();
+                let req = window.__sent.filter(function (m) { return m.type === 'HUNT_BIG_REQ'; })[0];
+                let o = { asked: !!req && req.target === 'leader-x', merged0: window.__has('至臻猫盾'), left0: huntBigLeft };
+                if (req) huntBigOnAck({ target: gState.id, sender: 'leader-x', rid: req.rid, ok: true, left: 3 });
+                executeGroundCombinationsLogic();
+                o.merged1 = window.__has('至臻猫盾'); o.left1 = huntBigLeft; bc.postMessage = post; gState.team = []; return JSON.stringify(o); })()`));
+            if (!team.asked || team.merged0 || team.left0 !== 4 || !team.merged1 || team.left1 !== 3) bad.push('队员合大金应先问队长 ' + JSON.stringify(team));
+            const noWords = await T.eval(`/保底|必出/.test(huntBigFullNote.toString().replace(/\\/\\/.*$/gm, ''))`);
+            if (noWords) bad.push('提示里有不该写的词');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H28 大金上限覆盖合成：至臻猫盾/丰饶圣餐/皇冠占名额、骑士剑不算；剩 0 不合成并提示、剩 1 合一次变 0；队员先问队长', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('U7')) {
             // U7：寻宝队的角色、地图、合成配方在仓库界面里（大厅面板上没了）；点得到、有用；触屏尺寸下不用滚就看得见
             const bad = [];

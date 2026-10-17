@@ -928,6 +928,39 @@
             huntBigPend[rid] = function (ok, left) { clearTimeout(to); if (typeof left === 'number') huntBigLeft = left; cb(ok ? pick(pool) : pick(itemPool.gold)); };
             bc.postMessage({ type: 'HUNT_BIG_REQ', target: huntBigLeader(), sender: gState.id, rid: rid });
         }
+        // H28：大金上限覆盖所有来源——合成也算。原料里没有大金、产物是大金（大金物品，或合成产物 v ≥ 20 万：至臻猫盾、丰饶圣餐、皇冠）就占 1 个；
+        // 原料里已经有大金的（猫盾骑士剑）不另算。上限用完了：这两样放一起也不合，弹一句。组队走队长计数（跟 H16b 一样）。
+        const HUNT_BIG_CRAFT_V = 200000;
+        function huntBigName(n) { return itemPool.ultra.concat(itemPool.god).some(function (u) { return u.n === n; }); }
+        function huntCraftBigName(n) { return allRecipes().some(function (r) { return r.out.n === n && r.out.v >= HUNT_BIG_CRAFT_V; }); }
+        function huntRecipeBigCost(rec) {
+            let outBig = huntBigName(rec.out.n) || rec.out.v >= HUNT_BIG_CRAFT_V;
+            let ing = function (n) { return huntBigName(n) || huntCraftBigName(n); };
+            return outBig && !ing(rec.a) && !ing(rec.b);
+        }
+        function huntBigFullNote() { blazeFlash('这张图的大金已经满了'); }
+        function huntBigAsk(cb) {
+            let rid = Math.random().toString(36).slice(2), to = setTimeout(function () { if (huntBigPend[rid]) { delete huntBigPend[rid]; cb(false); } }, 3000);
+            huntBigPend[rid] = function (ok, left) { clearTimeout(to); if (typeof left === 'number') huntBigLeft = left; cb(!!ok); };
+            bc.postMessage({ type: 'HUNT_BIG_REQ', target: huntBigLeader(), sender: gState.id, rid: rid });
+        }
+        // 地上两样东西要合出一个大金时先过这一关：'go' 可以合（已扣一个）/ 'wait' 在等队长答复 / 'no' 满了，不合
+        function huntBigGate(a, b) {
+            let ua = a.userData, ub = b.userData;
+            if (ua.bigNo || ub.bigNo) return 'no';
+            if (ua.bigPaid && ub.bigPaid) { ua.bigPaid = ub.bigPaid = false; return 'go'; }
+            if (huntBigSolo()) {
+                if (huntBigLeft <= 0) { ua.bigNo = ub.bigNo = true; huntBigFullNote(); return 'no'; }
+                huntBigLeft--; return 'go';
+            }
+            if (ua.bigWait || ub.bigWait) return 'wait';
+            ua.bigWait = ub.bigWait = true;
+            huntBigAsk(function (ok) {
+                ua.bigWait = ub.bigWait = false;
+                if (ok) ua.bigPaid = ub.bigPaid = true; else { ua.bigNo = ub.bigNo = true; huntBigFullNote(); }
+            });
+            return 'wait';
+        }
         function huntBigOnReq(m) {
             if (m.target !== gState.id || !isPlaying || huntBigLeader() !== gState.id || typeof m.rid !== 'string') return;
             // 只认自己队里的真人（发送者以连接为准，房主转发时已经改写成真实的）
