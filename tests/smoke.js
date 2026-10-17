@@ -2367,6 +2367,33 @@ async function enterExit(tab, key) {
         }
 
                 //@@NEW@@
+        if (want('U4')) {
+            // U4：背包、腰包、仓库格子里，宝物除了名字和重量再显示价值；≥1 万用“万”
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const t = JSON.parse(await T.eval(`JSON.stringify([800000, 15000, 10000, 123456, 9999, 120].map(itemValueText))`));
+            if (t.join() !== '80万,1.5万,1万,12.3万,9999,120') bad.push('价值写法 ' + t.join());
+            await T.eval(`${HIDE} (function(){ let it = function (n, v, w) { return { n: n, v: v, w: w }; };
+                gState.inv = [it('黄金猫盾', 800000, 5), it('小鱼干', 15000, 1), null, null, null, null];
+                gState.inv[3] = { n: '腰包', type: 'backpack_ext', v: 0, w: 1, bag: [it('铜钱', 600, 1), null, null] };
+                gState.garage = Array(200).fill(null); gState.garage[0] = it('皇冠', 3000000, 9); gState.garage[1] = it('铜币', 80, 1); openPouch = gState.inv[3]; initGarage(); updateHUD(); })(); true;`);
+            const txt = JSON.parse(await T.eval(`JSON.stringify({
+                inv: Array.prototype.map.call(document.getElementById('garage-active-inv').children, function (c) { return c.innerText.replace(/\\s+/g, ' '); }).slice(0, 4),
+                gar: Array.prototype.map.call(document.getElementById('garage-stash-container').children, function (c) { return c.innerText.replace(/\\s+/g, ' '); }).slice(0, 2),
+                bag: Array.prototype.map.call(document.querySelectorAll('#garage-pouch-row .slot'), function (c) { return c.innerText.replace(/\\s+/g, ' '); }),
+                bp: Array.prototype.map.call(document.querySelectorAll('#bp-hotbar-slots .slot, #bp-backpack-slots .slot'), function (c) { return c.innerText.replace(/\\s+/g, ' '); }).slice(0, 2),
+                hud: document.getElementById('hud-slot-0').innerText.replace(/\\s+/g, ' ') })`));
+            if (!/黄金猫盾/.test(txt.inv[0]) || !/重:5/.test(txt.inv[0]) || !/值:80万/.test(txt.inv[0])) bad.push('仓库界面的背包格 ' + txt.inv[0]);
+            if (!/值:1\.5万/.test(txt.inv[1])) bad.push('1.5 万 ' + txt.inv[1]);
+            if (!/值:300万/.test(txt.gar[0]) || !/值:80/.test(txt.gar[1])) bad.push('仓库格 ' + txt.gar.join(' | '));
+            if (!/值:600/.test(txt.bag[0])) bad.push('腰包格 ' + txt.bag.join(' | '));
+            if (!/值:80万/.test(txt.bp[0])) bad.push('局里背包格 ' + txt.bp.join(' | '));
+            if (!/值:80万/.test(txt.hud)) bad.push('快捷栏 ' + txt.hud);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('U4 格子里宝物显示价值：背包、腰包、仓库、局内背包和快捷栏；≥1 万写“万”', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('N1')) {
             // N1 惊魂夜逃生者 7 号（牵制）：要 20 猫盾币解锁；翻板快 30%；技能：留假身 3 秒（追捕者的 AI 看着跟真人一样、打一下就没）+ 自己隐身 2 秒，冷却 30 秒；AI 也会用
             const bad = [];

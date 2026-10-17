@@ -1665,11 +1665,17 @@
                 }).join('');
         }
 
-        // 格子里显示的字：名字 + 重量（腰包算上里面的），腰包再标上装了几件、是不是展开着
+        // U4：价值——小于 1 万写数字，大于等于 1 万用“万”（80 万、1.5 万）
+        function itemValueText(v) {
+            if (v < 10000) return String(Math.round(v));
+            let w = Math.round(v / 1000) / 10;   // 保留一位小数
+            return (w % 1 === 0 ? w.toFixed(0) : w.toFixed(1)) + '万';
+        }
+        // 格子里显示的字：名字 + 重量 + 价值（腰包算上里面的），腰包再标上装了几件、是不是展开着
         function slotLabelHtml(it) {
             if (!it) return '';
             let extra = isPouch(it) ? '<div style="font-size:10px; color:#e65100;">' + pouchCount(it) + '/' + POUCH_SLOTS + (openPouch === it ? ' ▾' : ' ▸') + '</div>' : '';
-            return '<div>' + it.n + '</div><div>重:' + itemWeight(it) + '</div>' + extra;
+            return '<div>' + it.n + '</div><div>重:' + itemWeight(it) + '</div>' + (it.v > 0 ? '<div style="font-size:10px; color:#8d6e63;">值:' + itemValueText(it.v) + '</div>' : '') + extra;
         }
         // 展开的腰包：在 anchor 后面画一行 3 格（容器名 'bag'），能和背包、仓库互相拖
         function pouchRowEl(anchor, id) {
