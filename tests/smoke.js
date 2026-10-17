@@ -4153,13 +4153,20 @@ async function enterExit(tab, key) {
             await N.eval(`escapeExit(); true;`); await W(1000);
             for (let i = 0; i < 6 && (await N.eval(MODAL)) !== null; i++) await clickModal(N);
             // 3. 卡片开着时调一次普通弹窗：卡片不丢，两个依次关掉
-            await N.eval(`introPush('测试卡片', '一'); showSysModal('普通弹窗', '二', [{ label: '好' }]); true;`); await W(300);
-            const o1 = await clickModal(N), o2 = await clickModal(N), o3 = await N.eval(MODAL);
+            await N.eval(`introPush('测试卡片', '一'); showSysModal('普通弹窗', '二', [{ label: '好' }]); true;`);
+            await until(N, `${MODAL} !== null`, 15000);
+            const o1 = await clickModal(N);
+            await until(N, `${MODAL} !== null`, 15000);   // 第二个弹窗在负载高时会晚一点出来，等它出来再点
+            const o2 = await clickModal(N);
+            await frames(N, 20);
+            const o3 = await N.eval(MODAL);
             const st3 = JSON.parse(await N.eval(`JSON.stringify({ open: introOpen, q: introQ.length, wait: sysModalWait.length })`));
             if (o1 !== '测试卡片' || o2 !== '普通弹窗' || o3 !== null || st3.open || st3.q || st3.wait) bad.push('卡片被盖 ' + JSON.stringify([o1, o2, o3, st3]));
             // 4. 卡片开着时代码直接把弹窗藏起来：introOpen 也回到 false，排队的下一张接着出
-            await N.eval(`introPush('卡 1', 'a'); introPush('卡 2', 'b'); true;`); await W(300);
-            await N.eval(`document.getElementById('sys-modal').classList.add('hidden'); true;`); await W(500);
+            await N.eval(`introPush('卡 1', 'a'); introPush('卡 2', 'b'); true;`);
+            await until(N, `${MODAL} === '卡 1'`, 15000);
+            await N.eval(`document.getElementById('sys-modal').classList.add('hidden'); true;`);
+            await until(N, `${MODAL} === '卡 2'`, 15000);
             const o4 = await N.eval(`${MODAL} + '|' + introOpen`);
             if (o4 !== '卡 2|true') bad.push('直接藏起来以后 ' + o4);
             await clickModal(N);
