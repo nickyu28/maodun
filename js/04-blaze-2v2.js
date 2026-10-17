@@ -155,7 +155,7 @@
             ffaPoisonDelay: 60, ffaPoisonRate: 1.4,   // 乱斗：先给一分钟，然后慢慢收
             poisonNoFlee: 120,                        // 圈小到这个程度之后，AI 不再回身逃
             // 局间加成：每局结束后选一项，永久生效到本场结束
-            perkPickTime: 10,
+            perkPickTime: 20,
             // ── 数值卡 ──
             perkHp: 100, perkDmg: 20,                 // 通用
             perkAs: 0.10,                             // 远程专属：攻速 +10%

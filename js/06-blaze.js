@@ -1617,7 +1617,7 @@
         function blazeLawTick(dt) {
             if (!blaze.law) return;
             // 还在选规则：整局冻着（phase 不是 live，谁也动不了），
-            // 头上走一个 10 秒的倒计时，到点自动替你随机挑一条
+            // 头上走一个 20 秒的倒计时，到点自动替你随机挑一条
             if (blaze.lawTable) {
                 blaze.lawT -= dt;
                 let el = document.getElementById('sys-modal-title');
