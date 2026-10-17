@@ -2367,6 +2367,67 @@ async function enterExit(tab, key) {
         }
 
                 //@@NEW@@
+        if (want('N1')) {
+            // N1 惊魂夜逃生者 7 号（牵制）：要 20 猫盾币解锁；翻板快 30%；技能：留假身 3 秒（追捕者的 AI 看着跟真人一样、打一下就没）+ 自己隐身 2 秒，冷却 30 秒；AI 也会用
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} gState.mcoin = 5; gState.owned = {}; NIGHT_MATCH_WAIT = 0; enterNightMatch('survivor'); true;`);
+            if (!(await until(T, `!document.getElementById('night-pick').classList.contains('hidden')`, 8000))) bad.push('选角色页没出来');
+            const cards = JSON.parse(await T.eval(`JSON.stringify(Array.prototype.map.call(document.getElementById('night-pick-grid').children, function (c) { return c.innerText.replace(/\\s+/g, ' '); }))`));
+            if (cards.length !== 7 || !/7号/.test(cards[6]) || !/牵制/.test(cards[6]) || !/20/.test(cards[6])) bad.push('选角色页没有 7 号/没标价 ' + JSON.stringify(cards));
+            if (await T.eval(`NIGHT_CHARS.c3.desc.indexOf('保底') >= 0 || NIGHT_CHARS.c3.desc.indexOf('必出') >= 0`)) bad.push('7 号说明里有不该写的词');
+            await T.eval(`nightPickChar('c3'); true;`);
+            if (await T.eval(`!!night`)) bad.push('币不够也开局了');
+            if (await T.eval(`gState.mcoin`) !== 5) bad.push('币不够不该扣币');
+            await T.eval(`${HIDE} gState.mcoin = 25; nightPickChar('c3'); true;`);
+            if (!(await until(T, `night && night.char === 'c3' && night.survivors && night.survivors.length === 4 && night.hunter`, 10000))) bad.push('买了没能开局');
+            const own = JSON.parse(await T.eval(`JSON.stringify({ m: gState.mcoin, o: charOwned('night', 'c3'), cat: charOwned('night', 'cat') })`));
+            if (own.m !== 5 || !own.o || !own.cat) bad.push('解锁扣币/拥有状态不对 ' + JSON.stringify(own));
+            await T.eval(`${HIDE} true;`);
+            // 被动：翻板快 30%
+            const vm = JSON.parse(await T.eval(`JSON.stringify([nightVaultMul({ charKey: 'c3' }), nightVaultMul({ charKey: 'cat' }), nightVaultMul(null)])`));
+            if (vm.join() !== '0.7,1,1') bad.push('翻板倍率 ' + vm);
+            // 主动：假身 + 隐身
+            const c = JSON.parse(await T.eval(`(function(){ const me = night.survivors[0], h = night.hunter; night.c3Cd = 0;
+                h.gy = me.gy || 0; h.recover = 0; h.lockOn = me; h.stun = 0; let before = false;
+                [[10, 0, Math.PI], [-10, 0, 0], [0, 10, -Math.PI / 2], [0, -10, Math.PI / 2]].some(function (o) { h.p.set(me.p.x + o[0], me.p.y, me.p.z + o[1]); h.faceA = o[2]; before = nightHunterSees(h, me); return before; });
+                nightSurvivorSkill();
+                const d = night.decoys[0];
+                return JSON.stringify({ before: before, n: night.decoys.length, cd: night.c3Cd, inv: nightInvisible(me), seesMe: nightHunterSees(h, me), seesDecoy: !!d && nightHunterSees(h, d), lock: h.lockOn === d, mesh: !!d && d.mesh.parent === scene, hp: me.hp }); })()`));
+            if (!c.before) bad.push('测试前提：追捕者本来该看得见我');
+            if (c.n !== 1 || c.cd < 29 || !c.inv) bad.push('放技能后没有假身/没进冷却/没隐身 ' + JSON.stringify(c));
+            if (c.seesMe || !c.seesDecoy) bad.push('隐身时追捕者还看得见本人/看不见假身 ' + JSON.stringify(c));
+            if (!c.lock || !c.mesh) bad.push('正追着我的追捕者没转去追假身/假身没画出来 ' + JSON.stringify(c));
+            // 冷却中再按不出新的
+            await T.eval(`nightSurvivorSkill(); true;`);
+            if (await T.eval(`night.decoys.length`) !== 1) bad.push('冷却中又出了一个假身');
+            // 追捕者打假身：假身没了、人没掉血
+            const hit = JSON.parse(await T.eval(`(function(){ const me = night.survivors[0], h = night.hunter, d = night.decoys[0];
+                h.p.set(d.p.x - 6, d.p.y, d.p.z); h.faceA = 0; h.recover = 0; h.lockOn = d; h.carrying = null; h.hookPull = null; h.hookMove = null; night.friendly = false;
+                for (let i = 0; i < 20 && !d.out; i++) { h.recover = 0; nightHunterAI(0.05); }
+                return JSON.stringify({ popped: d.out, hp: me.hp, down: me.downed }); })()`));
+            if (!hit.popped || hit.hp !== 2 || hit.down) bad.push('追捕者打到假身：假身该消失、人不掉血 ' + JSON.stringify(hit));
+            if (!(await until(T, `night.decoys.length === 0`, 5000))) bad.push('假身没被收走');
+            // 隐身 2 秒后恢复、假身 3 秒后消失
+            await T.eval(`night.c3Cd = 0; night.survivors[0].invisUntil = 0; nightSurvivorSkill(); window.__t0 = performance.now(); true;`);
+            if (!(await until(T, `night.decoys.length === 0`, 8000))) bad.push('假身过了 3 秒还在');
+            const dt1 = await T.eval(`performance.now() - window.__t0`);
+            if (dt1 < 2500 || dt1 > 15000) bad.push('假身存在时间不对 ' + Math.round(dt1) + 'ms');
+            if (!(await until(T, `!nightInvisible(night.survivors[0])`, 4000))) bad.push('隐身没结束');
+            // AI 7 号：被追捕者盯上就放技能
+            const ai = JSON.parse(await T.eval(`(function(){ const a = night.survivors[1], h = night.hunter; a.charKey = 'c3'; a.skillCd = 0; a.reactT = 0; a.hp = 2; night.decoys.length = 0;
+                h.p.set(a.p.x + 20, a.p.y, a.p.z); h.lockOn = a; h.recover = 0;
+                nightSurvivorAISkill(a, 20, 0.1);
+                return JSON.stringify({ n: night.decoys.length, cd: a.skillCd, inv: nightInvisible(a), lock: h.lockOn === night.decoys[0] }); })()`));
+            if (ai.n !== 1 || ai.cd < 29 || !ai.inv || !ai.lock) bad.push('AI 7 号没用技能 ' + JSON.stringify(ai));
+            // AI 的队友里能刷出 7 号
+            const roster = await T.eval(`(function(){ return nightSpawnActors.toString().indexOf("'c3'") >= 0; })()`);
+            if (!roster) bad.push('AI 队友不会刷出 7 号');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('N1 惊魂夜 7 号：20 币解锁；翻板快 30%；假身 3 秒 + 隐身 2 秒（追捕者 AI 转去追假身、打假身不掉血）、冷却 30 秒；AI 也会用', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('S2')) {
             // S2 推推乐变数：四种台面都能开局、打完；道具会掉、会捡、会用；蓄力撞按住变强、点一下是普通推；触屏按住也行
             const bad = [];

@@ -712,6 +712,10 @@
                 side: 'survivor', name: '6号', role: '辅助',
                 desc: '被动：<br>开局暗中指定一名队友，他挖煤 +10%，没人知道是谁。<br><br>主动：<br>冷却：30 秒<br>任选一台有人在挖的矿机 +50% 挖煤，施法定身 1 秒。'
             },
+            c3: {
+                side: 'survivor', name: '7号', role: '牵制',
+                desc: '被动：<br>翻板快 30%。<br><br>主动：<br>冷却：30 秒<br>原地留一个假身 3 秒，追捕者看着跟真人一样；自己隐身 2 秒。'
+            },
             hunter: {
                 side: 'hunter', name: '1号', role: '追击', spd: 1.0,
                 desc: '被动：<br>命中后 5 秒内 +15% 移速。<br><br>主动：<br>冷却：24 秒<br>冲刺 10 身位并造成 1 伤害，冲不过放倒的板子。'
@@ -1069,6 +1073,7 @@
                 else if (o && m.st === 2 && o.state !== 'broken') nightBreakPallet(o);
             }
             else if (m.ev === 'stun') { nightStunHunter(m.sec, null, true); }
+            else if (m.ev === 'c3') { if (a) nightC3Cast(a, true, { x: m.x, z: m.z, gy: m.gy, faceA: m.faceA }); }
             else if (m.ev === 'end') { endNightGame(m.text, true); }
         }
 
@@ -1192,7 +1197,7 @@
             nightPickAccent = accent;
             nightPickSel = null;
             let grid = document.getElementById('night-pick-grid'); grid.innerHTML = '';
-            (isHunter ? ['hunter', 'hmi', 'hgou', 'hmeow', 'h3', 'h4'] : ['cat', 'dog', 'meow', 'mi', 'c1', 'c2']).forEach(function (k) {
+            (isHunter ? ['hunter', 'hmi', 'hgou', 'hmeow', 'h3', 'h4'] : ['cat', 'dog', 'meow', 'mi', 'c1', 'c2', 'c3']).forEach(function (k) {
                 let ch = NIGHT_CHARS[k];
                 let card = document.createElement('div');
                 card.dataset.k = k;
@@ -1203,7 +1208,8 @@
                     nightPickSel = k; nightPickRender();
                 };
                 card.innerHTML = '<div style="font-size:15px; font-weight:bold; color:#333;">' + ch.name + '</div>' +
-                    '<div style="font-size:11px; color:' + accent + '; margin-top:2px;">' + ch.role + '</div>';
+                    '<div style="font-size:11px; color:' + accent + '; margin-top:2px;">' + ch.role + '</div>' +
+                    (charOwned('night', k) ? '' : '<div class="night-lock" style="font-size:11px; color:#e6a23c; margin-top:2px;">' + COIN_PRICE + ' 猫盾币</div>');
                 grid.appendChild(card);
             });
             nightPickRender();
@@ -1238,7 +1244,7 @@
                     '<span style="font-size:12px; color:' + accent + ';"> · ' + ch.role + '</span></div>' +
                     '<div style="font-size:12px; color:#555; line-height:1.9; margin:12px 0 16px;">' + ch.desc + '</div>' +
                     '<button onclick="nightPickChar(nightPickSel)" style="width:100%; margin:0; background:' + accent +
-                    '; color:#fff; border:none; padding:9px; font-size:15px; cursor:pointer;">用它开局</button>';
+                    '; color:#fff; border:none; padding:9px; font-size:15px; cursor:pointer;">' + (charOwned('night', nightPickSel) ? '用它开局' : COIN_PRICE + ' 猫盾币解锁并开局') + '</button>';
             }
 
             let team = document.getElementById('night-pick-team');
@@ -1263,6 +1269,10 @@
         }
 
         function nightPickChar(k) {
+            if (!charOwned('night', k)) {   // N1：7 号要 20 猫盾币解锁，买了才能开局
+                if (!charBuy('night', k)) return;
+                saveProgress();
+            }
             document.getElementById('night-pick').classList.add('hidden');
             gState.nightChar = k; settingsRemember('nightChar', k);
 

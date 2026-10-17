@@ -1342,7 +1342,7 @@
         }
 
         const EGG_RESET_VER = 2;
-        const EGG_PAIRS = { cat: 'hunter', dog: 'hgou', meow: 'hmeow', mi: 'hmi', c1: 'hgou', c2: 'hmi' };
+        const EGG_PAIRS = { cat: 'hunter', dog: 'hgou', meow: 'hmeow', mi: 'hmi', c1: 'hgou', c2: 'hmi', c3: 'hmeow' };
         const GOLD_EGG_NAMES = ['黄金书', '金苹果', '黄金圣杯', '黄金小鱼干', '黄金猫盾', '至臻猫盾', '外星信号接收器']
             .concat(HUNT_GEMS.map(function (g) { return g.n; }));   // 六颗宝石也算金色物品
         // 传说宝物：整个游戏里只有这三件，价值都在金色天花板（王权之心 100 万）之上

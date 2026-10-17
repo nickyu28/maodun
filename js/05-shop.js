@@ -265,9 +265,11 @@
             gState.mcoin = (gState.mcoin || 0) + n;
             saveProgress();
         }
+        const NIGHT_PAID = { c3: 1 };   // 惊魂夜里要花猫盾币解锁的角色（其余都是免费的）
         function charOwned(mode, key) {
             if (TEST_INFINITE_COINS) return true;
             if (mode === 'hunt') return true;                       // 寻宝队的角色全免费
+            if (mode === 'night' && !NIGHT_PAID[key]) return true;
             if (COIN_FREE[mode] && COIN_FREE[mode][key]) return true;
             return !!(gState.owned && gState.owned[mode] && gState.owned[mode][key]);
         }

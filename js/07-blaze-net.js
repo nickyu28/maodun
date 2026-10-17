@@ -274,7 +274,7 @@
                 blockCharges: SKILL.dogBlockCharges, blockRecharge: SKILL.dogBlockRecharge,
                 miCd: 0, meowCd: 0, boostT: 0, healBar: null, charge: null,
                 spikes: [], spikeCd: 0, tpCd: 0, tpIndex: 0, tpCast: null, tpBoostUntil: 0, c2Cast: null, c2Mark: null,
-                hookCd: 0, hookBoostUntil: 0, hookFx: null, sealCd: 0, throwCd: 0, rushT: 0, order: null, c1Cd: 0, c2Cd: 0,
+                hookCd: 0, hookBoostUntil: 0, hookFx: null, sealCd: 0, throwCd: 0, rushT: 0, order: null, c1Cd: 0, c2Cd: 0, c3Cd: 0, decoys: [],
                 spear: null, groundSpear: null, stunRing: null, rangeRing: null, spearRing: null,
                 hitBoost: 0, last: performance.now(), raf: null,
                 survivors: [], hunter: null
@@ -436,7 +436,7 @@
             if (a.xray) a.xray.position.set(a.p.x, fy, a.p.z);
         }
 
-        const NIGHT_BODY = { cat: 0x9b59b6, dog: 0xe67e22, mi: 0x16a085, meow: 0x3498db, c1: 0xec407a, c2: 0x26c6da };
+        const NIGHT_BODY = { cat: 0x9b59b6, dog: 0xe67e22, mi: 0x16a085, meow: 0x3498db, c1: 0xec407a, c2: 0x26c6da, c3: 0xffa726 };
         const HUNTER_H = 20, SURV_H = 11;
 
         const HUNTER_BODY = { hunter: 0xffd21e, hmi: 0x6ec6ff, hgou: 0x8bc34a, hmeow: 0xba68c8, h3: 0xff7043, h4: 0x9e9e9e };
@@ -589,7 +589,7 @@
             let keys = netSurvKeys(playerSide);
             let chars = gState.netChars || {};
 
-            let all = ['cat', 'dog', 'meow', 'mi', 'c1', 'c2'];
+            let all = ['cat', 'dog', 'meow', 'mi', 'c1', 'c2', 'c3'];
             let taken = keys.map(function (k) { return chars[k]; }).filter(Boolean);
             if (playerSide === 'survivor' && gState.nightChar) taken.push(gState.nightChar);
             let roster = all.filter(function (k) { return taken.indexOf(k) < 0; });

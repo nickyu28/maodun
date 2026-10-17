@@ -182,7 +182,7 @@
         function nightActorVaultTick(a, dt) {
             let v = a.vault;
             v.t += dt;
-            let u = Math.min(1, v.t / NIGHT.palletVault);
+            let u = Math.min(1, v.t / (NIGHT.palletVault * nightVaultMul(a)));
             let e = u * u * (3 - 2 * u);
             a.p.x = v.from.x + (v.to.x - v.from.x) * e;
             a.p.z = v.from.z + (v.to.z - v.from.z) * e;
@@ -428,7 +428,7 @@
 
         function nightAliveSurvivors() { return night.survivors.filter(function (a) { return !a.out && !a.escaped; }); }
 
-        const RESCUE_ORDER = { c1: 0, meow: 1, dog: 2, cat: 3, c2: 4, mi: 5 };
+        const RESCUE_ORDER = { c1: 0, meow: 1, dog: 2, cat: 3, c2: 4, mi: 5, c3: 6 };
 
         function nightRescueUrgency(v) {
             let u = 0;
@@ -577,6 +577,7 @@
 
         function nightHunterSees(h, a) {
             if (!a || a.out || a.escaped) return false;
+            if (nightInvisible(a)) return false;   // 7 号隐身中
             if (!nightSameLevel(h.p, a.p)) return false;
             let d = nightFlatDist(h.p, a.p);
             if (d > NIGHT.hunterSight * nightSkillK().sight) return false;
@@ -587,7 +588,7 @@
             return dot >= NIGHT.hunterFov;
         }
 
-        const HUNT_ORDER = { mi: 0, cat: 1, c2: 1, c1: 2, meow: 2, dog: 3 };
+        const HUNT_ORDER = { mi: 0, cat: 1, c2: 1, c1: 2, c3: 2, meow: 2, dog: 3 };
         function nightHuntScore(h, a) {
             let ord = HUNT_ORDER[a.charKey];
             if (ord === undefined) ord = 2;
@@ -684,14 +685,14 @@
                 }
             }
             if (lock && h.noHitT > NIGHT.hunterSwitchT) {
-                let others = standing.filter(function (a) { return a !== lock && nightHunterSees(h, a); });
+                let others = standing.concat(night.decoys).filter(function (a) { return a !== lock && nightHunterSees(h, a); });
                 if (others.length) {
                     lock = nightPickHuntTarget(h, others);
                     h.noHitT = 0; h.lostT = 0;
                 }
             }
             if (!lock) {
-                let vis = standing.filter(function (a) { return nightHunterSees(h, a); });
+                let vis = standing.concat(night.decoys).filter(function (a) { return nightHunterSees(h, a); });
                 lock = nightPickHuntTarget(h, vis);
                 if (lock) { h.lostT = 0; h.noHitT = 0; h.lastSeen = lock.p.clone(); }
             }
@@ -726,7 +727,8 @@
                 h.stuckT = 0; h.breakT = 0;
                 let aim = new THREE.Vector3().subVectors(tgt.p, h.p).setY(0).normalize();
                 nightSlashFx(h.p, aim, true);
-                nightDamage(tgt); h.recover = NIGHT.hitRecover; h.noHitT = 0; return;
+                if (tgt.decoy) nightPopDecoy(tgt); else nightDamage(tgt);
+                h.recover = NIGHT.hitRecover; h.noHitT = 0; return;
             }
 
             if (tryBreak(tgt.p)) return;
@@ -1206,6 +1208,11 @@
                     list.forEach(function (o) { if (o.progress > m2.progress) m2 = o; });
                     m2.c2Boost = true; a.skillCd = SKILL.c2BoostCd;
                 }
+                return;
+            }
+
+            if (a.charKey === 'c3') {   // 追捕者盯上我、或者已经贴脸了：留个假身，自己隐身
+                if ((h.lockOn === a && dh < 110) || dh <= NIGHT.atkRange + 25) { nightC3Cast(a); a.skillCd = SKILL.c3Cd; }
                 return;
             }
 
@@ -1739,7 +1746,7 @@
             let h = night.hunter;
             if (h.recover > 0 || h.spearLeft > 0 || night.action) return;
             let hit = null, bestD = Infinity;
-            nightAliveSurvivors().forEach(function (a) {
+            nightAliveSurvivors().concat(night.decoys).forEach(function (a) {
                 if (a.onChair || a.downed) return;
                 let d = nightFlatDist(h.p, a.p);
                 if (d < bestD && nightCanHit(h.p, a.p, NIGHT.atkRange)) { bestD = d; hit = a; }
@@ -1747,7 +1754,8 @@
             let aim = new THREE.Vector3(); camera.getWorldDirection(aim); aim.y = 0; aim.normalize();
             if (hit) {
                 nightSlashFx(h.p, aim, true);
-                nightDamage(hit); h.recover = NIGHT.hitRecover; nightFlashHunter('命中！');
+                if (hit.decoy) { nightPopDecoy(hit); h.recover = NIGHT.hitRecover; nightFlashHunter('打中的是假身！'); }
+                else { nightDamage(hit); h.recover = NIGHT.hitRecover; nightFlashHunter('命中！'); }
             } else { nightSlashFx(h.p, aim, false); h.recover = NIGHT.whiffRecover; nightFlashHunter('空刀'); }
         }
 
@@ -2187,6 +2195,7 @@
             c1StunRange: 48, c1StunTime: 3, c1BoostTime: 4, c1SaveCd: 45, c1TowardMul: 1.5,
             c2BoostMul: 1.5, c2BoostCd: 30, c2MarkMul: 1.1,
             c2CastPre: 0.5, c2CastPost: 0.5,
+            c3Cd: 30, c3DecoyTime: 3, c3InvisTime: 2, c3VaultMul: 0.7,
             meowWhiffRefund: 0.6,
             maoRushBoost: 1.15, maoRushTime: 5,
             hmiTpCd: 34,
@@ -2341,6 +2350,13 @@
                 return;
             }
 
+            if (night.char === 'c3') {
+                if (night.c3Cd > 0) { nightFlash('假身冷却 ' + night.c3Cd.toFixed(0) + 's'); return; }
+                nightC3Cast(me); night.c3Cd = SKILL.c3Cd;
+                nightFlash('假身！你隐身 ' + SKILL.c3InvisTime + ' 秒');
+                return;
+            }
+
             if (night.char === 'mi') {
                 if (nightMachinesLocked()) { nightFlash('矿机已经够了，去开门'); return; }
                 if (!night.repairing) { nightFlash('要先在修矿机时才能使用'); return; }
@@ -2352,6 +2368,52 @@
                 nightCheckMachine(night.repairing);
                 return;
             }
+        }
+
+        // ── N1 7 号（牵制）──
+        // 被动：翻板快 30%。主动：原地留一个假身 3 秒（追捕者的 AI 和真人看着跟真人一样，打它一下假身就没了），自己隐身 2 秒。
+        function nightVaultMul(actor) { return (actor && actor.charKey === 'c3') ? SKILL.c3VaultMul : 1; }
+        function nightInvisible(a) { return !!(a && a.invisUntil && performance.now() < a.invisUntil); }
+        function nightFade(mesh, op) {
+            if (!mesh) return;
+            mesh.traverse(function (o) {
+                let ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+                ms.forEach(function (m) { m.transparent = op < 1; m.opacity = op; m.needsUpdate = true; });
+            });
+        }
+        function nightFaceOf(a) {
+            if (a.isPlayer) { let d = new THREE.Vector3(); camera.getWorldDirection(d); return Math.atan2(d.z, d.x); }
+            return a.faceA || 0;
+        }
+        function nightC3Cast(a, fromNet, at) {
+            if (!night) return;
+            let pos = at ? new THREE.Vector3(at.x, a.p.y, at.z) : a.p.clone();
+            let gy = at ? (at.gy || 0) : (a.gy || 0), faceA = at && at.faceA !== undefined ? at.faceA : nightFaceOf(a), ck = a.charKey || 'c3';
+            let mesh = nightMakeBody(ck, false, a.isPlayer ? myFace() : aiRandomFace(), a.isPlayer ? gState.acc : aiRandomAcc());
+            let lb = nightMakeLabel(a.isPlayer ? (gState.id || '你') : (NIGHT_CHARS[ck] ? NIGHT_CHARS[ck].name : '7号'), NIGHT_BODY[ck] || 0xffa726, false, a.isPlayer ? myTitle() : aiRandomTitle());
+            lb.position.y = SURV_H + 8; mesh.add(lb);
+            mesh.position.set(pos.x, gy, pos.z); mesh.rotation.y = -faceA + Math.PI / 2; scene.add(mesh);
+            let decoy = { decoy: true, owner: a, p: pos, gy: gy, mesh: mesh, left: SKILL.c3DecoyTime, hp: a.hp || 2, charKey: ck, out: false, escaped: false, downed: false, onChair: false, key: 'decoy' };
+            night.decoys.push(decoy);
+            a.invisUntil = performance.now() + SKILL.c3InvisTime * 1000;
+            if (a.isPlayer && night.selfMesh) nightFade(night.selfMesh, 0.3);
+            let h = night.hunter;
+            if (h && h.lockOn === a) { h.lockOn = decoy; h.lastSeen = pos.clone(); h.lostT = 0; }   // 正追着它的，转头去追假身
+            if (netOn() && !fromNet && !a.remote) netEvent('c3', { key: a.key, x: +pos.x.toFixed(1), z: +pos.z.toFixed(1), gy: gy, faceA: +faceA.toFixed(2) });
+            return decoy;
+        }
+        function nightPopDecoy(d) { d.out = true; }
+        function nightC3Tick(dt) {
+            if (night.c3Cd > 0) night.c3Cd -= dt;
+            night.decoys = night.decoys.filter(function (d) {
+                d.left -= dt;
+                if (d.left <= 0 || d.out) { d.out = true; scene.remove(d.mesh); return false; }
+                return true;
+            });
+            night.survivors.forEach(function (a) {
+                if (nightInvisible(a)) { a.c3Hid = true; if (!a.isPlayer && a.mesh) a.mesh.visible = false; }
+                else if (a.c3Hid) { a.c3Hid = false; if (a.mesh) a.mesh.visible = true; if (a.isPlayer && night.selfMesh) nightFade(night.selfMesh, 1); }
+            });
         }
 
         function nightTryBlock(victim) {
@@ -2435,7 +2497,7 @@
 
                 if (night.side === 'survivor') {
                     night.healCd = 0; night.miCd = 0; night.meowCd = 0;
-                    night.c1Cd = 0; night.c2Cd = 0;
+                    night.c1Cd = 0; night.c2Cd = 0; night.c3Cd = 0;
                     night.blockCharges = SKILL.dogBlockCharges; night.blockRecharge = 0;
                     night.slamReady = 1;
                 } else {
@@ -2461,6 +2523,7 @@
             if (night.c1Cd > 0) night.c1Cd -= dt;
             if (night.c2Cd > 0) night.c2Cd -= dt;
             if (night.boostT > 0) night.boostT -= dt;
+            nightC3Tick(dt);
 
             if (night.blockCharges < SKILL.dogBlockCharges) {
                 night.blockRecharge -= dt;
@@ -2961,7 +3024,7 @@
                 }
                 else if (act.type === 'vault') {
 
-                    let u = Math.min(1, act.t / (NIGHT.palletVault * nightActMul(night.survivors[0])));
+                    let u = Math.min(1, act.t / (NIGHT.palletVault * nightActMul(night.survivors[0]) * nightVaultMul(night.survivors[0])));
                     let e = u * u * (3 - 2 * u);
                     camera.position.x = act.from.x + (act.to.x - act.from.x) * e;
                     camera.position.z = act.from.z + (act.to.z - act.from.z) * e;
@@ -3209,6 +3272,7 @@
                             : (c.phase === 'pre' ? '　起手中…' : '　收手中…');
                     } else sk += '　提速 ' + (night.c2Cd > 0 ? night.c2Cd.toFixed(0) + 's' : '就绪');
                 }
+                if (night.char === 'c3') sk += '　假身 ' + (night.c3Cd > 0 ? night.c3Cd.toFixed(0) + 's' : '就绪') + (nightInvisible(me) ? '（隐身中）' : '');
                 if (night.char === 'mi') sk += '　爆发 ' + (night.miCd > 0 ? night.miCd.toFixed(0) + 's' : '+' + Math.max(SKILL.miBurstMin, night.done * SKILL.miBurstPer));
                 if (me.tempHpUntil && performance.now() < me.tempHpUntil) sk += '　临时生命 ' + ((me.tempHpUntil - performance.now()) / 1000).toFixed(0) + 's';
                 if (nightMyFish(me).length > 0) sk += '　小鱼干 ' + (me.fishEaten || 0) + '/' + SKILL.fishCount + '（你的还剩 ' + nightMyFish(me).length + ' 条）';
@@ -3279,7 +3343,7 @@
             else if (night.stun > 0) show = '眩晕中 ' + night.stun.toFixed(1) + 's';
             else if (night.action) {
                 let a = night.action;
-                let need = a.type === 'vault' ? NIGHT.palletVault
+                let need = a.type === 'vault' ? NIGHT.palletVault * nightVaultMul(night.survivors[0])
                     : a.type === 'rescue' ? (night.char === 'meow' ? SKILL.meowRescueTime : NIGHT.rescueTime)
                         : a.type === 'heal' ? SKILL.healTime : NIGHT.palletBreak;
                 let label = a.type === 'vault' ? '翻越板子 ' : (a.type === 'rescue' ? '救援队友 ' : (a.type === 'heal' ? '治疗队友 ' : '破坏板子 '));
