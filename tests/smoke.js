@@ -3404,6 +3404,80 @@ async function enterExit(tab, key) {
             report('LB9 配方清单（现有 X / 需要 Y 红绿、筛现在能做的）、手册 5 页并标"用在哪些配方里"、仓库里能直接开、同名叠放', bad.length === 0, bad.join(' / '));
         }
 
+
+        if (want('LB10')) {
+            // LB10 核素表自检：代码里的核素和 docs/chem.md 的表逐行对得上；每个 (Z,N) 唯一；衰变产物要么在表里要么 Z>26；半衰期 >1000 年的都不衰变
+            const bad = [];
+            const T = await LBTAB();
+            const md = fs.readFileSync(path.join(ROOT, 'docs', 'chem.md'), 'utf8');
+            const sec = md.slice(md.indexOf('## 1. 核素表'), md.indexOf('## 2. 聚变表'));
+            const rows = [...sec.matchAll(/^\| (\d+) \| (\d+) \| ([^|]+?) \| (是|否) \| ([^|]*)\|/gm)].map((m) => ({ z: +m[1], n: +m[2], name: m[3].trim(), stable: m[4] === '是', hl: m[5].trim() }));
+            const code = JSON.parse(await T.eval(`JSON.stringify((function(){
+                const stable = [], unst = [], probs = [], keys = {};
+                Object.keys(LAB_STABLE).forEach(function (z) { LAB_STABLE[z].forEach(function (a) { stable.push([+z, a - z, labAtomName(+z, a - z)]); }); });
+                LAB_UNST.forEach(function (u) {
+                    unst.push([u[0], u[1], labAtomName(u[0], u[1]), u[2] > LAB_CUTOFF]);
+                    // 衰变产物：主分支按方式算，再加第二分支
+                    const pz = u[3] === 'b-' ? u[0] + 1 : u[0] - 1, pn = u[3] === 'b-' ? u[1] - 1 : u[1] + 1;
+                    const prods = [[pz, pn]].concat(LAB_UNST_ALT[u[0] + ':' + u[1]] || []);
+                    prods.forEach(function (q) { if (!(q[0] > 26 || labAtomOK(q[0], q[1]))) probs.push(labAtomName(u[0], u[1]) + ' → ' + q.join(',')); });
+                    if (u[0] < 1 || u[1] < 0) probs.push('坏行 ' + u.join());
+                    const k = 'a:' + u[0] + ':' + u[1]; if (u[2] > LAB_CUTOFF && LAB_DECAY[k]) probs.push(labAtomName(u[0], u[1]) + ' 比 1000 年长却会衰变'); if (u[2] <= LAB_CUTOFF && !LAB_DECAY[k]) probs.push(labAtomName(u[0], u[1]) + ' 不到 1000 年却不衰变');
+                });
+                const all = stable.concat(unst), seen = {}, dup = [];
+                all.forEach(function (r) { const k = r[0] + ':' + r[1]; if (seen[k]) dup.push(r[2]); seen[k] = 1; });
+                const bigZ = all.filter(function (r) { return r[0] > 26; }).length;
+                return { stable: stable, unst: unst, probs: probs, dup: dup, bigZ: bigZ };
+            })())`));
+            if (code.probs.length) bad.push('衰变产物不在表里（也不是 Z>26）／半衰期规则不对：' + code.probs.join('；'));
+            if (code.dup.length) bad.push('(Z,N) 重复：' + code.dup.join(','));
+            if (code.bigZ) bad.push('表里有 Z>26 的行');
+            // 代码和文档逐行对：稳定的
+            const docStable = rows.filter((r) => r.stable).map((r) => r.z + ':' + r.n).sort(), codeStable = code.stable.map((r) => r[0] + ':' + r[1]).sort();
+            const only = (a, b) => a.filter((x) => b.indexOf(x) < 0);
+            if (only(docStable, codeStable).length || only(codeStable, docStable).length) bad.push('稳定核素文档和代码不一致：文档多 ' + only(docStable, codeStable) + ' 代码多 ' + only(codeStable, docStable));
+            const docUnst = rows.filter((r) => !r.stable && r.z > 0).map((r) => r.z + ':' + r.n).sort(), codeUnst = code.unst.map((r) => r[0] + ':' + r[1]).sort();
+            if (only(docUnst, codeUnst).length || only(codeUnst, docUnst).length) bad.push('不稳定核素文档和代码不一致：文档多 ' + only(docUnst, codeUnst) + ' 代码多 ' + only(codeUnst, docUnst));
+            // 名字一致；"当作不衰变"那几行和代码里的 >1000 年一致
+            rows.filter((r) => r.z > 0).forEach((r) => { const c = code.stable.concat(code.unst).filter((q) => q[0] === r.z && q[1] === r.n)[0]; if (c && c[2] !== r.name) bad.push('名字不一致 ' + r.name + ' / ' + c[2]); });
+            code.unst.forEach((u) => { const r = rows.filter((q) => q.z === u[0] && q.n === u[1])[0]; if (r && /当作不衰变/.test(r.hl) !== u[3]) bad.push(u[2] + ' 的“当作不衰变”文档和代码不一致'); });
+            // 作者这次要求的几行
+            ['23:27', '20:28', '24:26'].forEach((k) => { if (codeStable.indexOf(k) < 0) bad.push('稳定表缺 ' + k); });
+            ['8:6', '13:15', '15:15', '14:17', '17:21', '18:19', '18:21', '18:23', '19:23', '20:25', '21:25', '23:25', '23:26'].forEach((k) => { if (codeUnst.indexOf(k) < 0) bad.push('不稳定表缺 ' + k); });
+            const ar39 = await T.eval(`!!LAB_DECAY['a:18:21'] && LAB_DECAY['a:18:21'].T < LAB_CUTOFF`);
+            if (!ar39) bad.push('氩-39（269 年）应该按真实半衰期衰变');
+            if (!/氩-36（约 98%）／硫-36（约 2%）/.test(sec)) bad.push('氯-36 的两个分支没写进文档');
+            // 聚变表里没有铀-235，天然铀在
+            const fus = md.slice(md.indexOf('## 2. 聚变表'), md.indexOf('## 3. 价值表'));
+            if (/\| 92 \| 143 \|/.test(fus)) bad.push('聚变表里还有铀-235');
+            if (!/\| 92 \| 146 \|/.test(fus)) bad.push('聚变表里没有天然铀');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('LB10 核素表自检：和 chem.md 逐行对、(Z,N) 唯一、衰变产物在表里或 Z>26、半衰期 >1000 年不衰变；聚变表没有铀-235', bad.length === 0, bad.join(' / ') + ' （文档 ' + rows.length + ' 行）');
+        }
+
+        if (want('LB11')) {
+            // LB11 中子：粒子包里的中子不衰变；散放在地上、台面、身上、仓库里的零散中子按 611 秒半衰期衰变
+            const bad = [];
+            const T = await LBTAB();
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labSt().lockUntil = 0; labSt().box = {}; true;`);
+            // 仓库箱：离线 10 亿秒，随机数 0 = 该衰变的全衰变；粒子包不动
+            const bx = JSON.parse(await T.eval(`(function(){ let L = labSt(); L.box = { 'pack:2:2': 3, n: 20, 'a:2:2': 1 }; L.decayAt = 1000; labBoxCatchUp(1000 + 1e12, function () { return 0; }); return JSON.stringify(L.box); })()`));
+            if (bx['pack:2:2'] !== 3 || bx.n !== undefined || bx.p !== 20 || bx.e !== 20) bad.push('仓库箱里：粒子包不该变、零散中子该全衰变 ' + JSON.stringify(bx));
+            await LBENTER(T);
+            await T.eval(`labClear(); lab.bag = {}; lab.stove.items = {}; for (let i = 0; i < 80; i++) labSpawn('n', -12 + (i % 20) * 1.2, -7 + Math.floor(i / 20) * 1.6); labGive('pack:2:2', 2); labGive('n', 60); lab.stove.items = { n: 40 }; true;`);
+            await T.eval(`labAdvance(611, 1); true;`);   // 正好一个半衰期，每个中子约一半衰变
+            const r = JSON.parse(await T.eval(`JSON.stringify({ ground: labCount('n'), bagN: lab.bag.n || 0, pack: lab.bag['pack:2:2'] || 0, stoveN: lab.stove.items.n || 0, t: lab.t })`));
+            if (r.pack !== 2) bad.push('粒子包里的中子不该衰变（包本身没了？）' + JSON.stringify(r));
+            if (!(r.ground >= 26 && r.ground <= 54)) bad.push('地上 80 个中子过一个半衰期应该剩约 40，实际 ' + r.ground);
+            if (!(r.bagN >= 17 && r.bagN <= 43)) bad.push('身上 60 个中子应该剩约 30，实际 ' + r.bagN);
+            if (!(r.stoveN >= 10 && r.stoveN <= 30)) bad.push('台面上 40 个中子应该剩约 20，实际 ' + r.stoveN);
+            if (await T.eval(`LAB_NEUTRON_T`) !== 611) bad.push('自由中子半衰期不是 611 秒');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB11 中子：粒子包里的不衰变；地上、台面、身上、仓库里零散的按 611 秒半衰期衰变', bad.length === 0, bad.join(' / '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
