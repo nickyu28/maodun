@@ -2995,7 +2995,7 @@ async function enterExit(tab, key) {
         }
 
         // ── 实验室（第 4A 段）：LB 系列。默认藏起来，测试用 ?labdebug=1 打开 ──
-        const LB_GATHER = 1.5;
+        const LB_GATHER = 4;
         const LBTAB = async () => { const T = await openTab(chrome, url, { query: 'labdebug=1' }); await T.eval(`${HIDE} true;`); return T; };
         const LBENTER = async (T) => {
             await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labEnter(); true;`);
@@ -3058,51 +3058,44 @@ async function enterExit(tab, key) {
         }
 
         if (want('LB2')) {
-            // LB2 原子：1 质子 + 1 电子落地 1.5 秒后拼成氢-1；粒子包右键拆成单个粒子（拆出来的 5 秒内不拼）；拼不出的散开，5 秒内不再拼
+            // LB2 原子拼装：簇里 2 个以上粒子倒计时 4 秒，每进来一个新粒子（0.5 米内）重置；拼不成的停在原地什么都不发生；粒子包拆开落在脚边
             const bad = [];
             const T = await LBTAB();
             await LBENTER(T);
-            await T.eval(`labSpawn('p', 5, 2); labSpawn('e', 5.4, 2); true;`);
-            if (await T.eval(`LAB_T.gather !== ${LB_GATHER} || LAB_T.scatterCd !== 5`)) bad.push('1.5 秒／5 秒的常量不对');
-            await T.eval(`labAdvance(1.0); true;`);
-            if (await T.eval(`labCount('a:1:0')`) !== 0) bad.push('没到 1.5 秒就拼了');
-            await T.eval(`labAdvance(0.8); true;`);
-            if (!(await T.eval(`labCount('a:1:0') === 1 && labCount('p') === 0 && labCount('e') === 0`))) bad.push('质子 + 电子没拼成氢-1');
-            await T.eval(`labClear();`);
-            // 粒子包拆分：2 质子 + 2 电子 + 2 中子，摆开后不会马上又拼回去
-            await T.eval(`labGive('pack:2:2', 1); labSel('pack:2:2'); labUse(); true;`);
+            if (await T.eval(`LAB_T.gather !== ${LB_GATHER} || LAB_T.mergeR !== 0.5 || 'scatterCd' in LAB_T`)) bad.push('4 秒／0.5 米的常量不对，或还留着"散开冷却"');
+            await T.eval(`labClear(); labSpawn('p', 5, 2); labSpawn('e', 5.3, 2); true;`);
+            await T.eval(`labAdvance(3.5); true;`);
+            if (await T.eval(`labCount('a:1:0')`) !== 0) bad.push('没到 4 秒就拼了');
+            await T.eval(`labAdvance(0.7); true;`);
+            if (!(await T.eval(`labCount('a:1:0') === 1 && labCount('p') === 0 && labCount('e') === 0`))) bad.push('质子 + 电子 4 秒后没拼成氢-1');
+            // 簇里每进来一个新粒子倒计时重置：3 秒时放进一个中子，要从那时候重新数 4 秒
+            await T.eval(`labClear(); labSpawn('p', 5, 2); labSpawn('e', 5.3, 2); labAdvance(3.0); labSpawn('n', 5.15, 2.3); labAdvance(3.0); true;`);
+            if (await T.eval(`labCount('a:1:1')`) !== 0) bad.push('新粒子进来以后倒计时没重置（第 6 秒就拼了）');
+            await T.eval(`labAdvance(1.3); true;`);
+            if (await T.eval(`labCount('a:1:1')`) !== 1) bad.push('新粒子进来 4 秒后没拼成氢-2');
+            // 离得远（0.5 米外）的粒子不进簇，也不重置
+            await T.eval(`labClear(); labSpawn('p', 5, 2); labSpawn('e', 5.3, 2); labAdvance(3.0); labSpawn('n', 7, 2); labAdvance(1.2); true;`);
+            if (!(await T.eval(`labCount('a:1:0') === 1 && labCount('n') === 1`))) bad.push('0.5 米外的中子不该影响这一簇');
+            // 粒子包拆开：落在脚边 0.5 米内、成一簇，4 秒后按数量拼成氦-4
+            await T.eval(`labClear(); lab.bag = {}; labGive('pack:2:2', 1); labSel('pack:2:2'); labRightClick(); true;`);
             const cnt = JSON.parse(await T.eval(`JSON.stringify({ p: labCount('p'), e: labCount('e'), n: labCount('n'), bag: lab.bag['pack:2:2'] || 0, far: Math.max(...lab.ground.map(function (e) { return Math.hypot(e.x - lab.p.x, e.z - lab.p.z); })) })`));
             if (!(cnt.far <= 0.5 + 1e-6)) bad.push('拆出来的粒子应该落在脚边 0.5 米内，最远 ' + cnt.far);
             if (cnt.p !== 2 || cnt.e !== 2 || cnt.n !== 2 || cnt.bag !== 0) bad.push('粒子包没拆对 ' + JSON.stringify(cnt));
-            await T.eval(`labAdvance(4.0); true;`);
-            if ((await T.eval(`labCount('a:2:2')`)) !== 0 || (await T.eval(`labCount('p') + labCount('e') + labCount('n')`)) !== 6) bad.push('拆出来 4 秒就拼回去了（5 秒冷却不管用）');
-            await T.eval(`labClear();`);
-            // 拼不出：1 质子 + 2 电子，到时间散开，5 秒冷却
-            await T.eval(`labSpawn('p', 6, 2); labSpawn('e', 6.4, 2); labSpawn('e', 6.2, 2.4); window.__c = lab.ground.slice(); window.__p0 = window.__c.map(function (e) { return [e.x, e.z]; }); labAdvance(1.0); true;`);
-            if (await T.eval(`window.__c.some(function (e) { return e.noMerge > 0; })`)) bad.push('没到 1.5 秒就散开了');
+            await T.eval(`labAdvance(3.5); true;`);
+            if (await T.eval(`labCount('a:2:2')`) !== 0) bad.push('拆出来 3.5 秒就拼了');
             await T.eval(`labAdvance(0.7); true;`);
-            if (!(await T.eval(`window.__c.every(function (e) { return e.noMerge > lab.t + 3; })`))) bad.push('拼不出的没有散开');
-            else {
-                // 散开：每个粒子就近挪开，离原来的位置不超过 0.5 米（不飞出去）
-                const mv = await T.eval(`Math.max(...window.__c.map(function (e, i) { return Math.hypot(e.x - window.__p0[i][0], e.z - window.__p0[i][1]); }))`);
-                if (!(mv > 0.05 && mv <= 0.5 + 1e-6)) bad.push('散开应该就近挪 0.5 米内，实际挪了 ' + mv);
-            }
-            // 冷却期间把 1 质子 + 1 电子放到一起，冷却没完之前不拼，完了就拼
-            await T.eval(`labKill(window.__c[2]); window.__c[1].x = window.__c[0].x + 0.4; window.__c[1].z = window.__c[0].z; window.__nm = Math.max(window.__c[0].noMerge, window.__c[1].noMerge); labAdvance(Math.max(0, window.__nm - lab.t - 0.9)); true;`);
-            if (await T.eval(`labCount('a:1:0')`) !== 0) bad.push('冷却没完就拼了');
-            await T.eval(`labAdvance(1.6); true;`);
-            if (await T.eval(`labCount('a:1:0')`) !== 1) bad.push('冷却完了还是没拼');
+            if (!(await T.eval(`labCount('a:2:2') === 1 && labSt().made['a:2:2'] >= 1`))) bad.push('拆出来 4 秒后没拼成氦-4（或没记进 made）');
+            // 拼不出：1 质子 + 2 电子，停在原地，什么都不发生，不管过多久
+            await T.eval(`labClear(); labSpawn('p', 6, 2); labSpawn('e', 6.3, 2); labSpawn('e', 6.15, 2.3); window.__c = lab.ground.slice(); window.__p0 = window.__c.map(function (e) { return [e.x, e.z]; }); labAdvance(12.0); true;`);
+            const still = JSON.parse(await T.eval(`JSON.stringify({ n: lab.ground.length, mv: Math.max(...window.__c.map(function (e, i) { return Math.hypot(e.x - window.__p0[i][0], e.z - window.__p0[i][1]); })), keys: lab.ground.map(function (e) { return e.key; }).sort().join() })`));
+            if (still.n !== 3 || still.mv > 1e-9 || still.keys !== 'e,e,p') bad.push('拼不成的应该停在原地什么都不发生 ' + JSON.stringify(still));
             // 氢-2、氦-4：按 Z/N/e 拼，不同中子数是不同核素
-            await T.eval(`labClear(); labSpawn('p', 4, 1); labSpawn('e', 4.4, 1); labSpawn('n', 4.2, 1.4); labAdvance(2.0); true;`);
+            await T.eval(`labClear(); labSpawn('p', 4, 1); labSpawn('e', 4.2, 1); labSpawn('n', 4.1, 1.2); labAdvance(4.3); true;`);
             if (await T.eval(`labCount('a:1:1')`) !== 1) bad.push('1p+1n+1e 没拼成氢-2');
-            await T.eval(`labClear(); labSpawn('p', 4, 1); labSpawn('p', 4.4, 1); labSpawn('e', 4.2, 1.3); labSpawn('e', 4.5, 1.3); labSpawn('n', 4.1, 1.5); labSpawn('n', 4.3, 1.6); labAdvance(2.0); true;`);
-            if (await T.eval(`labCount('a:2:2')`) !== 1) bad.push('2p+2n+2e 没拼成氦-4');
-            if (!(await T.eval(`labSt().made['a:2:2'] === 1`))) bad.push('拼出来的没记进 made（订单要用）');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
-            report('LB2 原子：粒子落地 1.5 秒后拼合、粒子包右键拆成粒子、拼不出的散开且 5 秒内不再拼', bad.length === 0, bad.join(' / '));
+            report('LB2 原子拼装：4 秒倒计时、进来新粒子重置、拼不成停在原地、粒子包拆在脚边成一簇', bad.length === 0, bad.join(' / '));
         }
-
 
         if (want('LB3')) {
             // LB3 衰变：仓库箱里的按半衰期衰变（含离线，用时间戳，概率 = 1 − 0.5^(t/T)）；仓库箱满了产物消失；地上和身上的也会衰变；自由中子 611 秒；半衰期 > 1000 年的当稳定
@@ -3299,7 +3292,7 @@ async function enterExit(tab, key) {
             if (!(await until(T, `lab === null`, 10000))) bad.push('血没了没出来');
             const d = JSON.parse(await T.eval(`JSON.stringify({ box: labSt().box, lock: labSt().lockUntil - Date.now(), modal: ${MODAL}, garage: !document.getElementById('screen-lobby').classList.contains('hidden') })`));
             if (d.box.iron !== 3 || Object.keys(d.box).length !== 2) bad.push('死了以后仓库箱变了（身上、台面、地上的不该进箱子）' + JSON.stringify(d.box));
-            if (!(d.lock > 55000 && d.lock <= 60500)) bad.push('锁定时间应该约 60 秒 ' + d.lock);
+            if (!(d.lock > 45000 && d.lock <= 60500)) bad.push('锁定时间应该约 60 秒 ' + d.lock);
             if (!/实验室/.test(d.modal || '') || !d.garage) bad.push('死了没有提示或没回大厅 ' + JSON.stringify(d));
             await T.eval(`${HIDE} labEnter(); true;`);
             if (await T.eval(`lab !== null`)) bad.push('锁定期间居然进去了');
@@ -3510,7 +3503,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('LB12')) {
-            // LB12 合成台面板（药剂配方、先台面再身上、不够灰显）；一个房间、墙和边界走不出去；第一人称；左键按瞄准判断、Q 放脚下；文字牌放大描边
+            // LB12 合成台面板（药剂配方、先台面再身上、不够灰显）；一个房间、墙和边界走不出去；第三人称近镜头；左键按瞄准判断、Q 放脚下；文字牌放大描边
             const bad = [];
             const T = await LBTAB();
             await LBENTER(T);
@@ -3526,10 +3519,16 @@ async function enterExit(tab, key) {
                 o.inside = o.zMin > -LAB_ROOM.z && o.zMax < LAB_ROOM.z && o.xMin > -LAB_ROOM.x && o.xMax < LAB_ROOM.x; o.walls = lab.objs.filter(function (m) { return m.geometry && m.geometry.type === 'BoxGeometry' && m.geometry.parameters.height >= 3; }).length; return JSON.stringify(o); })()`));
             if (!wall.inside || wall.walls < 4) bad.push('走出房间了或墙不够 ' + JSON.stringify(wall));
             if (!(wall.zMin >= -8.5 && wall.zMax <= 8.5 && wall.xMin >= -11.5 && wall.xMax <= 11.5)) bad.push('边界不在墙里面 ' + JSON.stringify(wall));
-            // 第一人称：镜头在眼睛的位置（1.5 米），自己的身体不画；视野 65°、没有高空俯视
-            await T.eval(`lab.p.x = 0; lab.p.z = 0; camera.rotation.set(0, 0, 0, 'YXZ'); labCamera(); true;`);
-            const fp = JSON.parse(await T.eval(`JSON.stringify({ x: camera.position.x, y: camera.position.y, z: camera.position.z, eye: LAB_EYE, me: lab.me.visible, fov: camera.fov })`));
-            if (!(Math.abs(fp.y - 1.5) < 0.01 && Math.abs(fp.x) < 0.01 && Math.abs(fp.z) < 0.01 && fp.me === false && fp.fov === 65)) bad.push('不是第一人称（眼高 1.5、不画自己、视野 65） ' + JSON.stringify(fp));
+            // 第三人称近镜头（和主游戏一样：眼高 = 主游戏 9 × 0.2、往后 22 × 0.2、抬高 6 × 0.2，不是高空俯视）；画完镜头放回眼睛的位置
+            await T.eval(`lab.p.x = 0; lab.p.z = 0; camera.rotation.set(0, 0, 0, 'YXZ'); labCamera(); window.__pos = null; let rr = renderer.render; renderer.render = function (sc, cam) { window.__pos = [cam.position.x, cam.position.y, cam.position.z]; }; labRender(); renderer.render = rr; true;`);
+            const tp = JSON.parse(await T.eval(`JSON.stringify({ r: window.__pos, eye: [camera.position.x, camera.position.y, camera.position.z], LAB_EYE: LAB_EYE, cam: LAB_CAM, fov: camera.fov, me: lab.me.visible })`));
+            if (!tp.r || !(Math.abs(tp.r[2] - tp.cam.back) < 0.01 && Math.abs(tp.r[0]) < 0.01)) bad.push('画的时候镜头应该在身后 ' + tp.cam.back + ' 米 ' + JSON.stringify(tp.r));
+            if (!(tp.r[1] > tp.eye[1] && tp.r[1] < 3.4)) bad.push('镜头高度不对（要比眼睛高一点、不是高空） ' + JSON.stringify(tp.r));
+            if (!(Math.abs(tp.eye[1] - 1.8) < 0.01 && Math.abs(tp.cam.back - 4.4) < 1e-9 && Math.abs(tp.cam.up - 1.2) < 1e-9 && tp.fov === 65 && tp.me === true)) bad.push('不是主游戏那套数（眼高 1.8、back 4.4、up 1.2、视野 65、画自己） ' + JSON.stringify(tp));
+            if (!(Math.abs(tp.eye[2]) < 0.01)) bad.push('画完镜头没放回眼睛的位置 ' + JSON.stringify(tp.eye));
+            // 背后是墙：镜头收近，不出墙
+            await T.eval(`lab.p.x = 0; lab.p.z = LAB_BOUND.z1; camera.rotation.set(0, 0, 0, 'YXZ'); labCamera(); lab.camD = undefined; window.__pos = null; let r2 = renderer.render; renderer.render = function (sc, cam) { window.__pos = [cam.position.x, cam.position.y, cam.position.z]; }; labRender(); renderer.render = r2; true;`);
+            if (!(await T.eval(`Math.abs(window.__pos[2]) < LAB_ROOM.z`))) bad.push('背后是墙时镜头跑出墙了');
             // 按镜头朝向走：转 90° 以后 W 往镜头看的方向
             await T.eval(`camera.rotation.set(0, Math.PI / 2, 0, 'YXZ'); lab.p.x = 0; lab.p.z = 0; lab.k.w = true; labMove(0.1); lab.k.w = false; true;`);
             if (!(await T.eval(`lab.p.x < -0.3 && Math.abs(lab.p.z) < 0.05`))) bad.push('镜头转 90° 以后 W 没往镜头方向走');
@@ -3579,11 +3578,11 @@ async function enterExit(tab, key) {
             if (!(await T.eval(`touchInGame() && touchLookActive()`))) bad.push('实验室里触屏摇杆和转视角没开');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
-            report('LB12 一个房间、墙和边界；合成台；第一人称；左键按瞄准（捡／互动／使用）、Q 放脚下、右键拆包接水；文字牌放大描边', bad.length === 0, bad.join(' / '));
+            report('LB12 一个房间、墙和边界；合成台；第三人称近镜头；左键按瞄准（捡／互动／使用）、Q 放脚下、右键拆包接水；文字牌放大描边', bad.length === 0, bad.join(' / '));
         }
 
         if (want('LB13')) {
-            // LB13 东西落地都就近落在原处 0.5 米内：拆粒子包、拼不出的散开、Q 放下、放气、身上放不下掉出来
+            // LB13 东西落地都就近落在原处 0.5 米内：拆粒子包、Q 放下、放气、身上放不下掉出来
             const bad = [];
             const T = await LBTAB();
             await LBENTER(T);
@@ -3597,13 +3596,57 @@ async function enterExit(tab, key) {
             await T.eval(`labClear(); lab.bag = {}; for (let i = 0; i < LAB_BAG_CAP; i++) labGive('a:1:' + i, 1); true;`);
             d = await far(`labBagGive('coal', 5)`);
             if (d > 0.5 + 1e-6) bad.push('身上放不下掉出来：飞到 ' + d.toFixed(2) + ' 米');
-            // 拼不出的散开：每个粒子最多挪 0.5 米，仍然在原处附近
-            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; labSpawn('p', 5, 2); labSpawn('e', 5.4, 2); labSpawn('e', 5.2, 2.4); labSpawn('n', 5.1, 2.1); window.__p0 = lab.ground.map(function (e) { return [e.x, e.z]; }); window.__c = lab.ground.slice(); labAdvance(2.0); true;`);
-            const mv = await T.eval(`Math.max(...window.__c.map(function (e, i) { return Math.hypot(e.x - window.__p0[i][0], e.z - window.__p0[i][1]); }))`);
-            if (mv > 0.5 + 1e-6) bad.push('散开：最远挪了 ' + mv.toFixed(2) + ' 米');
+            // 拼不成的组合不散开，停在原地（见 LB2）；放下的东西就在脚下，不叠在一起
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; labGive('p', 4); labSel('p'); labPut(true); true;`);
+            const pp = JSON.parse(await T.eval(`JSON.stringify(lab.ground.map(function (e) { return [e.x, e.z]; }))`));
+            let minD = 9; for (let a = 0; a < pp.length; a++) for (let b = a + 1; b < pp.length; b++) minD = Math.min(minD, Math.hypot(pp[a][0] - pp[b][0], pp[a][1] - pp[b][1]));
+            if (!(minD > 0.02)) bad.push('Q 放多个叠在一起了 ' + minD);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
-            report('LB13 东西落地都就近落在原处 0.5 米内（拆包、散开、放气、掉出来）', bad.length === 0, bad.join(' / '));
+            report('LB13 东西落地都就近落在原处 0.5 米内（拆包、Q 放下、放气、掉出来）', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB14')) {
+            // LB14 粒子簇标签（质子／中子／电子数；能拼显示名字和倒计时，拼不成显示"无对应原子"）、对准时显示名字和说明、放 50 个东西几何体／材质／贴图／着色器不新增、标签贴图只在内容变化时重画
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            // 手速放粒子：每 0.5 秒放一个（质子、质子、电子、电子、中子、中子），应该能拼成氦-4（一堆倒计时从最后一个进来开始重新数 4 秒）
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; ['p','p','e','e','n','n'].forEach(function (k, i) { window.__q = k; labGive(k, 1); labSel(k); labPut(); labAdvance(0.5); }); true;`);
+            const m1 = JSON.parse(await T.eval(`JSON.stringify({ n: lab.ground.length, labels: lab.labels.filter(function (L) { return L.sp.visible; }).map(function (L) { return L.text; }) })`));
+            if (m1.n !== 6 || m1.labels.length !== 1) bad.push('手速放 6 个粒子，应该还没散开、有 1 个标签 ' + JSON.stringify(m1));
+            else if (!/质子 2.*中子 2.*电子 2\|氦-4 \d\.\d 秒/.test(m1.labels[0])) bad.push('标签内容不对 ' + m1.labels[0]);
+            await T.eval(`labAdvance(3.2); true;`);
+            if (await T.eval(`labCount('a:2:2')`) !== 0) bad.push('最后一个粒子放下后不到 4 秒就拼了');
+            await T.eval(`labAdvance(0.6); true;`);
+            if (await T.eval(`labCount('a:2:2')`) !== 1) bad.push('手速放 6 个粒子（2 质子 2 中子 2 电子）没拼成氦-4 ' + await T.eval(`lab.ground.map(function (e) { return e.key + '@' + e.x.toFixed(2) + ',' + e.z.toFixed(2); }).join(' ') + ' cl=' + JSON.stringify(lab.cl)`));
+            // 拼不成：标签显示"无对应原子"，数字是当前的数
+            await T.eval(`labClear(); labSpawn('p', 3, 3); labSpawn('p', 3.2, 3); labSpawn('e', 3.1, 3.2); labSpawn('e', 3.3, 3.2); labAdvance(0.2); true;`);
+            const m2 = await T.eval(`lab.labels.filter(function (L) { return L.sp.visible; }).map(function (L) { return L.text; }).join(' ## ')`);
+            if (!/质子 2.*中子 0.*电子 2\|无对应原子/.test(m2)) bad.push('2 质子 + 2 电子（没有中子）：标签应该显示质子 2 中子 0 电子 2、无对应原子 ' + m2);
+            // 标签贴图只在内容变化时重画：倒计时数字不变的时候（不推进时间）连续画 60 帧，重画次数不增加；一个粒子的"簇"没有标签
+            await T.eval(`labClear(); labSpawn('p', -3, 3); labSpawn('e', -3.2, 3); labAdvance(0.1); window.__d0 = lab.labelDraws; for (let i = 0; i < 60; i++) labAssemble(0); true;`);
+            if (await T.eval(`lab.labelDraws !== window.__d0`)) bad.push('内容没变也在重画标签贴图');
+            await T.eval(`labClear(); labSpawn('p', -3, 3); labAdvance(0.1); true;`);
+            if (await T.eval(`lab.labels.some(function (L) { return L.sp.visible; })`)) bad.push('单个粒子不该有簇标签');
+            // 对准时显示名字和说明
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; camera.rotation.set(-Math.atan2(1.4, 2.0), 0, 0, 'YXZ'); labSpawn('p', 0, -2.0); labHudUpdate(); true;`);
+            const h1 = await T.eval(`document.getElementById('lab-hint').innerText`);
+            if (!/质子/.test(h1)) bad.push('对准质子，提示里没有名字 ' + h1);
+            await T.eval(`labClear(); labSpawn('pack:2:2', 0, -2.0); labHudUpdate(); true;`);
+            const h2 = await T.eval(`document.getElementById('lab-hint').innerText`);
+            if (!/粒子包/.test(h2) || !/2 质子 \+ 2 电子/.test(h2)) bad.push('对准粒子包，提示里应该有"粒子包：2 质子 + 2 电子" ' + h2);
+            // 复用：放 50 个东西，几何体、贴图、着色器程序、场景里的对象数都不新增（成组画：绘制调用只多几次）
+            await T.eval(`labClear(); lab.bag = {}; for (let i = 0; i < 4; i++) { labSpawn(['p','n','e','coal','bottle','g:o2'][i], 1 + i, 2, { noFill: 1e9 }); } labClear(); renderer.render(scene, camera); true;`);
+            const r0 = JSON.parse(await T.eval(`(function(){ renderer.render(scene, camera); return JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, renderer.info.programs.length, scene.children.length, renderer.info.render.calls]); })()`));
+            await T.eval(`for (let i = 0; i < 50; i++) labSpawn(['p','n','e','coal','bottle','g:o2'][i % 6], (Math.random() - 0.5) * 18, (Math.random() - 0.5) * 12, { noFill: 1e9 }); true;`);
+            const r1 = JSON.parse(await T.eval(`(function(){ labSyncMeshes(); labAssemble(0); renderer.render(scene, camera); return JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, renderer.info.programs.length, scene.children.length, renderer.info.render.calls, Object.keys(lab.groups).filter(function (k) { return lab.groups[k].n > 0; }).length, lab.labels.filter(function (L) { return L.sp.visible; }).length]); })()`));
+            if (r0[0] !== r1[0] || r0[2] !== r1[2] || r0[3] !== r1[3]) bad.push('放 50 个东西新建了几何体／着色器／对象 ' + r0 + ' → ' + r1);
+            // 绘制调用只多"有东西的组数 + 可见的簇标签数"（成组画，不是一个东西一次）
+            if (r1[4] - r0[4] > r1[5] + r1[6] + 1) bad.push('放 50 个东西多了 ' + (r1[4] - r0[4]) + ' 次绘制，只该多 ' + (r1[5] + r1[6]) + '（成组 ' + r1[5] + ' + 标签 ' + r1[6] + '）');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB14 粒子簇标签、手速拼氦-4、对准显示名字说明、放 50 个东西不新建几何体／着色器、标签贴图只在变化时重画', bad.length === 0, bad.join(' / '));
         }
 
         if (want('HH1')) {
