@@ -3063,6 +3063,7 @@ async function enterExit(tab, key) {
             const T = await LBTAB();
             await LBENTER(T);
             if (await T.eval(`LAB_T.gather !== ${LB_GATHER} || LAB_T.mergeR !== 0.5 || 'scatterCd' in LAB_T`)) bad.push('4 秒／0.5 米的常量不对，或还留着"散开冷却"');
+            await T.eval(`LAB_DECAY['n'].T = 1e15; true;`);
             await T.eval(`labClear(); labSpawn('p', 5, 2); labSpawn('e', 5.3, 2); true;`);
             await T.eval(`labAdvance(3.5); true;`);
             if (await T.eval(`labCount('a:1:0')`) !== 0) bad.push('没到 4 秒就拼了');
@@ -3611,6 +3612,7 @@ async function enterExit(tab, key) {
             const bad = [];
             const T = await LBTAB();
             await LBENTER(T);
+            await T.eval(`LAB_DECAY['n'].T = 1e15; true;`);   // 自由中子 611 秒半衰期，测试里不让它随机衰变（会把簇搅乱）
             // 手速放粒子：每 0.5 秒放一个（质子、质子、电子、电子、中子、中子），应该能拼成氦-4（一堆倒计时从最后一个进来开始重新数 4 秒）
             await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; ['p','p','e','e','n','n'].forEach(function (k, i) { window.__q = k; labGive(k, 1); labSel(k); labPut(); labAdvance(0.5); }); true;`);
             const m1 = JSON.parse(await T.eval(`JSON.stringify({ n: lab.ground.length, labels: lab.labels.filter(function (L) { return L.sp.visible; }).map(function (L) { return L.text; }) })`));
