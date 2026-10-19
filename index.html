@@ -1045,6 +1045,8 @@
                 <button id="btn-mode-night" onclick="selectGameMode('night')" style="margin:0; font-size:11px; padding:7px 2px;">惊魂夜</button>
                 <button id="btn-mode-blaze" onclick="selectGameMode('blaze')" style="margin:0; font-size:11px; padding:7px 2px;">超燃</button>
                 <button id="btn-mode-race" onclick="selectGameMode('race')" style="margin:0; font-size:11px; padding:7px 2px;">竞速</button>
+                <!-- 实验室入口：和别的模式一样先选模式再点「开始游戏」。LAB_ENABLED 为 false 时不显示（网址带 ?labdebug=1 才出现）；放在寻宝队正下面 -->
+                <button id="btn-mode-lab" onclick="selectGameMode('lab')" style="display:none; margin:0; font-size:11px; padding:7px 2px;">实验室</button>
                 <button id="btn-mode-jail" onclick="selectGameMode('jail')" style="margin:0; font-size:11px; padding:7px 2px;">监狱救援</button>
                 <button id="btn-mode-dodge" onclick="selectGameMode('dodge')" style="margin:0; font-size:11px; padding:7px 2px;">躲避球</button>
                 <button id="btn-mode-escape" onclick="selectGameMode('escape')" style="margin:0; font-size:11px; padding:7px 2px;">合作密室</button>
@@ -1270,10 +1272,6 @@
         <div style="font-size:12px; color:#e6a23c; margin:4px 0;">宝物放不进背包 —— 只有商店买的道具能带上场</div>
         <button onclick="bookOpen()" style="background:#5e35b1; color:#fff; border:none;">图鉴</button>
         <button onclick="tidyAll()" style="background:#607d8b; color:#fff; border:none;">一键整理</button>
-        <!-- 实验室入口：LAB_ENABLED 为 false 时不显示（网址带 ?labdebug=1 才出现） -->
-        <button id="garage-lab-btn" onclick="labEnter()" style="display:none; background:#00897b; color:#fff; border:none;">实验室</button>
-        <button id="garage-lab-list-btn" onclick="labBook('list')" style="display:none; background:#5e35b1; color:#fff; border:none;">实验室配方</button>
-        <button id="garage-lab-book-btn" onclick="labBook('table')" style="display:none; background:#5e35b1; color:#fff; border:none;">实验室手册</button>
         <button id="start-game-btn" onclick="requestEnterMap()">开始游戏</button>
         <div id="race-board" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);
              z-index:60; display:flex; align-items:center; justify-content:center;">
@@ -1622,7 +1620,7 @@
 
     <script>
         // B4：版本号。每次发版手动加一（同一天多次发版就把最后的 -N 加一）。B5 拆文件后，脚本地址也带这个版本号。
-        const GAME_VERSION = '2026.10.19-1';
+        const GAME_VERSION = '2026.10.19-2';
         // B5：脚本拆到 js/ 下面，按这个顺序执行（顺序不能乱，后面的文件要用前面定义的东西）。
         // 地址后面带 ?v=版本号，发新版时浏览器一定拿新文件，不会一半新一半旧。
         // L1：所有文件同时下载（异步），页面上显示"加载中 n/17"；全部到齐、页面也解析完以后再执行。

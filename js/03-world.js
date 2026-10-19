@@ -55,6 +55,7 @@
             if (jail && !jail.over) return true;
             if (dodge && !dodge.over) return true;
             if (hub) return true;
+            if (lab && !lab.over) return true;   // 实验室
             if (cake && !cake.over) return true;
             if (escapeRoom && !escapeRoom.over) return true;   // 合作密室之前也漏了，平板上转不了视角
             if (park && !park.over) return true;
@@ -62,7 +63,7 @@
         }
         // 大厅/局内那些可以点、可以滑的面板：手指按在上面不算摇杆也不算转视角
         function touchOverPanel(el) {
-            return !!(el && el.closest && el.closest('input, select, textarea, a, #lobby-bottom, #lobby-tl, #lobby-tr, #mode-detail-panel, #sys-modal, #esc-code-panel, #chat-panel, #shop-modal, #nm-spectate-bar, #race-spectate-bar, #spectate-bar'));
+            return !!(el && el.closest && el.closest('input, select, textarea, a, #lobby-bottom, #lobby-tl, #lobby-tr, #mode-detail-panel, #sys-modal, #esc-code-panel, #chat-panel, #shop-modal, #nm-spectate-bar, #race-spectate-bar, #spectate-bar, #lab-bag, #lab-panel, #lab-book'));
         }
         function touchLookSkip(t) {
             return touchOverPanel(t.target) || t.target.closest('.joystick-zone') || t.target.closest('.action-btn') ||
@@ -1466,6 +1467,11 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026.10.19-2', date: '10 月 19 日', title: '最近更新', items: [
+                    '修了大厅里山能穿过的问题'
+                ]
+            },
+            {
                 id: '2026.10.19-1', date: '10 月 19 日', title: '最近更新', items: [
                     '修了几处小问题'
                 ]
@@ -1477,11 +1483,6 @@
                     '腰包按 4 5 6 拿东西，格子里看得到价值',
                     '寻宝队的角色、地图、配方挪进了仓库',
                     '大金合成也算进每张图的上限'
-                ]
-            },
-            {
-                id: '2026.10.16-2', date: '10 月 16 日', title: '最近更新', items: [
-                    '大厅里远处的人不再是黑块了'
                 ]
             }
         ];

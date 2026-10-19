@@ -13,6 +13,28 @@
         // 绘制次数：天空 1 + 云 1 + 山丘 1 + 树 1（实例化）+ 房子 1 = 5。
         const HUB_MODE_PATH = [['hunt', '#43a047'], ['night', '#3949ab'], ['blaze', '#e53935'], ['race', '#00897b'], ['jail', '#78909c'],
             ['dodge', '#fb8c00'], ['escape', '#ab47bc'], ['cake', '#fbc02d'], ['sumo', '#ef6c00'], ['tower', '#7e57c2']];
+        // 山是半个椭球（rx 是山脚半径、h 是山高）。山脚离围墙有 20，但广场是方的、山排成圆，斜角的山有一部分在广场里面——
+        // 人和镜头都不能穿进去。只做数学判断，不加任何物体，不增加绘制次数。
+        let HUB_HILLS = [];
+        function hubInHill(x, y, z) {
+            for (let i = 0; i < HUB_HILLS.length; i++) {
+                const h = HUB_HILLS[i], dx = x - h.x, dz = z - h.z;
+                if ((dx * dx + dz * dz) / (h.rx * h.rx) + (y * y) / (h.h * h.h) < 1) return h;
+            }
+            return null;
+        }
+        // 万一人已经在山里（比如被传送进去）：沿着从山中心往外的方向推到山脚再留 3 的余量；山挤在一起推不出去就回出生点
+        function hubPushOutOfHills(p) {
+            for (let pass = 0; pass < 6; pass++) {
+                const h = hubInHill(p.x, Math.max(0, p.y), p.z);
+                if (!h) return;
+                const ty = Math.max(0, p.y) / h.h, rr = h.rx * Math.sqrt(1 - ty * ty) + 3;
+                let dx = p.x - h.x, dz = p.z - h.z, d = Math.hypot(dx, dz);
+                if (d < 0.001) { dx = 1; dz = 0; d = 1; }
+                p.x = h.x + dx / d * rr; p.z = h.z + dz / d * rr;
+            }
+            if (hubInHill(p.x, Math.max(0, p.y), p.z)) { p.x = 0; p.z = 20; }
+        }
         let hubGroundCv = null, hubBgSeed = 20261016;
         function hubBgRand() { hubBgSeed = (hubBgSeed * 1664525 + 1013904223) % 4294967296; return hubBgSeed / 4294967296; }
         // 地面画在一张贴图上：草地（深浅不一的大块斑）、中间一圈石砖广场、十条通向各模式的路（各模式一个颜色）。不加任何额外物体。
@@ -112,6 +134,7 @@
                 hills.push({ x: Math.sin(a) * d, z: -Math.cos(a) * d, rx: rx, h: h });
                 hillParts.push({ geo: new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), x: Math.sin(a) * d, y: 0, z: -Math.cos(a) * d, sx: rx, sy: h, sz: rx, ry: R() * 3, color: greens[Math.floor(R() * greens.length)] });
             }
+            HUB_HILLS = hills;
             add(new THREE.Mesh(hubMergeParts(hillParts), new THREE.MeshLambertMaterial({ vertexColors: true })), 'hills');
             // 4) 棒棒糖树：细细的杆子 + 圆圆的树冠，种在小山顶上，实例化一次画完
             const tg = hubMergeParts([
@@ -303,10 +326,15 @@
                         prevY < p.y - 0.2 && prevY > p.y - 7) { blockedBySide = true; break outer; }
                 }
             }
+            // 山当墙：走进山里的那一步不走；贴着山边能顺着滑（只动 x 或只动 z）
+            if (!blockedBySide && hubInHill(newX, prevY, newZ)) {
+                if (!hubInHill(newX, prevY, hub.p.z)) newZ = hub.p.z; else if (!hubInHill(hub.p.x, prevY, newZ)) newX = hub.p.x; else { newX = hub.p.x; newZ = hub.p.z; }
+            }
             if (!blockedBySide) { hub.p.x = newX; hub.p.z = newZ; }
             let half = HUB.plazaHalf - 2;
             hub.p.x = Math.max(-half, Math.min(half, hub.p.x));
             hub.p.z = Math.max(-half, Math.min(half, hub.p.z));
+            hubPushOutOfHills(hub.p);   // 山不能穿
             hub.vy = (hub.vy || 0) - HUB.gravity * dt;
             hub.p.y += hub.vy * dt;
             // 落地判定要用「这一帧移动前」的高度来筛台子：不然摔得快、一帧就掉穿了整块台子时，
@@ -361,6 +389,8 @@
                     back *= 0.7;
                 }
             }
+            // 镜头也不能退进山里（站在山脚边往山那边看，镜头会落进山体）：沿"人→镜头"这条线往回收，直到出了山
+            for (let i = 0; i < 12 && back > 2 && hubInHill(ax - dir.x * back, Math.max(0, ay - dir.y * back), az - dir.z * back); i++) back *= 0.8;
             return { x: ax - dir.x * back, y: ay - dir.y * back, z: az - dir.z * back };
         }
         function hubProximityTick() {

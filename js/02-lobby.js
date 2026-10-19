@@ -632,6 +632,8 @@
         }
         function selectGameMode(m) {
             if (m === 'paint') m = 'hunt';   // 这个模式下架了，老存档里记着的模式改回寻宝队
+            if (m === 'lab' && !labVisible()) m = 'hunt';   // 实验室藏起来的时候选不到
+            labRefreshButtons();
             gState.gameMode = m;
             refreshRankUI();
             renderDailyModBanner();
@@ -648,7 +650,7 @@
             if (isEscape) { escRenderLevels(); escDailyInfoRender(); }
             document.getElementById('park-only').classList.toggle('hidden', !isPark);
             document.getElementById('cake-only').classList.toggle('hidden', !isCake);
-            let modeName = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : MODE_CN[m] && NM_DEFS[m] ? MODE_CN[m] : '超燃');
+            let modeName = isHunt ? '寻宝队' : (isNight ? '惊魂夜' : isRace ? '竞速' : isJail ? '监狱救援' : isDodge ? '躲避球' : isEscape ? '合作密室' : isPark ? '猫盾乐园' : isCake ? '松饼大作战' : m === 'lab' ? '实验室' : MODE_CN[m] && NM_DEFS[m] ? MODE_CN[m] : '超燃');
             document.getElementById('lobby-title').innerText = modeName;
             let mbc = document.getElementById('mode-bar-current'); if (mbc) mbc.innerText = isEscape ? modeName + ' · 第 ' + (escProg().sel || 1) + ' 关' : modeName;
             if (isNight) selectNightChar(gState.nightChar || 'cat');
@@ -661,6 +663,7 @@
             [['btn-mode-hunt', isHunt, '#5cb85c'],
             ['btn-mode-night', isNight, '#9b59b6'],
             ['btn-mode-blaze', isBlaze, '#ff5722'],
+            ['btn-mode-lab', m === 'lab', '#00897b'],
             ['btn-mode-race', isRace, '#00897b'],
             ['btn-mode-jail', isJail, '#4527a0'],
             ['btn-mode-dodge', isDodge, '#e65100'],
@@ -1690,7 +1693,6 @@
         function garageRenderPouchRow(actDiv) { renderPouchSlots(pouchRowEl(actDiv, 'garage-pouch-row'), initGarage); }
 
         function initGarage() {
-            if (typeof labRefreshButtons === 'function') labRefreshButtons();   // 实验室：藏起来的时候一个按钮都不显示
             // H27：开了“无限资金”只是显示“无限”、买东西不扣钱；不再把真实余额改成 99999999，余额不封顶
             document.getElementById('garage-money').innerText = HUNT_TEST_MONEY ? '无限' : gState.money;
             let actDiv = document.getElementById('garage-active-inv'); actDiv.innerHTML = '';

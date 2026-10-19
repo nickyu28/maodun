@@ -754,6 +754,7 @@
                 showSysModal('队友还在打惊魂夜', '等他们打完再开，大概还要 ' + min + ' 分钟。', [{ label: '知道了' }]);
                 return;
             }
+            if (m === 'lab') { labEnter(); return; }   // 实验室是单人的，不跟队伍走
             if (m !== 'night' && m !== 'cake' && lobbyParty.length > 0 && !peerIsHost) {
                 lobbySuggestModeToHost(m);
                 return;

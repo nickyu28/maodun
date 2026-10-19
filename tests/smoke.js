@@ -3004,33 +3004,57 @@ async function enterExit(tab, key) {
         const LBEXIT = async (T) => { await T.eval(`labExit(); true;`); await until(T, `lab === null`, 10000); };
 
         if (want('LB1')) {
-            // LB1 入口：LAB_ENABLED 为 false 时仓库里一个实验室按钮都没有；网址带 ?labdebug=1 才出现；进出一次后几何体、贴图不涨
+            // LB1 入口：实验室是大厅里的一个模式入口（寻宝队正下面）；LAB_ENABLED 为 false 时不显示、进不去；网址带 ?labdebug=1 才出现；仓库里没有实验室按钮；进出一次后几何体、贴图不涨
             const bad = [];
             const N = await openTab(chrome, url);   // 正常玩家：没有 labdebug
-            await N.eval(`${HIDE} nav('screen-garage'); initGarage(); true;`);
-            const hid = JSON.parse(await N.eval(`JSON.stringify({ en: LAB_ENABLED, vis: labVisible(), btns: ['garage-lab-btn', 'garage-lab-list-btn', 'garage-lab-book-btn'].map(function (i) { return getComputedStyle(document.getElementById(i)).display; }), noHud: !document.getElementById('lab-hud') })`));
-            if (hid.en !== false || hid.vis !== false || hid.btns.some((d) => d !== 'none')) bad.push('正常玩家看得到实验室按钮 ' + JSON.stringify(hid));
+            await N.eval(`${HIDE} nav('screen-lobby'); selectGameMode('hunt'); true;`);
+            const hid = JSON.parse(await N.eval(`JSON.stringify({ en: LAB_ENABLED, vis: labVisible(), btn: getComputedStyle(document.getElementById('btn-mode-lab')).display, noHud: !document.getElementById('lab-hud') })`));
+            if (hid.en !== false || hid.vis !== false || hid.btn !== 'none') bad.push('正常玩家看得到实验室按钮 ' + JSON.stringify(hid));
+            await N.eval(`selectGameMode('lab'); true;`);
+            if ((await N.eval(`gState.gameMode`)) === 'lab') bad.push('藏起来的时候居然选得到实验室模式');
             await N.eval(`labEnter(); true;`);
             if (await N.eval(`lab !== null`)) bad.push('藏起来的时候居然进得去');
             if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
             await N.close();
             const T = await LBTAB();
-            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); true;`);
-            const vis = JSON.parse(await T.eval(`JSON.stringify({ vis: labVisible(), btns: ['garage-lab-btn', 'garage-lab-list-btn', 'garage-lab-book-btn'].map(function (i) { return getComputedStyle(document.getElementById(i)).display; }) })`));
-            if (!vis.vis || vis.btns.some((d) => d === 'none')) bad.push('带 ?labdebug=1 没出现 ' + JSON.stringify(vis));
+            await T.eval(`${HIDE} nav('screen-lobby'); selectGameMode('hunt'); document.getElementById('mode-detail-panel').classList.remove('hidden'); true;`);
+            const vis = JSON.parse(await T.eval(`JSON.stringify({ vis: labVisible(), btn: getComputedStyle(document.getElementById('btn-mode-lab')).display })`));
+            if (!vis.vis || vis.btn === 'none') bad.push('带 ?labdebug=1 没出现 ' + JSON.stringify(vis));
+            // 位置：和寻宝队同一列、在它正下面（紧挨着的下一行）
+            const pos = JSON.parse(await T.eval(`(function(){ let a = document.getElementById('btn-mode-hunt').getBoundingClientRect(), b = document.getElementById('btn-mode-lab').getBoundingClientRect(); return JSON.stringify({ dx: Math.abs(a.left - b.left), dy: b.top - a.bottom, h: a.height }); })()`));
+            if (pos.dx > 2 || pos.dy < 0 || pos.dy > pos.h) bad.push('实验室入口不在寻宝队正下面 ' + JSON.stringify(pos));
+            // 仓库界面是原样：没有任何实验室按钮
+            await T.eval(`nav('screen-garage'); initGarage(); true;`);
+            if (await T.eval(`['garage-lab-btn', 'garage-lab-list-btn', 'garage-lab-book-btn'].some(function (i) { return !!document.getElementById(i); }) || /实验室/.test(document.getElementById('screen-garage').innerText)`)) bad.push('仓库里还有实验室按钮');
+            // 照超燃的方式进：选模式 → 开始游戏
+            await T.eval(`nav('screen-lobby'); document.getElementById('btn-mode-lab').click(); true;`);
+            if (!(await T.eval(`gState.gameMode === 'lab' && document.getElementById('mode-bar-current').innerText === '实验室'`))) bad.push('点实验室入口没选中');
+            await T.eval(`document.getElementById('lobby-start-btn').click(); true;`);
+            if (!(await until(T, `lab && document.getElementById('lab-hud') && !lab.over`, 15000))) bad.push('选实验室后点开始游戏进不去');
+            else {
+                // 实验室里有清楚的「返回大厅」按钮：看得见、没被别的东西盖住；点了回大厅，开始游戏按钮在右上角
+                const ex = JSON.parse(await T.eval(`(function(){ let b = document.getElementById('lab-btn-exit'), r = b.getBoundingClientRect(), top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return JSON.stringify({ txt: b.innerText, ok: top === b || b.contains(top), w: r.width, h: r.height, start: getComputedStyle(document.getElementById('lobby-start-btn')).display, lobby: !document.getElementById('screen-lobby').classList.contains('hidden') }); })()`));
+                if (ex.txt !== '返回大厅' || !ex.ok || ex.h < 30) bad.push('「返回大厅」按钮不清楚或被盖住 ' + JSON.stringify(ex));
+                if (ex.lobby) bad.push('在实验室里大厅界面还开着（会和实验室叠在一起）');
+                await T.eval(`document.getElementById('lab-btn-exit').click(); true;`);
+                await until(T, `lab === null`, 10000);
+                const back = JSON.parse(await T.eval(`JSON.stringify({ lobby: !document.getElementById('screen-lobby').classList.contains('hidden'), start: document.getElementById('lobby-start-btn').getBoundingClientRect().width > 0, mode: gState.gameMode, hub: !!hub })`));
+                if (!back.lobby || !back.start || back.mode !== 'lab') bad.push('返回大厅后没回到大厅、开始游戏按钮不在 ' + JSON.stringify(back));
+            }
             // 进出泄漏：先进出一次热身，再进出三次，几何体和贴图数量不涨
             const mem = () => T.eval(`(renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);
-            await LBENTER(T); await LBEXIT(T);
-            const m0 = await mem();
+            await LBENTER(T); await LBEXIT(T); await LBENTER(T); await LBEXIT(T);   // 热身两圈：回大厅会重搭广场，第一次的资源数不算
+            await frames(T, 10);
+            const m0 = await mem();   // 进去前的数，只用来确认"进去以后建了场景"
             const during = [];
             for (let i = 0; i < 3; i++) { await LBENTER(T); during.push(await mem()); await LBEXIT(T); }
-            const m1 = await mem();
-            if (m0 !== m1) bad.push('进出实验室 3 次后资源变了 ' + m0 + ' → ' + m1);
-            if (JSON.parse(during[0])[0] <= JSON.parse(m0)[0]) bad.push('进去以后没有建场景 ' + during[0]);
-            if (!(await T.eval(`!document.getElementById('screen-garage').classList.contains('hidden') && !document.getElementById('lab-hud') && !document.getElementById('lab-panel')`))) bad.push('退出后没回仓库或界面没收干净');
+            // 大厅广场每次重搭，路人戴什么是随机的、资源数会不一样；所以比"在实验室里"的数：后两次进出一样，没涨
+            { const a1 = JSON.parse(during[1]), a2 = JSON.parse(during[2]); if (a2[0] > a1[0] || a2[1] > a1[1] || a2[2] !== a1[2]) bad.push('进出实验室 3 次，实验室里的资源数在涨（漏了没释放） ' + during.join(' → ')); }
+            if (during[0] === m0) bad.push('进去以后没有建场景 ' + during[0]);
+            if (!(await T.eval(`!document.getElementById('screen-lobby').classList.contains('hidden') && !document.getElementById('lab-hud') && !document.getElementById('lab-panel') && !!hub`))) bad.push('退出后没回大厅或界面没收干净');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('LB1 实验室入口：藏起来时按钮不出现、进不去；?labdebug=1 才有；进出 3 次几何体、贴图不涨', bad.length === 0, bad.join(' / '));
+            report('LB1 实验室入口：大厅里的模式（寻宝队正下面）、仓库里没有；藏起来时不出现、进不去；?labdebug=1 才有；开始游戏进、「返回大厅」回；进出 3 次几何体、贴图不涨', bad.length === 0, bad.join(' / '));
         }
 
         if (want('LB2')) {
@@ -3047,19 +3071,21 @@ async function enterExit(tab, key) {
             await T.eval(`labClear();`);
             // 粒子包拆分：2 质子 + 2 电子 + 2 中子，摆开后不会马上又拼回去
             await T.eval(`labGive('pack:2:2', 1); labSel('pack:2:2'); labUse(); true;`);
-            const cnt = JSON.parse(await T.eval(`JSON.stringify({ p: labCount('p'), e: labCount('e'), n: labCount('n'), bag: lab.bag['pack:2:2'] || 0 })`));
+            const cnt = JSON.parse(await T.eval(`JSON.stringify({ p: labCount('p'), e: labCount('e'), n: labCount('n'), bag: lab.bag['pack:2:2'] || 0, far: Math.max(...lab.ground.map(function (e) { return Math.hypot(e.x - lab.p.x, e.z - lab.p.z); })) })`));
+            if (!(cnt.far <= 0.5 + 1e-6)) bad.push('拆出来的粒子应该落在脚边 0.5 米内，最远 ' + cnt.far);
             if (cnt.p !== 2 || cnt.e !== 2 || cnt.n !== 2 || cnt.bag !== 0) bad.push('粒子包没拆对 ' + JSON.stringify(cnt));
             await T.eval(`labAdvance(4.0); true;`);
             if ((await T.eval(`labCount('a:2:2')`)) !== 0 || (await T.eval(`labCount('p') + labCount('e') + labCount('n')`)) !== 6) bad.push('拆出来 4 秒就拼回去了（5 秒冷却不管用）');
             await T.eval(`labClear();`);
             // 拼不出：1 质子 + 2 电子，到时间散开，5 秒冷却
-            await T.eval(`labSpawn('p', 6, 2); labSpawn('e', 6.4, 2); labSpawn('e', 6.2, 2.4); window.__c = lab.ground.slice(); labAdvance(1.0); true;`);
+            await T.eval(`labSpawn('p', 6, 2); labSpawn('e', 6.4, 2); labSpawn('e', 6.2, 2.4); window.__c = lab.ground.slice(); window.__p0 = window.__c.map(function (e) { return [e.x, e.z]; }); labAdvance(1.0); true;`);
             if (await T.eval(`window.__c.some(function (e) { return e.noMerge > 0; })`)) bad.push('没到 1.5 秒就散开了');
             await T.eval(`labAdvance(0.7); true;`);
             if (!(await T.eval(`window.__c.every(function (e) { return e.noMerge > lab.t + 3; })`))) bad.push('拼不出的没有散开');
             else {
-                const dist = await T.eval(`Math.min(...[[0,1],[0,2],[1,2]].map(function (q) { return labD(window.__c[q[0]], window.__c[q[1]]); }))`);
-                if (!(dist > 1.5)) bad.push('散开以后还挨着 ' + dist);
+                // 散开：每个粒子就近挪开，离原来的位置不超过 0.5 米（不飞出去）
+                const mv = await T.eval(`Math.max(...window.__c.map(function (e, i) { return Math.hypot(e.x - window.__p0[i][0], e.z - window.__p0[i][1]); }))`);
+                if (!(mv > 0.05 && mv <= 0.5 + 1e-6)) bad.push('散开应该就近挪 0.5 米内，实际挪了 ' + mv);
             }
             // 冷却期间把 1 质子 + 1 电子放到一起，冷却没完之前不拼，完了就拼
             await T.eval(`labKill(window.__c[2]); window.__c[1].x = window.__c[0].x + 0.4; window.__c[1].z = window.__c[0].z; window.__nm = Math.max(window.__c[0].noMerge, window.__c[1].noMerge); labAdvance(Math.max(0, window.__nm - lab.t - 0.9)); true;`);
@@ -3217,20 +3243,23 @@ async function enterExit(tab, key) {
             await T.eval(`labClear(); window.__b0 = lab.booms; labSpawn('g:h2', 3, 5, { noFill: 1e9 }); labSpawn('g:o2', 3.2, 5, { noFill: 1e9 }); true;`);
             await T.eval(`labAdvance(0.2); true;`);
             if (await T.eval(`lab.booms`) !== (await T.eval(`window.__b0`)) + 1) bad.push('没装瓶的氢氧混合没爆炸');
-            // 水池：站在池边选空瓶按 R 装水；钠扔进水池爆炸；小院下雨也能装水
+            // 水池：站在池边选空瓶右键接水；钠扔进水池爆炸；没有雨，别处接不了水
             await T.eval(`labClear(); lab.bag = {}; lab.p.x = LAB_POOL.x; lab.p.z = LAB_POOL.z + 2.5; labGive('bottle', 3); labSel('bottle'); true;`);
-            await T.eval(`labUse(); true;`);
-            if ((await T.eval(`lab.bag['b:water']`)) !== 1 || (await T.eval(`lab.bag.bottle`)) !== 2) bad.push('水池边装不了水');
-            await T.eval(`lab.p.x = -6; lab.p.z = 3; labSel('bottle'); labUse(); true;`);
-            if ((await T.eval(`lab.bag['b:water']`)) !== 1) bad.push('主屋里没雨没水池也装上水了');
-            await T.eval(`lab.p.x = 3; lab.p.z = -3; lab.rain = true; lab.rainT = 1e9; labSel('bottle'); labUse(); true;`);
-            if ((await T.eval(`lab.bag['b:water']`)) !== 2) bad.push('小院下雨装不了水');
+            await T.eval(`labRightClick(); true;`);
+            if ((await T.eval(`lab.bag['b:water']`)) !== 1 || (await T.eval(`lab.bag.bottle`)) !== 2) bad.push('水池边右键接不了水');
+            await T.eval(`lab.p.x = -6; lab.p.z = 3; labSel('bottle'); labRightClick(); labUse(); true;`);
+            if ((await T.eval(`lab.bag['b:water']`)) !== 1) bad.push('离水池远也接上水了');
+            await T.eval(`labSel('bottle'); lab.p.x = LAB_POOL.x; lab.p.z = LAB_POOL.z + 2.5; labUse('L'); true;`);
+            if ((await T.eval(`lab.bag['b:water']`)) !== 1) bad.push('左键也接上水了（接水是右键）');
+            // 整个实验室只有 1 个水池，没有雨
+            const pools = JSON.parse(await T.eval(`JSON.stringify({ n: lab.objs.filter(function (o) { return o.geometry && o.geometry.type === 'CylinderGeometry' && o.material.color.getHex() === 0x29b6f6; }).length, rain: lab.rain !== undefined || typeof labRainTick !== 'undefined' || !!lab.rainMesh })`));
+            if (pools.n !== 1 || pools.rain) bad.push('水池应该只有 1 个、没有雨 ' + JSON.stringify(pools));
             await T.eval(`lab.p.x = -6; lab.p.z = 3; window.__b0 = lab.booms; labSpawn('a:11:12', LAB_POOL.x, LAB_POOL.z); true;`);
             await T.eval(`labAdvance(0.2); true;`);
             if (await T.eval(`lab.booms`) !== (await T.eval(`window.__b0`)) + 1) bad.push('钠扔进水池没爆炸');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
-            report('LB5 接触反应：氢氧氯分子（要装瓶，不装飘走）、钠+水爆炸留氢氧化钠、钠+氯气→食盐、铁挨着水生锈、水+二氧化碳→苏打水、水池和下雨装水', bad.length === 0, bad.join(' / '));
+            report('LB5 接触反应：氢氧氯分子（要装瓶，不装飘走）、钠+水爆炸留氢氧化钠、钠+氯气→食盐、铁挨着水生锈、水+二氧化碳→苏打水、水池右键接水（没有雨）', bad.length === 0, bad.join(' / '));
         }
 
         if (want('LB6')) {
@@ -3268,10 +3297,10 @@ async function enterExit(tab, key) {
             // 死亡：丢掉身上和台面的东西、仓库箱不丢、锁 60 秒
             await T.eval(`labClear(); lab.p.x = -2; lab.p.z = 3; labGive('coal', 5); lab.stove.items = { sand: 2 }; labSpawn('iron', -1, 3); lab.hp = 5; labHurt(10); true;`);
             if (!(await until(T, `lab === null`, 10000))) bad.push('血没了没出来');
-            const d = JSON.parse(await T.eval(`JSON.stringify({ box: labSt().box, lock: labSt().lockUntil - Date.now(), modal: ${MODAL}, garage: !document.getElementById('screen-garage').classList.contains('hidden') })`));
+            const d = JSON.parse(await T.eval(`JSON.stringify({ box: labSt().box, lock: labSt().lockUntil - Date.now(), modal: ${MODAL}, garage: !document.getElementById('screen-lobby').classList.contains('hidden') })`));
             if (d.box.iron !== 3 || Object.keys(d.box).length !== 2) bad.push('死了以后仓库箱变了（身上、台面、地上的不该进箱子）' + JSON.stringify(d.box));
             if (!(d.lock > 55000 && d.lock <= 60500)) bad.push('锁定时间应该约 60 秒 ' + d.lock);
-            if (!/实验室/.test(d.modal || '') || !d.garage) bad.push('死了没有提示或没回仓库 ' + JSON.stringify(d));
+            if (!/实验室/.test(d.modal || '') || !d.garage) bad.push('死了没有提示或没回大厅 ' + JSON.stringify(d));
             await T.eval(`${HIDE} labEnter(); true;`);
             if (await T.eval(`lab !== null`)) bad.push('锁定期间居然进去了');
             if (!/还要等/.test(await T.eval(`document.getElementById('sys-modal-text').innerText`))) bad.push('锁定期间没有提示还要等多久');
@@ -3297,7 +3326,7 @@ async function enterExit(tab, key) {
             const pool = await T.eval(`LAB_ORDER_POOL.map(function (c) { return c[0]; }).join()`);
             if (/accel|bomb|a:30|a:79|a:92/.test(pool)) bad.push('本段做不出来的东西进了订单池 ' + pool);
             // 水池装水：先在订单之前造一瓶（不算）；再把订单设成 2 瓶水，造 2 瓶才算
-            await T.eval(`lab.p.x = LAB_POOL.x; lab.p.z = LAB_POOL.z + 2.5; labGive('bottle', 4); labSel('bottle'); labUse(); true;`);
+            await T.eval(`lab.p.x = LAB_POOL.x; lab.p.z = LAB_POOL.z + 2.5; labGive('bottle', 4); labSel('bottle'); labRightClick(); true;`);
             await T.eval(`labSt().orders = [{ k: 'b:water', n: 2, base: labSt().made['b:water'] || 0 }, { k: 'salt', n: 1, base: 0 }, { k: 'a:3:4', n: 1, base: 0 }]; window.__m0 = gState.money; true;`);
             await T.eval(`labUse(); true;`);
             if (await T.eval(`labSt().orders.length !== 3 || labSt().orders[0].k !== 'b:water'`)) bad.push('才造了 1 瓶（订单出现之后）就完成了');
@@ -3311,7 +3340,7 @@ async function enterExit(tab, key) {
             if (await T.eval(`gState.money !== window.__m0 || !labSt().orders.some(function (q) { return q.k === 'a:3:4'; })`)) bad.push('发出来的东西也算了订单');
             // 拼出来的算：1 质子 + 1 电子...锂-7 要 3p 3e 4n；这里用现成的 labMade 路径验证价值奖励
             await T.eval(`labSt().orders = [{ k: 'pot:heal', n: 1, base: 0 }, { k: 'pot:spring', n: 1, base: 0 }, { k: 'a:2:2', n: 1, base: 0 }]; window.__m0 = gState.money; true;`);
-            await T.eval(`labGive('sugar', 1); labGive('salt', 1); labGive('b:water', 1); labGive('rubber', 2); labGive('iron', 2); labAlch('heal'); labAlch('spring'); true;`);
+            await T.eval(`labGive('sugar', 1); labGive('salt', 1); labGive('b:water', 1); labGive('rubber', 2); labGive('iron', 2); labCraftMake('heal'); labCraftMake('spring'); true;`);
             const g2 = await T.eval(`gState.money - window.__m0`);
             if (g2 !== 2000 + 1200) bad.push('治疗药剂 20000 的 10% = 2000、弹簧鞋 12000 的 10% = 1200，共 3200，实际 ' + g2);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
@@ -3327,9 +3356,9 @@ async function enterExit(tab, key) {
             const hp0 = await T.eval(`JSON.stringify(HUNT_POTIONS)`);
             await LBENTER(T);
             await T.eval(`lab.p.x = 7; lab.p.z = 5; lab.bag = {}; true;`);
-            if (await T.eval(`labAlch('heal')`)) bad.push('身上什么都没有也炼成了');
+            if (await T.eval(`labCraftMake('heal')`)) bad.push('身上什么都没有也炼成了');
             await T.eval(`labGive('sugar', 1); labGive('salt', 1); labGive('b:water', 1); labGive('b:soda', 1); labGive('sugar', 1); labGive('b:naoh', 1); labGive('b:water', 1); labGive('rubber', 2); labGive('iron', 2); true;`);
-            const made = JSON.parse(await T.eval(`JSON.stringify({ heal: labAlch('heal'), speed: labAlch('speed'), dmg: labAlch('dmg'), spring: labAlch('spring'), bag: lab.bag })`));
+            const made = JSON.parse(await T.eval(`JSON.stringify({ heal: labCraftMake('heal'), speed: labCraftMake('speed'), dmg: labCraftMake('dmg'), spring: labCraftMake('spring'), bag: lab.bag })`));
             if (!made.heal || !made.speed || !made.dmg || !made.spring) bad.push('有材料却没炼成 ' + JSON.stringify(made));
             if (made.bag['pot:heal'] !== 1 || made.bag['pot:speed'] !== 1 || made.bag['pot:dmg'] !== 1 || made.bag['pot:spring'] !== 1) bad.push('炼出来的药剂不对 ' + JSON.stringify(made.bag));
             if (made.bag.bottle !== 4 || Object.keys(made.bag).length !== 5) bad.push('材料没扣干净、瓶子没还 ' + JSON.stringify(made.bag));
@@ -3388,12 +3417,14 @@ async function enterExit(tab, key) {
             if (/电池|电线|原子弹|烟花|Boss|电解|离心/.test(Object.values(pages).join(''))) bad.push('手册里出现了范围外的东西');
             // 每个物品标注用在哪些配方里：沙子用在"烧玻璃瓶"
             if (!/沙子.{0,12}用在：[^）]*烧玻璃瓶/.test(pages.react)) bad.push('沙子没标用在烧玻璃瓶 ' + pages.react.slice(0, 200));
-            // 手册和清单在仓库里直接能开（不用进实验室）
-            await T.eval(`labBookClose(); document.getElementById('garage-lab-list-btn').click(); true;`);
-            if (!(await T.eval(`!!document.getElementById('lab-book')`))) bad.push('仓库里的"实验室配方"按钮没打开');
-            await T.eval(`labBookClose(); document.getElementById('garage-lab-book-btn').click(); true;`);
-            if (!(await T.eval(`!!document.getElementById('lab-book') && LAB_UI.tab === 'table'`))) bad.push('仓库里的"实验室手册"按钮没打开');
+            // 实验室里顶上的「配方清单」「手册」按钮能开（进实验室点）
+            await LBENTER(T);
+            await T.eval(`labBookClose(); document.getElementById('lab-btn-list').click(); true;`);
+            if (!(await T.eval(`!!document.getElementById('lab-book')`))) bad.push('实验室里的"配方清单"按钮没打开');
+            await T.eval(`labBookClose(); document.getElementById('lab-btn-book').click(); true;`);
+            if (!(await T.eval(`!!document.getElementById('lab-book') && LAB_UI.tab === 'table'`))) bad.push('实验室里的"手册"按钮没打开');
             await T.eval(`labBookClose(); true;`);
+            await LBEXIT(T);
             // 同名物品叠放；存档只走白名单（lab 字段）
             const st = JSON.parse(await T.eval(`(function(){ let s = {}; labAdd(s, 'coal'); labAdd(s, 'coal'); labAdd(s, 'coal', 3); labAdd(s, 'iron'); return JSON.stringify(s); })()`));
             if (st.coal !== 5 || st.iron !== 1 || Object.keys(st).length !== 2) bad.push('同名物品没叠在一起 ' + JSON.stringify(st));
@@ -3465,7 +3496,7 @@ async function enterExit(tab, key) {
             const bx = JSON.parse(await T.eval(`(function(){ let L = labSt(); L.box = { 'pack:2:2': 3, n: 20, 'a:2:2': 1 }; L.decayAt = 1000; labBoxCatchUp(1000 + 1e12, function () { return 0; }); return JSON.stringify(L.box); })()`));
             if (bx['pack:2:2'] !== 3 || bx.n !== undefined || bx.p !== 20 || bx.e !== 20) bad.push('仓库箱里：粒子包不该变、零散中子该全衰变 ' + JSON.stringify(bx));
             await LBENTER(T);
-            await T.eval(`labClear(); lab.bag = {}; lab.stove.items = {}; for (let i = 0; i < 80; i++) labSpawn('n', -12 + (i % 20) * 1.2, -7 + Math.floor(i / 20) * 1.6); labGive('pack:2:2', 2); labGive('n', 60); lab.stove.items = { n: 40 }; true;`);
+            await T.eval(`labClear(); lab.bag = {}; lab.stove.items = {}; for (let i = 0; i < 80; i++) labSpawn('n', -12 + (i % 20) * 1.2, -7 + Math.floor(i / 20) * 1.6, { noMerge: 1e9 }); labGive('pack:2:2', 2); labGive('n', 60); lab.stove.items = { n: 40 }; true;`);
             await T.eval(`labAdvance(611, 1); true;`);   // 正好一个半衰期，每个中子约一半衰变
             const r = JSON.parse(await T.eval(`JSON.stringify({ ground: labCount('n'), bagN: lab.bag.n || 0, pack: lab.bag['pack:2:2'] || 0, stoveN: lab.stove.items.n || 0, t: lab.t })`));
             if (r.pack !== 2) bad.push('粒子包里的中子不该衰变（包本身没了？）' + JSON.stringify(r));
@@ -3476,6 +3507,134 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
             report('LB11 中子：粒子包里的不衰变；地上、台面、身上、仓库里零散的按 611 秒半衰期衰变', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB12')) {
+            // LB12 合成台面板（药剂配方、先台面再身上、不够灰显）；一个房间、墙和边界走不出去；第一人称；左键按瞄准判断、Q 放脚下；文字牌放大描边
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            // 布局：一个房间，只有合成台、灶台、订单板、仓库箱、1 个水池；没有工作台、炼药台、小院、雨
+            const lay = JSON.parse(await T.eval(`JSON.stringify({ st: Object.keys(LAB_ST).sort(), room: LAB_ROOM, signs: lab.objs.filter(function (o) { return o.userData.labSign; }).length, pool: !!LAB_POOL, zone: typeof labZone, yard: typeof labInYard, rain: typeof labRainTick, bench: typeof labPanelBench, alch: typeof labPanelAlch })`));
+            if (lay.st.join() !== 'box,craft,orders,stove') bad.push('家具应该是 合成台、灶台、订单板、仓库箱 ' + lay.st);
+            if (lay.zone !== 'undefined' || lay.yard !== 'undefined' || lay.rain !== 'undefined' || lay.bench !== 'undefined' || lay.alch !== 'undefined') bad.push('还留着旧的区域／雨／工作台／炼药台代码 ' + JSON.stringify(lay));
+            // 墙：怎么按都走不出房间；脚下边界在墙里面
+            const wall = JSON.parse(await T.eval(`(function(){ let o = {}; lab.p.x = 0; lab.p.z = 0; camera.rotation.set(0, 0, 0, 'YXZ'); lab.k.w = true; for (let i = 0; i < 400; i++) labMove(0.05); lab.k.w = false; o.zMin = lab.p.z;
+                camera.rotation.set(0, Math.PI / 2, 0, 'YXZ'); lab.k.w = true; for (let i = 0; i < 400; i++) labMove(0.05); lab.k.w = false; o.xMin = lab.p.x;
+                camera.rotation.set(0, Math.PI, 0, 'YXZ'); lab.k.w = true; for (let i = 0; i < 400; i++) labMove(0.05); lab.k.w = false; o.zMax = lab.p.z;
+                camera.rotation.set(0, -Math.PI / 2, 0, 'YXZ'); lab.k.w = true; for (let i = 0; i < 400; i++) labMove(0.05); lab.k.w = false; o.xMax = lab.p.x;
+                o.inside = o.zMin > -LAB_ROOM.z && o.zMax < LAB_ROOM.z && o.xMin > -LAB_ROOM.x && o.xMax < LAB_ROOM.x; o.walls = lab.objs.filter(function (m) { return m.geometry && m.geometry.type === 'BoxGeometry' && m.geometry.parameters.height >= 3; }).length; return JSON.stringify(o); })()`));
+            if (!wall.inside || wall.walls < 4) bad.push('走出房间了或墙不够 ' + JSON.stringify(wall));
+            if (!(wall.zMin >= -8.5 && wall.zMax <= 8.5 && wall.xMin >= -11.5 && wall.xMax <= 11.5)) bad.push('边界不在墙里面 ' + JSON.stringify(wall));
+            // 第一人称：镜头在眼睛的位置（1.5 米），自己的身体不画；视野 65°、没有高空俯视
+            await T.eval(`lab.p.x = 0; lab.p.z = 0; camera.rotation.set(0, 0, 0, 'YXZ'); labCamera(); true;`);
+            const fp = JSON.parse(await T.eval(`JSON.stringify({ x: camera.position.x, y: camera.position.y, z: camera.position.z, eye: LAB_EYE, me: lab.me.visible, fov: camera.fov })`));
+            if (!(Math.abs(fp.y - 1.5) < 0.01 && Math.abs(fp.x) < 0.01 && Math.abs(fp.z) < 0.01 && fp.me === false && fp.fov === 65)) bad.push('不是第一人称（眼高 1.5、不画自己、视野 65） ' + JSON.stringify(fp));
+            // 按镜头朝向走：转 90° 以后 W 往镜头看的方向
+            await T.eval(`camera.rotation.set(0, Math.PI / 2, 0, 'YXZ'); lab.p.x = 0; lab.p.z = 0; lab.k.w = true; labMove(0.1); lab.k.w = false; true;`);
+            if (!(await T.eval(`lab.p.x < -0.3 && Math.abs(lab.p.z) < 0.05`))) bad.push('镜头转 90° 以后 W 没往镜头方向走');
+            // 左键：对着地上的东西 → 捡；对着家具 → 互动；都没对着 → 使用手里的
+            await T.eval(`labClear(); lab.bag = {}; lab.stove.items = {}; lab.p.x = 0; lab.p.z = 0; camera.rotation.set(0, 0, 0, 'YXZ'); camera.rotation.set(-Math.atan2(1.1, 2.0), 0, 0, 'YXZ'); labSpawn('iron', 0, -2.0); labSpawn('coal', 2, 1); window.__ir = lab.ground.filter(function (e) { return e.key === 'iron'; })[0]; true;`);
+            const a1 = JSON.parse(await T.eval(`JSON.stringify({ item: labAim().item && labAim().item.key, station: labAim().station })`));
+            if (a1.item !== 'iron') bad.push('对着前方的铁块，瞄准应该是铁块 ' + JSON.stringify(a1));
+            await T.eval(`labClick(); true;`);
+            if (!(await T.eval(`lab.bag.iron === 1 && labCount('iron') === 0 && labCount('coal') === 1`))) bad.push('左键对着铁块没捡起来（或把旁边没对着的煤也捡了）');
+            await T.eval(`lab.p.x = LAB_ST.craft.x; lab.p.z = LAB_ST.craft.z + 2.2; camera.rotation.set(0, 0, 0, 'YXZ'); labClear(); true;`);
+            if ((await T.eval(`labAim().station`)) !== 'craft') bad.push('对着合成台，瞄准应该是合成台 ' + await T.eval(`labAim().station`));
+            await T.eval(`labClick(); true;`);
+            if (!(await T.eval(`lab.panel === 'craft'`))) bad.push('左键对着合成台没开合成面板');
+            await T.eval(`labPanelClose(); lab.p.x = 0; lab.p.z = 3; camera.rotation.set(0, Math.PI, 0, 'YXZ'); labGive('pot:heal', 1); labSel('pot:heal'); lab.hp = 30; labClick(); true;`);
+            if ((await T.eval(`lab.hp`)) !== 80) bad.push('什么都没对着、手里拿着药剂，左键应该使用（喝掉）：血量 ' + await T.eval(`lab.hp`));
+            // Q：放在脚下，不飞出去；放多个时错开 0.3 米以内
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 2; lab.p.z = 2; labGive('iron', 6); labSel('iron'); labPut(); true;`);
+            const q1 = JSON.parse(await T.eval(`JSON.stringify(lab.ground.map(function (e) { return Math.hypot(e.x - lab.p.x, e.z - lab.p.z); }))`));
+            if (q1.length !== 1 || q1[0] > 0.01) bad.push('Q 应该放在脚下 ' + JSON.stringify(q1));
+            await T.eval(`labClear(); labSel('iron'); labPut(true); true;`);
+            const q2 = JSON.parse(await T.eval(`JSON.stringify({ d: lab.ground.map(function (e) { return Math.hypot(e.x - lab.p.x, e.z - lab.p.z); }), n: lab.ground.length, ys: lab.ground.map(function (e) { return e.y; }) })`));
+            if (q2.n !== 5 || Math.max(...q2.d) > 0.3 + 1e-6) bad.push('放多个：应该都在脚边 0.3 米内 ' + JSON.stringify(q2));
+            if (q2.ys.some((y) => y > 0.5)) bad.push('放下的东西飞起来了（有抛物线） ' + q2.ys);
+            // 右键：拆粒子包、接水（和左键分开）
+            await T.eval(`labClear(); lab.bag = {}; labGive('pack:1:0', 1); labSel('pack:1:0'); labClick(); true;`);
+            if (!(await T.eval(`lab.bag['pack:1:0'] === 1`))) bad.push('左键不该拆粒子包');
+            await T.eval(`labRightClick(); true;`);
+            if (!(await T.eval(`!lab.bag['pack:1:0'] && labCount('p') === 1`))) bad.push('右键没拆粒子包');
+            // 合成台面板：药剂配方，材料先用台面再用身上，不够灰显
+            await T.eval(`labClear(); lab.bag = {}; lab.stove.items = {}; lab.p.x = LAB_ST.craft.x; lab.p.z = LAB_ST.craft.z + 2; labInteract(); true;`);
+            if (!(await T.eval(`lab.panel === 'craft' && !!document.getElementById('lab-panel')`))) bad.push('在合成台旁按互动没弹合成面板');
+            const lst = JSON.parse(await T.eval(`JSON.stringify({ n: document.querySelectorAll('#lab-panel button[onclick^="labCraftMake"]').length, want: LAB_RECIPES.filter(function (r) { return r.where === '合成台'; }).length, dis: document.querySelectorAll('#lab-panel button[disabled]').length, txt: document.getElementById('lab-panel').innerText })`));
+            if (lst.n !== lst.want || lst.want < 4 || lst.dis !== lst.n) bad.push('面板应该列出全部合成台配方、没材料时全灰 ' + JSON.stringify([lst.n, lst.want, lst.dis]));
+            if (!/治疗药剂/.test(lst.txt) || !/弹簧鞋/.test(lst.txt) || /橡胶\s*×1/.test(lst.txt.split('弹簧鞋')[0])) bad.push('面板缺药剂配方 ' + lst.txt.slice(0, 80));
+            await T.eval(`labGive('sugar', 2); labGive('salt', 1); labGive('b:water', 1); lab.stove.items = { sugar: 1 }; labPanelCraft(); true;`);
+            if (await T.eval(`document.querySelector('#lab-panel button[onclick="labCraftMake(\\'heal\\')"]').disabled`)) bad.push('材料够了（台面 1 + 身上 2 糖），合成按钮还灰着');
+            await T.eval(`labCraftMake('heal'); true;`);
+            const mk = JSON.parse(await T.eval(`JSON.stringify({ heal: lab.bag['pot:heal'] || 0, sugar: lab.bag.sugar || 0, stoveSugar: lab.stove.items.sugar || 0, made: labSt().made['pot:heal'] || 0 })`));
+            if (mk.heal !== 1 || mk.stoveSugar !== 0 || mk.sugar !== 2 || mk.made !== 1) bad.push('合成结果不对（先用台面的） ' + JSON.stringify(mk));
+            await T.eval(`labCraftMake('speed'); true;`);
+            if (await T.eval(`!!lab.bag['pot:speed']`)) bad.push('材料不够也合成了');
+            // 文字牌：Sprite，大字描边；3 米外按 65° 视角在 1080 高的屏幕上 ≥ 100 像素
+            const sg = JSON.parse(await T.eval(`JSON.stringify(lab.objs.filter(function (o) { return o.userData.labSign; }).map(function (o) { return { sprite: !!o.isSprite, w: o.material.map.image.width, h: o.material.map.image.height, sy: o.scale.y }; }))`));
+            if (sg.length < 5 || sg.some((x) => !x.sprite || x.w !== 512 || x.h !== 128)) bad.push('文字牌应该都是 512×128 的大字 Sprite ' + JSON.stringify(sg.slice(0, 2)));
+            const px = sg.length ? sg[0].sy * (84 / 128) / (2 * 3 * Math.tan(32.5 * Math.PI / 180)) * 1080 : 0;
+            if (px < 100) bad.push('3 米外字高只有 ' + Math.round(px) + ' 像素（1080 高屏幕）');
+            if (!(await T.eval(`touchInGame() && touchLookActive()`))) bad.push('实验室里触屏摇杆和转视角没开');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB12 一个房间、墙和边界；合成台；第一人称；左键按瞄准（捡／互动／使用）、Q 放脚下、右键拆包接水；文字牌放大描边', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB13')) {
+            // LB13 东西落地都就近落在原处 0.5 米内：拆粒子包、拼不出的散开、Q 放下、放气、身上放不下掉出来
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 1; lab.p.z = 1; true;`);
+            const far = async (code) => await T.eval(`(function(){ ${code}; return Math.max(0, ...lab.ground.map(function (e) { return Math.hypot(e.x - lab.p.x, e.z - lab.p.z); })); })()`);
+            let d = await far(`labGive('pack:6:6', 1); labSel('pack:6:6'); labRightClick()`);
+            if (d > 0.5 + 1e-6) bad.push('拆大粒子包：最远飞到 ' + d.toFixed(2) + ' 米');
+            await T.eval(`labClear(); true;`);
+            d = await far(`labGive('b:h2', 1); labSel('b:h2'); labClick()`);
+            if (d > 0.5 + 1e-6) bad.push('放气：飞到 ' + d.toFixed(2) + ' 米');
+            await T.eval(`labClear(); lab.bag = {}; for (let i = 0; i < LAB_BAG_CAP; i++) labGive('a:1:' + i, 1); true;`);
+            d = await far(`labBagGive('coal', 5)`);
+            if (d > 0.5 + 1e-6) bad.push('身上放不下掉出来：飞到 ' + d.toFixed(2) + ' 米');
+            // 拼不出的散开：每个粒子最多挪 0.5 米，仍然在原处附近
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; labSpawn('p', 5, 2); labSpawn('e', 5.4, 2); labSpawn('e', 5.2, 2.4); labSpawn('n', 5.1, 2.1); window.__p0 = lab.ground.map(function (e) { return [e.x, e.z]; }); window.__c = lab.ground.slice(); labAdvance(2.0); true;`);
+            const mv = await T.eval(`Math.max(...window.__c.map(function (e, i) { return Math.hypot(e.x - window.__p0[i][0], e.z - window.__p0[i][1]); }))`);
+            if (mv > 0.5 + 1e-6) bad.push('散开：最远挪了 ' + mv.toFixed(2) + ' 米');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB13 东西落地都就近落在原处 0.5 米内（拆包、散开、放气、掉出来）', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('HH1')) {
+            // HH1 大厅里的山不能穿：人走进山里会被推出来，镜头不会退进山体；不增加绘制调用
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} nav('screen-lobby'); true;`);
+            await until(T, `!!hub && HUB_HILLS.length === 30`, 10000);
+            const inner = JSON.parse(await T.eval(`JSON.stringify((function(){ let r = []; HUB_HILLS.forEach(function (h) { if (Math.abs(h.x) < HUB.plazaHalf - 2 && Math.abs(h.z) < HUB.plazaHalf - 2) r.push({ x: h.x, z: h.z, rx: h.rx, h: h.h }); }); return r; })())`));
+            if (!inner.length) bad.push('没有任何一座山在广场范围里，测试没意义');
+            else {
+                const h = inner[0];
+                // 传送进山里：走一帧会被推到山外（或回出生点）
+                await T.eval(`hub.p.set(${h.x}, 0, ${h.z}); hub.vy = 0; hubPlayerMove(0.016); true;`);
+                if (await T.eval(`!!hubInHill(hub.p.x, 0, hub.p.z)`)) bad.push('人传送到山里没被弄出来');
+                // 朝着山走：怎么走都进不去
+                const st = JSON.parse(await T.eval(`(function(){ let best = null, n = Math.hypot(${h.x}, ${h.z}) || 1, ux = -(${h.x}) / n, uz = -(${h.z}) / n; for (let k = 4; k < 40; k++) { let x = ${h.x} + ux * (${h.rx} + k * 3), z = ${h.z} + uz * (${h.rx} + k * 3); if (!hubInHill(x, 0, z) && Math.abs(x) < HUB.plazaHalf - 4 && Math.abs(z) < HUB.plazaHalf - 4) { best = [x, z]; break; } } return JSON.stringify(best); })()`));
+                if (!st) bad.push('找不到山边的起点');
+                else {
+                    const walk = await T.eval(`(function(){ hub.p.set(${st[0]}, 0, ${st[1]}); hub.vy = 0; let dx = ${h.x} - ${st[0]}, dz = ${h.z} - ${st[1]}; camera.rotation.set(0, Math.atan2(-dx, -dz), 0, 'YXZ'); keys['w'] = true; let bad = 0; for (let i = 0; i < 200; i++) { hubPlayerMove(0.016); if (hubInHill(hub.p.x, hub.p.y, hub.p.z)) bad++; } keys['w'] = false; return bad; })()`);
+                    if (walk !== 0) bad.push('朝着山一直走，有 ' + walk + ' 帧在山里');
+                }
+                // 镜头：站在山脚外一点、朝着远离山的方向看（镜头在山这一侧）不会落进山体
+                await T.eval(`hub.p.set(${h.x} + ${h.rx} + 6, 0, ${h.z}); camera.rotation.set(0, -Math.PI / 2, 0, 'YXZ'); true;`);
+                const cam = JSON.parse(await T.eval(`(function(){ let c = hubCameraPos(); return JSON.stringify({ inHill: !!hubInHill(c.x, Math.max(0, c.y), c.z) }); })()`));
+                if (cam.inHill) bad.push('镜头退进了山体');
+            }
+            // 没有新增物体：广场的绘制调用不涨（L2 里还有总量检查）
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('HH1 大厅里的山不能穿（人被推出来、镜头不进山），只做数学判断、不加物体', bad.length === 0, bad.join(' / '));
         }
 
         if (ONLY) throw new Error('ONLY_DONE');

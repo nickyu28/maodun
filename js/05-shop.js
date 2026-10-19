@@ -31,6 +31,7 @@
             if (dodge && !dodge.over) return true;
             // 大厅、松饼、密室、乐园之前漏了：只有那个被画布盖住的旧摇杆，按不到，平板上根本走不动
             if (hub) return true;
+            if (lab && !lab.over) return true;   // 实验室
             if (cake && !cake.over) return true;
             if (escapeRoom && !escapeRoom.over && !escapeRoom.codeOpen) return true;
             if (park && !park.over) return true;
