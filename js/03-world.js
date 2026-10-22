@@ -1467,6 +1467,11 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026.10.22-2', date: '10 月 22 日', title: '最近更新', items: [
+                    '修了几处小问题'
+                ]
+            },
+            {
                 id: '2026.10.22-1', date: '10 月 22 日', title: '最近更新', items: [
                     '修了几处小问题'
                 ]
@@ -1474,11 +1479,6 @@
             {
                 id: '2026.10.19-2', date: '10 月 19 日', title: '最近更新', items: [
                     '修了大厅里山能穿过的问题'
-                ]
-            },
-            {
-                id: '2026.10.19-1', date: '10 月 19 日', title: '最近更新', items: [
-                    '修了几处小问题'
                 ]
             }
         ];

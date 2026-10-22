@@ -1,9 +1,10 @@
         // ══════════════════════════════════════════════════════════
-        //  实验室（化学）· 第 4A 段
+        //  实验室（化学 + 电路）· 第 4A、4B 段
         //  规则以 docs/lab-spec.md 和 docs/chem.md 为准。整个功能默认藏起来：
         //  LAB_ENABLED 为 false 时，只有网址带 ?labdebug=1（会记在本机，?labdebug=0 清掉）才有大厅里的"实验室"模式入口（寻宝队正下面）。
-        //  本段只有：一个房间（合成台、灶台、订单板、仓库箱、水池）、原子拼合、衰变、灶台和接触反应、药剂、订单、配方清单、手册。
-        //  没有：电路和器材、原子弹、烟花、化学寻宝队、Boss、联机同步（NET_PROTO 不动）。
+        //  现在有：一个房间（合成台、灶台、订单板、仓库箱、水池、元素表牌子）、原子拼合、衰变、灶台和接触反应、药剂、订单、配方清单、手册；
+        //  4B：电线、电池、开关、灯泡、电阻、电动机（零件）、电解槽、升压器，手动接线的电路，电解，元素表。
+        //  还没有：高级电池、加速器、离心机、反应堆、空气分离机、原子弹（4C）、烟花、化学寻宝队、Boss、联机同步（NET_PROTO 不动）。
         // ══════════════════════════════════════════════════════════
         const LAB_ENABLED = false;
         // 开关：网址带 ?labdebug=1 就开，并用 localStorage（TH_labdebug）记住，以后不带参数也开；?labdebug=0 清掉。
@@ -21,7 +22,7 @@
         function labVisible() { return LAB_ENABLED || labDebugOn(); }
 
         // 时间和距离（"米" = 场景里的 1 个单位）。冒烟测试会改这几个数把等待缩短。
-        const LAB_T = { gather: 4, gasLife: 10, poisonLife: 5, rust: 120, glass: 5, mergeR: 0.5, reactR: 0.5, fillR: 2, boomR: 3, boomDmg: 40, poisonDps: 5, poisonR: 4, lock: 60, pickR: 2.4, stationR: 3.4 };
+        const LAB_T = { gather: 4, gasLife: 10, poisonLife: 5, rust: 120, glass: 5, mergeR: 0.5, reactR: 0.5, fillR: 2, boomR: 3, boomDmg: 40, poisonDps: 5, poisonR: 4, lock: 60, pickR: 2.4, stationR: 3.4, elec: 5 };
         // 身上 6 格：快捷栏 3 格 + 背包 3 格（一格一种东西，数量不限）；房间里散落的粒子最多 300 个
         const LAB_BOX_CAP = 60, LAB_BAG_CAP = 6, LAB_HOT = 3, LAB_PARTICLE_CAP = 300;
         const LAB_HOLD_RATE = { Q: 5, L: 6, R: 5 };   // 长按：每秒放 5 个／捡 6 个／拆 5 个包
@@ -70,7 +71,11 @@
             'g:h2': { name: '氢气', col: 0xffcdd2, shape: 'g', op: 0.35, gas: 1 }, 'g:o2': { name: '氧气', col: 0x80deea, shape: 'g', op: 0.35, gas: 1 },
             'g:co2': { name: '二氧化碳', col: 0xb0bec5, shape: 'g', op: 0.35, gas: 1 }, 'g:so2': { name: '二氧化硫', col: 0xfff176, shape: 'g', op: 0.45, gas: 1, toxic: 1 }, 'g:cl2': { name: '氯气', col: 0xaed581, shape: 'g', op: 0.45, gas: 1, toxic: 1 },
             'pot:heal': { name: '治疗药剂', v: 20000, col: 0xe53935, shape: 'c', op: 0.9 }, 'pot:speed': { name: '加速药剂', v: 25000, col: 0x29b6f6, shape: 'c', op: 0.9 },
-            'pot:dmg': { name: '伤害药剂', v: 30000, col: 0x8e24aa, shape: 'c', op: 0.9 }, 'pot:spring': { name: '弹簧鞋', v: 12000, col: 0x66bb6a, shape: 'b' }
+            'pot:dmg': { name: '伤害药剂', v: 30000, col: 0x8e24aa, shape: 'c', op: 0.9 }, 'pot:spring': { name: '弹簧鞋', v: 12000, col: 0x66bb6a, shape: 'b' },
+            'b:brine': { name: '盐水', col: 0xb3e5fc, shape: 'c', op: 0.8 }, 'b:melt': { name: '熔融食盐', col: 0xffcc80, shape: 'c', op: 0.8 },
+            wire: { name: '电线', v: 3500, col: 0xff8a65, shape: 'b' }, bat: { name: '电池', v: 6000, col: 0x43a047, shape: 'c' }, switch: { name: '开关', v: 5000, col: 0xbcaaa4, shape: 'b' },
+            bulb: { name: '灯泡', v: 6000, col: 0xfff59d, shape: 's' }, resistor: { name: '电阻', v: 4000, col: 0xffcc80, shape: 'b' }, motor: { name: '电动机', v: 15000, col: 0x78909c, shape: 'c' },
+            elec: { name: '电解槽', v: 15000, col: 0x4dd0e1, shape: 'c' }, booster: { name: '升压器', v: 20000, col: 0xff7043, shape: 'b' }
         };
         const LAB_BOTTLE_OF = { h2: 'b:h2', o2: 'b:o2', co2: 'b:co2', so2: 'b:so2', cl2: 'b:cl2' };
         const LAB_DEF_CACHE = {};
@@ -81,6 +86,8 @@
             else if ((m = /^a:(\d+):(\d+)$/.exec(key))) {
                 let z = +m[1], n = +m[2];
                 d = { key: key, name: labAtomName(z, n), v: 0, shape: 's', op: 1, atom: [z, n], col: new THREE.Color().setHSL(((z * 37) % 360) / 360, 0.65, 0.55).getHex() };
+            } else if ((m = /^bat:(\d+)$/.exec(key))) {
+                d = { key: key, name: '电池（剩 ' + m[1] + ' U）', v: 0, shape: 'c', op: 1, col: 0x43a047 };   // 用过的电池：按剩下的电量分堆，不能卖
             } else if ((m = /^pack:(\d+):(\d+)$/.exec(key))) {
                 d = { key: key, name: '粒子包（' + labAtomName(+m[1], +m[2]) + '）', v: 0, shape: 'b', op: 1, pack: [+m[1], +m[2]], col: 0xffca28 };
             } else d = { key: key, name: key, v: 0, shape: 'b', op: 1, col: 0xcccccc };
@@ -96,11 +103,13 @@
             if (key === 'e') return '带负电；要和质子一样多';
             if (d.pack) return '粒子包：' + d.pack[0] + ' 质子 + ' + d.pack[0] + ' 电子' + (d.pack[1] ? ' + ' + d.pack[1] + ' 中子' : '') + '（右键拆开）';
             if (d.atom) return '原子：质子 ' + d.atom[0] + '，中子 ' + d.atom[1] + '，电子 ' + d.atom[0];
+            if (LAB_DEV_DESC[key]) return LAB_DEV_DESC[key];
+            if (/^bat:/.test(key)) return LAB_DEV_DESC.bat;
             if (d.gas) return '气体，要用空瓶装起来';
             if (/^b:/.test(key)) return '装在瓶里';
             return '';
         }
-        const LAB_ST_DESC = { stove: '摆好材料再点火', craft: '合成药剂（以后也做器材）', orders: '看订单、拿奖励', box: '存取材料' };
+        const LAB_ST_DESC = { stove: '摆好材料再点火', craft: '合成药剂和器材', orders: '看订单、拿奖励', box: '存取材料', table: '氢到铁的元素和同位素' };
         function labValue(key) { return labDef(key).v || 0; }
 
         // ── 按 key 存数量的小仓库（仓库箱、身上、灶台都是这个形状）──
@@ -176,10 +185,20 @@
             { id: 'fes', where: '灶台', name: '硫化铁', in: { iron: 1, 'a:16:16': 1 }, out: { fes: 1 } },
             { id: 'so2', where: '灶台', name: '二氧化硫', in: { 'a:16:16': 1, 'b:o2': 1 }, out: { 'b:so2': 1 } },
             { id: 'glass', where: '灶台', name: '烧玻璃瓶', time: 5, in: { sand: 1 }, out: { bottle: 1 } },
-            { id: 'heal', where: '合成台', name: '治疗药剂', in: { sugar: 1, salt: 1, 'b:water': 1 }, out: { 'pot:heal': 1, bottle: 1 } },
-            { id: 'speed', where: '合成台', name: '加速药剂', in: { 'b:soda': 1, sugar: 1 }, out: { 'pot:speed': 1, bottle: 1 } },
-            { id: 'dmg', where: '合成台', name: '伤害药剂', in: { 'b:naoh': 1, 'b:water': 1 }, out: { 'pot:dmg': 1, bottle: 2 } },
-            { id: 'spring', where: '合成台', name: '弹簧鞋', in: { rubber: 2, iron: 2 }, out: { 'pot:spring': 1 } },
+            { id: 'brine', where: '灶台', name: '盐水', in: { salt: 1, 'b:water': 1 }, out: { 'b:brine': 1 } },
+            { id: 'melt', where: '灶台', name: '熔融食盐', time: 5, in: { salt: 1, bottle: 1 }, out: { 'b:melt': 1 } },
+            { id: 'heal', where: '合成台', kind: 'potion', name: '治疗药剂', in: { sugar: 1, salt: 1, 'b:water': 1 }, out: { 'pot:heal': 1, bottle: 1 } },
+            { id: 'speed', where: '合成台', kind: 'potion', name: '加速药剂', in: { 'b:soda': 1, sugar: 1 }, out: { 'pot:speed': 1, bottle: 1 } },
+            { id: 'dmg', where: '合成台', kind: 'potion', name: '伤害药剂', in: { 'b:naoh': 1, 'b:water': 1 }, out: { 'pot:dmg': 1, bottle: 2 } },
+            { id: 'spring', where: '合成台', kind: 'potion', name: '弹簧鞋', in: { rubber: 2, iron: 2 }, out: { 'pot:spring': 1 } },
+            { id: 'wire', where: '合成台', kind: 'device', name: '电线', in: { 'a:29:34': 1, rubber: 1 }, out: { wire: 2 } },
+            { id: 'bat', where: '合成台', kind: 'device', name: '电池', in: { 'a:29:34': 1, iron: 1, 'b:brine': 1 }, out: { bat: 1, bottle: 1 } },
+            { id: 'switch', where: '合成台', kind: 'device', name: '开关', in: { 'a:29:34': 1, rubber: 1, iron: 1 }, out: { switch: 1 } },
+            { id: 'bulb', where: '合成台', kind: 'device', name: '灯泡', in: { bottle: 1, iron: 1, wire: 1 }, out: { bulb: 1 } },
+            { id: 'resistor', where: '合成台', kind: 'device', name: '电阻', in: { coal: 1, wire: 1 }, out: { resistor: 1 } },
+            { id: 'motor', where: '合成台', kind: 'device', name: '电动机', in: { iron: 2, wire: 2 }, out: { motor: 1 } },
+            { id: 'elec', where: '合成台', kind: 'device', name: '电解槽', in: { bottle: 1, coal: 2, wire: 2 }, out: { elec: 1 } },
+            { id: 'booster', where: '合成台', kind: 'device', name: '升压器', in: { iron: 2, wire: 4 }, out: { booster: 1 } },
             { id: 'h2', where: '接触', name: '氢分子', note: '两个氢-1 原子碰到一起，变成氢气（要装瓶，不然 10 秒后飘走）', in: { 'a:1:0': 2 }, out: { 'g:h2': 1 } },
             { id: 'o2', where: '接触', name: '氧分子', note: '两个氧-16 原子碰到一起，变成氧气（要装瓶）', in: { 'a:8:8': 2 }, out: { 'g:o2': 1 } },
             { id: 'cl2', where: '接触', name: '氯分子', note: '两个氯-35 原子碰到一起，变成氯气（有毒，一定要装瓶）', in: { 'a:17:18': 2 }, out: { 'g:cl2': 1 } },
@@ -226,7 +245,7 @@
         // ══════════════ 运行时：一个能走动的小场景 ══════════════
         let lab = null;
         // 一个大房间（24 × 18 米）：靠北墙一排家具，水池在东南角。四面墙是实的，走不出去
-        const LAB_ST = { stove: { x: -8, z: -7.3, name: '灶台' }, craft: { x: -3, z: -7.3, name: '合成台' }, orders: { x: 3, z: -8.5, name: '订单板' }, box: { x: 8, z: -7.3, name: '仓库箱' } };
+        const LAB_ST = { stove: { x: -8, z: -7.3, name: '灶台' }, craft: { x: -3, z: -7.3, name: '合成台' }, orders: { x: 3, z: -8.5, name: '订单板' }, box: { x: 8, z: -7.3, name: '仓库箱' }, table: { x: -11.7, z: 0, name: '元素表' } };
         const LAB_POOL = { x: 8, z: 4.5, r: 1.7 };
         const LAB_ROOM = { x: 12, z: 9 };   // 墙内侧到中心的距离
         const LAB_BOUND = { x0: -11.4, x1: 11.4, z0: -8.4, z1: 8.4 };   // 人的中心能到的范围（离墙 0.6 米）
@@ -249,7 +268,7 @@
             lab = {
                 over: false, t: 0, seq: 0, last: performance.now(), raf: null, ground: [], bag: {}, sel: null, stove: { items: {}, cook: null },
                 hp: 100, p: { x: 0, y: 0, z: 2, vy: 0 }, face: { x: 0, z: -1 }, k: {}, selIdx: 0, hold: null, speedT: 0, dmgT: 0, springT: 0, poisonT: 0,
-                geo: {}, groups: {}, dirty: true, cl: {}, labels: [], labelDraws: 0, objs: [], fx: [], fxFree: [], fxAll: [], fxGeo: null, hudT: 0, boxT: 5, hudSig: '', booms: 0, panel: null, oldBg: scene.background, oldFog: scene.fog
+                geo: {}, groups: {}, dirty: true, cl: {}, labels: [], labelDraws: 0, objs: [], fx: [], fxFree: [], fxAll: [], fxGeo: null, hudT: 0, boxT: 5, hudSig: '', booms: 0, panel: null, devs: [], wires: [], dmap: {}, dseq: 0, wseq: 0, cyc: null, cirDirty: true, cirWarned: false, wirePend: null, devSig: '', dlabels: [], dm: {}, wm: null, halo: null, oldBg: scene.background, oldFog: scene.fog
             };
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
             labBuildWorld(); labBuildPlayer(); labBuildHud(); labBindKeys();
@@ -257,8 +276,9 @@
             // 这个实验室里会出现的所有"形状 + 透明度"的组、标签、光球，进来就一次建好；运行时只往里放东西，不新建
             Object.keys(LAB_FIXED).forEach(function (k) { let d = labDef(k); labGroup(d.shape, d.op); }); labGroup('s', 1); labGroup('b', 1);
             for (let i = 0; i < LAB_LABEL_MAX; i++) lab.labels[i] = labLabelMake();
+            labDevBuild();   // 设备、光晕、连线、头顶牌子：进来就一次建好，放设备只改矩阵和颜色
             let fm = labFxMesh(); if (fm) lab.fxFree.push(fm);
-            labCamera(); labSyncMeshes();
+            labCamera(); labSyncMeshes(); labDevPrewarm();
             renderer.compile(scene, camera);   // 进来就把要用的着色器编好，不在第一次放东西的时候卡一下
             // 点一下空白处锁住鼠标转视角（和大厅一样），Esc 松开去点按钮
             document.body.onmousedown = function (e) {
@@ -295,8 +315,10 @@
                 let dump = function (st) { Object.keys(st).forEach(function (k) { if (!labBoxAdd(k, st[k])) lost += st[k]; }); };
                 dump(R.bag); dump(R.stove.items);
                 R.ground.forEach(function (e) { if (!labDef(e.key).gas) { if (!labBoxAdd(e.key, 1)) lost++; } });
+                R.devs.forEach(function (d) { if (!labBoxAdd(labDevItem(d), 1)) lost++; });   // 放着的设备和电线也收回仓库箱（用过的电池带着剩下的电量）
+                if (R.wires.length && !labBoxAdd('wire', R.wires.length)) lost += R.wires.length;
             }
-            R.objs.forEach(function (o) { scene.remove(o); });   // 房间、家具、文字牌、成组的物品、光球、标签：全部是 objs，一起释放
+            R.objs.forEach(function (o) { scene.remove(o); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });   // 房间、家具、文字牌、成组的物品、光球、标签：全部是 objs，一起释放
             Object.keys(R.geo).forEach(function (k) { R.geo[k].dispose(); });
             if (R.fxGeo) R.fxGeo.dispose();
             scene.background = R.oldBg; scene.fog = R.oldFog;
@@ -347,6 +369,7 @@
             labBox(3, 1.1, 1.6, 0x4a148c, st.craft.x, 0.55, st.craft.z); labSign(st.craft.name, st.craft.x, 2.2, st.craft.z, 2.4, 0.6);
             labBox(2.2, 1.2, 1.6, 0x455a64, st.box.x, 0.6, st.box.z); labSign(st.box.name, st.box.x, 2.2, st.box.z, 2.4, 0.6);
             labBox(3.4, 2.4, 0.3, 0xfff59d, st.orders.x, 1.5, st.orders.z); labSign(st.orders.name, st.orders.x, 3.0, st.orders.z + 0.3, 2.4, 0.6);
+            labBox(0.3, 2.4, 3.6, 0xcfd8dc, -11.85, 1.5, 0); labSign(st.table.name, -11.4, 3.0, 0, 2.4, 0.6);   // 西墙上的元素表牌子
             let pool = new THREE.Mesh(new THREE.CylinderGeometry(LAB_POOL.r, LAB_POOL.r, 0.15, 24), new THREE.MeshLambertMaterial({ color: 0x29b6f6 }));
             pool.position.set(LAB_POOL.x, 0.08, LAB_POOL.z); labAddObj(pool); labSign('水池', LAB_POOL.x, 1.5, LAB_POOL.z, 1.8, 0.45);
         }
@@ -452,19 +475,29 @@
         // ── 长按连续 ──
         // Q 长按：每秒放 5 个（放完选中的那一堆为止，一个一个按螺旋排开）；左键长按对着地上的东西：每秒捡 6 个附近的；
         // 右键长按对着粒子包：每秒拆 5 个，到上限停并提示。对着家具、或没对着东西（使用）都只做一次，不连发。松手（或手机上松开按钮）就停。
+        // 手里拿着电线时的左键：对着设备 = 选中／连线；对着一根线 = 拆掉；对着地上的东西或台子照常；返回 null = 不归电线管
+        function labWireAim(a) {
+            if (lab.sel !== 'wire') { if (lab.wirePend) { lab.wirePend = null; lab.devSig = ''; } return null; }
+            if (a.dev) return labWireClick(a.dev);
+            if (a.wire) { lab.wirePend = null; labWireRemove(a.wire, true); labFlash('拆了一根线'); return true; }
+            if (a.item || a.station) return null;
+            return labWireClick(null);
+        }
         function labHoldStart(kind) {
             if (!lab || lab.over || lab.panel || document.getElementById('lab-book')) return false;
             labHoldStop();
             labSyncSel();
             if (kind === 'Q') { lab.hold = { kind: 'Q', acc: 0, i: 0 }; return labHoldStep(); }
             if (kind === 'R') {
+                if (labAim().dev) return labRightClick();   // 对着设备：收起来
                 let d = lab.sel ? labDef(lab.sel) : null;
                 let ok = labRightClick();
                 if (ok && d && d.pack) lab.hold = { kind: 'R', acc: 0, i: 0 };
                 return ok;
             }
-            let a = labAim();
+            let a = labAim(), w = labWireAim(a); if (w !== null) return w;
             if (a.item) { let ok = labPickEntity(a.item); if (ok) lab.hold = { kind: 'L', acc: 0, i: 0 }; return ok; }
+            if (a.dev) return labDevClick(a.dev);
             if (a.station) return labInteractWith(a.station);
             return labUse('L');
         }
@@ -518,10 +551,11 @@
             labFill();
             labToxic(dt);
             labStoveTick(dt);
+            labCircuitStep(dt); labDevSync();
             labFxTick(dt);
             labSyncMeshes();
             labCamera();
-            lab.hudT -= dt; if (lab.hudT <= 0) { lab.hudT = 0.2; labHudUpdate(); }
+            lab.hudT -= dt; if (lab.hudT <= 0) { lab.hudT = 0.2; labHudUpdate(); labDevLabels(); }
             lab.boxT -= dt; if (lab.boxT <= 0) { lab.boxT = 5; labBoxCatchUp(Date.now()); }
             if (lab.hp <= 0) { labDie(); return; }
             labRender();
@@ -588,6 +622,314 @@
             let m = labFxMesh(); if (!m) return;
             m.material.color.setHex(col); m.position.set(x, 1, z); m.visible = true;
             lab.fx.push({ mesh: m, t: 0, grow: 0.8, r: r });
+        }
+
+        // ══════════════ 电路和器材（第 4B 段）══════════════
+        // 设备（电池、开关、灯泡、电阻、电解槽、升压器）放在地上；手里拿电线，左键先点设备 A 再点设备 B 连一根线（用掉 1 根电线，同一对设备最多 2 根）。
+        // 只靠摆在一起不会通电。把设备当点、电线当边，一个"回路" = 图里一圈首尾相连的设备（开关断开、没电的电池不算在图里）。
+        //   · 一圈里至少要有 1 块电池和 1 个用电器才通电；一圈里电池电压相加（每块 1.5 V），一圈就是串联。
+        //   · 一个设备在好几圈里（比如一块电池接两盏灯，各自成一圈）就是并联：电压不变，它的耗电平均分给这几圈。
+        //   · 每块电池承担它所在每一圈的全部耗电（串联的几块都背满，并联的几块各背一份）。
+        //   · 升压器：沿着从"编号最小的电池、先接的那根线"出发的方向，它后面的设备电压和耗电都 ×5。
+        const LAB_DEV_CAP = 24, LAB_WIRE_CAP = 48, LAB_CYC_CAP = 64, LAB_DLABEL_MAX = 4;
+        const LAB_ELEC = { bat: 1.5, cap: 180, mult: 5 };
+        // base：通电时的耗电（U/s）；电解槽只在干活时耗电，升压器自己耗 2
+        const LAB_DEV = {
+            bat: { name: '电池', base: 0, y: 0.35, col: 0x43a047, geo: function () { return new THREE.CylinderGeometry(0.28, 0.28, 0.7, 12); } },
+            switch: { name: '开关', base: 0, y: 0.14, col: 0x66bb6a, geo: function () { return new THREE.BoxGeometry(0.7, 0.28, 0.5); } },
+            bulb: { name: '灯泡', base: 1, y: 0.5, col: 0xfff59d, basic: true, geo: function () { return new THREE.SphereGeometry(0.3, 12, 8); } },
+            resistor: { name: '电阻', base: 0.5, y: 0.12, col: 0xffcc80, geo: function () { return new THREE.BoxGeometry(0.85, 0.24, 0.3); } },
+            elec: { name: '电解槽', base: 2, y: 0.45, col: 0x4dd0e1, geo: function () { return new THREE.CylinderGeometry(0.4, 0.4, 0.9, 12); } },
+            booster: { name: '升压器', base: 2, y: 0.32, col: 0xff7043, geo: function () { return new THREE.BoxGeometry(0.7, 0.64, 0.7); } }
+        };
+        const LAB_DEV_DESC = {
+            wire: '接线用：拿在手上，左键先点一个设备再点另一个', bat: '一次性电池，1.5 V，容量 180 U', switch: '放在回路里，左键断开／接通', bulb: '通电会亮，耗电 1 U/s', resistor: '耗电 0.5 U/s',
+            motor: '只是零件，不能单独用', elec: '耗电 2 U/s，旁边放装了水的瓶子和空瓶', booster: '电压 ×5，后面设备的耗电也 ×5，自己耗电 2 U/s'
+        };
+        // 电解：放在电解槽 2 米内的瓶子。水 ≥ 2 V，盐水 ≥ 3 V（要 3 个空瓶），熔融食盐 ≥ 4 V
+        const LAB_ELEC_MODE = [{ key: 'b:water', v: 2 }, { key: 'b:brine', v: 3 }, { key: 'b:melt', v: 4 }];
+        function labDevType(key) { if (key === 'bat' || /^bat:\d+$/.test(key)) return 'bat'; return LAB_DEV[key] ? key : null; }
+        function labBatKey(c) { c = Math.max(0, Math.round(c)); return c >= LAB_ELEC.cap ? 'bat' : 'bat:' + c; }
+        function labBatCharge(key) { return key === 'bat' ? LAB_ELEC.cap : +key.slice(4); }
+        function labDevItem(d) { return d.ty === 'bat' ? labBatKey(d.charge) : d.key; }
+        function labNum(x) { return String(Math.round(x * 10) / 10); }
+
+        function labDevBuild() {
+            let R = lab;
+            Object.keys(LAB_DEV).forEach(function (t) {
+                let T = LAB_DEV[t], g = R.geo['dev:' + t] = T.geo();
+                let m = new THREE.InstancedMesh(g, T.basic ? new THREE.MeshBasicMaterial({ color: 0xffffff }) : new THREE.MeshLambertMaterial({ color: 0xffffff }), LAB_DEV_CAP);
+                m.setColorAt(0, new THREE.Color(T.col)); m.count = 0; m.frustumCulled = false; labAddObj(m); R.dm[t] = m;
+            });
+            R.geo.halo = new THREE.SphereGeometry(0.9, 10, 8);
+            R.halo = new THREE.InstancedMesh(R.geo.halo, new THREE.MeshBasicMaterial({ color: 0xfff176, transparent: true, opacity: 0.32, depthWrite: false }), LAB_DEV_CAP);
+            R.halo.count = 0; R.halo.frustumCulled = false; labAddObj(R.halo);
+            R.geo.wire = new THREE.BoxGeometry(0.07, 0.07, 1);
+            R.wm = new THREE.InstancedMesh(R.geo.wire, new THREE.MeshBasicMaterial({ color: 0xffffff }), LAB_WIRE_CAP);
+            R.wm.setColorAt(0, new THREE.Color(0x607d8b)); R.wm.count = 0; R.wm.frustumCulled = false; labAddObj(R.wm);
+            for (let i = 0; i < LAB_DLABEL_MAX; i++) R.dlabels[i] = labLabelMake();
+        }
+
+        // 进来就让设备、光晕、连线、头顶牌子各画一次（牌子放在屏幕外），几何体和贴图提前传给显卡；放第一个设备时不会卡一下
+        function labDevPrewarm() {
+            let R = lab;
+            Object.keys(R.dm).forEach(function (t) { R.dm[t].count = 1; });
+            R.halo.count = 1; R.wm.count = 1;
+            R.dlabels.forEach(function (l) { l.sp.frustumCulled = false; l.sp.position.set(0, -50, 0); l.sp.visible = true; });
+            renderer.render(scene, camera);
+            Object.keys(R.dm).forEach(function (t) { R.dm[t].count = 0; });
+            R.halo.count = 0; R.wm.count = 0;
+            R.dlabels.forEach(function (l) { l.sp.visible = false; });
+        }
+
+        // ── 放、收设备；接线、拆线 ──
+        function labPlaceDev(key, x, z) {
+            let ty = labDevType(key);
+            if (!ty) return null;
+            if (lab.devs.length >= LAB_DEV_CAP) { labFlash('设备太多了'); return null; }
+            let q = { x: x, z: z }; labClampP(q);
+            if (lab.devs.some(function (d) { return labD(d, q) < 0.8; })) { labFlash('离别的设备太近了'); return null; }
+            let d = { id: ++lab.dseq, key: ty === 'bat' ? labBatKey(labBatCharge(key)) : key, ty: ty, x: q.x, z: q.z, charge: ty === 'bat' ? labBatCharge(key) : 0, on: true, run: false, v: 0, draw: 0, bdraw: 0, k: 0, job: null, work: false, warnAt: 0 };
+            lab.devs.push(d); lab.dmap[d.id] = d; lab.cirDirty = true; lab.devSig = '';
+            return d;
+        }
+        function labDevRemove(d, give) {
+            let nw = 0;
+            lab.wires = lab.wires.filter(function (w) { if (w.a === d.id || w.b === d.id) { nw++; return false; } return true; });
+            lab.devs.splice(lab.devs.indexOf(d), 1); delete lab.dmap[d.id];
+            if (lab.wirePend === d.id) lab.wirePend = null;
+            if (d.job && give) labSpawn(d.job.mode, d.x, d.z);
+            lab.cirDirty = true; lab.devSig = '';
+            if (give) { labBagGive(labDevItem(d), 1); if (nw) labBagGive('wire', nw); }
+        }
+        function labWireAdd(a, b) {
+            if (!a || !b || a === b) return null;
+            if (lab.wires.length >= LAB_WIRE_CAP) { labFlash('线太多了'); return null; }
+            let same = lab.wires.filter(function (w) { return (w.a === a.id && w.b === b.id) || (w.a === b.id && w.b === a.id); }).length;
+            if (same >= 2) { labFlash('这两个设备已经连了两根线'); return null; }
+            if (!labN(lab.bag, 'wire')) { labFlash('没有电线了'); return null; }
+            labDel(lab.bag, 'wire', 1); labSyncSel();
+            let w = { id: ++lab.wseq, a: a.id, b: b.id };
+            lab.wires.push(w); lab.cirDirty = true; lab.devSig = '';
+            return w;
+        }
+        function labWireRemove(w, give) {
+            let i = lab.wires.indexOf(w); if (i < 0) return false;
+            lab.wires.splice(i, 1); lab.cirDirty = true; lab.devSig = '';
+            if (give) labBagGive('wire', 1);
+            return true;
+        }
+        // 手里拿着电线，左键点设备：第一下选中，第二下连线；再点同一个取消
+        function labWireClick(d) {
+            if (!d) { lab.wirePend = null; labFlash('对着设备点：先点一个，再点另一个'); return false; }
+            let a = lab.wirePend ? lab.dmap[lab.wirePend] : null;
+            if (!a) { lab.wirePend = d.id; lab.devSig = ''; labFlash('再点另一个设备'); return true; }
+            lab.wirePend = null; lab.devSig = '';
+            if (a === d) { labFlash('取消了'); return true; }
+            return !!labWireAdd(a, d);
+        }
+        function labDevClick(d) {
+            if (d.ty === 'switch') { d.on = !d.on; lab.cirDirty = true; lab.devSig = ''; labFlash(d.on ? '开关接通了' : '开关断开了'); return true; }
+            labFlash(labDevInfo(d)); return true;
+        }
+        function labDevPick(d) { let nm = LAB_DEV[d.ty].name; labDevRemove(d, true); labFlash('收起了' + nm); return true; }
+        // Q：设备放在面前 1 米（被别的设备挡住就换个方向）；每次只放 1 个
+        function labPutDev(k) {
+            if (lab.devs.length >= LAB_DEV_CAP) { labFlash('设备太多了'); return false; }
+            let base = Math.atan2(lab.face.z, lab.face.x), d = null;
+            for (let i = 0; i < 6 && !d; i++) {
+                let a = base + i * 1.0472, q = { x: lab.p.x + Math.cos(a), z: lab.p.z + Math.sin(a) };
+                labClampP(q);
+                if (!lab.devs.some(function (o) { return labD(o, q) < 0.8; })) d = labPlaceDev(k, q.x, q.z);
+            }
+            if (!d) { labFlash('这里放不下'); return false; }
+            labDel(lab.bag, k, 1); labSyncSel();
+            if (lab.hold && lab.hold.kind === 'Q') lab.hold = null;
+            return true;
+        }
+
+        // ── 回路 ──
+        function labCircuitRebuild() {
+            let idx = {}, nodes = [];
+            lab.devs.forEach(function (d) {
+                if (d.ty === 'switch' && !d.on) return;
+                if (d.ty === 'bat' && d.charge <= 0) return;
+                idx[d.id] = nodes.length; nodes.push(d);
+            });
+            let adj = nodes.map(function () { return []; });
+            lab.wires.forEach(function (w) {
+                let a = idx[w.a], b = idx[w.b]; if (a === undefined || b === undefined) return;
+                adj[a].push([b, w.id]); adj[b].push([a, w.id]);
+            });
+            let cycles = [], budget = 30000, over = false, vis = nodes.map(function () { return false; });
+            let dfs = function (s, cur, pn, pe) {
+                let list = adj[cur];
+                for (let i = 0; i < list.length && !over; i++) {
+                    if (--budget < 0 || cycles.length >= LAB_CYC_CAP) { over = true; return; }
+                    let to = list[i][0], eid = list[i][1];
+                    if (pe.indexOf(eid) >= 0) continue;
+                    if (to === s) { if (pe[0] < eid) cycles.push({ nodes: pn.slice(), edges: pe.concat(eid) }); continue; }   // 每一圈两个方向都会走到，只收线编号小的那个方向
+                    if (to < s || vis[to]) continue;
+                    vis[to] = true; pn.push(to); pe.push(eid);
+                    dfs(s, to, pn, pe);
+                    pn.pop(); pe.pop(); vis[to] = false;
+                }
+            };
+            for (let s = 0; s < nodes.length && !over; s++) { vis[s] = true; dfs(s, s, [s], []); vis[s] = false; }
+            if (over && !lab.cirWarned) { lab.cirWarned = true; labFlash('电路太复杂了'); }
+            let live = [];
+            if (!over) cycles.forEach(function (c) {
+                let L = c.nodes.length, devs = c.nodes.map(function (i) { return nodes[i]; });
+                let nb = devs.filter(function (d) { return d.ty === 'bat'; }).length, nl = devs.filter(function (d) { return d.ty !== 'bat' && d.ty !== 'switch'; }).length;
+                if (!nb || !nl) return;
+                // 方向：从编号最小的电池出发，先接的那根线通向的一边是"后面"
+                let p = 0; devs.forEach(function (d, i) { if (d.ty === 'bat' && (devs[p].ty !== 'bat' || d.id < devs[p].id)) p = i; });
+                let step = c.edges[p] < c.edges[(p + L - 1) % L] ? 1 : -1, m = 1;
+                c.rows = []; c.vbase = nb * LAB_ELEC.bat;
+                for (let k = 0; k < L; k++) {
+                    let d = devs[(((p + step * k) % L) + L) % L];
+                    c.rows.push({ d: d, m: m });
+                    if (d.ty === 'booster') m *= LAB_ELEC.mult;
+                }
+                live.push(c);
+            });
+            lab.cyc = live;
+        }
+        function labCircuitStep(dt) {
+            if (!lab.devs.length) { lab.cyc = null; return; }
+            if (lab.cirDirty) { labCircuitRebuild(); lab.cirDirty = false; }
+            let cyc = lab.cyc || [];
+            lab.devs.forEach(function (d) { d.run = false; d.v = 0; d.k = 0; d.draw = 0; d.bdraw = 0; });
+            cyc.forEach(function (c) { c.rows.forEach(function (r) { let d = r.d, V = c.vbase * r.m; d.run = true; d.k++; if (V > d.v) d.v = V; }); });
+            lab.devs.forEach(function (d) { if (d.ty !== 'elec') return; if (d.run) labElecCheck(d); d.work = !!(d.run && d.job); });
+            cyc.forEach(function (c) {
+                let D = 0;
+                c.rows.forEach(function (r) {
+                    let d = r.d, b = d.ty === 'elec' ? (d.work ? LAB_DEV.elec.base : 0) : LAB_DEV[d.ty].base;
+                    if (b) { let x = b * r.m / d.k; D += x; d.draw += x; }
+                });
+                c.rows.forEach(function (r) { if (r.d.ty === 'bat') r.d.bdraw += D; });
+            });
+            lab.devs.forEach(function (d) {
+                if (d.ty === 'bat' && d.bdraw > 0) {
+                    d.charge -= d.bdraw * dt;
+                    if (d.charge <= 0) { d.charge = 0; lab.cirDirty = true; labFlash('电池没电了'); }
+                }
+                if (d.ty === 'elec' && d.job && d.run) { d.job.t += dt; if (d.job.t >= LAB_T.elec - 1e-9) labElecDone(d); }
+            });
+        }
+
+        // ── 电解 ──
+        function labElecBottles(d) { return lab.ground.filter(function (e) { return e.key === 'bottle' && !e.dead && labD(e, d) <= LAB_T.fillR; }); }
+        function labElecWarn(d, txt) {
+            if (lab.t < d.warnAt || labD(d, lab.p) > 8) return;
+            d.warnAt = lab.t + 4; labFlash(txt);
+        }
+        function labElecCheck(d) {
+            if (d.job) return;
+            for (let i = 0; i < LAB_ELEC_MODE.length; i++) {
+                let m = LAB_ELEC_MODE[i], e = lab.ground.filter(function (g) { return g.key === m.key && !g.dead && labD(g, d) <= LAB_T.fillR; })[0];
+                if (!e) continue;
+                if (d.v + 1e-9 < m.v) { labElecWarn(d, '电压不够，要 ' + m.v + ' V'); return; }
+                if (m.key === 'b:brine' && labElecBottles(d).length < 3) { labElecWarn(d, '需要 3 个空瓶'); return; }
+                labKill(e); d.job = { mode: m.key, t: 0 };
+                return;
+            }
+        }
+        // 做完一瓶：放进来的瓶子空了留在原处；产物装进 2 米内的空瓶，没有瓶子的气体就放在电解槽上（氢氧混着会爆炸、氯气有毒）
+        function labElecDone(d) {
+            let mode = d.job.mode; d.job = null;
+            labSpawn('bottle', d.x + 0.3, d.z + 0.3);
+            let put = function (gas, bottled) {
+                let b = labElecBottles(d).sort(function (p, q) { return labD(p, d) - labD(q, d); })[0];
+                if (b) { labKill(b); labSpawn(bottled, b.x, b.z); if (bottled === 'b:naoh') labMade(bottled, 1); }
+                else if (gas) labSpawn('g:' + gas, d.x, d.z);
+                else labFlash('没有空瓶，氢氧化钠洒了');
+            };
+            if (mode === 'b:water') { put('h2', 'b:h2'); put('h2', 'b:h2'); put('o2', 'b:o2'); }
+            else if (mode === 'b:brine') { put(null, 'b:naoh'); put('h2', 'b:h2'); put('cl2', 'b:cl2'); }
+            else { put('cl2', 'b:cl2'); labSpawn('a:11:12', d.x + 1.3, d.z); }
+            d.warnAt = 0;
+        }
+
+        // ── 画出来：设备、光晕、连线都用现成的实例网格，只改矩阵和颜色 ──
+        function labDevSync() {
+            let R = lab;
+            let sig = R.devs.map(function (d) { return d.id + ':' + d.x + ':' + d.z + ':' + (d.run ? 1 : 0) + (d.on ? 1 : 0) + (d.work ? 1 : 0) + ':' + Math.ceil(d.charge / 12) + (R.wirePend === d.id ? 'p' : ''); }).join(',') + '|' + R.wires.map(function (w) { return w.id; }).join(',');
+            if (sig === R.devSig) return;
+            R.devSig = sig;
+            if (!LAB_DUMMY) { LAB_DUMMY = new THREE.Object3D(); LAB_COL = new THREE.Color(); }
+            let cnt = {}, hn = 0;
+            R.devs.forEach(function (d) {
+                let T = LAB_DEV[d.ty], m = R.dm[d.ty], i = cnt[d.ty] = (cnt[d.ty] || 0) + 1, col = T.col;
+                i--;
+                LAB_DUMMY.position.set(d.x, T.y, d.z); LAB_DUMMY.scale.setScalar(R.wirePend === d.id ? 1.25 : 1); LAB_DUMMY.rotation.set(0, 0, 0); LAB_DUMMY.updateMatrix();
+                m.setMatrixAt(i, LAB_DUMMY.matrix);
+                if (d.ty === 'bat') col = d.charge <= 0 ? 0x616161 : LAB_COL.setHSL(0.33 * Math.min(1, d.charge / LAB_ELEC.cap), 0.6, 0.42).getHex();
+                else if (d.ty === 'switch') col = d.on ? 0x66bb6a : 0xe53935;
+                else if (d.ty === 'bulb') col = d.run ? 0xffee58 : 0x8d8a6a;
+                else if (d.ty === 'resistor') col = d.run ? 0xff7043 : 0xffcc80;
+                else if (d.ty === 'elec') col = d.work ? 0x00e5ff : 0x4dd0e1;
+                else if (d.ty === 'booster') col = d.run ? 0xffab40 : 0xff7043;
+                m.setColorAt(i, LAB_COL.setHex(col));
+                if (d.ty === 'bulb' && d.run) {
+                    LAB_DUMMY.position.set(d.x, 0.5, d.z); LAB_DUMMY.scale.setScalar(1); LAB_DUMMY.updateMatrix(); R.halo.setMatrixAt(hn++, LAB_DUMMY.matrix);
+                }
+            });
+            Object.keys(R.dm).forEach(function (t) { let m = R.dm[t]; m.count = cnt[t] || 0; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; });
+            R.halo.count = hn; R.halo.instanceMatrix.needsUpdate = true;
+            // 连线：一根细长方体，两头在设备上；同一对设备的第二根线错开一点
+            let seen = {};
+            R.wires.forEach(function (w, i) {
+                let a = R.dmap[w.a], b = R.dmap[w.b]; if (!a || !b) return;
+                let pk = Math.min(w.a, w.b) + ':' + Math.max(w.a, w.b), second = seen[pk]; seen[pk] = 1;
+                let dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz) || 1, off = second ? 0.18 : 0;
+                let ox = -dz / len * off, oz = dx / len * off, y = second ? 0.62 : 0.4;
+                LAB_DUMMY.position.set((a.x + b.x) / 2 + ox, y, (a.z + b.z) / 2 + oz); LAB_DUMMY.scale.set(1, 1, len); LAB_DUMMY.lookAt(b.x + ox, y, b.z + oz); LAB_DUMMY.updateMatrix();
+                R.wm.setMatrixAt(i, LAB_DUMMY.matrix);
+                R.wm.setColorAt(i, LAB_COL.setHex(a.run && b.run ? 0xffee58 : 0x607d8b));
+            });
+            LAB_DUMMY.scale.setScalar(1); LAB_DUMMY.rotation.set(0, 0, 0);
+            R.wm.count = R.wires.length; R.wm.instanceMatrix.needsUpdate = true; R.wm.instanceColor.needsUpdate = true;
+        }
+        function labDevInfo(d) {
+            let T = LAB_DEV[d.ty];
+            if (d.ty === 'bat') return '电池：剩 ' + Math.ceil(d.charge) + '/' + LAB_ELEC.cap + ' U' + (d.bdraw ? '　耗电 ' + labNum(d.bdraw) + ' U/s' : '');
+            if (d.ty === 'switch') return '开关：' + (d.on ? '接通' : '断开');
+            if (!d.run) return T.name + '：没通电';
+            return T.name + (d.ty === 'bulb' ? '：亮着　' : '：') + labNum(d.v) + ' V　耗电 ' + labNum(d.draw) + ' U/s';
+        }
+        // 设备头顶的牌子：离自己最近的 4 个，显示电压和耗电（电池显示剩余电量）
+        function labDevLabels() {
+            let R = lab, list = R.devs.slice().sort(function (a, b) { return labD(a, R.p) - labD(b, R.p); }).filter(function (d) { return labD(d, R.p) <= 7; }).slice(0, LAB_DLABEL_MAX).map(function (d) {
+                let T = LAB_DEV[d.ty], l1 = T.name, l2;
+                if (d.ty === 'bat') { l1 = '电池 ' + Math.ceil(d.charge) + '/' + LAB_ELEC.cap + ' U'; l2 = d.bdraw ? '耗电 ' + labNum(d.bdraw) + ' U/s' : (d.charge <= 0 ? '没电了' : '没接通'); }
+                else if (d.ty === 'switch') l2 = d.on ? '接通' : '断开';
+                else l2 = d.run ? labNum(d.v) + ' V　耗电 ' + labNum(d.draw) + ' U/s' : '没通电';
+                return { x: d.x, z: d.z, l1: l1, l2: l2 };
+            });
+            labLabelsShow(list, R.dlabels, LAB_DLABEL_MAX, 1.5);
+        }
+        // 对准设备（光线离设备中心 0.6 米内）和电线（光线离线上某点 0.22 米内）
+        function labAimDev() {
+            let R = lab, dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+            let ex = R.p.x, ey = R.p.y + LAB_EYE, ez = R.p.z, res = { dev: null, wire: null };
+            let ray = function (x, y, z) {
+                let vx = x - ex, vy = y - ey, vz = z - ez, t = vx * dir.x + vy * dir.y + vz * dir.z;
+                if (t <= 0.2 || t > 9) return null;
+                return { t: t, d: Math.hypot(vx - dir.x * t, vy - dir.y * t, vz - dir.z * t) };
+            };
+            let bt = 1e9;
+            R.devs.forEach(function (d) { let h = ray(d.x, LAB_DEV[d.ty].y, d.z); if (h && h.d <= 0.6 && h.t < bt) { bt = h.t; res.dev = d; } });
+            let bd = 1e9;
+            R.wires.forEach(function (w) {
+                let a = R.dmap[w.a], b = R.dmap[w.b]; if (!a || !b) return;
+                for (let i = 0; i <= 8; i++) {
+                    let f = i / 8, h = ray(a.x + (b.x - a.x) * f, 0.45, a.z + (b.z - a.z) * f);
+                    if (h && h.d <= 0.22 && h.d < bd) { bd = h.d; res.wire = w; }
+                }
+            });
+            return res;
         }
 
         // ══════════════ 规则：气体、衰变、拼合、反应 ══════════════
@@ -675,11 +1017,12 @@
             sp.scale.set(2.6, 0.65, 1); sp.visible = false; sp.renderOrder = 5; labAddObj(sp);
             return { sp: sp, cv: cv, g: cv.getContext('2d'), text: '' };
         }
-        function labLabelsShow(list) {
-            for (let i = 0; i < LAB_LABEL_MAX; i++) {
-                let L = lab.labels[i];
+        function labLabelsShow(list, pool, max, y) {
+            pool = pool || lab.labels; max = max || LAB_LABEL_MAX; y = y || 1.5;
+            for (let i = 0; i < max; i++) {
+                let L = pool[i];
                 if (i >= list.length) { if (L && L.sp.visible) L.sp.visible = false; continue; }
-                if (!L) L = lab.labels[i] = labLabelMake();
+                if (!L) L = pool[i] = labLabelMake();
                 let d = list[i], txt = d.l1 + '|' + d.l2;
                 if (txt !== L.text) {
                     L.text = txt; lab.labelDraws++;
@@ -688,7 +1031,7 @@
                     g.strokeText(d.l2, 256, 90); g.fillStyle = /无对应/.test(d.l2) ? '#ff8a80' : '#ffee58'; g.fillText(d.l2, 256, 90);
                     L.sp.material.map.needsUpdate = true;
                 }
-                L.sp.position.set(d.x, 1.5, d.z); L.sp.visible = true;
+                L.sp.position.set(d.x, y, d.z); L.sp.visible = true;
             }
         }
         // 接触反应：挨在一起（0.5 米）就发生
@@ -734,6 +1077,7 @@
             let R = lab;
             R.booms++;
             R.ground.slice().forEach(function (e) { if (Math.hypot(e.x - x, e.z - z) <= LAB_T.boomR) labKill(e); });
+            R.devs.slice().forEach(function (d) { if (Math.hypot(d.x - x, d.z - z) <= LAB_T.boomR) labDevRemove(d, false); });   // 设备和接在上面的线也炸没了
             if (Math.hypot(LAB_ST.stove.x - x, LAB_ST.stove.z - z) <= LAB_T.boomR) { R.stove.items = {}; R.stove.cook = null; }
             if (Math.hypot(R.p.x - x, R.p.z - z) <= LAB_T.boomR) { R.bag = {}; R.sel = null; labHurt(LAB_T.boomDmg); }
             labFxBall(x, z, LAB_T.boomR * 0.6, 0xff9800);
@@ -831,7 +1175,7 @@
                     '<div style="font-size:14px;">' + Object.keys(r.in).map(function (k) { let have = labCraftHave(k); return '<span style="color:' + (have >= r.in[k] ? '#2e7d32' : '#c62828') + ';">' + labName(k) + ' ' + have + '/' + r.in[k] + '</span>'; }).join('　') +
                     ' → ' + line(r.out) + '</div></div>';
             }).join('');
-            labPanelOpen('craft', '合成台', '<div style="margin:4px 0;color:#666;">材料取自灶台台面和身上（先用台面的）。不够的灰着。合成好的药剂在实验室里用左键喝（伤害药剂按 T 能扔出去）。</div>' + rows);
+            labPanelOpen('craft', '合成台', '<div style="margin:4px 0;color:#666;">材料取自灶台台面和身上（先用台面的）。不够的灰着。合成好的药剂用左键喝（伤害药剂按 T 能扔出去）；器材用 Q 放在地上，再用电线接起来。</div>' + rows);
         }
 
         // ══════════════ 身上的东西 ══════════════
@@ -867,6 +1211,7 @@
         function labPut(all, spiralIdx) {
             labSyncSel();
             let k = lab.sel; if (!k || !labN(lab.bag, k)) { labFlash('先选一样东西'); return false; }
+            if (labDevType(k)) return labPutDev(k);   // 设备放在面前，一次一个
             let n = all ? Math.min(labN(lab.bag, k), 30) : 1;
             if (labIsParticle(k)) { let room = LAB_PARTICLE_CAP - labParticleCount(); if (room <= 0) return labFull(); n = Math.min(n, room); }
             labDel(lab.bag, k, n);
@@ -936,16 +1281,16 @@
         }
         function labInteractWith(st) {
             if (!st) { labFlash('附近没有能用的台子'); return false; }
-            if (st === 'stove') labPanelStove(); else if (st === 'craft') labPanelCraft(); else if (st === 'orders') labPanelOrders(); else labPanelBox();
+            if (st === 'stove') labPanelStove(); else if (st === 'craft') labPanelCraft(); else if (st === 'orders') labPanelOrders(); else if (st === 'table') labPanelTable(); else labPanelBox();
             return true;
         }
-        function labInteract() { return labInteractWith(labNearStation()); }
+        function labInteract() { let a = labAim(); if (a.dev) return labDevClick(a.dev); return labInteractWith(labNearStation()); }
 
         // ── 瞄准：左键按"准星对着什么"来判断 ──
         // 地上或台上的东西 → 捡；家具（合成台、灶台、订单板、仓库箱）→ 互动；都没对准 → 使用手里的东西
         function labAim() {
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir);
-            let ex = lab.p.x, ey = lab.p.y + LAB_EYE, ez = lab.p.z, res = { item: null, station: null }, bi = 0, bs = 0;
+            let ex = lab.p.x, ey = lab.p.y + LAB_EYE, ez = lab.p.z, res = { item: null, station: null, dev: null, wire: null }, bi = 0, bs = 0;
             let cosOf = function (x, y, z) { let dx = x - ex, dy = y - ey, dz = z - ez, d = Math.hypot(dx, dy, dz) || 1; return (dx * dir.x + dy * dir.y + dz * dir.z) / d; };
             lab.ground.forEach(function (e) {
                 if (e.dead || labDef(e.key).gas) return;
@@ -958,17 +1303,20 @@
                 let c = cosOf(q.x, 0.9, q.z);
                 if (c >= Math.cos(35 * Math.PI / 180) && c > bs) { bs = c; res.station = k; }
             });
+            let dv = labAimDev(); res.dev = dv.dev; res.wire = dv.wire;
             return res;
         }
         function labClick() {
             if (!lab || lab.over || lab.panel || document.getElementById('lab-book')) return false;
-            let a = labAim();
+            let a = labAim(), w = labWireAim(a); if (w !== null) return w;
             if (a.item) return labPickEntity(a.item);
+            if (a.dev) return labDevClick(a.dev);
             if (a.station) return labInteractWith(a.station);
             return labUse('L');
         }
         function labRightClick() {
             if (!lab || lab.over || lab.panel || document.getElementById('lab-book')) return false;
+            let a = labAim(); if (a.dev) return labDevPick(a.dev);
             return labUse('R');
         }
 
@@ -1012,8 +1360,11 @@
             let st = '血量 ' + Math.max(0, Math.ceil(R.hp)) + '/100' + (R.poisonT > 0 ? '　<b style="color:#c62828">毒气！</b>' : '') + (eff.length ? '<br>' + eff.join('　') : '');
             let stEl = document.getElementById('lab-status'); if (stEl && stEl.getAttribute('data-s') !== st) { stEl.innerHTML = st; stEl.setAttribute('data-s', st); }
             let bag = labBagHtml(), bEl = document.getElementById('lab-bag'); if (bEl && bEl.getAttribute('data-s') !== bag) { bEl.innerHTML = bag; bEl.setAttribute('data-s', bag); }
-            let hint = '', aim = labAim();
-            if (aim.item) { let ds = labDesc(aim.item.key); hint = labName(aim.item.key) + (ds ? '：' + ds : '') + '<br><small>左键：拿</small>'; }
+            let hint = '', aim = labAim(), wh = R.sel === 'wire', pend = R.wirePend ? R.dmap[R.wirePend] : null;
+            if (pend) hint = '已选 ' + LAB_DEV[pend.ty].name + '<br><small>左键再点另一个设备（点同一个取消）</small>';
+            else if (aim.dev) hint = labDevInfo(aim.dev) + '<br><small>' + (aim.dev.ty === 'switch' ? '左键：开关　' : (wh ? '左键：接线　' : '')) + '右键：收起</small>';
+            else if (aim.wire) hint = '电线<br><small>' + (wh ? '左键：拆掉' : '拿着电线，左键：拆掉') + '</small>';
+            else if (aim.item) { let ds = labDesc(aim.item.key); hint = labName(aim.item.key) + (ds ? '：' + ds : '') + '<br><small>左键：拿</small>'; }
             else if (aim.station) hint = LAB_ST[aim.station].name + '：' + LAB_ST_DESC[aim.station] + '<br><small>左键：打开</small>';
             else if (Math.hypot(R.p.x - LAB_POOL.x, R.p.z - LAB_POOL.z) <= LAB_POOL.r + 1.6) hint = '水池<br><small>选中空玻璃瓶，右键：接水</small>';
             let hEl = document.getElementById('lab-hint');
@@ -1051,6 +1402,27 @@
                 '<div style="margin:8px 0;"><button id="lab-fire" style="' + LAB_BTN + '" onclick="labStoveFire();labPanelStove()">点火</button> ' +
                 (S.cook ? '<span>烧着呢：' + S.cook.rec.name + '，还要 ' + Math.ceil(S.cook.t) + ' 秒</span>' : (rec ? '<span style="color:#2e7d32;">可以做：' + rec.name + '</span>' : '<span style="color:#888;">现在摆的东西没有对应的配方</span>')) + '</div>' +
                 '<div style="margin-top:6px;border-top:1px solid #eee;padding-top:6px;font-size:12px;"><b>灶台配方</b>' + recs + '</div>');
+        }
+        // 元素表：氢到铁（Z 1～26）每个同位素，直接读 LAB_STABLE 和 LAB_UNST（半衰期比 1000 年长的和稳定的一样，不进 LAB_DECAY）
+        function labIsoList() {
+            let out = [];
+            for (let z = 1; z <= 26; z++) {
+                (LAB_STABLE[z] || []).forEach(function (a) { out.push({ z: z, n: a - z, st: 'stable' }); });
+                LAB_UNST.filter(function (u) { return u[0] === z; }).forEach(function (u) {
+                    out.push({ z: z, n: u[1], st: LAB_DECAY['a:' + z + ':' + u[1]] ? 'decay' : 'long', T: u[2], mode: u[3] });
+                });
+            }
+            return out.sort(function (a, b) { return a.z - b.z || a.n - b.n; });
+        }
+        function labPanelTable() {
+            let rows = '', last = 0;
+            labIsoList().forEach(function (r) {
+                if (r.z !== last) { last = r.z; rows += '<tr><td colspan="5" style="background:#ede7f6;font-weight:bold;">' + r.z + ' ' + LAB_EL[r.z][1] + ' ' + LAB_EL[r.z][0] + '</td></tr>'; }
+                let txt = r.st === 'stable' ? '<span style="color:#2e7d32;">稳定</span>' : r.st === 'decay' ? '<span style="color:#c62828;">会衰变（' + LAB_MODE_TXT[r.mode] + '），半衰期 ' + labTimeTxt(r.T) + '</span>' : '<span style="color:#2e7d32;">当作稳定（半衰期太长）</span>';
+                rows += '<tr class="lab-iso" data-z="' + r.z + '" data-n="' + r.n + '" data-s="' + r.st + '"><td>' + labAtomName(r.z, r.n) + '</td><td>' + r.z + '</td><td>' + r.n + '</td><td>' + r.z + '</td><td>' + txt + '</td></tr>';
+            });
+            labPanelOpen('table', '元素表', '<div style="margin:4px 0;color:#666;">地上的粒子按质子数、中子数、电子数拼成这些原子。数据待核对。</div>' +
+                '<table style="width:100%;border-collapse:collapse;font-size:13px;"><tr style="color:#666;"><td>名字</td><td>质子</td><td>中子</td><td>电子</td><td>稳定吗</td></tr>' + rows + '</table>');
         }
         function labPanelOrders() {
             let L = labSt(); labOrdersFill();
@@ -1132,9 +1504,17 @@
                     return '<div style="border-bottom:1px solid #eee;padding:5px 0;"><b>' + r.name + '</b> <span style="color:#888;font-size:11px;">' + r.where + '</span><br>' + labRecipeLine(r) + (r.note ? '<br><span style="color:#666;">' + r.note + '</span>' : '') + '</div>';
                 }).join('') + '<div style="margin-top:6px;color:#666;">气体必须装瓶：空玻璃瓶在 2 米内会自动装；没装进瓶的气体 10 秒后飘走。氯气、二氧化硫没装瓶有毒（每秒 5 点伤害，5 秒）。爆炸 3 米、40 点伤害，会毁掉范围内所有东西，仓库箱除外。</div>';
             }
+            if (tab === 'device') {
+                return LAB_RECIPES.filter(function (r) { return r.kind === 'device'; }).map(function (r) {
+                    return '<div style="border-bottom:1px solid #eee;padding:5px 0;"><b>' + r.name + '</b>　' + (LAB_DEV_DESC[r.id] || '') + '<br>' + labRecipeLine(r) + '</div>';
+                }).join('') + '<div style="margin-top:6px;color:#666;line-height:1.6;">在合成台做。放在地上（Q），手里拿电线，左键先点设备 A 再点设备 B 连一根线（用 1 根电线，同一对最多 2 根）；点一下已有的线拆掉。摆在一起不会自动连。<br>' +
+                    '一圈首尾相连、里面有电池和用电器才通电。串联：电压相加，每块电池承担整圈的耗电。并联（一个设备在几圈里）：电压不变，耗电平均分。升压器：它后面的电压和耗电都 ×5。<br>' +
+                    '耗电：灯泡 1、电阻 0.5、电解槽 2（干活时）、升压器 2（自己）U/s。电池 1.5 V、180 U，用完就没了。<br>' +
+                    '电解：电解槽 2 米内放瓶子。水 ≥ 2 V（得 2 氢 + 1 氧）；盐水 ≥ 3 V（氢氧化钠 + 氢气 + 氯气，要 3 个空瓶）；熔融食盐 ≥ 4 V（钠 + 氯气）。每瓶 5 秒。</div>';
+            }
             if (tab === 'potion') {
                 let eff = { heal: '+50 血', speed: '30 秒移速 +30%', dmg: '喝：30 秒伤害 ×1.5；T 扔出去：50 点伤害', spring: '30 秒跳高 ×1.6' };
-                return LAB_RECIPES.filter(function (r) { return r.where === '合成台'; }).map(function (r) {
+                return LAB_RECIPES.filter(function (r) { return r.kind === 'potion'; }).map(function (r) {
                     return '<div style="border-bottom:1px solid #eee;padding:5px 0;"><b>' + r.name + '</b>　' + eff[r.id] + '<br>' + labRecipeLine(r) + '</div>';
                 }).join('') + '<div style="margin-top:6px;color:#666;">药剂本段只在实验室里用。</div>';
             }
@@ -1158,14 +1538,14 @@
                 b.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;background:#fff;border-radius:12px;padding:12px 14px;width:min(95vw,600px);max-height:84vh;overflow:auto;box-shadow:0 6px 30px rgba(0,0,0,.45);font-family:"Microsoft YaHei",sans-serif;font-size:13px;color:#222;';
                 document.body.appendChild(b);
             }
-            let tabs = [['list', '配方清单'], ['table', '周期表'], ['react', '反应'], ['potion', '药剂'], ['order', '订单'], ['neutron', '中子']];
+            let tabs = [['list', '配方清单'], ['table', '周期表'], ['react', '反应'], ['device', '器材'], ['potion', '药剂'], ['order', '订单'], ['neutron', '中子']];
             b.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:16px;">实验室手册</b><button style="' + LAB_BTN2 + '" onclick="labBookClose()">关闭</button></div>' +
                 '<div style="margin:6px 0;">' + tabs.map(function (t) { return '<button class="lab-tab" style="' + (t[0] === LAB_UI.tab ? LAB_BTN : LAB_BTN2) + '" onclick="labBook(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') + '</div>' +
                 '<div id="lab-book-body">' + labBookPage(LAB_UI.tab) + '</div>';
         }
 
         // ── 调试：只有网址带 ?labdebug=1 才有"发材料" ──
-        const LAB_DBG_ITEMS = ['coal', 'iron', 'a:29:34', 'sand', 'salt', 'bottle', 'p', 'e', 'n', 'a:1:0', 'a:8:8', 'a:11:12', 'a:16:16', 'a:17:18', 'a:3:4', 'a:2:2', 'pack:1:0', 'pack:2:2', 'pack:3:4', 'pack:6:6', 'b:h2', 'b:o2', 'b:water', 'b:co2', 'b:cl2', 'b:soda', 'b:naoh', 'sugar', 'rubber'];
+        const LAB_DBG_ITEMS = ['coal', 'iron', 'a:29:34', 'sand', 'salt', 'bottle', 'p', 'e', 'n', 'a:1:0', 'a:8:8', 'a:11:12', 'a:16:16', 'a:17:18', 'a:3:4', 'a:2:2', 'pack:1:0', 'pack:2:2', 'pack:3:4', 'pack:6:6', 'b:h2', 'b:o2', 'b:water', 'b:co2', 'b:cl2', 'b:soda', 'b:naoh', 'sugar', 'rubber', 'b:brine', 'b:melt', 'wire', 'bat', 'switch', 'bulb', 'resistor', 'motor', 'elec', 'booster'];
         function labGive(k, n) {
             if (!labDebugOn() || !lab) return false;
             n = n === undefined ? 1 : n;

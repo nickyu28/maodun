@@ -3384,7 +3384,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('LB9')) {
-            // LB9 配方清单和手册：每个配方显示"现有 X / 需要 Y"（够绿不够红）、能筛"现在能做的"；手册 5 页都在、每个物品标"用在哪些配方里"；仓库里直接能开；同名物品叠放
+            // LB9 配方清单和手册：每个配方显示"现有 X / 需要 Y"（够绿不够红）、能筛"现在能做的"；手册 6 页都在、每个物品标"用在哪些配方里"；仓库里直接能开；同名物品叠放
             const bad = [];
             const T = await LBTAB();
             await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labSt().box = { iron: 1, 'a:16:16': 1, coal: 2 }; true;`);
@@ -3399,9 +3399,9 @@ async function enterExit(tab, key) {
             const ids = JSON.parse(await T.eval(`JSON.stringify(Array.prototype.map.call(document.querySelectorAll('#lab-book .lab-rec'), function (r) { return r.getAttribute('data-id'); }))`));
             if (ids.indexOf('fes') < 0 || ids.indexOf('water') >= 0 || ids.indexOf('rubber') >= 0) bad.push('筛"现在能做的"：该留硫化铁，去掉水和橡胶 ' + ids);
             await T.eval(`LAB_UI.only = false; true;`);
-            // 手册 5 页
+            // 手册 6 页
             const pages = {};
-            for (const t of ['table', 'react', 'potion', 'order', 'neutron']) {
+            for (const t of ['table', 'react', 'device', 'potion', 'order', 'neutron']) {
                 await T.eval(`labBook('${t}'); true;`);
                 pages[t] = await T.eval(`document.getElementById('lab-book-body').innerText`);
             }
@@ -3410,7 +3410,8 @@ async function enterExit(tab, key) {
             if (!/治疗药剂/.test(pages.potion) || !/弹簧鞋/.test(pages.potion) || !/用在/.test(pages.potion)) bad.push('药剂页缺内容');
             if (!/订单/.test(pages.order) || !/10%/.test(pages.order)) bad.push('订单页缺内容');
             if (!/611/.test(pages.neutron)) bad.push('中子页缺内容');
-            if (/电池|电线|原子弹|烟花|Boss|电解|离心/.test(Object.values(pages).join(''))) bad.push('手册里出现了范围外的东西');
+            if (!/电线/.test(pages.device) || !/升压器/.test(pages.device) || !/串联/.test(pages.device)) bad.push('器材页缺内容');
+            if (/原子弹|烟花|Boss|离心/.test(Object.values(pages).join(''))) bad.push('手册里出现了范围外的东西');
             // 每个物品标注用在哪些配方里：沙子用在"烧玻璃瓶"
             if (!/沙子.{0,12}用在：[^）]*烧玻璃瓶/.test(pages.react)) bad.push('沙子没标用在烧玻璃瓶 ' + pages.react.slice(0, 200));
             // 实验室里顶上的「配方清单」「手册」按钮能开（进实验室点）
@@ -3428,7 +3429,7 @@ async function enterExit(tab, key) {
             if (ver.sv !== 2 || ver.np !== 10) bad.push('SAVE_VER 或 NET_PROTO 变了 ' + JSON.stringify(ver));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('LB9 配方清单（现有 X / 需要 Y 红绿、筛现在能做的）、手册 5 页并标"用在哪些配方里"、仓库里能直接开、同名叠放', bad.length === 0, bad.join(' / '));
+            report('LB9 配方清单（现有 X / 需要 Y 红绿、筛现在能做的）、手册 6 页并标"用在哪些配方里"、仓库里能直接开、同名叠放', bad.length === 0, bad.join(' / '));
         }
 
 
@@ -3512,7 +3513,7 @@ async function enterExit(tab, key) {
             await LBENTER(T);
             // 布局：一个房间，只有合成台、灶台、订单板、仓库箱、1 个水池；没有工作台、炼药台、小院、雨
             const lay = JSON.parse(await T.eval(`JSON.stringify({ st: Object.keys(LAB_ST).sort(), room: LAB_ROOM, signs: lab.objs.filter(function (o) { return o.userData.labSign; }).length, pool: !!LAB_POOL, zone: typeof labZone, yard: typeof labInYard, rain: typeof labRainTick, bench: typeof labPanelBench, alch: typeof labPanelAlch })`));
-            if (lay.st.join() !== 'box,craft,orders,stove') bad.push('家具应该是 合成台、灶台、订单板、仓库箱 ' + lay.st);
+            if (lay.st.join() !== 'box,craft,orders,stove,table') bad.push('家具应该是 合成台、灶台、订单板、仓库箱、元素表 ' + lay.st);
             if (lay.zone !== 'undefined' || lay.yard !== 'undefined' || lay.rain !== 'undefined' || lay.bench !== 'undefined' || lay.alch !== 'undefined') bad.push('还留着旧的区域／雨／工作台／炼药台代码 ' + JSON.stringify(lay));
             // 墙：怎么按都走不出房间；脚下边界在墙里面
             const wall = JSON.parse(await T.eval(`(function(){ let o = {}; lab.p.x = 0; lab.p.z = 0; camera.rotation.set(0, 0, 0, 'YXZ'); lab.k.w = true; for (let i = 0; i < 400; i++) labMove(0.05); lab.k.w = false; o.zMin = lab.p.z;
@@ -3904,6 +3905,310 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('HH1 大厅里的山不能穿（人被推出来、镜头不进山），只做数学判断、不加物体', bad.length === 0, bad.join(' / '));
+        }
+
+        // ── 实验室第 4B 段：器材、电路、电解、元素表（LB20～LB25）──
+        // 页面里的小工具：__d 放设备，__w 连线（自己补电线），__ring 把一串设备首尾连成一圈，__look 把镜头对准一个点。
+        // 先停掉实验室自己的帧循环，再用 labAdvance 按固定步长往前推，电量、时间都不依赖帧率。
+        const ELHELP = `window.__d = function (k, x, z) { return labPlaceDev(k, x, z); };
+            window.__w = function (a, b) { labGive('wire', 1); return labWireAdd(a, b); };
+            window.__ring = function (l) { for (let i = 0; i < l.length; i++) window.__w(l[i], l[(i + 1) % l.length]); };
+            window.__look = function (x, y, z) { let dx = x - lab.p.x, dy = y - (lab.p.y + LAB_EYE), dz = z - lab.p.z; camera.rotation.set(Math.atan2(dy, Math.hypot(dx, dz)), Math.atan2(-dx, -dz), 0, 'YXZ'); camera.updateMatrixWorld(); };
+            window.__s = function (d) { return { run: d.run, v: Math.round(d.v * 100) / 100, draw: Math.round(d.draw * 100) / 100, bd: Math.round(d.bdraw * 100) / 100, ch: Math.round(d.charge * 100) / 100 }; };
+            cancelAnimationFrame(lab.raf); lab.p.x = 0; lab.p.z = 6; lab.p.y = 0; lab.hp = 100; lab.bag = {}; labClear(); true;`;
+        const elNear = (a, b, e) => Math.abs(a - b) <= (e === undefined ? 0.15 : e);
+
+        if (want('LB20')) {
+            // LB20 器材配方：电线、电池、开关、灯泡、电阻、电动机、电解槽、升压器都在合成台按文档配方做；材料不够不让做；盐水、熔融食盐在灶台做
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`${ELHELP}`);
+            const rec = JSON.parse(await T.eval(`JSON.stringify(LAB_RECIPES.filter(function (r) { return r.kind === 'device'; }).map(function (r) { return [r.id, r.where, r.in, r.out]; }))`));
+            const rw = {
+                wire: [{ 'a:29:34': 1, rubber: 1 }, { wire: 2 }], bat: [{ 'a:29:34': 1, iron: 1, 'b:brine': 1 }, { bat: 1, bottle: 1 }], switch: [{ 'a:29:34': 1, rubber: 1, iron: 1 }, { switch: 1 }],
+                bulb: [{ bottle: 1, iron: 1, wire: 1 }, { bulb: 1 }], resistor: [{ coal: 1, wire: 1 }, { resistor: 1 }], motor: [{ iron: 2, wire: 2 }, { motor: 1 }],
+                elec: [{ bottle: 1, coal: 2, wire: 2 }, { elec: 1 }], booster: [{ iron: 2, wire: 4 }, { booster: 1 }]
+            };
+            if (rec.length !== 8) bad.push('器材配方应该是 8 个 ' + rec.length);
+            rec.forEach((r) => {
+                const w = rw[r[0]];
+                if (!w) { bad.push('多出来的器材配方 ' + r[0]); return; }
+                if (r[1] !== '合成台') bad.push(r[0] + ' 应该在合成台做');
+                if (JSON.stringify(r[2]) !== JSON.stringify(w[0]) || JSON.stringify(r[3]) !== JSON.stringify(w[1])) bad.push(r[0] + ' 配方和文档不一样 ' + JSON.stringify(r));
+            });
+            // 材料够：台面上摆好材料，合成，材料用掉，产物进身上；不够：不让做
+            for (const id of Object.keys(rw)) {
+                await T.eval(`lab.bag = {}; lab.stove.items = ${JSON.stringify(rw[id][0])}; true;`);
+                if (await T.eval(`labCraftMake('${id}') !== true`)) { bad.push(id + ' 材料够了却做不出来'); continue; }
+                const got = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, stove: lab.stove.items })`));
+                if (JSON.stringify(got.bag) !== JSON.stringify(rw[id][1]) || Object.keys(got.stove).length) bad.push(id + ' 合成后材料／产物不对 ' + JSON.stringify(got));
+                await T.eval(`lab.bag = {}; lab.stove.items = {}; true;`);
+                if (await T.eval(`labCraftMake('${id}') !== false`)) bad.push(id + ' 没材料居然做出来了');
+            }
+            // 灶台：食盐 + 水 → 盐水；食盐 + 空瓶烧 5 秒 → 熔融食盐
+            await T.eval(`lab.bag = {}; lab.stove.items = { salt: 1, 'b:water': 1 }; labStoveFire(); true;`);
+            if (await T.eval(`lab.stove.items['b:brine'] !== 1`)) bad.push('食盐 + 水应该得盐水 ' + await T.eval(`JSON.stringify(lab.stove.items)`));
+            await T.eval(`lab.stove.items = { salt: 1, bottle: 1 }; labStoveFire(); true;`);
+            if (await T.eval(`!!lab.stove.items['b:melt']`)) bad.push('熔融食盐应该烧 5 秒才好');
+            await T.eval(`labAdvance(LAB_T.glass + 0.5, 0.1); true;`);
+            if (await T.eval(`lab.stove.items['b:melt'] !== 1`)) bad.push('烧够 5 秒应该得熔融食盐 ' + await T.eval(`JSON.stringify(lab.stove.items)`));
+            const nm = JSON.parse(await T.eval(`JSON.stringify(['wire', 'bat', 'switch', 'bulb', 'resistor', 'motor', 'elec', 'booster', 'b:brine', 'b:melt', 'bat:42'].map(labName))`));
+            if (nm.join() !== '电线,电池,开关,灯泡,电阻,电动机,电解槽,升压器,盐水,熔融食盐,电池（剩 42 U）') bad.push('名字不对 ' + nm);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB20 器材配方：8 种器材在合成台按文档配方做、材料不够不让做；灶台做盐水和熔融食盐', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB21')) {
+            // LB21 手动接线：设备摆在一起不会通电；手里拿电线，左键先点 A 再点 B 连线（用 1 根电线）；一根线不成回路，两根才成；对着线左键拆掉（电线还回来）；右键收起设备；Q 放设备；不能叠在一起
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`${ELHELP} window.A = __d('bat', -1.5, 2); window.B = __d('bulb', 1.5, 2); labGive('wire', 3); labSel('wire'); true;`);
+            if (await T.eval(`labPlaceDev('bulb', -1.5, 2) !== null || lab.devs.length !== 2`)) bad.push('设备不能叠在一起');
+            await T.eval(`labAdvance(1, 0.1); true;`);
+            let s = JSON.parse(await T.eval(`JSON.stringify({ a: __s(A), b: __s(B) })`));
+            if (s.b.run || !elNear(s.a.ch, 180, 0.001)) bad.push('只是摆着不接线就通电了 ' + JSON.stringify(s));
+            // 用鼠标点：第一下选中，第二下连线
+            await T.eval(`__look(A.x, 0.35, A.z); labClick(); true;`);
+            if (await T.eval(`lab.wirePend !== A.id || lab.wires.length !== 0`)) bad.push('点第一个设备应该选中它');
+            await T.eval(`__look(B.x, 0.5, B.z); labClick(); true;`);
+            let w = JSON.parse(await T.eval(`JSON.stringify({ n: lab.wires.length, bag: lab.bag.wire, pend: lab.wirePend })`));
+            if (w.n !== 1 || w.bag !== 2 || w.pend !== null) bad.push('点第二个设备应该连上一根线、用掉 1 根电线 ' + JSON.stringify(w));
+            await T.eval(`labAdvance(1, 0.1); true;`);
+            if (await T.eval(`B.run`)) bad.push('只连一根线不成回路，灯不该亮');
+            await T.eval(`__look(A.x, 0.35, A.z); labClick(); __look(B.x, 0.5, B.z); labClick(); true;`);
+            if (await T.eval(`lab.wires.length !== 2 || lab.bag.wire !== 1`)) bad.push('第二根线没连上');
+            await T.eval(`labAdvance(2, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ a: __s(A), b: __s(B) })`));
+            if (!s.b.run || !elNear(s.a.ch, 178, 0.2) || !elNear(s.b.v, 1.5, 0.01) || !elNear(s.b.draw, 1, 0.01)) bad.push('两根线成回路后灯应该亮、1.5 V、耗电 1 U/s ' + JSON.stringify(s));
+            // 点同一个设备两下 = 取消；空地上点 = 提示
+            await T.eval(`__look(A.x, 0.35, A.z); labClick(); labClick(); true;`);
+            if (await T.eval(`lab.wirePend !== null || lab.wires.length !== 2`)) bad.push('点同一个设备两下应该取消');
+            // 对着线左键：拆掉一根，电线还回来，灯灭
+            await T.eval(`__look((A.x + B.x) / 2, 0.45, (A.z + B.z) / 2); labClick(); true;`);
+            w = JSON.parse(await T.eval(`JSON.stringify({ n: lab.wires.length, bag: lab.bag.wire })`));
+            if (w.n !== 1 || w.bag !== 2) bad.push('对着线左键应该拆掉一根、电线还回来 ' + JSON.stringify(w));
+            await T.eval(`labAdvance(1, 0.1); true;`);
+            if (await T.eval(`B.run`)) bad.push('拆了线灯还亮着');
+            // 右键对着设备：收起来（连着的线一起还回来）；用过的电池带着剩下的电量
+            await T.eval(`__look(A.x, 0.35, A.z); labRightClick(); true;`);
+            const pk = JSON.parse(await T.eval(`JSON.stringify({ devs: lab.devs.length, wires: lab.wires.length, keys: Object.keys(lab.bag), wire: lab.bag.wire })`));
+            if (pk.devs !== 1 || pk.wires !== 0 || pk.wire !== 3 || !pk.keys.some((k) => /^bat:17\d$/.test(k))) bad.push('右键收起设备不对 ' + JSON.stringify(pk));
+            // Q 放设备：放在面前，一次一个
+            await T.eval(`lab.bag = {}; labGive('bulb', 3); labSel('bulb'); labPut(); true;`);
+            const pt = JSON.parse(await T.eval(`JSON.stringify({ devs: lab.devs.length, bulb: lab.bag.bulb, d: labD(lab.devs[lab.devs.length - 1], lab.p) })`));
+            if (pt.devs !== 2 || pt.bulb !== 2 || !elNear(pt.d, 1, 0.01)) bad.push('Q 应该在面前 1 米放一个设备 ' + JSON.stringify(pt));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB21 手动接线：摆着不通电、点两下连线、一根线不成回路、对着线拆线、右键收设备、Q 放设备、不能叠放', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB22')) {
+            // LB22 电路：串联点亮 2 盏灯（电压相加、每块电池背满）、并联（电压不变、耗电均摊）、电阻 0.5、电池耗尽设备停、开关断开／接通
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`${ELHELP} true;`);
+            // 串联：电池 + 2 盏灯一圈
+            await T.eval(`window.B = __d('bat', -3, 2); window.L1 = __d('bulb', 0, 0.5); window.L2 = __d('bulb', 3, 2); __ring([B, L1, L2]); labAdvance(2, 0.1); true;`);
+            let s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), l1: __s(L1), l2: __s(L2) })`));
+            if (!s.l1.run || !s.l2.run || !elNear(s.l1.v, 1.5, 0.01) || !elNear(s.l1.draw, 1, 0.01) || !elNear(s.b.bd, 2, 0.01) || !elNear(s.b.ch, 176, 0.05)) bad.push('串联 2 盏灯：应该都亮、各 1 U/s、电池背 2 U/s ' + JSON.stringify(s));
+            // 电阻 0.5
+            await T.eval(`labClear(); lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -3, 2); window.R = __d('resistor', 2, 2); __ring([B, R]); labAdvance(2, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), r: __s(R) })`));
+            if (!s.r.run || !elNear(s.r.draw, 0.5, 0.01) || !elNear(s.b.ch, 179, 0.05)) bad.push('电阻应该耗电 0.5 U/s ' + JSON.stringify(s));
+            // 串联 2 块电池：电压 3 V，每块电池各背 1 U/s
+            await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -4, 2); window.B2 = __d('bat', -1, 3); window.L1 = __d('bulb', 3, 2); __ring([B, B2, L1]); labAdvance(2, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), b2: __s(B2), l: __s(L1) })`));
+            if (!elNear(s.l.v, 3, 0.01) || !elNear(s.b.bd, 1, 0.01) || !elNear(s.b2.bd, 1, 0.01) || !elNear(s.b.ch, 178, 0.05) || !elNear(s.b2.ch, 178, 0.05)) bad.push('串联 2 块电池：灯应该 3 V，每块电池各背 1 U/s ' + JSON.stringify(s));
+            // 并联：1 块电池带 2 盏灯，各自一圈（每盏灯和电池之间连两根线）
+            await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', 0, 2); window.L1 = __d('bulb', -3, 1); window.L2 = __d('bulb', 3, 1); __ring([B, L1]); __ring([B, L2]); labAdvance(2, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), l1: __s(L1), l2: __s(L2) })`));
+            if (!s.l1.run || !s.l2.run || !elNear(s.l1.v, 1.5, 0.01) || !elNear(s.l2.v, 1.5, 0.01) || !elNear(s.b.bd, 2, 0.01)) bad.push('并联 2 盏灯：电压都是 1.5 V（不相加），电池背两盏的 2 U/s ' + JSON.stringify(s));
+            // 并联：2 块电池带 1 盏灯：电压还是 1.5 V，耗电 1 U/s 平均分摊，每块电池 0.5 U/s
+            await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -3, 2); window.B2 = __d('bat', 3, 2); window.L1 = __d('bulb', 0, 1); __ring([B, L1]); __ring([B2, L1]); labAdvance(2, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), b2: __s(B2), l: __s(L1) })`));
+            if (!elNear(s.l.v, 1.5, 0.01) || !elNear(s.l.draw, 1, 0.01) || !elNear(s.b.bd, 0.5, 0.01) || !elNear(s.b2.bd, 0.5, 0.01) || !elNear(s.b.ch, 179, 0.05)) bad.push('并联 2 块电池：灯 1.5 V、耗电均摊每块 0.5 U/s ' + JSON.stringify(s));
+            // 电池耗尽：一块没电了，另一块接着带（全背）；两块都没电，灯灭
+            await T.eval(`B.charge = 0.05; labAdvance(1, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), b2: __s(B2), l: __s(L1) })`));
+            if (s.b.ch !== 0 || !s.l.run || !elNear(s.b2.bd, 1, 0.01)) bad.push('并联里一块电池耗尽，另一块应该接着带全部耗电 ' + JSON.stringify(s));
+            await T.eval(`B2.charge = 1; labAdvance(3, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b2: __s(B2), l: __s(L1) })`));
+            if (s.b2.ch !== 0 || s.l.run) bad.push('电池耗尽后灯应该灭 ' + JSON.stringify(s));
+            // 满电的普通电池亮一盏灯 180 秒：用 1 U/s 实测 20 秒掉 20 U，按比例就是 180 秒
+            await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -3, 2); window.L1 = __d('bulb', 3, 2); __ring([B, L1]); labAdvance(20, 0.1); true;`);
+            if (!elNear(await T.eval(`B.charge`), 160, 0.1)) bad.push('一盏灯 20 秒应该耗 20 U ' + await T.eval(`B.charge`));
+            // 开关：断开灯灭、电池不掉电；接通灯亮。用瞄准 + E 键切换
+            await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -3, 2); window.S = __d('switch', 0, 0.5); window.L1 = __d('bulb', 3, 2); __ring([B, S, L1]); labAdvance(1, 0.1); window.__c0 = B.charge; true;`);
+            if (await T.eval(`!L1.run || !S.on`)) bad.push('开关接通时灯应该亮');
+            await T.eval(`__look(S.x, 0.14, S.z); labInteract(); labAdvance(1, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ on: S.on, l: L1.run, ch: B.charge, c0: window.__c0 })`));
+            if (s.on || s.l || !elNear(s.ch, s.c0, 0.001)) bad.push('开关断开后灯应该灭、电池不再掉电 ' + JSON.stringify(s));
+            await T.eval(`__look(S.x, 0.14, S.z); labInteract(); labAdvance(1, 0.1); true;`);
+            if (await T.eval(`!S.on || !L1.run`)) bad.push('开关接通后灯应该又亮');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB22 电路：串联 2 盏灯、串联电池电压相加、并联电压不变耗电均摊、电阻 0.5、电池耗尽设备停、开关断开接通', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB23')) {
+            // LB23 升压器：它后面的电压和耗电都 ×5，自己耗电 2 U/s（前面的设备不受影响）；一圈电池耗电 = 升压器 2 + 灯 1 × 5 = 7 U/s
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`${ELHELP} true;`);
+            // 电池 → 升压器 → 灯 → 回电池（线按这个顺序接）
+            await T.eval(`window.B = __d('bat', -3, 2); window.K = __d('booster', 0, 0.5); window.L = __d('bulb', 3, 2); __w(B, K); __w(K, L); __w(L, B); labAdvance(2, 0.1); true;`);
+            let s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), k: __s(K), l: __s(L) })`));
+            if (!elNear(s.l.v, 7.5, 0.01) || !elNear(s.l.draw, 5, 0.01) || !elNear(s.k.draw, 2, 0.01) || !elNear(s.k.v, 1.5, 0.01) || !elNear(s.b.bd, 7, 0.01) || !elNear(s.b.ch, 166, 0.1)) bad.push('升压器在灯前面：灯应该 7.5 V、耗电 5，升压器自己 2，电池背 7 ' + JSON.stringify(s));
+            // 灯在升压器前面：不受影响
+            await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -3, 2); window.L = __d('bulb', 0, 0.5); window.K = __d('booster', 3, 2); __w(B, L); __w(L, K); __w(K, B); labAdvance(2, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), k: __s(K), l: __s(L) })`));
+            if (!elNear(s.l.v, 1.5, 0.01) || !elNear(s.l.draw, 1, 0.01) || !elNear(s.b.bd, 3, 0.01)) bad.push('灯在升压器前面不该 ×5 ' + JSON.stringify(s));
+            // 2 块电池 + 升压器：电压 3 × 5 = 15 V
+            await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -4, 2); window.B2 = __d('bat', -1, 3); window.K = __d('booster', 1, 0.5); window.L = __d('bulb', 4, 2); __w(B, B2); __w(B2, K); __w(K, L); __w(L, B); labAdvance(1, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), l: __s(L) })`));
+            if (!elNear(s.l.v, 15, 0.01) || !elNear(s.b.bd, 7, 0.01)) bad.push('2 块电池 + 升压器：灯 15 V、每块电池背 7 U/s ' + JSON.stringify(s));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB23 升压器 ×5：后面的电压和耗电都乘 5、自己耗电 2、前面的不受影响', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB24')) {
+            // LB24 电解：水 ≥ 2 V → 2 氢 + 1 氧（5 秒，每块串联电池 10 U）；电压不够不出；没装瓶的氢氧混合爆炸；盐水要 3 个空瓶且 ≥ 3 V；熔融食盐 ≥ 4 V 出钠 + 氯气；没装瓶的氯气有毒
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`${ELHELP} window.__G = function (k) { return lab.ground.filter(function (e) { return e.key === k && !e.dead; }).length; };
+                window.__clr = function () { lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); labClear(); lab.booms = 0; lab.hp = 100; };
+                window.__bot = function (n, x, z) { for (let i = 0; i < n; i++) labSpawn('bottle', x + i * 0.3, z + 1); };
+                true;`);
+            // 水：2 块电池串联（3 V）+ 电解槽
+            await T.eval(`window.B = __d('bat', -4, 2); window.B2 = __d('bat', -1, 3); window.E = __d('elec', 3, 2); __ring([B, B2, E]); labSpawn('b:water', 3.5, 2.5); __bot(2, 3, 2); labAdvance(1, 0.1); true;`);
+            if (await T.eval(`!E.job || __G('b:water') !== 0`)) bad.push('水瓶放在电解槽旁、电压够，应该开始电解');
+            await T.eval(`labAdvance(5, 0.1); true;`);
+            let g = JSON.parse(await T.eval(`JSON.stringify({ h2: __G('b:h2'), o2: __G('b:o2'), free: __G('g:h2') + __G('g:o2'), water: __G('b:water'), booms: lab.booms, ch: [Math.round(B.charge * 10) / 10, Math.round(B2.charge * 10) / 10], job: !!E.job })`));
+            if (g.h2 !== 2 || g.o2 !== 1 || g.free !== 0 || g.water !== 0 || g.booms !== 0 || g.job) bad.push('电解水应该得 2 瓶氢气 + 1 瓶氧气 ' + JSON.stringify(g));
+            if (!elNear(g.ch[0], 170, 0.3) || !elNear(g.ch[1], 170, 0.3)) bad.push('电解一瓶水（5 秒 × 2 U/s）每块串联电池应该耗 10 U ' + JSON.stringify(g.ch));
+            // 电压不够：1 块电池（1.5 V）不出，水瓶还在
+            await T.eval(`__clr(); window.B = __d('bat', -3, 2); window.E = __d('elec', 3, 2); __ring([B, E]); labSpawn('b:water', 3.5, 2.5); __bot(3, 3, 2); labAdvance(7, 0.1); true;`);
+            g = JSON.parse(await T.eval(`JSON.stringify({ water: __G('b:water'), h2: __G('b:h2'), job: !!E.job, v: E.v, draw: E.draw })`));
+            if (g.water !== 1 || g.h2 !== 0 || g.job || g.draw !== 0) bad.push('电压不够不该电解（水瓶还在、不耗电） ' + JSON.stringify(g));
+            // 没装瓶：氢氧混在一起爆炸，电解槽也炸没了
+            await T.eval(`__clr(); lab.p.x = 9; lab.p.z = 7; window.B = __d('bat', -4, -2); window.B2 = __d('bat', -1, -3); window.E = __d('elec', 3, -2); __ring([B, B2, E]); labSpawn('b:water', 3.5, -1.8); labAdvance(7, 0.1); true;`);
+            g = JSON.parse(await T.eval(`JSON.stringify({ booms: lab.booms, elec: lab.devs.filter(function (d) { return d.ty === 'elec'; }).length })`));
+            if (g.booms < 1 || g.elec !== 0) bad.push('没装瓶的氢氧混合应该爆炸、炸掉范围内的设备 ' + JSON.stringify(g));
+            // 盐水：只有 2 个空瓶不开始，补到 3 个才开始；得氢氧化钠 + 氢气 + 氯气
+            await T.eval(`__clr(); lab.p.x = 0; lab.p.z = 6; window.B = __d('bat', -4, 2); window.B2 = __d('bat', -1, 3); window.E = __d('elec', 3, 2); __ring([B, B2, E]); labSpawn('b:brine', 3.5, 2.5); __bot(2, 3, 2); labAdvance(2, 0.1); true;`);
+            if (await T.eval(`!!E.job || __G('b:brine') !== 1`)) bad.push('盐水只有 2 个空瓶，不该开始');
+            await T.eval(`__bot(1, 4, 2); labAdvance(6, 0.1); true;`);
+            g = JSON.parse(await T.eval(`JSON.stringify({ naoh: __G('b:naoh'), h2: __G('b:h2'), cl2: __G('b:cl2'), brine: __G('b:brine'), free: __G('g:h2') + __G('g:cl2'), left: __G('bottle'), booms: lab.booms })`));
+            if (g.naoh !== 1 || g.h2 !== 1 || g.cl2 !== 1 || g.brine !== 0 || g.free !== 0 || g.left !== 1 || g.booms !== 0) bad.push('电解盐水应该得 氢氧化钠 + 氢气 + 氯气 各一瓶、剩一个空瓶 ' + JSON.stringify(g));
+            // 盐水 3 V 够；熔融食盐 3 V 不够，4 V（3 块电池）可以：得钠 + 氯气
+            await T.eval(`__clr(); window.B = __d('bat', -4, 2); window.B2 = __d('bat', -1, 3); window.E = __d('elec', 3, 2); __ring([B, B2, E]); labSpawn('b:melt', 3.5, 2.5); __bot(1, 3, 2); labAdvance(3, 0.1); true;`);
+            if (await T.eval(`!!E.job || __G('b:melt') !== 1`)) bad.push('熔融食盐 3 V 不够，不该电解');
+            await T.eval(`__clr(); window.B = __d('bat', -4, 2); window.B2 = __d('bat', -1, 3); window.B3 = __d('bat', -3, 0); window.E = __d('elec', 3, 2); __ring([B, B2, B3, E]); labSpawn('b:melt', 3.5, 2.5); __bot(1, 3, 2); labAdvance(6.5, 0.1); true;`);
+            g = JSON.parse(await T.eval(`JSON.stringify({ na: __G('a:11:12'), cl2: __G('b:cl2'), free: __G('g:cl2'), melt: __G('b:melt'), v: Math.round(E.v * 10) / 10, na2: lab.ground.filter(function (e) { return e.key === 'a:11:12'; }).map(function (e) { return Math.round(labD(e, E) * 10) / 10; }) })`));
+            if (g.na !== 1 || g.cl2 !== 1 || g.free !== 0 || g.melt !== 0) bad.push('电解熔融食盐应该得钠 + 一瓶氯气 ' + JSON.stringify(g));
+            // 没装瓶的氯气有毒：盐水开始后把空瓶都拿走，做完氯气飘在电解槽上，人站旁边掉血
+            await T.eval(`__clr(); window.B = __d('bat', -4, 2); window.B2 = __d('bat', -1, 3); window.E = __d('elec', 3, 2); __ring([B, B2, E]); labSpawn('b:brine', 3.5, 2.5); __bot(3, 3, 2); labAdvance(1, 0.1); lab.ground.filter(function (e) { return e.key === 'bottle'; }).forEach(labKill); lab.p.x = 2; lab.p.z = 4; labAdvance(5.2, 0.1); true;`);
+            g = JSON.parse(await T.eval(`JSON.stringify({ cl2: __G('g:cl2'), hp: lab.hp })`));
+            if (g.cl2 !== 1 || !(g.hp < 100)) bad.push('没装瓶的氯气应该飘在外面、有毒（掉血） ' + JSON.stringify(g));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB24 电解：水 ≥ 2 V 出氢氧、电压不够不出、没装瓶氢氧爆炸、盐水要 3 个空瓶、熔融食盐 ≥ 4 V 出钠和氯气、没装瓶氯气有毒', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB25')) {
+            // LB25 元素表：房间里有一块牌子，对着它左键打开面板；氢到铁每个同位素的名字、质子／中子／电子数、稳定还是衰变（衰变的写半衰期）；数据直接读核素表，没有另外抄一份
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`${ELHELP} lab.p.x = -9.5; lab.p.z = 0; true;`);
+            if (await T.eval(`!LAB_ST.table || LAB_ST.table.name !== '元素表' || !lab.objs.some(function (o) { return o.userData && o.userData.labSign && o.position.x < -11; })`)) bad.push('房间里没有元素表牌子');
+            await T.eval(`__look(LAB_ST.table.x, 0.9, LAB_ST.table.z); labHudUpdate(); true;`);
+            if (!/元素表/.test(await T.eval(`document.getElementById('lab-hint').innerText`))) bad.push('对着牌子应该提示元素表');
+            await T.eval(`labClick(); true;`);
+            if (await T.eval(`lab.panel !== 'table'`)) bad.push('对着牌子左键没打开元素表 ' + await T.eval(`lab.panel`));
+            const rowsOf = async () => JSON.parse(await T.eval(`JSON.stringify([].map.call(document.querySelectorAll('#lab-panel tr.lab-iso'), function (r) { let c = r.children; return [+r.dataset.z, +r.dataset.n, r.dataset.s, c[0].innerText, +c[1].innerText, +c[2].innerText, +c[3].innerText, c[4].innerText]; }))`));
+            const expectOf = async () => JSON.parse(await T.eval(`JSON.stringify((function () { let o = []; for (let z = 1; z <= 26; z++) { (LAB_STABLE[z] || []).forEach(function (a) { o.push([z, a - z, 'stable']); }); LAB_UNST.forEach(function (u) { if (u[0] === z) o.push([z, u[1], LAB_DECAY['a:' + z + ':' + u[1]] ? 'decay' : 'long']); }); } return o; })())`));
+            let rows = await rowsOf(), exp = await expectOf();
+            const key = (a) => a[0] + ':' + a[1];
+            if (rows.length !== exp.length) bad.push('行数和核素表不一样 ' + rows.length + ' / ' + exp.length);
+            const have = new Map(rows.map((r) => [key(r), r]));
+            exp.forEach((e) => {
+                const r = have.get(key(e));
+                if (!r) { bad.push('少了 ' + key(e)); return; }
+                if (r[2] !== e[2]) bad.push(key(e) + ' 稳定／衰变标错 ' + r[2] + ' 应该 ' + e[2]);
+                if (r[4] !== e[0] || r[5] !== e[1] || r[6] !== e[0]) bad.push(key(e) + ' 质子／中子／电子数不对 ' + r.slice(4, 7));
+                if (e[2] === 'decay' && !/半衰期/.test(r[7])) bad.push(key(e) + ' 衰变的要写半衰期 ' + r[7]);
+                if (e[2] === 'stable' && !/稳定/.test(r[7])) bad.push(key(e) + ' 应该写稳定 ' + r[7]);
+            });
+            const names = JSON.parse(await T.eval(`JSON.stringify([labAtomName(1, 0), labAtomName(26, 30), labAtomName(6, 6)])`));
+            const nameOf = (z, n) => have.get(z + ':' + n) && have.get(z + ':' + n)[3];
+            if (nameOf(1, 0) !== names[0] || nameOf(26, 30) !== names[1] || nameOf(6, 6) !== names[2] || names.join() !== '氢-1,铁-56,碳-12') bad.push('名字不对 ' + nameOf(1, 0) + ' ' + nameOf(26, 30) + ' ' + nameOf(6, 6));
+            if (rows.some((r) => r[0] < 1 || r[0] > 26)) bad.push('只列氢到铁（Z 1～26）');
+            if (new Set(rows.map((r) => r[0])).size !== 26) bad.push('26 个元素每个都要有');
+            // 数据是直接读核素表的：往核素表里加一个，面板里就多一个，没有另外抄的一份
+            await T.eval(`labPanelClose(); LAB_UNST.push([26, 40, 100, 'b-']); labClick(); true;`);
+            rows = await rowsOf();
+            if (!rows.some((r) => r[0] === 26 && r[1] === 40 && r[3] === '铁-66')) bad.push('往核素表加一个核素，元素表里没跟着多（数据不是直接读核素表的）');
+            await T.eval(`LAB_UNST.pop(); labPanelClose(); true;`);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB25 元素表：牌子对着左键打开，氢到铁每个同位素的名字、质子／中子／电子、稳定或衰变（写半衰期），数据直接读核素表', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB26')) {
+            // LB26 器材的显示和复用：灯泡亮了有发光（变亮的颜色 + 光晕），电池和设备头顶有牌子（电量、电压、耗电）；放设备、连线不新建几何体／贴图／场景物体，绘制调用只多几次；退出把设备和电线收回仓库箱，下次进来是干净的
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`${ELHELP} true;`);
+            const stat = () => T.eval(`(renderer.render(scene, camera), JSON.stringify({ calls: renderer.info.render.calls, geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures, kids: scene.children.length }))`);
+            await T.eval(`labAdvance(0.2, 0.1); true;`);   // 先推一下：镜头退到人身后，人物身上的几何体和贴图这时才传给显卡，不算设备的
+            await frames(T, 3);
+            const s0 = JSON.parse(await stat());
+            await T.eval(`window.B = __d('bat', -4, 2); window.S = __d('switch', -2, 3); window.L1 = __d('bulb', 0, 2); window.L2 = __d('bulb', 2, 3); window.R = __d('resistor', 4, 2); window.K = __d('booster', 1, 0.5);
+                __w(B, S); __w(S, L1); __w(L1, L2); __w(L2, R); __w(R, K); __w(K, B); labAdvance(1, 0.1); lab.p.x = -3; lab.p.z = 3; labHudUpdate(); labDevLabels(); true;`);
+            const s1 = JSON.parse(await stat());
+            if (s1.geo !== s0.geo || s1.tex !== s0.tex || s1.kids !== s0.kids) bad.push('放设备、连线不该新建几何体／贴图／场景物体 ' + JSON.stringify([s0, s1]));
+            if (s1.calls - s0.calls > 12) bad.push('放了 6 个设备 + 6 根线，绘制调用多了 ' + (s1.calls - s0.calls) + ' 次（太多） ' + JSON.stringify([s0, s1]));
+            // 发光：灯亮了颜色变亮 + 光晕；灭了变暗、光晕没了
+            const lit = JSON.parse(await T.eval(`JSON.stringify({ run: L1.run, col: [].slice.call(lab.dm.bulb.instanceColor.array, 0, 3), halo: lab.halo.count })`));
+            if (!lit.run || !(lit.col[0] > 0.9 && lit.col[1] > 0.8) || lit.halo !== 2) bad.push('灯亮了应该变亮 + 有光晕 ' + JSON.stringify(lit));
+            await T.eval(`S.on = false; lab.cirDirty = true; labAdvance(0.5, 0.1); true;`);
+            const dim = JSON.parse(await T.eval(`JSON.stringify({ col: [].slice.call(lab.dm.bulb.instanceColor.array, 0, 3), halo: lab.halo.count })`));
+            if (dim.halo !== 0 || !(dim.col[0] < 0.7)) bad.push('灯灭了应该变暗、光晕没了 ' + JSON.stringify(dim));
+            await T.eval(`S.on = true; lab.cirDirty = true; labAdvance(1, 0.1); labDevLabels(); true;`);
+            // 头顶牌子：离得近的 4 个；电池写剩余电量，其他写电压和耗电
+            const lb = JSON.parse(await T.eval(`JSON.stringify(lab.dlabels.filter(function (l) { return l.sp.visible; }).map(function (l) { return l.text; }))`));
+            if (lb.length !== 4 || !lb.some((t) => /电池 \d+\/180 U/.test(t)) || !lb.some((t) => /V　耗电 [\d.]+ U\/s/.test(t))) bad.push('头顶牌子不对 ' + JSON.stringify(lb));
+            // 只要牌子内容不变，就不重画贴图
+            const d0 = await T.eval(`lab.labelDraws`);
+            await T.eval(`labDevLabels(); labDevLabels(); true;`);
+            if ((await T.eval(`lab.labelDraws`)) !== d0) bad.push('牌子内容没变不该重画');
+            // 反复放、收：资源数不涨
+            await T.eval(`for (let i = 0; i < 30; i++) { let d = __d('resistor', -8 + (i % 6) * 0.9, -5 + Math.floor(i / 6) * 0.9); if (d) { __w(d, R); labDevRemove(d, false); } } labAdvance(0.5, 0.1); true;`);
+            const s2 = JSON.parse(await stat());
+            if (s2.geo !== s0.geo || s2.tex !== s0.tex || s2.kids !== s0.kids) bad.push('反复放收设备资源数涨了 ' + JSON.stringify([s0, s2]));
+            // 上限
+            const cap = JSON.parse(await T.eval(`(function () { let n = lab.devs.length; for (let i = 0; i < 40; i++) __d('resistor', -10 + (i % 12) * 0.9, -6.5 + Math.floor(i / 12) * 0.9); return JSON.stringify({ n: lab.devs.length, cap: LAB_DEV_CAP }); })()`));
+            if (cap.n !== cap.cap) bad.push('设备数应该封顶 ' + JSON.stringify(cap));
+            // 退出：设备、电线收回仓库箱；用过的电池带着剩下的电量；再进来是空的
+            await T.eval(`lab.devs.slice().forEach(function (d) { if (d.ty === 'resistor') labDevRemove(d, false); }); lab.bag = {}; labClear(); gState.lab.box = {}; true;`);
+            const nw = await T.eval(`lab.wires.length`);
+            await LBEXIT(T);
+            const box = JSON.parse(await T.eval(`JSON.stringify(gState.lab.box)`));
+            if (box.wire !== nw || box.bulb !== 2 || box.switch !== 1 || box.booster !== 1 || !Object.keys(box).some((k) => /^bat:\d+$/.test(k))) bad.push('退出应该把设备和电线收回仓库箱 ' + JSON.stringify(box));
+            await LBENTER(T);
+            if (await T.eval(`lab.devs.length !== 0 || lab.wires.length !== 0`)) bad.push('再进来应该没有设备');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB26 器材的显示和复用：灯亮有光晕、头顶牌子、放设备不新建对象、绘制调用只多几次、退出收回仓库箱', bad.length === 0, bad.join(' / '));
         }
 
         if (ONLY) throw new Error('ONLY_DONE');
