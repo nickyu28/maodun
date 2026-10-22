@@ -3351,8 +3351,8 @@ async function enterExit(tab, key) {
             await LBENTER(T);
             await T.eval(`lab.p.x = 7; lab.p.z = 5; lab.bag = {}; true;`);
             if (await T.eval(`labCraftMake('heal')`)) bad.push('身上什么都没有也炼成了');
-            await T.eval(`labGive('sugar', 1); labGive('salt', 1); labGive('b:water', 1); labGive('b:soda', 1); labGive('sugar', 1); labGive('b:naoh', 1); labGive('b:water', 1); labGive('rubber', 2); labGive('iron', 2); true;`);
-            const made = JSON.parse(await T.eval(`JSON.stringify({ heal: labCraftMake('heal'), speed: labCraftMake('speed'), dmg: labCraftMake('dmg'), spring: labCraftMake('spring'), bag: lab.bag })`));
+            // 身上只有 6 格：材料分批给、做一样拿一样，不然格子不够，药剂会掉在脚边
+            const made = JSON.parse(await T.eval(`(function(){ let o = {}; labGive('sugar', 2); labGive('salt', 1); labGive('b:water', 2); o.heal = labCraftMake('heal'); labGive('b:soda', 1); o.speed = labCraftMake('speed'); labGive('b:naoh', 1); o.dmg = labCraftMake('dmg'); labGive('rubber', 2); labGive('iron', 2); o.spring = labCraftMake('spring'); o.bag = lab.bag; o.ground = lab.ground.length; return JSON.stringify(o); })()`));
             if (!made.heal || !made.speed || !made.dmg || !made.spring) bad.push('有材料却没炼成 ' + JSON.stringify(made));
             if (made.bag['pot:heal'] !== 1 || made.bag['pot:speed'] !== 1 || made.bag['pot:dmg'] !== 1 || made.bag['pot:spring'] !== 1) bad.push('炼出来的药剂不对 ' + JSON.stringify(made.bag));
             if (made.bag.bottle !== 4 || Object.keys(made.bag).length !== 5) bad.push('材料没扣干净、瓶子没还 ' + JSON.stringify(made.bag));
@@ -3649,6 +3649,172 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
             report('LB14 粒子簇标签、手速拼氦-4、对准显示名字说明、放 50 个东西不新建几何体／着色器、标签贴图只在变化时重画', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB15')) {
+            // LB15 簇可以任意大（连通判定：任何粒子离簇里另一个粒子 0.5 米内就属于同一簇）：粒子拼出硅-31（45 个）、铁-56（82 个）；质子数 > 26 的簇不拼、不散、没有倒计时
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`LAB_DECAY['n'].T = 1e15; true;`);   // 测试里不让自由中子随机衰变
+            // 一排 0.45 米间隔的粒子，整排长 20 米（两头离得远，只靠一个接一个连起来）：质子、电子、中子轮着排
+            const chain = (z, n, N) => `(function(){ labClear(); let seq = []; for (let i = 0; i < ${z}; i++) seq.push('p', 'e'); for (let i = 0; i < ${N}; i++) seq.push('n'); seq.sort(function (a, b) { return (a.charCodeAt(0) * 7 % 5) - (b.charCodeAt(0) * 7 % 5); }); let n = seq.length; seq.forEach(function (k, i) { labSpawn(k, -10.2 + (i % 46) * 0.45, -3 + Math.floor(i / 46) * 0.45); }); let cl = labClusters().map(function (c) { return c.length; }); return JSON.stringify({ total: n, clusters: cl }); })()`;
+            const c1 = JSON.parse(await T.eval(chain(14, 14, 17)));
+            if (c1.total !== 45 || c1.clusters.length !== 1 || c1.clusters[0] !== 45) bad.push('45 个粒子排成一长串应该是 1 个簇 ' + JSON.stringify(c1));
+            await T.eval(`labAdvance(3.5); true;`);
+            if (await T.eval(`labCount('a:14:17')`) !== 0) bad.push('没到 4 秒就拼了');
+            await T.eval(`labAdvance(0.8); true;`);
+            if (!(await T.eval(`labCount('a:14:17') === 1 && lab.ground.length === 1`))) bad.push('45 个粒子没拼成硅-31 ' + await T.eval(`lab.ground.map(function (e) { return e.key; }).slice(0, 5).join()`));
+            const c2 = JSON.parse(await T.eval(chain(26, 26, 30)));
+            if (c2.total !== 82 || c2.clusters.length !== 1 || c2.clusters[0] !== 82) bad.push('82 个粒子应该是 1 个簇 ' + JSON.stringify(c2));
+            await T.eval(`labAdvance(4.3); true;`);
+            if (!(await T.eval(`labCount('a:26:30') === 1 && lab.ground.length === 1`))) bad.push('82 个粒子没拼成铁-56 ' + await T.eval(`lab.ground.length + ' ' + lab.ground.map(function (e) { return e.key; }).slice(0, 3).join()`));
+            // 一堆粒子一起放（用 Q 放下一整堆）
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; labGive('p', 20); labGive('e', 20); labGive('n', 22); ['p', 'e', 'n'].forEach(function (k) { labSel(k); labPut(true); }); labAdvance(4.3); true;`);
+            if (await T.eval(`labCount('a:20:22') !== 1`)) bad.push('一起放下 20 质子 + 22 中子 + 20 电子没拼成钙-42');
+            // 质子数 > 26：不拼、不散开、没有倒计时
+            await T.eval(`labClear(); let k = 0; for (let i = 0; i < 27; i++) { labSpawn('p', -1 + (k % 12) * 0.2, 1 + Math.floor(k / 12) * 0.2); k++; labSpawn('e', -1 + (k % 12) * 0.2, 1 + Math.floor(k / 12) * 0.2); k++; } for (let i = 0; i < 32; i++) { labSpawn('n', -1 + (k % 12) * 0.2, 1 + Math.floor(k / 12) * 0.2); k++; } window.__p0 = lab.ground.map(function (e) { return [e.id, e.x, e.z]; }); labAdvance(0.2); true;`);
+            const lb1 = await T.eval(`lab.labels.filter(function (L) { return L.sp.visible; }).map(function (L) { return L.text; }).join(' ## ')`);
+            await T.eval(`labAdvance(12.0); true;`);
+            const big = JSON.parse(await T.eval(`JSON.stringify({ n: lab.ground.length, atoms: lab.ground.filter(function (e) { return e.key[0] === 'a'; }).length, moved: Math.max(...lab.ground.map(function (e, i) { return Math.hypot(e.x - window.__p0[i][1], e.z - window.__p0[i][2]); })), timers: Object.keys(lab.cl).length, labels: lab.labels.filter(function (L) { return L.sp.visible; }).map(function (L) { return L.text; }) })`));
+            if (big.n !== 27 * 2 + 32 || big.atoms !== 0 || big.moved > 1e-9) bad.push('质子数 > 26 的簇应该原地不动、不拼不散 ' + JSON.stringify(big));
+            if (big.timers !== 0 || big.labels.some((t) => /秒/.test(t.split('|')[1] || ''))) bad.push('质子数 > 26 的簇不该有倒计时 ' + JSON.stringify(big.labels));
+            if (!/质子 27.*中子 32.*电子 27/.test(lb1) || !/不参与拼装/.test(lb1)) bad.push('质子数 > 26 的簇标签应该写数量和"不参与拼装" ' + lb1);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB15 簇任意大（连通判定）：硅-31（45 个）、铁-56（82 个）、一起放下一堆；质子数 > 26 的簇不拼不散没有倒计时', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB16')) {
+            // LB16 粒子上限 300：超过就不让右键拆包／放下粒子并提示；300 个粒子不散开、逻辑每帧耗时低于阈值、绘制调用成组
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`LAB_DECAY['n'].T = 1e15; window.__msg = []; window.__fl = labFlash; labFlash = function (t) { window.__msg.push(t); }; true;`);
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; for (let i = 0; i < 290; i++) labSpawn(['p','n','e'][i % 3], -8 + (i % 40) * 0.4, -6 + Math.floor(i / 40) * 0.5); labGive('pack:6:6', 2); labSel('pack:6:6'); window.__p0 = lab.ground.map(function (e) { return [e.id, e.x, e.z]; }); true;`);
+            if (await T.eval(`labParticleCount()`) !== 290) bad.push('先放了 290 个粒子');
+            await T.eval(`labRightClick(); true;`);   // 290 + 18 > 300：不让拆
+            const r1 = JSON.parse(await T.eval(`JSON.stringify({ n: labParticleCount(), packs: lab.bag['pack:6:6'] || 0, msg: window.__msg.slice() })`));
+            if (r1.n !== 290 || r1.packs !== 2 || !r1.msg.some((t) => /房间太满，先拼一些吧/.test(t))) bad.push('超过 300 个应该拒绝拆包并提示 ' + JSON.stringify(r1));
+            await T.eval(`for (let i = 0; i < 10; i++) labSpawn('n', 9 + (i % 5) * 0.4, 6 + Math.floor(i / 5) * 0.4); window.__msg.length = 0; labRightClick(); true;`);   // 正好 300：再拆不行
+            if (!(await T.eval(`labParticleCount() === 300 && lab.bag['pack:6:6'] === 2 && window.__msg.some(function (t) { return /房间太满/.test(t); })`))) bad.push('满 300 个以后还拆了包');
+            await T.eval(`labGive('p', 1); labSel('p'); window.__msg.length = 0; labPut(); true;`);
+            if (!(await T.eval(`labParticleCount() === 300 && lab.bag.p === 1 && window.__msg.some(function (t) { return /房间太满/.test(t); })`))) bad.push('满 300 个以后放下粒子也该被拒绝');
+            // 300 个粒子不散开（停在原地）；逻辑每帧耗时（不含画面）低于阈值；绘制调用成组
+            await T.eval(`labAdvance(8.0); true;`);
+            const stay = await T.eval(`Math.max(...window.__p0.map(function (q) { let e = lab.ground.filter(function (g) { return g.id === q[0]; })[0]; return e ? Math.hypot(e.x - q[1], e.z - q[2]) : 99; }))`);
+            if (stay > 1e-9) bad.push('300 个粒子里有的动了或没了（散开／拼掉） ' + stay);
+            const perf = JSON.parse(await T.eval(`(function(){ let r = renderer.render; renderer.render = function () {}; let t0 = performance.now(); for (let i = 0; i < 100; i++) labTick(0.016); let ms = (performance.now() - t0) / 100; renderer.render = r; renderer.render(scene, camera); return JSON.stringify({ tickMs: +ms.toFixed(3), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, n: lab.ground.length }); })()`));
+            if (!(perf.tickMs < 4)) bad.push('300 个粒子逻辑每帧 ' + perf.tickMs + ' 毫秒，应该 < 4');
+            if (!(perf.calls <= 48)) bad.push('300 个粒子绘制调用 ' + perf.calls + ' 次，应该成组画（≤ 48）');
+            await T.eval(`labFlash = window.__fl; true;`);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB16 粒子上限 300（拆包／放下超限拒绝并提示）；300 个粒子不散开、逻辑每帧低于 4 毫秒、绘制成组', bad.length === 0, bad.length ? bad.join(' / ') : JSON.stringify(perf));
+        }
+
+        if (want('LB17')) {
+            // LB17 长按连续：Q 每秒放 5 个（螺旋排开 0.3 米内）；左键对着地上的东西每秒捡 6 个、对着家具不连发；右键对着粒子包每秒拆 5 个、到 300 上限停并提示；手机按钮松手就停
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`LAB_DECAY['n'].T = 1e15; true;`);
+            // Q 长按 1 秒：立刻放 1 个，之后每 0.2 秒 1 个 → 6 个左右
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; labGive('coal', 12); labSel('coal'); labHoldStart('Q'); labAdvance(1.0); labHoldStop(); true;`);
+            const q1 = JSON.parse(await T.eval(`JSON.stringify({ n: labCount('coal'), left: lab.bag.coal, hold: lab.hold, d: lab.ground.map(function (e) { return Math.hypot(e.x - lab.p.x, e.z - lab.p.z); }), ys: lab.ground.map(function (e) { return e.y; }), pos: lab.ground.map(function (e) { return e.x.toFixed(3) + ',' + e.z.toFixed(3); }) })`));
+            if (!(q1.n >= 5 && q1.n <= 7) || q1.n + q1.left !== 12) bad.push('长按 Q 1 秒应该放 5～7 个，实际 ' + q1.n);
+            if (q1.hold !== null) bad.push('松手以后还在连放');
+            if (Math.max(...q1.d) > 0.3 + 1e-6 || new Set(q1.pos).size !== q1.pos.length) bad.push('连续放下应该按螺旋排开、0.3 米内、不叠在一起 ' + JSON.stringify(q1.pos));
+            if (q1.ys.some((y) => y > 0.5)) bad.push('放下的东西飞起来了');
+            await T.eval(`labAdvance(2.0); true;`);
+            if (await T.eval(`labCount('coal')`) !== q1.n) bad.push('松手以后又多放了');
+            // Q 长按放完为止（12 个 2.4 秒左右），放完自动停
+            await T.eval(`labClear(); lab.bag = {}; labGive('coal', 12); labSel('coal'); labHoldStart('Q'); labAdvance(4.0); true;`);
+            if (!(await T.eval(`labCount('coal') === 12 && !lab.bag.coal && lab.hold === null`))) bad.push('长按 Q 没放完／放完没停');
+            // 左键长按对着地上的东西：每秒捡 6 个附近的
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; camera.rotation.set(-Math.atan2(1.4, 2.0), 0, 0, 'YXZ'); labSpawn('iron', 0, -2.0); for (let i = 0; i < 20; i++) labSpawn('iron', -0.8 + (i % 5) * 0.4, -1.6 - Math.floor(i / 5) * 0.4); true;`);
+            const aimed = await T.eval(`labAim().item && labAim().item.key`);
+            if (aimed !== 'iron') bad.push('瞄准没对着铁块 ' + aimed);
+            await T.eval(`labHoldStart('L'); labAdvance(1.0); labHoldStop(); true;`);
+            const l1 = await T.eval(`lab.bag.iron || 0`);
+            if (!(l1 >= 6 && l1 <= 8)) bad.push('左键长按 1 秒应该捡 6～8 个，实际 ' + l1);
+            await T.eval(`labAdvance(2.0); true;`);
+            if (await T.eval(`(lab.bag.iron || 0) !== ${l1}`)) bad.push('松手以后还在捡');
+            // 对着家具：只交互一次，不连发
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = LAB_ST.craft.x; lab.p.z = LAB_ST.craft.z + 2.2; camera.rotation.set(0, 0, 0, 'YXZ'); true;`);
+            const fh = await T.eval(`labHoldStart('L')`);
+            if (!fh || !(await T.eval(`lab.panel === 'craft' && lab.hold === null`))) bad.push('长按左键对着家具应该只打开一次面板、不连发');
+            await T.eval(`labPanelClose(); true;`);
+            // 右键长按对着粒子包：每秒拆 5 个
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 0; labGive('pack:1:0', 12); labSel('pack:1:0'); labHoldStart('R'); labAdvance(1.0); labHoldStop(); true;`);
+            const r1 = JSON.parse(await T.eval(`JSON.stringify({ unpacked: 12 - (lab.bag['pack:1:0'] || 0), particles: labParticleCount() })`));
+            if (!(r1.unpacked >= 5 && r1.unpacked <= 7) || r1.particles !== r1.unpacked * 2) bad.push('右键长按 1 秒应该拆 5～7 个包 ' + JSON.stringify(r1));
+            // 到 300 上限停并提示
+            await T.eval(`labClear(); lab.bag = {}; window.__msg = []; window.__fl = labFlash; labFlash = function (t) { window.__msg.push(t); }; for (let i = 0; i < 292; i++) labSpawn(['p','n','e'][i % 3], -8 + (i % 40) * 0.4, -6 + Math.floor(i / 40) * 0.5); labGive('pack:1:0', 20); labSel('pack:1:0'); labHoldStart('R'); labAdvance(3.0); true;`);
+            const r2 = JSON.parse(await T.eval(`JSON.stringify({ n: labParticleCount(), packs: lab.bag['pack:1:0'], hold: lab.hold, msg: window.__msg.filter(function (t) { return /房间太满/.test(t); }).length })`));
+            if (r2.n !== 300 || r2.packs !== 16 || r2.hold !== null || r2.msg < 1) bad.push('长按拆包到 300 上限应该停并提示 ' + JSON.stringify(r2));
+            await T.eval(`labFlash = window.__fl; labClear(); lab.bag = {}; true;`);
+            // 手机：长按按钮效果相同，松手就停（按下 = mousedown／touchstart，松开 = mouseup／touchend）
+            await T.eval(`labGive('coal', 20); labSel('coal'); document.getElementById('lab-btn-put').dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); labAdvance(1.0); document.getElementById('lab-btn-put').dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); true;`);
+            const m1 = await T.eval(`labCount('coal')`);
+            if (!(m1 >= 5 && m1 <= 7)) bad.push('按住「放下」按钮 1 秒应该放 5～7 个，实际 ' + m1);
+            await T.eval(`labAdvance(1.0); true;`);
+            if (await T.eval(`labCount('coal')`) !== m1) bad.push('松开「放下」按钮以后还在放');
+            await T.eval(`labClear(); lab.bag = {}; labGive('pack:1:0', 12); labSel('pack:1:0'); document.getElementById('lab-btn-rc').dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true })); labAdvance(1.0); document.getElementById('lab-btn-rc').dispatchEvent(new TouchEvent('touchend', { bubbles: true })); true;`);
+            const m2 = await T.eval(`12 - (lab.bag['pack:1:0'] || 0)`);
+            if (!(m2 >= 5 && m2 <= 7)) bad.push('按住「拆包/接水」按钮（触屏）1 秒应该拆 5～7 个，实际 ' + m2);
+            await T.eval(`labAdvance(1.0); true;`);
+            if (await T.eval(`12 - (lab.bag['pack:1:0'] || 0)`) !== m2) bad.push('松开「拆包/接水」按钮以后还在拆');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB17 长按连续：Q 每秒 5 个螺旋放、左键每秒 6 个捡（家具不连发）、右键每秒 5 个拆包到上限停；手机按钮松手就停', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB18')) {
+            // LB18 快捷栏 3 格 + 背包 3 格，不留空格自动补上：默认选第 1 格；选中位置不变（选中的放完了，下一个移过来；后面没有了选最后一个）；快捷栏有空位时背包补上；一件都没有才是空的
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            if (await T.eval(`LAB_HOT !== 3 || LAB_BAG_CAP !== 6 || lab.selIdx !== 0 || lab.sel !== null`)) bad.push('进实验室应该默认选中第 1 格（身上没东西时是空的）、快捷栏 3 格 + 背包 3 格');
+            await T.eval(`labGive('coal', 2); labGive('iron', 1); labGive('sand', 1); labGive('salt', 1); true;`);
+            if (await T.eval(`lab.sel !== 'coal'`)) bad.push('第一样东西进来，默认选中第 1 格应该拿着它 ' + await T.eval(`lab.sel`));
+            const ks0 = JSON.parse(await T.eval(`JSON.stringify(Object.keys(lab.bag))`));
+            if (ks0.join() !== 'coal,iron,sand,salt') bad.push('格子顺序不对 ' + ks0);
+            // 选中第 2 格（铁块），放完：后面的沙子前移，手里自动拿着沙子
+            await T.eval(`labSelIdx(1); labPut(true); true;`);
+            const a1 = JSON.parse(await T.eval(`JSON.stringify({ keys: Object.keys(lab.bag), sel: lab.sel, idx: lab.selIdx })`));
+            if (a1.keys.join() !== 'coal,sand,salt' || a1.sel !== 'sand' || a1.idx !== 1) bad.push('选中第 2 格放完，应该前移、手里拿着下一样（沙子）、选中位置不变 ' + JSON.stringify(a1));
+            // 选中最后一格（盐），放完：后面没有了，选中最后一个有东西的格子（沙子）
+            await T.eval(`labSelIdx(2); labPut(true); true;`);
+            const a2 = JSON.parse(await T.eval(`JSON.stringify({ keys: Object.keys(lab.bag), sel: lab.sel, idx: lab.selIdx })`));
+            if (a2.keys.join() !== 'coal,sand' || a2.sel !== 'sand' || a2.idx !== 1) bad.push('选中格后面没有东西了，应该选最后一个有东西的格子 ' + JSON.stringify(a2));
+            // 用掉（喝药剂）也一样补上；丢进仓库箱也一样
+            await T.eval(`labClear(); lab.bag = {}; labGive('pot:heal', 1); labGive('coal', 1); labGive('sand', 1); lab.hp = 20; labSelIdx(0); labUse('L'); true;`);
+            const a3 = JSON.parse(await T.eval(`JSON.stringify({ keys: Object.keys(lab.bag), sel: lab.sel, hp: lab.hp })`));
+            if (a3.hp !== 70 || a3.keys.join() !== 'coal,sand,bottle' || a3.sel !== 'coal') bad.push('用掉药剂以后后面的应该前移、手里拿着下一样 ' + JSON.stringify(a3));
+            // 背包补快捷栏：4 种东西，快捷栏放满 3 个，第 4 个在背包；快捷栏第 1 格放完，第 4 个自动补到快捷栏
+            await T.eval(`labClear(); lab.bag = {}; labGive('coal', 1); labGive('iron', 1); labGive('sand', 1); labGive('salt', 1); true;`);
+            const h0 = await T.eval(`labBagHtml().replace(/<[^>]+>/g, '|').replace(/\\|+/g, '|')`);
+            if (!/1 煤（碳）×1.*2 铁块×1.*3 沙子×1.*4 食盐×1/.test(h0)) bad.push('界面应该是 1 煤 2 铁 3 沙 | 4 盐 ' + h0);
+            await T.eval(`labSelIdx(0); labPut(true); true;`);
+            const h1 = await T.eval(`labBagHtml().replace(/<[^>]+>/g, '|').replace(/\\|+/g, '|')`);
+            if (!/1 铁块×1.*2 沙子×1.*3 食盐×1/.test(h1) || /煤/.test(h1)) bad.push('快捷栏第 1 格放完，背包里的东西应该补上来、不留空格 ' + h1);
+            if (await T.eval(`Object.keys(lab.bag).length !== 3`)) bad.push('快捷栏 3 格应该满着');
+            // 一件都没有才是空的
+            await T.eval(`['iron', 'sand', 'salt'].forEach(function (k) { labSel(k); labPut(true); }); true;`);
+            if (await T.eval(`lab.sel !== null || Object.keys(lab.bag).length !== 0`)) bad.push('全放完了应该是空的 ' + await T.eval(`lab.sel`));
+            // 6 格满了：第 7 种掉在脚边
+            await T.eval(`labClear(); lab.bag = {}; window.__ok = ['coal', 'iron', 'sand', 'salt', 'bottle', 'rubber', 'fes'].map(function (k) { return labBagGive(k, 1); }); true;`);
+            const f = JSON.parse(await T.eval(`JSON.stringify({ ok: window.__ok, kinds: Object.keys(lab.bag).length, ground: lab.ground.length })`));
+            if (f.kinds !== 6 || f.ok[6] !== false || f.ground !== 1) bad.push('背包 6 格满了，第 7 种应该掉在脚边 ' + JSON.stringify(f));
+            // 1～6 键选格子；再次进实验室默认选第 1 格
+            await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '3' })); true;`);
+            if (await T.eval(`lab.selIdx !== 2`)) bad.push('按 3 应该选第 3 格');
+            await LBEXIT(T); await LBENTER(T);
+            if (await T.eval(`lab.selIdx !== 0`)) bad.push('再次进实验室应该默认选第 1 格');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB18 快捷栏 3 格 + 背包 3 格：自动补上不留空格、选中位置不变、默认选第 1 格', bad.length === 0, bad.join(' / '));
         }
 
         if (want('HH1')) {

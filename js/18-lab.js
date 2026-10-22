@@ -11,7 +11,9 @@
 
         // 时间和距离（"米" = 场景里的 1 个单位）。冒烟测试会改这几个数把等待缩短。
         const LAB_T = { gather: 4, gasLife: 10, poisonLife: 5, rust: 120, glass: 5, mergeR: 0.5, reactR: 0.5, fillR: 2, boomR: 3, boomDmg: 40, poisonDps: 5, poisonR: 4, lock: 60, pickR: 2.4, stationR: 3.4 };
-        const LAB_BOX_CAP = 60, LAB_BAG_CAP = 12;
+        // 身上 6 格：快捷栏 3 格 + 背包 3 格（一格一种东西，数量不限）；房间里散落的粒子最多 300 个
+        const LAB_BOX_CAP = 60, LAB_BAG_CAP = 6, LAB_HOT = 3, LAB_PARTICLE_CAP = 300;
+        const LAB_HOLD_RATE = { Q: 5, L: 6, R: 5 };   // 长按：每秒放 5 个／捡 6 个／拆 5 个包
 
         // ── 元素和核素（数据来自 docs/chem.md，全部"待核对"）──
         const LAB_EL = [null, ['氢', 'H'], ['氦', 'He'], ['锂', 'Li'], ['铍', 'Be'], ['硼', 'B'], ['碳', 'C'], ['氮', 'N'], ['氧', 'O'], ['氟', 'F'], ['氖', 'Ne'], ['钠', 'Na'], ['镁', 'Mg'], ['铝', 'Al'], ['硅', 'Si'], ['磷', 'P'], ['硫', 'S'], ['氯', 'Cl'], ['氩', 'Ar'], ['钾', 'K'], ['钙', 'Ca'], ['钪', 'Sc'], ['钛', 'Ti'], ['钒', 'V'], ['铬', 'Cr'], ['锰', 'Mn'], ['铁', 'Fe'], ['钴', 'Co'], ['镍', 'Ni'], ['铜', 'Cu'], ['锌', 'Zn']];
@@ -235,7 +237,7 @@
             ensureScene();
             lab = {
                 over: false, t: 0, seq: 0, last: performance.now(), raf: null, ground: [], bag: {}, sel: null, stove: { items: {}, cook: null },
-                hp: 100, p: { x: 0, y: 0, z: 2, vy: 0 }, face: { x: 0, z: -1 }, k: {}, speedT: 0, dmgT: 0, springT: 0, poisonT: 0,
+                hp: 100, p: { x: 0, y: 0, z: 2, vy: 0 }, face: { x: 0, z: -1 }, k: {}, selIdx: 0, hold: null, speedT: 0, dmgT: 0, springT: 0, poisonT: 0,
                 geo: {}, groups: {}, dirty: true, cl: {}, labels: [], labelDraws: 0, objs: [], fx: [], fxFree: [], fxAll: [], fxGeo: null, hudT: 0, boxT: 5, hudSig: '', booms: 0, panel: null, oldBg: scene.background, oldFog: scene.fog
             };
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
@@ -258,8 +260,10 @@
             lab.onMouse = function (e) {
                 if (!lab || lab.over || !document.pointerLockElement) return;
                 if (e.target && e.target.closest && e.target.closest('button, #lab-panel, #lab-book, #lab-bag, #sys-modal')) return;
-                if (e.button === 0) labClick(); else if (e.button === 2) labRightClick();
+                if (e.button === 0) labHoldStart('L'); else if (e.button === 2) labHoldStart('R');
             };
+            lab.onMouseUp = function (e) { if (lab && lab.hold && lab.hold.kind !== 'Q') labHoldStop(); };
+            document.addEventListener('mouseup', lab.onMouseUp);
             lab.onCtx = function (e) { if (lab) e.preventDefault(); };
             document.addEventListener('mousedown', lab.onMouse); document.addEventListener('contextmenu', lab.onCtx);
             if (gState.control !== 'pad') labFlash('点一下画面锁住鼠标：左键捡／用，右键拆包／接水，Q 放下，Esc 松开');
@@ -285,7 +289,7 @@
             Object.keys(R.geo).forEach(function (k) { R.geo[k].dispose(); });
             if (R.fxGeo) R.fxGeo.dispose();
             scene.background = R.oldBg; scene.fog = R.oldFog;
-            if (R.onMouse) { document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); }
+            if (R.onMouse) { document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); document.removeEventListener('mouseup', R.onMouseUp); }
             lab = null;
             labSt().decayAt = Date.now();
             saveProgress();
@@ -371,7 +375,7 @@
         function labGeo(shape) {
             let g = lab.geo[shape];
             if (!g) {
-                g = shape === 's' ? new THREE.SphereGeometry(0.28, 10, 8) : shape === 'c' ? new THREE.CylinderGeometry(0.22, 0.28, 0.8, 10) : shape === 'g' ? new THREE.SphereGeometry(0.7, 10, 8) : new THREE.BoxGeometry(0.55, 0.55, 0.55);
+                g = shape === 's' ? new THREE.SphereGeometry(0.28, 6, 4) : shape === 'c' ? new THREE.CylinderGeometry(0.22, 0.28, 0.8, 10) : shape === 'g' ? new THREE.SphereGeometry(0.7, 10, 8) : new THREE.BoxGeometry(0.55, 0.55, 0.55);
                 lab.geo[shape] = g;
             }
             return g;
@@ -411,19 +415,78 @@
             if (e.repeat) return;
             if (k === 'escape') { if (lab.panel) labPanelClose(); else if (document.getElementById('lab-book')) labBookClose(); return; }
             if (lab.panel || document.getElementById('lab-book')) return;
-            if (k === 'q' || k === 'g') labPut(e.shiftKey); else if (k === 'f') labPick(); else if (k === 'r') labUse('L'); else if (k === 'e') labInteract(); else if (k === 't') labThrow();
-            else if (/^[1-9]$/.test(k)) labSelIdx(+k - 1);
+            if (k === 'q' || k === 'g') { if (e.shiftKey) labPut(true); else labHoldStart('Q'); } else if (k === 'f') labPick(); else if (k === 'r') labUse('L'); else if (k === 'e') labInteract(); else if (k === 't') labThrow();
+            else if (/^[1-6]$/.test(k)) labSelIdx(+k - 1);
         }
         function labKeyUp(e) {
             if (!lab) return;
             let k = (e.key || '').toLowerCase();
             if (LAB_KEYMAP[k]) lab.k[LAB_KEYMAP[k]] = false; else if (k === ' ') lab.k.jump = false;
+            else if (k === 'q' || k === 'g') { if (lab.hold && lab.hold.kind === 'Q') labHoldStop(); }
         }
         function labBindKeys() { window.addEventListener('keydown', labKeyDown); window.addEventListener('keyup', labKeyUp); }
         function labUnbindKeys() { window.removeEventListener('keydown', labKeyDown); window.removeEventListener('keyup', labKeyUp); }
         function labHold(dir, on) { if (lab) lab.k[dir] = !!on; }
-        function labSelIdx(i) { let ks = Object.keys(lab.bag); if (ks[i]) lab.sel = ks[i]; }
-        function labSel(k) { if (lab && lab.bag[k]) lab.sel = k; lab.hudSig = ''; }
+        // 选中的是"第几格"，不是某样东西：格子按放进来的先后排，放完了后面的自动前移补上、不留空洞；
+        // 选中位置不变——选中格的东西没了，下一样东西移过来，手里自动拿着它；后面没有了就选最后一个有东西的格子；一件都没有才是空的
+        function labSyncSel() {
+            let ks = Object.keys(lab.bag);
+            if (!ks.length) { lab.sel = null; return; }
+            lab.selIdx = Math.max(0, Math.min(lab.selIdx | 0, ks.length - 1));
+            lab.sel = ks[lab.selIdx];
+        }
+        function labSelIdx(i) { let ks = Object.keys(lab.bag); if (ks[i]) { lab.selIdx = i; labSyncSel(); lab.hudSig = ''; } }
+        function labSel(k) { if (!lab) return; let i = Object.keys(lab.bag).indexOf(k); if (i >= 0) { lab.selIdx = i; labSyncSel(); } lab.hudSig = ''; }
+
+        // ── 长按连续 ──
+        // Q 长按：每秒放 5 个（放完选中的那一堆为止，一个一个按螺旋排开）；左键长按对着地上的东西：每秒捡 6 个附近的；
+        // 右键长按对着粒子包：每秒拆 5 个，到上限停并提示。对着家具、或没对着东西（使用）都只做一次，不连发。松手（或手机上松开按钮）就停。
+        function labHoldStart(kind) {
+            if (!lab || lab.over || lab.panel || document.getElementById('lab-book')) return false;
+            labHoldStop();
+            labSyncSel();
+            if (kind === 'Q') { lab.hold = { kind: 'Q', acc: 0, i: 0 }; return labHoldStep(); }
+            if (kind === 'R') {
+                let d = lab.sel ? labDef(lab.sel) : null;
+                let ok = labRightClick();
+                if (ok && d && d.pack) lab.hold = { kind: 'R', acc: 0, i: 0 };
+                return ok;
+            }
+            let a = labAim();
+            if (a.item) { let ok = labPickEntity(a.item); if (ok) lab.hold = { kind: 'L', acc: 0, i: 0 }; return ok; }
+            if (a.station) return labInteractWith(a.station);
+            return labUse('L');
+        }
+        function labHoldStop() { if (lab) lab.hold = null; }
+        function labHoldStep() {
+            let h = lab.hold; if (!h) return false;
+            labSyncSel();
+            if (h.kind === 'Q') {
+                if (!lab.sel || !labN(lab.bag, lab.sel)) { lab.hold = null; return false; }
+                let k = lab.sel, ok = labPut(false, h.i);
+                if (!ok) { lab.hold = null; return false; }
+                h.i++;
+                if (!lab.bag[k]) lab.hold = null;   // 这一堆放完了就停（后面补上来的下一样不自动接着放）
+                return true;
+            }
+            if (h.kind === 'R') {
+                let d = lab.sel ? labDef(lab.sel) : null;
+                if (!d || !d.pack) { lab.hold = null; return false; }
+                if (!labUse('R')) { lab.hold = null; return false; }
+                return true;
+            }
+            // 'L'：捡离自己最近的一个（够得着的），没有了就停
+            let e = labNearestItem(LAB_T.pickR);
+            if (!e || !labPickEntity(e)) { lab.hold = null; return false; }
+            return true;
+        }
+        function labHoldTick(dt) {
+            let h = lab.hold; if (!h) return;
+            if (lab.panel || document.getElementById('lab-book')) { lab.hold = null; return; }
+            let iv = 1 / LAB_HOLD_RATE[h.kind];
+            h.acc += dt;
+            while (lab.hold && h.acc >= iv - 1e-9) { h.acc -= iv; labHoldStep(); }
+        }
 
         // ── 主循环 ──
         function labLoop() {
@@ -436,6 +499,7 @@
         function labTick(dt) {
             lab.t += dt;
             labMove(dt);
+            labHoldTick(dt); labSyncSel();
             labGasTick(dt);
             labDecayTick(dt, Math.random);
             labAssemble(dt);
@@ -535,21 +599,30 @@
             let r = labDecayStore(lab.bag, dt, rnd, LAB_BAG_CAP);
             if (r.lost > 0) labFlash('身上放不下，衰变出来的东西没了');
             labDecayStore(lab.stove.items, dt, rnd, 0);   // 台面上的零散中子也衰变（粒子包、器材里的中子不衰变：它们不是 'n' 这种物品）
-            if (lab.sel && !lab.bag[lab.sel]) lab.sel = null;
+            labSyncSel();
         }
         // 粒子拼原子：地上的粒子落地 1.5 秒后，挨在一起的按总质子数 Z、中子数 N、电子数 e 拼（Z ≤ 26，表里没有的组合散开）
         // 原子拼装：挨在一起的粒子（任意两个之间 0.5 米内连成一串）算一簇。
         // 簇里有 2 个以上粒子就开始倒计时（4 秒），簇里每进来一个新粒子倒计时重置；
         // 倒计时走完时，质子数 = 电子数、并且有对应原子，就拼成那个原子；没有对应原子的组合停在原地，什么都不发生。
         // 簇的头顶有标签：当前质子、中子、电子数；能拼就显示名字和倒计时，拼不成显示"无对应原子"。
+        // 用格子（边长 = 簇半径）找邻居：每个粒子只看周围 9 格，几百个粒子也不卡
         function labClusters() {
             let P = lab.ground.filter(function (e) { return (e.key === 'p' || e.key === 'n' || e.key === 'e') && !e.held; });   // held：放进器材里
-            let seen = new Set(), out = [];
+            let R = LAB_T.mergeR, grid = new Map(), stamp = lab.cstamp = (lab.cstamp || 0) + 1, out = [];
+            P.forEach(function (e) {
+                e.gx = Math.floor(e.x / R); e.gz = Math.floor(e.z / R);
+                let k = (e.gx + 512) * 1024 + (e.gz + 512), a = grid.get(k); if (a) a.push(e); else grid.set(k, [e]);
+            });
             P.forEach(function (a) {
-                if (seen.has(a)) return;
-                let comp = [a]; seen.add(a);
+                if (a.cs === stamp) return;
+                a.cs = stamp; let comp = [a];
                 for (let i = 0; i < comp.length; i++) {
-                    P.forEach(function (b) { if (!seen.has(b) && labD(comp[i], b) <= LAB_T.mergeR) { seen.add(b); comp.push(b); } });
+                    let c = comp[i];
+                    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+                        let cell = grid.get((c.gx + dx + 512) * 1024 + (c.gz + dz + 512)); if (!cell) continue;
+                        for (let j = 0; j < cell.length; j++) { let b = cell[j]; if (b.cs !== stamp && labD(c, b) <= R) { b.cs = stamp; comp.push(b); } }
+                    }
                 }
                 out.push(comp);
             });
@@ -565,16 +638,20 @@
             let timers = {}, labels = [];
             labClusters().forEach(function (comp) {
                 if (comp.length < 2) return;
-                let sig = comp.map(function (e) { return e.id; }).sort(function (a, b) { return a - b; }).join(','), info = labClusterInfo(comp);
+                let sum = 0, sq = 0;
+                comp.forEach(function (e) { sum += e.id; sq += e.id * e.id; });
+                let sig = comp.length + ':' + sum + ':' + sq, info = labClusterInfo(comp);   // 簇的"指纹"：成员变了（进来或走了一个粒子）就不一样，倒计时重新数
                 let t = (lab.cl[sig] || 0) + (dt || 0);
-                if (info.ok && t >= LAB_T.gather) {
+                if (info.ok && info.np <= 26 && t >= LAB_T.gather) {
                     comp.forEach(labKill);
                     let a = labSpawn(info.key, info.x, info.z);
                     labMade(a.key, 1);
                     return;
                 }
+                let l1 = '质子 ' + info.np + '　中子 ' + info.nn + '　电子 ' + info.ne;
+                if (info.np > 26) { if (labels.length < LAB_LABEL_MAX) labels.push({ x: info.x, z: info.z, l1: l1, l2: '质子数超过 26，不参与拼装' }); return; }   // 原地放着：不拼、不散开、没有倒计时
                 timers[sig] = t;
-                labels.push({ x: info.x, z: info.z, l1: '质子 ' + info.np + '　中子 ' + info.nn + '　电子 ' + info.ne, l2: info.ok ? info.name + ' ' + Math.max(0, LAB_T.gather - t).toFixed(1) + ' 秒' : '无对应原子' });
+                if (labels.length < LAB_LABEL_MAX) labels.push({ x: info.x, z: info.z, l1: l1, l2: info.ok ? info.name + ' ' + Math.max(0, LAB_T.gather - t).toFixed(1) + ' 秒' : '无对应原子' });
             });
             lab.cl = timers;
             labLabelsShow(labels);
@@ -610,9 +687,10 @@
         }
         function labReact(dt) {
             let G = lab.ground, dead = new Set(), add = [], booms = [];
-            for (let i = 0; i < G.length; i++) {
-                for (let j = i + 1; j < G.length; j++) {
-                    let a = G[i], b = G[j];
+            let Q = G.filter(function (e) { return !labIsParticle(e.key); });   // 质子、中子、电子不跟任何东西反应，不参与两两比较（几百个粒子也不卡）
+            for (let i = 0; i < Q.length; i++) {
+                for (let j = i + 1; j < Q.length; j++) {
+                    let a = Q[i], b = Q[j];
                     if (dead.has(a) || dead.has(b) || labD(a, b) > LAB_T.reactR) continue;
                     let ka = a.key, kb = b.key, mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
                     let has = function (x, y) { return (ka === x && kb === y) || (ka === y && kb === x); };
@@ -658,8 +736,7 @@
                 let b = lab.ground.filter(function (e) { return e.key === 'bottle' && !e.dead && labD(e, g) <= LAB_T.fillR; })[0];
                 if (b) { labKill(b); labKill(g); labSpawn(bk, b.x, b.z); return; }
                 if (labN(lab.bag, 'bottle') > 0 && Math.hypot(g.x - lab.p.x, g.z - lab.p.z) <= LAB_T.fillR) {
-                    labDel(lab.bag, 'bottle'); labKill(g); labBagGive(bk, 1);
-                    if (!lab.bag[lab.sel]) lab.sel = null;
+                    labDel(lab.bag, 'bottle'); labKill(g); labBagGive(bk, 1); labSyncSel();
                 }
             });
         }
@@ -704,8 +781,7 @@
         function labStovePut(k, all) {
             let n = all ? labN(lab.bag, k) : 1;
             if (lab.stove.cook || n <= 0 || !labDel(lab.bag, k, n)) return;
-            labAdd(lab.stove.items, k, n);
-            if (!lab.bag[lab.sel]) lab.sel = null;
+            labAdd(lab.stove.items, k, n); labSyncSel();
             labPanelStove();
         }
         function labStoveTake(k) {
@@ -730,7 +806,7 @@
                 if (need - fromStove) labDel(lab.bag, k, need - fromStove);
             });
             Object.keys(rec.out).forEach(function (k) { labBagGive(k, rec.out[k]); if (k !== 'bottle') labMade(k, rec.out[k]); });
-            if (lab.sel && !lab.bag[lab.sel]) lab.sel = null;
+            labSyncSel();
             labFlash('合成了：' + rec.name);
             if (lab.panel === 'craft') labPanelCraft();
             return true;
@@ -751,7 +827,7 @@
         // 放进身上；种类满了就掉在脚边
         function labBagGive(k, n) {
             n = n === undefined ? 1 : n;
-            if (lab.bag[k] || Object.keys(lab.bag).length < LAB_BAG_CAP) { labAdd(lab.bag, k, n); if (!lab.sel) lab.sel = k; return true; }
+            if (lab.bag[k] || Object.keys(lab.bag).length < LAB_BAG_CAP) { labAdd(lab.bag, k, n); labSyncSel(); return true; }
             for (let i = 0; i < n; i++) { let q = labNear(lab.p.x, lab.p.z, 0.5); labSpawn(k, q.x, q.z); }
             labFlash('身上放不下，掉在脚边了');
             return false;
@@ -764,7 +840,7 @@
         function labPickEntity(e) {
             if (!e || e.dead) { labFlash('附近没有能拿的东西'); return false; }
             if (!lab.bag[e.key] && Object.keys(lab.bag).length >= LAB_BAG_CAP) { labFlash('身上放不下了'); return false; }
-            labKill(e); labAdd(lab.bag, e.key, 1); if (!lab.sel) lab.sel = e.key;
+            labKill(e); labAdd(lab.bag, e.key, 1); labSyncSel();
             return true;
         }
         function labPick() { return labPickEntity(labNearestItem(LAB_T.pickR)); }
@@ -774,23 +850,32 @@
             return { x: x + Math.cos(a) * r, z: z + Math.sin(a) * r };
         }
         // Q：把手上选中的东西放在脚下（不飞出去、没有抛物线）；放多个时错开 0.3 米以内的小偏移，不叠在一起
-        function labPut(all) {
+        function labIsParticle(k) { return k === 'p' || k === 'n' || k === 'e'; }
+        function labParticleCount() { let c = 0; lab.ground.forEach(function (e) { if (labIsParticle(e.key)) c++; }); return c; }
+        function labFull() { labFlash('房间太满，先拼一些吧'); return false; }
+        function labPut(all, spiralIdx) {
+            labSyncSel();
             let k = lab.sel; if (!k || !labN(lab.bag, k)) { labFlash('先选一样东西'); return false; }
             let n = all ? Math.min(labN(lab.bag, k), 30) : 1;
+            if (labIsParticle(k)) { let room = LAB_PARTICLE_CAP - labParticleCount(); if (room <= 0) return labFull(); n = Math.min(n, room); }
             labDel(lab.bag, k, n);
             for (let i = 0; i < n; i++) {
-                let ang = i * 2.399, r = n > 1 ? 0.3 * Math.sqrt((i + 1) / n) : 0;
+                let ang, r;
+                if (spiralIdx !== undefined) { ang = spiralIdx * 2.399; r = 0.3 * Math.sqrt(Math.min(spiralIdx, 100) / 100); }   // 长按连续放：一个一个按螺旋排开，0.3 米内
+                else { ang = i * 2.399; r = n > 1 ? 0.3 * Math.sqrt((i + 1) / n) : 0; }
                 labSpawn(k, lab.p.x + Math.cos(ang) * r, lab.p.z + Math.sin(ang) * r);
             }
-            if (!lab.bag[k]) lab.sel = null;
+            labSyncSel();
             return true;
         }
         let labDrop = labPut;   // 老名字，测试和旧代码还在用
         // 右键：粒子包拆开；空瓶在水池边接水。左键／R：气体瓶放气；药剂喝掉
         // mode：'L' 左键／R 键（药剂、放气）；'R' 右键（拆粒子包、接水）；不传 = 都行
         function labUse(mode) {
+            labSyncSel();
             let k = lab.sel; if (!k || !labN(lab.bag, k)) { labFlash('先选一样东西'); return false; }
             let d = labDef(k);
+            if (d.pack && mode !== 'L' && labParticleCount() + d.pack[0] * 2 + d.pack[1] > LAB_PARTICLE_CAP) return labFull();   // 散落的粒子最多 300 个
             if ((d.pack || k === 'bottle') && mode === 'L') { labFlash(d.pack ? '右键拆开' : '右键接水（站在水池边）'); return false; }
             if (!d.pack && k !== 'bottle' && mode === 'R') { labFlash('这个用左键'); return false; }
             if (d.pack) {
@@ -820,18 +905,17 @@
             } else if (k === 'pot:spring') {
                 labDel(lab.bag, k, 1); lab.springT = 30; labFlash('穿上了弹簧鞋，30 秒内跳得更高');
             } else { labFlash('这个不能直接用'); return false; }
-            if (lab.sel && !lab.bag[lab.sel]) lab.sel = null;
+            labSyncSel();
             return true;
         }
         // T：把伤害药剂扔到面前 5 米，50 伤害（3 米内都算；站太近会伤到自己）
         function labThrow() {
             if (lab.sel !== 'pot:dmg' || !labN(lab.bag, 'pot:dmg')) { labFlash('选中伤害药剂再扔'); return false; }
-            labDel(lab.bag, 'pot:dmg', 1); labBagGive('bottle', 1);
+            labDel(lab.bag, 'pot:dmg', 1); labBagGive('bottle', 1); labSyncSel();
             let tx = lab.p.x + lab.face.x * 5, tz = lab.p.z + lab.face.z * 5;
             labFxBall(tx, tz, 1.6, 0x8e24aa);
             if (Math.hypot(lab.p.x - tx, lab.p.z - tz) <= 3) labHurt(50);
-            labFlash('扔出去了');
-            if (lab.sel && !lab.bag[lab.sel]) lab.sel = null;
+            labFlash('扔出去了'); labSyncSel();
             return true;
         }
         function labNearStation() {
@@ -895,17 +979,20 @@
                 '<div id="lab-cross" style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,640px);text-align:center;pointer-events:auto;">' +
                 '<div id="lab-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:15px;"></div>' +
-                '<div style="margin-top:2px;"><button id="lab-btn-act" style="' + LAB_BTN + '" onclick="labClick()">动作</button><button id="lab-btn-put" style="' + LAB_BTN + '" onclick="labPut()">放下 (Q)</button>' +
-                '<button id="lab-btn-rc" style="' + LAB_BTN + '" onclick="labRightClick()">拆包/接水</button><button style="' + LAB_BTN + '" onclick="labThrow()">扔药 (T)</button><button style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHold(\'jump\',true)" ontouchend="labHold(\'jump\',false)" onmousedown="labHold(\'jump\',true)" onmouseup="labHold(\'jump\',false)">跳</button></div></div>' +
+                '<div style="margin-top:2px;"><button id="lab-btn-act" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'L\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'L\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">动作</button><button id="lab-btn-put" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'Q\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'Q\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">放下 (Q)</button>' +
+                '<button id="lab-btn-rc" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'R\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'R\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">拆包/接水</button><button style="' + LAB_BTN + '" onclick="labThrow()">扔药 (T)</button><button style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHold(\'jump\',true)" ontouchend="labHold(\'jump\',false)" onmousedown="labHold(\'jump\',true)" onmouseup="labHold(\'jump\',false)">跳</button></div></div>' +
                 '';   // 走路用屏幕上通用的摇杆（左半屏拖动），转视角拖右半屏——和主游戏一样
             document.body.appendChild(d);
         }
         function labBagHtml() {
-            let ks = Object.keys(lab.bag);
-            if (!ks.length) return '<span style="color:#888;">身上什么都没有（身上最多 ' + LAB_BAG_CAP + ' 种）</span>';
-            return ks.map(function (k, i) {
-                return '<span onclick="labSel(\'' + k + '\')" style="display:inline-block;margin:2px;padding:3px 7px;border-radius:12px;cursor:pointer;border:2px solid ' + (lab.sel === k ? '#5e35b1' : '#cfd8dc') + ';background:' + (lab.sel === k ? '#ede7f6' : '#fff') + ';">' + (i + 1) + ' ' + labName(k) + '×' + lab.bag[k] + '</span>';
-            }).join('');
+            let ks = Object.keys(lab.bag), out = '';
+            for (let i = 0; i < LAB_BAG_CAP; i++) {
+                if (i === LAB_HOT) out += '<span style="display:inline-block;width:8px;"></span>';
+                let k = ks[i], on = k !== undefined && lab.sel === k;
+                if (k === undefined) { out += '<span style="display:inline-block;margin:2px;padding:3px 9px;border-radius:12px;border:2px dashed #e0e0e0;color:#ccc;">' + (i + 1) + '</span>'; continue; }
+                out += '<span onclick="labSel(\'' + k + '\')" style="display:inline-block;margin:2px;padding:3px 7px;border-radius:12px;cursor:pointer;border:2px solid ' + (on ? '#5e35b1' : (i < LAB_HOT ? '#90a4ae' : '#cfd8dc')) + ';background:' + (on ? '#ede7f6' : '#fff') + ';">' + (i + 1) + ' ' + labName(k) + '×' + lab.bag[k] + '</span>';
+            }
+            return out;
         }
         function labHudUpdate() {
             let R = lab; if (!R) return;
@@ -966,15 +1053,14 @@
             let L = labSt(), n = all ? labN(L.box, k) : 1;
             if (n <= 0) return;
             if (!lab.bag[k] && Object.keys(lab.bag).length >= LAB_BAG_CAP) { labFlash('身上放不下了'); return; }
-            labDel(L.box, k, n); labAdd(lab.bag, k, n); if (!lab.sel) lab.sel = k;
+            labDel(L.box, k, n); labAdd(lab.bag, k, n); labSyncSel();
             saveProgress(); labPanelBox();
         }
         function labBoxPut(k, all) {
             let L = labSt(), n = all ? labN(lab.bag, k) : 1;
             if (n <= 0) return;
             if (!L.box[k] && Object.keys(L.box).length >= LAB_BOX_CAP) { labFlash('仓库箱满了'); return; }
-            labDel(lab.bag, k, n); labAdd(L.box, k, n);
-            if (!lab.bag[lab.sel]) lab.sel = null;
+            labDel(lab.bag, k, n); labAdd(L.box, k, n); labSyncSel();
             saveProgress(); labPanelBox();
         }
         function labBoxSell(k, all) {
@@ -1072,7 +1158,7 @@
         function labGive(k, n) {
             if (!labDebugOn() || !lab) return false;
             n = n === undefined ? 1 : n;
-            labAdd(lab.bag, k, n); if (!lab.sel) lab.sel = k; lab.hudSig = '';
+            labAdd(lab.bag, k, n); labSyncSel(); lab.hudSig = '';
             return true;
         }
         function labDbgPanel() {
