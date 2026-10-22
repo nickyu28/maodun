@@ -132,6 +132,8 @@ async function openTab(chrome, url, opts) {
     await send('Runtime.enable'); await send('Page.enable');
     await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []).concat(opts && opts.blockHosts ? opts.blockHosts.map((h) => ({ urlPattern: '*' + h + '*' })) : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    // 实验室开关会被 localStorage 记住（TH_labdebug）；同一个 Chrome 里所有标签页共用存档，所以每个新页面一开始先清掉，免得前一个标签页开了开关、后面不带参数的检查也看到实验室入口。测开关记忆本身的检查传 keepStorage: true。
+    if (!(opts && opts.keepStorage)) await send('Page.addScriptToEvaluateOnNewDocument', { source: "try{localStorage.removeItem('TH_labdebug')}catch(e){}" });
     if (opts && opts.mobile) {   // 触屏设备：has_touch + is_mobile
         await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
         await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 2, mobile: true });
@@ -3815,6 +3817,62 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
             report('LB18 快捷栏 3 格 + 背包 3 格：自动补上不留空格、选中位置不变、默认选第 1 格', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB19')) {
+            // LB19 实验室入口：带 ?labdebug=1 打开大厅，展开「选择模式」后入口可见、没被盖住、点得到、点「开始游戏」进得去（电脑、平板横屏、手机竖屏／横屏、小屏）；开关用 localStorage 记住：访问过一次以后不带参数也有，?labdebug=0 清掉；读写 localStorage 抛错也不崩，读不到就当没开
+            const bad = [];
+            const views = [['电脑 1280×800', 1280, 800, false], ['平板横屏 1180×820', 1180, 820, true], ['手机竖屏 390×844', 390, 844, true], ['手机横屏 844×390', 844, 390, true], ['小屏 320×568', 320, 568, true]];
+            const T1 = await openTab(chrome, url, { query: 'labdebug=1', keepStorage: true });
+            await T1.eval(`${HIDE} true;`);
+            for (const [nm, w, h, mob] of views) {
+                await T1.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: mob });
+                await T1.eval(`${HIDE} nav('screen-lobby'); selectGameMode('hunt'); true;`);
+                // 真的点「选择模式」把面板展开（不是直接去掉 hidden）
+                await T1.eval(`(function(){ let p = document.getElementById('mode-detail-panel'); if (p.classList.contains('hidden')) document.querySelector('#lobby-tr button').click(); return true; })()`);
+                await until(T1, `!document.getElementById('mode-detail-panel').classList.contains('hidden')`, 5000);
+                await frames(T1, 3);
+                const r = JSON.parse(await T1.eval(`(function(){ let b = document.getElementById('btn-mode-lab'), r = b.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, top = document.elementFromPoint(cx, cy), h = document.getElementById('btn-mode-hunt').getBoundingClientRect(); return JSON.stringify({ disp: getComputedStyle(b).display, w: r.width, h: r.height, inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, top: top === b, below: Math.abs(h.left - r.left) < 2 && r.top >= h.bottom - 1 }); })()`));
+                if (r.disp === 'none' || r.w < 20 || r.h < 20) bad.push(nm + '：入口没显示 ' + JSON.stringify(r));
+                else if (!r.inView || !r.top) bad.push(nm + '：入口在屏幕外或被别的东西盖住了 ' + JSON.stringify(r));
+                else if (!r.below) bad.push(nm + '：入口不在寻宝队正下面 ' + JSON.stringify(r));
+            }
+            await T1.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+            // 点入口选中、点开始游戏进实验室
+            await T1.eval(`document.getElementById('btn-mode-lab').click(); true;`);
+            if (!(await T1.eval(`gState.gameMode === 'lab'`))) bad.push('点实验室入口没选中');
+            await T1.eval(`document.getElementById('lobby-start-btn').click(); true;`);
+            if (!(await until(T1, `typeof lab !== 'undefined' && lab && document.getElementById('lab-hud')`, 15000))) bad.push('带 ?labdebug=1 选实验室后点开始游戏进不去');
+            if (!(await T1.eval(`localStorage.getItem('TH_labdebug') === '1'`))) bad.push('带 ?labdebug=1 访问后没记在 localStorage');
+            if (T1.errors.length) bad.push(T1.errors.slice(0, 2).join(' / '));
+            await T1.close();
+            // 以后不带参数也有（同一个浏览器存档）：入口可见，大厅左边的版本号后面写着「实验室入口已开」
+            const T2 = await openTab(chrome, url, { keepStorage: true });
+            await T2.eval(`${HIDE} true;`);
+            const m2 = JSON.parse(await T2.eval(`JSON.stringify({ search: location.search, vis: labVisible(), disp: getComputedStyle(document.getElementById('btn-mode-lab')).display, ver: document.getElementById('lobby-version').innerText })`));
+            if (!m2.vis || m2.disp === 'none' || !/实验室入口已开/.test(m2.ver)) bad.push('访问过一次以后不带参数应该也有入口 ' + JSON.stringify(m2));
+            await T2.close();
+            // ?labdebug=0 清掉，之后不带参数也没有
+            const T3 = await openTab(chrome, url, { query: 'labdebug=0', keepStorage: true });
+            await T3.eval(`${HIDE} true;`);
+            const m3 = JSON.parse(await T3.eval(`JSON.stringify({ vis: labVisible(), disp: getComputedStyle(document.getElementById('btn-mode-lab')).display, stored: localStorage.getItem('TH_labdebug'), ver: document.getElementById('lobby-version').innerText })`));
+            if (m3.vis || m3.disp !== 'none' || m3.stored !== null || /实验室/.test(m3.ver)) bad.push('?labdebug=0 应该清掉开关 ' + JSON.stringify(m3));
+            await T3.close();
+            const T4 = await openTab(chrome, url, { keepStorage: true });
+            await T4.eval(`${HIDE} true;`);
+            if (await T4.eval(`labVisible() || getComputedStyle(document.getElementById('btn-mode-lab')).display !== 'none'`)) bad.push('?labdebug=0 之后不带参数还有入口');
+            // localStorage 读写抛错：不崩，读不到就当没开；网址上的 ?labdebug=1 当次照样有效
+            const ex = JSON.parse(await T4.eval(`(function(){ let r = {}; Object.defineProperty(window, 'localStorage', { configurable: true, get: function () { throw new Error('blocked'); } });
+                try { r.noParam = labDebugRead(); } catch (e) { r.noParam = 'threw'; }
+                history.replaceState(null, '', location.pathname + '?labdebug=1');
+                try { r.withParam = labDebugRead(); } catch (e) { r.withParam = 'threw'; }
+                history.replaceState(null, '', location.pathname + '?labdebug=0');
+                try { r.zero = labDebugRead(); } catch (e) { r.zero = 'threw'; }
+                return JSON.stringify(r); })()`));
+            if (ex.noParam !== false || ex.withParam !== true || ex.zero !== false) bad.push('localStorage 抛错时应该不崩、读不到当没开、网址参数照样有效 ' + JSON.stringify(ex));
+            if (T4.errors.length) bad.push(T4.errors.slice(0, 2).join(' / '));
+            await T4.close();
+            report('LB19 实验室入口：?labdebug=1 下各种屏幕都看得见点得到、能进；开关记在 localStorage、?labdebug=0 清掉；localStorage 抛错不崩', bad.length === 0, bad.join(' / '));
         }
 
         if (want('HH1')) {

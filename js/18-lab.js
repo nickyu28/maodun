@@ -1,12 +1,23 @@
         // ══════════════════════════════════════════════════════════
         //  实验室（化学）· 第 4A 段
         //  规则以 docs/lab-spec.md 和 docs/chem.md 为准。整个功能默认藏起来：
-        //  LAB_ENABLED 为 false 时，只有网址带 ?labdebug=1 才有大厅里的"实验室"模式入口（寻宝队正下面）。
+        //  LAB_ENABLED 为 false 时，只有网址带 ?labdebug=1（会记在本机，?labdebug=0 清掉）才有大厅里的"实验室"模式入口（寻宝队正下面）。
         //  本段只有：一个房间（合成台、灶台、订单板、仓库箱、水池）、原子拼合、衰变、灶台和接触反应、药剂、订单、配方清单、手册。
         //  没有：电路和器材、原子弹、烟花、化学寻宝队、Boss、联机同步（NET_PROTO 不动）。
         // ══════════════════════════════════════════════════════════
         const LAB_ENABLED = false;
-        function labDebugOn() { try { return /[?&]labdebug=1(&|$)/.test(location.search); } catch (e) { return false; } }
+        // 开关：网址带 ?labdebug=1 就开，并用 localStorage（TH_labdebug）记住，以后不带参数也开；?labdebug=0 清掉。
+        // 读写 localStorage 都包了 try/catch，读不到就当没开（网址上的 ?labdebug=1 当次照样有效）。LAB_ENABLED 的默认值不变。
+        const LAB_DBG_KEY = 'TH_labdebug';
+        function labDebugRead() {
+            let q = null;
+            try { let m = /[?&]labdebug=([01])(&|$)/.exec(location.search); if (m) q = m[1]; } catch (e) { }
+            if (q === '1') { try { localStorage.setItem(LAB_DBG_KEY, '1'); } catch (e) { } return true; }
+            if (q === '0') { try { localStorage.removeItem(LAB_DBG_KEY); } catch (e) { } return false; }
+            try { return localStorage.getItem(LAB_DBG_KEY) === '1'; } catch (e) { return false; }
+        }
+        let LAB_DBG_CACHE = null;
+        function labDebugOn() { if (LAB_DBG_CACHE === null) LAB_DBG_CACHE = labDebugRead(); return LAB_DBG_CACHE; }
         function labVisible() { return LAB_ENABLED || labDebugOn(); }
 
         // 时间和距离（"米" = 场景里的 1 个单位）。冒烟测试会改这几个数把等待缩短。
@@ -1170,7 +1181,9 @@
 
         // ── 大厅里的入口（藏起来的时候不显示；按钮在 index.html 的模式列表里，寻宝队正下面）──
         function labRefreshButtons() {
-            let b = document.getElementById('btn-mode-lab'); if (b) b.style.display = labVisible() ? '' : 'none';
+            let on = labVisible(), b = document.getElementById('btn-mode-lab'); if (b) b.style.display = on ? '' : 'none';
+            // 大厅左边的版本号后面标一下开关状态：看一眼就知道这台设备开着没有（入口在右上角「选择模式」里、寻宝队正下面）
+            let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION + (on ? '　实验室入口已开' : '');
         }
 
         // 调试用：清空地上的东西（只在 ?labdebug=1 时有用，冒烟测试用）
