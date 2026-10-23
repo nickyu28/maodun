@@ -3517,11 +3517,6 @@
                 out: { n: '丰饶圣餐', v: 250000, w: 5, tex: 'cup', c: 0xffb300, main: '#ffb300', detail: '#e65100' }
             },
             {
-                // H21：合成出来掉在地上，捡起来拿在手上按“用道具”，本局运气层数 +1、东西没了；除了合成时那一下，游戏里任何地方都不说它的作用，用的时候也不提示
-                id: 'luckclaw', a: '猫盾', b: '黄金小鱼干',
-                out: { n: '运气猫爪', v: 100000, w: 1, tex: 'cat_shield', c: 0xff80ab, main: '#ff80ab', detail: '#7e57c2', type: 'luckclaw' }
-            },
-            {
                 id: 'catblade', a: '骑士团圣剑', b: '至臻猫盾',
                 // spd/hp 是装备这把剑时的加成（移动速度倍率、额外生命上限）——
                 // 不是随便加在这就生效的，ground-merge 生成物、捡进背包两处都是
@@ -3737,55 +3732,6 @@
             return true;
         }
 
-        // ── 运气（H21）──
-        // 用掉运气猫爪就是本局运气层数 L+1（不封顶，原料不限），只对自己生效，每局从 0 开始、不存档。k = 1 − 0.8^L。
-        // 箱子/信号接收器开出的东西：紫色 k×50% 换成金色；金色 k×10% 换成大金（占全队上限，见 huntTakeBigAsync）；
-        // 保险柜 k 的概率多抽一件、留贵的；抽奖机大金 +k×5%、销毁 −k×15%。AI 开箱不吃运气。
-        function huntLuckK() { return 1 - Math.pow(0.8, gState.huntLuck || 0); }
-        // 用掉运气猫爪：运气 +1，不提示
-        function huntLuckUse() { gState.huntLuck = (gState.huntLuck || 0) + 1; }
-        // 合成运气猫爪那一下的动静（彩虹光柱、引怪、一句话）；运气本身要等拿起来用
-        function huntLuckFx(pos) {
-            // 彩虹光：红绿蓝三根光柱绕在一起，几秒就散；动静跟别的合成一样会引怪
-            let lvl = Math.max(0, Math.min(1, Math.log10(100000 / 20000) / Math.log10(100)));
-            huntLure = { p: pos.clone(), t: 4 + lvl * 6, r: 40 + lvl * 120 };
-            [0xff1744, 0x00e676, 0x2979ff].forEach(function (col, i) {
-                let mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, fog: false });
-                let beam = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 400, 10, 1, true), mat);
-                let a = i * Math.PI * 2 / 3;
-                beam.position.set(pos.x + Math.cos(a) * 2.4, 200, pos.z + Math.sin(a) * 2.4); beam.renderOrder = 800;
-                scene.add(beam); huntLureFx.push({ o: beam, mat: mat, t: 3.5, life: 3.5 });
-            });
-            sfxPlay([523, 659, 784, 1046], 0.5, 0.07, 'triangle');
-            blazeFlash('发生了神奇的反应！');
-        }
-        // 把地上的东西换成另一件（原来那件已经掉出来了，换的时候用同一个位置和速度）
-        function huntUpgradeItem(mesh, it) {
-            if (!mesh || groundItems.indexOf(mesh) < 0) return;
-            let old = mesh.userData;
-            mesh.userData = Object.assign({}, it, { isItem: true, vel: old.vel, fromSignal: old.fromSignal, gravityActive: old.gravityActive });
-            if (mesh.material) { mesh.material = new THREE.MeshLambertMaterial({ map: createProceduralTexture(it.tex || 'generic', it.c, '#ffffff') }); }
-            huntItemGlow(mesh);
-        }
-        // 一件刚开出来的东西，按运气该不该换：返回 'gold'（紫换金）/ 'big'（金换大金）/ 'extra'（保险柜多抽一件留贵的）/ null。r 是 0~1 的随机数
-        function huntLuckDecide(it, boxType, k, r) {
-            if (boxType === 'safe') return r < k ? 'extra' : null;
-            let purple = itemPool.purple.some(function (p) { return p.n === it.n; });
-            let gold = itemPool.gold.some(function (g) { return g.n === it.n; }) || it.type === 'gem';
-            if (purple) return r < k * 0.5 ? 'gold' : null;
-            if (gold && !huntIsBig(it)) return r < k * 0.1 ? 'big' : null;
-            return null;
-        }
-        // 箱子/信号接收器的东西刚掉出来时调用：按运气看要不要换
-        function huntLuckApply(mesh, boxType) {
-            if (!mesh || !(gState.huntLuck > 0)) return;
-            let it = mesh.userData, pick = function (a) { return a[Math.floor(Math.random() * a.length)]; };
-            let d = huntLuckDecide(it, boxType, huntLuckK(), Math.random());
-            if (d === 'extra') { let extra = pick(huntBigPool('safe')); if (extra && extra.v > (it.v || 0)) huntUpgradeItem(mesh, extra); }
-            else if (d === 'gold') huntUpgradeItem(mesh, pick(itemPool.gold));
-            else if (d === 'big') huntTakeBigAsync(huntBigPool(boxType), pick, function (big) { if (huntIsBig(big)) huntUpgradeItem(mesh, big); });
-        }
-
         function huntLureTick(dt) {
             if (huntLure) { huntLure.t -= dt; if (huntLure.t <= 0) huntLure = null; }
             huntLureFx = huntLureFx.filter(function (f) {
@@ -3816,41 +3762,60 @@
                     if (isConsumed(gi) || gi === bi || gi.userData.type !== 'gem') return;
                     if (bi.userData.type !== 'base') return;   // 已经镶满变皇冠了就不再吃
                     if (bi.position.distanceTo(gi.position) >= GROUND_MERGE_RANGE) return;
-                    // H28：镶上这一颗就满了（变皇冠 = 一个大金）：先占一个大金名额，满了就不镶
-                    if (crownSockCount(bi.userData) >= HUNT_GEMS.length - 1 && !(bi.userData.sock && bi.userData.sock[gi.userData.gem]) && huntBigGate(bi, gi) !== 'go') return;
+                    // H28：镶上这一颗就满了（变皇冠 = 一个大金）要占一个名额；名额没了也照样镶（只是不再扣）
+                    let completes = crownSockCount(bi.userData) >= HUNT_GEMS.length - 1 && !(bi.userData.sock && bi.userData.sock[gi.userData.gem]);
                     if (!crownSocketGem(bi.userData, gi.userData.gem)) return;
+                    if (completes) huntBigCraftTake();
                     consumed.push(gi); scene.remove(gi);
                     huntMergeBoom(bi.position, bi.userData.v, bi.userData.n);
                 });
             });
 
-            GROUND_RECIPES.forEach(function (rec) {
-                let as = groundItems.filter(function (i) { return i.userData.n === rec.a; });
-                let bs = groundItems.filter(function (i) { return i.userData.n === rec.b; });
-                if (!as.length || !bs.length) return;
-                bs.forEach(function (bi) {
-                    if (isConsumed(bi)) return;
-                    for (let k = 0; k < as.length; k++) {
-                        let ai = as[k];
-                        if (isConsumed(ai)) continue;
-                        if (ai.position.distanceTo(bi.position) >= GROUND_MERGE_RANGE) continue;
-                        if (huntRecipeBigCost(rec) && huntBigGate(ai, bi) !== 'go') continue;   // H28
-                        consumed.push(ai, bi); scene.remove(ai); scene.remove(bi);
-                        let up = rec.out;
-                        let ns = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4),
-                            new THREE.MeshLambertMaterial({ map: createProceduralTexture('gold_chest', up.main, up.detail) }));
-                        ns.position.copy(ai.position);
-                        ns.userData = { n: up.n, v: up.v, w: up.w, tex: up.tex, c: up.c, isItem: true, feeds: 0 };
-                        if (up.type) { ns.userData.type = up.type; ns.userData.dmg = up.dmg; ns.userData.spd = up.spd; ns.userData.hp = up.hp; }
-                        huntItemGlow(ns); scene.add(ns); groundItems.push(ns);
-                        huntFindRecipe(rec.id);
-                        if (up.type === 'luckclaw') huntLuckFx(ns.position); else huntMergeBoom(ns.position, up.v, up.n);
-                        break;
-                    }
-                });
-            });
+            // 配方合成：同时有好几种合法组合时，一次选一个——先看产物价值，高的优先；价值一样看消耗的原料总价值，少的优先；
+            // 再一样看两件离得近的、配方在表里靠前的、地上先后——同样的摆法每次选的都是同一个。合完一个再选下一个（新合出来的也能继续合）。
+            for (let guard = 0; guard < 60; guard++) {
+                let m = huntBestMerge(consumed);
+                if (!m) break;
+                let rec = m.rec, ai = m.a, bi = m.b;
+                if (huntRecipeBigCost(rec)) huntBigCraftTake();   // H28
+                consumed.push(ai, bi); scene.remove(ai); scene.remove(bi);
+                let up = rec.out;
+                let ns = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4),
+                    new THREE.MeshLambertMaterial({ map: createProceduralTexture('gold_chest', up.main, up.detail) }));
+                ns.position.copy(ai.position);
+                ns.userData = { n: up.n, v: up.v, w: up.w, tex: up.tex, c: up.c, isItem: true, feeds: 0 };
+                if (up.type) { ns.userData.type = up.type; ns.userData.dmg = up.dmg; ns.userData.spd = up.spd; ns.userData.hp = up.hp; }
+                huntItemGlow(ns); scene.add(ns); groundItems.push(ns);
+                huntFindRecipe(rec.id);
+                huntMergeBoom(ns.position, up.v, up.n);
+            }
 
             if (consumed.length > 0) groundItems = groundItems.filter(function (i) { return !isConsumed(i); });
+        }
+        // 候选 x 比 y 好吗：产物价值高的好；一样就消耗原料总价值少的好；再一样距离近的、配方靠前的、地上先后靠前的
+        function huntMergeBetter(x, y) {
+            if (x.outV !== y.outV) return x.outV > y.outV;
+            if (x.cost !== y.cost) return x.cost < y.cost;
+            if (x.d !== y.d) return x.d < y.d;
+            if (x.ri !== y.ri) return x.ri < y.ri;
+            if (x.i !== y.i) return x.i < y.i;
+            return x.j < y.j;
+        }
+        function huntBestMerge(consumed) {
+            let best = null;
+            GROUND_RECIPES.forEach(function (rec, ri) {
+                groundItems.forEach(function (ai, i) {
+                    if (consumed.indexOf(ai) > -1 || ai.userData.n !== rec.a) return;
+                    groundItems.forEach(function (bi, j) {
+                        if (bi === ai || consumed.indexOf(bi) > -1 || bi.userData.n !== rec.b) return;
+                        let d = ai.position.distanceTo(bi.position);
+                        if (d >= GROUND_MERGE_RANGE) return;
+                        let c = { rec: rec, ri: ri, a: ai, b: bi, outV: rec.out.v, cost: (ai.userData.v || 0) + (bi.userData.v || 0), d: d, i: i, j: j };
+                        if (!best || huntMergeBetter(c, best)) best = c;
+                    });
+                });
+            });
+            return best;
         }
 
         function refreshRadarMinimap() {
@@ -4220,11 +4185,11 @@
                 return;
             }
 
-            // 药水、运气猫爪：拿在手上按“用道具”，没有读条，马上生效、东西没了。运气猫爪用的时候不提示（H21）
-            if (useTrigger && gState.selectedSlot <= 2 && selectedInv && (selectedInv.type === 'potion' || selectedInv.type === 'luckclaw')) {
+            // 药水：拿在手上按“用道具”，没有读条，马上生效、东西没了
+            if (useTrigger && gState.selectedSlot <= 2 && selectedInv && selectedInv.type === 'potion') {
                 keys['rmb'] = false; touchBtn.ability = false;
                 gState.inv[gState.selectedSlot] = null;
-                if (selectedInv.type === 'potion') huntPotionUse(selectedInv); else huntLuckUse();
+                huntPotionUse(selectedInv);
                 updateHUD();
                 return;
             }
@@ -4374,7 +4339,6 @@
                             let ang = Math.random() * Math.PI * 2;
                             box.userData = { ...singleLoot, isItem: true, vel: new THREE.Vector3(Math.cos(ang) * 18, 0, Math.sin(ang) * 18) };
                             huntItemGlow(box); scene.add(box); groundItems.push(box);
-                            huntLuckApply(box, boxType);
                         }
                     }
                     else if (activeObj.userData.isItem) {

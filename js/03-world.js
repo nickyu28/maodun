@@ -198,7 +198,6 @@
             gState.debuff = { type: 0, timer: 0, cooldown: 0 };
             gState.maxHp = 100; gState.hp = effectiveMaxHp(); huntMaxHpSync(true);
             gState.huntHpCut = 0; gState.speedT = 0; gState.springT = 0; gState.stimT = 0; gState.reviveT = 0;   // H22：血量上限扣减、加速药剂、弹簧鞋的剩余秒数，每局归零
-            gState.huntLuck = 0;   // H21：运气层数，每局从 0 开始，不存档
             huntLure = null;
             huntLureFx.forEach(function (f) { scene.remove(f.o); }); huntLureFx = [];
             gState.hasLeft = false; gState.deathPos = null; gState.spectating = null; gState.spectateIdx = -1; gState.peerState = {}; hideDeathUI();
@@ -1467,6 +1466,12 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026.10.23-1', date: '10 月 23 日', title: '最近更新', items: [
+                    '修了合成配方的问题',
+                    '运气猫爪下架了（已按价值折现返还）'
+                ]
+            },
+            {
                 id: '2026.10.22-2', date: '10 月 22 日', title: '最近更新', items: [
                     '修了几处小问题'
                 ]
@@ -1474,11 +1479,6 @@
             {
                 id: '2026.10.22-1', date: '10 月 22 日', title: '最近更新', items: [
                     '修了几处小问题'
-                ]
-            },
-            {
-                id: '2026.10.19-2', date: '10 月 19 日', title: '最近更新', items: [
-                    '修了大厅里山能穿过的问题'
                 ]
             }
         ];

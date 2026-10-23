@@ -852,12 +852,17 @@ async function enterExit(tab, key) {
             if (!r.reload) bad.push('存档读回来不一样');
             if (!r.draw || !r.ai || !r.shopHtml || !r.titleList) bad.push('脸/AI/页面 ' + JSON.stringify([r.draw, r.ai, r.shopHtml, r.titleList]));
             // 真打一局：逃生者撤离，次数 +1；追捕者抓起倒地的人，次数 +1
-            await T.eval(`${HIDE} gState.nightStat = null; selectGameMode('night'); ${MODES.night.start}; true;`); await W(3000);
-            await T.eval(`night.survivors[0].escaped = true; endNightGame('测试'); true;`); await W(1500);
+            await T.eval(`${HIDE} gState.nightStat = null; selectGameMode('night'); ${MODES.night.start}; true;`);
+            if (!(await until(T, `night && !night.over && night.survivors && night.survivors.length`, 30000))) bad.push('惊魂夜没开起来');
+            await T.eval(`night.survivors[0].escaped = true; endNightGame('测试'); true;`);
+            await until(T, `nightStatOf().esc >= 1`, 30000);   // 等条件成立，不靠固定等待（CI 负载高时曾经没记上）
             const esc = await T.eval(`nightStatOf().esc`);
             if (esc !== 1) bad.push('撤离一局没记上 ' + esc);
-            await T.eval(`${HIDE} nightBackToLobby(); true;`); await W(800);
-            await T.eval(`${HIDE} NIGHT_MATCH_WAIT = 0; enterNightMatch('hunter'); nightPickChar('hunter'); true;`); await W(3500);
+            await T.eval(`${HIDE} nightBackToLobby(); true;`);
+            await until(T, `!night || night.over`, 30000);
+            await T.eval(`${HIDE} NIGHT_MATCH_WAIT = 0; enterNightMatch('hunter'); nightPickChar('hunter'); true;`);
+            if (!(await until(T, `night && !night.over && night.hunter && night.survivors && night.survivors.length`, 30000))) bad.push('追捕者那局没开起来');
+            await frames(T, 3);
             const grab = JSON.parse(await T.eval(`(function(){ let h = night.hunter; h.recover = 0; h.spearLeft = 0; night.action = null; h.carrying = null;
                 let s = night.survivors.filter(function (a) { return !a.isPlayer; })[0]; s.downed = true; s.onChair = false; s.out = false; s.escaped = false;
                 s.p.copy(h.p); s.gy = h.gy || 0; let before = nightStatOf().catch; nightHunterGrab(); return JSON.stringify({ before: before, after: nightStatOf().catch, carrying: !!h.carrying }); })()`));
@@ -1706,73 +1711,152 @@ async function enterExit(tab, key) {
             report('H20 血条/体力条里写数字，左上角两行删了，带骑士剑时超出的部分是金色', bad.length === 0, bad.join(' / '));
         }
 
-                if (want('H21')) {
-            // H21 运气猫爪：猫盾 + 黄金小鱼干 合成，彩虹光 + "发生了神奇的反应！"，合成后掉出一件（用了才运气层数 +1，不封顶）；
-            // k = 1 − 0.8^L：紫色 k×50% 换金、金色 k×10% 换大金、保险柜 k 概率多抽留贵的、抽奖机大金 +k×5% 销毁 −k×15%；
-            // 除合成时那一句，哪里都不说它的作用；AI 开箱不吃运气；每局从 0 开始
+                if (want('CR1')) {
+            // CR1 合成：丰饶圣餐在大金名额用完（地图开局常常就剩 0）时也能合；多个合成同时成立时先合产物价值高的、一样高选消耗原料总价值少的，每次结果一样；所有配方都合得出来
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
-            const r = JSON.parse(await T.eval(`(function(){
-                let o = {}, flashes = [], bf = blazeFlash; blazeFlash = function (t) { flashes.push(t); return bf.apply(this, arguments); };
-                let mk = function (name) { let m = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial()); m.position.set(camera.position.x, 2, camera.position.z); m.userData = Object.assign({}, (itemPool.purple.concat(itemPool.gold).filter(function (x) { return x.n === name; })[0]) || { n: name, v: 1, w: 1 }, { isItem: true }); scene.add(m); groundItems.push(m); return m; };
-                let rec = GROUND_RECIPES.filter(function (x) { return x.id === 'luckclaw'; })[0];
-                o.rec = !!rec && rec.a === '猫盾' && rec.b === '黄金小鱼干' && rec.out.v === 100000 && rec.out.w === 1;
-                // 合成 5 次：原料不限，层数一直涨
-                gState.huntLuck = 0; let before = groundItems.length;
-                for (let i = 0; i < 5; i++) { mk('猫盾'); mk('黄金小鱼干'); executeGroundCombinationsLogic(); }
-                o.L = gState.huntLuck; o.claws = groundItems.filter(function (g) { return g.userData.n === '运气猫爪' && g.userData.type === 'luckclaw' && g.userData.v === 100000 && g.userData.w === 1; }).length;
-                o.flash = flashes.filter(function (t) { return t === '发生了神奇的反应！'; }).length;
-                o.found = huntFoundRecipe('luckclaw');
-                o.beams = huntLureFx.length >= 3;
-                // k 和换位概率（网格取样，精确）
-                let kk = function (L) { gState.huntLuck = L; return huntLuckK(); };
-                o.k = [kk(0), kk(1), kk(3)].map(function (x) { return +x.toFixed(4); });
-                let frac = function (it, box, k) { let n = 0, N = 10000, kinds = {}; for (let i = 0; i < N; i++) { let d = huntLuckDecide(it, box, k, (i + 0.5) / N); if (d) { n++; kinds[d] = 1; } } return [n / N, Object.keys(kinds).join()]; };
-                let k3 = 1 - Math.pow(0.8, 3);
-                o.purple = frac(itemPool.purple[0], 'wood', k3); o.gold = frac(itemPool.gold[0], 'wood', k3); o.safe = frac(itemPool.god[0], 'safe', k3); o.big = frac(itemPool.ultra[0], 'gold', k3);
-                o.k3 = k3;
-                // 抽奖机
-                let lot = function (kind, k) { let N = 20000, c = {}; for (let i = 0; i < N; i++) { let v = huntLotteryPick(kind, (i + 0.5) / N, k); c[v] = (c[v] || 0) + 1 / N; } return c; };
-                o.lotG0 = lot('gold', 0); o.lotG = lot('gold', k3); o.lotP = lot('purple', k3);
-                // 层数 0 时什么都不变；每局开始归零
-                gState.huntLuck = 0; let m = mk(itemPool.purple[0].n); huntLuckApply(m, 'wood'); o.noLuckSame = m.userData.n === itemPool.purple[0].n;
-                gState.huntLuck = 40; let up = 0, tries = 60; for (let i = 0; i < tries; i++) { let mm = mk(itemPool.purple[0].n); huntLuckApply(mm, 'wood'); if (mm.userData.n !== itemPool.purple[0].n) up++; }
-                o.upgrades = up;
-                // 保险柜：留贵的，不会变便宜
-                gState.huntLuck = 40; let cheap = true; for (let i = 0; i < 30; i++) { let mm = mk('x'); mm.userData = Object.assign({}, itemPool.god[3] || itemPool.god[0], { isItem: true }); let v0 = mm.userData.v; huntLuckApply(mm, 'safe'); if (mm.userData.v < v0) cheap = false; }
-                o.safeKeepsBest = cheap;
-                blazeFlash = bf;
+            await T.eval(`window.__mk = function (u, x) { let m = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), new THREE.MeshBasicMaterial()); m.userData = Object.assign({ isItem: true, feeds: 0 }, u); m.position.set(500 + (x || 0), 1, 500); scene.add(m); groundItems.push(m); return m; };
+                window.__has = function (n) { return groundItems.some(function (g) { return g.userData.n === n; }); };
+                window.__cnt = function (n) { return groundItems.filter(function (g) { return g.userData.n === n; }).length; };
+                window.__clear = function () { groundItems.slice().forEach(function (g) { scene.remove(g); }); groundItems.length = 0; }; true;`);
+            // 1) 丰饶圣餐回归：真把金苹果和黄金圣杯扔到地上（走真实的扔东西），名额用完（0）和有名额（4）都要合出来
+            for (const left of [0, 4]) {
+                await T.eval(`window.__clear(); huntBigLeft = ${left}; gState.inv[0] = Object.assign({}, itemPool.gold.filter(function (i) { return i.n === '金苹果'; })[0]); gState.inv[1] = Object.assign({}, itemPool.gold.filter(function (i) { return i.n === '黄金圣杯'; })[0]); executeThrow(0); executeThrow(1); true;`);
+                if (!(await until(T, `window.__has('丰饶圣餐')`, 20000))) bad.push('名额剩 ' + left + ' 时扔金苹果 + 黄金圣杯合不出丰饶圣餐');
+                else if (await T.eval(`window.__has('金苹果') || window.__has('黄金圣杯')`)) bad.push('合成后原料还在');
+            }
+            // 2) 优先级：造三个互相竞争的配方（都要"甲"）
+            const comp = JSON.parse(await T.eval(`(function(){
+                let saved = GROUND_RECIPES.slice(), o = {};
+                let out = function (n, v) { return { n: n, v: v, w: 1, tex: 'generic', c: 0xffffff, main: '#fff', detail: '#000' }; };
+                GROUND_RECIPES.length = 0;
+                GROUND_RECIPES.push({ id: 't_low', a: '甲', b: '乙', out: out('低产物', 1000) }, { id: 't_high', a: '甲', b: '丙', out: out('高产物', 5000) }, { id: 't_same', a: '甲', b: '丁', out: out('同价产物', 5000) });
+                // (a) 甲 + 乙 + 丙 都在：产物价值高的赢（高产物），乙留下
+                window.__clear(); huntBigLeft = 4; window.__mk({ n: '甲', v: 10 }, 0); window.__mk({ n: '乙', v: 10 }, 1); window.__mk({ n: '丙', v: 10 }, 2); executeGroundCombinationsLogic();
+                o.a = [window.__has('高产物'), window.__has('低产物'), window.__has('乙'), window.__has('丙')];
+                // (b) 甲 + 丙 + 丁：产物价值一样（5000），选消耗原料总价值少的（丁 5 < 丙 50）
+                window.__clear(); window.__mk({ n: '甲', v: 10 }, 0); window.__mk({ n: '丙', v: 50 }, 1); window.__mk({ n: '丁', v: 5 }, 2); executeGroundCombinationsLogic();
+                o.b = [window.__has('同价产物'), window.__has('高产物'), window.__has('丙'), window.__has('丁')];
+                // (c) 摆法不同、地上先后不同，结果一样：重复 20 次，丙丁换顺序
+                let same = true;
+                for (let i = 0; i < 20; i++) { window.__clear(); if (i % 2) { window.__mk({ n: '丁', v: 5 }, 2); window.__mk({ n: '丙', v: 50 }, 1); window.__mk({ n: '甲', v: 10 }, 0); } else { window.__mk({ n: '甲', v: 10 }, 0); window.__mk({ n: '丙', v: 50 }, 1); window.__mk({ n: '丁', v: 5 }, 2); } executeGroundCombinationsLogic(); if (!window.__has('同价产物') || window.__has('高产物')) same = false; }
+                o.c = same;
+                // (d) 一堆东西：两个甲、乙丙丁各一：先合高价的，再合下一个
+                window.__clear(); window.__mk({ n: '甲', v: 10 }, 0); window.__mk({ n: '甲', v: 10 }, 0.5); window.__mk({ n: '乙', v: 10 }, 1); window.__mk({ n: '丙', v: 50 }, 2); window.__mk({ n: '丁', v: 5 }, 3); executeGroundCombinationsLogic();
+                o.d = [window.__cnt('同价产物'), window.__cnt('高产物'), window.__cnt('低产物'), window.__cnt('乙'), window.__cnt('丙')];
+                GROUND_RECIPES.length = 0; saved.forEach(function (r) { GROUND_RECIPES.push(r); });
                 return JSON.stringify(o); })()`));
-            if (!r.rec) bad.push('配方不对');
-            if (r.L !== 0 || r.claws !== 5 || r.flash !== 5 || !r.found || !r.beams) bad.push('合成（只掉出猫爪，运气要用了才涨） ' + JSON.stringify([r.L, r.claws, r.flash, r.found, r.beams]));
-            if (r.k.join() !== '0,0.2,0.488') bad.push('k=' + r.k.join());
-            const near = (a, b) => Math.abs(a - b) < 0.002;
-            if (!near(r.purple[0], r.k3 * 0.5) || r.purple[1] !== 'gold') bad.push('紫→金 ' + JSON.stringify(r.purple));
-            if (!near(r.gold[0], r.k3 * 0.1) || r.gold[1] !== 'big') bad.push('金→大金 ' + JSON.stringify(r.gold));
-            if (!near(r.safe[0], r.k3) || r.safe[1] !== 'extra') bad.push('保险柜 ' + JSON.stringify(r.safe));
-            if (r.big[0] !== 0) bad.push('大金还会被换 ' + JSON.stringify(r.big));
-            if (!(near(r.lotG0.big, 0.05) && near(r.lotG0.destroy, 0.25))) bad.push('没运气的抽奖变了 ' + JSON.stringify(r.lotG0));
-            if (!(near(r.lotG.big, 0.05 + 0.05 * r.k3) && near(r.lotG.destroy, 0.25 - 0.15 * r.k3) && near(r.lotG.purple, 0.15) && near((r.lotG.big + r.lotG.destroy + r.lotG.purple + r.lotG.gold), 1))) bad.push('抽奖(金) ' + JSON.stringify(r.lotG));
-            if (!(near(r.lotP.destroy, 0.25 - 0.15 * r.k3) && near(r.lotP.purple, 0.6) && !r.lotP.big)) bad.push('抽奖(紫) ' + JSON.stringify(r.lotP));
-            if (!r.noLuckSame || r.upgrades < 15 || r.upgrades > 55 || !r.safeKeepsBest) bad.push('实际换位 ' + JSON.stringify([r.noLuckSame, r.upgrades, r.safeKeepsBest]));
-            // 哪里都不说它的作用：规则、介绍、页面上都没有"运气猫爪"和运气层数
-            const txt = JSON.parse(await T.eval(`JSON.stringify({ log: JSON.stringify(CHANGELOG), rules: Object.keys(MODE_RULES).map(function (k) { return rulesHtml(k); }).join(''), page: document.body.innerHTML, intro: typeof HUNT_ITEM_INTRO !== 'undefined' ? JSON.stringify(HUNT_ITEM_INTRO) : '' })`));
-            ['rules', 'page', 'intro'].forEach((k) => { if (/运气猫爪|运气层|运气值/.test(txt[k])) bad.push(k + ' 里提到了运气'); });
-            // 每局归零；运气只在玩家自己开箱/信号接收器两处用（AI 开箱的代码不碰）
-            await T.eval(`gState.huntLuck = 7; ${HIDE} ${MODES.hunt.exit}; true;`); await W(1200);
-            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000);
-            if ((await T.eval('gState.huntLuck')) !== 0) bad.push('新的一局没归零');
-            const callers = ['08-night.js', '09-hunt.js'].map((f) => (fs.readFileSync(path.join(ROOT, 'js', f), 'utf8').match(/huntLuckApply\(/g) || []).length).reduce((a, b) => a + b, 0);
-            if (callers !== 3) bad.push('huntLuckApply 的调用点数量 ' + callers);   // 定义 1 + 玩家开箱 1 + 信号接收器 1
-            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
+            if (comp.a.join() !== 'true,false,true,false') bad.push('甲+乙+丙：该合产物价值高的，乙留着 ' + comp.a);
+            if (comp.b.join() !== 'true,false,true,false') bad.push('产物一样值钱时该选消耗原料少的（丁），丙留着 ' + comp.b);
+            if (!comp.c) bad.push('同样的东西摆法不同，结果不一样');
+            if (comp.d.join() !== '1,1,0,1,0') bad.push('两个甲 + 乙丙丁：应该先合 丁（同价、更便宜），再合 丙（比乙值钱），剩一个乙 ' + comp.d);
+            // 3) 所有配方都合得出来（名额 4 和 0 都试）：原料名字取自配方，价值任意
+            for (const left of [4, 0]) {
+                const all = JSON.parse(await T.eval(`(function(){
+                    huntBigLeft = ${left}; let bad = [];
+                    GROUND_RECIPES.forEach(function (r) {
+                        window.__clear(); window.__mk({ n: r.a, v: 1000 }, 0); window.__mk({ n: r.b, v: 1000 }, 2); executeGroundCombinationsLogic();
+                        if (!window.__has(r.out.n) || window.__has(r.a) && r.a !== r.out.n || window.__has(r.b) && r.b !== r.out.n) bad.push(r.id + ':' + r.a + '+' + r.b);
+                    });
+                    // 皇冠：底座 + 6 颗宝石
+                    window.__clear(); let b = crownBaseItem(); window.__mk(b, 0); HUNT_GEMS.forEach(function (g, i) { window.__mk(huntGemItem(g), 1 + i * 0.1); }); executeGroundCombinationsLogic(); executeGroundCombinationsLogic();
+                    if (!window.__has('皇冠')) bad.push('crown');
+                    return JSON.stringify({ n: GROUND_RECIPES.length, bad: bad, ids: GROUND_RECIPES.map(function (r) { return r.id; }) }); })()`));
+                if (all.bad.length) bad.push('名额 ' + left + ' 时这些配方合不出来 ' + all.bad.join(','));
+                if (left === 4 && all.ids.join() !== 'gcat,ucat,feast,catblade') bad.push('配方清单变了 ' + all.ids);
+            }
+            // 4) 原有的链：猫盾 + 小鱼干 + 黄金小鱼干 放一起，同一轮里黄金猫盾接着和黄金小鱼干合成至臻猫盾
+            const chain = await T.eval(`(function(){ window.__clear(); huntBigLeft = 4; window.__mk({ n: '猫盾', v: 15000 }, 0); window.__mk({ n: '小鱼干', v: 5000 }, 1); window.__mk({ n: '黄金小鱼干', v: 50000 }, 2); executeGroundCombinationsLogic(); return window.__has('至臻猫盾'); })()`);
+            if (!chain) bad.push('猫盾 + 小鱼干 + 黄金小鱼干 应该一路合成至臻猫盾');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('H21 运气猫爪：合成掉出物品（用了才 +1）；紫→金 k×50%、金→大金 k×10%、保险柜多抽留贵、抽奖机 +5%/−15%；哪里都不说明；每局归零', bad.length === 0, bad.join(' / '));
+            report('CR1 合成：丰饶圣餐名额用完也合得出来、竞争配方先合产物价值高的（一样高选原料便宜的、结果固定）、所有配方都合得出来', bad.length === 0, bad.join(' / '));
+        }
+
+                if (want('LT1')) {
+            // LT1 抽奖机：背包里能拿在手上的东西都收（以前只认紫色池、金色池里的名字，药剂、合成物、商店道具都被拒）；紫/蓝按紫色一档，金/红按金色一档
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            const names = JSON.parse(await T.eval(`(function(){
+                let items = [], add = function (k, it) { items.push([k, it]); };
+                HUNT_POTIONS.forEach(function (p) { add('药剂 ' + p.n, Object.assign({}, p)); });
+                Object.keys(shopItems).forEach(function (n) { add('商店 ' + n, Object.assign({}, shopItems[n])); });
+                add('猫盾', Object.assign({}, itemPool.purple.filter(function (i) { return i.n === '猫盾'; })[0]));
+                add('金苹果', Object.assign({}, itemPool.gold[1]));
+                GROUND_RECIPES.forEach(function (r) { add('合成物 ' + r.out.n, { n: r.out.n, v: r.out.v, w: r.out.w, tex: r.out.tex, c: r.out.c, type: r.out.type }); });
+                itemPool.ultra.concat(itemPool.god).forEach(function (u) { add('大金 ' + u.n, Object.assign({}, u)); });
+                add('宝石', huntGemItem(HUNT_GEMS[0])); add('皇冠底座', crownBaseItem());
+                add('猫神护身符', { n: '猫神护身符', v: GODCAT_V, w: 1, tex: 'generic', c: 0xffd54f, type: 'godcat' });
+                window.__lt = items; return JSON.stringify(items.map(function (x) { return [x[0], huntLotteryKind(x[1])]; })); })()`));
+            if (names.some((x) => x[1] !== 'purple' && x[1] !== 'gold')) bad.push('有东西归不了档 ' + JSON.stringify(names.filter((x) => x[1] !== 'purple' && x[1] !== 'gold')));
+            const kind = Object.fromEntries(names);
+            if (kind['药剂 治疗药剂'] !== 'gold' || kind['药剂 加速药剂'] !== 'gold') bad.push('药剂（5～8 万）该投金色 ' + kind['药剂 治疗药剂']);
+            if (kind['商店 医疗包'] !== 'purple' || kind['猫盾'] !== 'purple' || kind['金苹果'] !== 'gold') bad.push('归档不对 ' + JSON.stringify([kind['商店 医疗包'], kind['猫盾'], kind['金苹果']]));
+            // 真点抽奖：每一种都能投进去、槽位清空、弹出结果（而不是"只能投入紫色或金色物品"）
+            await T.eval(`huntBigLeft = 4; gState.team = []; true;`);
+            const total = names.length;
+            let refused = [];
+            for (let i = 0; i < total; i++) {
+                const r = JSON.parse(await T.eval(`(function(){ ${HIDE} let it = Object.assign({}, window.__lt[${i}][1]); gState.inv[0] = it; gState.selectedSlot = 0; clickLottery();
+                    return JSON.stringify({ gone: !gState.inv[0], title: ${MODAL} }); })()`));
+                if (!r.gone || r.title === '提示') refused.push(names[i][0] + ':' + JSON.stringify(r));
+            }
+            if (refused.length) bad.push('抽奖机拒收：' + refused.join(' | '));
+            await T.eval(`${HIDE} true;`);
+            // 空手还是提示先选东西
+            await T.eval(`gState.inv[gState.selectedSlot] = null; clickLottery(); true;`);
+            if ((await T.eval(MODAL)) === null) bad.push('空手点抽奖应提示');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('LT1 抽奖机收所有能拿在手上的东西（药剂、商店道具、合成物、大金、宝石……），按格子底色归紫/金一档', bad.length === 0, bad.join(' / '));
+        }
+
+                if (want('H21')) {
+            // H21（改）运气猫爪下架：物品、配方、效果代码、抽奖加成都没了，不留悬空引用；老存档里的猫爪（仓库、背包、腰包里）载入时全部拿走、按价值折成钱还给玩家并弹一条提示；SAVE_VER 不动
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const core = fs.readFileSync(path.join(ROOT, 'js', '01-core.js'), 'utf8');
+            const refundSrc = core.slice(core.indexOf('// 运气猫爪下架'), core.indexOf('function loadProgress('));   // 折现函数自己会提到猫爪，别的地方都不许提
+            const rest = core.replace(refundSrc, '') + ['02-lobby', '03-world', '05-shop', '08-night', '09-hunt', '18-lab'].map((f) => fs.readFileSync(path.join(ROOT, 'js', f + '.js'), 'utf8')).join('\n') + fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+            const restClean = rest.replace(/luckClawRefund\(\)/g, '').replace(/'运气猫爪下架了（已按价值折现返还）'/, '');   // 更新公告里写一句下架不算残留
+            const bits = restClean.match(/.{0,20}(运气猫爪|luckclaw|huntLuck).{0,20}/g) || [];
+            const live = bits.filter((x) => !/^\s*\/\/|^.*\/\/.*(运气猫爪|luckclaw|huntLuck)/.test(x));   // 注释里提一句不算
+            if (live.length) bad.push('代码里还留着运气猫爪的东西 ' + live.slice(0, 3).join(' | '));
+            await T.eval(`${HIDE} true;`);
+            const g = JSON.parse(await T.eval(`JSON.stringify({ rec: GROUND_RECIPES.filter(function (r) { return r.id === 'luckclaw' || r.out.n === '运气猫爪'; }).length, fn: [typeof huntLuckK, typeof huntLuckUse, typeof huntLuckApply, typeof huntLuckFx, typeof huntLuckDecide], luck: gState.huntLuck, tbl: huntLotteryTable('gold').map(function (x) { return x[1]; }), ver: SAVE_VER })`));
+            if (g.rec) bad.push('配方里还有运气猫爪 ' + JSON.stringify(g));
+            if (g.fn.some((t) => t !== 'undefined') || g.luck !== undefined) bad.push('运气的函数／状态还在 ' + JSON.stringify(g));
+            if (g.tbl.join() !== '0.05,0.25,0.15,0.55') bad.push('抽奖表被运气改过 ' + g.tbl);
+            if (g.ver !== 2) bad.push('SAVE_VER 动了');
+            // 老存档：仓库、背包、腰包里的猫爪载入时拿走，按价值折现；没写价值的按 10 万（载入时调用的位置也查一下）
+            if (!/loadProgress\(pid\); luckClawRefund\(\);/.test(fs.readFileSync(path.join(ROOT, 'js', '02-lobby.js'), 'utf8'))) bad.push('载入存档后没调用折现');
+            const r = JSON.parse(await T.eval(`(function(){
+                let claw = function (v) { let c = { n: '运气猫爪', v: v, w: 1, tex: 'cat_shield', c: 0xff80ab, type: 'luckclaw' }; if (v === undefined) delete c.v; return c; };
+                                let inv = new Array(INV_BASE).fill(null), garage = new Array(200).fill(null);
+                inv[0] = claw(100000); inv[1] = { n: '猫盾', v: 15000, w: 1, tex: 'cat_shield', c: 0x9c27b0 };
+                inv[2] = { n: '腰包', v: 40000, w: 4, tex: 'pouch', c: 0xd35400, type: 'backpack_ext', isShop: true, bag: [claw(100000), null, { n: '猫盾', v: 15000, w: 1 }] };
+                garage[0] = claw(100000); garage[5] = claw(); garage[9] = { n: '黄金书', v: 30000, w: 3 };
+                gState.inv = inv; gState.garage = garage; gState.money = 1000; gState.recipes = { luckclaw: 111, gcat: 222 }; let m0 = gState.money;
+                let total = luckClawRefund();
+                let left = JSON.stringify([gState.inv, gState.garage]).indexOf('运气猫爪');
+                let saved = localStorage.getItem('TH_save_' + gState.id) || '';
+                let again = luckClawRefund();
+                return JSON.stringify({ m0: m0, total: total, money: gState.money, left: left, keep: [gState.inv[1] && gState.inv[1].n, gState.garage[9] && gState.garage[9].n, gState.inv[2].bag[2] && gState.inv[2].bag[2].n], savedHas: saved.indexOf('运气猫爪'), again: again, rec: Object.keys(gState.recipes).join(), savedRec: saved.indexOf('luckclaw') }); })()`));
+            if (r.m0 !== 1000 || r.total !== 400000 || r.money !== 401000) bad.push('折现：4 个猫爪（含腰包里的、没写价值的按 10 万）应该返 40 万 ' + JSON.stringify(r));
+            if (r.left !== -1 || r.savedHas !== -1 || r.again !== 0) bad.push('猫爪没拿干净／存档里还有／重复折现 ' + JSON.stringify(r));
+            if (r.keep.join() !== '猫盾,黄金书,猫盾') bad.push('别的东西被动了 ' + r.keep);
+            if (r.rec !== 'gcat' || r.savedRec !== -1) bad.push('配方图鉴里的猫爪记录没清（别的记录要留） ' + r.rec);
+            if (!(await until(T, `document.getElementById('sys-modal') && !document.getElementById('sys-modal').classList.contains('hidden') && /运气猫爪已下架，已按价值折现 400000/.test(document.getElementById('sys-modal-text').innerText)`, 8000))) bad.push('没弹折现提示 ' + await T.eval(`document.getElementById('sys-modal-text').innerText`));
+            if (/保底|必出/.test(refundSrc.match(/运气猫爪已下架[^']*/)[0])) bad.push('提示里有不该写的词');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('H21 运气猫爪下架：物品、配方、效果代码、抽奖加成都没了；老存档里的猫爪（仓库、背包、腰包）载入时折现（含没写价值的）并弹提示一次', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('H22b')) {
-            // H22b：药水和运气猫爪是掉在地上的宝物，捡进背包，拿在手上按“用道具”才生效（没有读条，按一下马上起效，东西没了）；撤离后进仓库能卖
+            // H22b：药水是掉在地上的宝物，捡进背包，拿在手上按“用道具”才生效（没有读条，按一下马上起效，东西没了）；撤离后进仓库能卖
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
@@ -1797,24 +1881,8 @@ async function enterExit(tab, key) {
             await until(T, `!gState.inv.some(function (q) { return q && q.n === '治疗药剂'; })`, 20000);
             const o3 = JSON.parse(await T.eval(`JSON.stringify({ hp: gState.hp, gone: !gState.inv.some(function (q) { return q && q.n === '治疗药剂'; }) })`));
             if (o3.hp !== 70 || !o3.gone) bad.push('按用道具没回血/物品还在 ' + JSON.stringify(o3));
-            // 3) 运气猫爪：合成后地上有这件东西 → 捡起来 → 用道具 → huntLuck +1，用的时候没有提示
-            const o4 = JSON.parse(await T.eval(`(function(){ gState.huntLuck = 0; let mk = function (name) { let m = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshLambertMaterial()); m.position.set(camera.position.x, camera.position.y - 7, camera.position.z); m.userData = Object.assign({}, (itemPool.purple.concat(itemPool.gold).filter(function (q) { return q.n === name; })[0]) || { n: name, v: 1, w: 1, tex: 'misc', c: 0xffffff }, { isItem: true, vel: new THREE.Vector3(0, 0, 0) }); scene.add(m); groundItems.push(m); return m; };
-                mk('猫盾'); mk('黄金小鱼干'); executeGroundCombinationsLogic();
-                let claw = groundItems.filter(function (g) { return g.userData.n === '运气猫爪'; });
-                return JSON.stringify({ n: claw.length, luck: gState.huntLuck, v: claw[0] && claw[0].userData.v, w: claw[0] && claw[0].userData.w }); })()`));
-            if (o4.n !== 1 || o4.luck !== 0 || o4.v !== 100000 || o4.w !== 1) bad.push('合成后地上应有运气猫爪、运气还是 0 ' + JSON.stringify(o4));
-            await press(`(function(){ let g = groundItems.filter(function (x) { return x.userData.n === '运气猫爪'; })[0]; g.userData.vel = new THREE.Vector3(0, 0, 0); camera.position.set(g.position.x + 4, g.position.y + 7, g.position.z); pVel.set(0, 0, 0); keys['f'] = true; return true; })()`);
-            await until(T, `gState.inv.some(function (q) { return q && q.n === '运气猫爪'; })`, 20000);
-            const o5 = JSON.parse(await T.eval(`(function(){ let idx = gState.inv.findIndex(function (q) { return q && q.n === '运气猫爪'; }); return JSON.stringify({ idx: idx, luck: gState.huntLuck }); })()`));
-            if (o5.idx < 0 || o5.luck !== 0) bad.push('猫爪没捡进背包/捡起来运气就涨了 ' + JSON.stringify(o5));
-            await T.eval(`(function(){ window.__fl = []; let bf = blazeFlash; window.__bf = bf; blazeFlash = function (t) { window.__fl.push(t); return bf.apply(this, arguments); };
-                let idx = gState.inv.findIndex(function (q) { return q && q.n === '运气猫爪'; }); let it = gState.inv[idx]; gState.inv[idx] = null; gState.inv[0] = it; gState.selectedSlot = 0; keys['rmb'] = true; return true; })()`);
-            await until(T, `!gState.inv.some(function (q) { return q && q.n === '运气猫爪'; })`, 20000);
-            const o6 = JSON.parse(await T.eval(`(function(){ blazeFlash = window.__bf; return JSON.stringify({ luck: gState.huntLuck, gone: !gState.inv.some(function (q) { return q && q.n === '运气猫爪'; }), flashes: window.__fl }); })()`));
-            if (o6.luck !== 1 || !o6.gone) bad.push('用了猫爪运气没 +1 / 物品还在 ' + JSON.stringify(o6));
-            if (o6.flashes.length) bad.push('用猫爪的时候不该有提示 ' + JSON.stringify(o6.flashes));
             await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1500);
-            // 4) 撤离后药水在仓库里，能卖（价值照旧）
+            // 3) 撤离后药水在仓库里，能卖（价值照旧）
             await T.eval(GARAGE_SETUP(`[null, null, null, null, null, null]`, `[]`, 1000));
             await T.eval(`${HIDE} requestEnterMap(); true;`); await W(2500); await T.eval(`${HIDE} true;`);
             await T.eval(`gState.inv[1] = Object.assign({}, HUNT_POTIONS[0]); completeExtraction('撤离成功'); true;`); await until(T, `gState.garage.some(function (q) { return q && q.n === '治疗药剂'; })`, 20000);
@@ -1826,7 +1894,7 @@ async function enterExit(tab, key) {
             if (m1 - m0 !== 80000) bad.push('卖药水应得 80000，实际 ' + (m1 - m0));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('H22b 药水、运气猫爪掉在地上、捡进背包，手上按“用道具”才生效（没有提示）；撤离后药水进仓库能卖', bad.length === 0, bad.join(' / '));
+            report('H22b 药水掉在地上、捡进背包，手上按“用道具”才生效；撤离后药水进仓库能卖', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('H22')) {
@@ -2432,7 +2500,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('H28')) {
-            // H28 大金上限覆盖所有来源，合成也算：原料里没大金、产物是大金（至臻猫盾、丰饶圣餐、皇冠）+1；骑士剑（原料已有大金）不另算；满了不合成并提示；组队问队长
+            // H28 大金上限覆盖所有来源，合成也算：原料里没大金、产物是大金（至臻猫盾、丰饶圣餐、皇冠）占 1 个名额；骑士剑（原料已有大金）不另算；名额没了也照样合成（只是不再扣）；组队通知队长扣
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
@@ -2441,11 +2509,11 @@ async function enterExit(tab, key) {
                 window.__clear = function () { groundItems.slice().forEach(function (g) { scene.remove(g); }); groundItems.length = 0; window.__flash.length = 0; }; true;`);
             const run = (js) => T.eval(`(function(){ window.__clear(); ${js}; executeGroundCombinationsLogic(); executeGroundCombinationsLogic(); return true; })()`);
             const st = async (names) => JSON.parse(await T.eval(`JSON.stringify({ left: huntBigLeft, has: ${JSON.stringify(names)}.map(window.__has), flash: window.__flash.slice(-1)[0] || '' })`));
-            // 上限剩 0：黄金猫盾 + 黄金小鱼干 不合成，弹提示
+            // 上限剩 0：黄金猫盾 + 黄金小鱼干 照样合成，名额还是 0，不弹"满了"
             await T.eval(`huntBigLeft = 0; true;`);
             await run(`window.__mk({ n: '黄金猫盾', v: 50000, w: 1 }, 0); window.__mk({ n: '黄金小鱼干', v: 30000, w: 1 }, 2)`);
             let r = await st(['黄金猫盾', '黄金小鱼干', '至臻猫盾']);
-            if (r.has.join() !== 'true,true,false' || !/大金已经满了/.test(r.flash) || r.left !== 0) bad.push('上限 0 时黄金猫盾+黄金小鱼干该不合成并提示 ' + JSON.stringify(r));
+            if (r.has.join() !== 'false,false,true' || /满了/.test(r.flash) || r.left !== 0) bad.push('上限 0 时黄金猫盾+黄金小鱼干也该合出来、不提示 ' + JSON.stringify(r));
             // 上限剩 1：合一次，变 0
             await T.eval(`huntBigLeft = 1; true;`);
             await run(`window.__mk({ n: '黄金猫盾', v: 50000, w: 1 }, 0); window.__mk({ n: '黄金小鱼干', v: 30000, w: 1 }, 2)`);
@@ -2463,7 +2531,7 @@ async function enterExit(tab, key) {
             // 丰饶圣餐（25 万）算
             await run(`window.__mk({ n: '金苹果', v: 50000, w: 2 }, 0); window.__mk({ n: '黄金圣杯', v: 100000, w: 2 }, 2)`);
             r = await st(['金苹果', '黄金圣杯', '丰饶圣餐']);
-            if (r.has.join() !== 'true,true,false') bad.push('上限 0 时丰饶圣餐该不合成 ' + JSON.stringify(r));
+            if (r.has.join() !== 'false,false,true' || r.left !== 0) bad.push('上限 0 时丰饶圣餐也该合出来 ' + JSON.stringify(r));
             await T.eval(`huntBigLeft = 1; true;`);
             await run(`window.__mk({ n: '金苹果', v: 50000, w: 2 }, 0); window.__mk({ n: '黄金圣杯', v: 100000, w: 2 }, 2)`);
             r = await st(['金苹果', '黄金圣杯', '丰饶圣餐']);
@@ -2472,24 +2540,21 @@ async function enterExit(tab, key) {
             const crown = (left) => T.eval(`(function(){ huntBigLeft = ${left}; window.__clear(); let b = crownBaseItem(); HUNT_GEMS.slice(0, 5).forEach(function (g) { crownSocketGem(b, g.id); }); let bm = window.__mk(b, 0); window.__mk(huntGemItem(HUNT_GEMS[5]), 2); executeGroundCombinationsLogic(); executeGroundCombinationsLogic();
                 return JSON.stringify({ left: huntBigLeft, crown: window.__has('皇冠'), gem: window.__has(HUNT_GEMS[5].n), flash: window.__flash.slice(-1)[0] || '' }); })()`);
             let c0 = JSON.parse(await crown(0));
-            if (c0.crown || !c0.gem || !/已经满了/.test(c0.flash)) bad.push('上限 0 时最后一颗宝石不该镶 ' + JSON.stringify(c0));
+            if (!c0.crown || c0.gem || c0.left !== 0) bad.push('上限 0 时最后一颗宝石也该镶成皇冠 ' + JSON.stringify(c0));
             let c1 = JSON.parse(await crown(1));
             if (!c1.crown || c1.gem || c1.left !== 0) bad.push('上限 1 时该镶成皇冠、名额变 0 ' + JSON.stringify(c1));
-            // 组队（不是队长）：先问队长，答复可以才合
+            // 组队（不是队长）：照样合，同时通知队长扣名额
             const team = JSON.parse(await T.eval(`(function(){ window.__clear(); window.__sent = []; let post = bc.postMessage; bc.postMessage = function (m) { window.__sent.push(m); };
                 gState.team = [{ id: 'leader-x', isLeader: true, isAI: false }, { id: gState.id, isAI: false }]; huntBigLeft = 4;
                 window.__mk({ n: '黄金猫盾', v: 50000, w: 1 }, 0); window.__mk({ n: '黄金小鱼干', v: 30000, w: 1 }, 2); executeGroundCombinationsLogic();
                 let req = window.__sent.filter(function (m) { return m.type === 'HUNT_BIG_REQ'; })[0];
                 let o = { asked: !!req && req.target === 'leader-x', merged0: window.__has('至臻猫盾'), left0: huntBigLeft };
                 if (req) huntBigOnAck({ target: gState.id, sender: 'leader-x', rid: req.rid, ok: true, left: 3 });
-                executeGroundCombinationsLogic();
-                o.merged1 = window.__has('至臻猫盾'); o.left1 = huntBigLeft; bc.postMessage = post; gState.team = []; return JSON.stringify(o); })()`));
-            if (!team.asked || team.merged0 || team.left0 !== 4 || !team.merged1 || team.left1 !== 3) bad.push('队员合大金应先问队长 ' + JSON.stringify(team));
-            const noWords = await T.eval(`/保底|必出/.test(huntBigFullNote.toString().replace(/\\/\\/.*$/gm, ''))`);
-            if (noWords) bad.push('提示里有不该写的词');
+                o.left1 = huntBigLeft; bc.postMessage = post; gState.team = []; return JSON.stringify(o); })()`));
+            if (!team.asked || !team.merged0 || team.left0 !== 4 || team.left1 !== 3) bad.push('队员合大金应该马上合成、并通知队长扣名额 ' + JSON.stringify(team));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('H28 大金上限覆盖合成：至臻猫盾/丰饶圣餐/皇冠占名额、骑士剑不算；剩 0 不合成并提示、剩 1 合一次变 0；队员先问队长', bad.length === 0, bad.join(' / '));
+            report('H28 大金上限覆盖合成：至臻猫盾/丰饶圣餐/皇冠占名额、骑士剑不算；剩 0 也照样合成、剩 1 合一次变 0；队员合成时通知队长', bad.length === 0, bad.join(' / '));
         }
 
         if (want('U7')) {

@@ -261,7 +261,6 @@
             b.userData = { ...reward, isItem: true, vel: new THREE.Vector3(0, 0, 0), fromSignal: true };
             huntItemGlow(b);
             scene.add(b); groundItems.push(b); s.mesh = b;
-            huntLuckApply(b, 'signal');
             signalRouteTick(true);
             if (!actionTarget) bar.style.display = 'none';
         }
@@ -891,14 +890,21 @@
 
         // H16：抽奖机。投金色：5% 大金 / 25% 销毁 / 15% 变紫 / 55% 变金；投紫色：15% 变金 / 60% 变紫 / 25% 销毁。
         // 大金走 huntTakeBig(huntBigPool('safe'))（占这张图的大金上限），奖励都从 itemPool 里拿，不手写。
-        // 运气（H21）：投金色大金 +k×5%、销毁 −k×15%（余下的 +k×10% 给变金）；投紫色销毁 −k×15%，给变金
-        function huntLotteryTable(kind, k) {
-            k = k || 0;
-            if (kind === 'gold') return [['big', 0.05 + 0.05 * k], ['destroy', 0.25 - 0.15 * k], ['purple', 0.15], ['gold', 0.55 + 0.10 * k]];
-            return [['gold', 0.15 + 0.15 * k], ['purple', 0.60], ['destroy', 0.25 - 0.15 * k]];
+        // 抽奖机收什么：背包里能拿在手上的东西都收（以前只认紫色池、金色池里的名字，药剂、合成物、商店道具都被拒）。
+        // 紫色池、金色池里的按自己的池子，宝石算金色；别的（药剂、合成物、商店道具、大金……）按格子底色 slotTier：紫/蓝 → 投紫色，金/红 → 投金色
+        function huntLotteryKind(it) {
+            if (!it) return null;
+            if (itemPool.purple.some(function (p) { return p.n === it.n; })) return 'purple';
+            if (itemPool.gold.some(function (g) { return g.n === it.n; }) || it.type === 'gem') return 'gold';
+            let t = slotTier(it);
+            return (t === 'gold' || t === 'red') ? 'gold' : 'purple';
         }
-        function huntLotteryPick(kind, r, k) {
-            let acc = 0, t = huntLotteryTable(kind, k === undefined ? huntLuckK() : k);
+        function huntLotteryTable(kind) {
+            if (kind === 'gold') return [['big', 0.05], ['destroy', 0.25], ['purple', 0.15], ['gold', 0.55]];
+            return [['gold', 0.15], ['purple', 0.60], ['destroy', 0.25]];
+        }
+        function huntLotteryPick(kind, r) {
+            let acc = 0, t = huntLotteryTable(kind);
             for (let i = 0; i < t.length; i++) { acc += t[i][1]; if (r < acc) return t[i][0]; }
             return t[t.length - 1][0];
         }
@@ -913,12 +919,10 @@
             let slot = gState.selectedSlot; let item = gState.inv[slot];
             if (!item) { showSysModal('提示', '请先在快捷栏选择要用于抽奖的物品', [{ label: '确定' }]); return; }
 
-            let isPurple = itemPool.purple.some(p => p.n === item.n);
-            let isGold = itemPool.gold.some(g => g.n === item.n);
-            if (!isPurple && !isGold) { showSysModal('提示', '只能投入紫色或金色物品进行抽奖！', [{ label: '确定' }]); return; }
-
+            let kind = huntLotteryKind(item);
+            if (openPouch === item) openPouch = null;   // 投的是腰包：里面的东西跟着它一起没了
             gState.inv[slot] = null; updateHUD();
-            let res = huntLotteryPick(isGold ? 'gold' : 'purple', Math.random());
+            let res = huntLotteryPick(kind, Math.random());
             // 大金要先问队长（H16b）；别的结果马上有
             if (res === 'big') huntTakeBigAsync(huntBigPool('safe'), function (a) { return a[Math.floor(Math.random() * a.length)]; }, huntLotteryShow);
             else huntLotteryShow(huntLotteryReward(res));

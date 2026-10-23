@@ -947,7 +947,7 @@
             bc.postMessage({ type: 'HUNT_BIG_REQ', target: huntBigLeader(), sender: gState.id, rid: rid });
         }
         // H28：大金上限覆盖所有来源——合成也算。原料里没有大金、产物是大金（大金物品，或合成产物 v ≥ 20 万：至臻猫盾、丰饶圣餐、皇冠）就占 1 个；
-        // 原料里已经有大金的（猫盾骑士剑）不另算。上限用完了：这两样放一起也不合，弹一句。组队走队长计数（跟 H16b 一样）。
+        // 原料里已经有大金的（猫盾骑士剑）不另算。名额用完了合成照样成功，只是不再扣（以前会不让合，丰饶圣餐就这样做不出来了）。组队走队长计数（跟 H16b 一样）。
         const HUNT_BIG_CRAFT_V = 200000;
         function huntBigName(n) { return itemPool.ultra.concat(itemPool.god).some(function (u) { return u.n === n; }); }
         function huntCraftBigName(n) { return allRecipes().some(function (r) { return r.out.n === n && r.out.v >= HUNT_BIG_CRAFT_V; }); }
@@ -956,28 +956,15 @@
             let ing = function (n) { return huntBigName(n) || huntCraftBigName(n); };
             return outBig && !ing(rec.a) && !ing(rec.b);
         }
-        function huntBigFullNote() { blazeFlash('这张图的大金已经满了'); }
+        // 合成大金产物占 1 个名额；名额用完了也照样能合成（只是不再扣）。组队时通知队长扣一下，不等答复
+        function huntBigCraftTake() {
+            if (huntBigSolo()) { if (huntBigLeft > 0) huntBigLeft--; }
+            else huntBigAsk(function () { });
+        }
         function huntBigAsk(cb) {
             let rid = Math.random().toString(36).slice(2), to = setTimeout(function () { if (huntBigPend[rid]) { delete huntBigPend[rid]; cb(false); } }, 3000);
             huntBigPend[rid] = function (ok, left) { clearTimeout(to); if (typeof left === 'number') huntBigLeft = left; cb(!!ok); };
             bc.postMessage({ type: 'HUNT_BIG_REQ', target: huntBigLeader(), sender: gState.id, rid: rid });
-        }
-        // 地上两样东西要合出一个大金时先过这一关：'go' 可以合（已扣一个）/ 'wait' 在等队长答复 / 'no' 满了，不合
-        function huntBigGate(a, b) {
-            let ua = a.userData, ub = b.userData;
-            if (ua.bigNo || ub.bigNo) return 'no';
-            if (ua.bigPaid && ub.bigPaid) { ua.bigPaid = ub.bigPaid = false; return 'go'; }
-            if (huntBigSolo()) {
-                if (huntBigLeft <= 0) { ua.bigNo = ub.bigNo = true; huntBigFullNote(); return 'no'; }
-                huntBigLeft--; return 'go';
-            }
-            if (ua.bigWait || ub.bigWait) return 'wait';
-            ua.bigWait = ub.bigWait = true;
-            huntBigAsk(function (ok) {
-                ua.bigWait = ub.bigWait = false;
-                if (ok) ua.bigPaid = ub.bigPaid = true; else { ua.bigNo = ub.bigNo = true; huntBigFullNote(); }
-            });
-            return 'wait';
         }
         function huntBigOnReq(m) {
             if (m.target !== gState.id || !isPlaying || huntBigLeader() !== gState.id || typeof m.rid !== 'string') return;
@@ -1111,6 +1098,28 @@
             if (gState.tutorial) return;   // T0：教程里什么都不存（背包、任务、进度都是练习用的），做完或跳过时再存
             const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, huntDiffPlayed: gState.huntDiffPlayed || {}, safeBoost: gState.safeBoost || 0, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, towerDay: gState.towerDay, escDaily: gState.escDaily, escDraft: gState.escDraft, quest: gState.quest || null, blazeMastery: gState.blazeMastery || null, perkBook: gState.perkBook || null, nightStat: gState.nightStat || null, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntRunActive: !!gState.huntRunActive, lab: gState.lab || null, badgeGiven: !!gState.badgeGiven, huntTutorialShown: !!gState.huntTutorialShown, weightWarnShown: !!gState.weightWarnShown, skinPity: gState.skinPity || 0, blazeChar: gState.blazeChar || 'bow', tutDone: gState.tutDone || false, huntMobSeen: gState.huntMobSeen || {}, huntMobKills: gState.huntMobKills || {} };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
+        }
+
+        // 运气猫爪下架：载入存档时把仓库、背包（含腰包里）、已上交的东西里的运气猫爪全部拿走，按价值（没写价值按 10 万）折成钱还给玩家，弹一条提示。
+        // 只在载入时处理，存档的字段和格式都不变（不动 SAVE_VER 和白名单）；拿走以后下一次存档里就没有了，所以每个存档只会提示一次。
+        const LUCKCLAW_DEFAULT_V = 100000;
+        function luckClawRefund() {
+            let total = 0, n = 0, dropRec = !!(gState.recipes && gState.recipes.luckclaw);
+            if (dropRec) delete gState.recipes.luckclaw;   // 配方图鉴里记过的这一条也去掉
+            let take = function (arr) {
+                if (!Array.isArray(arr)) return;
+                for (let i = 0; i < arr.length; i++) {
+                    let it = arr[i]; if (!it) continue;
+                    if (Array.isArray(it.bag)) take(it.bag);
+                    if (it.type === 'luckclaw' || it.n === '运气猫爪') { total += it.v > 0 ? it.v : LUCKCLAW_DEFAULT_V; n++; arr[i] = null; }
+                }
+            };
+            take(gState.inv); take(gState.garage); take(gState.submittedItems);
+            if (!n) { if (dropRec) saveProgress(); return 0; }
+            gState.money = (gState.money || 0) + total;
+            saveProgress();
+            setTimeout(function () { showSysModal('提示', '运气猫爪已下架，已按价值折现 ' + total + '（共 ' + n + ' 个）', [{ label: '好' }]); }, 1200);
+            return total;
         }
 
         function loadProgress(pid) {
