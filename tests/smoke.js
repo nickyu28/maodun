@@ -4744,6 +4744,68 @@ async function enterExit(tab, key) {
             report('IND6 第 3b 阶段：电池组、铜线、电灯、过压爆炸、爆炸伤人、发电机带水泵浇地、电炉 1800°C、夜里电灯、存档、收起设备', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND7')) {
+            // IND7 第 4 阶段（化学）：灶台烧柴攒草木灰；沙子 + 草木灰大火出玻璃瓶；电解槽：电压不够不干活不耗电，水出 2 氢 1 氧，盐水出氢氧化钠氢氯，
+            // 熔融盐要灶台 801°C 以上 3 米内；氢气碰火就炸（旁边的电解槽一起炸没）、没火飘走；氯气毒气每秒 8 血；元素表点亮；存档
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; true;`);
+                // 草木灰：大火每秒烧 2，烧掉 120 燃料出 1 份
+                await T.eval(`(function(){ indBagAdd('wood', 20); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(3); indPanelClose(); indAdvance(62); })(); true;`);
+                if (!((await T.eval(`ind.base.stove.out.ash || 0`)) >= 1)) bad.push('烧柴没出草木灰 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 玻璃瓶：沙子 2 + 草木灰 1，大火
+                await T.eval(`(function(){ indStoveTakeAll(); indPanelClose(); indBagAdd('sand', 2); indStovePut('sand', 1); indStovePut('sand', 1); indStovePut('ash', 1); indPanelClose(); indAdvance(25); })(); true;`);
+                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('做不出玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`indStoveTakeAll(); indPanelClose(); true;`);
+                const place = (k, x, z) => T.eval(`(function(){ indBagAdd('${k}', 1); indTeleport(${x}, ${z}); indLookAt(${x}, ${z} - 5); indSelect('${k}'); indUse(); return ind.base.devs[ind.base.devs.length - 1].id; })()`);
+                const click = (id, k) => T.eval(`(function(){ let d = indDev(${id}); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); if ('${k}') indSelect('${k}'); indAction(); indPanelClose(); return true; })()`);
+                await T.eval(`indBagAdd('wire', 10); indBagAdd('battery', 30); indBagAdd('bottle', 20); indBagAdd('water_raw', 4); indBagAdd('salt', 6); true;`);
+                const bank = await place('dev_bank', -6, 6), el = await place('dev_el', -2, 6);
+                await click(bank, 'wire'); await click(el, 'wire'); await click(bank, 'battery');
+                // 1.5 V：电压不够，不干活也不耗电
+                await T.eval(`(function(){ let d = indDev(${el}); d.st = { water_raw: 1, bottle: 3 }; indTeleport(-10, 10); indAdvance(25); })(); true;`);
+                const low = JSON.parse(await T.eval(`JSON.stringify({ st: indDev(${el}).st, u: indDev(${bank}).u })`));
+                if (low.st.b_h2 || low.u !== 180) bad.push('1.5 V 也电解了或耗电了 ' + JSON.stringify(low));
+                // 装到 8 节 12 V：电解水，20 秒出 2 氢 1 氧 + 空桶
+                for (let i = 0; i < 7; i++) await click(bank, 'battery');
+                await T.eval(`indTeleport(-10, 10); indAdvance(21); true;`);
+                const w = JSON.parse(await T.eval(`JSON.stringify({ st: indDev(${el}).st, e: ind.base.elems })`));
+                if (w.st.b_h2 !== 2 || w.st.b_o2 !== 1 || w.st.bucket !== 1 || !w.e[1] || !w.e[8]) bad.push('电解水不对 ' + JSON.stringify(w));
+                // 盐水：氢氧化钠 + 氢 + 氯
+                await T.eval(`(function(){ let d = indDev(${el}); d.st = { salt: 1, water_raw: 1, bottle: 2 }; d.et = 0; indAdvance(21); })(); true;`);
+                const b = JSON.parse(await T.eval(`JSON.stringify({ st: indDev(${el}).st, e: ind.base.elems })`));
+                if (b.st.naoh !== 1 || b.st.b_h2 !== 1 || b.st.b_cl2 !== 1 || !b.e[17]) bad.push('电解盐水不对 ' + JSON.stringify(b));
+                // 熔融盐：离灶台远不行；放到灶台旁边、灶台 801°C 以上才出钠
+                await T.eval(`(function(){ let d = indDev(${el}); d.st = { salt: 2, bottle: 1 }; d.et = 0; indAdvance(21); })(); true;`);
+                if (await T.eval(`!!indDev(${el}).st.sodium`)) bad.push('离灶台远也电解出了钠');
+                await T.eval(`(function(){ let d = indDev(${el}); d.x = IND_BASE_ST.stove.x + 1.5; d.z = IND_BASE_ST.stove.z + 2; ind.wireDirty = true; indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(3); indPanelClose(); indAdvance(20); d.et = 0; indAdvance(21); })(); true;`);
+                const na = JSON.parse(await T.eval(`JSON.stringify({ st: indDev(${el}).st, t: ind.base.stove.temp, e: ind.base.elems })`));
+                if (na.st.sodium !== 1 || na.st.b_cl2 !== 1 || !na.e[11]) bad.push('熔融盐电解不对 ' + JSON.stringify(na));
+                // 氢气：灶台开着、3 米内放气就炸（人在旁边扣 40）；离火远飘走
+                await T.eval(`(function(){ indBagAdd('b_h2', 2); ind.base.surv.hp = 100; indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 2.5); indLookAt(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z); indSelect('b_h2'); indDrop(); })(); true;`);
+                if (Math.abs((await T.eval(`ind.base.surv.hp`)) - 60) > 0.5) bad.push('氢气碰火没炸 ' + await T.eval(`ind.base.surv.hp`));
+                await T.eval(`(function(){ ind.base.surv.hp = 100; indTeleport(-20, 15); indSelect('b_h2'); indDrop(); })(); true;`);
+                if ((await T.eval(`ind.base.surv.hp`)) !== 100) bad.push('离火远的氢气也炸了');
+                // 氯气：毒气，站在里面每秒扣 8
+                await T.eval(`(function(){ indBagAdd('b_cl2', 1); indTeleport(-20, 15); indSelect('b_cl2'); indDrop(); ind.base.surv.hp = 100; indAdvance(2); })(); true;`);
+                const hp = await T.eval(`ind.base.surv.hp`);
+                if (!(hp < 85 && hp > 83)) bad.push('氯气没按每秒 8 扣血 ' + hp);
+                // 元素表
+                await T.eval(`indPanelElems(); true;`);
+                if (!(await T.eval(`/元素表　\\d+ \\/ 118/.test(document.getElementById('ind-panel').innerText) && Object.keys(ind.base.elems).length >= 4`))) bad.push('元素表不对 ' + await T.eval(`JSON.stringify(ind.base.elems)`));
+                await T.eval(`indPanelClose(); indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
+                const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ e: Object.keys(b.elems).length, ver: b.ver, el: (b.devs.filter(function (d) { return d.ty === 'el'; })[0] || {}).st })); }); })`));
+                if (sv.e < 4 || sv.ver < 7 || sv.el) bad.push('存档读回来不对 ' + JSON.stringify(sv));
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND7 第 4 阶段：草木灰、玻璃瓶、电解（水、盐水、熔融盐、电压不够不干）、氢气碰火爆炸、氯气毒气、元素表、存档', bad.length === 0, bad.join(' / '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
