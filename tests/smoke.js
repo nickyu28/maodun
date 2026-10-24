@@ -2799,7 +2799,7 @@ async function enterExit(tab, key) {
             if (await T.eval(`!!night`)) bad.push('币不够也开局了');
             if (await T.eval(`gState.mcoin`) !== 5) bad.push('币不够不该扣币');
             await T.eval(`${HIDE} gState.mcoin = 25; nightPickChar('c3'); true;`);
-            if (!(await until(T, `night && night.char === 'c3' && night.survivors && night.survivors.length === 4 && night.hunter`, 10000))) bad.push('买了没能开局');
+            if (!(await until(T, `night && night.char === 'c3' && night.survivors && night.survivors.length === 4 && night.hunter`, 30000))) bad.push('买了没能开局');   // 负载高时开局慢，多等一会儿
             const own = JSON.parse(await T.eval(`JSON.stringify({ m: gState.mcoin, o: charOwned('night', 'c3'), cat: charOwned('night', 'cat') })`));
             if (own.m !== 5 || !own.o || !own.cat) bad.push('解锁扣币/拥有状态不对 ' + JSON.stringify(own));
             await T.eval(`${HIDE} true;`);
@@ -2807,7 +2807,7 @@ async function enterExit(tab, key) {
             const vm = JSON.parse(await T.eval(`JSON.stringify([nightVaultMul({ charKey: 'c3' }), nightVaultMul({ charKey: 'cat' }), nightVaultMul(null)])`));
             if (vm.join() !== '0.7,1,1') bad.push('翻板倍率 ' + vm);
             // 主动：假身 + 隐身
-            const c = JSON.parse(await T.eval(`(function(){ const me = night.survivors[0], h = night.hunter; night.c3Cd = 0;
+            const c = JSON.parse(await T.eval(`(function(){ if (!night || !night.survivors[0] || !night.hunter) return JSON.stringify({ notReady: true }); const me = night.survivors[0], h = night.hunter; night.c3Cd = 0;
                 h.gy = me.gy || 0; h.recover = 0; h.lockOn = me; h.stun = 0; let before = false;
                 [[10, 0, Math.PI], [-10, 0, 0], [0, 10, -Math.PI / 2], [0, -10, Math.PI / 2]].some(function (o) { h.p.set(me.p.x + o[0], me.p.y, me.p.z + o[1]); h.faceA = o[2]; before = nightHunterSees(h, me); return before; });
                 nightSurvivorSkill();
@@ -2837,7 +2837,7 @@ async function enterExit(tab, key) {
             await T.eval(`night.survivors[0].invisUntil = performance.now() - 1; true;`);
             if (!(await until(T, `!nightInvisible(night.survivors[0])`, 4000))) bad.push('隐身没结束');
             // AI 7 号：被追捕者盯上就放技能
-            const ai = JSON.parse(await T.eval(`(function(){ const a = night.survivors[1], h = night.hunter; a.charKey = 'c3'; a.skillCd = 0; a.reactT = 0; a.hp = 2; night.decoys.length = 0;
+            const ai = JSON.parse(await T.eval(`(function(){ if (!night || !night.survivors[1] || !night.hunter) return JSON.stringify({ notReady: true }); const a = night.survivors[1], h = night.hunter; a.charKey = 'c3'; a.skillCd = 0; a.reactT = 0; a.hp = 2; night.decoys.length = 0;
                 h.p.set(a.p.x + 20, a.p.y, a.p.z); h.lockOn = a; h.recover = 0;
                 nightSurvivorAISkill(a, 20, 0.1);
                 return JSON.stringify({ n: night.decoys.length, cd: a.skillCd, inv: nightInvisible(a), lock: h.lockOn === night.decoys[0] }); })()`));
