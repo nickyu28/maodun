@@ -1466,7 +1466,7 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026.10.23-1', date: '10 月 23 日', title: '最近更新', items: [
+                id: '2026.10.24-1', date: '10 月 23 日', title: '最近更新', items: [
                     '修了合成配方的问题',
                     '运气猫爪下架了（已按价值折现返还）'
                 ]

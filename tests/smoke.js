@@ -1813,6 +1813,25 @@ async function enterExit(tab, key) {
             report('LT1 抽奖机收所有能拿在手上的东西（药剂、商店道具、合成物、大金、宝石……），按格子底色归紫/金一档', bad.length === 0, bad.join(' / '));
         }
 
+                if (want('LT2')) {
+            // LT2 抽奖保护：里面有东西的腰包不收（提示"先清空腰包"，腰包和里面的东西都不动、地上不多东西）；空腰包照常能投
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+            if (!(await until(T, `isPlaying && typeof clickLottery === 'function'`, 30000))) bad.push('寻宝队没开起来');
+            await T.eval(`${HIDE} huntBigLeft = 4; gState.team = []; window.__p = Object.assign({}, shopItems['腰包'], { bag: [Object.assign({}, itemPool.gold[0]), null, Object.assign({}, HUNT_POTIONS[0])] });
+                gState.inv[0] = window.__p; gState.selectedSlot = 0; window.__g0 = groundItems.length; clickLottery(); true;`);
+            if (!(await until(T, `${MODAL} === '提示' && /先清空腰包/.test(document.getElementById('sys-modal-text').innerText)`, 10000))) bad.push('非空腰包没提示"先清空腰包" ' + await T.eval(`String(${MODAL})`));
+            const keep = JSON.parse(await T.eval(`JSON.stringify({ same: gState.inv[0] === window.__p, bag: window.__p.bag.map(function (q) { return q ? q.n : null; }), ground: groundItems.length - window.__g0 })`));
+            if (!keep.same || keep.bag.join() !== '黄金书,,治疗药剂' || keep.ground !== 0) bad.push('非空腰包被动了 ' + JSON.stringify(keep));
+            // 清空以后再投：收下，槽位空了，出抽奖结果
+            await T.eval(`${HIDE} window.__p.bag = [null, null, null]; clickLottery(); true;`);
+            if (!(await until(T, `!gState.inv[0] && ${MODAL} === '抽奖结果'`, 10000))) bad.push('空腰包投不进去 ' + await T.eval(`JSON.stringify({ slot: !!gState.inv[0], modal: ${MODAL} })`));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('LT2 抽奖保护：非空腰包不收、提示先清空、东西不动；空腰包能投', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('H21')) {
             // H21（改）运气猫爪下架：物品、配方、效果代码、抽奖加成都没了，不留悬空引用；老存档里的猫爪（仓库、背包、腰包里）载入时全部拿走、按价值折成钱还给玩家并弹一条提示；SAVE_VER 不动
             const bad = [];

@@ -891,7 +891,8 @@
         // H16：抽奖机。投金色：5% 大金 / 25% 销毁 / 15% 变紫 / 55% 变金；投紫色：15% 变金 / 60% 变紫 / 25% 销毁。
         // 大金走 huntTakeBig(huntBigPool('safe'))（占这张图的大金上限），奖励都从 itemPool 里拿，不手写。
         // 抽奖机收什么：背包里能拿在手上的东西都收（以前只认紫色池、金色池里的名字，药剂、合成物、商店道具都被拒）。
-        // 紫色池、金色池里的按自己的池子，宝石算金色；别的（药剂、合成物、商店道具、大金……）按格子底色 slotTier：紫/蓝 → 投紫色，金/红 → 投金色
+        // 紫色池、金色池里的按自己的池子，宝石算金色；别的（药剂、合成物、商店道具、大金……）按格子底色 slotTier：紫/蓝 → 投紫色，金/红 → 投金色。
+        // 例外：里面有东西的腰包不收（clickLottery 里提示"先清空腰包"），空腰包照常收
         function huntLotteryKind(it) {
             if (!it) return null;
             if (itemPool.purple.some(function (p) { return p.n === it.n; })) return 'purple';
@@ -919,8 +920,10 @@
             let slot = gState.selectedSlot; let item = gState.inv[slot];
             if (!item) { showSysModal('提示', '请先在快捷栏选择要用于抽奖的物品', [{ label: '确定' }]); return; }
 
+            // 腰包里还有东西不让投（不然里面的东西会跟着一起没了），东西不动；空腰包可以投
+            if (isPouch(item) && pouchBag(item).some(function (q) { return q; })) { showSysModal('提示', '先清空腰包', [{ label: '好' }]); return; }
             let kind = huntLotteryKind(item);
-            if (openPouch === item) openPouch = null;   // 投的是腰包：里面的东西跟着它一起没了
+            if (openPouch === item) openPouch = null;
             gState.inv[slot] = null; updateHUD();
             let res = huntLotteryPick(kind, Math.random());
             // 大金要先问队长（H16b）；别的结果马上有
