@@ -1342,7 +1342,7 @@ async function enterExit(tab, key) {
                     const s0 = await M.eval(getStam);
                     await M.eval(`tMove.x = 0; tMove.y = ${-v}; true;`);
                     // 跑的要等体力真降下来（最多 20 秒，不看真实时间）；走的本来就不降，等几帧够了
-                    if (v > 0.9) await until(M, `${getStam} < ${s0} - 6`, 20000); else await W(1000);
+                    if (v > 0.9) await until(M, `${getStam} < ${s0} - 6`, 60000); else await W(1000);   // 负载高时帧率低、游戏时间走得慢，最多等 60 秒
                     const s1 = await M.eval(getStam);
                     await M.eval(`tMove.x = 0; tMove.y = 0; true;`);
                     out.push(+(s0 - s1).toFixed(1));
