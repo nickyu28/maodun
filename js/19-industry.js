@@ -8,7 +8,10 @@
         //  第 2 阶段：世界规则（悠闲 / 硬核）、生存值（饱食、口渴、精力、体力、血量）、昼夜、床、种地、浇水、灶台（火候、燃料、做饭、烧开水、烧焦）。
         //  第 2.5 阶段：季节（一季 3 天，作物分季节，暖棚）、体温（气温、衣服、灶台和篝火取暖、下水冷）、工作台（衣服、篝火、暖棚）。
         //  第 2.8 阶段：动物（羊、牛、狗、猫）：远征里喂吃的就跟着你，撤离时一起回家；羊剪毛、牛挤奶，羊毛做毛衣帽围巾，牛奶喝或煮奶酪。
-        //  还没有：科技线（3 起，只给硬核）；猫狗带到大厅当装饰（要改主游戏的宠物，以后和 Code 一起做）。
+        //  第 3a 阶段（只给硬核）：冶炼（铜锌铁矿、黄铜、钢）、风箱（鼓风 1600°C）、刚出炉的锭是烫的（不拿钳子每秒扣血，泡水马上凉、放地上 30 秒凉）、钳子、铁稿、钢稿、配方查询。
+        //  第 3b 阶段（只给硬核）：电。电池组（每节 1.5 V、180 U）、蒸汽发电机（灶台中火以上旁边 3 米，12 V 不限电量）、
+        //  用电器（灯 6 V、水泵 12 V、电炉 24 V）、铜线一头接电源一头接用电器；电压超过额定直接炸（3 米内基地的东西都没了）。
+        //  还没有：化学（电解、玻璃、气体）、元素表；猫狗带到大厅当装饰（要改主游戏的宠物，以后和 Code 一起做）。
         // ══════════════════════════════════════════════════════════
         const IND_ENABLED = false;
         const IND_DBG_KEY = 'TH_hcdebug';
@@ -85,8 +88,26 @@
             wool_hat: { name: '毛帽', col: 0x1565c0, wear: 'head', warm: 3 },
             wool_scarf: { name: '毛围巾', col: 0xf9a825, wear: 'neck', warm: 3 },
             milk: { name: '牛奶', col: 0xfffde7, eat: { f: 5, w: 25, back: 'bucket' } },
-            cheese: { name: '奶酪', col: 0xffe082, eat: { f: 35 } }
+            cheese: { name: '奶酪', col: 0xffe082, eat: { f: 35 } },
+            ingot_cu: { name: '铜锭', col: 0xd84315 }, ingot_zn: { name: '锌锭', col: 0xb0bec5 }, ingot_fe: { name: '铁锭', col: 0x616161 },
+            brass: { name: '黄铜锭', col: 0xfbc02d }, steel: { name: '钢锭', col: 0x90a4ae },
+            hot_cu: { name: '铜锭（烫）', col: 0xff3d00, hot: 'ingot_cu' }, hot_zn: { name: '锌锭（烫）', col: 0xff6e40, hot: 'ingot_zn' }, hot_fe: { name: '铁锭（烫）', col: 0xff5722, hot: 'ingot_fe' },
+            hot_brass: { name: '黄铜锭（烫）', col: 0xffab00, hot: 'brass' }, hot_steel: { name: '钢锭（烫）', col: 0xff6d00, hot: 'steel' },
+            tongs: { name: '钳子', col: 0x795548 },
+            pick_iron: { name: '铁稿', col: 0x616161, tool: 2 }, pick_steel: { name: '钢稿', col: 0x90a4ae, tool: 3 },
+            battery: { name: '电池', col: 0x43a047 }, wire: { name: '铜线', col: 0xff7043 },
+            dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '发电机', col: 0x546e7a, dev: 'gen' },
+            dev_lamp: { name: '电灯', col: 0xfff176, dev: 'lamp' }, dev_pump: { name: '水泵', col: 0x0288d1, dev: 'pump' }, dev_furnace: { name: '电炉', col: 0xbf360c, dev: 'furnace' }
         };
+        // 电：rated 额定电压（超过就炸），minV 低于它不工作，draw 每秒耗电；电源：bank 电池组（节数 × 1.5 V），gen 发电机（灶台中火以上 3 米内 12 V）
+        const IND_DEVS = {
+            bank: { name: '电池组', col: 0x2e7d32, src: true, size: [1, 0.8, 0.8] },
+            gen: { name: '发电机', col: 0x546e7a, src: true, volt: 12, size: [1.2, 1, 1] },
+            lamp: { name: '电灯', col: 0xfff176, rated: 6, minV: 1.5, draw: 0.2, size: [0.5, 1.6, 0.5] },
+            pump: { name: '水泵', col: 0x0288d1, rated: 12, minV: 6, draw: 1, size: [0.9, 0.9, 0.9] },
+            furnace: { name: '电炉', col: 0xbf360c, rated: 24, minV: 18, draw: 4, size: [1.4, 1.2, 1.2] }
+        };
+        const IND_BAT_V = 1.5, IND_BAT_U = 180, IND_BOOM_R = 3, IND_BOOM_DMG = 40, IND_DEV_CAP = 40, IND_GEN_R = 3, IND_FURNACE_T = 1800;
         function indName(k) { return (IND_ITEMS[k] && IND_ITEMS[k].name) || k; }
         // 资源点：每种给几个、要什么稿子；seeds 是野生种子堆（随机一种作物）
         const IND_NODES = {
@@ -127,8 +148,14 @@
         const IND_CRAFT = [
             { out: 'coat', in: { cotton: 4 } }, { out: 'hat', in: { cotton: 2 } }, { out: 'scarf', in: { cotton: 2 } },
             { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } },
-            { out: 'yarn', in: { wool: 2 } }, { out: 'sweater', in: { yarn: 3 } }, { out: 'wool_hat', in: { yarn: 1 } }, { out: 'wool_scarf', in: { yarn: 1 } }
+            { out: 'yarn', in: { wool: 2 } }, { out: 'sweater', in: { yarn: 3 } }, { out: 'wool_hat', in: { yarn: 1 } }, { out: 'wool_scarf', in: { yarn: 1 } },
+            { bellows: true, name: '风箱（装在灶台上）', in: { wood: 6, clay: 4 }, hard: true },
+            { out: 'tongs', in: { ingot_cu: 2 }, hard: true },
+            { out: 'battery', in: { ingot_cu: 1, ingot_zn: 1, salt: 1 }, hard: true }, { out: 'wire', n: 4, in: { ingot_cu: 1 }, hard: true },
+            { out: 'dev_bank', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_gen', in: { ingot_cu: 3, ingot_fe: 2, steel: 1 }, hard: true },
+            { out: 'dev_lamp', in: { ingot_cu: 1, sand: 2 }, hard: true }, { out: 'dev_pump', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_furnace', in: { steel: 2, clay: 4, ingot_cu: 2 }, hard: true }, { out: 'pick_iron', in: { ingot_fe: 3, wood: 2 }, hard: true }, { out: 'pick_steel', in: { steel: 3, wood: 2 }, hard: true }
         ];
+        const IND_HOT_COOL = 30, IND_HOT_DPS = 15;   // 烫的锭放 30 秒凉；不拿钳子每秒扣 15 血
         // 动物：饱食每秒掉 1/30（满 100），饿了（< 30）不产东西；羊每 2 天能剪一次毛，牛每天能挤一次奶（要空桶）；
         // 驯服：远征里拿着它爱吃的东西对着它左键，喂够就跟着你走，撤离时 10 米内跟着的一起回家
         const IND_ANIMALS = {
@@ -139,7 +166,7 @@
         };
         const IND_ANIMAL_CAP = 20, IND_WOOL_EVERY = 2 * 1200, IND_MILK_EVERY = 1200, IND_ANIMAL_HUNGER = 1 / 30;
         // 灶台：火候三档；燃料每秒烧掉的量；配方按顺序找第一个原料够的
-        const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }];
+        const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }, { name: '鼓风', t: 1600, burn: 3, bellows: true }];
         const IND_STOVE_CAP = 8;   // 灶台上最多放几种
         const IND_RECIPES = [
             { in: { water_raw: 1 }, out: { water_boiled: 1 }, minT: 100, time: 10 },
@@ -151,7 +178,13 @@
             { in: { potato: 1 }, out: { bake_potato: 1 }, minT: 180, time: 15, burnT: 400 },
             { in: { corn: 1 }, out: { bake_corn: 1 }, minT: 180, time: 15, burnT: 400 },
             { in: { wood: 2 }, out: { charcoal: 1 }, minT: 400, time: 30 },
-            { in: { milk: 1 }, out: { cheese: 1, bucket: 1 }, minT: 100, time: 30, burnT: 300 }
+            { in: { milk: 1 }, out: { cheese: 1, bucket: 1 }, minT: 100, time: 30, burnT: 300 },
+            // 冶炼（只给硬核）：温度用真实熔点；出来的锭是烫的
+            { in: { ingot_fe: 1, charcoal: 1 }, out: { hot_steel: 1 }, minT: 1550, time: 40, hard: true },
+            { in: { ingot_cu: 1, ingot_zn: 1 }, out: { hot_brass: 2 }, minT: 950, time: 20, hard: true },
+            { in: { ore_fe: 1 }, out: { hot_fe: 1 }, minT: 1538, time: 30, hard: true },
+            { in: { ore_cu: 1 }, out: { hot_cu: 1 }, minT: 1085, time: 20, hard: true },
+            { in: { ore_zn: 1 }, out: { hot_zn: 1 }, minT: 420, time: 15, hard: true }
         ];
         const IND_BURN_S = 8;   // 超过烧焦温度累计 8 秒就烧成焦炭
 
@@ -204,7 +237,7 @@
         const IND_WATER_Y = -1.2;
 
         // ── 存档（IndexedDB，单独存）──
-        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 4;
+        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 6;
         function indDb(cb) {
             try {
                 let rq = indexedDB.open(IND_DB, 1);
@@ -218,7 +251,7 @@
         const IND_V3_GIFT = { seed_cotton: 4, seed_cabbage: 3 };
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
-                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, fires: [], animals: [], stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
+                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, bellows: false, fires: [], animals: [], devs: [], wires: [], dseq: 0, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
         }
         function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
         function indFixBase(b) {
@@ -242,7 +275,14 @@
             b.surv.temp = indNum(b.surv.temp, 37, 25, 45);
             if (!b.wear || typeof b.wear !== 'object') b.wear = {};
             Object.keys(b.wear).forEach(function (sl) { let k = b.wear[sl]; if (!IND_ITEMS[k] || IND_ITEMS[k].wear !== sl) delete b.wear[sl]; });
-            b.gh = !!b.gh;
+            b.gh = !!b.gh; b.bellows = !!b.bellows;
+            if (!Array.isArray(b.devs)) b.devs = [];
+            b.devs = b.devs.filter(function (d) { return d && IND_DEVS[d.ty] && isFinite(d.x) && isFinite(d.z) && d.id; }).slice(0, IND_DEV_CAP);
+            b.devs.forEach(function (d) { d.bats = indNum(d.bats, 0, 0, 64) | 0; d.u = indNum(d.u, 0, 0, 64 * IND_BAT_U); d.on = d.on !== false; d.ft = indNum(d.ft, 20, 20, 2000); });
+            let ids = {}; b.devs.forEach(function (d) { ids[d.id] = d; });
+            if (!Array.isArray(b.wires)) b.wires = [];
+            b.wires = b.wires.filter(function (w) { return Array.isArray(w) && ids[w[0]] && ids[w[1]] && IND_DEVS[ids[w[0]].ty].src && !IND_DEVS[ids[w[1]].ty].src; });
+            b.dseq = indNum(b.dseq, 0, 0, 1e9) | 0; b.devs.forEach(function (d) { b.dseq = Math.max(b.dseq, d.id); });
             if (!Array.isArray(b.fires)) b.fires = [];
             b.fires = b.fires.filter(function (f) { return f && isFinite(f.x) && isFinite(f.z); }).slice(0, 30);
             b.fires.forEach(function (f) { f.fuel = indNum(f.fuel, 0, 0, 1e5); });
@@ -253,7 +293,7 @@
             if (!b.stove || typeof b.stove !== 'object') b.stove = n.stove;
             let S = b.stove;
             ['items', 'out'].forEach(function (f) { if (!S[f] || typeof S[f] !== 'object') S[f] = {}; Object.keys(S[f]).forEach(function (k) { if (!IND_ITEMS[k] || !(S[f][k] > 0)) delete S[f][k]; }); });
-            S.fuel = indNum(S.fuel, 0, 0, 1e6); S.fire = indNum(S.fire, 0, 0, 3) | 0; S.temp = indNum(S.temp, 20, 20, 2000);
+            S.fuel = indNum(S.fuel, 0, 0, 1e6); S.fire = indNum(S.fire, 0, 0, 4) | 0; if (S.fire === 4 && !b.bellows) S.fire = 3; S.temp = indNum(S.temp, 20, 20, 2000);
             if (!S.cook || typeof S.cook !== 'object' || !IND_RECIPES[S.cook.i]) S.cook = null;
             b.ver = IND_SAVE_VER;
             return b;
@@ -297,7 +337,8 @@
         function indSel() { let ks = Object.keys(ind.bag); if (!ks.length) return null; ind.selIdx = Math.max(0, Math.min(ind.selIdx, ks.length - 1)); return ks[ind.selIdx]; }
         function indSelect(k) { let i = Object.keys(ind.bag).indexOf(k); if (i >= 0) ind.selIdx = i; }
         function indTool() { let t = 0; Object.keys(ind.bag).forEach(function (k) { if (IND_ITEMS[k].tool) t = Math.max(t, IND_ITEMS[k].tool); }); return t; }
-        function indBoxAdd(k, n) { let b = ind.base.box; b[k] = (b[k] || 0) + n; }
+        function indCool(k) { return (IND_ITEMS[k] && IND_ITEMS[k].hot) || k; }
+        function indBoxAdd(k, n) { k = indCool(k); let b = ind.base.box; b[k] = (b[k] || 0) + n; }   // 仓库箱里的烫锭当它凉了
         function indRand() { return ind && ind.rng ? ind.rng() : Math.random(); }
         function indRoll(a) { return a[0] + Math.floor(indRand() * (a[1] - a[0] + 1)); }
 
@@ -518,7 +559,7 @@
             ind.objs.forEach(function (o) { scene.remove(o); });
             ind.geos.forEach(function (g) { g.dispose(); });
             ind.mats.forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); });
-            ind.objs = []; ind.geos = []; ind.mats = []; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.animalMesh = null; ind.nodes = []; ind.exits = [];
+            ind.objs = []; ind.geos = []; ind.mats = []; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.animalMesh = null; ind.devMesh = null; ind.wireLine = null; ind.booms = []; ind.nodes = []; ind.exits = [];
         }
         function indBox(w, h, d, col, x, y, z) {
             let m = new THREE.Mesh(indGeo(new THREE.BoxGeometry(w, h, d)), indMat(new THREE.MeshLambertMaterial({ color: col })));
@@ -634,6 +675,8 @@
             ind.cropMesh = indInst(new THREE.ConeGeometry(0.5, 1, 6), IND_CROP_CAP); ind.cropDirty = true;
             ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 40);
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
+            ind.devMesh = indInst(new THREE.BoxGeometry(1, 1, 1), IND_DEV_CAP); ind.devDirty = true;
+            ind.wireLine = new THREE.LineSegments(indGeo(new THREE.BufferGeometry()), indMat(new THREE.LineBasicMaterial({ color: 0xff7043 }))); ind.wireLine.frustumCulled = false; indAdd(ind.wireLine); ind.wireDirty = true;
             ind.p.x = 0; ind.p.z = fromTrip ? -IND_BASE.z + 4 : 4; ind.p.y = 0; ind.p.vy = 0;
             if (fromTrip) {
                 let got = Object.keys(ind.bag).map(function (k) { indBoxAdd(k, ind.bag[k]); return indName(k) + '×' + ind.bag[k]; });
@@ -741,6 +784,11 @@
             let live = !!ind.base.rule;   // 还没选规则时时间不走
             if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); indCropTick(dt); }
             indFireTick(dt); indAnimalTick(dt, live);
+            indHotTick(dt);
+            if (!ind || ind.over) return;
+            if (live) indElecTick(dt);
+            if (!ind || ind.over) return;
+            indBoomTick(dt);
             indStoveTick(dt);
             if (!ind || ind.over) return;
             indMove(dt);
@@ -752,7 +800,7 @@
                 ind.exitT = inExit ? ind.exitT + dt : 0;
                 if (ind.exitT >= IND_T.extract) indGoBase(true);
             }
-            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals();
+            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
             ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); indSeasonLook(); }
@@ -824,7 +872,7 @@
         function indRender() {
             // 夜里：天空和雾变暗，屏幕盖一层半透明黑（不改场景里原有的灯）
             let d = indDark(), nightEl = document.getElementById('ind-night');
-            if (nightEl) nightEl.style.opacity = (d * 0.55).toFixed(3);
+            if (nightEl) nightEl.style.opacity = (d * 0.55 * (indLampNear() ? 0.35 : 1)).toFixed(3);
             if (ind.where === 'trip' && scene.fog) { scene.fog.far = 160 - d * 110; scene.fog.near = 60 - d * 50; }
             let eye = camera.position.clone(), rx = camera.rotation.x, ry = camera.rotation.y, rz = camera.rotation.z;
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir);
@@ -852,6 +900,7 @@
             };
             indFires().forEach(function (f) { consider(f, f.x, f.z, 'fire'); });
             indAnimals().forEach(function (a) { consider(a, a.x, a.z, 'animal', 0.4); });
+            if (R.where === 'base') R.base.devs.forEach(function (d) { consider(d, d.x, d.z, 'dev', 0.4); });
             if (R.where === 'trip') R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node'); });
             else {
                 R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item'); });
@@ -875,20 +924,24 @@
             if (a && a.kind === 'bench') return indPanelBench();
             if (a && a.kind === 'fire') return indFeedFire(a.o);
             if (a && a.kind === 'animal') return indAnimalAct(a.o);
+            if (a && a.kind === 'dev') return indDevAct(a.o);
             let k = indSel();
             if (ind.where === 'base' && k && IND_ITEMS[k].seed) return indPlant(k);
         }
         // 右键：吃喝、浇水、接水
         function indUse() {
             if (!ind || ind.over || ind.panel) return;
-            let k = indSel(); if (!k) return;
-            let a = indAim();
+            let k = indSel(), a = indAim();
+            if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
+            if (!k) return;
+            if (IND_ITEMS[k].dev) return indPlaceDev(k);
             if (k === 'bucket') {
                 if (a && a.kind === 'pool') { indBagDel('bucket', 1); indBagAdd('water_raw', 1); indSelect('water_raw'); indFlash('接了一桶生水'); return true; }
                 if (indInWater()) { indBagDel('bucket', 1); indBagAdd('water_sea', 1); indSelect('water_sea'); indFlash('接了一桶海水'); return true; }
                 indFlash('到水池或海边才能接水'); return false;
             }
             if ((k === 'water_raw' || k === 'water_boiled') && a && a.kind === 'crop') return indWater(a.o, k);
+            if (IND_ITEMS[k].hot) return indQuench(k);
             if (IND_ITEMS[k].eat) return indEat(k);
             if (IND_ITEMS[k].wear) return indWear(k);
             if (k === 'campfire') return indPlaceFire();
@@ -981,6 +1034,164 @@
             ind.itemDirty = true; indSave();
         }
 
+        // ── 电 ──
+        function indDev(id) { return ind.base.devs.filter(function (d) { return d.id === id; })[0] || null; }
+        function indNearStove(x, z, r) { let S = IND_BASE_ST.stove; return Math.hypot(x - S.x, z - S.z) <= r; }
+        function indSrcVolt(d) {
+            if (d.ty === 'bank') return d.u > 0 ? d.bats * IND_BAT_V : 0;
+            if (d.ty === 'gen') return indNearStove(d.x, d.z, IND_GEN_R) && ind.base.stove.fire >= 2 ? IND_DEVS.gen.volt : 0;
+            return 0;
+        }
+        function indFurnaceOn() { return ind.where === 'base' && ind.base.devs.some(function (d) { return d.ty === 'furnace' && d.pw && indNearStove(d.x, d.z, IND_GEN_R); }); }
+        // 每帧：按电线算电压；超过额定就炸；够电压、开着、电池有电就工作并耗电
+        function indElecTick(dt) {
+            if (ind.where !== 'base') return;
+            let B = ind.base, booms = [];
+            B.devs.forEach(function (d) { d.pw = false; });
+            B.wires.forEach(function (w) {
+                let s = indDev(w[0]), d = indDev(w[1]); if (!s || !d) return;
+                let D = IND_DEVS[d.ty], V = indSrcVolt(s);
+                if (V > D.rated + 1e-6) { booms.push(d); return; }
+                if (!d.on || V < D.minV) return;
+                if (s.ty === 'bank') { if (s.u <= 0) return; s.u = Math.max(0, s.u - D.draw * dt); }
+                d.pw = true;
+            });
+            booms.forEach(function (d) { if (ind && !ind.over && ind.where === 'base' && indDev(d.id)) indBoom(d.x, d.z); });
+            if (!ind || ind.over || ind.where !== 'base') return;
+            if (B.devs.some(function (d) { return d.ty === 'pump' && d.pw; })) {
+                let end = (Math.floor(B.clock / IND_DAY) + 1) * IND_DAY;
+                B.crops.forEach(function (c) { if (c.wet < end) { c.wet = end; ind.cropDirty = true; } });
+            }
+            ind.devDirty = true;
+        }
+        // 爆炸：3 米内基地里的东西（设备、电线、地上的东西、篝火、作物）全没了，仓库箱不动；人在范围里扣 40 血
+        function indBoom(x, z) {
+            let B = ind.base, R = IND_BOOM_R, gone = {};
+            B.devs = B.devs.filter(function (d) { if (Math.hypot(d.x - x, d.z - z) <= R) { gone[d.id] = 1; return false; } return true; });
+            B.wires = B.wires.filter(function (w) { return !gone[w[0]] && !gone[w[1]]; });
+            B.ground = B.ground.filter(function (g) { return Math.hypot(g.x - x, g.z - z) > R; });
+            B.fires = B.fires.filter(function (f) { return Math.hypot(f.x - x, f.z - z) > R; });
+            B.crops = B.crops.filter(function (c) { return Math.hypot(c.x - x, c.z - z) > R; });
+            if (ind.wirePend && gone[ind.wirePend]) ind.wirePend = null;
+            ind.itemDirty = ind.cropDirty = ind.fireDirty = ind.devDirty = ind.wireDirty = true;
+            indBoomFx(x, z);
+            indSave();
+            if (Math.hypot(ind.p.x - x, ind.p.z - z) <= R && indHard()) {
+                B.surv.hp -= IND_BOOM_DMG; ind.lastHurt = '爆炸';
+                if (B.surv.hp <= 0) { indDie('爆炸'); return; }
+            }
+            indFlash('轰！');
+        }
+        function indBoomFx(x, z) {
+            let m = new THREE.Mesh(indGeo(new THREE.SphereGeometry(1, 12, 8)), indMat(new THREE.MeshBasicMaterial({ color: 0xff6d00, transparent: true, opacity: 0.7 })));
+            m.position.set(x, 1, z); indAdd(m); ind.booms = ind.booms || []; ind.booms.push({ m: m, t: 0 });
+        }
+        function indBoomTick(dt) {
+            (ind.booms || []).forEach(function (b) { b.t += dt; b.m.scale.setScalar(1 + b.t * 6); b.m.material.opacity = Math.max(0, 0.7 - b.t * 1.4); b.m.visible = b.t < 0.5; });
+            if (ind.booms) ind.booms = ind.booms.filter(function (b) { return b.t < 0.5; });
+        }
+        function indPlaceDev(k) {
+            if (ind.where !== 'base') { indFlash('设备只能放在基地里'); return false; }
+            if (ind.base.devs.length >= IND_DEV_CAP) { indFlash('设备太多了'); return false; }
+            let f = indFace(), x = ind.p.x + f.x * 1.6, z = ind.p.z + f.z * 1.6;
+            x = Math.max(-IND_BASE.x + 0.8, Math.min(IND_BASE.x - 0.8, x)); z = Math.max(-IND_BASE.z + 0.8, Math.min(IND_BASE.z - 0.8, z));
+            indBagDel(k, 1);
+            ind.base.devs.push({ id: ++ind.base.dseq, ty: IND_ITEMS[k].dev, x: x, z: z, bats: 0, u: 0, on: true, ft: 20 });
+            ind.devDirty = true; indSave(); indFlash('放好了' + indName(k) + '（拿铜线点电源再点它，接上电）');
+            return true;
+        }
+        function indPickDev(d) {
+            let k = 'dev_' + d.ty; if (indBagAdd(k, 1) <= 0) { indFlash('身上放不下了'); return false; }
+            if (d.ty === 'bank') { let b = Math.ceil(d.u / IND_BAT_U - 1e-9); if (b > 0) indBagAdd('battery', b); }
+            ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
+            ind.base.wires = ind.base.wires.filter(function (w) { return w[0] !== d.id && w[1] !== d.id; });
+            if (ind.wirePend === d.id) ind.wirePend = null;
+            ind.devDirty = ind.wireDirty = true; indSave(); indFlash('收起了' + IND_DEVS[d.ty].name);
+            return true;
+        }
+        // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
+        function indDevAct(d) {
+            let k = indSel(), D = IND_DEVS[d.ty];
+            if (k === 'wire') {
+                if (!ind.wirePend) { ind.wirePend = d.id; ind.devDirty = true; indFlash('选了' + D.name + '，再点另一个'); return true; }
+                if (ind.wirePend === d.id) { ind.wirePend = null; ind.devDirty = true; indFlash('取消了'); return true; }
+                let a = indDev(ind.wirePend); ind.wirePend = null; ind.devDirty = true;
+                if (!a) return false;
+                let src = D.src ? d : a, dev = D.src ? a : d;
+                if (!IND_DEVS[src.ty].src || IND_DEVS[dev.ty].src) { indFlash('一头接电源（电池组、发电机），一头接用电器'); return false; }
+                ind.base.wires = ind.base.wires.filter(function (w) { return w[1] !== dev.id; });   // 一个用电器只接一根
+                ind.base.wires.push([src.id, dev.id]); indBagDel('wire', 1);
+                ind.wireDirty = true; indSave(); indFlash('接上了：' + IND_DEVS[src.ty].name + ' → ' + IND_DEVS[dev.ty].name);
+                return true;
+            }
+            if (d.ty === 'bank' && k === 'battery') {
+                if (d.bats >= 64) { indFlash('装满了'); return false; }
+                indBagDel('battery', 1); d.bats++; d.u += IND_BAT_U; indSave();
+                indFlash('装了一节电池（' + d.bats + ' 节，' + (d.bats * IND_BAT_V).toFixed(1) + ' V）'); return true;
+            }
+            if (!D.src) { d.on = !d.on; indSave(); indFlash(D.name + (d.on ? '开了' : '关了')); return true; }
+            indFlash(D.name + (d.ty === 'bank' ? '：拿电池左键装电池' : '：放在点着的灶台 3 米内（中火以上）就发电'));
+            return false;
+        }
+        function indDevInfo(d) {
+            let D = IND_DEVS[d.ty];
+            if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' U';
+            if (d.ty === 'gen') return D.name + ' ' + (indSrcVolt(d) > 0 ? '发电中 12 V' : '没在发电');
+            let w = ind.base.wires.filter(function (x) { return x[1] === d.id; })[0], s = w ? indDev(w[0]) : null;
+            return D.name + '（额定 ' + D.rated + ' V）' + (s ? '　接着' + IND_DEVS[s.ty].name + ' ' + indSrcVolt(s).toFixed(1) + ' V' : '　没接电') + (d.on ? (d.pw ? '　工作中' : '　没在工作') : '　关着');
+        }
+        // 画设备（一组画完，有电的亮）和电线（一组线段）
+        function indSyncDevs() {
+            if (!ind.devMesh || !ind.devDirty) return;
+            indDummy();
+            let A = ind.where === 'base' ? ind.base.devs : [], n = Math.min(A.length, IND_DEV_CAP);
+            for (let i = 0; i < n; i++) {
+                let d = A[i], D = IND_DEVS[d.ty];
+                IND_DUMMY.position.set(d.x, D.size[1] / 2, d.z); IND_DUMMY.rotation.set(0, 0, 0); IND_DUMMY.scale.set(D.size[0], D.size[1], D.size[2]); IND_DUMMY.updateMatrix();
+                ind.devMesh.setMatrixAt(i, IND_DUMMY.matrix);
+                let c = D.col; if (!D.src && !d.pw) c = 0x757575; if (ind.wirePend === d.id) c = 0xe040fb;
+                ind.devMesh.setColorAt(i, IND_COL.setHex(c));
+            }
+            ind.devMesh.count = n; ind.devMesh.instanceMatrix.needsUpdate = true;
+            if (ind.devMesh.instanceColor) ind.devMesh.instanceColor.needsUpdate = true;
+            ind.devDirty = false;
+            if (ind.wireDirty && ind.wireLine) {
+                let W = ind.where === 'base' ? ind.base.wires : [], arr = new Float32Array(Math.max(1, W.length) * 6), k = 0;
+                W.forEach(function (w) { let a = indDev(w[0]), b = indDev(w[1]); if (!a || !b) return; arr.set([a.x, 0.15, a.z, b.x, 0.15, b.z], k); k += 6; });
+                ind.wireLine.geometry.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+                ind.wireLine.geometry.setDrawRange(0, k / 3);
+                ind.wireDirty = false;
+            }
+        }
+        function indLampNear() { return ind.where === 'base' && ind.base.devs.some(function (d) { return d.ty === 'lamp' && d.pw && Math.hypot(d.x - ind.p.x, d.z - ind.p.z) < 12; }); }
+
+        // ── 烫的锭 ──
+        // 身上的烫锭 30 秒后凉；硬核没拿钳子每秒扣 15 血；基地地上的烫锭 30 秒后凉；泡水马上凉
+        function indHotTick(dt) {
+            ind.hotT = ind.hotT || {};
+            let hot = false;
+            Object.keys(ind.bag).forEach(function (k) {
+                let c = IND_ITEMS[k].hot; if (!c) return;
+                hot = true;
+                if (ind.hotT[k] === undefined) ind.hotT[k] = IND_HOT_COOL;
+                ind.hotT[k] -= dt;
+                if (ind.hotT[k] <= 0) { let n = ind.bag[k]; delete ind.bag[k]; delete ind.hotT[k]; indBagAdd(c, n); }
+            });
+            Object.keys(ind.hotT).forEach(function (k) { if (!ind.bag[k]) delete ind.hotT[k]; });
+            if (hot && indHard() && !ind.bag.tongs) { ind.base.surv.hp -= IND_HOT_DPS * dt; ind.lastHurt = '烫伤'; if (ind.base.surv.hp <= 0) indDie('烫伤'); }
+            if (ind && ind.where === 'base') ind.base.ground.forEach(function (g) {
+                let c = IND_ITEMS[g.k].hot; if (!c) return;
+                g.ht = (g.ht === undefined ? IND_HOT_COOL : g.ht) - dt;
+                if (g.ht <= 0) { g.k = c; delete g.ht; ind.itemDirty = true; }
+            });
+        }
+        function indQuench(k) {
+            let a = indAim();
+            if (!((a && a.kind === 'pool') || indInWater())) { indFlash(indName(k) + '：放凉要泡水，或者放地上等一会儿'); return false; }
+            let c = IND_ITEMS[k].hot, n = ind.bag[k]; delete ind.bag[k]; if (ind.hotT) delete ind.hotT[k]; indBagAdd(c, n);
+            indFlash('滋——' + indName(c) + '凉了'); return true;
+        }
+
         // ── 衣服、篝火、工作台 ──
         function indWear(k) {
             let sl = IND_ITEMS[k].wear, old = ind.base.wear[sl];
@@ -1010,21 +1221,24 @@
             indFlash('加了 1 个' + indName(k) + '，还能烧 ' + Math.ceil(f.fuel) + ' 秒');
             return true;
         }
-        function indCraftCan(r) { return Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh); }
+        function indCraftShow(r) { return !r.hard || indHard(); }
+        function indCraftCan(r) { return indCraftShow(r) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.bellows && ind.base.bellows); }
         function indCraft(i) {
             if (!ind) return false;
             let r = IND_CRAFT[i]; if (!r || !indCraftCan(r)) { indFlash('原料不够'); return false; }
-            if (!r.gh && !ind.bag[r.out] && Object.keys(ind.bag).length >= IND_BAG_CAP && !Object.keys(r.in).some(function (k) { return ind.bag[k] === r.in[k]; })) { indFlash('身上放不下了'); return false; }
+            if (!r.gh && !r.bellows && !ind.bag[r.out] && Object.keys(ind.bag).length >= IND_BAG_CAP && !Object.keys(r.in).some(function (k) { return ind.bag[k] === r.in[k]; })) { indFlash('身上放不下了'); return false; }
             Object.keys(r.in).forEach(function (k) { indBagDel(k, r.in[k]); });
             if (r.gh) { ind.base.gh = true; if (ind.where === 'base') indBuildGh(); indFlash('暖棚盖好了，棚里的作物不管季节都长'); }
-            else { indBagAdd(r.out, 1); indFlash('做好了：' + indName(r.out)); }
+            else if (r.bellows) { ind.base.bellows = true; indFlash('风箱装好了，灶台多了一档「鼓风」'); }
+            else { indBagAdd(r.out, r.n || 1); indFlash('做好了：' + indName(r.out) + (r.n ? '×' + r.n : '')); }
             indSave(); if (ind.panel === 'bench') indPanelBench();
             return true;
         }
         function indPanelBench() {
             if (!ind) return;
             let rows = IND_CRAFT.map(function (r, i) {
-                let nm = r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : '');
+                if (!indCraftShow(r)) return '';
+                let nm = r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.bellows ? r.name + (ind.base.bellows ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : '');
                 let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ');
                 return indRow(nm + '<br><small style="color:#888">' + need + '</small>', '<button style="' + IND_BTN + (indCraftCan(r) ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>');
             }).join('');
@@ -1038,6 +1252,7 @@
         function indStoveFind(items) {
             for (let i = 0; i < IND_RECIPES.length; i++) {
                 let r = IND_RECIPES[i];
+                if (r.hard && !indHard()) continue;
                 if (Object.keys(r.in).every(function (k) { return (items[k] || 0) >= r.in[k]; })) return i;
             }
             return -1;
@@ -1048,7 +1263,7 @@
                 S.fuel -= F.burn * dt;
                 if (S.fuel <= 0) { S.fuel = 0; S.fire = 0; if (ind.panel === 'stove') ind.panelDirty = true; }
             }
-            let target = IND_FIRE[S.fire].t;
+            let target = Math.max(IND_FIRE[S.fire].t, indFurnaceOn() ? IND_FURNACE_T : 20);
             if (S.temp < target) S.temp = Math.min(target, S.temp + 50 * dt); else S.temp = Math.max(target, S.temp - (S.fire > 0 ? 50 : 10) * dt);
             if (!S.cook) {
                 let i = indStoveFind(S.items);
@@ -1086,6 +1301,7 @@
             if (!ind) return;
             let S = ind.base.stove;
             if (lv > 0 && S.fuel <= 0) { indFlash('先加燃料（木头、木炭、煤）'); return; }
+            if (lv === 4 && !ind.base.bellows) return;
             S.fire = lv; indSave(); indPanelStove();
         }
         function indStoveTakeAll() {
@@ -1135,7 +1351,7 @@
             let st = '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + '<br>';
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; st += '正在做：' + Object.keys(r.out).filter(function (k) { return k !== 'bucket'; }).map(indName).join('、') + ' ' + Math.floor(S.cook.t / r.time * 100) + '%'; }
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做</span>';
-            let fire = IND_FIRE.map(function (f, i) { return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + f.name + '</button>'; }).join('');
+            let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !ind.base.bellows) return ''; return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + f.name + '</button>'; }).join('');
             let on = Object.keys(S.items).map(function (k) { return indName(k) + '×' + S.items[k]; }).join('、') || '空';
             let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';
             let put = Object.keys(ind.bag).map(function (k) {
@@ -1149,6 +1365,39 @@
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indStoveTakeAll()">全部拿出来</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>';
         }
         function indPanelStove() { if (!ind) return; indPanelShow('stove', indStoveHtml()); }
+
+        // ── 配方查询：搜一样东西，看它怎么做、能做什么 ──
+        function indBookLines() {
+            let L = [];
+            IND_RECIPES.forEach(function (r) {
+                if (r.hard && !indHard()) return;
+                L.push({ ins: Object.keys(r.in), outs: Object.keys(r.out), txt: Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + ' → ' + Object.keys(r.out).map(function (k) { return indName(k) + '×' + r.out[k]; }).join(' + '), where: '灶台 ' + r.minT + '°C 以上，' + r.time + ' 秒' + (r.burnT ? '（超过 ' + r.burnT + '°C 会烧焦）' : '') });
+            });
+            IND_CRAFT.forEach(function (r) {
+                if (!indCraftShow(r)) return;
+                let out = r.gh ? '暖棚' : r.bellows ? '风箱' : indName(r.out);
+                L.push({ ins: Object.keys(r.in), outs: r.out ? [r.out] : [], name: out, txt: Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + ' → ' + out, where: '工作台' });
+            });
+            Object.keys(IND_CROPS).forEach(function (k) {
+                let C = IND_CROPS[k];
+                L.push({ ins: ['seed_' + k], outs: [k, 'seed_' + k], txt: indName('seed_' + k) + ' → ' + C.name + ' + 种子', where: '农田，' + C.grow + ' 秒，' + C.s.map(function (i) { return IND_SEASONS[i].name; }).join('') + '天长' });
+            });
+            return L;
+        }
+        function indPanelBook(q) {
+            if (!ind) return;
+            q = (q || '').trim();
+            let L = indBookLines().filter(function (l) {
+                if (!q) return true;
+                return (l.name || '').indexOf(q) >= 0 || l.ins.concat(l.outs).some(function (k) { return indName(k).indexOf(q) >= 0; });
+            });
+            let rows = L.map(function (l) { return '<div style="padding:4px 0;border-bottom:1px solid #eee;"><div>' + l.txt + '</div><small style="color:#888">' + l.where + '</small></div>'; }).join('') || '<div style="color:#999;padding:8px 0;">没找到</div>';
+            indPanelShow('book', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">配方</div>' +
+                '<input id="ind-book-q" value="' + q.replace(/"/g, '') + '" placeholder="搜东西，比如：铁" style="width:100%;box-sizing:border-box;padding:6px;font-size:15px;margin-bottom:6px;" oninput="indBookSearch(this.value)">' +
+                '<div id="ind-book-list">' + rows + '</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+            let inp = document.getElementById('ind-book-q'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        }
+        function indBookSearch(q) { indPanelBook(q); }
 
         // ── 键盘、界面 ──
         const IND_KEYMAP = { w: 'w', a: 'a', s: 's', d: 'd', arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' };
@@ -1182,7 +1431,7 @@
             d.innerHTML =
                 '<div style="position:absolute;left:8px;top:8px;"><div id="ind-status" style="background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
                 '<div id="ind-wear" style="margin-top:4px;background:rgba(255,255,255,.92);padding:4px 10px;border-radius:8px;font-size:13px;pointer-events:auto;"></div></div>' +
-                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
+                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
                 '<div id="ind-hint" style="position:absolute;left:50%;bottom:150px;transform:translateX(-50%);color:#fff;padding:4px 12px;font-size:20px;font-weight:bold;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
@@ -1224,6 +1473,7 @@
             else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水')) + '<br><small>' + (ripe ? '左键：收' : '拿着水，右键：浇水') + '</small>'; }
             else if (a && a.kind === 'fire') hint = '篝火' + (a.o.fuel > 0 ? ' 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒' : '（灭了）') + '<br><small>拿着木头，左键：加柴</small>';
             else if (a && a.kind === 'bench') hint = '工作台<br><small>左键：打开</small>';
+            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : a.o.ty === 'bank' ? '拿电池左键：装电池　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
             else if (a && a.kind === 'animal') {
                 let o = a.o, D = IND_ANIMALS[o.k];
                 if (R.where === 'trip') hint = (o.follow ? D.name + '（跟着你）' : '野生的' + D.name + (o.fed ? '（还要喂 ' + (D.tame - o.fed) + ' 次）' : '')) + '<br><small>爱吃：' + indFoodTxt(o.k) + '</small>';
@@ -1238,6 +1488,8 @@
             else if (sel && IND_ITEMS[sel].eat) hint = '<small>右键：' + (IND_ITEMS[sel].eat.f ? '吃' : '喝') + indName(sel) + '</small>';
             else if (sel && IND_ITEMS[sel].wear) hint = '<small>右键：穿上' + indName(sel) + '</small>';
             else if (sel === 'campfire') hint = '<small>右键：在面前点篝火</small>';
+            else if (sel && IND_ITEMS[sel].dev) hint = '<small>右键：放下' + indName(sel) + '</small>';
+            else if (sel === 'wire' && R.wirePend) hint = '<small>再点另一个设备接线</small>';
             let wr = ['body', 'head', 'neck'].filter(function (sl) { return R.base.wear[sl]; }).map(function (sl) { return '<span onclick="indTakeOff(\'' + sl + '\')" style="cursor:pointer;margin-right:6px;border-bottom:1px dashed #999;">' + indName(R.base.wear[sl]) + '</span>'; }).join('');
             wr = '穿着：' + (wr || '<span style="color:#999">什么都没穿</span>') + (wr ? '<small style="color:#999">（点一下脱下）</small>' : '');
             let sig = st + '|' + bag + '|' + hint + '|' + wr;
