@@ -6,7 +6,8 @@
         //  存档单独放在浏览器的 IndexedDB（库 maodun_industry），不进主存档白名单，SAVE_VER 不动。
         //  第 1 阶段：隐藏入口、基地、远征地图（七种地貌、资源点、撤离点）、采集、撤离。
         //  第 2 阶段：世界规则（悠闲 / 硬核）、生存值（饱食、口渴、精力、体力、血量）、昼夜、床、种地、浇水、灶台（火候、燃料、做饭、烧开水、烧焦）。
-        //  还没有：季节、体温、衣服（2.5）、动物（2.8）、科技线（3 起，只给硬核）。
+        //  第 2.5 阶段：季节（一季 3 天，作物分季节，暖棚）、体温（气温、衣服、灶台和篝火取暖、下水冷）、工作台（衣服、篝火、暖棚）。
+        //  还没有：动物（2.8）、科技线（3 起，只给硬核）。
         // ══════════════════════════════════════════════════════════
         const IND_ENABLED = false;
         const IND_DBG_KEY = 'TH_hcdebug';
@@ -31,6 +32,10 @@
         const IND_CAM = { back: 4.4, up: 1.2 };
         // 时间：一天 1200 秒（白天 900、夜里 300）；生存值按"每秒"算
         const IND_DAY = 1200, IND_DUSK = 900;
+        const IND_SEASON_DAYS = 3;
+        const IND_SEASONS = [{ name: '春', t: 18 }, { name: '夏', t: 28 }, { name: '秋', t: 15 }, { name: '冬', t: -5 }];
+        // 体温：等效气温 = 气温 + 衣服保暖 × 2.5；低于 15°C 慢慢变冷、高于 30°C 慢慢变热，每差 1 度每秒变 0.0015°C；不冷不热时每秒回 37°C 0.02
+        const IND_BODY = { warmMul: 2.5, cold: 15, hot: 30, rate: 0.0015, back: 0.02, chill: 35, freeze: 33, sweat: 39, boil: 41, fireR: 4, fireHeat: 20, waterCold: 10 };
         const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 1.5 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, regen: 0.3, starveHp: 1, thirstHp: 2 };
 
         // ── 物品 ──
@@ -66,7 +71,14 @@
             bread: { name: '面包', col: 0xd7a86e, eat: { f: 40 } },
             tomato_soup: { name: '番茄汤', col: 0xd84315, eat: { f: 25, w: 20, back: 'bucket' } },
             sugar: { name: '糖', col: 0xffffff, eat: { f: 10 } },
-            pumpkin_pie: { name: '南瓜派', col: 0xef6c00, eat: { f: 60 } }
+            pumpkin_pie: { name: '南瓜派', col: 0xef6c00, eat: { f: 60 } },
+            seed_cotton: { name: '棉花种子', col: 0xd7ccc8, seed: 'cotton' }, cotton: { name: '棉花', col: 0xfafafa },
+            seed_cabbage: { name: '白菜种子', col: 0xd7ccc8, seed: 'cabbage' }, cabbage: { name: '白菜', col: 0xc5e1a5, eat: { f: 10, w: 4 } },
+            seed_radish: { name: '萝卜种子', col: 0xd7ccc8, seed: 'radish' }, radish: { name: '萝卜', col: 0xffffff, eat: { f: 8, w: 3 } },
+            coat: { name: '棉衣', col: 0x5c6bc0, wear: 'body', warm: 6 },
+            hat: { name: '棉帽', col: 0x8e24aa, wear: 'head', warm: 2 },
+            scarf: { name: '围巾', col: 0xe53935, wear: 'neck', warm: 2 },
+            campfire: { name: '篝火', col: 0xff7043, place: true }
         };
         function indName(k) { return (IND_ITEMS[k] && IND_ITEMS[k].name) || k; }
         // 资源点：每种给几个、要什么稿子；seeds 是野生种子堆（随机一种作物）
@@ -92,13 +104,23 @@
         };
         // 作物：生长秒数（游戏时间，浇了水按全速，没浇水半速）、收获几个、留几个种子；番茄熟了以后还能再结
         const IND_CROPS = {
-            wheat: { name: '小麦', grow: 120, yield: [2, 3], seeds: [1, 2], col: 0xffca28 },
-            potato: { name: '土豆', grow: 240, yield: [2, 4], seeds: [1, 1], col: 0x8d6e63 },
-            tomato: { name: '番茄', grow: 360, yield: [2, 3], seeds: [0, 1], col: 0xe53935, regrow: 180, times: 3 },
-            corn: { name: '玉米', grow: 480, yield: [2, 2], seeds: [1, 1], col: 0xfdd835 },
-            cane: { name: '甘蔗', grow: 900, yield: [2, 4], seeds: [1, 1], col: 0x9ccc65 },
-            pumpkin: { name: '南瓜', grow: 1800, yield: [1, 1], seeds: [1, 2], col: 0xfb8c00 }
+            wheat: { name: '小麦', grow: 120, yield: [2, 3], seeds: [1, 2], col: 0xffca28, s: [0, 1, 2] },
+            potato: { name: '土豆', grow: 240, yield: [2, 4], seeds: [1, 1], col: 0x8d6e63, s: [0, 2] },
+            tomato: { name: '番茄', grow: 360, yield: [2, 3], seeds: [0, 1], col: 0xe53935, regrow: 180, times: 3, s: [1] },
+            corn: { name: '玉米', grow: 480, yield: [2, 2], seeds: [1, 1], col: 0xfdd835, s: [1, 2] },
+            cane: { name: '甘蔗', grow: 900, yield: [2, 4], seeds: [1, 1], col: 0x9ccc65, s: [1] },
+            pumpkin: { name: '南瓜', grow: 1800, yield: [1, 1], seeds: [1, 2], col: 0xfb8c00, s: [1, 2] },
+            cotton: { name: '棉花', grow: 600, yield: [2, 3], seeds: [1, 1], col: 0xfafafa, s: [1, 2] },
+            cabbage: { name: '白菜', grow: 300, yield: [1, 2], seeds: [1, 1], col: 0xc5e1a5, s: [0, 2, 3] },
+            radish: { name: '萝卜', grow: 240, yield: [1, 2], seeds: [1, 1], col: 0xffffff, s: [0, 2, 3] }
         };
+        // 暖棚：盖在农田最左边一条（x -28～-20），棚里的作物不管季节都长
+        const IND_GH = { x0: -28, x1: -20, z0: -18, z1: 18 };
+        // 工作台配方（身上的原料够就能做）；gh 是盖暖棚（不出物品）
+        const IND_CRAFT = [
+            { out: 'coat', in: { cotton: 4 } }, { out: 'hat', in: { cotton: 2 } }, { out: 'scarf', in: { cotton: 2 } },
+            { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } }
+        ];
         // 灶台：火候三档；燃料每秒烧掉的量；配方按顺序找第一个原料够的
         const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }];
         const IND_STOVE_CAP = 8;   // 灶台上最多放几种
@@ -164,7 +186,7 @@
         const IND_WATER_Y = -1.2;
 
         // ── 存档（IndexedDB，单独存）──
-        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 2;
+        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 3;
         function indDb(cb) {
             try {
                 let rq = indexedDB.open(IND_DB, 1);
@@ -174,10 +196,11 @@
             } catch (e) { cb(null); }
         }
         function indKey() { return 'p_' + (gState.id || 'guest'); }
-        const IND_START_BOX = { pick_stone: 1, bucket: 2, seed_wheat: 6, seed_potato: 4, wood: 8, salt: 2, bake_potato: 3 };
+        const IND_START_BOX = { pick_stone: 1, bucket: 2, seed_wheat: 6, seed_potato: 4, seed_cotton: 4, seed_cabbage: 3, wood: 8, salt: 2, bake_potato: 3 };
+        const IND_V3_GIFT = { seed_cotton: 4, seed_cabbage: 3 };
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
-                surv: { hp: 100, food: 80, water: 80, energy: 100 }, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
+                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, fires: [], stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
         }
         function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
         function indFixBase(b) {
@@ -186,7 +209,8 @@
             if (b.rule !== 'casual' && b.rule !== 'hard') b.rule = null;
             if (!b.box || typeof b.box !== 'object') b.box = {};
             Object.keys(b.box).forEach(function (k) { if (!IND_ITEMS[k] || !(b.box[k] > 0)) delete b.box[k]; });
-            if ((b.ver || 1) < 2) Object.keys(IND_START_BOX).forEach(function (k) { if (k !== 'pick_stone') b.box[k] = (b.box[k] || 0) + IND_START_BOX[k]; });   // 第 1 阶段的老档补上第 2 阶段的起步物资
+            if ((b.ver || 1) < 2) Object.keys(IND_START_BOX).forEach(function (k) { if (k !== 'pick_stone' && !IND_V3_GIFT[k]) b.box[k] = (b.box[k] || 0) + IND_START_BOX[k]; });   // 第 1 阶段的老档补上第 2 阶段的起步物资
+            if ((b.ver || 1) < 3) Object.keys(IND_V3_GIFT).forEach(function (k) { b.box[k] = (b.box[k] || 0) + IND_V3_GIFT[k]; });   // 第 2 阶段的老档补上棉花、白菜种子
             if (!Array.isArray(b.ground)) b.ground = [];
             b.ground = b.ground.filter(function (g) { return g && IND_ITEMS[g.k] && isFinite(g.x) && isFinite(g.z); });
             b.ground.forEach(function (g) { g.x = indNum(g.x, 0, -IND_BASE.x + 0.5, IND_BASE.x - 0.5); g.z = indNum(g.z, 0, -IND_BASE.z + 0.5, IND_BASE.z - 0.5); });
@@ -197,6 +221,13 @@
             b.clock = indNum(b.clock, 60, 0, 1e9);
             if (!b.surv || typeof b.surv !== 'object') b.surv = n.surv;
             ['hp', 'food', 'water', 'energy'].forEach(function (k) { b.surv[k] = indNum(b.surv[k], n.surv[k], 0, 100); });
+            b.surv.temp = indNum(b.surv.temp, 37, 25, 45);
+            if (!b.wear || typeof b.wear !== 'object') b.wear = {};
+            Object.keys(b.wear).forEach(function (sl) { let k = b.wear[sl]; if (!IND_ITEMS[k] || IND_ITEMS[k].wear !== sl) delete b.wear[sl]; });
+            b.gh = !!b.gh;
+            if (!Array.isArray(b.fires)) b.fires = [];
+            b.fires = b.fires.filter(function (f) { return f && isFinite(f.x) && isFinite(f.z); }).slice(0, 30);
+            b.fires.forEach(function (f) { f.fuel = indNum(f.fuel, 0, 0, 1e5); });
             if (b.surv.hp <= 0) b.surv.hp = 100;
             if (!b.stove || typeof b.stove !== 'object') b.stove = n.stove;
             let S = b.stove;
@@ -264,6 +295,49 @@
             if (t < IND_DUSK - 60) return t < 30 ? 1 - t / 30 : 0;
             if (t < IND_DUSK) return (t - (IND_DUSK - 60)) / 60;
             return 1;
+        }
+
+        // 季节：一季 3 天，春夏秋冬轮
+        function indSeason() { return Math.floor((indDayNo() - 1) / IND_SEASON_DAYS) % 4; }
+        function indSeasonTxt() { return IND_SEASONS[indSeason()].name + '天（第 ' + ((indDayNo() - 1) % IND_SEASON_DAYS + 1) + '/' + IND_SEASON_DAYS + ' 天）'; }
+        function indInGh(x, z) { return ind.base.gh && x >= IND_GH.x0 && x <= IND_GH.x1 && z >= IND_GH.z0 && z <= IND_GH.z1; }
+        function indCropSeasonOK(c) { return indInGh(c.x, c.z) || IND_CROPS[c.k].s.indexOf(indSeason()) >= 0; }
+        // 火：基地的篝火存档，远征的篝火只在这一趟
+        function indFires() { return ind.where === 'base' ? ind.base.fires : (ind.tripFires || []); }
+        // 气温：季节 + 昼夜 + 地貌 + 火 + 下水
+        function indAirTemp() {
+            let t = IND_SEASONS[indSeason()].t, tod = indTod();
+            if (indIsNight()) t -= 8; else if (tod > 300 && tod < 700) t += 3;
+            if (ind.where === 'trip') {
+                let bm = indBiome(ind.map, ind.p.x, ind.p.z);
+                if (bm === 'desert') t += indIsNight() ? -4 : 10;
+                else if (bm === 'mountain' || bm === 'ancient') t -= 5;
+                ind.map.volc.forEach(function (v) { let d = Math.hypot(ind.p.x - v.x, ind.p.z - v.z); if (d < v.r * 1.6) t += 25 * (1 - d / (v.r * 1.6)); });
+                if (indInWater()) t -= IND_BODY.waterCold;
+            } else {
+                let st = IND_BASE_ST.stove, S = ind.base.stove;
+                if (S.temp > 100 && Math.hypot(ind.p.x - st.x, ind.p.z - st.z) < IND_BODY.fireR) t += Math.min(25, S.temp / 40);
+            }
+            if (indFires().some(function (f) { return f.fuel > 0 && Math.hypot(ind.p.x - f.x, ind.p.z - f.z) < IND_BODY.fireR; })) t += IND_BODY.fireHeat;
+            return t;
+        }
+        function indWarmth() { let w = 0; Object.keys(ind.base.wear).forEach(function (sl) { w += IND_ITEMS[ind.base.wear[sl]].warm || 0; }); return w; }
+        function indBodyTick(dt) {
+            let S = ind.base.surv, B = IND_BODY, eff = indAirTemp() + indWarmth() * B.warmMul;
+            if (eff < B.cold) S.temp -= (B.cold - eff) * B.rate * dt;
+            else if (eff > B.hot) S.temp += (eff - B.hot) * B.rate * dt;
+            else S.temp += Math.max(-B.back * dt, Math.min(B.back * dt, 37 - S.temp));
+            S.temp = Math.max(25, Math.min(45, S.temp));
+        }
+        // 基地外面的草地按季节换颜色（冬天是雪）
+        const IND_GRASS = [0xa5d6a7, 0x81c784, 0xd7c27a, 0xeceff1];
+        function indSeasonLook() {
+            if (!ind.grass || ind.where !== 'base') return;
+            let se = indSeason(); if (se === ind.grassSeason) return;
+            ind.grassSeason = se; ind.grass.material.color.setHex(IND_GRASS[se]);
+        }
+        function indFireTick(dt) {
+            indFires().forEach(function (f) { if (f.fuel > 0) { f.fuel = Math.max(0, f.fuel - dt); if (f.fuel <= 0) ind.fireDirty = true; } });
         }
 
         // ── 进出 ──
@@ -356,7 +430,7 @@
             ind.objs.forEach(function (o) { scene.remove(o); });
             ind.geos.forEach(function (g) { g.dispose(); });
             ind.mats.forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); });
-            ind.objs = []; ind.geos = []; ind.mats = []; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.nodes = []; ind.exits = [];
+            ind.objs = []; ind.geos = []; ind.mats = []; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.nodes = []; ind.exits = [];
         }
         function indBox(w, h, d, col, x, y, z) {
             let m = new THREE.Mesh(indGeo(new THREE.BoxGeometry(w, h, d)), indMat(new THREE.MeshLambertMaterial({ color: col })));
@@ -417,9 +491,32 @@
             if (ind.cropMesh.instanceColor) ind.cropMesh.instanceColor.needsUpdate = true;
         }
 
+        // 暖棚：半透明的顶和四根柱子
+        function indBuildGh() {
+            if (ind.ghMesh) return;
+            let G = IND_GH, w = G.x1 - G.x0, d = G.z1 - G.z0, cx = (G.x0 + G.x1) / 2, cz = (G.z0 + G.z1) / 2;
+            let roof = new THREE.Mesh(indGeo(new THREE.BoxGeometry(w, 0.1, d)), indMat(new THREE.MeshLambertMaterial({ color: 0xe0f7fa, transparent: true, opacity: 0.35 })));
+            roof.position.set(cx, 3, cz); indAdd(roof); ind.ghMesh = roof;
+            [[G.x0, G.z0], [G.x1, G.z0], [G.x0, G.z1], [G.x1, G.z1]].forEach(function (p) { indBox(0.2, 3, 0.2, 0x8d6e63, p[0], 1.5, p[1]); });
+            indSign('暖棚', cx, 3.8, G.z0, 2, 0.5);
+        }
+        function indSyncFires() {
+            if (!ind.fireMesh || !ind.fireDirty) return;
+            indDummy();
+            let F = indFires(), n = Math.min(F.length, 30);
+            for (let i = 0; i < n; i++) {
+                let f = F[i], y = ind.where === 'trip' ? indGround(f.x, f.z) : 0;
+                IND_DUMMY.position.set(f.x, y + 0.45, f.z); IND_DUMMY.rotation.set(0, 0, 0); IND_DUMMY.scale.setScalar(f.fuel > 0 ? 1 : 0.6); IND_DUMMY.updateMatrix();
+                ind.fireMesh.setMatrixAt(i, IND_DUMMY.matrix); ind.fireMesh.setColorAt(i, IND_COL.setHex(f.fuel > 0 ? 0xff7043 : 0x5d4037));
+            }
+            ind.fireMesh.count = n; ind.fireMesh.instanceMatrix.needsUpdate = true;
+            if (ind.fireMesh.instanceColor) ind.fireMesh.instanceColor.needsUpdate = true;
+            ind.fireDirty = false;
+        }
+
         // 基地：一块地、一圈矮篱笆、农田、仓库箱、灶台、床、水池、出发门
         const IND_BASE_ST = {
-            box: { x: -2, z: -19, name: '仓库箱' }, stove: { x: 8, z: -19, name: '灶台' }, bed: { x: 22, z: -18, name: '床' },
+            box: { x: -2, z: -19, name: '仓库箱' }, stove: { x: 8, z: -19, name: '灶台' }, bed: { x: 22, z: -18, name: '床' }, bench: { x: 15, z: -19, name: '工作台' },
             pool: { x: 20, z: 10, r: 2.2, name: '水池' }, gate: { x: 0, z: -IND_BASE.z, name: '出发' }
         };
         function indGoBase(fromTrip) {
@@ -427,7 +524,7 @@
             ind.where = 'base'; ind.map = null; ind.exitT = 0;
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
             let X = IND_BASE.x, Z = IND_BASE.z, F = IND_FIELD;
-            indPlane(2 * X + 30, 2 * Z + 30, 0xa5d6a7, 0, 0, 0);
+            ind.grass = indPlane(2 * X + 30, 2 * Z + 30, 0xa5d6a7, 0, 0, 0); ind.grassSeason = -1;
             indPlane(2 * X, 2 * Z, 0xbcaaa4, 0, 0.01, 0);
             indPlane(F.x1 - F.x0, F.z1 - F.z0, 0x6d4c41, (F.x0 + F.x1) / 2, 0.02, (F.z0 + F.z1) / 2);
             indSign('农田', (F.x0 + F.x1) / 2, 2.5, F.z0 - 1, 2.4, 0.6);
@@ -437,12 +534,15 @@
             indBox(2.2, 1.2, 1.6, 0x455a64, S.box.x, 0.6, S.box.z); indSign(S.box.name, S.box.x, 2.2, S.box.z, 2.4, 0.6);
             indBox(2.4, 1.0, 1.6, 0xb71c1c, S.stove.x, 0.5, S.stove.z); indSign(S.stove.name, S.stove.x, 2.2, S.stove.z, 2.4, 0.6);
             indBox(2.2, 0.5, 3.2, 0x5c6bc0, S.bed.x, 0.25, S.bed.z); indSign(S.bed.name, S.bed.x, 1.8, S.bed.z, 2, 0.5);
+            indBox(2.4, 1.0, 1.4, 0xa1887f, S.bench.x, 0.5, S.bench.z); indSign(S.bench.name, S.bench.x, 2.2, S.bench.z, 2.4, 0.6);
+            if (ind.base.gh) indBuildGh();
             let pool = new THREE.Mesh(indGeo(new THREE.CylinderGeometry(S.pool.r, S.pool.r, 0.15, 24)), indMat(new THREE.MeshLambertMaterial({ color: 0x29b6f6 })));
             pool.position.set(S.pool.x, 0.08, S.pool.z); indAdd(pool); indSign(S.pool.name, S.pool.x, 1.6, S.pool.z, 1.8, 0.45);
             let g = S.gate; indBox(0.4, 3.2, 0.4, 0x5d4037, g.x - 2.4, 1.6, g.z); indBox(0.4, 3.2, 0.4, 0x5d4037, g.x + 2.4, 1.6, g.z); indBox(5.2, 0.5, 0.5, 0x5d4037, g.x, 3.3, g.z);
             indSign('出发（远征）', g.x, 4.3, g.z, 3.2, 0.8);
             ind.itemMesh = indInst(new THREE.BoxGeometry(0.5, 0.5, 0.5), IND_ITEM_CAP); ind.itemDirty = true;
             ind.cropMesh = indInst(new THREE.ConeGeometry(0.5, 1, 6), IND_CROP_CAP); ind.cropDirty = true;
+            ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             ind.p.x = 0; ind.p.z = fromTrip ? -IND_BASE.z + 4 : 4; ind.p.y = 0; ind.p.vy = 0;
             if (fromTrip) {
                 let got = Object.keys(ind.bag).map(function (k) { indBoxAdd(k, ind.bag[k]); return indName(k) + '×' + ind.bag[k]; });
@@ -454,10 +554,10 @@
 
         // 远征：地形（一个网格，颜色按地貌）、水面、资源点（一个 InstancedMesh）、两个撤离点
         const IND_SEG = 120, IND_NODE_N = 420;
-        const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin'];
+        const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin', 'seed_cotton', 'seed_cabbage', 'seed_radish'];
         function indGoTrip(seed) {
             indClearWorld();
-            ind.where = 'trip'; ind.exitT = 0;
+            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = [];
             let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed);
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 60, 160);
             let geo = indGeo(new THREE.PlaneGeometry(IND_MAP * 2, IND_MAP * 2, IND_SEG, IND_SEG));
@@ -489,6 +589,7 @@
                 ind.nodes.push({ key: key, x: x, z: z, y: h, n: nd.give[0] + Math.floor(roll * (nd.give[1] - nd.give[0] + 1)), seed: IND_SEED_KINDS[Math.floor(r() * IND_SEED_KINDS.length)], dead: false });
             }
             ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true;
+            ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             ind.exits.push({ x: 0, z: 6, name: '回家的门' });
             for (let i = 0; i < 2; i++) { let a = r() * Math.PI * 2, d = IND_MAP * (0.45 + r() * 0.35); ind.exits.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, name: '撤离点' }); }
             ind.exits.forEach(function (e) {
@@ -532,7 +633,8 @@
         function indTick(dt) {
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indSurvTick(dt); indCropTick(dt); }
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); indCropTick(dt); }
+            indFireTick(dt);
             indStoveTick(dt);
             if (!ind || ind.over) return;
             indMove(dt);
@@ -544,10 +646,10 @@
                 ind.exitT = inExit ? ind.exitT + dt : 0;
                 if (ind.exitT >= IND_T.extract) indGoBase(true);
             }
-            indSyncItems(); indSyncNodes(); indSyncCrops();
+            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
-            ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); }
+            ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); indSeasonLook(); }
         }
         // 生存值：饱食、口渴、精力按时间掉；拉肚子口渴掉 3 倍；夜里在外面精力掉 3 倍；
         // 到 0：悠闲只是变慢；硬核饿了每秒扣 1 血、渴了每秒扣 2 血，血到 0 就死
@@ -555,22 +657,24 @@
             let S = ind.base.surv, Q = IND_SURV;
             if (ind.sickT > 0) ind.sickT -= dt;
             S.food = Math.max(0, S.food - Q.food * dt);
-            S.water = Math.max(0, S.water - Q.water * (ind.sickT > 0 ? Q.sickWater : 1) * dt);
+            S.water = Math.max(0, S.water - Q.water * (ind.sickT > 0 ? Q.sickWater : 1) * (S.temp > IND_BODY.sweat ? 2 : 1) * dt);
             let em = (ind.running ? Q.runEnergy : 1) * (ind.where === 'trip' && indIsNight() ? Q.nightOut : 1);
             S.energy = Math.max(0, S.energy - Q.energy * em * dt);
             if (indHard()) {
-                let dmg = (S.food <= 0 ? Q.starveHp : 0) + (S.water <= 0 ? Q.thirstHp : 0);
-                if (dmg > 0) { S.hp -= dmg * dt; ind.lastHurt = S.water <= 0 ? '渴死' : '饿死'; }
+                let cold = S.temp < IND_BODY.freeze ? 1 : 0, hot = S.temp > IND_BODY.boil ? 1 : 0;
+                let dmg = (S.food <= 0 ? Q.starveHp : 0) + (S.water <= 0 ? Q.thirstHp : 0) + cold + hot;
+                if (dmg > 0) { S.hp -= dmg * dt; ind.lastHurt = cold ? '冻死' : hot ? '热死' : S.water <= 0 ? '渴死' : '饿死'; }
                 else if (S.food > 30 && S.water > 30) S.hp = Math.min(100, S.hp + Q.regen * dt);
                 if (S.hp <= 0) indDie(ind.lastHurt || '倒下');
             }
         }
         function indSlow() { let S = ind.base.surv; return S.food <= 0 || S.water <= 0 || S.energy <= 0; }
+        function indShiver() { return ind.base.surv.temp < IND_BODY.chill; }
         function indDie(cause) {
             if (!ind || ind.over) return;
-            let lost = Object.keys(ind.bag).length;
-            ind.bag = {};
-            let S = ind.base.surv; S.hp = 100; S.food = Math.max(S.food, 40); S.water = Math.max(S.water, 40); S.energy = Math.max(S.energy, 50);
+            let lost = Object.keys(ind.bag).length + Object.keys(ind.base.wear).length;
+            ind.bag = {}; ind.base.wear = {};
+            let S = ind.base.surv; S.hp = 100; S.temp = 37; S.food = Math.max(S.food, 40); S.water = Math.max(S.water, 40); S.energy = Math.max(S.energy, 50);
             indGoBase(null);
             indSave();
             indFlash('死因：' + cause + (lost ? '。身上的东西都没了' : ''));
@@ -579,7 +683,7 @@
         function indCropTick(dt) {
             let clock = ind.base.clock, ch = false;
             ind.base.crops.forEach(function (c) {
-                let C = IND_CROPS[c.k]; if (c.g >= C.grow) return;
+                let C = IND_CROPS[c.k]; if (c.g >= C.grow || !indCropSeasonOK(c)) return;
                 let was = c.g; c.g = Math.min(C.grow, c.g + dt * (c.wet > clock ? 1 : 0.5));
                 if (Math.floor(was / C.grow * 4) !== Math.floor(c.g / C.grow * 4)) ch = true;
             });
@@ -595,7 +699,7 @@
             let S = R.base.surv, canRun = k.run && moving && R.stam > 0 && S.energy > 0;
             R.running = canRun;
             R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt);
-            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indInWater() ? 0.6 : 1);
+            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * (indInWater() ? 0.6 : 1);
             if (moving) {
                 let n = Math.hypot(mx, mz), run = Math.min(1, n); mx /= n; mz /= n;
                 R.p.x += mx * sp * run * dt; R.p.z += mz * sp * run * dt;
@@ -640,13 +744,14 @@
                 if (d > 0.6 && (dx * f.x + dz * f.z) / Math.max(0.01, Math.hypot(dx, dz)) < 0.3) return;
                 if (d < bd) { bd = d; best = { kind: kind, o: o }; }
             };
+            indFires().forEach(function (f) { consider(f, f.x, f.z, 'fire'); });
             if (R.where === 'trip') R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node'); });
             else {
                 R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item'); });
                 R.base.crops.forEach(function (c) { consider(c, c.x, c.z, 'crop'); });
                 let S = IND_BASE_ST;
                 consider(S.box, S.box.x, S.box.z + 0.8, 'box'); consider(S.stove, S.stove.x, S.stove.z + 0.8, 'stove');
-                consider(S.bed, S.bed.x, S.bed.z + 1.6, 'bed'); consider(S.pool, S.pool.x, S.pool.z, 'pool', S.pool.r);
+                consider(S.bed, S.bed.x, S.bed.z + 1.6, 'bed'); consider(S.pool, S.pool.x, S.pool.z, 'pool', S.pool.r); consider(S.bench, S.bench.x, S.bench.z + 0.8, 'bench');
             }
             return best;
         }
@@ -660,6 +765,8 @@
             if (a && a.kind === 'box') return indPanelBox();
             if (a && a.kind === 'stove') return indPanelStove();
             if (a && a.kind === 'bed') return indSleep();
+            if (a && a.kind === 'bench') return indPanelBench();
+            if (a && a.kind === 'fire') return indFeedFire(a.o);
             let k = indSel();
             if (ind.where === 'base' && k && IND_ITEMS[k].seed) return indPlant(k);
         }
@@ -675,6 +782,8 @@
             }
             if ((k === 'water_raw' || k === 'water_boiled') && a && a.kind === 'crop') return indWater(a.o, k);
             if (IND_ITEMS[k].eat) return indEat(k);
+            if (IND_ITEMS[k].wear) return indWear(k);
+            if (k === 'campfire') return indPlaceFire();
             return false;
         }
         function indEat(k) {
@@ -742,7 +851,8 @@
             ind.base.clock += skip;
             S.food = Math.max(0, S.food - IND_SURV.food * 0.3 * skip); S.water = Math.max(0, S.water - IND_SURV.water * 0.3 * skip);
             S.energy = 100;
-            ind.base.crops.forEach(function (c) { let C = IND_CROPS[c.k]; c.g = Math.min(C.grow, c.g + skip * (c.wet > ind.base.clock - skip ? 0.75 : 0.5)); });
+            ind.base.crops.forEach(function (c) { let C = IND_CROPS[c.k]; if (indCropSeasonOK(c)) c.g = Math.min(C.grow, c.g + skip * (c.wet > ind.base.clock - skip ? 0.75 : 0.5)); });
+            S.temp = 37; ind.base.fires.forEach(function (f) { f.fuel = Math.max(0, f.fuel - skip); }); ind.fireDirty = true;
             ind.sleeping = true; for (let t = 0; t < skip; t += 1) indStoveTick(1); ind.sleeping = false;
             ind.cropDirty = true; indSave();
             indFlash('一觉睡到' + indClockTxt());
@@ -760,6 +870,57 @@
             x = Math.max(-IND_BASE.x + 0.5, Math.min(IND_BASE.x - 0.5, x)); z = Math.max(-IND_BASE.z + 0.5, Math.min(IND_BASE.z - 0.5, z));
             ind.base.ground.push({ k: k, x: x, z: z });
             ind.itemDirty = true; indSave();
+        }
+
+        // ── 衣服、篝火、工作台 ──
+        function indWear(k) {
+            let sl = IND_ITEMS[k].wear, old = ind.base.wear[sl];
+            indBagDel(k, 1); ind.base.wear[sl] = k;
+            if (old) indBagAdd(old, 1);
+            indSave(); indFlash('穿上了' + indName(k));
+            return true;
+        }
+        function indTakeOff(sl) {
+            if (!ind) return;
+            let k = ind.base.wear[sl]; if (!k) return;
+            if (indBagAdd(k, 1) <= 0) { indFlash('身上放不下了'); return; }
+            delete ind.base.wear[sl]; indSave(); indFlash('脱下了' + indName(k));
+        }
+        function indPlaceFire() {
+            let F = indFires(); if (F.length >= 30) { indFlash('火太多了'); return false; }
+            let f = indFace(), x = ind.p.x + f.x * 1.6, z = ind.p.z + f.z * 1.6;
+            if (ind.where === 'base') { x = Math.max(-IND_BASE.x + 0.5, Math.min(IND_BASE.x - 0.5, x)); z = Math.max(-IND_BASE.z + 0.5, Math.min(IND_BASE.z - 0.5, z)); }
+            indBagDel('campfire', 1); F.push({ x: x, z: z, fuel: 120 });
+            ind.fireDirty = true; indSave(); indFlash('篝火点上了（拿着木头对着它左键加柴）');
+            return true;
+        }
+        function indFeedFire(f) {
+            let k = ['wood', 'charcoal', 'coal'].filter(function (x) { return ind.bag[x]; })[0];
+            if (!k) { indFlash('篝火还能烧 ' + Math.ceil(f.fuel) + ' 秒（拿木头来加柴）'); return false; }
+            indBagDel(k, 1); f.fuel += IND_ITEMS[k].fuel; ind.fireDirty = true; indSave();
+            indFlash('加了 1 个' + indName(k) + '，还能烧 ' + Math.ceil(f.fuel) + ' 秒');
+            return true;
+        }
+        function indCraftCan(r) { return Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh); }
+        function indCraft(i) {
+            if (!ind) return false;
+            let r = IND_CRAFT[i]; if (!r || !indCraftCan(r)) { indFlash('原料不够'); return false; }
+            if (!r.gh && !ind.bag[r.out] && Object.keys(ind.bag).length >= IND_BAG_CAP && !Object.keys(r.in).some(function (k) { return ind.bag[k] === r.in[k]; })) { indFlash('身上放不下了'); return false; }
+            Object.keys(r.in).forEach(function (k) { indBagDel(k, r.in[k]); });
+            if (r.gh) { ind.base.gh = true; if (ind.where === 'base') indBuildGh(); indFlash('暖棚盖好了，棚里的作物不管季节都长'); }
+            else { indBagAdd(r.out, 1); indFlash('做好了：' + indName(r.out)); }
+            indSave(); if (ind.panel === 'bench') indPanelBench();
+            return true;
+        }
+        function indPanelBench() {
+            if (!ind) return;
+            let rows = IND_CRAFT.map(function (r, i) {
+                let nm = r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : '');
+                let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ');
+                return indRow(nm + '<br><small style="color:#888">' + need + '</small>', '<button style="' + IND_BTN + (indCraftCan(r) ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>');
+            }).join('');
+            indPanelShow('bench', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">工作台</div><div style="color:#888;margin-bottom:4px;">用身上的原料做</div>' + rows +
+                '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
 
         // ── 灶台 ──
@@ -910,7 +1071,8 @@
             let d = document.createElement('div'); d.id = 'ind-hud';
             d.style.cssText = 'position:fixed;inset:0;z-index:40;pointer-events:none;font-family:"Microsoft YaHei",sans-serif;color:#222;';
             d.innerHTML =
-                '<div id="ind-status" style="position:absolute;left:8px;top:8px;background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
+                '<div style="position:absolute;left:8px;top:8px;"><div id="ind-status" style="background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
+                '<div id="ind-wear" style="margin-top:4px;background:rgba(255,255,255,.92);padding:4px 10px;border-radius:8px;font-size:13px;pointer-events:auto;"></div></div>' +
                 '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
                 '<div id="ind-hint" style="position:absolute;left:50%;bottom:150px;transform:translateX(-50%);color:#fff;padding:4px 12px;font-size:20px;font-weight:bold;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
@@ -928,8 +1090,11 @@
             let R = ind; if (!R || R.over) return;
             if (R.panel === 'stove' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'); if (p) { p.innerHTML = indStoveHtml(); R.panelDirty = false; } }
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
-            let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + rule + '<br>';
+            let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + indSeasonTxt() + '　' + rule + '<br>';
             st += (indHard() ? indBar('血', S.hp, '#e53935') : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047');
+            let tc = S.temp < IND_BODY.chill ? '#1565c0' : S.temp > IND_BODY.sweat ? '#c62828' : '#2e7d32';
+            st += '<br>体温 <b style="color:' + tc + '">' + S.temp.toFixed(1) + '°C</b>　气温 ' + Math.round(indAirTemp()) + '°C　保暖 ' + indWarmth();
+            if (S.temp < IND_BODY.chill) st += '　<b style="color:#1565c0">冷得发抖</b>'; else if (S.temp > IND_BODY.sweat) st += '　<b style="color:#c62828">热得冒汗</b>';
             if (R.sickT > 0) st += '<br><b style="color:#c62828">拉肚子 ' + Math.ceil(R.sickT) + ' 秒</b>';
             if (indSlow()) st += '<br><b style="color:#c62828">' + (S.energy <= 0 ? '累得走不动' : '饿得/渴得走不动') + '</b>';
             if (R.where === 'base') st += '<br>基地　远征过 ' + R.base.trips + ' 次';
@@ -947,7 +1112,9 @@
             let a = indAim(), hint = '';
             if (a && a.kind === 'node') { let nd = IND_NODES[a.o.key], nm = a.o.key === 'seeds' ? '野生' + indName(a.o.seed) : indName(a.o.key); hint = nm + ' ×' + a.o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>'; }
             else if (a && a.kind === 'item') hint = indName(a.o.k) + '<br><small>左键：拿</small>';
-            else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (a.o.wet > R.base.clock ? '' : '　没浇水')) + '<br><small>' + (ripe ? '左键：收' : '拿着水，右键：浇水') + '</small>'; }
+            else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水')) + '<br><small>' + (ripe ? '左键：收' : '拿着水，右键：浇水') + '</small>'; }
+            else if (a && a.kind === 'fire') hint = '篝火' + (a.o.fuel > 0 ? ' 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒' : '（灭了）') + '<br><small>拿着木头，左键：加柴</small>';
+            else if (a && a.kind === 'bench') hint = '工作台<br><small>左键：打开</small>';
             else if (a && a.kind === 'box') hint = '仓库箱<br><small>左键：打开</small>';
             else if (a && a.kind === 'stove') hint = '灶台 ' + Math.round(R.base.stove.temp) + '°C<br><small>左键：打开</small>';
             else if (a && a.kind === 'bed') hint = '床<br><small>左键：睡觉（夜里或累了）</small>';
@@ -955,8 +1122,13 @@
             else if (R.where === 'base' && sel && IND_ITEMS[sel].seed && indInField(R.p.x + indFace().x * 1.4, R.p.z + indFace().z * 1.4)) hint = '左键：种' + indName(sel);
             else if (R.where === 'base' && Math.hypot(R.p.x - IND_BASE_ST.gate.x, R.p.z - IND_BASE_ST.gate.z) < 6) hint = '从门里走出去就是远征';
             else if (sel && IND_ITEMS[sel].eat) hint = '<small>右键：' + (IND_ITEMS[sel].eat.f ? '吃' : '喝') + indName(sel) + '</small>';
-            let sig = st + '|' + bag + '|' + hint;
+            else if (sel && IND_ITEMS[sel].wear) hint = '<small>右键：穿上' + indName(sel) + '</small>';
+            else if (sel === 'campfire') hint = '<small>右键：在面前点篝火</small>';
+            let wr = ['body', 'head', 'neck'].filter(function (sl) { return R.base.wear[sl]; }).map(function (sl) { return '<span onclick="indTakeOff(\'' + sl + '\')" style="cursor:pointer;margin-right:6px;border-bottom:1px dashed #999;">' + indName(R.base.wear[sl]) + '</span>'; }).join('');
+            wr = '穿着：' + (wr || '<span style="color:#999">什么都没穿</span>') + (wr ? '<small style="color:#999">（点一下脱下）</small>' : '');
+            let sig = st + '|' + bag + '|' + hint + '|' + wr;
             if (sig === R.hudSig) return; R.hudSig = sig;
+            let we = document.getElementById('ind-wear'); if (we) we.innerHTML = wr;
             let s = document.getElementById('ind-status'); if (s) s.innerHTML = st;
             let b = document.getElementById('ind-bag'); if (b) b.innerHTML = bag;
             let h = document.getElementById('ind-hint'); if (h) h.innerHTML = hint;

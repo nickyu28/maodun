@@ -4488,7 +4488,7 @@ async function enterExit(tab, key) {
                 // 存档读得回来
                 await T.eval(`indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
                 const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ rule: b.rule, clock: b.clock, e: b.surv.energy, ver: b.ver })); }); })`));
-                if (sv.rule !== 'hard' || sv.e !== 100 || sv.ver !== 2 || Math.abs(sv.clock - (await T.eval(`ind.base.clock`))) > 1) bad.push('存档读回来不对 ' + JSON.stringify(sv));
+                if (sv.rule !== 'hard' || sv.e !== 100 || sv.ver < 2 || Math.abs(sv.clock - (await T.eval(`ind.base.clock`))) > 1) bad.push('存档读回来不对 ' + JSON.stringify(sv));
                 // 硬核：饿渴到血 0 会死，身上的东西没了，回到基地
                 await T.eval(`(function(){ indBagAdd('stone', 3); indGoTrip(4242); let S = ind.base.surv; S.food = 0; S.water = 0; S.hp = 5; indAdvance(3); })(); true;`);
                 const dead = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, bag: Object.keys(ind.bag).length, hp: ind.base.surv.hp })`));
@@ -4504,6 +4504,62 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND2 第 2 阶段：选规则、生存值、吃喝拉肚子、种地浇水收获、灶台开水和烧焦、睡觉、硬核饿死、悠闲不死不出矿、存档', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND3')) {
+            // IND3 第 2.5 阶段：季节（一季 3 天）、作物分季节（冬天小麦不长、白菜长）、暖棚里不管季节都长；冬天不穿衣服体温掉、穿上棉衣棉帽围巾不掉；
+            // 篝火取暖 +20°C、加柴；硬核冻死（身上和穿着的都丢）、悠闲不死；工作台做东西扣原料；存档带着衣服、暖棚、篝火；第 2 阶段老档补种子
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); ind.rng = function () { return 0.99; }; ind.base.clock = 9 * IND_DAY + 100; ind.base.surv.food = 100; ind.base.surv.water = 100; true;`);
+                if ((await T.eval(`indSeason()`)) !== 3) bad.push('第 10 天不是冬天 ' + await T.eval(`indSeason()`));
+                // 冬天：露天小麦不长、白菜长
+                await T.eval(`(function(){ indBagAdd('seed_wheat', 2); indBagAdd('seed_cabbage', 2); indTeleport(-13, 3); indLookAt(-13, 1); indSelect('seed_wheat'); indAction(); indTeleport(-11, 3); indLookAt(-11, 1); indSelect('seed_cabbage'); indAction(); ind.base.crops.forEach(function (c) { c.wet = 1e9; }); })(); true;`);
+                await T.eval(`indAdvance(50); true;`);
+                const cr = JSON.parse(await T.eval(`JSON.stringify(ind.base.crops.map(function (c) { return [c.k, Math.round(c.g)]; }))`));
+                const w = cr.filter((c) => c[0] === 'wheat')[0], cb = cr.filter((c) => c[0] === 'cabbage')[0];
+                if (!w || !cb || w[1] !== 0 || cb[1] < 40) bad.push('冬天作物长得不对 ' + JSON.stringify(cr));
+                // 暖棚：工作台用 10 根木头盖，棚里冬天也长番茄
+                await T.eval(`(function(){ indBagAdd('wood', 10); indCraft(IND_CRAFT.length - 1); indBagAdd('seed_tomato', 1); indTeleport(-24, 3); indLookAt(-24, 1); indSelect('seed_tomato'); indAction(); ind.base.crops.forEach(function (c) { c.wet = 1e9; }); })(); true;`);
+                if (!(await T.eval(`ind.base.gh === true && !ind.bag.wood`))) bad.push('暖棚没盖上或木头没扣');
+                await T.eval(`indAdvance(20); true;`);
+                const tg = await T.eval(`(ind.base.crops.filter(function (c) { return c.k === 'tomato'; })[0] || { g: -1 }).g`);
+                if (!(tg > 15)) bad.push('暖棚里冬天番茄不长 ' + tg);
+                // 体温：冬天白天不穿衣服，60 秒掉约 1.8°C（气温 -5，比 15 低 20，每度每秒 0.0015）
+                await T.eval(`indTeleport(0, 10); ind.base.surv.temp = 37; indAdvance(60); true;`);
+                const t1 = await T.eval(`ind.base.surv.temp`);
+                if (!(t1 < 35.6 && t1 > 34.8)) bad.push('冬天不穿衣服体温掉得不对 ' + t1);
+                // 做衣服穿上：棉衣 6 + 棉帽 2 + 围巾 2 = 保暖 10，等效气温 20，不再掉
+                await T.eval(`(function(){ indBagAdd('cotton', 8); indCraft(0); indCraft(1); indCraft(2); ['coat', 'hat', 'scarf'].forEach(function (k) { indSelect(k); indUse(); }); })(); true;`);
+                if ((await T.eval(`indWarmth()`)) !== 10 || (await T.eval(`ind.bag.cotton || 0`)) !== 0) bad.push('衣服没做好或没穿上 ' + await T.eval(`JSON.stringify([ind.base.wear, ind.bag])`));
+                await T.eval(`ind.base.surv.temp = 37; indAdvance(60); true;`);
+                if ((await T.eval(`ind.base.surv.temp`)) < 36.95) bad.push('穿暖了体温还在掉 ' + await T.eval(`ind.base.surv.temp`));
+                // 篝火：脱掉衣服，做篝火点上，旁边气温 +20；拿木头左键加柴
+                await T.eval(`(function(){ ['body', 'head', 'neck'].forEach(indTakeOff); indBagAdd('wood', 6); indBagAdd('stone', 3); indCraft(3); indSelect('campfire'); indUse(); })(); true;`);
+                const fr = JSON.parse(await T.eval(`(function(){ let f = ind.base.fires[0]; if (!f) return 'null'; let a = indAirTemp(); f.fuel = 0; let b = indAirTemp(); f.fuel = 120; indLookAt(f.x, f.z); let before = f.fuel; indSelect('wood'); indAction(); return JSON.stringify({ n: ind.base.fires.length, d: a - b, add: f.fuel - before }); })()`));
+                if (fr === null || fr.n !== 1 || Math.abs(fr.d - 20) > 0.01 || fr.add !== 60) bad.push('篝火不对 ' + JSON.stringify(fr));
+                // 存档：衣服、暖棚、篝火都在
+                await T.eval(`indBagAdd('scarf', 1); indSelect('scarf'); indUse(); indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
+                const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ wear: b.wear, gh: b.gh, fires: b.fires.length, ver: b.ver })); }); })`));
+                if (sv.wear.neck !== 'scarf' || !sv.gh || sv.fires !== 1 || sv.ver !== 3) bad.push('存档读回来不对 ' + JSON.stringify(sv));
+                // 硬核冻死：身上和穿着的都没了
+                await T.eval(`(function(){ indGoTrip(99); let S = ind.base.surv; S.temp = 32.5; S.hp = 2; indAdvance(3); })(); true;`);
+                const dd = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, wear: Object.keys(ind.base.wear).length, hp: ind.base.surv.hp, t: ind.base.surv.temp })`));
+                if (dd.w !== 'base' || dd.wear !== 0 || dd.hp !== 100 || dd.t < 36.5) bad.push('硬核冻死不对 ' + JSON.stringify(dd));
+                // 悠闲：冻到 30°C 也不扣血
+                await T.eval(`(function(){ ind.base.rule = 'casual'; let S = ind.base.surv; S.temp = 30; S.hp = 50; indAdvance(3); })(); true;`);
+                if ((await T.eval(`ind.base.surv.hp`)) !== 50) bad.push('悠闲世界冻得扣血了');
+                // 第 2 阶段的老档：补上棉花、白菜种子，没有衣服字段也不出错
+                const mig = JSON.parse(await T.eval(`JSON.stringify(indFixBase({ ver: 2, rule: 'hard', box: { wood: 1 }, surv: { hp: 50 } }))`));
+                if (mig.box.seed_cotton !== 4 || mig.box.seed_cabbage !== 3 || mig.surv.temp !== 37 || mig.gh !== false || !Array.isArray(mig.fires)) bad.push('老档迁移不对 ' + JSON.stringify(mig.box));
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND3 第 2.5 阶段：季节、作物分季节、暖棚、体温和衣服、篝火取暖加柴、硬核冻死、悠闲不死、工作台、存档和老档迁移', bad.length === 0, bad.join(' / '));
         }
 
         if (ONLY) throw new Error('ONLY_DONE');
