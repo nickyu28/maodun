@@ -4612,13 +4612,70 @@ async function enterExit(tab, key) {
                 // 存档
                 await T.eval(`indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
                 const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ an: b.animals.length, ver: b.ver })); }); })`));
-                if (sv.an !== 2 || sv.ver !== 4) bad.push('存档读回来不对 ' + JSON.stringify(sv));
+                if (sv.an !== 2 || sv.ver < 4) bad.push('存档读回来不对 ' + JSON.stringify(sv));
                 // 进出 3 次不涨（动物也是一组画完）
                 await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
             }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND4 第 2.8 阶段：野生动物、喂食驯服跟着回家、剪羊毛做毛衣、挤牛奶煮奶酪、动物会饿、存档', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND5')) {
+            // IND5 第 3a 阶段（只给硬核）：大火炼铜矿出烫铜锭；不拿钳子拿着烫锭每秒扣 15 血；泡水马上凉；地上 30 秒凉；钳子；
+            // 风箱加鼓风档 1600°C 才炼得动铁矿；铁稿挖得动铁矿；悠闲世界炼不了、工作台不显示；配方查询能搜
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; true;`);
+                // 大火炼铜矿
+                await T.eval(`(function(){ indBagAdd('wood', 20); indBagAdd('ore_cu', 2); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStovePut('ore_cu', 1); indStoveFire(3); indPanelClose(); })(); true;`);
+                await T.eval(`indAdvance(45); true;`);
+                if (!(await T.eval(`ind.base.stove.out.hot_cu === 1`))) bad.push('大火炼不出铜锭 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 拿着烫铜锭，没钳子：每秒扣 15
+                await T.eval(`indStoveTakeAll(); indPanelClose(); ind.base.surv.hp = 100; ind.base.surv.temp = 37; true;`);
+                await T.eval(`indAdvance(2); true;`);
+                const hp1 = await T.eval(`ind.base.surv.hp`);
+                if (!(hp1 < 72 && hp1 > 68)) bad.push('拿烫锭没按每秒 15 扣血 ' + hp1);
+                // 泡水：对着水池右键，马上凉
+                await T.eval(`indTeleport(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z + 3.5); indLookAt(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z); indSelect('hot_cu'); indUse(); true;`);
+                if (!(await T.eval(`!ind.bag.hot_cu && ind.bag.ingot_cu === 1`))) bad.push('泡水没凉 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 地上放 30 秒凉
+                await T.eval(`indBagAdd('hot_zn', 1); indSelect('hot_zn'); indDrop(); indAdvance(31); true;`);
+                if (!(await T.eval(`ind.base.ground.some(function (g) { return g.k === 'ingot_zn'; }) && !ind.base.ground.some(function (g) { return g.k === 'hot_zn'; })`))) bad.push('地上的烫锭 30 秒没凉');
+                // 钳子：拿着烫锭不扣血
+                await T.eval(`indBagAdd('ingot_cu', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'tongs'; })); indBagAdd('hot_fe', 1); ind.base.surv.hp = 100; indAdvance(2); true;`);
+                if (!(await T.eval(`ind.bag.tongs === 1 && ind.base.surv.hp > 99`))) bad.push('有钳子还扣血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
+                // 大火炼不动铁矿；风箱装上后鼓风 1600°C 才行
+                await T.eval(`(function(){ indStoveTakeAll(); indPanelClose(); indBagAdd('ore_fe', 1); indStovePut('ore_fe', 1); indStoveFire(3); indPanelClose(); indAdvance(40); })(); true;`);
+                if (await T.eval(`!!ind.base.stove.out.hot_fe`)) bad.push('大火就炼出了铁（铁的熔点 1538°C）');
+                await T.eval(`(function(){ indStoveFire(4); })(); true;`);
+                if ((await T.eval(`ind.base.stove.fire`)) === 4) bad.push('没风箱就能鼓风');
+                await T.eval(`(function(){ indBagAdd('wood', 6); indBagAdd('clay', 4); indCraft(IND_CRAFT.findIndex(function (r) { return r.bellows; })); indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(4); indPanelClose(); indAdvance(60); })(); true;`);
+                if (!(await T.eval(`ind.base.bellows && ind.base.stove.out.hot_fe === 1`))) bad.push('鼓风炼不出铁 ' + await T.eval(`JSON.stringify([ind.base.bellows, ind.base.stove])`));
+                // 铁稿挖铁矿
+                await T.eval(`(function(){ ind.base.stove.fire = 0; indBagAdd('ingot_fe', 3); indBagAdd('wood', 2); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pick_iron'; })); })(); true;`);
+                const dug = await T.eval(`(function(){ let o = { key: 'ore_fe', n: 2, dead: false }; return indGather(o) ? 'dug' : 'refused'; })()`);
+                if (dug !== 'dug') bad.push('有铁稿还挖不动铁矿');
+                // 配方查询：搜"铁"能看到铁矿→铁锭和铁稿
+                await T.eval(`indPanelBook('铁'); true;`);
+                const bk = await T.eval(`document.getElementById('ind-book-list').innerText`);
+                if (!/铁矿×1 → 铁锭（烫）×1/.test(bk) || !/铁稿/.test(bk) || /小麦种子/.test(bk)) bad.push('配方查询搜"铁"不对 ' + bk.slice(0, 200));
+                await T.eval(`indPanelClose(); true;`);
+                // 悠闲：炼不了，工作台不显示硬核的东西，配方查询里也没有
+                await T.eval(`(function(){ ind.base.rule = 'casual'; ind.base.stove = { items: {}, out: {}, fuel: 500, fire: 3, temp: 1200, cook: null }; ind.base.stove.items.ore_cu = 1; indAdvance(30); })(); true;`);
+                if (await T.eval(`!!ind.base.stove.out.hot_cu`)) bad.push('悠闲世界也能炼铜');
+                await T.eval(`indPanelBench(); true;`);
+                if (await T.eval(`/钳子|铁稿|风箱/.test(document.getElementById('ind-panel').innerText)`)) bad.push('悠闲世界工作台显示了硬核的东西');
+                await T.eval(`indPanelBook('铁'); true;`);
+                if (await T.eval(`/铁锭/.test(document.getElementById('ind-book-list').innerText)`)) bad.push('悠闲世界配方查询里有冶炼');
+                await T.eval(`indPanelClose(); indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND5 第 3a 阶段：冶炼、烫锭扣血、泡水和放地上变凉、钳子、风箱鼓风炼铁、铁稿、配方查询、悠闲没有科技', bad.length === 0, bad.join(' / '));
         }
 
         if (ONLY) throw new Error('ONLY_DONE');
