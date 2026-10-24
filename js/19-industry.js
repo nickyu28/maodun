@@ -1,11 +1,12 @@
         // ══════════════════════════════════════════════════════════
-        //  猫盾工业（硬核模式）· 第 1 阶段：骨架
+        //  猫盾工业（硬核模式 + 农场）· 第 1～2 阶段
         //  基地永久保留，每次出门远征一张新的开放地图，带东西回基地。设计稿在 docs/industry.md。
         //  这个文件只新增，不改别的模式：大厅按钮是运行时插进去的，selectGameMode / lobbyPrimaryStart 是包了一层，
         //  原来的函数照样调用。整个功能默认藏起来：IND_ENABLED 为 false 时，只有网址带 ?hcdebug=1（记在本机，?hcdebug=0 清掉）才看得到。
         //  存档单独放在浏览器的 IndexedDB（库 maodun_industry），不进主存档白名单，SAVE_VER 不动。
-        //  第 1 阶段有：隐藏入口、基地（仓库箱、出发门、地上放的东西永久保存）、远征地图（地形、七种地貌、资源点、两个撤离点）、
-        //  采集、撤离（站在撤离圈里 3 秒）、半路回大厅身上的东西丢掉。还没有：生存值、灶台、电、机器（后面的阶段）。
+        //  第 1 阶段：隐藏入口、基地、远征地图（七种地貌、资源点、撤离点）、采集、撤离。
+        //  第 2 阶段：世界规则（悠闲 / 硬核）、生存值（饱食、口渴、精力、体力、血量）、昼夜、床、种地、浇水、灶台（火候、燃料、做饭、烧开水、烧焦）。
+        //  还没有：季节、体温、衣服（2.5）、动物（2.8）、科技线（3 起，只给硬核）。
         // ══════════════════════════════════════════════════════════
         const IND_ENABLED = false;
         const IND_DBG_KEY = 'TH_hcdebug';
@@ -22,48 +23,97 @@
 
         // ── 数值（冒烟测试可以改小）──
         const IND_T = { extract: 3, pickR: 2.6, gateR: 2.2, exitR: 3, speed: 7, run: 1.6 };
-        const IND_BASE = { x: 20, z: 15 };            // 基地半宽、半深（40 × 30 米）
+        const IND_BASE = { x: 30, z: 22.5 };          // 基地半宽、半深（60 × 45 米）
+        const IND_FIELD = { x0: -28, x1: -6, z0: -18, z1: 18, tile: 2 };   // 农田（基地左边），2 米一格
         const IND_MAP = 150;                          // 远征地图半宽（300 × 300 米）
-        const IND_BAG_CAP = 6, IND_STACK = 99;        // 身上 6 种，每种最多 99 个
+        const IND_BAG_CAP = 9, IND_STACK = 99;        // 身上 9 种，每种最多 99 个
         const IND_EYE = 1.8;
         const IND_CAM = { back: 4.4, up: 1.2 };
+        // 时间：一天 1200 秒（白天 900、夜里 300）；生存值按"每秒"算
+        const IND_DAY = 1200, IND_DUSK = 900;
+        const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 1.5 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, regen: 0.3, starveHp: 1, thirstHp: 2 };
 
         // ── 物品 ──
-        // tool：采这个资源点要的稿子等级（0 空手，1 石稿，2 铁稿，3 钢稿）
+        // tool：稿子等级；eat：吃喝的效果 { f 饱食, w 口渴, sick 拉肚子概率, back 吃完还回来什么 }
         const IND_ITEMS = {
-            wood: { name: '木头', col: 0x8d6e63 },
+            wood: { name: '木头', col: 0x8d6e63, fuel: 60 },
             stone: { name: '石头', col: 0x9e9e9e },
             sand: { name: '沙子', col: 0xffe082 },
             clay: { name: '黏土', col: 0xbcaaa4 },
             salt: { name: '盐', col: 0xf5f5f5 },
-            coal: { name: '煤', col: 0x263238 },
+            coal: { name: '煤', col: 0x263238, fuel: 150 },
             oil: { name: '石油', col: 0x212121 },
             ore_cu: { name: '铜矿', col: 0xd84315 },
             ore_zn: { name: '锌矿', col: 0x90a4ae },
             ore_fe: { name: '铁矿', col: 0x795548 },
             sulfur: { name: '硫', col: 0xfdd835 },
             ore_u: { name: '铀矿', col: 0x7cb342 },
-            pick_stone: { name: '石稿', col: 0x757575, tool: 1 }
+            pick_stone: { name: '石稿', col: 0x757575, tool: 1 },
+            charcoal: { name: '木炭', col: 0x37474f, fuel: 120 },
+            char: { name: '焦炭', col: 0x111111, fuel: 40 },
+            bucket: { name: '空桶', col: 0x8d6e63 },
+            water_raw: { name: '生水', col: 0x4fc3f7, eat: { w: 15, sick: 0.3, back: 'bucket' } },
+            water_sea: { name: '海水', col: 0x0288d1, eat: { w: -10, back: 'bucket' } },
+            water_boiled: { name: '开水', col: 0xb3e5fc, eat: { w: 40, back: 'bucket' } },
+            seed_wheat: { name: '小麦种子', col: 0xd7ccc8, seed: 'wheat' }, wheat: { name: '小麦', col: 0xffca28 },
+            seed_potato: { name: '土豆种子', col: 0xd7ccc8, seed: 'potato' }, potato: { name: '土豆', col: 0xa1887f },
+            seed_tomato: { name: '番茄种子', col: 0xd7ccc8, seed: 'tomato' }, tomato: { name: '番茄', col: 0xe53935, eat: { f: 8, w: 6 } },
+            seed_corn: { name: '玉米种子', col: 0xd7ccc8, seed: 'corn' }, corn: { name: '玉米', col: 0xfdd835 },
+            seed_cane: { name: '甘蔗种子', col: 0xd7ccc8, seed: 'cane' }, cane: { name: '甘蔗', col: 0x9ccc65 },
+            seed_pumpkin: { name: '南瓜种子', col: 0xd7ccc8, seed: 'pumpkin' }, pumpkin: { name: '南瓜', col: 0xfb8c00 },
+            bake_potato: { name: '烤土豆', col: 0x8d6e63, eat: { f: 30 } },
+            bake_corn: { name: '烤玉米', col: 0xf9a825, eat: { f: 25 } },
+            bread: { name: '面包', col: 0xd7a86e, eat: { f: 40 } },
+            tomato_soup: { name: '番茄汤', col: 0xd84315, eat: { f: 25, w: 20, back: 'bucket' } },
+            sugar: { name: '糖', col: 0xffffff, eat: { f: 10 } },
+            pumpkin_pie: { name: '南瓜派', col: 0xef6c00, eat: { f: 60 } }
         };
         function indName(k) { return (IND_ITEMS[k] && IND_ITEMS[k].name) || k; }
-        // 资源点：每种给几个、要什么稿子
+        // 资源点：每种给几个、要什么稿子；seeds 是野生种子堆（随机一种作物）
         const IND_NODES = {
             wood: { give: [2, 4], tool: 0 }, stone: { give: [2, 3], tool: 0 }, sand: { give: [2, 4], tool: 0 }, clay: { give: [1, 3], tool: 0 },
             salt: { give: [1, 3], tool: 0 }, coal: { give: [1, 3], tool: 1 }, oil: { give: [1, 1], tool: 0 },
             ore_cu: { give: [1, 2], tool: 1 }, ore_zn: { give: [1, 2], tool: 1 }, ore_fe: { give: [1, 2], tool: 2 },
-            sulfur: { give: [1, 3], tool: 1 }, ore_u: { give: [1, 1], tool: 3 }
+            sulfur: { give: [1, 3], tool: 1 }, ore_u: { give: [1, 1], tool: 3 }, seeds: { give: [2, 3], tool: 0 }
         };
+        const IND_NODE_COL = { seeds: 0x7cb342 };
+        // 悠闲世界的远征只刷这些（没有矿，没有科技原料）
+        const IND_CASUAL_RES = { wood: 1, stone: 1, sand: 1, clay: 1, salt: 1, seeds: 1 };
         const IND_TOOL_NAME = ['空手', '石稿', '铁稿', '钢稿'];
         // 地貌：名字、地面颜色、会刷什么资源（权重）
         const IND_BIOMES = {
-            plain: { name: '平原', col: 0x9ccc65, res: { sand: 2, clay: 2, stone: 2, wood: 1 } },
-            forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 1 } },
+            plain: { name: '平原', col: 0x9ccc65, res: { sand: 2, clay: 2, stone: 2, wood: 1, seeds: 2 } },
+            forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 1, seeds: 2 } },
             beach: { name: '海边', col: 0xfff59d, res: { sand: 4, salt: 3 } },
             mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, ore_cu: 2, ore_zn: 2, ore_fe: 2, coal: 2 } },
             desert: { name: '盐湖沙漠', col: 0xe6c27a, res: { sand: 3, salt: 3, oil: 1 } },
             volcano: { name: '火山', col: 0x5d4037, res: { sulfur: 5, stone: 1 } },
             ancient: { name: '古老岩层', col: 0x546e7a, res: { ore_u: 2, stone: 2, ore_fe: 1 } }
         };
+        // 作物：生长秒数（游戏时间，浇了水按全速，没浇水半速）、收获几个、留几个种子；番茄熟了以后还能再结
+        const IND_CROPS = {
+            wheat: { name: '小麦', grow: 120, yield: [2, 3], seeds: [1, 2], col: 0xffca28 },
+            potato: { name: '土豆', grow: 240, yield: [2, 4], seeds: [1, 1], col: 0x8d6e63 },
+            tomato: { name: '番茄', grow: 360, yield: [2, 3], seeds: [0, 1], col: 0xe53935, regrow: 180, times: 3 },
+            corn: { name: '玉米', grow: 480, yield: [2, 2], seeds: [1, 1], col: 0xfdd835 },
+            cane: { name: '甘蔗', grow: 900, yield: [2, 4], seeds: [1, 1], col: 0x9ccc65 },
+            pumpkin: { name: '南瓜', grow: 1800, yield: [1, 1], seeds: [1, 2], col: 0xfb8c00 }
+        };
+        // 灶台：火候三档；燃料每秒烧掉的量；配方按顺序找第一个原料够的
+        const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }];
+        const IND_STOVE_CAP = 8;   // 灶台上最多放几种
+        const IND_RECIPES = [
+            { in: { water_raw: 1 }, out: { water_boiled: 1 }, minT: 100, time: 10 },
+            { in: { water_sea: 1 }, out: { salt: 1, bucket: 1 }, minT: 100, time: 20 },
+            { in: { wheat: 2, salt: 1, water_boiled: 1 }, out: { bread: 1, bucket: 1 }, minT: 180, time: 30, burnT: 300 },
+            { in: { pumpkin: 1, wheat: 2, sugar: 1 }, out: { pumpkin_pie: 1 }, minT: 180, time: 40, burnT: 300 },
+            { in: { tomato: 1, water_boiled: 1, salt: 1 }, out: { tomato_soup: 1 }, minT: 100, time: 20, burnT: 400 },
+            { in: { cane: 3 }, out: { sugar: 1 }, minT: 100, time: 20, burnT: 250 },
+            { in: { potato: 1 }, out: { bake_potato: 1 }, minT: 180, time: 15, burnT: 400 },
+            { in: { corn: 1 }, out: { bake_corn: 1 }, minT: 180, time: 15, burnT: 400 },
+            { in: { wood: 2 }, out: { charcoal: 1 }, minT: 400, time: 30 }
+        ];
+        const IND_BURN_S = 8;   // 超过烧焦温度累计 8 秒就烧成焦炭
 
         // ── 随机数和噪声（同一个种子生成同一张图）──
         function indRng(seed) {
@@ -86,7 +136,6 @@
         // 一张远征地图：种子 → 地形高度、地貌、火山位置
         function indMakeMap(seed) {
             let r = indRng(seed), M = { seed: seed, volc: [] };
-            // 1～2 座火山，在离出生点 60% 以外的地方
             let nv = 1 + (r() < 0.5 ? 1 : 0);
             for (let i = 0; i < nv; i++) { let a = r() * Math.PI * 2, d = IND_MAP * (0.62 + r() * 0.25); M.volc.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 16 + r() * 6 }); }
             return M;
@@ -96,7 +145,7 @@
         function indBiome(M, x, z) {
             for (let i = 0; i < M.volc.length; i++) { let v = M.volc[i]; if (Math.hypot(x - v.x, z - v.z) < v.r) return 'volcano'; }
             let e = indElev(M, x, z), m = indMoist(M, x, z), rr = Math.hypot(x, z) / IND_MAP;
-            if (Math.hypot(x, z) < 14) return 'plain';   // 出生点附近总是平地
+            if (Math.hypot(x, z) < 14) return 'plain';
             if (e < -0.28) return 'beach';
             if (e > 0.32) return rr > 0.78 ? 'ancient' : 'mountain';
             if (m < -0.25) return 'desert';
@@ -105,16 +154,17 @@
         }
         function indHeight(M, x, z) {
             let h = indElev(M, x, z) * 9;
-            let spawn = Math.max(0, 1 - Math.hypot(x, z) / 14); h *= (1 - spawn);   // 出生点压平
-            for (let i = 0; i < M.volc.length; i++) {   // 火山：锥形，山顶有个坑
+            let spawn = Math.max(0, 1 - Math.hypot(x, z) / 14); h *= (1 - spawn);
+            for (let i = 0; i < M.volc.length; i++) {
                 let v = M.volc[i], d = Math.hypot(x - v.x, z - v.z);
                 if (d < v.r * 1.6) { let t = 1 - d / (v.r * 1.6); h += t * t * 22 - (d < v.r * 0.3 ? (1 - d / (v.r * 0.3)) * 8 : 0); }
             }
             return Math.max(-3, h);
         }
+        const IND_WATER_Y = -1.2;
 
         // ── 存档（IndexedDB，单独存）──
-        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 1;
+        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 2;
         function indDb(cb) {
             try {
                 let rq = indexedDB.open(IND_DB, 1);
@@ -124,14 +174,35 @@
             } catch (e) { cb(null); }
         }
         function indKey() { return 'p_' + (gState.id || 'guest'); }
-        function indNewBase() { return { ver: IND_SAVE_VER, box: { pick_stone: 1 }, ground: [], trips: 0 }; }
+        const IND_START_BOX = { pick_stone: 1, bucket: 2, seed_wheat: 6, seed_potato: 4, wood: 8, salt: 2, bake_potato: 3 };
+        function indNewBase() {
+            return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
+                surv: { hp: 100, food: 80, water: 80, energy: 100 }, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
+        }
+        function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
         function indFixBase(b) {
             if (!b || typeof b !== 'object') b = indNewBase();
+            let n = indNewBase();
+            if (b.rule !== 'casual' && b.rule !== 'hard') b.rule = null;
             if (!b.box || typeof b.box !== 'object') b.box = {};
+            Object.keys(b.box).forEach(function (k) { if (!IND_ITEMS[k] || !(b.box[k] > 0)) delete b.box[k]; });
+            if ((b.ver || 1) < 2) Object.keys(IND_START_BOX).forEach(function (k) { if (k !== 'pick_stone') b.box[k] = (b.box[k] || 0) + IND_START_BOX[k]; });   // 第 1 阶段的老档补上第 2 阶段的起步物资
             if (!Array.isArray(b.ground)) b.ground = [];
             b.ground = b.ground.filter(function (g) { return g && IND_ITEMS[g.k] && isFinite(g.x) && isFinite(g.z); });
-            Object.keys(b.box).forEach(function (k) { if (!IND_ITEMS[k] || !(b.box[k] > 0)) delete b.box[k]; });
+            b.ground.forEach(function (g) { g.x = indNum(g.x, 0, -IND_BASE.x + 0.5, IND_BASE.x - 0.5); g.z = indNum(g.z, 0, -IND_BASE.z + 0.5, IND_BASE.z - 0.5); });
+            if (!Array.isArray(b.crops)) b.crops = [];
+            b.crops = b.crops.filter(function (c) { return c && IND_CROPS[c.k] && isFinite(c.x) && isFinite(c.z); });
+            b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); });
             if (typeof b.trips !== 'number') b.trips = 0;
+            b.clock = indNum(b.clock, 60, 0, 1e9);
+            if (!b.surv || typeof b.surv !== 'object') b.surv = n.surv;
+            ['hp', 'food', 'water', 'energy'].forEach(function (k) { b.surv[k] = indNum(b.surv[k], n.surv[k], 0, 100); });
+            if (b.surv.hp <= 0) b.surv.hp = 100;
+            if (!b.stove || typeof b.stove !== 'object') b.stove = n.stove;
+            let S = b.stove;
+            ['items', 'out'].forEach(function (f) { if (!S[f] || typeof S[f] !== 'object') S[f] = {}; Object.keys(S[f]).forEach(function (k) { if (!IND_ITEMS[k] || !(S[f][k] > 0)) delete S[f][k]; }); });
+            S.fuel = indNum(S.fuel, 0, 0, 1e6); S.fire = indNum(S.fire, 0, 0, 3) | 0; S.temp = indNum(S.temp, 20, 20, 2000);
+            if (!S.cook || typeof S.cook !== 'object' || !IND_RECIPES[S.cook.i]) S.cook = null;
             b.ver = IND_SAVE_VER;
             return b;
         }
@@ -147,7 +218,7 @@
         }
         let IND_SAVING = 0;
         function indSave(cb) {
-            if (!ind) { if (cb) cb(false); return; }
+            if (!ind || !ind.base) { if (cb) cb(false); return; }
             let data = JSON.parse(JSON.stringify(ind.base));
             IND_SAVING++;
             indDb(function (db) {
@@ -162,7 +233,7 @@
             });
         }
 
-        // ── 背包（身上 6 种）──
+        // ── 背包（身上 9 种）──
         function indBagAdd(k, n) {
             let B = ind.bag;
             if (!B[k] && Object.keys(B).length >= IND_BAG_CAP) return 0;
@@ -172,8 +243,28 @@
         }
         function indBagDel(k, n) { let B = ind.bag; if (!B[k]) return 0; let t = Math.min(n, B[k]); B[k] -= t; if (B[k] <= 0) delete B[k]; return t; }
         function indSel() { let ks = Object.keys(ind.bag); if (!ks.length) return null; ind.selIdx = Math.max(0, Math.min(ind.selIdx, ks.length - 1)); return ks[ind.selIdx]; }
+        function indSelect(k) { let i = Object.keys(ind.bag).indexOf(k); if (i >= 0) ind.selIdx = i; }
         function indTool() { let t = 0; Object.keys(ind.bag).forEach(function (k) { if (IND_ITEMS[k].tool) t = Math.max(t, IND_ITEMS[k].tool); }); return t; }
         function indBoxAdd(k, n) { let b = ind.base.box; b[k] = (b[k] || 0) + n; }
+        function indRand() { return ind && ind.rng ? ind.rng() : Math.random(); }
+        function indRoll(a) { return a[0] + Math.floor(indRand() * (a[1] - a[0] + 1)); }
+
+        // ── 时间 ──
+        function indDayNo() { return Math.floor(ind.base.clock / IND_DAY) + 1; }
+        function indTod() { return ind.base.clock % IND_DAY; }
+        function indIsNight() { return indTod() >= IND_DUSK; }
+        // 白天 0～900 秒 = 06:00～21:00，夜里 900～1200 = 21:00～06:00
+        function indClockTxt() {
+            let t = indTod(), h = t < IND_DUSK ? 6 + t / 60 : 21 + (t - IND_DUSK) / (300 / 9);
+            h = h % 24; let hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+            return '第 ' + indDayNo() + ' 天 ' + (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+        }
+        function indDark() {
+            let t = indTod();
+            if (t < IND_DUSK - 60) return t < 30 ? 1 - t / 30 : 0;
+            if (t < IND_DUSK) return (t - (IND_DUSK - 60)) / 60;
+            return 1;
+        }
 
         // ── 进出 ──
         let ind = null;
@@ -192,8 +283,8 @@
             ensureScene();
             ind = {
                 loading: false, over: false, t: 0, last: performance.now(), raf: null, base: base, bag: {}, selIdx: 0,
-                where: 'base', map: null, nodes: [], exits: [], exitT: 0, k: {}, p: { x: 0, y: 0, z: 0, vy: 0 },
-                objs: [], geos: [], mats: [], hudT: 0, hudSig: '', panel: null, oldBg: scene.background, oldFog: scene.fog, itemMesh: null, nodeMesh: null
+                where: 'base', map: null, nodes: [], exits: [], exitT: 0, k: {}, p: { x: 0, y: 0, z: 0, vy: 0 }, stam: 100, sickT: 0, saveT: 10,
+                objs: [], geos: [], mats: [], hudT: 0, hudSig: '', panel: null, oldBg: scene.background, oldFog: scene.fog, itemMesh: null, nodeMesh: null, cropMesh: null
             };
             indBuildPlayer();
             indGoBase(null);
@@ -208,13 +299,30 @@
             ind.onMouse = function (e) {
                 if (!ind || ind.over || !document.pointerLockElement) return;
                 if (e.target && e.target.closest && e.target.closest('button, #ind-panel, #sys-modal')) return;
-                if (e.button === 0) indAction();
+                if (e.button === 0) indAction(); else if (e.button === 2) indUse();
             };
-            document.addEventListener('mousedown', ind.onMouse);
-            if (gState.control !== 'pad') indFlash('点一下画面锁住鼠标：左键 采集／拿／用，Q 放下，Shift 跑，Esc 松开');
+            ind.onCtx = function (e) { if (ind) e.preventDefault(); };
+            document.addEventListener('mousedown', ind.onMouse); document.addEventListener('contextmenu', ind.onCtx);
+            if (!base.rule) indAskRule();
+            else if (gState.control !== 'pad') indFlash('左键 采集／拿／种／打开，右键 吃喝／浇水／接水，Q 放下，Shift 跑');
             ind.last = performance.now();
             ind.raf = requestAnimationFrame(indLoop);
         }
+        // 第一次进来选世界规则（只能从悠闲升级到硬核）
+        function indAskRule() {
+            showSysModal('猫盾工业：选一种玩法', '悠闲：种地、做饭、养动物。饿了渴了只会变慢，不会死，远征不出矿。　　硬核：全部内容，饿死渴死都会死，以后还有冶炼、电、核和火箭。　　悠闲以后能升级成硬核，硬核不能退回悠闲。', [
+                { label: '悠闲', color: '#43a047', onClick: function () { indSetRule('casual'); } },
+                { label: '硬核', color: '#d84315', onClick: function () { indSetRule('hard'); } }
+            ]);
+        }
+        function indSetRule(r) {
+            if (!ind || !ind.base) return;
+            if (ind.base.rule === 'hard') return;            // 硬核不能退回
+            if (ind.base.rule === 'casual' && r !== 'hard') return;
+            ind.base.rule = r; indSave();
+            indFlash(r === 'hard' ? '硬核世界：小心别饿死' : '悠闲世界：慢慢种地吧');
+        }
+        function indHard() { return ind.base.rule === 'hard'; }
         // 半路回大厅：在基地里身上的东西收回仓库箱；在远征里身上的东西丢掉（和寻宝队一样，没撤离就不算）
         function indExit(confirmed) {
             if (!ind) return;
@@ -229,11 +337,11 @@
             R.bag = {};
             indUnbindKeys(); indPanelClose();
             document.body.onmousedown = null;
-            if (R.onMouse) document.removeEventListener('mousedown', R.onMouse);
+            if (R.onMouse) { document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); }
             if (document.pointerLockElement) document.exitPointerLock();
-            let hud = document.getElementById('ind-hud'); if (hud && hud.parentNode) hud.parentNode.removeChild(hud);
+            ['ind-hud', 'ind-night'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
             indClearWorld();
-            if (R.me) { scene.remove(R.me); }
+            if (R.me) scene.remove(R.me);
             scene.background = R.oldBg; scene.fog = R.oldFog;
             indSave(function () { });
             ind = null;
@@ -245,14 +353,18 @@
         function indGeo(g) { ind.geos.push(g); return g; }
         function indMat(m) { ind.mats.push(m); return m; }
         function indClearWorld() {
-            ind.objs.forEach(function (o) { scene.remove(o); if (o.material && o.material.map) o.material.map.dispose(); });
+            ind.objs.forEach(function (o) { scene.remove(o); });
             ind.geos.forEach(function (g) { g.dispose(); });
             ind.mats.forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); });
-            ind.objs = []; ind.geos = []; ind.mats = []; ind.itemMesh = null; ind.nodeMesh = null; ind.nodes = []; ind.exits = [];
+            ind.objs = []; ind.geos = []; ind.mats = []; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.nodes = []; ind.exits = [];
         }
         function indBox(w, h, d, col, x, y, z) {
             let m = new THREE.Mesh(indGeo(new THREE.BoxGeometry(w, h, d)), indMat(new THREE.MeshLambertMaterial({ color: col })));
             m.position.set(x, y, z); return indAdd(m);
+        }
+        function indPlane(w, d, col, x, y, z) {
+            let m = new THREE.Mesh(indGeo(new THREE.PlaneGeometry(w, d)), indMat(new THREE.MeshLambertMaterial({ color: col })));
+            m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); return indAdd(m);
         }
         function indSign(text, x, y, z, w, h) {
             let cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
@@ -267,46 +379,72 @@
             let me = raceMakeBody(mySkinColor(0x42a5f5), 0, true, gState.acc, myFace());
             me.scale.setScalar(0.2); scene.add(me); ind.me = me;
         }
-        // 地上的东西（基地里放的）：一个 InstancedMesh 画完，颜色按物品
-        const IND_ITEM_CAP = 600;
-        function indItemMesh() {
-            let m = new THREE.InstancedMesh(indGeo(new THREE.BoxGeometry(0.5, 0.5, 0.5)), indMat(new THREE.MeshLambertMaterial({ color: 0xffffff })), IND_ITEM_CAP);
-            m.count = 0; m.frustumCulled = false; indAdd(m); ind.itemMesh = m; ind.itemDirty = true;
+        // 成组画：基地地上的东西、农田里的作物、远征的资源点，各一个 InstancedMesh
+        const IND_ITEM_CAP = 600, IND_CROP_CAP = 200;
+        function indInst(geo, cap) {
+            let m = new THREE.InstancedMesh(indGeo(geo), indMat(new THREE.MeshLambertMaterial({ color: 0xffffff })), cap);
+            m.setColorAt(0, new THREE.Color(0xffffff));   // 先建好每个实例的颜色，第一次画之前着色器就带上实例颜色（不然后面设颜色也是白的）
+            m.count = 0; m.frustumCulled = false; indAdd(m); return m;
         }
         let IND_DUMMY = null, IND_COL = null;
+        function indDummy() { if (!IND_DUMMY) { IND_DUMMY = new THREE.Object3D(); IND_COL = new THREE.Color(); } }
         function indSyncItems() {
             if (!ind.itemMesh || !ind.itemDirty) return;
-            if (!IND_DUMMY) { IND_DUMMY = new THREE.Object3D(); IND_COL = new THREE.Color(); }
+            indDummy();
             let G = ind.base.ground, n = Math.min(G.length, IND_ITEM_CAP);
             for (let i = 0; i < n; i++) {
-                IND_DUMMY.position.set(G[i].x, 0.25, G[i].z); IND_DUMMY.rotation.set(0, (i * 0.7) % 6.28, 0); IND_DUMMY.updateMatrix();
+                IND_DUMMY.position.set(G[i].x, 0.25, G[i].z); IND_DUMMY.rotation.set(0, (i * 0.7) % 6.28, 0); IND_DUMMY.scale.setScalar(1); IND_DUMMY.updateMatrix();
                 ind.itemMesh.setMatrixAt(i, IND_DUMMY.matrix); ind.itemMesh.setColorAt(i, IND_COL.setHex(IND_ITEMS[G[i].k].col));
             }
             ind.itemMesh.count = n; ind.itemMesh.instanceMatrix.needsUpdate = true;
             if (ind.itemMesh.instanceColor) ind.itemMesh.instanceColor.needsUpdate = true;
             ind.itemDirty = false;
         }
+        function indCropRipe(c) { return c.g >= IND_CROPS[c.k].grow; }
+        function indSyncCrops() {
+            if (!ind.cropMesh) return;
+            ind.cropT = (ind.cropT || 0) - 1; if (ind.cropT > 0 && !ind.cropDirty) return;
+            ind.cropT = 20; ind.cropDirty = false;   // 长势变化慢，20 帧更新一次
+            indDummy();
+            let C = ind.base.crops, n = Math.min(C.length, IND_CROP_CAP);
+            for (let i = 0; i < n; i++) {
+                let c = C[i], f = Math.min(1, c.g / IND_CROPS[c.k].grow), s = 0.25 + 0.75 * f;
+                IND_DUMMY.position.set(c.x, 0.5 * s, c.z); IND_DUMMY.rotation.set(0, 0, 0); IND_DUMMY.scale.set(s, s, s); IND_DUMMY.updateMatrix();
+                ind.cropMesh.setMatrixAt(i, IND_DUMMY.matrix);
+                ind.cropMesh.setColorAt(i, IND_COL.setHex(f >= 1 ? IND_CROPS[c.k].col : (c.wet > ind.base.clock ? 0x388e3c : 0x7cb342)));
+            }
+            ind.cropMesh.count = n; ind.cropMesh.instanceMatrix.needsUpdate = true;
+            if (ind.cropMesh.instanceColor) ind.cropMesh.instanceColor.needsUpdate = true;
+        }
 
-        // 基地：一块地、一圈矮篱笆、仓库箱、出发门
-        const IND_BASE_ST = { box: { x: -6, z: -10, name: '仓库箱' }, gate: { x: 0, z: -IND_BASE.z, name: '出发' } };
+        // 基地：一块地、一圈矮篱笆、农田、仓库箱、灶台、床、水池、出发门
+        const IND_BASE_ST = {
+            box: { x: -2, z: -19, name: '仓库箱' }, stove: { x: 8, z: -19, name: '灶台' }, bed: { x: 22, z: -18, name: '床' },
+            pool: { x: 20, z: 10, r: 2.2, name: '水池' }, gate: { x: 0, z: -IND_BASE.z, name: '出发' }
+        };
         function indGoBase(fromTrip) {
             indClearWorld();
             ind.where = 'base'; ind.map = null; ind.exitT = 0;
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
-            let X = IND_BASE.x, Z = IND_BASE.z;
-            let fl = new THREE.Mesh(indGeo(new THREE.PlaneGeometry(2 * X + 20, 2 * Z + 20)), indMat(new THREE.MeshLambertMaterial({ color: 0xa5d6a7 })));
-            fl.rotation.x = -Math.PI / 2; indAdd(fl);
-            let pad = new THREE.Mesh(indGeo(new THREE.PlaneGeometry(2 * X, 2 * Z)), indMat(new THREE.MeshLambertMaterial({ color: 0xbcaaa4 })));
-            pad.rotation.x = -Math.PI / 2; pad.position.y = 0.01; indAdd(pad);
+            let X = IND_BASE.x, Z = IND_BASE.z, F = IND_FIELD;
+            indPlane(2 * X + 30, 2 * Z + 30, 0xa5d6a7, 0, 0, 0);
+            indPlane(2 * X, 2 * Z, 0xbcaaa4, 0, 0.01, 0);
+            indPlane(F.x1 - F.x0, F.z1 - F.z0, 0x6d4c41, (F.x0 + F.x1) / 2, 0.02, (F.z0 + F.z1) / 2);
+            indSign('农田', (F.x0 + F.x1) / 2, 2.5, F.z0 - 1, 2.4, 0.6);
             indBox(2 * X, 0.6, 0.2, 0x6d4c41, 0, 0.3, Z); indBox(0.2, 0.6, 2 * Z, 0x6d4c41, -X, 0.3, 0); indBox(0.2, 0.6, 2 * Z, 0x6d4c41, X, 0.3, 0);
             indBox(X - 2.5, 0.6, 0.2, 0x6d4c41, -(X + 2.5) / 2, 0.3, -Z); indBox(X - 2.5, 0.6, 0.2, 0x6d4c41, (X + 2.5) / 2, 0.3, -Z);
-            let b = IND_BASE_ST.box; indBox(2.2, 1.2, 1.6, 0x455a64, b.x, 0.6, b.z); indSign(b.name, b.x, 2.2, b.z, 2.4, 0.6);
-            let g = IND_BASE_ST.gate; indBox(0.4, 3.2, 0.4, 0x5d4037, g.x - 2.4, 1.6, g.z); indBox(0.4, 3.2, 0.4, 0x5d4037, g.x + 2.4, 1.6, g.z); indBox(5.2, 0.5, 0.5, 0x5d4037, g.x, 3.3, g.z);
+            let S = IND_BASE_ST;
+            indBox(2.2, 1.2, 1.6, 0x455a64, S.box.x, 0.6, S.box.z); indSign(S.box.name, S.box.x, 2.2, S.box.z, 2.4, 0.6);
+            indBox(2.4, 1.0, 1.6, 0xb71c1c, S.stove.x, 0.5, S.stove.z); indSign(S.stove.name, S.stove.x, 2.2, S.stove.z, 2.4, 0.6);
+            indBox(2.2, 0.5, 3.2, 0x5c6bc0, S.bed.x, 0.25, S.bed.z); indSign(S.bed.name, S.bed.x, 1.8, S.bed.z, 2, 0.5);
+            let pool = new THREE.Mesh(indGeo(new THREE.CylinderGeometry(S.pool.r, S.pool.r, 0.15, 24)), indMat(new THREE.MeshLambertMaterial({ color: 0x29b6f6 })));
+            pool.position.set(S.pool.x, 0.08, S.pool.z); indAdd(pool); indSign(S.pool.name, S.pool.x, 1.6, S.pool.z, 1.8, 0.45);
+            let g = S.gate; indBox(0.4, 3.2, 0.4, 0x5d4037, g.x - 2.4, 1.6, g.z); indBox(0.4, 3.2, 0.4, 0x5d4037, g.x + 2.4, 1.6, g.z); indBox(5.2, 0.5, 0.5, 0x5d4037, g.x, 3.3, g.z);
             indSign('出发（远征）', g.x, 4.3, g.z, 3.2, 0.8);
-            indItemMesh();
+            ind.itemMesh = indInst(new THREE.BoxGeometry(0.5, 0.5, 0.5), IND_ITEM_CAP); ind.itemDirty = true;
+            ind.cropMesh = indInst(new THREE.ConeGeometry(0.5, 1, 6), IND_CROP_CAP); ind.cropDirty = true;
             ind.p.x = 0; ind.p.z = fromTrip ? -IND_BASE.z + 4 : 4; ind.p.y = 0; ind.p.vy = 0;
             if (fromTrip) {
-                // 带回来的东西直接进仓库箱
                 let got = Object.keys(ind.bag).map(function (k) { indBoxAdd(k, ind.bag[k]); return indName(k) + '×' + ind.bag[k]; });
                 ind.bag = {}; ind.base.trips++;
                 indSave();
@@ -316,6 +454,7 @@
 
         // 远征：地形（一个网格，颜色按地貌）、水面、资源点（一个 InstancedMesh）、两个撤离点
         const IND_SEG = 120, IND_NODE_N = 420;
+        const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin'];
         function indGoTrip(seed) {
             indClearWorld();
             ind.where = 'trip'; ind.exitT = 0;
@@ -333,24 +472,23 @@
             geo.computeVertexNormals();
             indAdd(new THREE.Mesh(geo, indMat(new THREE.MeshLambertMaterial({ vertexColors: true }))));
             let wat = new THREE.Mesh(indGeo(new THREE.PlaneGeometry(IND_MAP * 2, IND_MAP * 2)), indMat(new THREE.MeshLambertMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.75 })));
-            wat.rotation.x = -Math.PI / 2; wat.position.y = -1.2; indAdd(wat);
-            // 资源点：按地貌的权重挑，铀只在古老岩层、硫只在火山（地貌表里已经限定）
-            let r = indRng(M.seed ^ 0x9e3779b9);
+            wat.rotation.x = -Math.PI / 2; wat.position.y = IND_WATER_Y; indAdd(wat);
+            // 资源点：按地貌的权重挑；悠闲世界只刷 IND_CASUAL_RES 里的
+            let r = indRng(M.seed ^ 0x9e3779b9), casual = ind.base.rule === 'casual';
             for (let i = 0; i < IND_NODE_N; i++) {
                 let x = (r() * 2 - 1) * (IND_MAP - 4), z = (r() * 2 - 1) * (IND_MAP - 4);
                 if (Math.hypot(x, z) < 8) continue;
-                let h = indHeight(M, x, z); if (h < -1.0) continue;   // 水下不放
-                let bm = indBiome(M, x, z), res = IND_BIOMES[bm].res, tot = 0;
-                Object.keys(res).forEach(function (k) { tot += res[k]; });
+                let h = indHeight(M, x, z); if (h < -1.0) continue;
+                let res = IND_BIOMES[indBiome(M, x, z)].res, tot = 0, ks = Object.keys(res).filter(function (k) { return !casual || IND_CASUAL_RES[k]; });
+                ks.forEach(function (k) { tot += res[k]; });
                 let pick = r() * tot, key = null;
-                Object.keys(res).some(function (k) { pick -= res[k]; if (pick <= 0) { key = k; return true; } return false; });
+                ks.some(function (k) { pick -= res[k]; if (pick <= 0) { key = k; return true; } return false; });
+                let roll = r();
                 if (!key) continue;
                 let nd = IND_NODES[key];
-                ind.nodes.push({ key: key, x: x, z: z, y: h, n: nd.give[0] + Math.floor(r() * (nd.give[1] - nd.give[0] + 1)), dead: false });
+                ind.nodes.push({ key: key, x: x, z: z, y: h, n: nd.give[0] + Math.floor(roll * (nd.give[1] - nd.give[0] + 1)), seed: IND_SEED_KINDS[Math.floor(r() * IND_SEED_KINDS.length)], dead: false });
             }
-            let nm = new THREE.InstancedMesh(indGeo(new THREE.DodecahedronGeometry(0.7, 0)), indMat(new THREE.MeshLambertMaterial({ color: 0xffffff })), ind.nodes.length || 1);
-            nm.frustumCulled = false; indAdd(nm); ind.nodeMesh = nm; ind.nodeDirty = true;
-            // 出生点在地图中间；撤离点：回出发的门（出生点旁边）+ 地图上随机两个
+            ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true;
             ind.exits.push({ x: 0, z: 6, name: '回家的门' });
             for (let i = 0; i < 2; i++) { let a = r() * Math.PI * 2, d = IND_MAP * (0.45 + r() * 0.35); ind.exits.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, name: '撤离点' }); }
             ind.exits.forEach(function (e) {
@@ -362,18 +500,18 @@
                 indSign(e.name, e.x, y + 3.2, e.z, 2.6, 0.65);
             });
             ind.p.x = 0; ind.p.z = -4; ind.p.y = indHeight(M, 0, -4); ind.p.vy = 0;
-            indSave();   // 出门前存一次（基地里放的东西）
+            indSave();
             indFlash('出发了！走回绿色撤离圈里站 ' + IND_T.extract + ' 秒才算带回来');
         }
         function indSyncNodes() {
             if (!ind.nodeMesh || !ind.nodeDirty) return;
-            if (!IND_DUMMY) { IND_DUMMY = new THREE.Object3D(); IND_COL = new THREE.Color(); }
+            indDummy();
             let n = 0;
             ind.nodes.forEach(function (o, i) {
                 if (o.dead) return;
                 IND_DUMMY.position.set(o.x, o.y + 0.45, o.z); IND_DUMMY.rotation.set(0, i, 0);
                 IND_DUMMY.scale.setScalar(o.key === 'wood' ? 1.3 : 1); IND_DUMMY.updateMatrix();
-                ind.nodeMesh.setMatrixAt(n, IND_DUMMY.matrix); ind.nodeMesh.setColorAt(n, IND_COL.setHex(IND_ITEMS[o.key].col)); n++;
+                ind.nodeMesh.setMatrixAt(n, IND_DUMMY.matrix); ind.nodeMesh.setColorAt(n, IND_COL.setHex(IND_NODE_COL[o.key] || IND_ITEMS[o.key].col)); n++;
             });
             ind.nodeMesh.count = n; ind.nodeMesh.instanceMatrix.needsUpdate = true;
             if (ind.nodeMesh.instanceColor) ind.nodeMesh.instanceColor.needsUpdate = true;
@@ -389,9 +527,14 @@
             indTick(dt);
             if (ind && !ind.over) { indRender(); ind.raf = requestAnimationFrame(indLoop); }
         }
-        function indGround(x, z) { return ind.where === 'trip' ? Math.max(-1.2, indHeight(ind.map, x, z)) : 0; }
+        function indGround(x, z) { return ind.where === 'trip' ? Math.max(IND_WATER_Y, indHeight(ind.map, x, z)) : 0; }
+        function indInWater() { return ind.where === 'trip' && indHeight(ind.map, ind.p.x, ind.p.z) < IND_WATER_Y + 0.2; }
         function indTick(dt) {
             ind.t += dt;
+            let live = !!ind.base.rule;   // 还没选规则时时间不走
+            if (live) { ind.base.clock += dt; indSurvTick(dt); indCropTick(dt); }
+            indStoveTick(dt);
+            if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
                 let g = IND_BASE_ST.gate;
@@ -401,9 +544,46 @@
                 ind.exitT = inExit ? ind.exitT + dt : 0;
                 if (ind.exitT >= IND_T.extract) indGoBase(true);
             }
-            indSyncItems(); indSyncNodes();
+            indSyncItems(); indSyncNodes(); indSyncCrops();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
+            ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
             ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); }
+        }
+        // 生存值：饱食、口渴、精力按时间掉；拉肚子口渴掉 3 倍；夜里在外面精力掉 3 倍；
+        // 到 0：悠闲只是变慢；硬核饿了每秒扣 1 血、渴了每秒扣 2 血，血到 0 就死
+        function indSurvTick(dt) {
+            let S = ind.base.surv, Q = IND_SURV;
+            if (ind.sickT > 0) ind.sickT -= dt;
+            S.food = Math.max(0, S.food - Q.food * dt);
+            S.water = Math.max(0, S.water - Q.water * (ind.sickT > 0 ? Q.sickWater : 1) * dt);
+            let em = (ind.running ? Q.runEnergy : 1) * (ind.where === 'trip' && indIsNight() ? Q.nightOut : 1);
+            S.energy = Math.max(0, S.energy - Q.energy * em * dt);
+            if (indHard()) {
+                let dmg = (S.food <= 0 ? Q.starveHp : 0) + (S.water <= 0 ? Q.thirstHp : 0);
+                if (dmg > 0) { S.hp -= dmg * dt; ind.lastHurt = S.water <= 0 ? '渴死' : '饿死'; }
+                else if (S.food > 30 && S.water > 30) S.hp = Math.min(100, S.hp + Q.regen * dt);
+                if (S.hp <= 0) indDie(ind.lastHurt || '倒下');
+            }
+        }
+        function indSlow() { let S = ind.base.surv; return S.food <= 0 || S.water <= 0 || S.energy <= 0; }
+        function indDie(cause) {
+            if (!ind || ind.over) return;
+            let lost = Object.keys(ind.bag).length;
+            ind.bag = {};
+            let S = ind.base.surv; S.hp = 100; S.food = Math.max(S.food, 40); S.water = Math.max(S.water, 40); S.energy = Math.max(S.energy, 50);
+            indGoBase(null);
+            indSave();
+            indFlash('死因：' + cause + (lost ? '。身上的东西都没了' : ''));
+        }
+        // 作物：浇过水（当天）全速长，没浇水半速
+        function indCropTick(dt) {
+            let clock = ind.base.clock, ch = false;
+            ind.base.crops.forEach(function (c) {
+                let C = IND_CROPS[c.k]; if (c.g >= C.grow) return;
+                let was = c.g; c.g = Math.min(C.grow, c.g + dt * (c.wet > clock ? 1 : 0.5));
+                if (Math.floor(was / C.grow * 4) !== Math.floor(c.g / C.grow * 4)) ch = true;
+            });
+            if (ch) ind.cropDirty = true;
         }
         function indMove(dt) {
             let R = ind, k = R.k, blocked = !!R.panel;
@@ -411,16 +591,19 @@
             if (cd.lengthSq() < 1e-6) cd.set(0, 0, -1); cd.normalize();
             let fwd = blocked ? 0 : (k.w ? 1 : 0) - (k.s ? 1 : 0), strafe = blocked ? 0 : (k.d ? 1 : 0) - (k.a ? 1 : 0);
             if (!blocked && !fwd && !strafe && gState.control === 'pad') { fwd = -tMove.y; strafe = tMove.x; }
-            let mx = cd.x * fwd - cd.z * strafe, mz = cd.z * fwd + cd.x * strafe;
-            let sp = IND_T.speed * (k.run ? IND_T.run : 1);
-            if (mx || mz) {
+            let mx = cd.x * fwd - cd.z * strafe, mz = cd.z * fwd + cd.x * strafe, moving = !!(mx || mz);
+            let S = R.base.surv, canRun = k.run && moving && R.stam > 0 && S.energy > 0;
+            R.running = canRun;
+            R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt);
+            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indInWater() ? 0.6 : 1);
+            if (moving) {
                 let n = Math.hypot(mx, mz), run = Math.min(1, n); mx /= n; mz /= n;
                 R.p.x += mx * sp * run * dt; R.p.z += mz * sp * run * dt;
                 R.me.rotation.y = Math.atan2(mx, mz);
             }
             let lim = R.where === 'base' ? { x: IND_BASE.x - 0.6, z: IND_BASE.z - 0.6 } : { x: IND_MAP - 1, z: IND_MAP - 1 };
             R.p.x = Math.max(-lim.x, Math.min(lim.x, R.p.x));
-            let zMin = R.where === 'base' && Math.abs(R.p.x) < IND_T.gateR ? -IND_BASE.z - 1 : -lim.z;   // 门口能走出去
+            let zMin = R.where === 'base' && Math.abs(R.p.x) < IND_T.gateR ? -IND_BASE.z - 1 : -lim.z;
             R.p.z = Math.max(zMin, Math.min(lim.z, R.p.z));
             let gy = indGround(R.p.x, R.p.z);
             if (k.jump && R.p.y <= gy + 0.001 && !blocked) R.p.vy = 9;
@@ -429,10 +612,14 @@
             R.me.position.set(R.p.x, R.p.y, R.p.z);
         }
         function indRender() {
+            // 夜里：天空和雾变暗，屏幕盖一层半透明黑（不改场景里原有的灯）
+            let d = indDark(), nightEl = document.getElementById('ind-night');
+            if (nightEl) nightEl.style.opacity = (d * 0.55).toFixed(3);
+            if (ind.where === 'trip' && scene.fog) { scene.fog.far = 160 - d * 110; scene.fog.near = 60 - d * 50; }
             let eye = camera.position.clone(), rx = camera.rotation.x, ry = camera.rotation.y, rz = camera.rotation.z;
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir);
-            let d = IND_CAM.back, cx = eye.x - dir.x * d, cz = eye.z - dir.z * d;
-            let cy = Math.max(indGround(cx, cz) + 0.6, eye.y - dir.y * d + IND_CAM.up);
+            let dd = IND_CAM.back, cx = eye.x - dir.x * dd, cz = eye.z - dir.z * dd;
+            let cy = Math.max(indGround(cx, cz) + 0.6, eye.y - dir.y * dd + IND_CAM.up);
             camera.position.set(cx, cy, cz);
             camera.lookAt(eye.x + dir.x * 60, eye.y + dir.y * 60, eye.z + dir.z * 60);
             renderer.render(scene, camera);
@@ -440,37 +627,75 @@
         }
 
         // ── 瞄准和动作 ──
-        // 面前 2.6 米内、朝镜头方向的最近目标：资源点 / 地上的东西 / 仓库箱
+        function indFace() { let f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); return f.normalize(); }
+        function indInField(x, z) { let F = IND_FIELD; return x >= F.x0 && x <= F.x1 && z >= F.z0 && z <= F.z1; }
+        function indTileAt(x, z) { let F = IND_FIELD, t = F.tile; return { x: F.x0 + (Math.floor((x - F.x0) / t) + 0.5) * t, z: F.z0 + (Math.floor((z - F.z0) / t) + 0.5) * t }; }
+        function indCropAt(x, z) { return ind.base.crops.filter(function (c) { return Math.abs(c.x - x) < 0.01 && Math.abs(c.z - z) < 0.01; })[0] || null; }
+        // 面前 2.6 米内、朝镜头方向的最近目标
         function indAim() {
-            let R = ind, f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
-            let best = null, bd = 1e9;
-            let consider = function (o, x, z, kind) {
-                let dx = x - R.p.x, dz = z - R.p.z, d = Math.hypot(dx, dz);
+            let R = ind, f = indFace(), best = null, bd = 1e9;
+            let consider = function (o, x, z, kind, r) {
+                let dx = x - R.p.x, dz = z - R.p.z, d = Math.hypot(dx, dz) - (r || 0);
                 if (d > IND_T.pickR) return;
-                if (d > 0.6 && (dx * f.x + dz * f.z) / d < 0.3) return;
+                if (d > 0.6 && (dx * f.x + dz * f.z) / Math.max(0.01, Math.hypot(dx, dz)) < 0.3) return;
                 if (d < bd) { bd = d; best = { kind: kind, o: o }; }
             };
             if (R.where === 'trip') R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node'); });
             else {
                 R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item'); });
-                let b = IND_BASE_ST.box; consider(b, b.x, b.z + 0.8, 'box');
+                R.base.crops.forEach(function (c) { consider(c, c.x, c.z, 'crop'); });
+                let S = IND_BASE_ST;
+                consider(S.box, S.box.x, S.box.z + 0.8, 'box'); consider(S.stove, S.stove.x, S.stove.z + 0.8, 'stove');
+                consider(S.bed, S.bed.x, S.bed.z + 1.6, 'bed'); consider(S.pool, S.pool.x, S.pool.z, 'pool', S.pool.r);
             }
             return best;
         }
+        // 左键：采集、拿、收菜、打开；对着空的农田格子、手里拿着种子：种下
         function indAction() {
             if (!ind || ind.over || ind.panel) return;
-            let a = indAim(); if (!a) return;
-            if (a.kind === 'node') indGather(a.o);
-            else if (a.kind === 'item') indPickItem(a.o);
-            else if (a.kind === 'box') indPanelBox();
+            let a = indAim();
+            if (a && a.kind === 'node') return indGather(a.o);
+            if (a && a.kind === 'item') return indPickItem(a.o);
+            if (a && a.kind === 'crop' && indCropRipe(a.o)) return indHarvest(a.o);
+            if (a && a.kind === 'box') return indPanelBox();
+            if (a && a.kind === 'stove') return indPanelStove();
+            if (a && a.kind === 'bed') return indSleep();
+            let k = indSel();
+            if (ind.where === 'base' && k && IND_ITEMS[k].seed) return indPlant(k);
+        }
+        // 右键：吃喝、浇水、接水
+        function indUse() {
+            if (!ind || ind.over || ind.panel) return;
+            let k = indSel(); if (!k) return;
+            let a = indAim();
+            if (k === 'bucket') {
+                if (a && a.kind === 'pool') { indBagDel('bucket', 1); indBagAdd('water_raw', 1); indSelect('water_raw'); indFlash('接了一桶生水'); return true; }
+                if (indInWater()) { indBagDel('bucket', 1); indBagAdd('water_sea', 1); indSelect('water_sea'); indFlash('接了一桶海水'); return true; }
+                indFlash('到水池或海边才能接水'); return false;
+            }
+            if ((k === 'water_raw' || k === 'water_boiled') && a && a.kind === 'crop') return indWater(a.o, k);
+            if (IND_ITEMS[k].eat) return indEat(k);
+            return false;
+        }
+        function indEat(k) {
+            let e = IND_ITEMS[k].eat, S = ind.base.surv;
+            indBagDel(k, 1);
+            if (e.f) S.food = Math.max(0, Math.min(100, S.food + e.f));
+            if (e.w) S.water = Math.max(0, Math.min(100, S.water + e.w));
+            if (e.back) indBagAdd(e.back, 1);
+            let sick = e.sick && indRand() < e.sick;
+            if (sick) ind.sickT = IND_SURV.sick;
+            indFlash((e.w && !e.f ? '喝了' : '吃了') + indName(k) + (e.w < 0 ? '，越喝越渴' : '') + (sick ? '，肚子不舒服' : ''));
+            return true;
         }
         function indGather(o) {
             let nd = IND_NODES[o.key], tool = indTool();
             if (tool < nd.tool) { indFlash(indName(o.key) + '要' + IND_TOOL_NAME[nd.tool] + '才挖得动'); return false; }
-            let got = indBagAdd(o.key, o.n);
+            let key = o.key === 'seeds' ? o.seed : o.key;
+            let got = indBagAdd(key, o.n);
             if (got <= 0) { indFlash('身上放不下了'); return false; }
             o.n -= got; if (o.n <= 0) { o.dead = true; ind.nodeDirty = true; }
-            indFlash('+' + got + ' ' + indName(o.key));
+            indFlash('+' + got + ' ' + indName(key));
             return true;
         }
         function indPickItem(o) {
@@ -478,51 +703,182 @@
             let G = ind.base.ground, i = G.indexOf(o); if (i >= 0) G.splice(i, 1);
             ind.itemDirty = true; indSave();
         }
-        // Q：在基地里把选中的东西放在脚边（永久保存）；远征里放下就是扔掉（地图下次就没了）
+        function indPlant(k) {
+            let f = indFace(), x = ind.p.x + f.x * 1.4, z = ind.p.z + f.z * 1.4;
+            if (!indInField(x, z)) { indFlash('种子要种在农田里'); return false; }
+            let t = indTileAt(x, z);
+            if (indCropAt(t.x, t.z)) { indFlash('这一格已经种了'); return false; }
+            if (ind.base.crops.length >= IND_CROP_CAP) { indFlash('种满了'); return false; }
+            indBagDel(k, 1);
+            ind.base.crops.push({ k: IND_ITEMS[k].seed, x: t.x, z: t.z, g: 0, wet: 0, times: 0 });
+            ind.cropDirty = true; indSave();
+            return true;
+        }
+        // 一桶水浇 2.5 米内的作物，管到当天结束
+        function indWater(c, k) {
+            indBagDel(k, 1); indBagAdd('bucket', 1);
+            let end = (Math.floor(ind.base.clock / IND_DAY) + 1) * IND_DAY, n = 0;
+            ind.base.crops.forEach(function (o) { if (Math.hypot(o.x - c.x, o.z - c.z) <= 2.5) { o.wet = end; n++; } });
+            ind.cropDirty = true; indSave();
+            indFlash('浇了 ' + n + ' 棵');
+            return true;
+        }
+        function indHarvest(c) {
+            let C = IND_CROPS[c.k], y = indRoll(C.yield), s = indRoll(C.seeds);
+            if (indBagAdd(c.k, y) <= 0) { indFlash('身上放不下了'); return false; }
+            if (s > 0) indBagAdd('seed_' + c.k, s);
+            c.times++;
+            if (C.regrow && c.times < C.times) c.g = C.grow - C.regrow;   // 番茄：再长一阵还能结
+            else { let i = ind.base.crops.indexOf(c); if (i >= 0) ind.base.crops.splice(i, 1); }
+            ind.cropDirty = true; indSave();
+            indFlash('收了 ' + y + ' 个' + C.name + (s > 0 ? '，留了 ' + s + ' 颗种子' : ''));
+            return true;
+        }
+        // 睡觉：只在基地的床上；睡到下一个早上，精力补满；睡着的时间饱食口渴按三成掉；作物和灶台照样过时间
+        function indSleep() {
+            let S = ind.base.surv;
+            if (!indIsNight() && S.energy > 70) { indFlash('还不困（夜里或者累了才能睡）'); return false; }
+            let skip = (Math.floor(ind.base.clock / IND_DAY) + 1) * IND_DAY - ind.base.clock;
+            ind.base.clock += skip;
+            S.food = Math.max(0, S.food - IND_SURV.food * 0.3 * skip); S.water = Math.max(0, S.water - IND_SURV.water * 0.3 * skip);
+            S.energy = 100;
+            ind.base.crops.forEach(function (c) { let C = IND_CROPS[c.k]; c.g = Math.min(C.grow, c.g + skip * (c.wet > ind.base.clock - skip ? 0.75 : 0.5)); });
+            ind.sleeping = true; for (let t = 0; t < skip; t += 1) indStoveTick(1); ind.sleeping = false;
+            ind.cropDirty = true; indSave();
+            indFlash('一觉睡到' + indClockTxt());
+            return true;
+        }
+        // Q：在基地里把选中的东西放在脚边（永久保存）；远征里放下就是扔掉
         function indDrop() {
             if (!ind || ind.over || ind.panel) return;
             let k = indSel(); if (!k) return;
             if (ind.where === 'trip') { indBagDel(k, 1); indFlash('扔掉了 1 个' + indName(k)); return; }
             if (ind.base.ground.length >= IND_ITEM_CAP) { indFlash('地上放太多了'); return; }
             indBagDel(k, 1);
-            let a = ind.base.ground.length * 2.399, rr = 0.25 * Math.sqrt(ind.base.ground.length % 12);
-            let f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; f.normalize();
+            let a = ind.base.ground.length * 2.399, rr = 0.25 * Math.sqrt(ind.base.ground.length % 12), f = indFace();
             let x = ind.p.x + f.x * 1.0 + Math.cos(a) * rr, z = ind.p.z + f.z * 1.0 + Math.sin(a) * rr;
             x = Math.max(-IND_BASE.x + 0.5, Math.min(IND_BASE.x - 0.5, x)); z = Math.max(-IND_BASE.z + 0.5, Math.min(IND_BASE.z - 0.5, z));
             ind.base.ground.push({ k: k, x: x, z: z });
             ind.itemDirty = true; indSave();
         }
 
-        // ── 仓库箱 ──
+        // ── 灶台 ──
+        // 温度每秒往火候的温度靠 50°C（关火每秒降 10°C）；燃料按火候烧；原料够了、温度到了就开始做，
+        // 做的时候温度超过烧焦线累计 8 秒，出来的就是焦炭
+        function indStoveFind(items) {
+            for (let i = 0; i < IND_RECIPES.length; i++) {
+                let r = IND_RECIPES[i];
+                if (Object.keys(r.in).every(function (k) { return (items[k] || 0) >= r.in[k]; })) return i;
+            }
+            return -1;
+        }
+        function indStoveTick(dt) {
+            let S = ind.base.stove, F = IND_FIRE[S.fire];
+            if (S.fire > 0) {
+                S.fuel -= F.burn * dt;
+                if (S.fuel <= 0) { S.fuel = 0; S.fire = 0; if (ind.panel === 'stove') ind.panelDirty = true; }
+            }
+            let target = IND_FIRE[S.fire].t;
+            if (S.temp < target) S.temp = Math.min(target, S.temp + 50 * dt); else S.temp = Math.max(target, S.temp - (S.fire > 0 ? 50 : 10) * dt);
+            if (!S.cook) {
+                let i = indStoveFind(S.items);
+                if (i >= 0 && S.temp >= IND_RECIPES[i].minT) S.cook = { i: i, t: 0, burn: 0 };
+                return;
+            }
+            let r = IND_RECIPES[S.cook.i];
+            if (Object.keys(r.in).some(function (k) { return (S.items[k] || 0) < r.in[k]; })) { S.cook = null; return; }   // 原料被拿走了
+            if (S.temp >= r.minT) S.cook.t += dt;
+            if (r.burnT && S.temp > r.burnT) S.cook.burn += dt;
+            if (S.cook.t >= r.time || S.cook.burn >= IND_BURN_S) {
+                let burnt = S.cook.burn >= IND_BURN_S;
+                Object.keys(r.in).forEach(function (k) { S.items[k] -= r.in[k]; if (S.items[k] <= 0) delete S.items[k]; });
+                let out = burnt ? { char: 1 } : r.out;
+                if (burnt && r.out.bucket) out = { char: 1, bucket: r.out.bucket };   // 烧焦了桶还在
+                Object.keys(out).forEach(function (k) { S.out[k] = (S.out[k] || 0) + out[k]; });
+                S.cook = null;
+                if (ind.panel === 'stove') ind.panelDirty = true;
+                if (!ind.sleeping) indFlash(burnt ? '烧焦了！' : '做好了：' + Object.keys(r.out).filter(function (k) { return k !== 'bucket'; }).map(indName).join('、'));
+            }
+        }
+        function indStovePut(k, n) {
+            if (!ind || !ind.bag[k]) return;
+            let S = ind.base.stove;
+            if (!S.items[k] && Object.keys(S.items).length >= IND_STOVE_CAP) { indFlash('灶台上放不下了'); return; }
+            let t = indBagDel(k, n || 1); S.items[k] = (S.items[k] || 0) + t;
+            indSave(); indPanelStove();
+        }
+        function indStoveFuel(k) {
+            if (!ind || !ind.bag[k] || !IND_ITEMS[k].fuel) return;
+            indBagDel(k, 1); ind.base.stove.fuel += IND_ITEMS[k].fuel;
+            indSave(); indPanelStove();
+        }
+        function indStoveFire(lv) {
+            if (!ind) return;
+            let S = ind.base.stove;
+            if (lv > 0 && S.fuel <= 0) { indFlash('先加燃料（木头、木炭、煤）'); return; }
+            S.fire = lv; indSave(); indPanelStove();
+        }
+        function indStoveTakeAll() {
+            if (!ind) return;
+            let S = ind.base.stove, left = 0;
+            [S.out, S.items].forEach(function (st) { Object.keys(st).forEach(function (k) { let t = indBagAdd(k, st[k]); st[k] -= t; if (st[k] <= 0) delete st[k]; else left += st[k]; }); });
+            S.cook = null;
+            if (left) indFlash('身上放不下了，还剩 ' + left + ' 个在灶台上');
+            indSave(); indPanelStove();
+        }
+
+        // ── 面板：仓库箱、灶台 ──
         const IND_BTN = 'margin:3px;padding:7px 12px;border:none;border-radius:6px;background:#455a64;color:#fff;font-size:14px;cursor:pointer;';
+        const IND_PANEL_CSS = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;background:#fff;border-radius:10px;padding:14px;width:min(92vw,440px);max-height:76vh;overflow:auto;font-family:"Microsoft YaHei",sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.3);';
         function indPanelClose() { let p = document.getElementById('ind-panel'); if (p && p.parentNode) p.parentNode.removeChild(p); if (ind) ind.panel = null; }
-        function indPanelBox() {
+        function indPanelShow(kind, html) {
             indPanelClose(); if (!ind) return;
             if (document.pointerLockElement) document.exitPointerLock();
-            ind.panel = 'box';
+            ind.panel = kind; ind.panelDirty = false;
+            let p = document.createElement('div'); p.id = 'ind-panel'; p.style.cssText = IND_PANEL_CSS; p.innerHTML = html;
+            document.body.appendChild(p);
+        }
+        function indRow(left, right) { return '<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eee;"><span>' + left + '</span><span>' + right + '</span></div>'; }
+        function indPanelBox() {
+            if (!ind) return;
             let box = ind.base.box, ks = Object.keys(box);
             let rows = ks.length ? ks.map(function (k) {
-                return '<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eee;"><span>' + indName(k) + ' × ' + box[k] + '</span><span>' +
-                    '<button style="' + IND_BTN + '" onclick="indBoxTake(\'' + k + '\',1)">拿 1</button><button style="' + IND_BTN + '" onclick="indBoxTake(\'' + k + '\',' + IND_STACK + ')">全拿</button></span></div>';
+                return indRow(indName(k) + ' × ' + box[k], '<button style="' + IND_BTN + '" onclick="indBoxTake(\'' + k + '\',1)">拿 1</button><button style="' + IND_BTN + '" onclick="indBoxTake(\'' + k + '\',' + IND_STACK + ')">全拿</button>');
             }).join('') : '<div style="color:#999;padding:8px 0;">空的</div>';
-            let p = document.createElement('div'); p.id = 'ind-panel';
-            p.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;background:#fff;border-radius:10px;padding:14px;width:min(92vw,420px);max-height:70vh;overflow:auto;font-family:"Microsoft YaHei",sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.3);';
-            p.innerHTML = '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">仓库箱</div>' + rows +
-                '<div style="margin-top:8px;text-align:right;"><button id="ind-box-putall" style="' + IND_BTN + 'background:#2e7d32;" onclick="indBoxPutAll()">身上的全部存入</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>';
-            document.body.appendChild(p);
+            indPanelShow('box', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">仓库箱</div>' + rows +
+                '<div style="margin-top:8px;text-align:right;"><button id="ind-box-putall" style="' + IND_BTN + 'background:#2e7d32;" onclick="indBoxPutAll()">身上的全部存入</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
         function indBoxTake(k, n) {
             if (!ind || !ind.base.box[k]) return;
             let t = indBagAdd(k, Math.min(n, ind.base.box[k]));
             if (t <= 0) indFlash('身上放不下了');
             ind.base.box[k] -= t; if (ind.base.box[k] <= 0) delete ind.base.box[k];
-            indSave(); indPanelBox();
+            indSave(); if (ind.panel === 'box') indPanelBox();
         }
         function indBoxPutAll() {
             if (!ind || ind.where !== 'base') return;
             Object.keys(ind.bag).forEach(function (k) { indBoxAdd(k, ind.bag[k]); });
             ind.bag = {}; indSave(); indPanelBox();
         }
+        function indStoveHtml() {
+            let S = ind.base.stove, F = IND_FIRE[S.fire];
+            let st = '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + '<br>';
+            if (S.cook) { let r = IND_RECIPES[S.cook.i]; st += '正在做：' + Object.keys(r.out).filter(function (k) { return k !== 'bucket'; }).map(indName).join('、') + ' ' + Math.floor(S.cook.t / r.time * 100) + '%'; }
+            else st += '<span style="color:#888">原料放够、温度到了就自己开始做</span>';
+            let fire = IND_FIRE.map(function (f, i) { return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + f.name + '</button>'; }).join('');
+            let on = Object.keys(S.items).map(function (k) { return indName(k) + '×' + S.items[k]; }).join('、') || '空';
+            let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';
+            let put = Object.keys(ind.bag).map(function (k) {
+                let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button>';
+                if (IND_ITEMS[k].fuel) b += '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="indStoveFuel(\'' + k + '\')">当柴烧</button>';
+                return indRow(indName(k) + ' × ' + ind.bag[k], b);
+            }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
+            return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">灶台</div><div style="line-height:1.7;">' + st + '</div><div>' + fire + '</div>' +
+                '<div style="margin-top:6px;">锅里：' + on + '<br>做好的：' + out + '</div>' +
+                '<div style="margin-top:6px;font-weight:bold;">身上的东西</div>' + put +
+                '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indStoveTakeAll()">全部拿出来</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>';
+        }
+        function indPanelStove() { if (!ind) return; indPanelShow('stove', indStoveHtml()); }
 
         // ── 键盘、界面 ──
         const IND_KEYMAP = { w: 'w', a: 'a', s: 's', d: 'd', arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' };
@@ -536,8 +892,8 @@
             if (e.repeat) return;
             if (k === 'escape') { if (ind.panel) indPanelClose(); return; }
             if (ind.panel) return;
-            if (k === 'q' || k === 'g') indDrop(); else if (k === 'e' || k === 'f') indAction();
-            else if (/^[1-6]$/.test(k)) ind.selIdx = +k - 1;
+            if (k === 'q' || k === 'g') indDrop(); else if (k === 'e' || k === 'f') indAction(); else if (k === 'r') indUse();
+            else if (/^[1-9]$/.test(k)) ind.selIdx = +k - 1;
         }
         function indKeyUp(e) {
             if (!ind) return;
@@ -548,28 +904,39 @@
         function indUnbindKeys() { window.removeEventListener('keydown', indKeyDown); window.removeEventListener('keyup', indKeyUp); }
         function indHold(dir, on) { if (ind) ind.k[dir] = !!on; }
         function indBuildHud() {
+            let n = document.createElement('div'); n.id = 'ind-night';
+            n.style.cssText = 'position:fixed;inset:0;z-index:39;pointer-events:none;background:#0a1030;opacity:0;';
+            document.body.appendChild(n);
             let d = document.createElement('div'); d.id = 'ind-hud';
             d.style.cssText = 'position:fixed;inset:0;z-index:40;pointer-events:none;font-family:"Microsoft YaHei",sans-serif;color:#222;';
             d.innerHTML =
-                '<div id="ind-status" style="position:absolute;left:8px;top:8px;background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:15px;font-weight:bold;line-height:1.5;"></div>' +
+                '<div id="ind-status" style="position:absolute;left:8px;top:8px;background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
                 '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
                 '<div id="ind-hint" style="position:absolute;left:50%;bottom:150px;transform:translateX(-50%);color:#fff;padding:4px 12px;font-size:20px;font-weight:bold;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
-                '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,640px);text-align:center;pointer-events:auto;">' +
-                '<div id="ind-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:15px;"></div>' +
-                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onclick="indAction()">采集/拿</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下 (Q)</button>' +
+                '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
+                '<div id="ind-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div>' +
+                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onclick="indAction()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水 (R)</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下 (Q)</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'jump\',true)" ontouchend="indHold(\'jump\',false)" onmousedown="indHold(\'jump\',true)" onmouseup="indHold(\'jump\',false)">跳</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'run\',true)" ontouchend="indHold(\'run\',false)" onmousedown="indHold(\'run\',true)" onmouseup="indHold(\'run\',false)">跑</button></div></div>';
             document.body.appendChild(d);
         }
+        function indBar(name, v, col) {
+            return '<span style="display:inline-block;margin-right:8px;">' + name + ' <span style="display:inline-block;width:46px;height:8px;background:#ddd;border-radius:4px;vertical-align:middle;overflow:hidden;"><span style="display:block;height:100%;width:' + Math.round(Math.max(0, Math.min(100, v))) + '%;background:' + (v <= 15 ? '#e53935' : col) + ';"></span></span> ' + Math.round(v) + '</span>';
+        }
         function indHudUpdate() {
             let R = ind; if (!R || R.over) return;
-            let st;
-            if (R.where === 'base') st = '基地　远征过 ' + R.base.trips + ' 次';
+            if (R.panel === 'stove' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'); if (p) { p.innerHTML = indStoveHtml(); R.panelDirty = false; } }
+            let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
+            let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + rule + '<br>';
+            st += (indHard() ? indBar('血', S.hp, '#e53935') : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047');
+            if (R.sickT > 0) st += '<br><b style="color:#c62828">拉肚子 ' + Math.ceil(R.sickT) + ' 秒</b>';
+            if (indSlow()) st += '<br><b style="color:#c62828">' + (S.energy <= 0 ? '累得走不动' : '饿得/渴得走不动') + '</b>';
+            if (R.where === 'base') st += '<br>基地　远征过 ' + R.base.trips + ' 次';
             else {
                 let bm = IND_BIOMES[indBiome(R.map, R.p.x, R.p.z)].name;
                 let near = R.exits.reduce(function (a, e) { let dd = Math.hypot(R.p.x - e.x, R.p.z - e.z); return dd < a ? dd : a; }, 1e9);
-                st = '远征　' + bm + '　离出生点 ' + Math.round(Math.hypot(R.p.x, R.p.z)) + ' 米<br>最近的撤离点 ' + Math.round(near) + ' 米' + (R.exitT > 0 ? '　<b style="color:#2e7d32">撤离中 ' + Math.ceil(IND_T.extract - R.exitT) + '</b>' : '');
+                st += '<br>远征　' + bm + '　最近的撤离点 ' + Math.round(near) + ' 米' + (R.exitT > 0 ? '　<b style="color:#2e7d32">撤离中 ' + Math.ceil(IND_T.extract - R.exitT) + '</b>' : '');
             }
             let ks = Object.keys(R.bag), sel = indSel(), bag = '';
             for (let i = 0; i < IND_BAG_CAP; i++) {
@@ -578,10 +945,16 @@
                 bag += '<span onclick="ind.selIdx=' + i + '" style="display:inline-block;margin:2px;padding:3px 7px;border-radius:12px;cursor:pointer;border:2px solid ' + (k === sel ? '#5e35b1' : '#cfd8dc') + ';background:' + (k === sel ? '#ede7f6' : '#fff') + ';">' + (i + 1) + ' ' + indName(k) + '×' + R.bag[k] + '</span>';
             }
             let a = indAim(), hint = '';
-            if (a && a.kind === 'node') { let nd = IND_NODES[a.o.key]; hint = indName(a.o.key) + ' ×' + a.o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>'; }
+            if (a && a.kind === 'node') { let nd = IND_NODES[a.o.key], nm = a.o.key === 'seeds' ? '野生' + indName(a.o.seed) : indName(a.o.key); hint = nm + ' ×' + a.o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>'; }
             else if (a && a.kind === 'item') hint = indName(a.o.k) + '<br><small>左键：拿</small>';
+            else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (a.o.wet > R.base.clock ? '' : '　没浇水')) + '<br><small>' + (ripe ? '左键：收' : '拿着水，右键：浇水') + '</small>'; }
             else if (a && a.kind === 'box') hint = '仓库箱<br><small>左键：打开</small>';
+            else if (a && a.kind === 'stove') hint = '灶台 ' + Math.round(R.base.stove.temp) + '°C<br><small>左键：打开</small>';
+            else if (a && a.kind === 'bed') hint = '床<br><small>左键：睡觉（夜里或累了）</small>';
+            else if (a && a.kind === 'pool') hint = '水池<br><small>拿着空桶，右键：接水</small>';
+            else if (R.where === 'base' && sel && IND_ITEMS[sel].seed && indInField(R.p.x + indFace().x * 1.4, R.p.z + indFace().z * 1.4)) hint = '左键：种' + indName(sel);
             else if (R.where === 'base' && Math.hypot(R.p.x - IND_BASE_ST.gate.x, R.p.z - IND_BASE_ST.gate.z) < 6) hint = '从门里走出去就是远征';
+            else if (sel && IND_ITEMS[sel].eat) hint = '<small>右键：' + (IND_ITEMS[sel].eat.f ? '吃' : '喝') + indName(sel) + '</small>';
             let sig = st + '|' + bag + '|' + hint;
             if (sig === R.hudSig) return; R.hudSig = sig;
             let s = document.getElementById('ind-status'); if (s) s.innerHTML = st;
@@ -608,7 +981,7 @@
         })();
         const IND_ORIG_SELECT = selectGameMode;
         selectGameMode = function (m) {
-            if (m === 'industry' && !indVisible()) m = 'hunt';   // 藏起来的时候选不到
+            if (m === 'industry' && !indVisible()) m = 'hunt';
             IND_ORIG_SELECT(m);
             indRefreshButton(m);
             if (m === 'industry') {
@@ -618,7 +991,7 @@
         };
         const IND_ORIG_START = lobbyPrimaryStart;
         lobbyPrimaryStart = function () {
-            if (gState.gameMode === 'industry') { indEnter(); return; }   // 单人的，不跟队伍走
+            if (gState.gameMode === 'industry') { indEnter(); return; }
             return IND_ORIG_START.apply(this, arguments);
         };
 
@@ -629,3 +1002,5 @@
             for (let t = 0; t < secs - 1e-9 && ind && !ind.over; t += step) indTick(step);
         }
         function indTeleport(x, z) { if (!indDebugOn() || !ind || ind.loading) return; ind.p.x = x; ind.p.z = z; ind.p.y = indGround(x, z); }
+        // 面朝某个点（让瞄准对上）
+        function indLookAt(x, z) { if (!indDebugOn() || !ind) return; camera.rotation.set(-0.3, Math.atan2(-(x - ind.p.x), -(z - ind.p.z)), 0, 'YXZ'); camera.updateMatrixWorld(); }

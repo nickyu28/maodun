@@ -4330,7 +4330,7 @@ async function enterExit(tab, key) {
                 const bms = await T.eval(`(function(){ let s = {}; for (let x = -140; x <= 140; x += 7) for (let z = -140; z <= 140; z += 7) s[indBiome(ind.map, x, z)] = 1; return Object.keys(s).length; })()`);
                 if (bms < 4) bad.push('一张图里地貌太少 ' + bms);
                 // 采集：石稿能挖的点
-                const g = JSON.parse(await T.eval(`(function(){ let o = ind.nodes.filter(function (n) { return !n.dead && IND_NODES[n.key].tool <= 1; })[0]; indTeleport(o.x, o.z + 1); let before = ind.bag[o.key] || 0, ok = indGather(o); return JSON.stringify({ k: o.key, ok: ok, got: (ind.bag[o.key] || 0) - before }); })()`));
+                const g = JSON.parse(await T.eval(`(function(){ let o = ind.nodes.filter(function (n) { return !n.dead && n.key !== 'seeds' && IND_NODES[n.key].tool <= 1; })[0]; indTeleport(o.x, o.z + 1); let before = ind.bag[o.key] || 0, ok = indGather(o); return JSON.stringify({ k: o.key, ok: ok, got: (ind.bag[o.key] || 0) - before }); })()`));
                 if (!g.ok || g.got < 1) bad.push('采集失败 ' + JSON.stringify(g));
                 // 铁矿要铁稿：石稿挖不动
                 const fe = await T.eval(`(function(){ let o = { key: 'ore_fe', n: 2, dead: false }; return indGather(o) ? 'dug' : 'refused'; })()`);
@@ -4363,6 +4363,86 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND1 猫盾工业骨架：藏着看不到进不去；?hcdebug=1 能进基地；出门生成远征图、采集、稿子等级、撤离 3 秒回基地进仓库箱；基地存档读得回来；远征里回大厅身上的丢；进出不涨', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND2')) {
+            // IND2 第 2 阶段：第一次进来选规则（硬核不能退回悠闲）；生存值按时间掉；吃喝；接水、喝生水会拉肚子；种地、浇水、长熟、收获留种；
+            // 灶台加柴、火候、烧开水、大火烧焦；夜里上床睡到第二天早上；硬核饿渴到血 0 会死、身上的丢；悠闲不会死、远征不出矿；存档读得回来
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                const ask = await T.eval(`!document.getElementById('sys-modal').classList.contains('hidden') && /选一种玩法/.test(document.getElementById('sys-modal').innerText)`);
+                if (!ask) bad.push('新基地没让选规则');
+                const c0 = await T.eval(`ind.base.clock`); await T.eval(`indAdvance(5); true;`);
+                if ((await T.eval(`ind.base.clock`)) !== c0) bad.push('没选规则时间就走了');
+                await T.eval(`${HIDE} indSetRule('hard'); indSetRule('casual'); ind.rng = function () { return 0.99; }; true;`);
+                if ((await T.eval(`ind.base.rule`)) !== 'hard') bad.push('硬核居然退回了悠闲');
+                // 生存值：60 秒饱食掉约 2、口渴掉约 4
+                const s0 = JSON.parse(await T.eval(`JSON.stringify(ind.base.surv)`));
+                await T.eval(`indAdvance(60); true;`);
+                const s1 = JSON.parse(await T.eval(`JSON.stringify(ind.base.surv)`));
+                if (Math.abs((s0.food - s1.food) - 2) > 0.3 || Math.abs((s0.water - s1.water) - 4) > 0.3) bad.push('生存值掉得不对 ' + JSON.stringify([s0, s1]));
+                // 吃烤土豆 +30
+                const ate = await T.eval(`(function(){ ind.base.surv.food = 50; let f = ind.base.surv.food; indBoxTake('bake_potato', 1); indPanelClose(); indSelect('bake_potato'); indUse(); return ind.base.surv.food - f; })()`);
+                if (Math.abs(ate - 30) > 0.5) bad.push('烤土豆没加 30 饱食 ' + ate);
+                // 接水：拿空桶对着水池右键
+                await T.eval(`indBoxTake('bucket', 2); indPanelClose(); indTeleport(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z + 3.5); indLookAt(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z); indSelect('bucket'); indUse(); true;`);
+                if (!(await T.eval(`ind.bag.water_raw === 1 && ind.bag.bucket === 1`))) bad.push('水池接不到水 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 喝生水：随机数小于 0.3 就拉肚子，口渴掉 3 倍
+                await T.eval(`ind.rng = function () { return 0.1; }; indSelect('water_raw'); indUse(); ind.rng = function () { return 0.99; }; true;`);
+                if (!(await T.eval(`ind.sickT > 0 && ind.bag.bucket === 2`))) bad.push('喝生水没拉肚子或桶没还回来');
+                const w0 = await T.eval(`ind.base.surv.water`); await T.eval(`indAdvance(10); true;`);
+                const dw = w0 - (await T.eval(`ind.base.surv.water`));
+                if (Math.abs(dw - 2) > 0.2) bad.push('拉肚子时口渴没掉 3 倍 ' + dw);
+                // 种地：农田里对着空格子左键种小麦
+                await T.eval(`indBoxTake('seed_wheat', 6); indPanelClose(); indTeleport(-17, 3); indLookAt(-17, 1); indSelect('seed_wheat'); indAction(); true;`);
+                const crop = JSON.parse(await T.eval(`JSON.stringify(ind.base.crops)`));
+                if (crop.length !== 1 || crop[0].k !== 'wheat') bad.push('种不下去 ' + JSON.stringify(crop));
+                else {
+                    // 浇水：接一桶，对着作物右键；浇过的全速长，120 秒熟
+                    await T.eval(`(function(){ indTeleport(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z + 3.5); indLookAt(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z); indSelect('bucket'); indUse(); let c = ind.base.crops[0]; indTeleport(c.x, c.z + 1.2); indLookAt(c.x, c.z); indSelect('water_raw'); indUse(); })(); true;`);
+                    if (!(await T.eval(`ind.base.crops[0].wet > ind.base.clock`))) bad.push('浇不上水');
+                    await T.eval(`indAdvance(${120 - 1}); true;`);
+                    if (await T.eval(`indCropRipe(ind.base.crops[0])`)) bad.push('还没到时间就熟了');
+                    await T.eval(`indAdvance(2); true;`);
+                    const h = await T.eval(`(function(){ let c = ind.base.crops[0]; if (!indCropRipe(c)) return 'notripe'; indTeleport(c.x, c.z + 1.2); indLookAt(c.x, c.z); indAction(); return JSON.stringify({ n: ind.base.crops.length, wheat: ind.bag.wheat || 0, seed: ind.bag.seed_wheat || 0 }); })()`);
+                    if (h === 'notripe') bad.push('浇了水 121 秒还没熟');
+                    else { const hh = JSON.parse(h); if (hh.n !== 0 || hh.wheat < 2 || hh.seed < 6) bad.push('收获不对 ' + h); }
+                }
+                // 灶台：加柴、中火烧开水
+                await T.eval(`indPanelClose(); indBoxTake('wood', 8); indPanelClose(); indTeleport(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z + 3.5); indLookAt(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z); indSelect('bucket'); indUse(); true;`);
+                await T.eval(`for (let i = 0; i < 6; i++) indStoveFuel('wood'); indStovePut('water_raw', 1); indStoveFire(2); indPanelClose(); indAdvance(25); true;`);
+                if (!(await T.eval(`ind.base.stove.out.water_boiled === 1`))) bad.push('中火烧不出开水 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 大火做面包会烧焦：出来的是焦炭，桶还在
+                await T.eval(`indStoveTakeAll(); indBoxTake('salt', 1); indPanelClose(); indStovePut('wheat', 1); indStovePut('wheat', 1); indStovePut('salt', 1); indStovePut('water_boiled', 1); indStoveFire(3); indPanelClose(); indAdvance(40); true;`);
+                const burnt = JSON.parse(await T.eval(`JSON.stringify(ind.base.stove.out)`));
+                if (!burnt.char || burnt.bread || !burnt.bucket) bad.push('大火做面包没烧焦（或桶没了） ' + JSON.stringify(burnt));
+                await T.eval(`indStoveFire(0); indStoveTakeAll(); indPanelClose(); true;`);
+                // 睡觉：夜里上床，睡到第二天 0 秒（早上 6 点），精力补满
+                await T.eval(`ind.base.clock = Math.floor(ind.base.clock / IND_DAY) * IND_DAY + IND_DUSK + 50; ind.base.surv.energy = 30; indTeleport(IND_BASE_ST.bed.x, IND_BASE_ST.bed.z + 3.6); indLookAt(IND_BASE_ST.bed.x, IND_BASE_ST.bed.z + 1.6); indAction(); true;`);
+                const sl = JSON.parse(await T.eval(`JSON.stringify({ tod: indTod(), e: ind.base.surv.energy })`));
+                if (sl.tod !== 0 || sl.e !== 100) bad.push('睡觉没睡到早上或精力没满 ' + JSON.stringify(sl));
+                // 存档读得回来
+                await T.eval(`indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
+                const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ rule: b.rule, clock: b.clock, e: b.surv.energy, ver: b.ver })); }); })`));
+                if (sv.rule !== 'hard' || sv.e !== 100 || sv.ver !== 2 || Math.abs(sv.clock - (await T.eval(`ind.base.clock`))) > 1) bad.push('存档读回来不对 ' + JSON.stringify(sv));
+                // 硬核：饿渴到血 0 会死，身上的东西没了，回到基地
+                await T.eval(`(function(){ indBagAdd('stone', 3); indGoTrip(4242); let S = ind.base.surv; S.food = 0; S.water = 0; S.hp = 5; indAdvance(3); })(); true;`);
+                const dead = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, bag: Object.keys(ind.bag).length, hp: ind.base.surv.hp })`));
+                if (dead.w !== 'base' || dead.bag !== 0 || dead.hp !== 100) bad.push('硬核饿渴没死或死后不对 ' + JSON.stringify(dead));
+                // 悠闲：到 0 不扣血、只变慢；远征不出矿
+                await T.eval(`(function(){ ind.base.rule = 'casual'; let S = ind.base.surv; S.food = 0; S.water = 0; S.hp = 50; indAdvance(5); })(); true;`);
+                if (!(await T.eval(`ind.base.surv.hp === 50 && indSlow() && ind.where === 'base'`))) bad.push('悠闲世界饿渴扣血了或没变慢');
+                await T.eval(`indGoTrip(777); true;`);
+                const ores = await T.eval(`ind.nodes.filter(function (n) { return !IND_CASUAL_RES[n.key]; }).length`);
+                if (ores !== 0) bad.push('悠闲世界远征出了矿 ' + ores);
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND2 第 2 阶段：选规则、生存值、吃喝拉肚子、种地浇水收获、灶台开水和烧焦、睡觉、硬核饿死、悠闲不死不出矿、存档', bad.length === 0, bad.join(' / '));
         }
 
         if (ONLY) throw new Error('ONLY_DONE');
