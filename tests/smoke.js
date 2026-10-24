@@ -1712,7 +1712,7 @@ async function enterExit(tab, key) {
         }
 
                 if (want('CR1')) {
-            // CR1 合成：丰饶圣餐在大金名额用完（地图开局常常就剩 0）时也能合；多个合成同时成立时先合产物价值高的、一样高选消耗原料总价值少的，每次结果一样；所有配方都合得出来
+            // CR1 合成：丰饶圣餐在正常开局（箱子里的大金不占合成名额）能合；多个合成同时成立时先合产物价值高的、一样高选消耗原料总价值少的，每次结果一样；所有配方都合得出来
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
@@ -1720,10 +1720,12 @@ async function enterExit(tab, key) {
                 window.__has = function (n) { return groundItems.some(function (g) { return g.userData.n === n; }); };
                 window.__cnt = function (n) { return groundItems.filter(function (g) { return g.userData.n === n; }).length; };
                 window.__clear = function () { groundItems.slice().forEach(function (g) { scene.remove(g); }); groundItems.length = 0; }; true;`);
-            // 1) 丰饶圣餐回归：真把金苹果和黄金圣杯扔到地上（走真实的扔东西），名额用完（0）和有名额（4）都要合出来
-            for (const left of [0, 4]) {
-                await T.eval(`window.__clear(); huntBigLeft = ${left}; gState.inv[0] = Object.assign({}, itemPool.gold.filter(function (i) { return i.n === '金苹果'; })[0]); gState.inv[1] = Object.assign({}, itemPool.gold.filter(function (i) { return i.n === '黄金圣杯'; })[0]); executeThrow(0); executeThrow(1); true;`);
-                if (!(await until(T, `window.__has('丰饶圣餐')`, 20000))) bad.push('名额剩 ' + left + ' 时扔金苹果 + 黄金圣杯合不出丰饶圣餐');
+            // 1) 丰饶圣餐回归：正常开局（不改任何名额），真把金苹果和黄金圣杯扔到地上（走真实的扔东西），要合出来；开局的箱子大金名额有多少都不影响
+            const open0 = JSON.parse(await T.eval(`JSON.stringify({ chest: huntBigLeft, craft: huntCraftBigLeft })`));
+            if (open0.craft !== 4) bad.push('正常开局合成名额应该是 4 ' + JSON.stringify(open0));
+            for (const left of [null]) {
+                await T.eval(`window.__clear(); gState.inv[0] = Object.assign({}, itemPool.gold.filter(function (i) { return i.n === '金苹果'; })[0]); gState.inv[1] = Object.assign({}, itemPool.gold.filter(function (i) { return i.n === '黄金圣杯'; })[0]); executeThrow(0); executeThrow(1); true;`);
+                if (!(await until(T, `window.__has('丰饶圣餐')`, 20000))) bad.push('正常开局扔金苹果 + 黄金圣杯合不出丰饶圣餐 ' + JSON.stringify(open0));
                 else if (await T.eval(`window.__has('金苹果') || window.__has('黄金圣杯')`)) bad.push('合成后原料还在');
             }
             // 2) 优先级：造三个互相竞争的配方（都要"甲"）
@@ -1733,7 +1735,7 @@ async function enterExit(tab, key) {
                 GROUND_RECIPES.length = 0;
                 GROUND_RECIPES.push({ id: 't_low', a: '甲', b: '乙', out: out('低产物', 1000) }, { id: 't_high', a: '甲', b: '丙', out: out('高产物', 5000) }, { id: 't_same', a: '甲', b: '丁', out: out('同价产物', 5000) });
                 // (a) 甲 + 乙 + 丙 都在：产物价值高的赢（高产物），乙留下
-                window.__clear(); huntBigLeft = 4; window.__mk({ n: '甲', v: 10 }, 0); window.__mk({ n: '乙', v: 10 }, 1); window.__mk({ n: '丙', v: 10 }, 2); executeGroundCombinationsLogic();
+                window.__clear(); huntCraftBigLeft = 4; window.__mk({ n: '甲', v: 10 }, 0); window.__mk({ n: '乙', v: 10 }, 1); window.__mk({ n: '丙', v: 10 }, 2); executeGroundCombinationsLogic();
                 o.a = [window.__has('高产物'), window.__has('低产物'), window.__has('乙'), window.__has('丙')];
                 // (b) 甲 + 丙 + 丁：产物价值一样（5000），选消耗原料总价值少的（丁 5 < 丙 50）
                 window.__clear(); window.__mk({ n: '甲', v: 10 }, 0); window.__mk({ n: '丙', v: 50 }, 1); window.__mk({ n: '丁', v: 5 }, 2); executeGroundCombinationsLogic();
@@ -1751,27 +1753,28 @@ async function enterExit(tab, key) {
             if (comp.b.join() !== 'true,false,true,false') bad.push('产物一样值钱时该选消耗原料少的（丁），丙留着 ' + comp.b);
             if (!comp.c) bad.push('同样的东西摆法不同，结果不一样');
             if (comp.d.join() !== '1,1,0,1,0') bad.push('两个甲 + 乙丙丁：应该先合 丁（同价、更便宜），再合 丙（比乙值钱），剩一个乙 ' + comp.d);
-            // 3) 所有配方都合得出来（名额 4 和 0 都试）：原料名字取自配方，价值任意
+            // 3) 所有配方都合得出来（合成名额还有的时候；箱子大金名额 4 和 0 都试，不该有影响）：原料名字取自配方，价值任意
             for (const left of [4, 0]) {
                 const all = JSON.parse(await T.eval(`(function(){
                     huntBigLeft = ${left}; let bad = [];
+                    window.__craft4 = function () { huntCraftBigLeft = 4; };
                     GROUND_RECIPES.forEach(function (r) {
-                        window.__clear(); window.__mk({ n: r.a, v: 1000 }, 0); window.__mk({ n: r.b, v: 1000 }, 2); executeGroundCombinationsLogic();
+                        window.__clear(); window.__craft4(); window.__mk({ n: r.a, v: 1000 }, 0); window.__mk({ n: r.b, v: 1000 }, 2); executeGroundCombinationsLogic();
                         if (!window.__has(r.out.n) || window.__has(r.a) && r.a !== r.out.n || window.__has(r.b) && r.b !== r.out.n) bad.push(r.id + ':' + r.a + '+' + r.b);
                     });
                     // 皇冠：底座 + 6 颗宝石
-                    window.__clear(); let b = crownBaseItem(); window.__mk(b, 0); HUNT_GEMS.forEach(function (g, i) { window.__mk(huntGemItem(g), 1 + i * 0.1); }); executeGroundCombinationsLogic(); executeGroundCombinationsLogic();
+                    window.__clear(); window.__craft4(); let b = crownBaseItem(); window.__mk(b, 0); HUNT_GEMS.forEach(function (g, i) { window.__mk(huntGemItem(g), 1 + i * 0.1); }); executeGroundCombinationsLogic(); executeGroundCombinationsLogic();
                     if (!window.__has('皇冠')) bad.push('crown');
                     return JSON.stringify({ n: GROUND_RECIPES.length, bad: bad, ids: GROUND_RECIPES.map(function (r) { return r.id; }) }); })()`));
-                if (all.bad.length) bad.push('名额 ' + left + ' 时这些配方合不出来 ' + all.bad.join(','));
+                if (all.bad.length) bad.push('箱子名额 ' + left + ' 时这些配方合不出来 ' + all.bad.join(','));
                 if (left === 4 && all.ids.join() !== 'gcat,ucat,feast,catblade') bad.push('配方清单变了 ' + all.ids);
             }
             // 4) 原有的链：猫盾 + 小鱼干 + 黄金小鱼干 放一起，同一轮里黄金猫盾接着和黄金小鱼干合成至臻猫盾
-            const chain = await T.eval(`(function(){ window.__clear(); huntBigLeft = 4; window.__mk({ n: '猫盾', v: 15000 }, 0); window.__mk({ n: '小鱼干', v: 5000 }, 1); window.__mk({ n: '黄金小鱼干', v: 50000 }, 2); executeGroundCombinationsLogic(); return window.__has('至臻猫盾'); })()`);
+            const chain = await T.eval(`(function(){ window.__clear(); huntCraftBigLeft = 4; window.__mk({ n: '猫盾', v: 15000 }, 0); window.__mk({ n: '小鱼干', v: 5000 }, 1); window.__mk({ n: '黄金小鱼干', v: 50000 }, 2); executeGroundCombinationsLogic(); return window.__has('至臻猫盾'); })()`);
             if (!chain) bad.push('猫盾 + 小鱼干 + 黄金小鱼干 应该一路合成至臻猫盾');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('CR1 合成：丰饶圣餐名额用完也合得出来、竞争配方先合产物价值高的（一样高选原料便宜的、结果固定）、所有配方都合得出来', bad.length === 0, bad.join(' / '));
+            report('CR1 合成：丰饶圣餐正常开局合得出来、竞争配方先合产物价值高的（一样高选原料便宜的、结果固定）、所有配方都合得出来', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('LT1')) {
@@ -2519,61 +2522,61 @@ async function enterExit(tab, key) {
         }
 
         if (want('H28')) {
-            // H28 大金上限覆盖所有来源，合成也算：原料里没大金、产物是大金（至臻猫盾、丰饶圣餐、皇冠）占 1 个名额；骑士剑（原料已有大金）不另算；名额没了也照样合成（只是不再扣）；组队通知队长扣
+            // H28 合成大金每张图最多 4 个（只算合成产出的，跟箱子/保险柜/信号接收器/抽奖的大金名额分开）：原料里没大金、产物是大金（至臻猫盾、丰饶圣餐、皇冠）占 1 个；
+            // 骑士剑（原料已有大金）不另算；4 个用完第 5 个不合成、材料不动、提示"本局合成大金已达上限"（同一对只提示一次）；开局箱子里的大金不占这个名额
             const bad = [];
             const T = await openTab(chrome, url);
-            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+            if (!(await until(T, `isPlaying && typeof huntCraftBigLeft === 'number'`, 30000))) bad.push('寻宝队没开起来');
+            await T.eval(`${HIDE} true;`);
+            // 正常开局：箱子里预先定好的大金占的是 huntBigLeft，合成名额还是满的 4 个
+            const st0 = JSON.parse(await T.eval(`JSON.stringify({ craft: huntCraftBigLeft, cap: HUNT_CRAFT_BIG_CAP, chestCap: HUNT_BIG_CAP })`));
+            if (st0.craft !== 4 || st0.cap !== 4 || st0.chestCap !== 4) bad.push('开局合成名额应该是满的 4 个 ' + JSON.stringify(st0));
             await T.eval(`window.__flash = []; window.__bf = blazeFlash; blazeFlash = function (t) { window.__flash.push(t); }; window.__mk = function (u, x) { let m = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), new THREE.MeshBasicMaterial()); m.userData = Object.assign({ isItem: true, feeds: 0 }, u); m.position.set(500 + (x || 0), 1, 500); scene.add(m); groundItems.push(m); return m; };
                 window.__has = function (n) { return groundItems.some(function (g) { return g.userData.n === n; }); };
                 window.__clear = function () { groundItems.slice().forEach(function (g) { scene.remove(g); }); groundItems.length = 0; window.__flash.length = 0; }; true;`);
             const run = (js) => T.eval(`(function(){ window.__clear(); ${js}; executeGroundCombinationsLogic(); executeGroundCombinationsLogic(); return true; })()`);
-            const st = async (names) => JSON.parse(await T.eval(`JSON.stringify({ left: huntBigLeft, has: ${JSON.stringify(names)}.map(window.__has), flash: window.__flash.slice(-1)[0] || '' })`));
-            // 上限剩 0：黄金猫盾 + 黄金小鱼干 照样合成，名额还是 0，不弹"满了"
-            await T.eval(`huntBigLeft = 0; true;`);
-            await run(`window.__mk({ n: '黄金猫盾', v: 50000, w: 1 }, 0); window.__mk({ n: '黄金小鱼干', v: 30000, w: 1 }, 2)`);
-            let r = await st(['黄金猫盾', '黄金小鱼干', '至臻猫盾']);
-            if (r.has.join() !== 'false,false,true' || /满了/.test(r.flash) || r.left !== 0) bad.push('上限 0 时黄金猫盾+黄金小鱼干也该合出来、不提示 ' + JSON.stringify(r));
-            // 上限剩 1：合一次，变 0
-            await T.eval(`huntBigLeft = 1; true;`);
-            await run(`window.__mk({ n: '黄金猫盾', v: 50000, w: 1 }, 0); window.__mk({ n: '黄金小鱼干', v: 30000, w: 1 }, 2)`);
-            r = await st(['黄金猫盾', '黄金小鱼干', '至臻猫盾']);
-            if (r.has.join() !== 'false,false,true' || r.left !== 0) bad.push('上限 1 时该合一次变 0 ' + JSON.stringify(r));
-            // 不是大金的配方不受限：猫盾+小鱼干=黄金猫盾（0 上限也合）
-            await T.eval(`huntBigLeft = 0; true;`);
-            await run(`window.__mk({ n: '猫盾', v: 1000, w: 1 }, 0); window.__mk({ n: '小鱼干', v: 1000, w: 1 }, 2)`);
-            r = await st(['猫盾', '小鱼干', '黄金猫盾']);
-            if (r.has.join() !== 'false,false,true' || r.left !== 0) bad.push('普通配方不该受上限 ' + JSON.stringify(r));
-            // 原料里已有大金（骑士团圣剑 + 至臻猫盾 → 骑士剑）不另算，上限 0 也合
+            const st = async (names) => JSON.parse(await T.eval(`JSON.stringify({ craft: huntCraftBigLeft, chest: huntBigLeft, has: ${JSON.stringify(names)}.map(window.__has), flash: window.__flash.slice() })`));
+            // 合成大金和箱子的大金名额互不影响：箱子名额 0 时照样能合
+            await T.eval(`huntBigLeft = 0; huntCraftBigLeft = 4; true;`);
+            // 连着合 4 个大金：至臻猫盾、丰饶圣餐、至臻猫盾、丰饶圣餐，名额 4 → 0
+            const pairs = [['黄金猫盾', '黄金小鱼干', '至臻猫盾'], ['金苹果', '黄金圣杯', '丰饶圣餐'], ['黄金猫盾', '黄金小鱼干', '至臻猫盾'], ['金苹果', '黄金圣杯', '丰饶圣餐']];
+            for (let i = 0; i < pairs.length; i++) {
+                const p = pairs[i];
+                await run(`window.__mk({ n: '${p[0]}', v: 50000, w: 1 }, 0); window.__mk({ n: '${p[1]}', v: 50000, w: 1 }, 2)`);
+                const r = await st(p);
+                if (r.has.join() !== 'false,false,true' || r.craft !== 3 - i || r.chest !== 0) bad.push('第 ' + (i + 1) + ' 个合成大金该合出来、名额剩 ' + (3 - i) + ' ' + JSON.stringify(r));
+            }
+            // 第 5 个：不合成，材料都还在，提示一次（多跑几轮也只提示一次）
+            await run(`window.__mk({ n: '金苹果', v: 50000, w: 2 }, 0); window.__mk({ n: '黄金圣杯', v: 60000, w: 4 }, 2); executeGroundCombinationsLogic(); executeGroundCombinationsLogic()`);
+            let r5 = await st(['金苹果', '黄金圣杯', '丰饶圣餐']);
+            if (r5.has.join() !== 'true,true,false' || r5.craft !== 0) bad.push('第 5 个合成大金该被拒、材料不动 ' + JSON.stringify(r5));
+            if (r5.flash.filter((t) => t === '本局合成大金已达上限').length !== 1) bad.push('满了该提示一次"本局合成大金已达上限" ' + JSON.stringify(r5.flash));
+            // 满了的时候，不是大金的配方照合：猫盾 + 小鱼干 = 黄金猫盾
+            await run(`window.__mk({ n: '猫盾', v: 15000, w: 1 }, 0); window.__mk({ n: '小鱼干', v: 5000, w: 1 }, 2)`);
+            let rn = await st(['猫盾', '小鱼干', '黄金猫盾']);
+            if (rn.has.join() !== 'false,false,true' || rn.craft !== 0) bad.push('普通配方不该受上限 ' + JSON.stringify(rn));
+            // 原料里已有大金（骑士团圣剑 + 至臻猫盾 → 骑士剑）不另算，名额 0 也合
             await run(`window.__mk({ n: '骑士团圣剑', v: 400000, w: 5 }, 0); window.__mk({ n: '至臻猫盾', v: 800000, w: 2 }, 2)`);
-            r = await st(['骑士团圣剑', '至臻猫盾', '猫盾骑士剑']);
-            if (r.has.join() !== 'false,false,true' || r.left !== 0) bad.push('骑士剑不该占名额 ' + JSON.stringify(r));
-            // 丰饶圣餐（25 万）算
-            await run(`window.__mk({ n: '金苹果', v: 50000, w: 2 }, 0); window.__mk({ n: '黄金圣杯', v: 100000, w: 2 }, 2)`);
-            r = await st(['金苹果', '黄金圣杯', '丰饶圣餐']);
-            if (r.has.join() !== 'false,false,true' || r.left !== 0) bad.push('上限 0 时丰饶圣餐也该合出来 ' + JSON.stringify(r));
-            await T.eval(`huntBigLeft = 1; true;`);
-            await run(`window.__mk({ n: '金苹果', v: 50000, w: 2 }, 0); window.__mk({ n: '黄金圣杯', v: 100000, w: 2 }, 2)`);
-            r = await st(['金苹果', '黄金圣杯', '丰饶圣餐']);
-            if (r.has.join() !== 'false,false,true' || r.left !== 0) bad.push('上限 1 时丰饶圣餐该合出来 ' + JSON.stringify(r));
-            // 皇冠：镶最后一颗宝石算一个
-            const crown = (left) => T.eval(`(function(){ huntBigLeft = ${left}; window.__clear(); let b = crownBaseItem(); HUNT_GEMS.slice(0, 5).forEach(function (g) { crownSocketGem(b, g.id); }); let bm = window.__mk(b, 0); window.__mk(huntGemItem(HUNT_GEMS[5]), 2); executeGroundCombinationsLogic(); executeGroundCombinationsLogic();
-                return JSON.stringify({ left: huntBigLeft, crown: window.__has('皇冠'), gem: window.__has(HUNT_GEMS[5].n), flash: window.__flash.slice(-1)[0] || '' }); })()`);
+            let rs = await st(['骑士团圣剑', '至臻猫盾', '猫盾骑士剑']);
+            if (rs.has.join() !== 'false,false,true' || rs.craft !== 0) bad.push('骑士剑不该占名额 ' + JSON.stringify(rs));
+            // 皇冠：镶最后一颗宝石算一个；名额 0 时最后一颗不镶、宝石还在、提示
+            const crown = (left) => T.eval(`(function(){ huntCraftBigLeft = ${left}; window.__clear(); let b = crownBaseItem(); HUNT_GEMS.slice(0, 5).forEach(function (g) { crownSocketGem(b, g.id); }); window.__mk(b, 0); window.__mk(huntGemItem(HUNT_GEMS[5]), 2); executeGroundCombinationsLogic(); executeGroundCombinationsLogic();
+                return JSON.stringify({ left: huntCraftBigLeft, crown: window.__has('皇冠'), gem: window.__has(HUNT_GEMS[5].n), flash: window.__flash.slice() }); })()`);
             let c0 = JSON.parse(await crown(0));
-            if (!c0.crown || c0.gem || c0.left !== 0) bad.push('上限 0 时最后一颗宝石也该镶成皇冠 ' + JSON.stringify(c0));
+            if (c0.crown || !c0.gem || c0.flash.filter((t) => t === '本局合成大金已达上限').length !== 1) bad.push('名额 0 时最后一颗宝石不该镶、要提示 ' + JSON.stringify(c0));
             let c1 = JSON.parse(await crown(1));
-            if (!c1.crown || c1.gem || c1.left !== 0) bad.push('上限 1 时该镶成皇冠、名额变 0 ' + JSON.stringify(c1));
-            // 组队（不是队长）：照样合，同时通知队长扣名额
-            const team = JSON.parse(await T.eval(`(function(){ window.__clear(); window.__sent = []; let post = bc.postMessage; bc.postMessage = function (m) { window.__sent.push(m); };
-                gState.team = [{ id: 'leader-x', isLeader: true, isAI: false }, { id: gState.id, isAI: false }]; huntBigLeft = 4;
-                window.__mk({ n: '黄金猫盾', v: 50000, w: 1 }, 0); window.__mk({ n: '黄金小鱼干', v: 30000, w: 1 }, 2); executeGroundCombinationsLogic();
-                let req = window.__sent.filter(function (m) { return m.type === 'HUNT_BIG_REQ'; })[0];
-                let o = { asked: !!req && req.target === 'leader-x', merged0: window.__has('至臻猫盾'), left0: huntBigLeft };
-                if (req) huntBigOnAck({ target: gState.id, sender: 'leader-x', rid: req.rid, ok: true, left: 3 });
-                o.left1 = huntBigLeft; bc.postMessage = post; gState.team = []; return JSON.stringify(o); })()`));
-            if (!team.asked || !team.merged0 || team.left0 !== 4 || team.left1 !== 3) bad.push('队员合大金应该马上合成、并通知队长扣名额 ' + JSON.stringify(team));
+            if (!c1.crown || c1.gem || c1.left !== 0) bad.push('名额 1 时该镶成皇冠、名额变 0 ' + JSON.stringify(c1));
+            // 新的一张图：合成名额回到 4
+            await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`);
+            await until(T, `!isPlaying`, 20000);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+            if (!(await until(T, `isPlaying && huntCraftBigLeft === 4`, 30000))) bad.push('新的一局合成名额没回到 4 ' + await T.eval(`huntCraftBigLeft`));
+            const noWords = /保底|必出/.test(fs.readFileSync(path.join(ROOT, 'js', '01-core.js'), 'utf8').match(/本局合成大金已达上限[^']*/)[0]);
+            if (noWords) bad.push('提示里有不该写的词');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('H28 大金上限覆盖合成：至臻猫盾/丰饶圣餐/皇冠占名额、骑士剑不算；剩 0 也照样合成、剩 1 合一次变 0；队员合成时通知队长', bad.length === 0, bad.join(' / '));
+            report('H28 合成大金每张图最多 4 个（只算合成的，开局箱子不占）：第 5 个被拒、材料不动、提示一次；骑士剑和普通配方不受限；新图重置', bad.length === 0, bad.join(' / '));
         }
 
         if (want('U7')) {
@@ -2611,28 +2614,86 @@ async function enterExit(tab, key) {
             report('U7 寻宝队的角色、地图、合成配方在仓库界面里（大厅面板上没了）：点得到、有用，触屏尺寸下不用滚动就看得见', bad.length === 0, bad.join(' / '));
         }
 
-        if (want('U6')) {
-            // U6：小地图的“全览”按钮在小地图左下角里面，不挡右下角；电脑和触屏都在小地图框里、没被别的盖住、点得到
+        if (want('BD1')) {
+            // BD1 用了地窖徽章（传回起点）以后，小地图导航的绿线和信号接收器的蓝线都还在，并且从起点重新画
             const bad = [];
-            for (const mobile of [false, true]) {
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+            if (!(await until(T, `isPlaying && typeof generateFootprintGuide === 'function'`, 30000))) bad.push('寻宝队没开起来');
+            await T.eval(`${HIDE} true;`);
+            // 找一个一楼离起点远、走得到的格子当导航目标，再找一个当信号接收器的东西
+            const pick = JSON.parse(await T.eval(`(function(){ let best = [], s0 = { f: 0, x: 1, z: 1 };
+                for (let z = mSize - 2; z >= 1; z--) for (let x = mSize - 2; x >= 1; x--) { if (!huntCellKind(0, x, z) || x + z < mSize) continue; if (huntRouteBuild(s0, { f: 0, x: x, z: z }, camera.position)) best.push([x, z]); if (best.length >= 2) break; }
+                return JSON.stringify(best); })()`));
+            if (pick.length < 2) bad.push('找不到能走到的远处格子 ' + JSON.stringify(pick));
+            else {
+                // 人先走到别处（中间某个格子），在那儿点导航、开信号接收器的目标
+                await T.eval(`(function(){ ${HIDE} let mid = null; for (let z = 2; z < mSize - 1 && !mid; z++) for (let x = 2; x < mSize - 1 && !mid; x++) if (huntCellKind(0, x, z) && huntRouteBuild({ f: 0, x: x, z: z }, { f: 0, x: ${pick[0][0]}, z: ${pick[0][1]} }, camera.position)) mid = [x, z];
+                    camera.position.set(mid[0] * TILE, 9, mid[1] * TILE); pVel.set(0, 0, 0);
+                    generateFootprintGuide(${pick[0][0]}, ${pick[0][1]});
+                    let m = huntGroundMesh({ n: '测试信号物', v: 1, w: 1, tex: 'generic', c: 0xffffff }); m.position.set(${pick[1][0]} * TILE, 1.5, ${pick[1][1]} * TILE); m.userData = { n: '测试信号物', v: 1, w: 1, isItem: true, vel: new THREE.Vector3(0, 0, 0) }; scene.add(m); groundItems.push(m);
+                    gState.signal = gState.signal || {}; gState.signal.mesh = m; signalRouteTick(true); return true; })()`);
+                const before = JSON.parse(await T.eval(`JSON.stringify({ green: !!(huntNavRoute.mesh && huntNavRoute.to), blue: !!huntSignalRoute.mesh })`));
+                if (!before.green || !before.blue) bad.push('用地窖前就没画出路线 ' + JSON.stringify(before));
+                // 选中地窖徽章，按“用道具”
+                await T.eval(`(function(){ let i = gState.inv.findIndex(function (q) { return q && q.type === 'badge'; }); if (i < 0) { gState.inv[0] = Object.assign({}, shopItems['地窖徽章']); i = 0; } else if (i !== 0) { let t = gState.inv[0]; gState.inv[0] = gState.inv[i]; gState.inv[i] = t; }
+                    gState.inv[0].uses = 1; gState.selectedSlot = 0; keys['rmb'] = true; return true; })()`);
+                if (!(await until(T, `gState.inv[0] && gState.inv[0].uses === 0 && Math.abs(camera.position.x - TILE) < 3 && Math.abs(camera.position.z - TILE) < 3`, 20000))) bad.push('地窖徽章没把人传回起点');
+                await frames(T, 5);
+                const after = JSON.parse(await T.eval(`JSON.stringify({ green: !!(huntNavRoute.mesh && huntNavRoute.mesh.parent === scene && huntNavRoute.mesh.visible), to: huntNavRoute.to, greenFrom: huntNavRoute.key, blue: !!(huntSignalRoute.mesh && huntSignalRoute.mesh.parent === scene && huntSignalRoute.mesh.visible), blueFrom: huntSignalRoute.key, start: huntPlayerNode() })`));
+                if (!after.green || !after.to || after.to.x !== pick[0][0] || after.to.z !== pick[0][1]) bad.push('用了地窖以后绿线没了 ' + JSON.stringify(after));
+                if (!after.blue) bad.push('用了地窖以后蓝线没了 ' + JSON.stringify(after));
+                const st = after.start.f + ',' + after.start.x + ',' + after.start.z;
+                if (after.greenFrom !== st || after.blueFrom.indexOf(st + ',') !== 0) bad.push('路线没从起点重新画 ' + JSON.stringify(after));
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('BD1 用了地窖徽章（传回起点）以后，导航绿线和信号接收器蓝线都还在、从起点重新画', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('U6')) {
+            // U6：小地图的“全览”按钮在小地图框外面（紧贴左边、底边对齐），不挡地图内容；电脑、平板、手机竖屏／横屏（矮屏小地图会缩小）都不跟别的东西重叠、没被盖住、点得到
+            const bad = [];
+            const sizes = [[false, 1280, 800, '电脑'], [false, 1024, 640, '小窗口'], [true, 1180, 820, '平板'], [true, 740, 360, '手机横屏'], [true, 390, 844, '手机竖屏']];
+            for (const [mobile, w, h, tag] of sizes) {
                 const T = await openTab(chrome, url, mobile ? { mobile: true } : {});
-                await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
-                const r = JSON.parse(await T.eval(`(function(){ const b = document.getElementById('minimap-expand'), c = document.getElementById('minimap-container'), br = b.getBoundingClientRect(), cr = c.getBoundingClientRect();
-                    const e = document.elementFromPoint(br.left + br.width / 2, br.top + br.height / 2);
-                    return JSON.stringify({ w: br.width, h: br.height, inBox: br.left >= cr.left - 1 && br.right <= cr.right + 1 && br.top >= cr.top - 1 && br.bottom <= cr.bottom + 1,
-                        left: br.right <= cr.left + cr.width / 2, bottom: br.top >= cr.top + cr.height / 2 - 1, covered: !(e && e.closest('#minimap-expand')),
-                        rightBottomFree: br.right <= cr.left + cr.width / 2 }); })()`));
-                const tag = mobile ? '触屏' : '电脑';
-                if (r.w < 20 || r.h < 14) bad.push(tag + ' 全览按钮太小 ' + r.w + '×' + r.h);
-                if (!r.inBox) bad.push(tag + ' 全览按钮跑出小地图框');
-                if (!r.left || !r.bottom) bad.push(tag + ' 全览按钮不在小地图左下角');
-                if (r.covered) bad.push(tag + ' 全览按钮被盖住');
-                await T.eval(`document.getElementById('minimap-expand').click(); true;`);
+                await T.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: mobile });
+                await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+                if (!(await until(T, `isPlaying && document.getElementById('minimap-expand').getBoundingClientRect().width > 0`, 30000))) { bad.push(tag + ' 寻宝队没开起来'); await T.close(); continue; }
+                await T.eval(`${HIDE} true;`);
+                await frames(T, 3);
+                for (const safe of [false, true]) {   // 出生点（上交、撤离按钮那块显示）和外面
+                    await T.eval(`${HIDE} true;`); await frames(T, 2);   // 新手提示卡片会晚一点弹出来，量之前关掉
+                    const r = JSON.parse(await T.eval(`(function(){ ${HIDE} document.getElementById('submit-btn-container').style.display = ${safe} ? 'flex' : 'none';
+                        const b = document.getElementById('minimap-expand'), c = document.getElementById('minimap-container'), br = b.getBoundingClientRect(), cr = c.getBoundingClientRect();
+                        const hit = function (x, y) { let e = document.elementFromPoint(x, y); return !!(e && e.closest('#minimap-expand')); };
+                        const inter = function (p, q) { return Math.max(0, Math.min(p.right, q.right) - Math.max(p.left, q.left)) * Math.max(0, Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top)); };
+                        // 跟 HUD 里别的看得见的东西（不包括按钮自己的祖先）有没有重叠
+                        let over = [];
+                        document.querySelectorAll('#ui-layer *').forEach(function (e) {
+                            if (e === b || e.contains(b) || b.contains(e)) return;
+                            let st = getComputedStyle(e); if (st.display === 'none' || st.visibility === 'hidden' || e.offsetParent === null && st.position !== 'fixed') return;
+                            if (e.closest('#largemap-container, #inventory-panel, .hidden')) return;
+                            let er = e.getBoundingClientRect(); if (er.width < 1 || er.height < 1) return;
+                            if (/joystick|joy-|knob/.test(e.id || '') ) return;   // 摇杆区是透明的大块触摸区
+                            if (inter(br, er) > 2) over.push((e.id || e.tagName) + '');
+                        });
+                        return JSON.stringify({ w: br.width, h: br.height, inMap: inter(br, cr) > 0, onScreen: br.left >= 0 && br.right <= innerWidth && br.top >= 0 && br.bottom <= innerHeight,
+                            covered: !hit(br.left + br.width / 2, br.top + br.height / 2) ? (function(){ let e = document.elementFromPoint(br.left + br.width / 2, br.top + br.height / 2); return e ? (e.id || e.tagName) + '|' + (e.className || '') + '|' + [Math.round(br.left), Math.round(br.top), Math.round(br.width), Math.round(br.height)].join(',') : 'null'; })() : false, over: over.slice(0, 6), gap: Math.round(cr.left - br.right), bottom: Math.round(cr.bottom - br.bottom) }); })()`));
+                    const t2 = tag + (safe ? '（出生点）' : '');
+                    if (r.w < 20 || r.h < 14) bad.push(t2 + ' 全览按钮太小 ' + r.w + '×' + r.h);
+                    if (r.inMap) bad.push(t2 + ' 全览按钮还压在小地图框上');
+                    if (!r.onScreen) bad.push(t2 + ' 全览按钮跑出屏幕');
+                    if (r.covered) bad.push(t2 + ' 全览按钮被盖住 ' + r.covered);
+                    if (r.over.length) bad.push(t2 + ' 全览按钮跟别的东西重叠 ' + r.over.join(','));
+                    if (r.gap < 0 || r.gap > 12 || Math.abs(r.bottom) > 2) bad.push(t2 + ' 全览按钮没贴着小地图左下 ' + JSON.stringify(r));
+                }
+                await T.eval(`document.getElementById('submit-btn-container').style.display = ''; document.getElementById('minimap-expand').click(); true;`);
                 if (!(await until(T, `gState.largeMapOpen`, 3000))) bad.push(tag + ' 点全览没打开大地图');
                 if (T.errors.length) bad.push(tag + ' ' + T.errors.slice(0, 2).join(' / '));
                 await T.close();
             }
-            report('U6 小地图“全览”按钮挪到小地图左下角里面：电脑和触屏都在框里、点得到', bad.length === 0, bad.join(' / '));
+            report('U6 小地图“全览”按钮在小地图框外面（左下）：电脑、平板、手机横竖屏都不挡地图、不重叠、点得到', bad.length === 0, bad.join(' / '));
         }
 
         if (want('U5')) {

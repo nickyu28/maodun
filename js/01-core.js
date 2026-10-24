@@ -946,8 +946,13 @@
             huntBigPend[rid] = function (ok, left) { clearTimeout(to); if (typeof left === 'number') huntBigLeft = left; cb(ok ? pick(pool) : pick(itemPool.gold)); };
             bc.postMessage({ type: 'HUNT_BIG_REQ', target: huntBigLeader(), sender: gState.id, rid: rid });
         }
-        // H28：大金上限覆盖所有来源——合成也算。原料里没有大金、产物是大金（大金物品，或合成产物 v ≥ 20 万：至臻猫盾、丰饶圣餐、皇冠）就占 1 个；
-        // 原料里已经有大金的（猫盾骑士剑）不另算。名额用完了合成照样成功，只是不再扣（以前会不让合，丰饶圣餐就这样做不出来了）。组队走队长计数（跟 H16b 一样）。
+        // H28：合成出来的大金每张图最多 HUNT_CRAFT_BIG_CAP（4）个，用完了不让合成，材料不动，弹一句"本局合成大金已达上限"。
+        // 原料里没有大金、产物是大金（大金物品，或合成产物 v ≥ 20 万：至臻猫盾、丰饶圣餐、皇冠）就占 1 个；原料里已经有大金的（猫盾骑士剑）不另算。
+        // 这个名额只算合成产出的，跟箱子／保险柜／信号接收器／抽奖用的 huntBigLeft 分开——以前两边共用一个数，造图时箱子里预先定好的大金
+        // 就把 4 个占掉了（开局常常只剩 0～2 个），丰饶圣餐因此经常合不出来。
+        // 组队时每个人各算各的（不走队长计数：那要新的联机消息，NET_PROTO 不动）。
+        const HUNT_CRAFT_BIG_CAP = 4;
+        let huntCraftBigLeft = HUNT_CRAFT_BIG_CAP;
         const HUNT_BIG_CRAFT_V = 200000;
         function huntBigName(n) { return itemPool.ultra.concat(itemPool.god).some(function (u) { return u.n === n; }); }
         function huntCraftBigName(n) { return allRecipes().some(function (r) { return r.out.n === n && r.out.v >= HUNT_BIG_CRAFT_V; }); }
@@ -956,16 +961,12 @@
             let ing = function (n) { return huntBigName(n) || huntCraftBigName(n); };
             return outBig && !ing(rec.a) && !ing(rec.b);
         }
-        // 合成大金产物占 1 个名额；名额用完了也照样能合成（只是不再扣）。组队时通知队长扣一下，不等答复
+        // 合成一个大金：还有名额就扣 1 个返回 true；没有了返回 false（调用方不合成）
         function huntBigCraftTake() {
-            if (huntBigSolo()) { if (huntBigLeft > 0) huntBigLeft--; }
-            else huntBigAsk(function () { });
+            if (huntCraftBigLeft <= 0) return false;
+            huntCraftBigLeft--; return true;
         }
-        function huntBigAsk(cb) {
-            let rid = Math.random().toString(36).slice(2), to = setTimeout(function () { if (huntBigPend[rid]) { delete huntBigPend[rid]; cb(false); } }, 3000);
-            huntBigPend[rid] = function (ok, left) { clearTimeout(to); if (typeof left === 'number') huntBigLeft = left; cb(!!ok); };
-            bc.postMessage({ type: 'HUNT_BIG_REQ', target: huntBigLeader(), sender: gState.id, rid: rid });
-        }
+        function huntBigCraftFullNote() { blazeFlash('本局合成大金已达上限'); }
         function huntBigOnReq(m) {
             if (m.target !== gState.id || !isPlaying || huntBigLeader() !== gState.id || typeof m.rid !== 'string') return;
             // 只认自己队里的真人（发送者以连接为准，房主转发时已经改写成真实的）
@@ -999,7 +1000,7 @@
         // 造图时把所有箱子的东西和每个队员的信号接收器奖励定好。保险柜先抽（保底局必出的那个一定是大金），
         // 再按生成顺序抽箱子，最后按队员轮流抽信号奖励。boxes 是带 userData.type 的箱子列表。
         function huntAssignLoot(boxes, rnd, teamSize) {
-            huntBigLeft = HUNT_BIG_CAP;
+            huntBigLeft = HUNT_BIG_CAP; huntCraftBigLeft = HUNT_CRAFT_BIG_CAP;
             let order = boxes.filter(function (c) { return c.userData.type === 'safe'; }).concat(boxes.filter(function (c) { return c.userData.type !== 'safe'; }));
             order.forEach(function (c) { c.userData.loot = huntRollChest(c.userData.type, rnd); });
             huntSignalLoot = [];

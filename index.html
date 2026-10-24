@@ -328,10 +328,10 @@
         }
 
         #minimap-expand {
-            position: absolute;
-            bottom: 2px;
-            left: 2px;   /* U6：原来在右下角，挡着小地图右下角的东西；挪到左下角里面 */
-            margin: 0;
+            /* 放在小地图框外面、紧贴框的左边，跟框底边对齐：不挡地图上的任何东西（原来在框里，挡着角上的格子） */
+            align-self: flex-end;
+            margin: 0 -9px 0 0;   /* hud-right 的间距是 15px，往右收一点贴近小地图 */
+            flex: none;
             padding: 2px 6px;
             font-size: 11px;
             line-height: 1.2;
@@ -1338,9 +1338,9 @@
                     <button id="btn-lottery" onclick="clickLottery()" class="hidden">抽奖</button>
                     <button id="btn-extract" onclick="clickExtract()" class="hidden">撤离</button>
                 </div>
+                <button id="minimap-expand" onclick="toggleLargeMapUI()">全览</button>
                 <div id="minimap-container">
                     <canvas id="minimap" width="150" height="150"></canvas>
-                    <button id="minimap-expand" onclick="toggleLargeMapUI()">全览</button>
                 </div>
             </div>
         </div>
@@ -1620,7 +1620,7 @@
 
     <script>
         // B4：版本号。每次发版手动加一（同一天多次发版就把最后的 -N 加一）。B5 拆文件后，脚本地址也带这个版本号。
-        const GAME_VERSION = '2026.10.24-1';
+        const GAME_VERSION = '2026.10.24-2';
         // B5：脚本拆到 js/ 下面，按这个顺序执行（顺序不能乱，后面的文件要用前面定义的东西）。
         // 地址后面带 ?v=版本号，发新版时浏览器一定拿新文件，不会一半新一半旧。
         // L1：所有文件同时下载（异步），页面上显示"加载中 n/17"；全部到齐、页面也解析完以后再执行。
