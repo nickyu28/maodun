@@ -4295,6 +4295,76 @@ async function enterExit(tab, key) {
             report('LB26 器材的显示和复用：灯亮有光晕、头顶牌子、放设备不新建对象、绘制调用只多几次、退出收回仓库箱', bad.length === 0, bad.join(' / '));
         }
 
+        // ── 猫盾工业（硬核模式，js/19-industry.js）：检查名字都以 IND 开头 ──
+        if (want('IND1')) {
+            // IND1 骨架：藏着时看不到、选不到、进不去；?hcdebug=1 能进基地；出门生成远征图（同一个种子同一张图）、采集、稿子等级、
+            // 撤离圈站满 3 秒才回基地且东西进仓库箱；基地里放的东西存进 IndexedDB 读得回来；远征里回大厅身上的东西丢；进出 3 次资源不涨
+            const bad = [];
+            const N = await openTab(chrome, url);
+            await N.eval(`${HIDE} nav('screen-lobby'); selectGameMode('hunt'); true;`);
+            const hid = JSON.parse(await N.eval(`JSON.stringify({ vis: indVisible(), btn: getComputedStyle(document.getElementById('btn-mode-industry')).display })`));
+            if (hid.vis || hid.btn !== 'none') bad.push('正常玩家看得到猫盾工业 ' + JSON.stringify(hid));
+            await N.eval(`selectGameMode('industry'); true;`);
+            if ((await N.eval(`gState.gameMode`)) === 'industry') bad.push('藏起来的时候选得到');
+            await N.eval(`indEnter(); true;`); await frames(N, 5);
+            if (await N.eval(`ind !== null`)) bad.push('藏起来的时候进得去');
+            if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
+            await N.close();
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            const IENTER = async () => { await T.eval(`${HIDE} indEnter(); true;`); return until(T, `ind && !ind.loading && ind.where === 'base' && !!document.getElementById('ind-hud')`, 15000); };
+            const IEXIT = async () => { await T.eval(`indExit(true); true;`); return until(T, `ind === null && IND_SAVING === 0`, 10000); };
+            await T.eval(`nav('screen-lobby'); document.getElementById('mode-detail-panel').classList.remove('hidden'); document.getElementById('btn-mode-industry').click(); true;`);
+            if (!(await T.eval(`gState.gameMode === 'industry' && document.getElementById('mode-bar-current').innerText === '猫盾工业' && getComputedStyle(document.getElementById('btn-mode-industry')).display !== 'none'`))) bad.push('?hcdebug=1 下点入口没选中');
+            await T.eval(`document.getElementById('lobby-start-btn').click(); true;`);
+            if (!(await until(T, `ind && !ind.loading && ind.where === 'base' && !!document.getElementById('ind-hud')`, 15000))) bad.push('选猫盾工业后点开始游戏进不去');
+            else {
+                if (await T.eval(`!document.getElementById('screen-lobby').classList.contains('hidden')`)) bad.push('进去后大厅界面还开着');
+                const box0 = JSON.parse(await T.eval(`JSON.stringify(ind.base.box)`));
+                if (!box0.pick_stone) bad.push('新基地的仓库箱里没有石稿 ' + JSON.stringify(box0));
+                await T.eval(`indBoxTake('pick_stone', 1); indPanelClose(); true;`);
+                // 从门里走出去 → 远征
+                await T.eval(`indTeleport(0, -IND_BASE.z + 0.1); indAdvance(0.2); true;`);
+                const trip = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, n: ind.nodes.length, e: ind.exits.length, fog: !!scene.fog })`));
+                if (trip.w !== 'trip' || trip.n < 100 || trip.e !== 3) bad.push('出门没生成远征图 ' + JSON.stringify(trip));
+                if (!(await T.eval(`(function(){ let a = indMakeMap(12345), b = indMakeMap(12345); return indHeight(a, 37, -51) === indHeight(b, 37, -51) && indBiome(a, 90, 20) === indBiome(b, 90, 20); })()`))) bad.push('同一个种子生成的图不一样');
+                const bms = await T.eval(`(function(){ let s = {}; for (let x = -140; x <= 140; x += 7) for (let z = -140; z <= 140; z += 7) s[indBiome(ind.map, x, z)] = 1; return Object.keys(s).length; })()`);
+                if (bms < 4) bad.push('一张图里地貌太少 ' + bms);
+                // 采集：石稿能挖的点
+                const g = JSON.parse(await T.eval(`(function(){ let o = ind.nodes.filter(function (n) { return !n.dead && IND_NODES[n.key].tool <= 1; })[0]; indTeleport(o.x, o.z + 1); let before = ind.bag[o.key] || 0, ok = indGather(o); return JSON.stringify({ k: o.key, ok: ok, got: (ind.bag[o.key] || 0) - before }); })()`));
+                if (!g.ok || g.got < 1) bad.push('采集失败 ' + JSON.stringify(g));
+                // 铁矿要铁稿：石稿挖不动
+                const fe = await T.eval(`(function(){ let o = { key: 'ore_fe', n: 2, dead: false }; return indGather(o) ? 'dug' : 'refused'; })()`);
+                if (fe !== 'refused') bad.push('石稿居然挖得动铁矿');
+                // 撤离：站进撤离圈，不到 3 秒不算，满了回基地，身上的东西进仓库箱
+                await T.eval(`indTeleport(ind.exits[1].x, ind.exits[1].z); indAdvance(1.5); true;`);
+                if (await T.eval(`ind.where !== 'trip'`)) bad.push('不到 3 秒就撤离了');
+                await T.eval(`indAdvance(2); true;`);
+                const back = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, bag: Object.keys(ind.bag).length, box: ind.base.box, trips: ind.base.trips, fog: !!scene.fog })`));
+                if (back.w !== 'base' || back.bag !== 0 || !back.box[g.k] || !back.box.pick_stone || back.trips !== 1) bad.push('撤离后没回基地或东西没进仓库箱 ' + JSON.stringify(back));
+                // 基地里放下一个东西，存进 IndexedDB，读得回来
+                await T.eval(`indBoxTake(${JSON.stringify(g.k)}, 1); indPanelClose(); indDrop(); true;`);
+                await until(T, `IND_SAVING === 0`, 5000);
+                const saved = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify(b)); }); })`));
+                if (saved.ground.length !== 1 || saved.ground[0].k !== g.k || saved.trips !== 1) bad.push('基地存档读回来不对 ' + JSON.stringify(saved));
+                // 远征里回大厅：身上的东西丢，仓库箱不变
+                const boxBefore = await T.eval(`JSON.stringify(ind.base.box)`);
+                await T.eval(`indTeleport(0, -IND_BASE.z + 0.1); indAdvance(0.2); (function(){ let o = ind.nodes.filter(function (n) { return !n.dead && IND_NODES[n.key].tool === 0; })[0]; indGather(o); })(); true;`);
+                await IEXIT();
+                const after = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify(b)); }); })`));
+                if (JSON.stringify(after.box) !== boxBefore) bad.push('远征里回大厅后仓库箱变了（身上的东西应该丢掉） ' + boxBefore + ' → ' + JSON.stringify(after.box));
+                if (!(await T.eval(`!document.getElementById('screen-lobby').classList.contains('hidden') && !document.getElementById('ind-hud') && !document.getElementById('ind-panel') && gState.gameMode === 'industry'`))) bad.push('退出后没回大厅或界面没收干净');
+                // 进出 3 次：基地里的几何体、贴图不涨
+                const mem = () => T.eval(`(renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);
+                await IENTER(); await IEXIT(); await IENTER(); await IEXIT();
+                const during = [];
+                for (let i = 0; i < 3; i++) { if (!(await IENTER())) { bad.push('第 ' + (i + 1) + ' 次进不去'); break; } during.push(await mem()); await IEXIT(); }
+                if (during.length === 3) { const a1 = JSON.parse(during[1]), a2 = JSON.parse(during[2]); if (a2[0] > a1[0] || a2[1] > a1[1] || a2[2] !== a1[2]) bad.push('进出 3 次资源数在涨 ' + during.join(' → ')); }
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND1 猫盾工业骨架：藏着看不到进不去；?hcdebug=1 能进基地；出门生成远征图、采集、稿子等级、撤离 3 秒回基地进仓库箱；基地存档读得回来；远征里回大厅身上的丢；进出不涨', bad.length === 0, bad.join(' / '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
