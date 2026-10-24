@@ -4523,7 +4523,7 @@ async function enterExit(tab, key) {
                 const w = cr.filter((c) => c[0] === 'wheat')[0], cb = cr.filter((c) => c[0] === 'cabbage')[0];
                 if (!w || !cb || w[1] !== 0 || cb[1] < 40) bad.push('冬天作物长得不对 ' + JSON.stringify(cr));
                 // 暖棚：工作台用 10 根木头盖，棚里冬天也长番茄
-                await T.eval(`(function(){ indBagAdd('wood', 10); indCraft(IND_CRAFT.length - 1); indBagAdd('seed_tomato', 1); indTeleport(-24, 3); indLookAt(-24, 1); indSelect('seed_tomato'); indAction(); ind.base.crops.forEach(function (c) { c.wet = 1e9; }); })(); true;`);
+                await T.eval(`(function(){ indBagAdd('wood', 10); indCraft(IND_CRAFT.findIndex(function (r) { return r.gh; })); indBagAdd('seed_tomato', 1); indTeleport(-24, 3); indLookAt(-24, 1); indSelect('seed_tomato'); indAction(); ind.base.crops.forEach(function (c) { c.wet = 1e9; }); })(); true;`);
                 if (!(await T.eval(`ind.base.gh === true && !ind.bag.wood`))) bad.push('暖棚没盖上或木头没扣');
                 await T.eval(`indAdvance(20); true;`);
                 const tg = await T.eval(`(ind.base.crops.filter(function (c) { return c.k === 'tomato'; })[0] || { g: -1 }).g`);
@@ -4544,7 +4544,7 @@ async function enterExit(tab, key) {
                 // 存档：衣服、暖棚、篝火都在
                 await T.eval(`indBagAdd('scarf', 1); indSelect('scarf'); indUse(); indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
                 const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ wear: b.wear, gh: b.gh, fires: b.fires.length, ver: b.ver })); }); })`));
-                if (sv.wear.neck !== 'scarf' || !sv.gh || sv.fires !== 1 || sv.ver !== 3) bad.push('存档读回来不对 ' + JSON.stringify(sv));
+                if (sv.wear.neck !== 'scarf' || !sv.gh || sv.fires !== 1 || sv.ver < 3) bad.push('存档读回来不对 ' + JSON.stringify(sv));
                 // 硬核冻死：身上和穿着的都没了
                 await T.eval(`(function(){ indGoTrip(99); let S = ind.base.surv; S.temp = 32.5; S.hp = 2; indAdvance(3); })(); true;`);
                 const dd = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, wear: Object.keys(ind.base.wear).length, hp: ind.base.surv.hp, t: ind.base.surv.temp })`));
@@ -4560,6 +4560,65 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND3 第 2.5 阶段：季节、作物分季节、暖棚、体温和衣服、篝火取暖加柴、硬核冻死、悠闲不死、工作台、存档和老档迁移', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND4')) {
+            // IND4 第 2.8 阶段：远征里有野生动物；喂它爱吃的、喂够了就跟着走，撤离时跟着的一起回家；基地里饿了不产东西；
+            // 羊剪毛（2 天一次）、羊毛做毛线和毛衣；牛拿空桶挤奶（一天一次）、灶台煮奶酪；不爱吃的不吃；存档带着动物
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('casual'); ind.base.surv.food = 100; ind.base.surv.water = 100; true;`);
+                await T.eval(`indGoTrip(2024); true;`);
+                const wild = JSON.parse(await T.eval(`JSON.stringify(ind.wild.map(function (a) { return a.k; }))`));
+                if (wild.length < 8) bad.push('远征里野生动物太少 ' + wild.length);
+                // 造一只羊、一头牛在面前（不靠随机地图里刚好有）
+                await T.eval(`(function(){ ind.wild.push({ k: 'sheep', x: 3, z: -4, fed: 0, follow: false }); ind.wild.push({ k: 'cow', x: -3, z: -4, fed: 0, follow: false }); indTeleport(3, -2); indLookAt(3, -4); })(); true;`);
+                const ref = await T.eval(`(function(){ indBagAdd('bread', 1); indSelect('bread'); let a = ind.wild[ind.wild.length - 2]; return indAnimalAct(a) ? 'ate' : 'refused'; })()`);
+                if (ref !== 'refused' || !(await T.eval(`ind.bag.bread === 1`))) bad.push('羊居然吃面包');
+                await T.eval(`(function(){ indBagAdd('wheat', 10); indSelect('wheat'); let s = ind.wild[ind.wild.length - 2], c = ind.wild[ind.wild.length - 1]; for (let i = 0; i < 3; i++) indAnimalAct(s); for (let i = 0; i < 4; i++) indAnimalAct(c); })(); true;`);
+                if (!(await T.eval(`ind.wild[ind.wild.length - 2].follow && ind.wild[ind.wild.length - 1].follow && ind.bag.wheat === 3`))) bad.push('喂够了没跟着走 ' + await T.eval(`JSON.stringify(ind.wild.slice(-2))`));
+                // 跟着走：人走远，动物跟上来
+                await T.eval(`indTeleport(20, -4); indAdvance(8); true;`);
+                const dd = await T.eval(`Math.hypot(ind.wild[ind.wild.length - 2].x - ind.p.x, ind.wild[ind.wild.length - 2].z - ind.p.z)`);
+                if (dd > 4) bad.push('羊没跟上来 ' + dd);
+                // 撤离：一起回家
+                await T.eval(`(function(){ let e = ind.exits[0]; indTeleport(e.x, e.z); ind.wild.slice(-2).forEach(function (a) { a.x = e.x + 1; a.z = e.z + 1; }); indAdvance(3.2); })(); true;`);
+                const home = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, an: ind.base.animals.map(function (a) { return a.k; }) })`));
+                if (home.w !== 'base' || home.an.indexOf('sheep') < 0 || home.an.indexOf('cow') < 0) bad.push('动物没跟着回家 ' + JSON.stringify(home));
+                // 剪羊毛：刚回家要等一天；时间到了剪 2 份；饿了不给剪
+                const sheepIdx = await T.eval(`ind.base.animals.findIndex(function (a) { return a.k === 'sheep'; })`);
+                const cowIdx = await T.eval(`ind.base.animals.findIndex(function (a) { return a.k === 'cow'; })`);
+                await T.eval(`(function(){ indBagAdd('wheat', 3); indBagAdd('bread', 1); indSelect('bread'); let a = ind.base.animals[${sheepIdx}]; indAnimalAct(a); })(); true;`);
+                if (await T.eval(`!!ind.bag.wool`)) bad.push('刚回家就能剪毛');
+                await T.eval(`(function(){ let a = ind.base.animals[${sheepIdx}]; a.woolAt = 0; a.food = 10; indAnimalAct(a); })(); true;`);
+                if (await T.eval(`!!ind.bag.wool`)) bad.push('饿着的羊也给剪毛');
+                await T.eval(`(function(){ let a = ind.base.animals[${sheepIdx}]; indSelect('wheat'); indAnimalAct(a); indSelect('bread'); a.woolAt = 0; indAnimalAct(a); a.woolAt = 0; indAnimalAct(a); })(); true;`);
+                if ((await T.eval(`ind.bag.wool || 0`)) !== 4) bad.push('剪羊毛不对 ' + await T.eval(`ind.bag.wool`));
+                // 毛线 → 毛衣（保暖 8）
+                await T.eval(`(function(){ indBagAdd('wool', 2); for (let i = 0; i < 3; i++) indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'yarn'; })); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'sweater'; })); indSelect('sweater'); indUse(); })(); true;`);
+                if ((await T.eval(`ind.base.wear.body`)) !== 'sweater' || (await T.eval(`indWarmth()`)) !== 8) bad.push('毛衣没做出来或没穿上 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.wear])`));
+                // 挤牛奶：拿空桶，一天一次；灶台煮奶酪
+                await T.eval(`(function(){ indBoxTake('bucket', 2); indPanelClose(); let c = ind.base.animals[${cowIdx}]; c.food = 80; indSelect('bucket'); indAnimalAct(c); indSelect('bucket'); indAnimalAct(c); })(); true;`);
+                if ((await T.eval(`ind.bag.milk || 0`)) !== 1) bad.push('挤奶不对（应该一天一桶） ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indBoxTake('wood', 2); indPanelClose(); indStoveFuel('wood'); indStovePut('milk', 1); indStoveFire(1); indPanelClose(); indAdvance(40); true;`);
+                if (!(await T.eval(`ind.base.stove.out.cheese === 1 && ind.base.stove.out.bucket === 1`))) bad.push('煮不出奶酪 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 动物会饿：100 秒掉约 3.3
+                const f0 = await T.eval(`ind.base.animals[${cowIdx}].food`); await T.eval(`indAdvance(30); true;`);
+                const df = f0 - (await T.eval(`ind.base.animals[${cowIdx}].food`));
+                if (Math.abs(df - 1) > 0.1) bad.push('动物饱食掉得不对 ' + df);
+                // 存档
+                await T.eval(`indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
+                const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ an: b.animals.length, ver: b.ver })); }); })`));
+                if (sv.an !== 2 || sv.ver !== 4) bad.push('存档读回来不对 ' + JSON.stringify(sv));
+                // 进出 3 次不涨（动物也是一组画完）
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND4 第 2.8 阶段：野生动物、喂食驯服跟着回家、剪羊毛做毛衣、挤牛奶煮奶酪、动物会饿、存档', bad.length === 0, bad.join(' / '));
         }
 
         if (ONLY) throw new Error('ONLY_DONE');

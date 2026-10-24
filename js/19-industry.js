@@ -7,7 +7,8 @@
         //  第 1 阶段：隐藏入口、基地、远征地图（七种地貌、资源点、撤离点）、采集、撤离。
         //  第 2 阶段：世界规则（悠闲 / 硬核）、生存值（饱食、口渴、精力、体力、血量）、昼夜、床、种地、浇水、灶台（火候、燃料、做饭、烧开水、烧焦）。
         //  第 2.5 阶段：季节（一季 3 天，作物分季节，暖棚）、体温（气温、衣服、灶台和篝火取暖、下水冷）、工作台（衣服、篝火、暖棚）。
-        //  还没有：动物（2.8）、科技线（3 起，只给硬核）。
+        //  第 2.8 阶段：动物（羊、牛、狗、猫）：远征里喂吃的就跟着你，撤离时一起回家；羊剪毛、牛挤奶，羊毛做毛衣帽围巾，牛奶喝或煮奶酪。
+        //  还没有：科技线（3 起，只给硬核）；猫狗带到大厅当装饰（要改主游戏的宠物，以后和 Code 一起做）。
         // ══════════════════════════════════════════════════════════
         const IND_ENABLED = false;
         const IND_DBG_KEY = 'TH_hcdebug';
@@ -78,7 +79,13 @@
             coat: { name: '棉衣', col: 0x5c6bc0, wear: 'body', warm: 6 },
             hat: { name: '棉帽', col: 0x8e24aa, wear: 'head', warm: 2 },
             scarf: { name: '围巾', col: 0xe53935, wear: 'neck', warm: 2 },
-            campfire: { name: '篝火', col: 0xff7043, place: true }
+            campfire: { name: '篝火', col: 0xff7043, place: true },
+            wool: { name: '羊毛', col: 0xf5f5f5 }, yarn: { name: '毛线', col: 0xeeeeee },
+            sweater: { name: '毛衣', col: 0xc62828, wear: 'body', warm: 8 },
+            wool_hat: { name: '毛帽', col: 0x1565c0, wear: 'head', warm: 3 },
+            wool_scarf: { name: '毛围巾', col: 0xf9a825, wear: 'neck', warm: 3 },
+            milk: { name: '牛奶', col: 0xfffde7, eat: { f: 5, w: 25, back: 'bucket' } },
+            cheese: { name: '奶酪', col: 0xffe082, eat: { f: 35 } }
         };
         function indName(k) { return (IND_ITEMS[k] && IND_ITEMS[k].name) || k; }
         // 资源点：每种给几个、要什么稿子；seeds 是野生种子堆（随机一种作物）
@@ -119,8 +126,18 @@
         // 工作台配方（身上的原料够就能做）；gh 是盖暖棚（不出物品）
         const IND_CRAFT = [
             { out: 'coat', in: { cotton: 4 } }, { out: 'hat', in: { cotton: 2 } }, { out: 'scarf', in: { cotton: 2 } },
-            { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } }
+            { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } },
+            { out: 'yarn', in: { wool: 2 } }, { out: 'sweater', in: { yarn: 3 } }, { out: 'wool_hat', in: { yarn: 1 } }, { out: 'wool_scarf', in: { yarn: 1 } }
         ];
+        // 动物：饱食每秒掉 1/30（满 100），饿了（< 30）不产东西；羊每 2 天能剪一次毛，牛每天能挤一次奶（要空桶）；
+        // 驯服：远征里拿着它爱吃的东西对着它左键，喂够就跟着你走，撤离时 10 米内跟着的一起回家
+        const IND_ANIMALS = {
+            sheep: { name: '羊', col: 0xfafafa, size: [1.2, 0.9, 0.8], food: ['wheat', 'cabbage', 'radish'], tame: 3, biome: ['plain'] },
+            cow: { name: '牛', col: 0x6d4c41, size: [1.8, 1.3, 0.9], food: ['wheat', 'cabbage', 'radish'], tame: 4, biome: ['plain'] },
+            dog: { name: '狗', col: 0xffb74d, size: [0.9, 0.7, 0.45], food: ['bread', 'bake_potato', 'cheese'], tame: 1, biome: ['forest', 'plain'] },
+            cat: { name: '猫', col: 0xff8a65, size: [0.6, 0.45, 0.32], food: ['bread', 'bake_potato', 'cheese', 'milk'], tame: 1, biome: ['forest'] }
+        };
+        const IND_ANIMAL_CAP = 20, IND_WOOL_EVERY = 2 * 1200, IND_MILK_EVERY = 1200, IND_ANIMAL_HUNGER = 1 / 30;
         // 灶台：火候三档；燃料每秒烧掉的量；配方按顺序找第一个原料够的
         const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }];
         const IND_STOVE_CAP = 8;   // 灶台上最多放几种
@@ -133,7 +150,8 @@
             { in: { cane: 3 }, out: { sugar: 1 }, minT: 100, time: 20, burnT: 250 },
             { in: { potato: 1 }, out: { bake_potato: 1 }, minT: 180, time: 15, burnT: 400 },
             { in: { corn: 1 }, out: { bake_corn: 1 }, minT: 180, time: 15, burnT: 400 },
-            { in: { wood: 2 }, out: { charcoal: 1 }, minT: 400, time: 30 }
+            { in: { wood: 2 }, out: { charcoal: 1 }, minT: 400, time: 30 },
+            { in: { milk: 1 }, out: { cheese: 1, bucket: 1 }, minT: 100, time: 30, burnT: 300 }
         ];
         const IND_BURN_S = 8;   // 超过烧焦温度累计 8 秒就烧成焦炭
 
@@ -186,7 +204,7 @@
         const IND_WATER_Y = -1.2;
 
         // ── 存档（IndexedDB，单独存）──
-        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 3;
+        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 4;
         function indDb(cb) {
             try {
                 let rq = indexedDB.open(IND_DB, 1);
@@ -200,7 +218,7 @@
         const IND_V3_GIFT = { seed_cotton: 4, seed_cabbage: 3 };
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
-                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, fires: [], stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
+                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, fires: [], animals: [], stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
         }
         function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
         function indFixBase(b) {
@@ -228,6 +246,9 @@
             if (!Array.isArray(b.fires)) b.fires = [];
             b.fires = b.fires.filter(function (f) { return f && isFinite(f.x) && isFinite(f.z); }).slice(0, 30);
             b.fires.forEach(function (f) { f.fuel = indNum(f.fuel, 0, 0, 1e5); });
+            if (!Array.isArray(b.animals)) b.animals = [];
+            b.animals = b.animals.filter(function (a) { return a && IND_ANIMALS[a.k] && isFinite(a.x) && isFinite(a.z); }).slice(0, IND_ANIMAL_CAP);
+            b.animals.forEach(function (a) { a.food = indNum(a.food, 60, 0, 100); a.woolAt = indNum(a.woolAt, 0, 0, 1e9); a.milkAt = indNum(a.milkAt, 0, 0, 1e9); a.x = indNum(a.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); a.z = indNum(a.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1); });
             if (b.surv.hp <= 0) b.surv.hp = 100;
             if (!b.stove || typeof b.stove !== 'object') b.stove = n.stove;
             let S = b.stove;
@@ -340,6 +361,73 @@
             indFires().forEach(function (f) { if (f.fuel > 0) { f.fuel = Math.max(0, f.fuel - dt); if (f.fuel <= 0) ind.fireDirty = true; } });
         }
 
+        // ── 动物 ──
+        function indAnimals() { return ind.where === 'base' ? ind.base.animals : (ind.wild || []); }
+        function indFoodTxt(k) { return IND_ANIMALS[k].food.map(indName).join('、'); }
+        function indAnimalTick(dt, live) {
+            let A = indAnimals(), base = ind.where === 'base';
+            A.forEach(function (a, i) {
+                if (base && live) a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * dt);
+                let sp = 1.2, tx, tz;
+                if (!base && a.follow) {
+                    let d = Math.hypot(ind.p.x - a.x, ind.p.z - a.z);
+                    if (d > 2.5) { tx = ind.p.x; tz = ind.p.z; sp = Math.min(9, 2 + d); } else { tx = a.x; tz = a.z; }
+                } else {
+                    a.wt = (a.wt || 0) - dt;
+                    if (a.wt <= 0 || a.tx === undefined) {
+                        a.wt = 3 + indHash(i, Math.floor(ind.t), 7) * 5;
+                        let ang = indHash(i, Math.floor(ind.t * 3), 11) * Math.PI * 2, r = indHash(i, Math.floor(ind.t * 5), 13) * 5;
+                        a.tx = a.x + Math.cos(ang) * r; a.tz = a.z + Math.sin(ang) * r;
+                    }
+                    tx = a.tx; tz = a.tz;
+                }
+                let dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz);
+                if (d > 0.1) { let st = Math.min(d, sp * dt); a.x += dx / d * st; a.z += dz / d * st; a.ry = Math.atan2(dx, dz); }
+                if (base) { a.x = Math.max(-IND_BASE.x + 1, Math.min(IND_BASE.x - 1, a.x)); a.z = Math.max(-IND_BASE.z + 1, Math.min(IND_BASE.z - 1, a.z)); }
+                else { a.x = Math.max(-IND_MAP + 2, Math.min(IND_MAP - 2, a.x)); a.z = Math.max(-IND_MAP + 2, Math.min(IND_MAP - 2, a.z)); }
+            });
+        }
+        function indSyncAnimals() {
+            if (!ind.animalMesh) return;
+            indDummy();
+            let A = indAnimals(), n = Math.min(A.length, 40);
+            for (let i = 0; i < n; i++) {
+                let a = A[i], D = IND_ANIMALS[a.k], y = indGround(a.x, a.z);
+                IND_DUMMY.position.set(a.x, y + D.size[1] / 2, a.z); IND_DUMMY.rotation.set(0, a.ry || 0, 0); IND_DUMMY.scale.set(D.size[2], D.size[1], D.size[0]); IND_DUMMY.updateMatrix();
+                ind.animalMesh.setMatrixAt(i, IND_DUMMY.matrix); ind.animalMesh.setColorAt(i, IND_COL.setHex(D.col));
+            }
+            ind.animalMesh.count = n; ind.animalMesh.instanceMatrix.needsUpdate = true;
+            if (ind.animalMesh.instanceColor) ind.animalMesh.instanceColor.needsUpdate = true;
+        }
+        // 左键对着动物：野生的喂它爱吃的（喂够就跟着你）；基地里的喂食、剪羊毛、拿空桶挤牛奶
+        function indAnimalAct(a) {
+            let D = IND_ANIMALS[a.k], k = indSel(), clock = ind.base.clock;
+            if (ind.where === 'trip') {
+                if (a.follow) { indFlash(D.name + '跟着你呢，走回撤离点就一起回家'); return false; }
+                if (!k || D.food.indexOf(k) < 0) { indFlash('野生的' + D.name + '，爱吃：' + indFoodTxt(a.k)); return false; }
+                indBagDel(k, 1); a.fed = (a.fed || 0) + 1;
+                if (a.fed >= D.tame) { a.follow = true; indFlash(D.name + '跟着你了！'); }
+                else indFlash(D.name + '吃了，还要喂 ' + (D.tame - a.fed) + ' 次');
+                return true;
+            }
+            if (k && D.food.indexOf(k) >= 0) {
+                if (a.food >= 95) { indFlash(D.name + '吃饱了'); return false; }
+                indBagDel(k, 1); a.food = Math.min(100, a.food + 30); indSave(); indFlash('喂了' + D.name + '（饱食 ' + Math.round(a.food) + '）'); return true;
+            }
+            if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
+            if (a.k === 'cow' && k === 'bucket') {
+                if (clock < a.milkAt) { indFlash('牛奶还要等 ' + Math.ceil(a.milkAt - clock) + ' 秒'); return false; }
+                indBagDel('bucket', 1); indBagAdd('milk', 1); a.milkAt = clock + IND_MILK_EVERY; indSave(); indFlash('挤了一桶牛奶'); return true;
+            }
+            if (a.k === 'sheep') {
+                if (clock < a.woolAt) { indFlash('羊毛还要等 ' + Math.ceil(a.woolAt - clock) + ' 秒'); return false; }
+                if (indBagAdd('wool', 2) <= 0) { indFlash('身上放不下了'); return false; }
+                a.woolAt = clock + IND_WOOL_EVERY; indSave(); indFlash('剪了 2 份羊毛'); return true;
+            }
+            indFlash(D.name + (a.k === 'cow' ? '：拿空桶对着它左键挤奶' : '：喜欢跟你玩'));
+            return false;
+        }
+
         // ── 进出 ──
         let ind = null;
         function indFlash(t) { try { blazeFlash(t); } catch (e) { } }
@@ -430,7 +518,7 @@
             ind.objs.forEach(function (o) { scene.remove(o); });
             ind.geos.forEach(function (g) { g.dispose(); });
             ind.mats.forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); });
-            ind.objs = []; ind.geos = []; ind.mats = []; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.nodes = []; ind.exits = [];
+            ind.objs = []; ind.geos = []; ind.mats = []; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.animalMesh = null; ind.nodes = []; ind.exits = [];
         }
         function indBox(w, h, d, col, x, y, z) {
             let m = new THREE.Mesh(indGeo(new THREE.BoxGeometry(w, h, d)), indMat(new THREE.MeshLambertMaterial({ color: col })));
@@ -520,6 +608,8 @@
             pool: { x: 20, z: 10, r: 2.2, name: '水池' }, gate: { x: 0, z: -IND_BASE.z, name: '出发' }
         };
         function indGoBase(fromTrip) {
+            let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];
+            ind.wild = [];
             indClearWorld();
             ind.where = 'base'; ind.map = null; ind.exitT = 0;
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
@@ -542,10 +632,16 @@
             indSign('出发（远征）', g.x, 4.3, g.z, 3.2, 0.8);
             ind.itemMesh = indInst(new THREE.BoxGeometry(0.5, 0.5, 0.5), IND_ITEM_CAP); ind.itemDirty = true;
             ind.cropMesh = indInst(new THREE.ConeGeometry(0.5, 1, 6), IND_CROP_CAP); ind.cropDirty = true;
+            ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 40);
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             ind.p.x = 0; ind.p.z = fromTrip ? -IND_BASE.z + 4 : 4; ind.p.y = 0; ind.p.vy = 0;
             if (fromTrip) {
                 let got = Object.keys(ind.bag).map(function (k) { indBoxAdd(k, ind.bag[k]); return indName(k) + '×' + ind.bag[k]; });
+                fol.forEach(function (a, i) {
+                    if (ind.base.animals.length >= IND_ANIMAL_CAP) return;
+                    ind.base.animals.push({ k: a.k, x: 6 + i * 1.5, z: -IND_BASE.z + 6, food: 60, woolAt: ind.base.clock + IND_DAY, milkAt: ind.base.clock });
+                    got.push(IND_ANIMALS[a.k].name);
+                });
                 ind.bag = {}; ind.base.trips++;
                 indSave();
                 indFlash(got.length ? '撤离成功，带回：' + got.join('、') + '（都放进仓库箱了）' : '撤离成功，这次空手回来');
@@ -590,6 +686,16 @@
             }
             ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true;
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
+            // 野生动物：平原有羊和牛，森林有狗和猫
+            ind.wild = [];
+            for (let i = 0, tries = 0; ind.wild.length < 14 && tries < 400; tries++) {
+                let x = (r() * 2 - 1) * (IND_MAP - 10), z = (r() * 2 - 1) * (IND_MAP - 10), bm = indBiome(M, x, z);
+                if (Math.hypot(x, z) < 12 || indHeight(M, x, z) < -0.8) continue;
+                let ks = Object.keys(IND_ANIMALS).filter(function (k) { return IND_ANIMALS[k].biome.indexOf(bm) >= 0; });
+                if (!ks.length) continue;
+                ind.wild.push({ k: ks[Math.floor(r() * ks.length)], x: x, z: z, fed: 0, follow: false }); i++;
+            }
+            ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 40);
             ind.exits.push({ x: 0, z: 6, name: '回家的门' });
             for (let i = 0; i < 2; i++) { let a = r() * Math.PI * 2, d = IND_MAP * (0.45 + r() * 0.35); ind.exits.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, name: '撤离点' }); }
             ind.exits.forEach(function (e) {
@@ -634,7 +740,7 @@
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
             if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); indCropTick(dt); }
-            indFireTick(dt);
+            indFireTick(dt); indAnimalTick(dt, live);
             indStoveTick(dt);
             if (!ind || ind.over) return;
             indMove(dt);
@@ -646,7 +752,7 @@
                 ind.exitT = inExit ? ind.exitT + dt : 0;
                 if (ind.exitT >= IND_T.extract) indGoBase(true);
             }
-            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires();
+            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
             ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); indSeasonLook(); }
@@ -745,6 +851,7 @@
                 if (d < bd) { bd = d; best = { kind: kind, o: o }; }
             };
             indFires().forEach(function (f) { consider(f, f.x, f.z, 'fire'); });
+            indAnimals().forEach(function (a) { consider(a, a.x, a.z, 'animal', 0.4); });
             if (R.where === 'trip') R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node'); });
             else {
                 R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item'); });
@@ -767,6 +874,7 @@
             if (a && a.kind === 'bed') return indSleep();
             if (a && a.kind === 'bench') return indPanelBench();
             if (a && a.kind === 'fire') return indFeedFire(a.o);
+            if (a && a.kind === 'animal') return indAnimalAct(a.o);
             let k = indSel();
             if (ind.where === 'base' && k && IND_ITEMS[k].seed) return indPlant(k);
         }
@@ -853,6 +961,7 @@
             S.energy = 100;
             ind.base.crops.forEach(function (c) { let C = IND_CROPS[c.k]; if (indCropSeasonOK(c)) c.g = Math.min(C.grow, c.g + skip * (c.wet > ind.base.clock - skip ? 0.75 : 0.5)); });
             S.temp = 37; ind.base.fires.forEach(function (f) { f.fuel = Math.max(0, f.fuel - skip); }); ind.fireDirty = true;
+            ind.base.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * skip * 0.5); });
             ind.sleeping = true; for (let t = 0; t < skip; t += 1) indStoveTick(1); ind.sleeping = false;
             ind.cropDirty = true; indSave();
             indFlash('一觉睡到' + indClockTxt());
@@ -1115,6 +1224,11 @@
             else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水')) + '<br><small>' + (ripe ? '左键：收' : '拿着水，右键：浇水') + '</small>'; }
             else if (a && a.kind === 'fire') hint = '篝火' + (a.o.fuel > 0 ? ' 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒' : '（灭了）') + '<br><small>拿着木头，左键：加柴</small>';
             else if (a && a.kind === 'bench') hint = '工作台<br><small>左键：打开</small>';
+            else if (a && a.kind === 'animal') {
+                let o = a.o, D = IND_ANIMALS[o.k];
+                if (R.where === 'trip') hint = (o.follow ? D.name + '（跟着你）' : '野生的' + D.name + (o.fed ? '（还要喂 ' + (D.tame - o.fed) + ' 次）' : '')) + '<br><small>爱吃：' + indFoodTxt(o.k) + '</small>';
+                else hint = D.name + '　饱食 ' + Math.round(o.food) + (o.k === 'sheep' ? '　' + (R.base.clock >= o.woolAt ? '能剪毛了' : '毛还要 ' + Math.ceil(o.woolAt - R.base.clock) + ' 秒') : o.k === 'cow' ? '　' + (R.base.clock >= o.milkAt ? '能挤奶了' : '奶还要 ' + Math.ceil(o.milkAt - R.base.clock) + ' 秒') : '') + '<br><small>左键：' + (o.k === 'sheep' ? '喂／剪毛' : o.k === 'cow' ? '喂／拿空桶挤奶' : '喂') + '</small>';
+            }
             else if (a && a.kind === 'box') hint = '仓库箱<br><small>左键：打开</small>';
             else if (a && a.kind === 'stove') hint = '灶台 ' + Math.round(R.base.stove.temp) + '°C<br><small>左键：打开</small>';
             else if (a && a.kind === 'bed') hint = '床<br><small>左键：睡觉（夜里或累了）</small>';
