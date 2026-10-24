@@ -11,6 +11,7 @@
         //  第 3a 阶段（只给硬核）：冶炼（铜锌铁矿、黄铜、钢）、风箱（鼓风 1600°C）、刚出炉的锭是烫的（不拿钳子每秒扣血，泡水马上凉、放地上 30 秒凉）、钳子、铁稿、钢稿、配方查询。
         //  第 3b 阶段（只给硬核）：电。电池组（每节 1.5 V、180 U）、蒸汽发电机（灶台中火以上旁边 3 米，12 V 不限电量）、
         //  用电器（灯 6 V、水泵 12 V、电炉 24 V）、铜线一头接电源一头接用电器；电压超过额定直接炸（3 米内基地的东西都没了）。
+        //  冬天的菜（悠闲硬核都有）：热汤（番茄汤、萝卜汤、白菜炖萝卜）吃了体温 +1.5°C 最多到 37；腌萝卜（萝卜 2 + 盐 1 + 玻璃瓶 1，吃完还瓶子）；悠闲也能烧玻璃瓶。
         //  第 4 阶段（只给硬核）：化学。灶台烧柴攒草木灰；沙子 + 草木灰 1000°C 出玻璃瓶（沙子单独要 1700°C）；电解槽（12 V）：
         //  水 ≥ 2 V 出 2 氢 1 氧，盐水 ≥ 3 V 出氢氧化钠、氢、氯，熔融盐（灶台 801°C 以上 3 米内）≥ 4 V 出钠和氯；
         //  气瓶放下就是放气：氢气碰到火（灶台开着、篝火 3 米内）就炸，氯气是毒气（45 秒，3 米内每秒扣 8 血）；元素表（拿到一种元素就点亮一格）。
@@ -76,7 +77,10 @@
             bake_potato: { name: '烤土豆', col: 0x8d6e63, eat: { f: 30 } },
             bake_corn: { name: '烤玉米', col: 0xf9a825, eat: { f: 25 } },
             bread: { name: '面包', col: 0xd7a86e, eat: { f: 40 } },
-            tomato_soup: { name: '番茄汤', col: 0xd84315, eat: { f: 25, w: 20, back: 'bucket' } },
+            tomato_soup: { name: '番茄汤', col: 0xd84315, eat: { f: 25, w: 20, back: 'bucket', hot: 1 } },
+            radish_soup: { name: '萝卜汤', col: 0xf5f5dc, eat: { f: 30, w: 20, back: 'bucket', hot: 1 } },
+            cabbage_stew: { name: '白菜炖萝卜', col: 0xdce775, eat: { f: 40, w: 10, back: 'bucket', hot: 1 } },
+            pickle: { name: '腌萝卜', col: 0xf8bbd0, eat: { f: 15, back: 'bottle' } },
             sugar: { name: '糖', col: 0xffffff, eat: { f: 10 } },
             pumpkin_pie: { name: '南瓜派', col: 0xef6c00, eat: { f: 60 } },
             seed_cotton: { name: '棉花种子', col: 0xd7ccc8, seed: 'cotton' }, cotton: { name: '棉花', col: 0xfafafa },
@@ -156,6 +160,7 @@
         const IND_CRAFT = [
             { out: 'coat', in: { cotton: 4 } }, { out: 'hat', in: { cotton: 2 } }, { out: 'scarf', in: { cotton: 2 } },
             { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } },
+            { out: 'pickle', in: { radish: 2, salt: 1, bottle: 1 } },
             { out: 'yarn', in: { wool: 2 } }, { out: 'sweater', in: { yarn: 3 } }, { out: 'wool_hat', in: { yarn: 1 } }, { out: 'wool_scarf', in: { yarn: 1 } },
             { bellows: true, name: '风箱（装在灶台上）', in: { wood: 6, clay: 4 }, hard: true },
             { out: 'tongs', in: { ingot_cu: 2 }, hard: true },
@@ -164,6 +169,7 @@
             { out: 'dev_el', in: { ingot_fe: 2, ingot_cu: 2, bottle: 1 }, hard: true },
             { out: 'dev_lamp', in: { ingot_cu: 1, sand: 2 }, hard: true }, { out: 'dev_pump', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_furnace', in: { steel: 2, clay: 4, ingot_cu: 2 }, hard: true }, { out: 'pick_iron', in: { ingot_fe: 3, wood: 2 }, hard: true }, { out: 'pick_steel', in: { steel: 3, wood: 2 }, hard: true }
         ];
+        const IND_HOT_SOUP = 1.5;
         const IND_HOT_COOL = 30, IND_HOT_DPS = 15;   // 烫的锭放 30 秒凉；不拿钳子每秒扣 15 血
         // 动物：饱食每秒掉 1/30（满 100），饿了（< 30）不产东西；羊每 2 天能剪一次毛，牛每天能挤一次奶（要空桶）；
         // 驯服：远征里拿着它爱吃的东西对着它左键，喂够就跟着你走，撤离时 10 米内跟着的一起回家
@@ -183,6 +189,8 @@
             { in: { wheat: 2, salt: 1, water_boiled: 1 }, out: { bread: 1, bucket: 1 }, minT: 180, time: 30, burnT: 300 },
             { in: { pumpkin: 1, wheat: 2, sugar: 1 }, out: { pumpkin_pie: 1 }, minT: 180, time: 40, burnT: 300 },
             { in: { tomato: 1, water_boiled: 1, salt: 1 }, out: { tomato_soup: 1 }, minT: 100, time: 20, burnT: 400 },
+            { in: { radish: 1, water_boiled: 1, salt: 1 }, out: { radish_soup: 1 }, minT: 100, time: 20, burnT: 400 },
+            { in: { cabbage: 1, radish: 1, water_boiled: 1 }, out: { cabbage_stew: 1 }, minT: 100, time: 25, burnT: 400 },
             { in: { cane: 3 }, out: { sugar: 1 }, minT: 100, time: 20, burnT: 250 },
             { in: { potato: 1 }, out: { bake_potato: 1 }, minT: 180, time: 15, burnT: 400 },
             { in: { corn: 1 }, out: { bake_corn: 1 }, minT: 180, time: 15, burnT: 400 },
@@ -194,8 +202,8 @@
             { in: { ore_fe: 1 }, out: { hot_fe: 1 }, minT: 1538, time: 30, hard: true },
             { in: { ore_cu: 1 }, out: { hot_cu: 1 }, minT: 1085, time: 20, hard: true },
             { in: { ore_zn: 1 }, out: { hot_zn: 1 }, minT: 420, time: 15, hard: true },
-            // 玻璃：草木灰当助熔剂（钾碱），1000°C；只有沙子要 1700°C（电炉）
-            { in: { sand: 2, ash: 1 }, out: { bottle: 2 }, minT: 1000, time: 20, hard: true },
+            // 玻璃：草木灰当助熔剂（钾碱），1000°C（悠闲也能做，腌萝卜要用瓶子）；只有沙子要 1700°C（电炉）
+            { in: { sand: 2, ash: 1 }, out: { bottle: 2 }, minT: 1000, time: 20 },
             { in: { sand: 3 }, out: { bottle: 1 }, minT: 1700, time: 30, hard: true }
         ];
         // 电解槽的三种用法（按顺序找第一种原料够、电压够的）
@@ -979,9 +987,11 @@
             if (e.f) S.food = Math.max(0, Math.min(100, S.food + e.f));
             if (e.w) S.water = Math.max(0, Math.min(100, S.water + e.w));
             if (e.back) indBagAdd(e.back, 1);
+            let warm = false;
+            if (e.hot && S.temp < 37) { S.temp = Math.min(37, S.temp + IND_HOT_SOUP); warm = true; }   // 热汤：体温立刻 +1.5°C，最多到 37
             let sick = e.sick && indRand() < e.sick;
             if (sick) ind.sickT = IND_SURV.sick;
-            indFlash((e.w && !e.f ? '喝了' : '吃了') + indName(k) + (e.w < 0 ? '，越喝越渴' : '') + (sick ? '，肚子不舒服' : ''));
+            indFlash((e.w && !e.f ? '喝了' : '吃了') + indName(k) + (e.w < 0 ? '，越喝越渴' : '') + (warm ? '，身上暖和了' : '') + (sick ? '，肚子不舒服' : ''));
             return true;
         }
         function indGather(o) {

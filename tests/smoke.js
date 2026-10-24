@@ -4806,6 +4806,77 @@ async function enterExit(tab, key) {
             report('IND7 第 4 阶段：草木灰、玻璃瓶、电解（水、盐水、熔融盐、电压不够不干）、氢气碰火爆炸、氯气毒气、元素表、存档', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND9')) {
+            // IND9 冬天的菜：萝卜汤、白菜炖萝卜灶台做得出来（≥100°C，20／25 秒，不烧焦）；热汤（番茄汤、萝卜汤、白菜炖萝卜）吃了体温 +1.5°C 不超过 37°C，还空桶；
+            // 腌萝卜工作台做得出来（萝卜 2 + 盐 1 + 玻璃瓶 1），吃完还玻璃瓶；悠闲世界也能做；配方查询搜得到
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 50; S.water = 50; S.temp = 37; S.hp = 100; true;`);
+                const cook = (items, secs) => T.eval(`(function(){ ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 500, fire: 1, temp: 200, cook: null }; indAdvance(${secs}); return JSON.stringify(ind.base.stove); })()`);
+                // 萝卜汤：19 秒还没好，21 秒好
+                await cook({ radish: 1, water_boiled: 1, salt: 1 }, 19);
+                if (await T.eval(`!!ind.base.stove.out.radish_soup`)) bad.push('萝卜汤 19 秒就好了');
+                await T.eval(`indAdvance(2); true;`);
+                if ((await T.eval(`ind.base.stove.out.radish_soup || 0`)) !== 1) bad.push('做不出萝卜汤 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 白菜炖萝卜：24 秒还没好，26 秒好；不用盐
+                await cook({ cabbage: 1, radish: 1, water_boiled: 1 }, 24);
+                if (await T.eval(`!!ind.base.stove.out.cabbage_stew`)) bad.push('白菜炖萝卜 24 秒就好了');
+                await T.eval(`indAdvance(2); true;`);
+                if ((await T.eval(`ind.base.stove.out.cabbage_stew || 0`)) !== 1) bad.push('做不出白菜炖萝卜 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 100°C 以下不做（关火温度 20）
+                await T.eval(`ind.base.stove = { items: { radish: 1, water_boiled: 1, salt: 1 }, out: {}, fuel: 0, fire: 0, temp: 20, cook: null }; indAdvance(30); true;`);
+                if (await T.eval(`!!ind.base.stove.out.radish_soup || !!ind.base.stove.cook`)) bad.push('不到 100°C 也在做萝卜汤');
+                // 烧焦线 400°C：大火 1200°C 超过 8 秒烧成焦炭
+                await T.eval(`ind.base.stove = { items: { radish: 1, water_boiled: 1, salt: 1 }, out: {}, fuel: 500, fire: 3, temp: 1200, cook: null }; indAdvance(30); true;`);
+                if (!(await T.eval(`!!ind.base.stove.out.char && !ind.base.stove.out.radish_soup`))) bad.push('萝卜汤大火没烧焦 ' + await T.eval(`JSON.stringify(ind.base.stove.out)`));
+                // 热汤：体温 +1.5，不超过 37；还空桶
+                const eat = (k, t) => T.eval(`(function(){ ind.bag = {}; indBagAdd('${k}', 1); ind.base.surv.temp = ${t}; ind.base.surv.food = 50; ind.base.surv.water = 50; indEat('${k}'); return JSON.stringify({ t: ind.base.surv.temp, f: ind.base.surv.food, w: ind.base.surv.water, bag: ind.bag }); })()`);
+                const near = (a, b) => Math.abs(a - b) < 0.001;
+                let r = JSON.parse(await eat('radish_soup', 34));
+                if (!near(r.t, 35.5) || r.f !== 80 || r.w !== 70 || r.bag.bucket !== 1) bad.push('喝萝卜汤不对 ' + JSON.stringify(r));
+                r = JSON.parse(await eat('cabbage_stew', 34));
+                if (!near(r.t, 35.5) || r.f !== 90 || r.w !== 60 || r.bag.bucket !== 1) bad.push('吃白菜炖萝卜不对 ' + JSON.stringify(r));
+                r = JSON.parse(await eat('tomato_soup', 34));
+                if (!near(r.t, 35.5) || r.f !== 75 || r.w !== 70 || r.bag.bucket !== 1) bad.push('喝番茄汤没加体温 ' + JSON.stringify(r));
+                r = JSON.parse(await eat('radish_soup', 36));
+                if (!near(r.t, 37)) bad.push('36°C 喝汤超过 37 ' + JSON.stringify(r));
+                r = JSON.parse(await eat('radish_soup', 37));
+                if (!near(r.t, 37)) bad.push('37°C 喝汤变了 ' + JSON.stringify(r));
+                r = JSON.parse(await eat('radish_soup', 38.5));
+                if (!near(r.t, 38.5)) bad.push('发烧时喝汤被拉低了 ' + JSON.stringify(r));
+                // 不是汤的不加体温
+                r = JSON.parse(await eat('bake_potato', 34));
+                if (!near(r.t, 34)) bad.push('烤土豆加体温了 ' + JSON.stringify(r));
+                // 腌萝卜：工作台，萝卜 2 + 盐 1 + 玻璃瓶 1；吃完还玻璃瓶
+                await T.eval(`ind.bag = {}; indBagAdd('radish', 2); indBagAdd('salt', 1); indBagAdd('bottle', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pickle'; })); true;`);
+                let bag = JSON.parse(await T.eval(`JSON.stringify(ind.bag)`));
+                if (bag.pickle !== 1 || bag.radish || bag.salt || bag.bottle) bad.push('做不出腌萝卜 ' + JSON.stringify(bag));
+                r = JSON.parse(await eat('pickle', 34));
+                if (r.f !== 65 || r.bag.bottle !== 1 || r.bag.pickle || !near(r.t, 34)) bad.push('吃腌萝卜不对 ' + JSON.stringify(r));
+                // 悠闲世界：沙子 + 草木灰 1000°C 出玻璃瓶，腌萝卜也做得了，汤也加体温
+                await T.eval(`ind.base.rule = 'casual'; ind.base.stove = { items: { sand: 2, ash: 1 }, out: {}, fuel: 500, fire: 3, temp: 1200, cook: null }; indAdvance(25); true;`);
+                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('悠闲做不出玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`ind.bag = {}; indBagAdd('radish', 2); indBagAdd('salt', 1); indBagAdd('bottle', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pickle'; })); true;`);
+                if ((await T.eval(`ind.bag.pickle || 0`)) !== 1) bad.push('悠闲做不出腌萝卜');
+                await cook({ cabbage: 1, radish: 1, water_boiled: 1 }, 26);
+                if ((await T.eval(`ind.base.stove.out.cabbage_stew || 0`)) !== 1) bad.push('悠闲做不出白菜炖萝卜');
+                r = JSON.parse(await eat('cabbage_stew', 34));
+                if (!near(r.t, 35.5)) bad.push('悠闲喝汤没加体温 ' + JSON.stringify(r));
+                // 配方查询搜得到
+                await T.eval(`indPanelBook('萝卜'); true;`);
+                const bk = await T.eval(`document.getElementById('ind-panel').innerText`);
+                if (!/萝卜汤/.test(bk) || !/白菜炖萝卜/.test(bk) || !/腌萝卜/.test(bk)) bad.push('配方查询搜萝卜缺东西 ' + bk.slice(0, 200));
+                await T.eval(`indPanelClose(); true;`);
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND9 冬天的菜：萝卜汤和白菜炖萝卜、热汤加体温（不超过 37）、番茄汤也加、腌萝卜还玻璃瓶、悠闲也能做', bad.length === 0, bad.join(' / '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
