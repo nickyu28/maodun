@@ -5303,11 +5303,12 @@ async function enterExit(tab, key) {
         }
 
         {
-            // L1：18 个文件同时下载，页面显示"加载中 n/18"；其中一个晚到 2 秒，先显示进度、不报错，最后正常进大厅
+            // L1：全部文件同时下载，页面显示"加载中 n/总数"；其中一个晚到 2 秒，先显示进度、不报错，最后正常进大厅
             const bad = [];
             const D = await openTab(chrome, url, { noLobby: true, delayUrl: 'js/09-hunt.js', delayMs: 2000, navWait: 800 });
             const t1 = await D.eval(`(function(){ let b = document.getElementById('boot-load'); return (b ? b.innerText : '') + '|' + (typeof requestLobbyAccess); })()`);
-            if (!/^加载中 \d+\/18\|undefined$/.test(t1)) bad.push('先显示进度 ' + t1);
+            const nFiles = (fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').match(/const GAME_FILES = \[([^\]]*)\]/)[1].match(/'js\//g) || []).length;   // 文件数从 index.html 读（猫盾工业加了 19-industry.js）
+            if (!new RegExp('^加载中 \\d+\\/' + nFiles + '\\|undefined$').test(t1)) bad.push('先显示进度 ' + t1);
             let ready = false;
             for (let i = 0; i < 40 && !ready; i++) { await W(250); ready = await D.eval(`typeof requestLobbyAccess === 'function' && !document.getElementById('boot-load')`); }
             if (!ready) bad.push('文件到齐后没跑起来');
