@@ -3762,8 +3762,9 @@
                     if (isConsumed(gi) || gi === bi || gi.userData.type !== 'gem') return;
                     if (bi.userData.type !== 'base') return;   // 已经镶满变皇冠了就不再吃
                     if (bi.position.distanceTo(gi.position) >= GROUND_MERGE_RANGE) return;
-                    // H28：镶上这一颗就满了（变皇冠 = 一个大金）要占一个名额；名额没了也照样镶（只是不再扣）
+                    // H28：镶上这一颗就满了（变皇冠 = 一个合成大金）要占一个名额；名额用完了这颗不镶，东西不动，提示一次
                     let completes = crownSockCount(bi.userData) >= HUNT_GEMS.length - 1 && !(bi.userData.sock && bi.userData.sock[gi.userData.gem]);
+                    if (completes && huntCraftBigLeft <= 0) { huntBigNoteOnce(bi, gi); return; }
                     if (!crownSocketGem(bi.userData, gi.userData.gem)) return;
                     if (completes) huntBigCraftTake();
                     consumed.push(gi); scene.remove(gi);
@@ -3771,13 +3772,13 @@
                 });
             });
 
-            // 配方合成：同时有好几种合法组合时，一次选一个——先看产物价值，高的优先；价值一样看消耗的原料总价值，少的优先；
+            // 配方合成（会合出大金、但合成大金名额用完了的组合不算在内，提示一次）：同时有好几种合法组合时，一次选一个——先看产物价值，高的优先；价值一样看消耗的原料总价值，少的优先；
             // 再一样看两件离得近的、配方在表里靠前的、地上先后——同样的摆法每次选的都是同一个。合完一个再选下一个（新合出来的也能继续合）。
             for (let guard = 0; guard < 60; guard++) {
                 let m = huntBestMerge(consumed);
                 if (!m) break;
                 let rec = m.rec, ai = m.a, bi = m.b;
-                if (huntRecipeBigCost(rec)) huntBigCraftTake();   // H28
+                if (huntRecipeBigCost(rec) && !huntBigCraftTake()) break;   // H28（不会发生：huntBestMerge 已经排除了）
                 consumed.push(ai, bi); scene.remove(ai); scene.remove(bi);
                 let up = rec.out;
                 let ns = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4),
@@ -3801,6 +3802,12 @@
             if (x.i !== y.i) return x.i < y.i;
             return x.j < y.j;
         }
+        // 名额满了的提示：同一对东西只提示一次（不每帧弹）
+        let huntBigNoted = new WeakSet();
+        function huntBigNoteOnce(a, b) {
+            if (huntBigNoted.has(a) && huntBigNoted.has(b)) return;
+            huntBigNoted.add(a); huntBigNoted.add(b); huntBigCraftFullNote();
+        }
         function huntBestMerge(consumed) {
             let best = null;
             GROUND_RECIPES.forEach(function (rec, ri) {
@@ -3810,6 +3817,7 @@
                         if (bi === ai || consumed.indexOf(bi) > -1 || bi.userData.n !== rec.b) return;
                         let d = ai.position.distanceTo(bi.position);
                         if (d >= GROUND_MERGE_RANGE) return;
+                        if (huntCraftBigLeft <= 0 && huntRecipeBigCost(rec)) { huntBigNoteOnce(ai, bi); return; }   // H28：合成大金名额用完，这两样不合
                         let c = { rec: rec, ri: ri, a: ai, b: bi, outV: rec.out.v, cost: (ai.userData.v || 0) + (bi.userData.v || 0), d: d, i: i, j: j };
                         if (!best || huntMergeBetter(c, best)) best = c;
                     });
@@ -4199,7 +4207,8 @@
                 if (selectedInv.uses > 0) {
                     selectedInv.uses = 0;
                     camera.position.set(TILE, 9, TILE); pVel.set(0, 0, 0); onGround = true;
-                    clearFootprints3D(); currentNavPath = [];
+                    // 传回起点后，导航绿线和信号接收器蓝线都从新位置重画（以前这里把绿线连目标一起清掉了，用完地窖路线就没了）
+                    navRouteTick(true); signalRouteTick(true);
                     gState.inSafeZone = true; if (document.pointerLockElement) document.exitPointerLock();
                     updateHUD();
                 } else {
