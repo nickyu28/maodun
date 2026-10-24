@@ -4678,6 +4678,72 @@ async function enterExit(tab, key) {
             report('IND5 第 3a 阶段：冶炼、烫锭扣血、泡水和放地上变凉、钳子、风箱鼓风炼铁、铁稿、配方查询、悠闲没有科技', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND6')) {
+            // IND6 第 3b 阶段（电）：放电池组、电灯，铜线接上；4 节电池 6 V 灯亮、耗电；再装一节 7.5 V 超过额定直接炸（3 米内东西全没，远处的电池组不动）；
+            // 人在 3 米内扣 40 血；发电机放在中火灶台旁边 12 V 带水泵、水泵自动浇地；16 节 24 V 带电炉，灶台不烧柴也到 1800°C；电灯让夜里不那么黑；存档带着设备和电线
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; true;`);
+                const place = (k, x, z) => T.eval(`(function(){ indBagAdd('${k}', 1); indTeleport(${x}, ${z}); indLookAt(${x}, ${z} - 5); indSelect('${k}'); indUse(); return ind.base.devs[ind.base.devs.length - 1].id; })()`);
+                const click = (id, k) => T.eval(`(function(){ let d = indDev(${id}); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); if ('${k}') indSelect('${k}'); return indAction(); })()`);
+                const bank = await place('dev_bank', 0, 0), lamp = await place('dev_lamp', 6, 0);
+                await T.eval(`indBagAdd('wire', 10); indBagAdd('battery', 30); true;`);
+                await click(bank, 'wire'); await click(lamp, 'wire');
+                if ((await T.eval(`ind.base.wires.length`)) !== 1) bad.push('铜线没接上 ' + await T.eval(`JSON.stringify(ind.base.wires)`));
+                for (let i = 0; i < 4; i++) await click(bank, 'battery');
+                await T.eval(`indTeleport(-8, 5); indAdvance(5); true;`);
+                const on = JSON.parse(await T.eval(`JSON.stringify({ pw: indDev(${lamp}).pw, u: indDev(${bank}).u, v: indSrcVolt(indDev(${bank})) })`));
+                if (!on.pw || on.v !== 6 || Math.abs(on.u - (720 - 1)) > 0.05) bad.push('6 V 灯不亮或耗电不对 ' + JSON.stringify(on));
+                // 再装一节：7.5 V > 6 V，灯炸了，3 米外的电池组还在，人在远处不扣血
+                await T.eval(`(function(){ indBagAdd('wheat', 1); ind.base.ground.push({ k: 'wheat', x: 6.5, z: -1.6 }); })(); true;`);
+                await click(bank, 'battery');
+                await T.eval(`indTeleport(-8, 5); indAdvance(0.2); true;`);
+                const bm = JSON.parse(await T.eval(`JSON.stringify({ lamp: !!indDev(${lamp}), bank: !!indDev(${bank}), wires: ind.base.wires.length, ground: ind.base.ground.filter(function (g) { return g.x > 6; }).length, hp: ind.base.surv.hp })`));
+                if (bm.lamp || !bm.bank || bm.wires !== 0 || bm.ground !== 0 || bm.hp !== 100) bad.push('过压爆炸不对 ' + JSON.stringify(bm));
+                // 人在旁边炸：扣 40
+                const lamp2 = await place('dev_lamp', 6, 0);
+                await click(bank, 'wire'); await click(lamp2, 'wire');
+                await T.eval(`(function(){ let d = indDev(${lamp2}); indTeleport(d.x + 1, d.z); indAdvance(0.2); })(); true;`);
+                if (Math.abs((await T.eval(`ind.base.surv.hp`)) - 60) > 0.5) bad.push('人在 3 米内没扣 40 血 ' + await T.eval(`ind.base.surv.hp`));
+                // 发电机：中火灶台 3 米内 12 V，带水泵，水泵把地浇了
+                await T.eval(`(function(){ ind.base.crops.push({ k: 'wheat', x: -17, z: 3, g: 0, wet: 0, times: 0 }); indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(2); indPanelClose(); })(); true;`);
+                const gen = await place('dev_gen', 8, -15), pump = await place('dev_pump', 12, -10);
+                await click(gen, 'wire'); await click(pump, 'wire');
+                await T.eval(`indTeleport(-8, 5); indAdvance(0.5); true;`);
+                const pp = JSON.parse(await T.eval(`JSON.stringify({ v: indSrcVolt(indDev(${gen})), pw: indDev(${pump}).pw, wet: ind.base.crops[0].wet > ind.base.clock })`));
+                if (pp.v !== 12 || !pp.pw || !pp.wet) bad.push('发电机带水泵不对 ' + JSON.stringify(pp));
+                // 电炉：24 V（16 节）放在灶台旁边，灶台不烧柴也升到 1800°C
+                await T.eval(`(function(){ indStoveFire(0); indPanelClose(); })(); true;`);
+                const bank2 = await place('dev_bank', 4, -14), fur = await place('dev_furnace', 6, -16);
+                await click(bank2, 'wire'); await click(fur, 'wire');
+                for (let i = 0; i < 16; i++) await click(bank2, 'battery');
+                await T.eval(`indTeleport(-8, 5); indAdvance(40); true;`);
+                const ft = JSON.parse(await T.eval(`JSON.stringify({ pw: !!(indDev(${fur}) || {}).pw, t: ind.base.stove.temp, fire: ind.base.stove.fire })`));
+                if (!ft.pw || ft.t < 1700 || ft.fire !== 0) bad.push('电炉没把灶台烧到 1800°C ' + JSON.stringify(ft));
+                // 电灯：夜里在亮着的灯旁边不那么黑
+                const lamp3 = await place('dev_lamp', -10, 10);
+                const bank3 = await place('dev_bank', -14, 10);
+                await click(bank3, 'wire'); await click(lamp3, 'wire'); await click(bank3, 'battery'); await click(bank3, 'battery');
+                await T.eval(`ind.base.clock = Math.floor(ind.base.clock / IND_DAY) * IND_DAY + IND_DUSK + 100; indTeleport(-10, 13); indAdvance(0.2); true;`);
+                if (!(await T.eval(`indLampNear()`))) bad.push('夜里灯旁边不亮');
+                // 存档
+                await T.eval(`indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
+                const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ d: b.devs.length, w: b.wires.length, ver: b.ver })); }); })`));
+                const now = JSON.parse(await T.eval(`JSON.stringify({ d: ind.base.devs.length, w: ind.base.wires.length })`));
+                if (sv.d !== now.d || sv.w !== now.w || sv.ver < 6) bad.push('存档读回来不对 ' + JSON.stringify([sv, now]));
+                // 收起设备：电池组按剩的电量还电池
+                const back = await T.eval(`(function(){ let d = indDev(${bank3}); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); indSelect('wire'); let b0 = ind.bag.battery || 0; indUse(); return [!!indDev(${bank3}), (ind.bag.battery || 0) - b0, ind.bag.dev_bank || 0].join(','); })()`);
+                if (back !== 'false,2,1') bad.push('收起电池组不对 ' + back);
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND6 第 3b 阶段：电池组、铜线、电灯、过压爆炸、爆炸伤人、发电机带水泵浇地、电炉 1800°C、夜里电灯、存档、收起设备', bad.length === 0, bad.join(' / '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
