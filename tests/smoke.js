@@ -4877,6 +4877,87 @@ async function enterExit(tab, key) {
             report('IND9 冬天的菜：萝卜汤和白菜炖萝卜、热汤加体温（不超过 37）、番茄汤也加、腌萝卜还玻璃瓶、悠闲也能做', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND10')) {
+            // IND10 玻璃暖棚、等待时间、精力：木暖棚才能升级玻璃暖棚（10 玻璃瓶 + 6 木头），范围从 x -28～-20 扩大到 -28～-17，旧档默认不是玻璃棚；
+            // 挤奶 300 秒、剪毛 600 秒、南瓜 900 秒、甘蔗 600 秒，旧档记的下次时间比新间隔晚就改成现在 + 新间隔；
+            // 精力：平时每分钟掉 4，跑步 ×2（跑 60 秒掉约 8），走 60 秒掉约 4
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('casual'); ind.base.surv.food = 100; ind.base.surv.water = 100; ind.base.surv.temp = 37; true;`);
+                // ── 玻璃暖棚 ──
+                const gi = `IND_CRAFT.findIndex(function (r) { return r.glass; })`, wi = `IND_CRAFT.findIndex(function (r) { return r.gh; })`;
+                await T.eval(`ind.bag = {}; indBagAdd('bottle', 10); indBagAdd('wood', 6); true;`);
+                if (await T.eval(`indCraft(${gi})`) || await T.eval(`ind.base.glass`)) bad.push('没有木暖棚也能升级玻璃暖棚');
+                await T.eval(`ind.bag = {}; indBagAdd('wood', 10); indCraft(${wi}); true;`);
+                if (!(await T.eval(`ind.base.gh && !ind.base.glass && indInGh(-25, 0) && !indInGh(-18, 0)`))) bad.push('木暖棚范围不对');
+                await T.eval(`ind.bag = {}; indBagAdd('bottle', 9); indBagAdd('wood', 6); true;`);
+                if (await T.eval(`indCraft(${gi})`)) bad.push('9 个玻璃瓶也能升级');
+                await T.eval(`ind.bag = {}; indBagAdd('bottle', 10); indBagAdd('wood', 5); true;`);
+                if (await T.eval(`indCraft(${gi})`)) bad.push('5 根木头也能升级');
+                await T.eval(`ind.bag = {}; indBagAdd('bottle', 10); indBagAdd('wood', 6); true;`);
+                if (!(await T.eval(`indCraft(${gi})`))) bad.push('原料够了升级不了');
+                if (await T.eval(`!!ind.bag.bottle || !!ind.bag.wood`)) bad.push('升级没扣原料 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if (!(await T.eval(`ind.base.glass && indInGh(-18, 0) && indInGh(-17, 0) && indInGh(-28, 18) && !indInGh(-16.5, 0) && !indInGh(-29, 0)`))) bad.push('玻璃暖棚范围不对');
+                await T.eval(`ind.bag = {}; indBagAdd('bottle', 10); indBagAdd('wood', 6); true;`);
+                if (await T.eval(`indCraft(${gi})`)) bad.push('玻璃暖棚能重复做');
+                // 冬天露天不长，玻璃棚里（x -18）长、木棚里（x -25）长
+                await T.eval(`ind.base.clock = 9 * IND_DAY + 10; true;`);
+                if (!(await T.eval(`indSeason() === 3 && indCropSeasonOK({ k: 'wheat', x: -18, z: 0 }) && indCropSeasonOK({ k: 'wheat', x: -25, z: 0 }) && !indCropSeasonOK({ k: 'wheat', x: -10, z: 0 })`))) bad.push('玻璃暖棚里冬天不长小麦');
+                if (await T.eval(`ind.where === 'base' && !ind.ghMesh`)) bad.push('玻璃暖棚没画出来');
+                // 存档读得回来；老档（没有 glass 字段）默认不是玻璃棚
+                await T.eval(`indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
+                const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ glass: b.glass, gh: b.gh, ver: b.ver })); }); })`));
+                if (!sv.glass || !sv.gh) bad.push('玻璃暖棚存档读不回来 ' + JSON.stringify(sv));
+                const old = JSON.parse(await T.eval(`(function(){ let b = indFixBase({ ver: 7, rule: 'casual', gh: true }); return JSON.stringify({ glass: b.glass, gh: b.gh }); })()`));
+                if (old.glass !== false || old.gh !== true) bad.push('老档默认不对 ' + JSON.stringify(old));
+                const old2 = JSON.parse(await T.eval(`(function(){ let b = indFixBase({ ver: 7, rule: 'casual', glass: true }); return JSON.stringify({ glass: b.glass, gh: b.gh }); })()`));
+                if (old2.glass !== false) bad.push('没有木暖棚却有玻璃棚 ' + JSON.stringify(old2));
+                // 配方查询搜得到
+                await T.eval(`indPanelBook('玻璃暖棚'); true;`);
+                if (!/玻璃暖棚/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('配方查询搜不到玻璃暖棚');
+                await T.eval(`indPanelClose(); true;`);
+                // ── 等待时间 ──
+                const wt = JSON.parse(await T.eval(`JSON.stringify({ milk: IND_MILK_EVERY, wool: IND_WOOL_EVERY, pumpkin: IND_CROPS.pumpkin.grow, cane: IND_CROPS.cane.grow })`));
+                if (wt.milk !== 300 || wt.wool !== 600 || wt.pumpkin !== 900 || wt.cane !== 600) bad.push('等待时间不对 ' + JSON.stringify(wt));
+                // 旧档：下次时间比 现在 + 新间隔 晚的改成现在 + 新间隔，早的不动
+                const lg = JSON.parse(await T.eval(`(function(){ let b = indFixBase({ ver: 7, rule: 'casual', clock: 100, animals: [
+                    { k: 'cow', x: 0, z: 0, food: 60, milkAt: 1300, woolAt: 0 }, { k: 'sheep', x: 1, z: 0, food: 60, milkAt: 0, woolAt: 2500 },
+                    { k: 'cow', x: 2, z: 0, food: 60, milkAt: 150, woolAt: 0 }, { k: 'sheep', x: 3, z: 0, food: 60, milkAt: 0, woolAt: 400 }] });
+                    return JSON.stringify(b.animals.map(function (a) { return [a.milkAt, a.woolAt]; })); })()`));
+                if (lg[0][0] !== 400 || lg[1][1] !== 700 || lg[2][0] !== 150 || lg[3][1] !== 400) bad.push('老档的下次时间不对 ' + JSON.stringify(lg));
+                // 挤奶、剪毛之后的下次时间
+                await T.eval(`(function(){ ind.bag = {}; indBagAdd('bucket', 1); ind.base.animals = [{ k: 'cow', x: 5, z: 5, food: 100, milkAt: 0, woolAt: 0 }, { k: 'sheep', x: 7, z: 5, food: 100, milkAt: 0, woolAt: 0 }]; })(); true;`);
+                const ac = JSON.parse(await T.eval(`(function(){ let c = ind.base.clock, r1 = indAnimalAct(ind.base.animals[0]), r2 = indAnimalAct(ind.base.animals[1]); return JSON.stringify({ r1: r1, r2: r2, m: ind.base.animals[0].milkAt - c, w: ind.base.animals[1].woolAt - c }); })()`));
+                if (ac.r1 !== true || ac.r2 !== true || ac.m !== 300 || ac.w !== 600) bad.push('挤奶剪毛后的间隔不对 ' + JSON.stringify(ac));
+                // 南瓜、甘蔗：浇了水在暖棚里，899 秒没熟、901 秒熟
+                await T.eval(`(function(){ ind.base.crops = [{ k: 'pumpkin', x: -25, z: 0, g: 0, wet: 1e9, times: 0 }, { k: 'cane', x: -25, z: 2, g: 0, wet: 1e9, times: 0 }]; ind.base.surv.food = 100; ind.base.surv.water = 100; indAdvance(590, 1); })(); true;`);
+                if (await T.eval(`indCropRipe(ind.base.crops[1])`)) bad.push('甘蔗 590 秒就熟了');
+                await T.eval(`indAdvance(20, 1); true;`);
+                if (!(await T.eval(`indCropRipe(ind.base.crops[1]) && !indCropRipe(ind.base.crops[0])`))) bad.push('甘蔗 610 秒没熟，或南瓜太早熟');
+                await T.eval(`indAdvance(280, 1); true;`);
+                if (await T.eval(`indCropRipe(ind.base.crops[0])`)) bad.push('南瓜 890 秒就熟了');
+                await T.eval(`indAdvance(20, 1); true;`);
+                if (!(await T.eval(`indCropRipe(ind.base.crops[0])`))) bad.push('南瓜 910 秒还没熟');
+                // ── 精力 ──
+                const energy = async (run) => {
+                    await T.eval(`(function(){ ind.p.x = 0; ind.p.z = 4; ind.base.clock = 60; ind.base.surv.energy = 100; ind.base.surv.food = 100; ind.base.surv.water = 100; ind.sleeping = false; })(); true;`);
+                    return +(await T.eval(`(function(){ camera.rotation.set(0, 0, 0); ind.k.w = true; ind.k.run = ${run ? 'true' : 'false'};
+                        for (let i = 0; i < 1200; i++) { ind.stam = 100; ind.p.x = 0; ind.p.z = 4; indTick(0.05); }
+                        ind.k.w = false; ind.k.run = false; return 100 - ind.base.surv.energy; })()`));
+                };
+                const walk = await energy(false), run = await energy(true);
+                if (Math.abs(walk - 4) > 0.3) bad.push('走 60 秒精力掉 ' + walk.toFixed(2) + '，应该约 4');
+                if (Math.abs(run - 8) > 0.5) bad.push('跑 60 秒精力掉 ' + run.toFixed(2) + '，应该约 8');
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND10 玻璃暖棚（要先有木棚、扩大范围、旧档默认不是）、挤奶剪毛南瓜甘蔗的新等待时间、旧档时间改短、精力走 60 秒掉 4 跑 60 秒掉 8', bad.length === 0, bad.join(' / '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式

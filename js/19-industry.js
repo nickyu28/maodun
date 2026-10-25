@@ -44,7 +44,7 @@
         const IND_SEASONS = [{ name: '春', t: 18 }, { name: '夏', t: 28 }, { name: '秋', t: 15 }, { name: '冬', t: -5 }];
         // 体温：等效气温 = 气温 + 衣服保暖 × 2.5；低于 15°C 慢慢变冷、高于 30°C 慢慢变热，每差 1 度每秒变 0.0015°C；不冷不热时每秒回 37°C 0.02
         const IND_BODY = { warmMul: 2.5, cold: 15, hot: 30, rate: 0.0015, back: 0.02, chill: 35, freeze: 33, sweat: 39, boil: 41, fireR: 4, fireHeat: 20, waterCold: 10 };
-        const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 1.5 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, regen: 0.3, starveHp: 1, thirstHp: 2 };
+        const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 4 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, regen: 0.3, starveHp: 1, thirstHp: 2 };
 
         // ── 物品 ──
         // tool：稿子等级；eat：吃喝的效果 { f 饱食, w 口渴, sick 拉肚子概率, back 吃完还回来什么 }
@@ -148,18 +148,21 @@
             potato: { name: '土豆', grow: 240, yield: [2, 4], seeds: [1, 1], col: 0x8d6e63, s: [0, 2] },
             tomato: { name: '番茄', grow: 360, yield: [2, 3], seeds: [0, 1], col: 0xe53935, regrow: 180, times: 3, s: [1] },
             corn: { name: '玉米', grow: 480, yield: [2, 2], seeds: [1, 1], col: 0xfdd835, s: [1, 2] },
-            cane: { name: '甘蔗', grow: 900, yield: [2, 4], seeds: [1, 1], col: 0x9ccc65, s: [1] },
-            pumpkin: { name: '南瓜', grow: 1800, yield: [1, 1], seeds: [1, 2], col: 0xfb8c00, s: [1, 2] },
+            cane: { name: '甘蔗', grow: 600, yield: [2, 4], seeds: [1, 1], col: 0x9ccc65, s: [1] },
+            pumpkin: { name: '南瓜', grow: 900, yield: [1, 1], seeds: [1, 2], col: 0xfb8c00, s: [1, 2] },
             cotton: { name: '棉花', grow: 600, yield: [2, 3], seeds: [1, 1], col: 0xfafafa, s: [1, 2] },
             cabbage: { name: '白菜', grow: 300, yield: [1, 2], seeds: [1, 1], col: 0xc5e1a5, s: [0, 2, 3] },
             radish: { name: '萝卜', grow: 240, yield: [1, 2], seeds: [1, 1], col: 0xffffff, s: [0, 2, 3] }
         };
         // 暖棚：盖在农田最左边一条（x -28～-20），棚里的作物不管季节都长
         const IND_GH = { x0: -28, x1: -20, z0: -18, z1: 18 };
+        // 玻璃暖棚：木暖棚升级，扩大到农田左半边（x -28～-17）
+        const IND_GH_GLASS = { x0: -28, x1: -17, z0: -18, z1: 18 };
+        function indGhBox() { return ind.base.glass ? IND_GH_GLASS : IND_GH; }
         // 工作台配方（身上的原料够就能做）；gh 是盖暖棚（不出物品）
         const IND_CRAFT = [
             { out: 'coat', in: { cotton: 4 } }, { out: 'hat', in: { cotton: 2 } }, { out: 'scarf', in: { cotton: 2 } },
-            { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } },
+            { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } }, { glass: true, name: '玻璃暖棚（先要有木暖棚）', in: { bottle: 10, wood: 6 } },
             { out: 'pickle', in: { radish: 2, salt: 1, bottle: 1 } },
             { out: 'yarn', in: { wool: 2 } }, { out: 'sweater', in: { yarn: 3 } }, { out: 'wool_hat', in: { yarn: 1 } }, { out: 'wool_scarf', in: { yarn: 1 } },
             { bellows: true, name: '风箱（装在灶台上）', in: { wood: 6, clay: 4 }, hard: true },
@@ -171,7 +174,7 @@
         ];
         const IND_HOT_SOUP = 1.5;
         const IND_HOT_COOL = 30, IND_HOT_DPS = 15;   // 烫的锭放 30 秒凉；不拿钳子每秒扣 15 血
-        // 动物：饱食每秒掉 1/30（满 100），饿了（< 30）不产东西；羊每 2 天能剪一次毛，牛每天能挤一次奶（要空桶）；
+        // 动物：饱食每秒掉 1/30（满 100），饿了（< 30）不产东西；羊每 600 秒能剪一次毛，牛每 300 秒能挤一次奶（要空桶）；
         // 驯服：远征里拿着它爱吃的东西对着它左键，喂够就跟着你走，撤离时 10 米内跟着的一起回家
         const IND_ANIMALS = {
             sheep: { name: '羊', col: 0xfafafa, size: [1.2, 0.9, 0.8], food: ['wheat', 'cabbage', 'radish'], tame: 3, biome: ['plain'] },
@@ -179,7 +182,7 @@
             dog: { name: '狗', col: 0xffb74d, size: [0.9, 0.7, 0.45], food: ['bread', 'bake_potato', 'cheese'], tame: 1, biome: ['forest', 'plain'] },
             cat: { name: '猫', col: 0xff8a65, size: [0.6, 0.45, 0.32], food: ['bread', 'bake_potato', 'cheese', 'milk'], tame: 1, biome: ['forest'] }
         };
-        const IND_ANIMAL_CAP = 20, IND_WOOL_EVERY = 2 * 1200, IND_MILK_EVERY = 1200, IND_ANIMAL_HUNGER = 1 / 30;
+        const IND_ANIMAL_CAP = 20, IND_WOOL_EVERY = 600, IND_MILK_EVERY = 300, IND_ANIMAL_HUNGER = 1 / 30;
         // 灶台：火候三档；燃料每秒烧掉的量；配方按顺序找第一个原料够的
         const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }, { name: '鼓风', t: 1600, burn: 3, bellows: true }];
         const IND_STOVE_CAP = 8;   // 灶台上最多放几种
@@ -267,7 +270,7 @@
         const IND_WATER_Y = -1.2;
 
         // ── 存档（IndexedDB，单独存）──
-        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 7;
+        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 8;
         function indDb(cb) {
             try {
                 let rq = indexedDB.open(IND_DB, 1);
@@ -281,7 +284,7 @@
         const IND_V3_GIFT = { seed_cotton: 4, seed_cabbage: 3 };
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
-                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, bellows: false, fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
+                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, bellows: false, fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
         }
         function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
         function indFixBase(b) {
@@ -305,7 +308,7 @@
             b.surv.temp = indNum(b.surv.temp, 37, 25, 45);
             if (!b.wear || typeof b.wear !== 'object') b.wear = {};
             Object.keys(b.wear).forEach(function (sl) { let k = b.wear[sl]; if (!IND_ITEMS[k] || IND_ITEMS[k].wear !== sl) delete b.wear[sl]; });
-            b.gh = !!b.gh; b.bellows = !!b.bellows;
+            b.gh = !!b.gh; b.glass = b.gh && !!b.glass; b.bellows = !!b.bellows;   // 旧档没有 glass，默认木暖棚
             if (!Array.isArray(b.devs)) b.devs = [];
             b.devs = b.devs.filter(function (d) { return d && IND_DEVS[d.ty] && isFinite(d.x) && isFinite(d.z) && d.id; }).slice(0, IND_DEV_CAP);
             b.devs.forEach(function (d) { if (!d.st || typeof d.st !== 'object') d.st = {}; Object.keys(d.st).forEach(function (k) { if (!IND_ITEMS[k] || !(d.st[k] > 0)) delete d.st[k]; }); d.et = indNum(d.et, 0, 0, 1e3); d.bats = indNum(d.bats, 0, 0, 64) | 0; d.u = indNum(d.u, 0, 0, 64 * IND_BAT_U); d.on = d.on !== false; d.ft = indNum(d.ft, 20, 20, 2000); });
@@ -320,7 +323,8 @@
             b.fires.forEach(function (f) { f.fuel = indNum(f.fuel, 0, 0, 1e5); });
             if (!Array.isArray(b.animals)) b.animals = [];
             b.animals = b.animals.filter(function (a) { return a && IND_ANIMALS[a.k] && isFinite(a.x) && isFinite(a.z); }).slice(0, IND_ANIMAL_CAP);
-            b.animals.forEach(function (a) { a.food = indNum(a.food, 60, 0, 100); a.woolAt = indNum(a.woolAt, 0, 0, 1e9); a.milkAt = indNum(a.milkAt, 0, 0, 1e9); a.x = indNum(a.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); a.z = indNum(a.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1); });
+            b.animals.forEach(function (a) { a.food = indNum(a.food, 60, 0, 100); a.woolAt = Math.min(indNum(a.woolAt, 0, 0, 1e9), b.clock + IND_WOOL_EVERY); a.milkAt = Math.min(indNum(a.milkAt, 0, 0, 1e9), b.clock + IND_MILK_EVERY);   // 旧档里记的下次时间比新间隔晚，改成现在 + 新间隔
+             a.x = indNum(a.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); a.z = indNum(a.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1); });
             if (b.surv.hp <= 0) b.surv.hp = 100;
             if (!b.stove || typeof b.stove !== 'object') b.stove = n.stove;
             let S = b.stove;
@@ -395,7 +399,7 @@
         // 季节：一季 3 天，春夏秋冬轮
         function indSeason() { return Math.floor((indDayNo() - 1) / IND_SEASON_DAYS) % 4; }
         function indSeasonTxt() { return IND_SEASONS[indSeason()].name + '天（第 ' + ((indDayNo() - 1) % IND_SEASON_DAYS + 1) + '/' + IND_SEASON_DAYS + ' 天）'; }
-        function indInGh(x, z) { return ind.base.gh && x >= IND_GH.x0 && x <= IND_GH.x1 && z >= IND_GH.z0 && z <= IND_GH.z1; }
+        function indInGh(x, z) { let G = indGhBox(); return ind.base.gh && x >= G.x0 && x <= G.x1 && z >= G.z0 && z <= G.z1; }
         function indCropSeasonOK(c) { return indInGh(c.x, c.z) || IND_CROPS[c.k].s.indexOf(indSeason()) >= 0; }
         // 火：基地的篝火存档，远征的篝火只在这一趟
         function indFires() { return ind.where === 'base' ? ind.base.fires : (ind.tripFires || []); }
@@ -655,12 +659,14 @@
 
         // 暖棚：半透明的顶和四根柱子
         function indBuildGh() {
-            if (ind.ghMesh) return;
-            let G = IND_GH, w = G.x1 - G.x0, d = G.z1 - G.z0, cx = (G.x0 + G.x1) / 2, cz = (G.z0 + G.z1) / 2;
-            let roof = new THREE.Mesh(indGeo(new THREE.BoxGeometry(w, 0.1, d)), indMat(new THREE.MeshLambertMaterial({ color: 0xe0f7fa, transparent: true, opacity: 0.35 })));
+            if (ind.ghObjs) ind.ghObjs.forEach(function (o) { scene.remove(o); let i = ind.objs.indexOf(o); if (i >= 0) ind.objs.splice(i, 1); });   // 升级玻璃棚时重盖
+            let before = ind.objs.length;
+            let G = indGhBox(), w = G.x1 - G.x0, d = G.z1 - G.z0, cx = (G.x0 + G.x1) / 2, cz = (G.z0 + G.z1) / 2;
+            let roof = new THREE.Mesh(indGeo(new THREE.BoxGeometry(w, 0.1, d)), indMat(new THREE.MeshLambertMaterial({ color: ind.base.glass ? 0xb3e5fc : 0xe0f7fa, transparent: true, opacity: ind.base.glass ? 0.3 : 0.35 })));
             roof.position.set(cx, 3, cz); indAdd(roof); ind.ghMesh = roof;
-            [[G.x0, G.z0], [G.x1, G.z0], [G.x0, G.z1], [G.x1, G.z1]].forEach(function (p) { indBox(0.2, 3, 0.2, 0x8d6e63, p[0], 1.5, p[1]); });
-            indSign('暖棚', cx, 3.8, G.z0, 2, 0.5);
+            [[G.x0, G.z0], [G.x1, G.z0], [G.x0, G.z1], [G.x1, G.z1]].forEach(function (p) { indBox(0.2, 3, 0.2, ind.base.glass ? 0x90a4ae : 0x8d6e63, p[0], 1.5, p[1]); });
+            indSign(ind.base.glass ? '玻璃暖棚' : '暖棚', cx, 3.8, G.z0, 2.6, 0.5);
+            ind.ghObjs = ind.objs.slice(before);
         }
         function indSyncFires() {
             if (!ind.fireMesh || !ind.fireDirty) return;
@@ -715,7 +721,7 @@
                 let got = Object.keys(ind.bag).map(function (k) { indBoxAdd(k, ind.bag[k]); return indName(k) + '×' + ind.bag[k]; });
                 fol.forEach(function (a, i) {
                     if (ind.base.animals.length >= IND_ANIMAL_CAP) return;
-                    ind.base.animals.push({ k: a.k, x: 6 + i * 1.5, z: -IND_BASE.z + 6, food: 60, woolAt: ind.base.clock + IND_DAY, milkAt: ind.base.clock });
+                    ind.base.animals.push({ k: a.k, x: 6 + i * 1.5, z: -IND_BASE.z + 6, food: 60, woolAt: ind.base.clock + IND_WOOL_EVERY, milkAt: ind.base.clock });
                     got.push(IND_ANIMALS[a.k].name);
                 });
                 ind.bag = {}; ind.base.trips++;
@@ -1355,13 +1361,14 @@
             return true;
         }
         function indCraftShow(r) { return !r.hard || indHard(); }
-        function indCraftCan(r) { return indCraftShow(r) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.bellows && ind.base.bellows); }
+        function indCraftCan(r) { return indCraftShow(r) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.glass && (!ind.base.gh || ind.base.glass)) && !(r.bellows && ind.base.bellows); }
         function indCraft(i) {
             if (!ind) return false;
             let r = IND_CRAFT[i]; if (!r || !indCraftCan(r)) { indFlash('原料不够'); return false; }
-            if (!r.gh && !r.bellows && !ind.bag[r.out] && Object.keys(ind.bag).length >= IND_BAG_CAP && !Object.keys(r.in).some(function (k) { return ind.bag[k] === r.in[k]; })) { indFlash('身上放不下了'); return false; }
+            if (!r.gh && !r.glass && !r.bellows && !ind.bag[r.out] && Object.keys(ind.bag).length >= IND_BAG_CAP && !Object.keys(r.in).some(function (k) { return ind.bag[k] === r.in[k]; })) { indFlash('身上放不下了'); return false; }
             Object.keys(r.in).forEach(function (k) { indBagDel(k, r.in[k]); });
             if (r.gh) { ind.base.gh = true; if (ind.where === 'base') indBuildGh(); indFlash('暖棚盖好了，棚里的作物不管季节都长'); }
+            else if (r.glass) { ind.base.glass = true; if (ind.where === 'base') indBuildGh(); indFlash('玻璃暖棚盖好了，棚子变大了'); }
             else if (r.bellows) { ind.base.bellows = true; indFlash('风箱装好了，灶台多了一档「鼓风」'); }
             else { indBagAdd(r.out, r.n || 1); indFlash('做好了：' + indName(r.out) + (r.n ? '×' + r.n : '')); }
             indSave(); if (ind.panel === 'bench') indPanelBench();
@@ -1371,7 +1378,7 @@
             if (!ind) return;
             let rows = IND_CRAFT.map(function (r, i) {
                 if (!indCraftShow(r)) return '';
-                let nm = r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.bellows ? r.name + (ind.base.bellows ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : '');
+                let nm = r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.glass ? r.name + (ind.base.glass ? '（已经盖了）' : '') : r.bellows ? r.name + (ind.base.bellows ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : '');
                 let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ');
                 return indRow(nm + '<br><small style="color:#888">' + need + '</small>', '<button style="' + IND_BTN + (indCraftCan(r) ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>');
             }).join('');
@@ -1510,7 +1517,7 @@
             });
             IND_CRAFT.forEach(function (r) {
                 if (!indCraftShow(r)) return;
-                let out = r.gh ? '暖棚' : r.bellows ? '风箱' : indName(r.out);
+                let out = r.gh ? '暖棚' : r.glass ? '玻璃暖棚' : r.bellows ? '风箱' : indName(r.out);
                 L.push({ ins: Object.keys(r.in), outs: r.out ? [r.out] : [], name: out, txt: Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + ' → ' + out, where: '工作台' });
             });
             Object.keys(IND_CROPS).forEach(function (k) {
