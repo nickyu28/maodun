@@ -5826,6 +5826,62 @@ async function enterExit(tab, key) {
             report('IND16 桶分材质：木桶不能上火、陶罐 1/10 碎、铁桶黄铜桶不碎、装了东西的桶记材质、用完还同一种、老档的桶算木桶', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND17')) {
+            // IND17 面板：炉子面板同一样东西只一行写总数，每样东西旁边"全放"，炉子"放满一炉"（按配方放够最多份数），工作台"做最多"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; window.__oldFlash = indFlash; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
+                const stoveSet = (items) => T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 3000, fire: 1, temp: 200, cook: null, spout: [] }; ind.base.pot = false; window.__fl = []; true;`);
+                // 一样东西一行，写总数；每行有放 1、全放
+                await T.eval(`ind.bag = { wood: 150, stone: 3 }; indPanelStove('stove'); true;`);
+                const txt = await T.eval(`document.getElementById('ind-panel').innerText`);
+                if ((txt.match(/木头 × /g) || []).length !== 1 || !/木头 × 150/.test(txt) || !/全放/.test(txt) || !/放满一炉/.test(txt)) bad.push('炉子面板：木头只一行写 150、有全放和放满一炉 ' + txt.slice(0, 200));
+                await T.eval(`indStovePut('stone', 3); indPanelClose(); true;`);
+                if (!(await T.eval(`ind.base.stove.items.stone === 3 && !ind.bag.stone`))) bad.push('全放石头 3 个没放进去');
+                // 放满一炉：面包（4 份）、有大锅（8 份）、原料不够
+                await stoveSet({}); await T.eval(`ind.bag = { wheat: 20, salt: 5, 'water_boiled@fe': 3 }; indStoveFill(); indPanelClose(); true;`);
+                let it = await J(`ind.base.stove.items`);
+                if (it.wheat !== 12 || it.salt !== 3 || it['water_boiled@fe'] !== 3) bad.push('放满一炉：3 份面包的原料 ' + JSON.stringify(it));
+                if (!(await T.eval(`ind.bag.wheat === 8 && ind.bag.salt === 2 && !ind.bag['water_boiled@fe']`))) bad.push('放满一炉：背包剩下的不对 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await stoveSet({}); await T.eval(`ind.bag = { wheat: 100, salt: 30, 'water_boiled@cu': 9 }; indStoveFill(); indPanelClose(); true;`);
+                it = await J(`ind.base.stove.items`);
+                if (it.wheat !== 16 || it.salt !== 4 || it['water_boiled@cu'] !== 4) bad.push('放满一炉：没大锅最多 4 份 ' + JSON.stringify(it));
+                await stoveSet({}); await T.eval(`ind.base.pot = true; ind.bag = { wheat: 100, salt: 30, 'water_boiled@cu': 9 }; indStoveFill(); indPanelClose(); true;`);
+                it = await J(`ind.base.stove.items`);
+                if (it.wheat !== 32 || it.salt !== 8 || it['water_boiled@cu'] !== 8) bad.push('放满一炉：有大锅最多 8 份 ' + JSON.stringify(it));
+                // 炉子里已经放了一些：补够
+                await stoveSet({ wheat: 4 }); await T.eval(`ind.bag = { wheat: 20, salt: 5, 'water_boiled@fe': 2 }; indStoveFill(); indPanelClose(); true;`);
+                it = await J(`ind.base.stove.items`);
+                if (it.wheat !== 8 || it.salt !== 2 || it['water_boiled@fe'] !== 2) bad.push('放满一炉：炉子里已经有的算数 ' + JSON.stringify(it));
+                // 木桶装的水不能上火：凑不出配方
+                await stoveSet({}); await T.eval(`ind.bag = { wheat: 20, salt: 5, water_boiled: 3 }; window.__fl = []; indStoveFill(); indPanelClose(); true;`);
+                if (!(await T.eval(`Object.keys(ind.base.stove.items).length === 0 && __fl.some(function (t) { return /凑不出/.test(t); })`))) bad.push('木桶的水不该被放进去 ' + await T.eval(`JSON.stringify([ind.base.stove.items, __fl])`));
+                // 冶炼一次 1 份（灶台）
+                await stoveSet({}); await T.eval(`ind.bag = { ore_cu: 5 }; indStoveFill(); indPanelClose(); true;`);
+                if ((await T.eval(`ind.base.stove.items.ore_cu`)) !== 1) bad.push('灶台冶炼一次 1 份');
+                // 小熔炉一次 2 份
+                await T.eval(`ind.base.cookers = [{ id: 61, ty: 'furnace', x: 4, z: 6, items: {}, out: {}, fuel: 100, fire: 0, temp: 20, cook: null, ashT: 0, spout: [] }]; ind.bag = { ore_cu: 5 }; ind.cookId = 61; indStoveFill(); ind.cookId = null; indPanelClose(); true;`);
+                if ((await T.eval(`ind.base.cookers[0].items.ore_cu`)) !== 2) bad.push('小熔炉一次 2 份 ' + await T.eval(`JSON.stringify(ind.base.cookers[0].items)`));
+                // 工作台：做最多
+                await T.eval(`ind.bag = { wood: 80 }; indPanelBench(); true;`);
+                const bt = await T.eval(`document.getElementById('ind-panel').innerText`);
+                const hasMax = (bt.match(/做最多/g) || []).length, rows = await T.eval(`Array.from(document.querySelectorAll('#ind-panel button')).filter(function (b) { return b.innerText === '做'; }).length`);
+                if (!hasMax || hasMax >= rows) bad.push('工作台：每行有"做最多"，盖暖棚这种只能一次的没有 ' + hasMax + ' / ' + rows);
+                await T.eval(`indCraftMax(IND_CRAFT.findIndex(function (r) { return r.out === 'bucket'; })); indPanelClose(); true;`);
+                if (!(await T.eval(`ind.bag.bucket === 26 && ind.bag.wood === 2`))) bad.push('做最多：80 木头应该做 26 个木桶剩 2 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = { wood: 1 }; indCraftMax(IND_CRAFT.findIndex(function (r) { return r.out === 'bucket'; })); true;`);
+                if (await T.eval(`!!ind.bag.bucket`)) bad.push('原料不够还做');
+                await T.eval(`indFlash = window.__oldFlash; indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND17 面板：同一样东西一行写总数、全放、炉子放满一炉（按配方放够最多份数）、工作台做最多', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

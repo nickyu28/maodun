@@ -1996,13 +1996,27 @@
             indSave(); if (ind.panel === 'bench') indPanelBench();
             return true;
         }
+        // 做最多：身上的原料够几次就做几次（背包放不下就停）
+        function indCraftMax(i) {
+            if (!ind) return;
+            let r = IND_CRAFT[i], n = 0;
+            if (!r || r.gh || r.glass || r.pot) return;
+            while (n < 500 && indCraftCan(r)) {
+                let before = JSON.stringify(ind.bag);
+                if (!indCraft(i)) break;
+                n++; if (JSON.stringify(ind.bag) === before) break;
+            }
+            if (n) indFlash('一共做了 ' + n + ' 次'); else indFlash('原料不够');
+            if (ind.panel === 'bench') indPanelBench();
+        }
         function indPanelBench() {
             if (!ind) return;
             let rows = IND_CRAFT.map(function (r, i) {
                 if (!indCraftShow(r)) return '';
                 let nm = r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.glass ? r.name + (ind.base.glass ? '（已经盖了）' : '') : r.pot ? r.name + (ind.base.pot ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : '');
                 let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ');
-                return indRow(nm + '<br><small style="color:#888">' + need + '</small>', '<button style="' + IND_BTN + (indCraftCan(r) ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>');
+                let can = indCraftCan(r), once = r.gh || r.glass || r.pot;   // 盖暖棚、装大锅只能一次
+                return indRow(nm + '<br><small style="color:#888">' + need + '</small>', '<span style="white-space:nowrap;"><button style="' + IND_BTN + (can ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>' + (once ? '' : '<button style="' + IND_BTN + (can ? 'background:#1b5e20;' : 'background:#bbb;') + '" onclick="indCraftMax(' + i + ')">做最多</button>') + '</span>');
             }).join('');
             indPanelShow('bench', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">工作台</div><div style="color:#888;margin-bottom:4px;">用身上的原料做</div>' + rows +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
@@ -2147,6 +2161,37 @@
             let t = indBagDel(k, n || 1); S.items[k] = (S.items[k] || 0) + t;
             indSave(); indPanelStove();
         }
+        // 放满一炉：按配方把原料放够最多份数（炉子里已经有的算数；炉子是空的就挑背包里原料齐的第一个配方）
+        function indBagFire(k) {   // 背包里能上火的 k（装在桶里的要不是木桶）
+            if (IND_CONT_BASES.indexOf(k) < 0) return ind.bag[k] || 0;
+            let n = 0; Object.keys(IND_MATS).forEach(function (m) { if (IND_MATS[m].fire) n += ind.bag[indFilledKey(k, m)] || 0; }); return n;
+        }
+        function indStoveFill() {
+            if (!ind) return;
+            let c = indCookCur(), S = c.C, K = indCookK(c.ty), ri = S.cook ? S.cook.i : indCookFind(S.items, K);
+            if (ri < 0 || (!S.cook && Object.keys(S.items).length === 0)) {
+                ri = -1;
+                for (let i = 0; i < IND_RECIPES.length && ri < 0; i++) {
+                    let r = IND_RECIPES[i];
+                    if ((r.hard && !indHard()) || (K.only && (r.cls || 'food') !== K.only) || !indBatchCap(K, r)) continue;
+                    if (Object.keys(r.in).every(function (k) { return indBagFire(k) + indHave(S.items, k) >= r.in[k]; })) ri = i;
+                }
+            }
+            if (ri < 0) { indFlash('背包里的原料凑不出配方'); return; }
+            let r = IND_RECIPES[ri], N = indBatchCap(K, r), hotPer = 0;
+            Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) hotPer += r.out[k]; });
+            if (hotPer) N = Math.min(N, Math.floor(IND_SPOUT_CAP / hotPer));
+            Object.keys(r.in).forEach(function (k) { N = Math.min(N, Math.floor((indBagFire(k) + indHave(S.items, k)) / r.in[k])); });
+            if (N <= 0) { indFlash('原料不够一份'); return; }
+            Object.keys(r.in).forEach(function (k) {
+                let need = r.in[k] * N - indHave(S.items, k);
+                if (need <= 0) return;
+                let keys = IND_CONT_BASES.indexOf(k) < 0 ? [k] : IND_TAKE_ORDER.filter(function (m) { return IND_MATS[m].fire; }).map(function (m) { return indFilledKey(k, m); });
+                keys.forEach(function (key) { let t = Math.min(need, ind.bag[key] || 0); if (t > 0) { indStovePut(key, t); need -= t; } });
+            });
+            indFlash('放了 ' + N + ' 份的原料：' + indOutTxt(r, N));
+            indPanelStove();
+        }
         function indStoveFuel(k) {
             if (!ind || !ind.bag[k] || !IND_ITEMS[k].fuel) return;
             indBagDel(k, 1); indCookCur().C.fuel += IND_ITEMS[k].fuel;
@@ -2179,7 +2224,7 @@
             let p = document.createElement('div'); p.id = 'ind-panel'; p.style.cssText = IND_PANEL_CSS; p.innerHTML = html;
             document.body.appendChild(p);
         }
-        function indRow(left, right) { return '<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eee;"><span>' + left + '</span><span>' + right + '</span></div>'; }
+        function indRow(left, right) { return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 0;border-bottom:1px solid #eee;"><span style="flex:1;min-width:0;">' + left + '</span><span style="white-space:nowrap;">' + right + '</span></div>'; }
         function indChestCur() { let C = ind.base.chests; return C.filter(function (c) { return c.id === ind.boxId; })[0] || indBoxTarget(); }
         function indChestCap(c) { return c.big ? 0 : IND_CHEST_SLOTS; }
         function indPanelBox(id) {
@@ -2230,13 +2275,13 @@
             let spt = S.spout.length ? indSpoutTxt(c) + '（左键点炉子旁边的出料槽取出）' : '空';
             if (S.cook && S.cook.full) st += '<br><b style="color:#c62828">出料槽满了</b>';
             let put = Object.keys(ind.bag).map(function (k) {
-                let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button>';
+                let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button><button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',' + ind.bag[k] + ')">全放</button>';
                 if (IND_ITEMS[k].fuel) b += '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="indStoveFuel(\'' + k + '\')">当柴烧</button>';
                 return indRow(indName(k) + ' × ' + ind.bag[k], b);
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + D.name + '</div><div style="line-height:1.7;">' + st + '</div><div>' + fire + '</div>' +
                 '<div style="margin-top:6px;">锅里：' + on + '<br>做好的：' + out + '<br>出料槽：' + spt + '</div>' +
-                '<div style="margin-top:6px;font-weight:bold;">身上的东西</div>' + put +
+                '<div style="margin-top:6px;font-weight:bold;">身上的东西　<button style="' + IND_BTN + 'background:#00838f;" onclick="indStoveFill()">放满一炉</button></div>' + put +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indStoveTakeAll()">全部拿出来</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>';
         }
         function indPanelStove(id) { if (!ind) return; let cid = id !== undefined ? id : ind.cookId; ind.cookId = cid; indPanelShow('stove', indStoveHtml()); ind.cookId = cid; }
