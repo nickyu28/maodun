@@ -31,6 +31,7 @@
         function indVisible() { return IND_ENABLED || indDebugOn(); }
 
         // ── 数值（冒烟测试可以改小）──
+        const IND_AIM_COS = Math.cos(30 * Math.PI / 180);
         const IND_T = { extract: 3, pickR: 2.6, gateR: 2.2, exitR: 3, speed: 7, run: 1.6 };
         const IND_BASE = { x: 30, z: 22.5 };          // 基地半宽、半深（60 × 45 米）
         const IND_FIELD = { x0: -28, x1: -6, z0: -18, z1: 18, tile: 2 };   // 农田（基地左边），2 米一格
@@ -64,7 +65,7 @@
             pick_stone: { name: '石稿', col: 0x757575, tool: 1 },
             charcoal: { name: '木炭', col: 0x37474f, fuel: 120 },
             char: { name: '焦炭', col: 0x111111, fuel: 40 },
-            bucket: { name: '空桶', col: 0x8d6e63 },
+            bucket: { name: '空桶', col: 0x8d6e63 }, shears: { name: '剪刀', col: 0xb0bec5, shears: true },
             water_raw: { name: '生水', col: 0x4fc3f7, eat: { w: 15, sick: 0.3, back: 'bucket' } },
             water_sea: { name: '海水', col: 0x0288d1, eat: { w: -10, back: 'bucket' } },
             water_boiled: { name: '开水', col: 0xb3e5fc, eat: { w: 40, back: 'bucket' } },
@@ -170,7 +171,8 @@
             { out: 'battery', in: { ingot_cu: 1, ingot_zn: 1, salt: 1 }, hard: true }, { out: 'wire', n: 4, in: { ingot_cu: 1 }, hard: true },
             { out: 'dev_bank', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_gen', in: { ingot_cu: 3, ingot_fe: 2, steel: 1 }, hard: true },
             { out: 'dev_el', in: { ingot_fe: 2, ingot_cu: 2, bottle: 1 }, hard: true },
-            { out: 'dev_lamp', in: { ingot_cu: 1, sand: 2 }, hard: true }, { out: 'dev_pump', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_furnace', in: { steel: 2, clay: 4, ingot_cu: 2 }, hard: true }, { out: 'pick_iron', in: { ingot_fe: 3, wood: 2 }, hard: true }, { out: 'pick_steel', in: { steel: 3, wood: 2 }, hard: true }
+            { out: 'dev_lamp', in: { ingot_cu: 1, sand: 2 }, hard: true }, { out: 'dev_pump', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_furnace', in: { steel: 2, clay: 4, ingot_cu: 2 }, hard: true }, { out: 'pick_iron', in: { ingot_fe: 3, wood: 2 }, hard: true }, { out: 'pick_steel', in: { steel: 3, wood: 2 }, hard: true },
+            { out: 'bucket', in: { wood: 3 } }, { out: 'shears', in: { stone: 2, wood: 1 } }
         ];
         const IND_HOT_SOUP = 1.5;
         const IND_HOT_COOL = 30, IND_HOT_DPS = 15;   // 烫的锭放 30 秒凉；不拿钳子每秒扣 15 血
@@ -270,7 +272,7 @@
         const IND_WATER_Y = -1.2;
 
         // ── 存档（IndexedDB，单独存）──
-        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 8;
+        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 9;
         function indDb(cb) {
             try {
                 let rq = indexedDB.open(IND_DB, 1);
@@ -280,8 +282,9 @@
             } catch (e) { cb(null); }
         }
         function indKey() { return 'p_' + (gState.id || 'guest'); }
-        const IND_START_BOX = { pick_stone: 1, bucket: 2, seed_wheat: 6, seed_potato: 4, seed_cotton: 4, seed_cabbage: 3, wood: 8, salt: 2, bake_potato: 3 };
+        const IND_START_BOX = { pick_stone: 1, shears: 1, bucket: 2, seed_wheat: 6, seed_potato: 4, seed_cotton: 4, seed_cabbage: 3, wood: 8, salt: 2, bake_potato: 3 };
         const IND_V3_GIFT = { seed_cotton: 4, seed_cabbage: 3 };
+        const IND_V9_GIFT = { shears: 1 };   // 存档版本 9：新号送一把剪刀，老档读档时补一把
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
                 surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, bellows: false, fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
@@ -293,8 +296,9 @@
             if (b.rule !== 'casual' && b.rule !== 'hard') b.rule = null;
             if (!b.box || typeof b.box !== 'object') b.box = {};
             Object.keys(b.box).forEach(function (k) { if (!IND_ITEMS[k] || !(b.box[k] > 0)) delete b.box[k]; });
-            if ((b.ver || 1) < 2) Object.keys(IND_START_BOX).forEach(function (k) { if (k !== 'pick_stone' && !IND_V3_GIFT[k]) b.box[k] = (b.box[k] || 0) + IND_START_BOX[k]; });   // 第 1 阶段的老档补上第 2 阶段的起步物资
+            if ((b.ver || 1) < 2) Object.keys(IND_START_BOX).forEach(function (k) { if (k !== 'pick_stone' && !IND_V3_GIFT[k] && !IND_V9_GIFT[k]) b.box[k] = (b.box[k] || 0) + IND_START_BOX[k]; });   // 第 1 阶段的老档补上第 2 阶段的起步物资
             if ((b.ver || 1) < 3) Object.keys(IND_V3_GIFT).forEach(function (k) { b.box[k] = (b.box[k] || 0) + IND_V3_GIFT[k]; });   // 第 2 阶段的老档补上棉花、白菜种子
+            if ((b.ver || 1) < 9) Object.keys(IND_V9_GIFT).forEach(function (k) { b.box[k] = (b.box[k] || 0) + IND_V9_GIFT[k]; });   // 第 5 阶段之前的老档补上剪刀
             if (!Array.isArray(b.ground)) b.ground = [];
             b.ground = b.ground.filter(function (g) { return g && IND_ITEMS[g.k] && isFinite(g.x) && isFinite(g.z); });
             b.ground.forEach(function (g) { g.x = indNum(g.x, 0, -IND_BASE.x + 0.5, IND_BASE.x - 0.5); g.z = indNum(g.z, 0, -IND_BASE.z + 0.5, IND_BASE.z - 0.5); });
@@ -492,17 +496,19 @@
                 if (a.food >= 95) { indFlash(D.name + '吃饱了'); return false; }
                 indBagDel(k, 1); a.food = Math.min(100, a.food + 30); indSave(); indFlash('喂了' + D.name + '（饱食 ' + Math.round(a.food) + '）'); return true;
             }
-            if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
             if (a.k === 'cow' && k === 'bucket') {
+                if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
                 if (clock < a.milkAt) { indFlash('牛奶还要等 ' + Math.ceil(a.milkAt - clock) + ' 秒'); return false; }
                 indBagDel('bucket', 1); indBagAdd('milk', 1); a.milkAt = clock + IND_MILK_EVERY; indSave(); indFlash('挤了一桶牛奶'); return true;
             }
-            if (a.k === 'sheep') {
+            if (a.k === 'sheep' && k === 'shears') {
+                if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
                 if (clock < a.woolAt) { indFlash('羊毛还要等 ' + Math.ceil(a.woolAt - clock) + ' 秒'); return false; }
                 if (indBagAdd('wool', 2) <= 0) { indFlash('身上放不下了'); return false; }
                 a.woolAt = clock + IND_WOOL_EVERY; indSave(); indFlash('剪了 2 份羊毛'); return true;
             }
-            indFlash(D.name + (a.k === 'cow' ? '：拿空桶对着它左键挤奶' : '：喜欢跟你玩'));
+            // 手里的东西对它没用：只显示状态，不吃东西、不剪毛
+            indFlash(D.name + '　饱食 ' + Math.round(a.food) + (a.food < 30 ? '，饿了' : '') + (a.k === 'sheep' ? '，' + (clock >= a.woolAt ? '能剪毛了（拿剪刀）' : '毛还要 ' + Math.ceil(a.woolAt - clock) + ' 秒') : a.k === 'cow' ? '，' + (clock >= a.milkAt ? '能挤奶了（拿空桶）' : '奶还要 ' + Math.ceil(a.milkAt - clock) + ' 秒') : '') + '，爱吃：' + indFoodTxt(a.k));
             return false;
         }
 
@@ -563,6 +569,15 @@
             indFlash(r === 'hard' ? '硬核世界：小心别饿死' : '悠闲世界：慢慢种地吧');
         }
         function indHard() { return ind.base.rule === 'hard'; }
+        // 悠闲升级成硬核：弹确认窗，确认才升，升了不能退回
+        function indAskHard() {
+            if (!ind || !ind.base || ind.base.rule !== 'casual') return;
+            showSysModal('升级成硬核', '升级后饿死渴死会死，能做冶炼和电，升了不能退回悠闲。', [{ label: '升级', color: '#e65100', onClick: indUpgradeHard }, { label: '再想想' }]);
+        }
+        function indUpgradeHard() {
+            if (!ind || !ind.base || ind.base.rule !== 'casual') return;
+            indSetRule('hard'); ind.hudSig = ''; if (ind.panel === 'bench') indPanelBench();
+        }
         // 半路回大厅：在基地里身上的东西收回仓库箱；在远征里身上的东西丢掉（和寻宝队一样，没撤离就不算）
         function indExit(confirmed) {
             if (!ind) return;
@@ -929,32 +944,48 @@
         function indInField(x, z) { let F = IND_FIELD; return x >= F.x0 && x <= F.x1 && z >= F.z0 && z <= F.z1; }
         function indTileAt(x, z) { let F = IND_FIELD, t = F.tile; return { x: F.x0 + (Math.floor((x - F.x0) / t) + 0.5) * t, z: F.z0 + (Math.floor((z - F.z0) / t) + 0.5) * t }; }
         function indCropAt(x, z) { return ind.base.crops.filter(function (c) { return Math.abs(c.x - x) < 0.01 && Math.abs(c.z - z) < 0.01; })[0] || null; }
-        // 面前 2.6 米内、朝镜头方向的最近目标
-        function indAim() {
-            let R = ind, f = indFace(), best = null, bd = 1e9;
-            let consider = function (o, x, z, kind, r) {
-                let dx = x - R.p.x, dz = z - R.p.z, d = Math.hypot(dx, dz) - (r || 0);
-                if (d > IND_T.pickR) return;
-                if (d > 0.6 && (dx * f.x + dz * f.z) / Math.max(0.01, Math.hypot(dx, dz)) < 0.3) return;
-                if (d < bd) { bd = d; best = { kind: kind, o: o }; }
+        // 准星对着的东西：从玩家沿镜头方向（水平）射一条线，每样东西有一个比外观大一圈的点击范围（hit），
+        // 线碰到的最近一个就是目标；什么都没碰到才退回"面前最近"（30° 以内，贴身 0.6 米内不看角度），动物没有距离优待。
+        // noAnimal：不算动物（拿着工具对着动物时，找别的目标用）
+        function indAim(noAnimal) {
+            let R = ind, f = indFace(), cand = [];
+            let consider = function (o, x, z, kind, hit, edge) {
+                if (noAnimal && kind === 'animal') return;
+                let dx = x - R.p.x, dz = z - R.p.z, dist = Math.hypot(dx, dz), fd = dx * f.x + dz * f.z, lat = Math.abs(dx * f.z - dz * f.x);
+                edge = edge || 0;   // 大东西（水池）从边上算距离
+                cand.push({ kind: kind, o: o, dist: dist - edge, fd: fd - edge, lat: lat, hit: hit || 0.6 });
             };
-            indFires().forEach(function (f) { consider(f, f.x, f.z, 'fire'); });
-            indAnimals().forEach(function (a) { consider(a, a.x, a.z, 'animal', 0.4); });
-            if (R.where === 'base') R.base.devs.forEach(function (d) { consider(d, d.x, d.z, 'dev', 0.4); });
-            if (R.where === 'trip') R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node'); });
+            indFires().forEach(function (f) { consider(f, f.x, f.z, 'fire', 0.7); });
+            indAnimals().forEach(function (a) { consider(a, a.x, a.z, 'animal', 0.7); });
+            if (R.where === 'base') R.base.devs.forEach(function (d) { consider(d, d.x, d.z, 'dev', 0.7); });
+            if (R.where === 'trip') R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node', 0.8); });
             else {
-                R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item'); });
-                R.base.crops.forEach(function (c) { consider(c, c.x, c.z, 'crop'); });
+                R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item', 0.5); });
+                R.base.crops.forEach(function (c) { consider(c, c.x, c.z, 'crop', 0.6); });
                 let S = IND_BASE_ST;
-                consider(S.box, S.box.x, S.box.z + 0.8, 'box'); consider(S.stove, S.stove.x, S.stove.z + 0.8, 'stove');
-                consider(S.bed, S.bed.x, S.bed.z + 1.6, 'bed'); consider(S.pool, S.pool.x, S.pool.z, 'pool', S.pool.r); consider(S.bench, S.bench.x, S.bench.z + 0.8, 'bench');
+                consider(S.box, S.box.x, S.box.z + 0.8, 'box', 1.2); consider(S.stove, S.stove.x, S.stove.z + 0.8, 'stove', 1.2);
+                consider(S.bed, S.bed.x, S.bed.z + 1.6, 'bed', 1.6); consider(S.pool, S.pool.x, S.pool.z, 'pool', S.pool.r + 0.3, S.pool.r); consider(S.bench, S.bench.x, S.bench.z + 0.8, 'bench', 1.2);
             }
-            return best;
+            let best = null, bd = 1e9;
+            cand.forEach(function (c) { if (c.fd > -0.5 && c.fd <= IND_T.pickR + 0.5 && c.lat <= c.hit && c.fd < bd) { bd = c.fd; best = c; } });   // 射线碰到的，取最近
+            if (best) return { kind: best.kind, o: best.o, ray: true };
+            cand.forEach(function (c) {
+                if (c.dist > IND_T.pickR) return;
+                if (c.dist > 0.6 && c.fd / Math.max(0.01, c.dist) < IND_AIM_COS) return;
+                if (c.dist < bd) { bd = c.dist; best = c; }
+            });
+            return best ? { kind: best.kind, o: best.o, ray: false } : null;
         }
+        // 手里的东西是不是工具（稿子、铜线、钳子、剪刀）：工具永远当工具用，不拿去喂动物
+        function indToolish(k) { return !!k && (!!IND_ITEMS[k].tool || k === 'wire' || k === 'tongs' || k === 'shears'); }
         // 左键：采集、拿、收菜、打开；对着空的农田格子、手里拿着种子：种下
         function indAction() {
             if (!ind || ind.over || ind.panel) return;
             let a = indAim();
+            if (a && a.kind === 'animal' && indToolish(indSel()) && indSel() !== 'shears') {   // 稿子、铜线、钳子对着动物：找别的目标，没有就只看状态
+                let b = indAim(true);
+                if (b) a = b;
+            }
             if (a && a.kind === 'node') return indGather(a.o);
             if (a && a.kind === 'item') return indPickItem(a.o);
             if (a && a.kind === 'crop' && indCropRipe(a.o)) return indHarvest(a.o);
@@ -1573,7 +1604,7 @@
             d.innerHTML =
                 '<div style="position:absolute;left:8px;top:8px;"><div id="ind-status" style="background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
                 '<div id="ind-wear" style="margin-top:4px;background:rgba(255,255,255,.92);padding:4px 10px;border-radius:8px;font-size:13px;pointer-events:auto;"></div></div>' +
-                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
+                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
                 '<div id="ind-hint" style="position:absolute;left:50%;bottom:150px;transform:translateX(-50%);color:#fff;padding:4px 12px;font-size:20px;font-weight:bold;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
@@ -1590,6 +1621,7 @@
             let R = ind; if (!R || R.over) return;
             if (R.panel === 'stove' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'); if (p) { p.innerHTML = indStoveHtml(); R.panelDirty = false; } }
             if (R.panel === 'el' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { p.innerHTML = indElHtml(d); R.panelDirty = false; } }
+            let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
             let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + indSeasonTxt() + '　' + rule + '<br>';
             st += (indHard() ? indBar('血', S.hp, '#e53935') : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047');
@@ -1620,7 +1652,7 @@
             else if (a && a.kind === 'animal') {
                 let o = a.o, D = IND_ANIMALS[o.k];
                 if (R.where === 'trip') hint = (o.follow ? D.name + '（跟着你）' : '野生的' + D.name + (o.fed ? '（还要喂 ' + (D.tame - o.fed) + ' 次）' : '')) + '<br><small>爱吃：' + indFoodTxt(o.k) + '</small>';
-                else hint = D.name + '　饱食 ' + Math.round(o.food) + (o.k === 'sheep' ? '　' + (R.base.clock >= o.woolAt ? '能剪毛了' : '毛还要 ' + Math.ceil(o.woolAt - R.base.clock) + ' 秒') : o.k === 'cow' ? '　' + (R.base.clock >= o.milkAt ? '能挤奶了' : '奶还要 ' + Math.ceil(o.milkAt - R.base.clock) + ' 秒') : '') + '<br><small>左键：' + (o.k === 'sheep' ? '喂／剪毛' : o.k === 'cow' ? '喂／拿空桶挤奶' : '喂') + '</small>';
+                else hint = D.name + '　饱食 ' + Math.round(o.food) + (o.k === 'sheep' ? '　' + (R.base.clock >= o.woolAt ? '能剪毛了' : '毛还要 ' + Math.ceil(o.woolAt - R.base.clock) + ' 秒') : o.k === 'cow' ? '　' + (R.base.clock >= o.milkAt ? '能挤奶了' : '奶还要 ' + Math.ceil(o.milkAt - R.base.clock) + ' 秒') : '') + '<br><small>左键：' + (o.k === 'sheep' ? '喂／拿剪刀剪毛' : o.k === 'cow' ? '喂／拿空桶挤奶' : '喂') + '</small>';
             }
             else if (a && a.kind === 'box') hint = '仓库箱<br><small>左键：打开</small>';
             else if (a && a.kind === 'stove') hint = '灶台 ' + Math.round(R.base.stove.temp) + '°C<br><small>左键：打开</small>';

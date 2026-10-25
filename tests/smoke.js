@@ -4595,7 +4595,7 @@ async function enterExit(tab, key) {
                 if (await T.eval(`!!ind.bag.wool`)) bad.push('刚回家就能剪毛');
                 await T.eval(`(function(){ let a = ind.base.animals[${sheepIdx}]; a.woolAt = 0; a.food = 10; indAnimalAct(a); })(); true;`);
                 if (await T.eval(`!!ind.bag.wool`)) bad.push('饿着的羊也给剪毛');
-                await T.eval(`(function(){ let a = ind.base.animals[${sheepIdx}]; indSelect('wheat'); indAnimalAct(a); indSelect('bread'); a.woolAt = 0; indAnimalAct(a); a.woolAt = 0; indAnimalAct(a); })(); true;`);
+                await T.eval(`(function(){ let a = ind.base.animals[${sheepIdx}]; indSelect('wheat'); indAnimalAct(a); indBagAdd('shears', 1); indSelect('shears'); a.woolAt = 0; indAnimalAct(a); a.woolAt = 0; indAnimalAct(a); })(); true;`);
                 if ((await T.eval(`ind.bag.wool || 0`)) !== 4) bad.push('剪羊毛不对 ' + await T.eval(`ind.bag.wool`));
                 // 毛线 → 毛衣（保暖 8）
                 await T.eval(`(function(){ indBagAdd('wool', 2); for (let i = 0; i < 3; i++) indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'yarn'; })); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'sweater'; })); indSelect('sweater'); indUse(); })(); true;`);
@@ -4930,7 +4930,7 @@ async function enterExit(tab, key) {
                 if (lg[0][0] !== 400 || lg[1][1] !== 700 || lg[2][0] !== 150 || lg[3][1] !== 400) bad.push('老档的下次时间不对 ' + JSON.stringify(lg));
                 // 挤奶、剪毛之后的下次时间
                 await T.eval(`(function(){ ind.bag = {}; indBagAdd('bucket', 1); ind.base.animals = [{ k: 'cow', x: 5, z: 5, food: 100, milkAt: 0, woolAt: 0 }, { k: 'sheep', x: 7, z: 5, food: 100, milkAt: 0, woolAt: 0 }]; })(); true;`);
-                const ac = JSON.parse(await T.eval(`(function(){ let c = ind.base.clock, r1 = indAnimalAct(ind.base.animals[0]), r2 = indAnimalAct(ind.base.animals[1]); return JSON.stringify({ r1: r1, r2: r2, m: ind.base.animals[0].milkAt - c, w: ind.base.animals[1].woolAt - c }); })()`));
+                const ac = JSON.parse(await T.eval(`(function(){ let c = ind.base.clock, r1 = indAnimalAct(ind.base.animals[0]), r2 = (indBagAdd('shears', 1), indSelect('shears'), indAnimalAct(ind.base.animals[1])); return JSON.stringify({ r1: r1, r2: r2, m: ind.base.animals[0].milkAt - c, w: ind.base.animals[1].woolAt - c }); })()`));
                 if (ac.r1 !== true || ac.r2 !== true || ac.m !== 300 || ac.w !== 600) bad.push('挤奶剪毛后的间隔不对 ' + JSON.stringify(ac));
                 // 南瓜、甘蔗：浇了水在暖棚里，899 秒没熟、901 秒熟
                 await T.eval(`(function(){ ind.base.crops = [{ k: 'pumpkin', x: -25, z: 0, g: 0, wet: 1e9, times: 0 }, { k: 'cane', x: -25, z: 2, g: 0, wet: 1e9, times: 0 }]; ind.base.surv.food = 100; ind.base.surv.water = 100; indAdvance(590, 1); })(); true;`);
@@ -4956,6 +4956,84 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND10 玻璃暖棚（要先有木棚、扩大范围、旧档默认不是）、挤奶剪毛南瓜甘蔗的新等待时间、旧档时间改短、精力走 60 秒掉 4 跑 60 秒掉 8', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND12')) {
+            // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
+            // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('casual'); ind.base.surv.food = 100; ind.base.surv.water = 100; ind.base.surv.temp = 37; true;`);
+                // 做桶、做剪刀（悠闲就有）
+                const bi = `IND_CRAFT.findIndex(function (r) { return r.out === 'bucket'; })`, si = `IND_CRAFT.findIndex(function (r) { return r.out === 'shears'; })`;
+                await T.eval(`ind.bag = {}; indBagAdd('wood', 3); indCraft(${bi}); true;`);
+                if (!(await T.eval(`ind.bag.bucket === 1 && !ind.bag.wood`))) bad.push('3 木头做不出桶 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = {}; indBagAdd('wood', 2); if (indCraft(${bi})) throw 1; ind.bag = {}; indBagAdd('stone', 2); indBagAdd('wood', 1); indCraft(${si}); true;`);
+                if (!(await T.eval(`ind.bag.shears === 1 && !ind.bag.stone`))) bad.push('做不出剪刀 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indPanelBook('桶'); true;`);
+                if (!/空桶/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('配方查询搜不到桶');
+                await T.eval(`indPanelBook('剪刀'); true;`);
+                if (!/剪刀/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('配方查询搜不到剪刀');
+                await T.eval(`indPanelClose(); true;`);
+                // 新号送一把剪刀，老档读档补一把（只补一次）
+                if (!(await T.eval(`indNewBase().box.shears === 1`))) bad.push('新号没送剪刀');
+                const lg = JSON.parse(await T.eval(`JSON.stringify([indFixBase({ ver: 8, rule: 'casual', box: {} }).box.shears, indFixBase({ ver: 9, rule: 'casual', box: {} }).box.shears || 0, indFixBase({ ver: 1, rule: 'casual', box: {} }).box.shears])`));
+                if (lg[0] !== 1 || lg[1] !== 0 || lg[2] !== 1) bad.push('老档补剪刀不对 ' + JSON.stringify(lg));
+                // 升级成硬核
+                const modalOpen = () => T.eval(`!document.getElementById('sys-modal').classList.contains('hidden')`);
+                const modalClick = (txt) => T.eval(`(function(){ let b = Array.from(document.querySelectorAll('#sys-modal-btns button')).filter(function (x) { return x.innerText === '${txt}'; })[0]; if (b) b.click(); return !!b; })()`);
+                await T.eval(`indHudUpdate(); true;`);
+                if (!(await T.eval(`getComputedStyle(document.getElementById('ind-btn-up')).display !== 'none'`))) bad.push('悠闲世界没有升级按钮');
+                if (await T.eval(`indCraftShow(IND_CRAFT.filter(function (r) { return r.out === 'tongs'; })[0])`)) bad.push('悠闲世界就看得到钳子');
+                await T.eval(`document.getElementById('ind-btn-up').click(); true;`);
+                if (!(await modalOpen()) || !/不能退回/.test(await T.eval(`document.getElementById('sys-modal-text').innerText`))) bad.push('点升级没弹确认窗，或字不对');
+                if (await T.eval(`ind.base.rule`) !== 'casual') bad.push('没确认就升了');
+                await modalClick('再想想');
+                if (await T.eval(`ind.base.rule`) !== 'casual' || await modalOpen()) bad.push('取消以后规则变了');
+                await T.eval(`document.getElementById('ind-btn-up').click(); true;`);
+                await modalClick('升级');
+                if (await T.eval(`ind.base.rule`) !== 'hard') bad.push('确认以后没升成硬核');
+                await T.eval(`indHudUpdate(); true;`);
+                if (await T.eval(`getComputedStyle(document.getElementById('ind-btn-up')).display !== 'none'`)) bad.push('升完按钮还在');
+                if (!(await T.eval(`indCraftShow(IND_CRAFT.filter(function (r) { return r.out === 'tongs'; })[0])`))) bad.push('升级后钳子配方没出现');
+                await T.eval(`indPanelBook('钳子'); true;`);
+                if (!/钳子/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('升级后配方查询没有钳子');
+                await T.eval(`indPanelClose(); indAskHard(); true;`);
+                if (await modalOpen()) bad.push('硬核世界还弹升级确认');
+                // 左键按准星（远征）
+                await T.eval(`${HIDE} indGoTrip(2024); ind.bag = {}; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; indBagAdd('pick_stone', 1); true;`);
+                await T.eval(`(function(){ ind.nodes.push({ key: 'stone', x: 0, z: -6, y: 0, n: 3, dead: false }); ind.wild.push({ k: 'sheep', x: 1.4, z: -2.6, fed: 0, follow: false }); ind.nodeDirty = true; indTeleport(0, -3); indLookAt(0, -6); indSelect('pick_stone'); indAction(); })(); true;`);
+                const m1 = JSON.parse(await T.eval(`JSON.stringify({ stone: ind.bag.stone || 0, pick: ind.bag.pick_stone || 0, fed: ind.wild[0].fed })`));
+                if (!m1.stone || m1.pick !== 1 || m1.fed) bad.push('拿稿子对着石头、旁边有羊，没挖矿 ' + JSON.stringify(m1));
+                // 拿稿子对着羊：什么都不消耗
+                await T.eval(`(function(){ ind.nodes.forEach(function (o) { o.dead = true; }); ind.bag = { pick_stone: 1, wire: 2, tongs: 1 }; ind.wild = [{ k: 'sheep', x: 0, z: -5, fed: 0, follow: false }]; indTeleport(0, -3); indLookAt(0, -5); ['pick_stone', 'wire', 'tongs'].forEach(function (k) { indSelect(k); indAction(); }); })(); true;`);
+                const m2 = JSON.parse(await T.eval(`JSON.stringify({ bag: ind.bag, fed: ind.wild[0].fed })`));
+                if (m2.bag.pick_stone !== 1 || m2.bag.wire !== 2 || m2.bag.tongs !== 1 || m2.fed) bad.push('拿工具对着羊消耗了东西 ' + JSON.stringify(m2));
+                // 拿小麦对着羊：喂
+                await T.eval(`(function(){ indBagAdd('wheat', 2); indSelect('wheat'); indAction(); })(); true;`);
+                const m3 = JSON.parse(await T.eval(`JSON.stringify({ w: ind.bag.wheat, fed: ind.wild[0].fed })`));
+                if (m3.w !== 1 || m3.fed !== 1) bad.push('拿小麦对着羊没喂 ' + JSON.stringify(m3));
+                // 射线没碰到东西：30° 以内的动物能选中，30° 外的选不中
+                await T.eval(`(function(){ ind.wild = [{ k: 'sheep', x: 0.855, z: -2.35, fed: 0, follow: false }]; indTeleport(0, 0); indLookAt(0, -5); })(); true;`);
+                const near = await T.eval(`(function(){ let a = indAim(); return a ? a.kind + ':' + a.ray : 'none'; })()`);
+                if (near !== 'animal:false') bad.push('20° 以内的动物没选中 ' + near);
+                await T.eval(`(function(){ ind.wild = [{ k: 'sheep', x: 1.8, z: -0.9, fed: 0, follow: false }]; indTeleport(0, 0); indLookAt(0, -5); })(); true;`);
+                const far = await T.eval(`(function(){ let a = indAim(); return a ? a.kind : 'none'; })()`);
+                if (far !== 'none') bad.push('60° 外的动物被选中了 ' + far);
+                // 基地里：拿剪刀才剪毛
+                await T.eval(`indGoBase(false); true;`);
+                await T.eval(`(function(){ ind.bag = { pick_stone: 1, shears: 1 }; ind.base.animals = [{ k: 'sheep', x: 0, z: 5, food: 80, woolAt: 0, milkAt: 0 }]; indTeleport(0, 8); indLookAt(0, 5); indSelect('pick_stone'); indAction(); })(); true;`);
+                if (await T.eval(`!!ind.bag.wool`)) bad.push('拿稿子对着羊也剪毛了');
+                await T.eval(`indSelect('shears'); indAction(); true;`);
+                if ((await T.eval(`ind.bag.wool || 0`)) !== 2 || (await T.eval(`ind.bag.shears`)) !== 1) bad.push('拿剪刀没剪到毛 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND12 作者玩出来的 bug：做桶和剪刀、悠闲升级成硬核（确认窗）、左键按准星（工具优先、拿对东西才喂／剪毛、30° 外不选）', bad.length === 0, bad.join(' / '));
         }
 
         if (ONLY) throw new Error('ONLY_DONE');
