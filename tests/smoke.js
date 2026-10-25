@@ -5968,6 +5968,127 @@ async function enterExit(tab, key) {
             report('IND18 草木灰和玻璃板：篝火出灰、草木灰当肥料（快 50%、叠加浇水、不重复、收获失效）、玻璃板和玻璃瓶、玻璃暖棚用玻璃板', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND19')) {
+            // IND19 现成房子：木屋 60 木头、砖房 40 砖 + 10 木头、大砖房 90 砖 + 20 木头（悠闲硬核都能做）；放下是一整间（四面墙、屋顶、朝着你的一扇门），
+            // 墙挡人，关着的门也挡、开了能进；屋里气温 = 屋外 + 保暖（6/12/12），屋里 4 米内有火在烧至少 18°C；隔着墙瞄不到里面的东西；
+            // 人在屋里屋顶变透明；空房子长按右键收起、里面有东西不让收；存档；炸在房子里房子塌
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('casual'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
+                const ci = (o) => `IND_CRAFT.findIndex(function (r) { return r.out === '${o}'; })`;
+                // ── 配方：悠闲、硬核都有，料不够做不出 ──
+                for (const rule of ['casual', 'hard']) {
+                    await T.eval(`indSetRule('${rule}'); ind.bag = {}; indBagAdd('wood', 59); if (indCraft(${ci('house_hut')})) throw 1; indBagAdd('wood', 1); indCraft(${ci('house_hut')}); true;`);
+                    if (!(await T.eval(`ind.bag.house_hut === 1 && !ind.bag.wood`))) bad.push(rule + ' 60 木头做不出木屋 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                    await T.eval(`ind.bag = {}; indBagAdd('brick', 40); indBagAdd('wood', 9); if (indCraft(${ci('house_brick')})) throw 1; indBagAdd('wood', 1); indCraft(${ci('house_brick')}); true;`);
+                    if (!(await T.eval(`ind.bag.house_brick === 1 && !ind.bag.brick && !ind.bag.wood`))) bad.push(rule + ' 40 砖 + 10 木头做不出砖房 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                    await T.eval(`ind.bag = {}; indBagAdd('brick', 90); indBagAdd('wood', 20); indCraft(${ci('house_big')}); true;`);
+                    if (!(await T.eval(`ind.bag.house_big === 1 && !ind.bag.brick && !ind.bag.wood`))) bad.push(rule + ' 90 砖 + 20 木头做不出大砖房 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                }
+                await T.eval(`indSetRule('casual'); true;`);
+                // 清出一片空地：床、灶台、工作台、水池收起来，仓库箱挪到角落
+                await T.eval(`ind.base.off = { stove: true, bed: true, bench: true, pool: true }; ind.base.chests[0].x = 25; ind.base.chests[0].z = -15; ind.base.cookers = []; ind.base.devs = []; ind.base.fires = []; ind.base.ground = []; ind.base.crops = []; ind.furnDirty = true; indSyncFurn(); true;`);
+                // ── 放：站在 (9,0) 朝东，房子放在面前，门朝西（朝着人） ──
+                await T.eval(`ind.bag = {}; indBagAdd('house_hut', 1); indBagAdd('house_big', 1); indBagAdd('house_brick', 1); indTeleport(9, 0); indLookAt(30, 0); indSelect('house_hut'); indUse(); indSyncFurn(); true;`);
+                const h0 = await J(`ind.base.houses.map(function (h) { return [h.ty, h.side, h.open, h.x, h.z]; })`);
+                if (h0.length !== 1 || h0[0][0] !== 'hut' || h0[0][1] !== 3 || h0[0][2] !== false) bad.push('放木屋不对（门要朝西 side=3、关着） ' + JSON.stringify(h0));
+                if (!(await T.eval(`!ind.bag.house_hut && !!ind.furnMesh['house' + ind.base.houses[0].id] && ind.furnMesh['house' + ind.base.houses[0].id].m.length >= 8`))) bad.push('房子没画出来');
+                const bx = await J(`indHouseBox(ind.base.houses[0])`);
+                if (Math.abs(bx.x1 - bx.x0 - 6) > 0.01 || Math.abs(bx.z1 - bx.z0 - 6) > 0.01) bad.push('木屋应该 6×6 ' + JSON.stringify(bx));
+                // 压在家具上放不下
+                await T.eval(`indTeleport(9, 8); indLookAt(30, 8); indSelect('house_brick'); indUse(); true;`);
+                if (await T.eval(`ind.base.houses.length !== 2`)) bad.push('旁边空地应该能再放一间');
+                await T.eval(`ind.base.houses.pop(); ind.furnDirty = true; indSyncFurn(); indBagAdd('house_brick', 1); ind.base.chests.push({ id: 99, x: 9 + 2.2 + 1.2 + 3, z: 8, big: false, items: {} }); window.__fl = []; indTeleport(9, 8); indLookAt(30, 8); indSelect('house_brick'); indUse(); true;`);
+                if (!(await T.eval(`ind.base.houses.length === 1 && __fl.indexOf('这里放不下，换个空地') >= 0`))) bad.push('压着箱子也放下了 ' + await T.eval(`JSON.stringify(__fl)`));
+                await T.eval(`ind.base.chests = ind.base.chests.filter(function (c) { return c.id !== 99; }); true;`);
+                // 大砖房 10×8（门朝西，所以东西向 8、南北向 10）
+                await T.eval(`indTeleport(20, 10); indLookAt(40, 10); indSelect('house_big'); indUse(); indSyncFurn(); true;`);
+                const bg = await J(`ind.base.houses.filter(function (h) { return h.ty === 'big'; }).map(function (h) { let b = indHouseBox(h); return [b.x1 - b.x0, b.z1 - b.z0]; })`);
+                if (bg.length !== 1 || Math.abs(bg[0][0] - 8) > 0.01 || Math.abs(bg[0][1] - 10) > 0.01) bad.push('大砖房应该 10×8 ' + JSON.stringify(bg));
+                await T.eval(`ind.base.houses = ind.base.houses.filter(function (h) { return h.ty === 'hut'; }); ind.furnDirty = true; indSyncFurn(); true;`);
+                // ── 墙挡人，关着的门也挡 ──
+                const walk = (x, z, tx, tz, n) => T.eval(`(function(){ indTeleport(${x}, ${z}); indLookAt(${tx}, ${tz}); ind.k.w = true; for (let i = 0; i < ${n}; i++) indMove(0.05); ind.k.w = false; return [ind.p.x, ind.p.z]; })()`);
+                let w1 = await walk(8, 2, 30, 2, 60);
+                if (!(w1[0] < 10)) bad.push('墙挡不住人 ' + JSON.stringify(w1));
+                let w2 = await walk(8, 0, 30, 0, 60);
+                if (!(w2[0] < 10)) bad.push('关着的门挡不住人 ' + JSON.stringify(w2));
+                // 大步（卡顿一帧走很远）也穿不过
+                let w3 = await T.eval(`(function(){ indTeleport(8, 2); indLookAt(30, 2); ind.k.w = true; indMove(0.5); indMove(0.5); ind.k.w = false; return ind.p.x; })()`);
+                if (!(w3 < 10)) bad.push('卡一帧穿墙了 ' + w3);
+                // ── 左键开门，进得去 ──
+                await T.eval(`indTeleport(9.2, 0); indLookAt(30, 0); true;`);
+                const aim0 = await J(`(function(){ let a = indAim(); return a && a.kind; })()`);
+                if (aim0 !== 'door') bad.push('对着门应该瞄到门 ' + aim0);
+                await T.eval(`indAction(); indSyncFurn(); true;`);
+                if (!(await T.eval(`ind.base.houses[0].open === true`))) bad.push('左键没把门打开');
+                let w4 = await walk(8, 0, 30, 0, 40);
+                if (!(w4[0] > 12)) bad.push('门开了进不去 ' + JSON.stringify(w4));
+                // ── 气温：屋里 = 屋外 + 保暖；屋里 4 米内有火至少 18°C ──
+                await T.eval(`IND_SEASONS[indSeason()].t = -30; ind.base.fires = []; true;`);
+                await T.eval(`indTeleport(8, 0); true;`); const tOut = await T.eval(`indAirTemp()`);
+                await T.eval(`indTeleport(14, 0); true;`); const tIn = await T.eval(`indAirTemp()`);
+                if (Math.abs(tIn - tOut - 6) > 0.01) bad.push('木屋屋里应该比外面高 6°C：外 ' + tOut + ' 里 ' + tIn);
+                await T.eval(`ind.base.houses[0].ty = 'brick'; true;`); const tIn2 = await T.eval(`indAirTemp()`);
+                if (Math.abs(tIn2 - tOut - 12) > 0.01) bad.push('砖房屋里应该比外面高 12°C：外 ' + tOut + ' 里 ' + tIn2);
+                await T.eval(`ind.base.houses[0].ty = 'hut'; ind.base.fires = [{ x: 15, z: 1, fuel: 500, ashT: 0 }]; true;`);
+                const tFire = await T.eval(`indAirTemp()`);
+                if (tFire < 18 - 1e-6 || tFire > 18 + 1e-6) bad.push('屋里有火至少 18°C（冬天 −30 + 火 20 + 6 = −4，应该顶到 18） ' + tFire);
+                await T.eval(`ind.base.fires = [{ x: 9.5, z: 1, fuel: 500, ashT: 0 }]; true;`);
+                const tFireOut = await T.eval(`indAirTemp()`);
+                if (!(tFireOut < 10)) bad.push('火在屋外、人在屋里，不该顶到 18：' + tFireOut);
+                await T.eval(`ind.base.fires = []; true;`);
+                await T.eval(`indTeleport(8, 0); true;`); const tOut2 = await T.eval(`indAirTemp()`);
+                if (Math.abs(tOut2 - tOut) > 0.01) bad.push('出了房子气温应该回到屋外的 ' + tOut2 + ' vs ' + tOut);
+                // 夜里在屋里和屋外精力掉得一样快（基地里本来就没有"夜里在外面"的 3 倍）
+                await T.eval(`ind.base.clock = IND_DUSK + 10; indTeleport(14, 0); ind.base.surv.energy = 100; indSurvTick(10); window.__e1 = 100 - ind.base.surv.energy; indTeleport(8, 0); ind.base.surv.energy = 100; indSurvTick(10); window.__e2 = 100 - ind.base.surv.energy; true;`);
+                if (!(await T.eval(`__e1 > 0 && Math.abs(__e1 - __e2) < 1e-9`))) bad.push('夜里屋里屋外精力掉得不一样 ' + await T.eval(`[__e1, __e2]`));
+                // ── 隔着墙瞄不到里面的东西，屋顶人进去变透明 ──
+                await T.eval(`ind.base.houses[0].open = false; ind.base.chests.push({ id: 98, x: 14, z: 1.5, big: false, items: {} }); ind.furnDirty = true; indSyncFurn(); indTeleport(9.3, 1.5); indLookAt(14, 1.5); true;`);
+                const aim1 = await J(`(function(){ let a = indAim(); return a && a.kind; })()`);
+                if (aim1 !== 'house') bad.push('隔着墙应该瞄到墙，不是里面的箱子 ' + aim1);
+                // 贴着墙外侧斜着看（射线擦过墙没碰到），也不能把墙里的箱子当目标
+                await T.eval(`ind.base.chests.push({ id: 97, x: 10.8, z: 0.5, big: false, items: {} }); indTeleport(9.7, 3.5); indLookAt(9.7, -5); true;`);
+                const aim1b = await J(`(function(){ let a = indAim(); return a && a.kind === 'chest' && a.o.id; })()`);
+                if (aim1b) bad.push('隔着墙斜着看，瞄到了墙里的箱子 ' + aim1b);
+                await T.eval(`ind.base.chests = ind.base.chests.filter(function (c) { return c.id !== 97; }); true;`);
+                await T.eval(`ind.base.houses[0].open = true; ind.furnDirty = true; indSyncFurn(); indTeleport(14, 0); indLookAt(14, 1.5); true;`);
+                const aim2 = await J(`(function(){ let a = indAim(); return a && a.kind; })()`);
+                if (aim2 !== 'chest') bad.push('人在屋里应该能瞄到箱子 ' + aim2);
+                await T.eval(`indTeleport(14, 0); indHouseFadeTick(2); true;`);
+                const ro = await J(`[ind.houseFx['house' + ind.base.houses[0].id].roof.material.opacity, ind.houseFx['house' + ind.base.houses[0].id].walls[0].material.opacity]`);
+                if (!(ro[0] < 0.3 && ro[1] < 0.7)) bad.push('人在屋里屋顶和墙应该变透明 ' + JSON.stringify(ro));
+                await T.eval(`indTeleport(2, 0); indHouseFadeTick(2); true;`);
+                const ro2 = await J(`ind.houseFx['house' + ind.base.houses[0].id].roof.material.opacity`);
+                if (!(ro2 > 0.9)) bad.push('人出来屋顶要变回实的 ' + ro2);
+                // ── 收起：里面有东西不让收，空了长按右键收 ──
+                await T.eval(`window.__fl = []; indTeleport(9.2, 0); indLookAt(30, 0); true;`);
+                await T.eval(`ind.base.houses[0].open = false; indRightDown(); indRightHoldTick(1.2); indRightUp(); true;`);
+                if (!(await T.eval(`ind.base.houses.length === 1 && __fl.indexOf('先把里面的东西搬出来') >= 0`))) bad.push('里面有箱子还收起来了 ' + await T.eval(`JSON.stringify(__fl)`));
+                await T.eval(`ind.base.chests = ind.base.chests.filter(function (c) { return c.id !== 98; }); true;`);
+                await T.eval(`indTeleport(9.2, 0); indLookAt(30, 0); indRightDown(); indRightHoldTick(0.5); true;`);
+                if (await T.eval(`ind.base.houses.length !== 1`)) bad.push('没按够 1 秒就收起来了');
+                await T.eval(`indRightHoldTick(0.7); indRightUp(); true;`);
+                if (!(await T.eval(`ind.base.houses.length === 0 && ind.bag.house_hut === 1`))) bad.push('空房子收不起来 ' + await T.eval(`JSON.stringify([ind.base.houses, ind.bag])`));
+                // ── 存档 ──
+                await T.eval(`indSelect('house_hut'); indTeleport(9, 0); indLookAt(30, 0); indUse(); ind.base.houses[0].open = true; true;`);
+                const sv = await J(`indFixBase(JSON.parse(JSON.stringify(ind.base))).houses.map(function (h) { return [h.ty, h.side, h.open, h.x, h.z]; })`);
+                if (JSON.stringify(sv) !== JSON.stringify(await J(`ind.base.houses.map(function (h) { return [h.ty, h.side, h.open, h.x, h.z]; })`)) || sv.length !== 1) bad.push('房子存档读回来不对 ' + JSON.stringify(sv));
+                const bd = await J(`indFixBase({ ver: 10, rule: 'casual', box: {}, houses: [{ id: 1, ty: 'castle', x: 0, z: 0 }, null, { id: 2, ty: 'big', x: 1e9, z: NaN, side: 9 }, { id: 3, ty: 'hut', x: 5, z: 5, side: 2, open: 1 }] }).houses.map(function (h) { return [h.ty, h.side, h.open]; })`);
+                if (JSON.stringify(bd) !== '[["hut",2,true]]') bad.push('乱写的房子存档要被滤掉 ' + JSON.stringify(bd));
+                if (!(await T.eval(`indFixBase({ ver: 9, rule: 'casual', box: {} }).houses.length === 0`))) bad.push('老档没有 houses 要补成空');
+                // ── 炸在房子里，房子塌 ──
+                await T.eval(`indBoom(14, 0, 3); indSyncFurn(); true;`);
+                if (!(await T.eval(`ind.base.houses.length === 0 && !Object.keys(ind.furnMesh).some(function (k) { return /^house/.test(k); })`))) bad.push('炸在房子里房子没塌');
+            }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND19 现成房子：三种房子的配方、放下一整间、墙和门挡人、屋里保暖和最低 18°C、隔墙瞄不到、屋顶透明、空房子收起、存档、被炸', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
