@@ -5005,6 +5005,173 @@ async function enterExit(tab, key) {
             report('IND10 玻璃暖棚（要先有木棚、扩大范围、旧档默认不是）、挤奶剪毛南瓜甘蔗的新等待时间、旧档时间改短、精力走 60 秒掉 4 跑 60 秒掉 8', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND11')) {
+            // IND11 第 5 阶段（压力，只给硬核）：钢瓶装气（压力 = 份数 × (温度 + 273) ÷ 293，名字上写着）、压缩机（通电有活干才耗电，2 秒压 1 瓶）、
+            // 灶台上的钢瓶按灶台温度算压力、超 100 个大气压炸（半径 1 + 压力 ÷ 50）、氢氧混装 500°C 炸、木炭 + 氧气 → 二氧化碳、液态二氧化碳放气出干冰、
+            // 干冰拿手上体温 −0.05、放进水桶冒白雾；压力机（旁边没有 1200°C 灶台不出）出钻石、钻石稿多拿 1 个
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; true;`);
+                const near = (a, b, e) => Math.abs(a - b) <= (e === undefined ? 0.01 : e);
+                // 钢瓶的名字和压力
+                const nm = JSON.parse(await T.eval(`JSON.stringify([indName('cyl'), indName('cyl:h2=20'), indName('cyl:h2=3,o2=1'), indName('cyl:co2=60'), indName('cyl:co2=57'), indName('cyl:co2=58'), !!IND_ITEMS['cyl:h2=61'], !!IND_ITEMS['cyl:xx=3'], indCylP({ h2: 20 }, 20), indCylP({ h2: 20 }, 600)])`));
+                if (nm[0] !== '钢瓶（空）' || nm[1] !== '钢瓶（氢气 20 份，20 个大气压）' || nm[2] !== '钢瓶（氢气 3、氧气 1 份，4 个大气压）') bad.push('钢瓶名字不对 ' + JSON.stringify(nm.slice(0, 3)));
+                if (!/液态二氧化碳 60 份，60 个大气压/.test(nm[3]) || /液态/.test(nm[4]) || !/液态二氧化碳 58 份/.test(nm[5])) bad.push('液态二氧化碳判断不对 ' + JSON.stringify(nm.slice(3, 6)));
+                if (nm[6] || nm[7]) bad.push('超过容量或乱写的钢瓶也认');
+                if (!near(nm[8], 20) || !near(nm[9], 20 * 873 / 293)) bad.push('压力公式不对 ' + nm[8] + ' / ' + nm[9]);
+                // 工作台：钢瓶、压缩机、压力机、钻石稿；悠闲看不到
+                const ci = (o) => `IND_CRAFT.findIndex(function (r) { return r.out === '${o}'; })`;
+                await T.eval(`ind.bag = {}; indBagAdd('steel', 2); indBagAdd('ingot_cu', 1); indCraft(${ci('cyl')}); true;`);
+                if (!(await T.eval(`ind.bag.cyl === 1 && !ind.bag.steel && !ind.bag.ingot_cu`))) bad.push('做不出钢瓶 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = {}; indBagAdd('steel', 3); indBagAdd('ingot_cu', 2); indBagAdd('wire', 2); indCraft(${ci('dev_comp')}); true;`);
+                if (!(await T.eval(`ind.bag.dev_comp === 1 && !ind.bag.steel && !ind.bag.wire`))) bad.push('做不出压缩机 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = {}; indBagAdd('steel', 4); indBagAdd('wire', 2); indCraft(${ci('dev_press')}); true;`);
+                if (!(await T.eval(`ind.bag.dev_press === 1 && !ind.bag.steel && !ind.bag.wire`))) bad.push('做不出压力机 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = {}; indBagAdd('diamond', 2); indBagAdd('steel', 2); indBagAdd('wood', 1); indCraft(${ci('pick_diamond')}); true;`);
+                if (!(await T.eval(`ind.bag.pick_diamond === 1 && indTool() === 4 && !!ind.base.elems[6]`))) bad.push('做不出钻石稿 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 压缩机：8 节电池 12 V
+                const place = (k, x, z) => T.eval(`(function(){ indBagAdd('${k}', 1); indTeleport(${x}, ${z}); indLookAt(${x}, ${z} - 5); indSelect('${k}'); indUse(); return ind.base.devs[ind.base.devs.length - 1].id; })()`);
+                const click = (id, k) => T.eval(`(function(){ let d = indDev(${id}); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); if ('${k}') indSelect('${k}'); indAction(); indPanelClose(); return true; })()`);
+                await T.eval(`ind.bag = {}; indBagAdd('wire', 10); indBagAdd('battery', 30); true;`);
+                const bank = await place('dev_bank', -8, 8), comp = await place('dev_comp', -4, 8);
+                await click(bank, 'wire'); await click(comp, 'wire');
+                for (let i = 0; i < 8; i++) await click(bank, 'battery');
+                // 没活干（没钢瓶没气瓶）：不耗电
+                await T.eval(`indTeleport(-10, 12); indAdvance(5); true;`);
+                if (!near(await T.eval(`indDev(${bank}).u`), 1440, 0.01)) bad.push('压缩机没活干也耗电 ' + await T.eval(`indDev(${bank}).u`));
+                await T.eval(`(function(){ let d = indDev(${comp}); d.cy = 'cyl'; d.st = { b_h2: 3 }; indTeleport(-10, 12); indAdvance(7); })(); true;`);
+                const c1 = JSON.parse(await T.eval(`JSON.stringify({ cy: indDev(${comp}).cy, st: indDev(${comp}).st, u: indDev(${bank}).u })`));
+                if (c1.cy !== 'cyl:h2=3' || c1.st.bottle !== 3 || c1.st.b_h2) bad.push('压缩机 7 秒应该压进 3 份氢气、还 3 个空瓶 ' + JSON.stringify(c1));
+                if (!near(c1.u, 1440 - 3 * 6, 3.2)) bad.push('压缩机耗电不是每秒 3 U（6 秒 18 U） ' + c1.u);
+                // 不同气体混装不拦；钢瓶满了停
+                await T.eval(`(function(){ let d = indDev(${comp}); d.st = { b_o2: 1, b_cl2: 1 }; indAdvance(5); })(); true;`);
+                if ((await T.eval(`indDev(${comp}).cy`)) !== 'cyl:h2=3,o2=1,cl2=1') bad.push('混装不对 ' + await T.eval(`indDev(${comp}).cy`));
+                await T.eval(`(function(){ let d = indDev(${comp}); d.cy = 'cyl:co2=60'; d.st = { b_co2: 2 }; indAdvance(6); })(); true;`);
+                if ((await T.eval(`indDev(${comp}).cy`)) !== 'cyl:co2=60' || (await T.eval(`indDev(${comp}).st.b_co2`)) !== 2) bad.push('满了还在压');
+                // 电压不够不干活
+                await T.eval(`(function(){ let d = indDev(${comp}); d.cy = 'cyl'; d.st = { b_h2: 1 }; let b = indDev(${bank}); b.bats = 2; b.u = 360; indAdvance(5); })(); true;`);
+                if ((await T.eval(`indDev(${comp}).cy`)) !== 'cyl') bad.push('3 V 也在压');
+                // 面板
+                await T.eval(`indPanelComp(${comp}); true;`);
+                if (!/压缩机/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('压缩机面板打不开');
+                await T.eval(`indPanelClose(); true;`);
+                // 灶台上的钢瓶：按灶台温度算压力。19 份氢在 1200°C = 95.5，不炸；20 份 = 100.5，炸（半径 1 + 压力 ÷ 50 ≈ 3.01）
+                const st = `IND_BASE_ST.stove`;
+                const boomSetup = (key, fire, temp) => T.eval(`(function(){ ind.base.devs = []; ind.base.wires = []; ind.base.ground = []; ind.base.surv.hp = 100;
+                    ind.base.stove = { items: { '${key}': 1 }, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null };
+                    ind.base.devs.push({ id: 901, ty: 'lamp', x: ${st}.x + 2, z: ${st}.z, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 902, ty: 'lamp', x: ${st}.x + 8, z: ${st}.z, bats: 0, u: 0, on: true, ft: 20, st: {} });
+                    indTeleport(${st}.x - 2, ${st}.z); ind.devDirty = true; })(); true;`);
+                await boomSetup('cyl:h2=19', 3, 1200); await T.eval(`indAdvance(3); true;`);
+                if (await T.eval(`ind.base.devs.length !== 2 || ind.base.surv.hp !== 100`)) bad.push('19 份氢 1200°C（95 个大气压）就炸了');
+                await boomSetup('cyl:h2=20', 3, 1200); await T.eval(`indAdvance(3); true;`);
+                const b1 = JSON.parse(await T.eval(`JSON.stringify({ ids: ind.base.devs.map(function (d) { return d.id; }), hp: ind.base.surv.hp, items: ind.base.stove.items })`));
+                if (b1.ids.join() !== '902' || b1.hp < 59.9 || b1.hp > 62 || Object.keys(b1.items).length) bad.push('超过 100 个大气压没炸对（3 米内的灯没了、8 米外的还在、人扣 40、钢瓶没了） ' + JSON.stringify(b1));
+                // 压力小的钢瓶：半径 = 1 + 压力 ÷ 50，2 米外的灯不受影响。氢氧混装 500°C 以上立即炸（中火 600°C），小火 200°C 不炸
+                await boomSetup('cyl:h2=2,o2=1', 1, 200); await T.eval(`indAdvance(3); true;`);
+                if (await T.eval(`ind.base.devs.length !== 2`)) bad.push('氢氧混装在 200°C 就炸了');
+                await boomSetup('cyl:h2=2,o2=1', 2, 600); await T.eval(`indAdvance(14); true;`);
+                const b2 = JSON.parse(await T.eval(`JSON.stringify({ ids: ind.base.devs.map(function (d) { return d.id; }), hp: ind.base.surv.hp })`));
+                if (b2.ids.join() !== '901,902' && b2.ids.join() !== '902') bad.push('氢氧混装 600°C 炸的范围不对 ' + JSON.stringify(b2));
+                if (b2.hp !== 100 && !(b2.hp > 59.9 && b2.hp < 62)) bad.push('氢氧混装 600°C 的伤害不对 ' + b2.hp);
+                if (await T.eval(`Object.keys(ind.base.stove.items).length`)) bad.push('氢氧混装 600°C 没炸');
+                await boomSetup('cyl:h2=3', 2, 600); await T.eval(`indAdvance(14); true;`);
+                if (await T.eval(`ind.base.devs.length !== 2 || !ind.base.stove.items['cyl:h2=3']`)) bad.push('只有氢气的钢瓶 600°C 也炸了');
+                // 二氧化碳：木炭 + 氧气瓶，≥ 400°C；小火 200°C 不行
+                await T.eval(`ind.base.stove = { items: { charcoal: 1, b_o2: 1 }, out: {}, fuel: 3000, fire: 1, temp: 200, cook: null }; indAdvance(20); true;`);
+                if (await T.eval(`!!ind.base.stove.out.b_co2`)) bad.push('200°C 就做出二氧化碳');
+                await T.eval(`ind.base.stove = { items: { charcoal: 1, b_o2: 1 }, out: {}, fuel: 3000, fire: 2, temp: 600, cook: null }; indAdvance(12); true;`);
+                if ((await T.eval(`ind.base.stove.out.b_co2 || 0`)) !== 1 || await T.eval(`!!ind.base.stove.out.char`)) bad.push('做不出二氧化碳瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 干冰：液态二氧化碳（60 份）按 Q 放气得 6 块、钢瓶清空；非液态的放了没有干冰
+                await T.eval(`ind.base.stove = { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null }; ind.bag = { 'cyl:co2=60': 1 }; indSelect('cyl:co2=60'); indDrop(); true;`);
+                if (!(await T.eval(`ind.bag.dry_ice === 6 && ind.bag.cyl === 1 && !ind.bag['cyl:co2=60']`))) bad.push('液态二氧化碳放气没得到干冰 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = { 'cyl:co2=30': 1 }; indSelect('cyl:co2=30'); indDrop(); true;`);
+                if (!(await T.eval(`!ind.bag.dry_ice && ind.bag.cyl === 1`))) bad.push('没到液态也出干冰 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = { 'cyl:co2=57': 1 }; indSelect('cyl:co2=57'); indDrop(); true;`);
+                if (await T.eval(`!!ind.bag.dry_ice`)) bad.push('57 份（刚好 57 个大气压）也出干冰');
+                await T.eval(`ind.bag = { 'cyl:co2=58': 1 }; indSelect('cyl:co2=58'); indDrop(); true;`);
+                if ((await T.eval(`ind.bag.dry_ice || 0`)) !== 5) bad.push('58 份应该出 5 块干冰 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 干冰拿手上：体温每秒 −0.05；放下别的东西就不掉
+                await T.eval(`ind.bag = { dry_ice: 3, bread: 1 }; ind.base.surv.temp = 37; indSelect('dry_ice'); indAdvance(10); true;`);
+                const tc = await T.eval(`ind.base.surv.temp`);   // 每秒 −0.05，身体自己每秒回 0.02，净掉 0.03/秒
+                if (!near(tc, 36.7, 0.03)) bad.push('干冰拿手上 10 秒体温应该约 36.7（每秒 −0.05，身体自己回 0.02） ' + tc);
+                await T.eval(`ind.base.surv.temp = 37; indSelect('bread'); indAdvance(10); true;`);
+                if (!near(await T.eval(`ind.base.surv.temp`), 37, 0.01)) bad.push('没拿干冰体温也在掉');
+                // 干冰放进装水的桶（右键）：冒白雾 30 秒
+                await T.eval(`ind.bag = { dry_ice: 2 }; indSelect('dry_ice'); indUse(); true;`);
+                if (!(await T.eval(`ind.bag.dry_ice === 2 && !(ind.fogs && ind.fogs.length)`))) bad.push('没有水桶也冒雾、吃掉干冰');
+                await T.eval(`ind.bag = { dry_ice: 2, water_raw: 1 }; indSelect('dry_ice'); indUse(); true;`);
+                if (!(await T.eval(`ind.bag.dry_ice === 1 && ind.bag.water_raw === 1 && ind.fogs.length === 1`))) bad.push('干冰放进水桶没冒雾 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indAdvance(29); true;`);
+                if (await T.eval(`ind.fogs.length !== 1`)) bad.push('白雾 29 秒就没了');
+                await T.eval(`indAdvance(2); true;`);
+                if (await T.eval(`ind.fogs.length !== 0`)) bad.push('白雾 31 秒还在');
+                // 压力机：16 节电池 24 V，旁边灶台 1200°C，5 个碳，20 秒出 1 颗钻石
+                await T.eval(`(function(){ ind.base.devs = []; ind.base.wires = []; ind.base.ground = []; ind.base.surv.hp = 100; ind.base.surv.temp = 37; ind.bag = { wire: 10, battery: 30 }; ind.base.stove = { items: {}, out: {}, fuel: 3000, fire: 0, temp: 20, cook: null }; })(); true;`);
+                const SX = +(await T.eval(`IND_BASE_ST.stove.x`)), SZ = +(await T.eval(`IND_BASE_ST.stove.z`));
+                const bank2 = await place('dev_bank', -8, 8), press = await place('dev_press', SX + 2, SZ + 1);
+                await click(bank2, 'wire'); await click(press, 'wire');
+                for (let i = 0; i < 16; i++) await click(bank2, 'battery');
+                const u0 = await T.eval(`indDev(${bank2}).u`);
+                // 旁边没有 1200°C 灶台：不出、不耗电
+                await T.eval(`indDev(${press}).st = { charcoal: 5 }; ind.base.stove.temp = 20; ind.base.stove.fire = 0; indTeleport(-12, 14); indAdvance(25); true;`);
+                if (await T.eval(`!!indDev(${press}).st.diamond || indDev(${bank2}).u !== ${u0}`)) bad.push('旁边没有 1200°C 灶台也出钻石或耗电 ' + await T.eval(`JSON.stringify(indDev(${press}).st)`));
+                // 灶台只有 600°C 也不行
+                await T.eval(`ind.base.stove = { items: {}, out: {}, fuel: 3000, fire: 2, temp: 600, cook: null }; indAdvance(25); true;`);
+                if (await T.eval(`!!indDev(${press}).st.diamond`)) bad.push('灶台 600°C 也出钻石');
+                // 1200°C：19 秒还没有，21 秒有；耗电每秒 6 U
+                await T.eval(`ind.base.stove = { items: {}, out: {}, fuel: 3000, fire: 3, temp: 1200, cook: null }; indDev(${press}).pt = 0; indAdvance(19); true;`);
+                if (await T.eval(`!!indDev(${press}).st.diamond`)) bad.push('19 秒就出钻石');
+                await T.eval(`indPanelPress(${press}); true;`);
+                const ptxt = await T.eval(`document.getElementById('ind-panel').innerText`);
+                const pm = /压力\s*(\d+)\s*\/\s*50000/.exec(ptxt);
+                if (!pm || Math.abs(+pm[1] - 47500) > 1300) bad.push('压力机面板压力不对 ' + ptxt.slice(0, 120));
+                await T.eval(`indPanelClose(); indAdvance(2); true;`);
+                const pr = JSON.parse(await T.eval(`JSON.stringify({ st: indDev(${press}).st, u: indDev(${bank2}).u })`));
+                if (pr.st.diamond !== 1 || pr.st.charcoal) bad.push('21 秒应该出 1 颗钻石、吃掉 5 个碳 ' + JSON.stringify(pr));
+                if (!near(pr.u, u0 - 6 * 20, 3.2)) bad.push('压力机耗电不是每秒 6 U（20 秒 120 U） ' + (u0 - pr.u));
+                // 木炭、煤、焦炭都算碳；不够 5 个不干活
+                await T.eval(`indDev(${press}).st = { charcoal: 2, coal: 2, char: 1 }; indDev(${press}).pt = 0; indAdvance(21); true;`);
+                if ((await T.eval(`indDev(${press}).st.diamond || 0`)) !== 1) bad.push('木炭 + 煤 + 焦炭凑 5 个应该出钻石 ' + await T.eval(`JSON.stringify(indDev(${press}).st)`));
+                await T.eval(`indDev(${press}).st = { charcoal: 4 }; indAdvance(25); true;`);
+                if (await T.eval(`!!indDev(${press}).st.diamond`)) bad.push('4 个碳也出钻石');
+                // 拿出来
+                await T.eval(`indDev(${press}).st = { diamond: 2, charcoal: 1 }; ind.bag = {}; indDevTake(${press}); indPanelClose(); true;`);
+                if (!(await T.eval(`ind.bag.diamond === 2 && ind.bag.charcoal === 1`))) bad.push('从压力机里拿不出来');
+                // 钻石稿：等级 4，铀矿（钢稿级）也挖得动，一次多拿 1 个
+                await T.eval(`${HIDE} indGoTrip(2024); ind.bag = { pick_diamond: 1 }; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodes.push({ key: 'ore_u', x: 0, z: -4, y: 0, n: 1, dead: false }, { key: 'stone', x: 3, z: -4, y: 0, n: 2, dead: false }); ind.nodeDirty = true; true;`);
+                await T.eval(`indTeleport(0, -2); indLookAt(0, -4); indAction(); true;`);
+                if ((await T.eval(`ind.bag.ore_u || 0`)) !== 2) bad.push('钻石稿采铀矿应该多拿 1 个 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indTeleport(3, -2); indLookAt(3, -4); indAction(); true;`);
+                if ((await T.eval(`ind.bag.stone || 0`)) !== 3) bad.push('钻石稿采石头应该多拿 1 个 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = { pick_steel: 1 }; ind.nodes.push({ key: 'stone', x: 6, z: -4, y: 0, n: 2, dead: false }); indTeleport(6, -2); indLookAt(6, -4); indAction(); true;`);
+                if ((await T.eval(`ind.bag.stone || 0`)) !== 2) bad.push('钢稿不该多拿 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indGoBase(false); true;`);
+                // 配方查询、悠闲看不到
+                for (const w of ['钢瓶', '干冰', '钻石', '二氧化碳']) {
+                    await T.eval(`indPanelBook('${w}'); true;`);
+                    if (!new RegExp(w).test(await T.eval(`document.getElementById('ind-panel').innerText`)) || /没找到/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('配方查询搜不到' + w);
+                }
+                await T.eval(`indPanelClose(); true;`);
+                // 存档：压缩机里的钢瓶存得住，乱写的钢瓶被丢掉
+                await T.eval(`(function(){ ind.base.devs = []; ind.base.wires = []; ind.base.devs.push({ id: 801, ty: 'comp', x: -4, z: 8, bats: 0, u: 0, on: true, ft: 20, st: { b_h2: 2 }, cy: 'cyl:h2=3,o2=1' }); ind.base.box = { 'cyl:co2=60': 2, 'cyl:h2=999': 1, 'cyl:zz=1': 1 }; indSave(); })(); true;`);
+                await until(T, `IND_SAVING === 0`, 5000);
+                const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ cy: b.devs[0].cy, st: b.devs[0].st, box: b.box })); }); })`));
+                if (sv.cy !== 'cyl:h2=3,o2=1' || sv.st.b_h2 !== 2 || sv.box['cyl:co2=60'] !== 2 || sv.box['cyl:h2=999'] || sv.box['cyl:zz=1']) bad.push('钢瓶存档不对 ' + JSON.stringify(sv));
+                const bad2 = await T.eval(`indFixBase({ ver: 9, rule: 'hard', gh: false, devs: [{ id: 5, ty: 'comp', x: 1, z: 1, st: {}, cy: 'cyl:h2=500' }] }).devs[0].cy === null`);
+                if (!bad2) bad.push('乱写的压缩机钢瓶没丢');
+                // 悠闲世界看不到这些配方
+                await T.eval(`ind.base.rule = 'casual'; true;`);
+                if (await T.eval(`indCraftShow(IND_CRAFT.filter(function (r) { return r.out === 'cyl'; })[0]) || indCraftShow(IND_CRAFT.filter(function (r) { return r.out === 'dev_press'; })[0])`)) bad.push('悠闲世界看得到钢瓶和压力机');
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND11 第 5 阶段（压力）：钢瓶装气和压力、压缩机、超 100 大气压和氢氧混装炸、二氧化碳、干冰、压力机出钻石（旁边没 1200°C 不出）、钻石稿', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
