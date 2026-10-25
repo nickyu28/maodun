@@ -4200,7 +4200,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('LB23')) {
-            // LB23 升压器：它后面的电压和耗电都 ×5，自己耗电 2 U/s（前面的设备不受影响）；一圈电池耗电 = 升压器 2 + 灯 1 × 5 = 7 U/s
+            // LB23 升压器（功率守恒）：它后面的电压 ×5，下游耗电不变（灯还是 1 U/s）；自己 2 U/s 只在有电流通过时才耗；前面的设备不受影响；一圈电池耗电 = 升压器 2 + 灯 1 = 3 U/s
             const bad = [];
             const T = await LBTAB();
             await LBENTER(T);
@@ -4208,7 +4208,7 @@ async function enterExit(tab, key) {
             // 电池 → 升压器 → 灯 → 回电池（线按这个顺序接）
             await T.eval(`window.B = __d('bat', -3, 2); window.K = __d('booster', 0, 0.5); window.L = __d('bulb', 3, 2); __w(B, K); __w(K, L); __w(L, B); labAdvance(2, 0.1); true;`);
             let s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), k: __s(K), l: __s(L) })`));
-            if (!elNear(s.l.v, 7.5, 0.01) || !elNear(s.l.draw, 5, 0.01) || !elNear(s.k.draw, 2, 0.01) || !elNear(s.k.v, 1.5, 0.01) || !elNear(s.b.bd, 7, 0.01) || !elNear(s.b.ch, 166, 0.1)) bad.push('升压器在灯前面：灯应该 7.5 V、耗电 5，升压器自己 2，电池背 7 ' + JSON.stringify(s));
+            if (!elNear(s.l.v, 7.5, 0.01) || !elNear(s.l.draw, 1, 0.01) || !elNear(s.k.draw, 2, 0.01) || !elNear(s.k.v, 1.5, 0.01) || !elNear(s.b.bd, 3, 0.01) || !elNear(s.b.ch, 174, 0.1)) bad.push('升压器在灯前面：灯应该 7.5 V、耗电 1，升压器自己 2，电池背 3 ' + JSON.stringify(s));
             // 灯在升压器前面：不受影响
             await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -3, 2); window.L = __d('bulb', 0, 0.5); window.K = __d('booster', 3, 2); __w(B, L); __w(L, K); __w(K, B); labAdvance(2, 0.1); true;`);
             s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), k: __s(K), l: __s(L) })`));
@@ -4216,10 +4216,22 @@ async function enterExit(tab, key) {
             // 2 块电池 + 升压器：电压 3 × 5 = 15 V
             await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -4, 2); window.B2 = __d('bat', -1, 3); window.K = __d('booster', 1, 0.5); window.L = __d('bulb', 4, 2); __w(B, B2); __w(B2, K); __w(K, L); __w(L, B); labAdvance(1, 0.1); true;`);
             s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), l: __s(L) })`));
-            if (!elNear(s.l.v, 15, 0.01) || !elNear(s.b.bd, 7, 0.01)) bad.push('2 块电池 + 升压器：灯 15 V、每块电池背 7 U/s ' + JSON.stringify(s));
+            if (!elNear(s.l.v, 15, 0.01) || !elNear(s.l.draw, 1, 0.01) || !elNear(s.b.bd, 3, 0.01)) bad.push('2 块电池 + 升压器：灯 15 V、灯耗电 1、每块电池背 3 U/s ' + JSON.stringify(s));
+            // 5 节电池经升压器：下游 37.5 V，灯每秒 1 U
+            await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.BS = [0, 1, 2, 3, 4].map(function (i) { return __d('bat', -6 + i * 2.5, 2); }); window.K = __d('booster', 5, 0.5); window.L = __d('bulb', 5, 4); for (let i = 0; i < 4; i++) __w(BS[i], BS[i + 1]); __w(BS[4], K); __w(K, L); __w(L, BS[0]); labAdvance(1, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(BS[0]), k: __s(K), l: __s(L) })`));
+            if (!elNear(s.l.v, 37.5, 0.01) || !elNear(s.l.draw, 1, 0.01) || !elNear(s.k.draw, 2, 0.01) || !elNear(s.b.bd, 3, 0.01)) bad.push('5 节电池 + 升压器：下游应该 37.5 V、灯 1 U/s ' + JSON.stringify(s));
+            // 两个升压器串联：电压 ×25，灯还是 1，每个升压器 2，电池背 5
+            await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -4, 2); window.K = __d('booster', -1, 0.5); window.K2 = __d('booster', 2, 0.5); window.L = __d('bulb', 5, 2); __w(B, K); __w(K, K2); __w(K2, L); __w(L, B); labAdvance(1, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), l: __s(L), k2: __s(K2) })`));
+            if (!elNear(s.l.v, 37.5, 0.01) || !elNear(s.b.bd, 5, 0.01) || !elNear(s.k2.draw, 2, 0.01)) bad.push('两个升压器串联：灯 37.5 V、电池背 5 ' + JSON.stringify(s));
+            // 没有别的东西在耗电（只有电池和升压器）：没有电流，升压器不耗电，电池不掉电
+            await T.eval(`lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); window.B = __d('bat', -3, 2); window.K = __d('booster', 0, 0.5); __w(B, K); __w(K, B); labAdvance(2, 0.1); true;`);
+            s = JSON.parse(await T.eval(`JSON.stringify({ b: __s(B), k: __s(K) })`));
+            if (!elNear(s.k.draw, 0, 0.001) || !elNear(s.b.bd, 0, 0.001) || !elNear(s.b.ch, 180, 0.01)) bad.push('没有用电器时升压器不该耗电 ' + JSON.stringify(s));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
-            report('LB23 升压器 ×5：后面的电压和耗电都乘 5、自己耗电 2、前面的不受影响', bad.length === 0, bad.join(' / '));
+            report('LB23 升压器（功率守恒）：后面的电压 ×5、下游耗电不变、自己 2 U/s 只在有电流时耗、5 节电池 37.5 V、前面的不受影响', bad.length === 0, bad.join(' / '));
         }
 
         if (want('LB24')) {
@@ -4305,6 +4317,41 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
             report('LB25 元素表：牌子对着左键打开，氢到铁每个同位素的名字、质子／中子／电子、稳定或衰变（写半衰期），数据直接读核素表', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB27')) {
+            // LB27 电线点击距离：按准星射线到整条线段的最短距离算（不再抽几个点）；贴脸、1/2/3/5 米处点电线中间和两端都点得中，中间没有空档；
+            // 离线 1 米外点不中；对准的线变白；拿着电线左键拆；设备和电线重叠时设备优先（点设备接线）
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            await T.eval(`${ELHELP} window.A = __d('bat', -5, 2); window.B = __d('bulb', 5, 2); window.W = __w(A, B); true;`);
+            const aim = (px, pz, tx, ty, tz) => T.eval(`(function(){ lab.p.x = ${px}; lab.p.z = ${pz}; __look(${tx}, ${ty}, ${tz}); let r = labAimDev(); return r.dev ? 'dev' : r.wire === W ? 'wire' : 'none'; })()`);
+            const spots = [['中间', 0], ['左端', -3.6], ['右端', 3.6], ['空档1', -3.3], ['空档2', 2.1], ['空档3', 0.9]];
+            for (const d of [0.3, 1, 2, 3, 5]) {
+                for (const sp of spots) {
+                    const got = await aim(sp[1], 2 + d, sp[1], 0.4, 2);
+                    if (got !== 'wire') bad.push('离线 ' + d + ' 米处点' + sp[0] + '没点中电线（' + got + '）');
+                }
+            }
+            // 从线的正上方斜着看、从线的延长线上看
+            if (await aim(0, 2.0, 1, 0.4, 2) !== 'wire') bad.push('站在线上看着线没点中');
+            if (await aim(-8, 2, 0, 0.4, 2) !== 'wire') bad.push('站在线的延长线上看着线没点中');
+            // 离线 1 米外（准星偏开）点不中
+            if (await aim(0, 5, 0, 0.4, 3.2) !== 'none') bad.push('偏开线 1.2 米也点中了');
+            if (await aim(0, 5, 0, 0.4, 3.0) !== 'none') bad.push('偏开线 1 米也点中了');
+            // 超过 9 米点不中（和点设备一样）
+            if (await aim(0, 12, 0, 0.4, 2) !== 'none') bad.push('10 米外点中了电线');
+            // 对准的线变白、没对准是灰；对着线左键拆掉
+            await T.eval(`lab.p.x = 0; lab.p.z = 5; __look(0, 0.4, 2); labDevSync(); true;`);
+            if (!(await T.eval(`lab.wireHi === W`))) bad.push('对准的线没有高亮');
+            await T.eval(`__look(0, 0.4, 8); labDevSync(); true;`);
+            if (await T.eval(`lab.wireHi !== null`)) bad.push('没对准线也在高亮');
+            await T.eval(`labGive('wire', 1); labSel('wire'); lab.p.x = 0; lab.p.z = 5; __look(-3.3, 0.4, 2); labClick(); true;`);
+            if (await T.eval(`lab.wires.length !== 0`)) bad.push('对着线的中间一段左键没拆掉');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB27 电线点击距离：贴脸、1/2/3/5 米处点电线中间和两端都点得中（没有空档），偏开 1 米点不中，超 9 米点不中，对准高亮', bad.length === 0, bad.join(' / '));
         }
 
         if (want('LB26')) {

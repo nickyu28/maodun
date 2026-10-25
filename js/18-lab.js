@@ -630,7 +630,7 @@
         //   · 一圈里至少要有 1 块电池和 1 个用电器才通电；一圈里电池电压相加（每块 1.5 V），一圈就是串联。
         //   · 一个设备在好几圈里（比如一块电池接两盏灯，各自成一圈）就是并联：电压不变，它的耗电平均分给这几圈。
         //   · 每块电池承担它所在每一圈的全部耗电（串联的几块都背满，并联的几块各背一份）。
-        //   · 升压器：沿着从"编号最小的电池、先接的那根线"出发的方向，它后面的设备电压和耗电都 ×5。
+        //   · 升压器：沿着从"编号最小的电池、先接的那根线"出发的方向，它后面的设备电压 ×5（耗电不变）；自己有电流通过时耗 2 U/s。
         const LAB_DEV_CAP = 24, LAB_WIRE_CAP = 48, LAB_CYC_CAP = 64, LAB_DLABEL_MAX = 4;
         const LAB_ELEC = { bat: 1.5, cap: 180, mult: 5 };
         // base：通电时的耗电（U/s）；电解槽只在干活时耗电，升压器自己耗 2
@@ -644,7 +644,7 @@
         };
         const LAB_DEV_DESC = {
             wire: '接线用：拿在手上，左键先点一个设备再点另一个', bat: '一次性电池，1.5 V，容量 180 U', switch: '放在回路里，左键断开／接通', bulb: '通电会亮，耗电 1 U/s', resistor: '耗电 0.5 U/s',
-            motor: '只是零件，不能单独用', elec: '耗电 2 U/s，旁边放装了水的瓶子和空瓶', booster: '电压 ×5，后面设备的耗电也 ×5，自己耗电 2 U/s'
+            motor: '只是零件，不能单独用', elec: '耗电 2 U/s，旁边放装了水的瓶子和空瓶', booster: '电压 ×5，后面设备的耗电不变，自己有电流通过时耗电 2 U/s'
         };
         // 电解：放在电解槽 2 米内的瓶子。水 ≥ 2 V，盐水 ≥ 3 V（要 3 个空瓶），熔融食盐 ≥ 4 V
         const LAB_ELEC_MODE = [{ key: 'b:water', v: 2 }, { key: 'b:brine', v: 3 }, { key: 'b:melt', v: 4 }];
@@ -664,7 +664,7 @@
             R.geo.halo = new THREE.SphereGeometry(0.9, 10, 8);
             R.halo = new THREE.InstancedMesh(R.geo.halo, new THREE.MeshBasicMaterial({ color: 0xfff176, transparent: true, opacity: 0.32, depthWrite: false }), LAB_DEV_CAP);
             R.halo.count = 0; R.halo.frustumCulled = false; labAddObj(R.halo);
-            R.geo.wire = new THREE.BoxGeometry(0.07, 0.07, 1);
+            R.geo.wire = new THREE.BoxGeometry(LAB_WIRE_VIS, LAB_WIRE_VIS, 1);
             R.wm = new THREE.InstancedMesh(R.geo.wire, new THREE.MeshBasicMaterial({ color: 0xffffff }), LAB_WIRE_CAP);
             R.wm.setColorAt(0, new THREE.Color(0x607d8b)); R.wm.count = 0; R.wm.frustumCulled = false; labAddObj(R.wm);
             for (let i = 0; i < LAB_DLABEL_MAX; i++) R.dlabels[i] = labLabelMake();
@@ -803,11 +803,13 @@
             cyc.forEach(function (c) { c.rows.forEach(function (r) { let d = r.d, V = c.vbase * r.m; d.run = true; d.k++; if (V > d.v) d.v = V; }); });
             lab.devs.forEach(function (d) { if (d.ty !== 'elec') return; if (d.run) labElecCheck(d); d.work = !!(d.run && d.job); });
             cyc.forEach(function (c) {
+                // 升压器：电压 ×5，但下游耗电不 ×5（功率守恒）；自己每秒 2 U 只在这一圈有别的设备在耗电（有电流通过）时才耗
                 let D = 0;
                 c.rows.forEach(function (r) {
-                    let d = r.d, b = d.ty === 'elec' ? (d.work ? LAB_DEV.elec.base : 0) : LAB_DEV[d.ty].base;
-                    if (b) { let x = b * r.m / d.k; D += x; d.draw += x; }
+                    let d = r.d, b = d.ty === 'elec' ? (d.work ? LAB_DEV.elec.base : 0) : d.ty === 'booster' ? 0 : LAB_DEV[d.ty].base;
+                    if (b) { let x = b / d.k; D += x; d.draw += x; }
                 });
+                if (D > 0) c.rows.forEach(function (r) { if (r.d.ty === 'booster') { let x = LAB_DEV.booster.base / r.d.k; D += x; r.d.draw += x; } });
                 c.rows.forEach(function (r) { if (r.d.ty === 'bat') r.d.bdraw += D; });
             });
             lab.devs.forEach(function (d) {
@@ -855,7 +857,7 @@
         // ── 画出来：设备、光晕、连线都用现成的实例网格，只改矩阵和颜色 ──
         function labDevSync() {
             let R = lab;
-            let sig = R.devs.map(function (d) { return d.id + ':' + d.x + ':' + d.z + ':' + (d.run ? 1 : 0) + (d.on ? 1 : 0) + (d.work ? 1 : 0) + ':' + Math.ceil(d.charge / 12) + (R.wirePend === d.id ? 'p' : ''); }).join(',') + '|' + R.wires.map(function (w) { return w.id; }).join(',');
+            R.wireHi = labAimDev().wire; let sig = (R.wireHi ? R.wireHi.id : 0) + '#' + R.devs.map(function (d) { return d.id + ':' + d.x + ':' + d.z + ':' + (d.run ? 1 : 0) + (d.on ? 1 : 0) + (d.work ? 1 : 0) + ':' + Math.ceil(d.charge / 12) + (R.wirePend === d.id ? 'p' : ''); }).join(',') + '|' + R.wires.map(function (w) { return w.id; }).join(',');
             if (sig === R.devSig) return;
             R.devSig = sig;
             if (!LAB_DUMMY) { LAB_DUMMY = new THREE.Object3D(); LAB_COL = new THREE.Color(); }
@@ -885,9 +887,9 @@
                 let pk = Math.min(w.a, w.b) + ':' + Math.max(w.a, w.b), second = seen[pk]; seen[pk] = 1;
                 let dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz) || 1, off = second ? 0.18 : 0;
                 let ox = -dz / len * off, oz = dx / len * off, y = second ? 0.62 : 0.4;
-                LAB_DUMMY.position.set((a.x + b.x) / 2 + ox, y, (a.z + b.z) / 2 + oz); LAB_DUMMY.scale.set(1, 1, len); LAB_DUMMY.lookAt(b.x + ox, y, b.z + oz); LAB_DUMMY.updateMatrix();
+                LAB_DUMMY.position.set((a.x + b.x) / 2 + ox, y, (a.z + b.z) / 2 + oz); LAB_DUMMY.scale.set(R.wireHi === w ? 2 : 1, R.wireHi === w ? 2 : 1, len); LAB_DUMMY.lookAt(b.x + ox, y, b.z + oz); LAB_DUMMY.updateMatrix();
                 R.wm.setMatrixAt(i, LAB_DUMMY.matrix);
-                R.wm.setColorAt(i, LAB_COL.setHex(a.run && b.run ? 0xffee58 : 0x607d8b));
+                R.wm.setColorAt(i, LAB_COL.setHex(R.wireHi === w ? 0xffffff : a.run && b.run ? 0xffee58 : 0x607d8b));   // 对准的那根线变白
             });
             LAB_DUMMY.scale.setScalar(1); LAB_DUMMY.rotation.set(0, 0, 0);
             R.wm.count = R.wires.length; R.wm.instanceMatrix.needsUpdate = true; R.wm.instanceColor.needsUpdate = true;
@@ -910,7 +912,32 @@
             });
             labLabelsShow(list, R.dlabels, LAB_DLABEL_MAX, 1.5);
         }
-        // 对准设备（光线离设备中心 0.6 米内）和电线（光线离线上某点 0.22 米内）
+        // 对准设备（光线离设备中心 0.6 米内）和电线（光线离整条线段 LAB_WIRE_HIT 米内）。
+        // 电线按"线段到准星射线的最短距离"算（不再只抽几个点，所以中间不会有点不中的空档）；距离上限（9 米）和点设备一样
+        const LAB_WIRE_VIS = 0.07, LAB_WIRE_HIT = LAB_WIRE_VIS * 3;   // 外观粗 0.07，隐形点击范围是它的 3 倍（半径 0.21 米）
+        function labWireDist(ex, ey, ez, dir, ax, ay, az, bx, by, bz) {
+            let tmin = 0.05, tmax = 9;
+            let f = function (u) {
+                let vx = ax + (bx - ax) * u - ex, vy = ay + (by - ay) * u - ey, vz = az + (bz - az) * u - ez;
+                let t = Math.max(tmin, Math.min(tmax, vx * dir.x + vy * dir.y + vz * dir.z));
+                return Math.hypot(vx - dir.x * t, vy - dir.y * t, vz - dir.z * t);
+            };
+            let lo = 0, hi = 1;   // 线段上的点到射线的距离是凸的，三分法找最小
+            for (let i = 0; i < 40; i++) { let m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3; if (f(m1) < f(m2)) hi = m2; else lo = m1; }
+            return Math.min(f((lo + hi) / 2), f(0), f(1));
+        }
+        // 每根线的两头（同一对设备的第二根线错开一点，和画出来的一致）
+        function labWireEnds() {
+            let R = lab, seen = {}, out = [];
+            R.wires.forEach(function (w) {
+                let a = R.dmap[w.a], b = R.dmap[w.b]; if (!a || !b) return;
+                let pk = Math.min(w.a, w.b) + ':' + Math.max(w.a, w.b), second = seen[pk]; seen[pk] = 1;
+                let dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz) || 1, off = second ? 0.18 : 0, y = second ? 0.62 : 0.4;
+                let ox = -dz / len * off, oz = dx / len * off;
+                out.push({ w: w, ax: a.x + ox, ay: y, az: a.z + oz, bx: b.x + ox, by: y, bz: b.z + oz });
+            });
+            return out;
+        }
         function labAimDev() {
             let R = lab, dir = new THREE.Vector3(); camera.getWorldDirection(dir);
             let ex = R.p.x, ey = R.p.y + LAB_EYE, ez = R.p.z, res = { dev: null, wire: null };
@@ -922,12 +949,9 @@
             let bt = 1e9;
             R.devs.forEach(function (d) { let h = ray(d.x, LAB_DEV[d.ty].y, d.z); if (h && h.d <= 0.6 && h.t < bt) { bt = h.t; res.dev = d; } });
             let bd = 1e9;
-            R.wires.forEach(function (w) {
-                let a = R.dmap[w.a], b = R.dmap[w.b]; if (!a || !b) return;
-                for (let i = 0; i <= 8; i++) {
-                    let f = i / 8, h = ray(a.x + (b.x - a.x) * f, 0.45, a.z + (b.z - a.z) * f);
-                    if (h && h.d <= 0.22 && h.d < bd) { bd = h.d; res.wire = w; }
-                }
+            labWireEnds().forEach(function (e) {
+                let d = labWireDist(ex, ey, ez, dir, e.ax, e.ay, e.az, e.bx, e.by, e.bz);
+                if (d <= LAB_WIRE_HIT && d < bd) { bd = d; res.wire = e.w; }
             });
             return res;
         }
@@ -1508,8 +1532,8 @@
                 return LAB_RECIPES.filter(function (r) { return r.kind === 'device'; }).map(function (r) {
                     return '<div style="border-bottom:1px solid #eee;padding:5px 0;"><b>' + r.name + '</b>　' + (LAB_DEV_DESC[r.id] || '') + '<br>' + labRecipeLine(r) + '</div>';
                 }).join('') + '<div style="margin-top:6px;color:#666;line-height:1.6;">在合成台做。放在地上（Q），手里拿电线，左键先点设备 A 再点设备 B 连一根线（用 1 根电线，同一对最多 2 根）；点一下已有的线拆掉。摆在一起不会自动连。<br>' +
-                    '一圈首尾相连、里面有电池和用电器才通电。串联：电压相加，每块电池承担整圈的耗电。并联（一个设备在几圈里）：电压不变，耗电平均分。升压器：它后面的电压和耗电都 ×5。<br>' +
-                    '耗电：灯泡 1、电阻 0.5、电解槽 2（干活时）、升压器 2（自己）U/s。电池 1.5 V、180 U，用完就没了。<br>' +
+                    '一圈首尾相连、里面有电池和用电器才通电。串联：电压相加，每块电池承担整圈的耗电。并联（一个设备在几圈里）：电压不变，耗电平均分。升压器：它后面的电压 ×5，耗电不变。<br>' +
+                    '耗电：灯泡 1、电阻 0.5、电解槽 2（干活时）、升压器 2（自己，有电流通过才耗）U/s。电池 1.5 V、180 U，用完就没了。<br>' +
                     '电解：电解槽 2 米内放瓶子。水 ≥ 2 V（得 2 氢 + 1 氧）；盐水 ≥ 3 V（氢氧化钠 + 氢气 + 氯气，要 3 个空瓶）；熔融食盐 ≥ 4 V（钠 + 氯气）。每瓶 5 秒。</div>';
             }
             if (tab === 'potion') {
