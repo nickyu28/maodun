@@ -4609,7 +4609,7 @@ async function enterExit(tab, key) {
                 await T.eval(`for (let i = 0; i < 6; i++) indStoveFuel('wood'); indStovePut('water_raw', 1); indStoveFire(2); indPanelClose(); indAdvance(25); true;`);
                 if (!(await T.eval(`ind.base.stove.out.water_boiled === 1`))) bad.push('中火烧不出开水 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 // 大火做面包会烧焦：出来的是焦炭，桶还在
-                await T.eval(`indStoveTakeAll(); indBoxTake('salt', 1); indPanelClose(); indStovePut('wheat', 1); indStovePut('wheat', 1); indStovePut('salt', 1); indStovePut('water_boiled', 1); indStoveFire(3); indPanelClose(); indAdvance(40); true;`);
+                await T.eval(`indStoveTakeAll(); indBoxTake('salt', 1); indPanelClose(); indBagAdd('wheat', 4); indStovePut('wheat', 4); indStovePut('salt', 1); indStovePut('water_boiled', 1); indStoveFire(3); indPanelClose(); indAdvance(40); true;`);
                 const burnt = JSON.parse(await T.eval(`JSON.stringify(ind.base.stove.out)`));
                 if (!burnt.char || burnt.bread || !burnt.bucket) bad.push('大火做面包没烧焦（或桶没了） ' + JSON.stringify(burnt));
                 await T.eval(`indStoveFire(0); indStoveTakeAll(); indPanelClose(); true;`);
@@ -5190,6 +5190,45 @@ async function enterExit(tab, key) {
                 if (await T.eval(`!!ind.bag.wool`)) bad.push('拿稿子对着羊也剪毛了');
                 await T.eval(`indSelect('shears'); indAction(); true;`);
                 if ((await T.eval(`ind.bag.wool || 0`)) !== 2 || (await T.eval(`ind.bag.shears`)) !== 1) bad.push('拿剪刀没剪到毛 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 面包：4 小麦 + 1 盐 + 1 桶水（生水开水都行）→ 3 面包，40 秒，桶还回来，生水和面不拉肚子；灶台一炉多份
+                await T.eval(`window.__fl = []; window.__oldFlash = indFlash; indFlash = function (t) { __fl.push(t); }; true;`);
+                const stoveSet = (items, fire, temp, pot) => T.eval(`(function(){ ind.base.pot = ${!!pot}; ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null }; ind.sickT = 0; window.__fl = []; })(); true;`);
+                await stoveSet({ wheat: 4, salt: 1, water_raw: 1 }, 1, 200); await T.eval(`indAdvance(39); true;`);
+                if (await T.eval(`!!ind.base.stove.out.bread`)) bad.push('面包 39 秒就好了');
+                await T.eval(`indAdvance(2); true;`);
+                const br = JSON.parse(await T.eval(`JSON.stringify({ out: ind.base.stove.out, sick: ind.sickT })`));
+                if (br.out.bread !== 3 || br.out.bucket !== 1 || br.sick) bad.push('4 小麦 + 盐 + 生水应该出 3 面包、还桶、不拉肚子 ' + JSON.stringify(br));
+                await stoveSet({ wheat: 4, salt: 1, water_boiled: 1 }, 1, 200); await T.eval(`indAdvance(41); true;`);
+                if ((await T.eval(`ind.base.stove.out.bread || 0`)) !== 3) bad.push('开水做不出面包');
+                await stoveSet({ wheat: 3, salt: 1, water_raw: 1 }, 1, 200); await T.eval(`indAdvance(45); true;`);
+                if (await T.eval(`!!ind.base.stove.out.bread`)) bad.push('3 小麦也做面包');
+                // 一炉 4 份：16 小麦 4 盐 4 水 → 12 面包 4 桶，时间一样；进度字、面板、做好提示
+                await stoveSet({ wheat: 20, salt: 5, water_boiled: 5 }, 1, 200); await T.eval(`indAdvance(20); true;`);
+                const lab = await T.eval(`ind.badges && ind.badges.stove && ind.badges.stove.mesh.visible ? ind.badges.stove.text : ''`);
+                if (!/^面包 ×12　(4\d|5\d)%$/.test(lab)) bad.push('灶台上方的进度字不对 ' + lab);
+                await T.eval(`indPanelStove(); true;`);
+                if (!/正在做：面包 ×12（4 份）/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('面板"正在做"没写份数 ' + (await T.eval(`document.getElementById('ind-panel').innerText`)).slice(0, 80));
+                await T.eval(`indPanelClose(); indAdvance(21); true;`);
+                const b4 = JSON.parse(await T.eval(`JSON.stringify({ out: ind.base.stove.out, items: ind.base.stove.items, fl: __fl })`));
+                if (b4.out.bread !== 12 || b4.out.bucket !== 4 || b4.items.wheat !== 4 || b4.items.salt !== 1) bad.push('一炉 4 份不对 ' + JSON.stringify(b4));
+                if (!b4.fl.some((t) => t === '做好了：面包 ×12')) bad.push('做好提示不对 ' + JSON.stringify(b4.fl));
+                // 装了黄铜大锅 8 份
+                await stoveSet({ wheat: 40, salt: 10, water_boiled: 10 }, 1, 200, true); await T.eval(`indAdvance(41); true;`);
+                const b8 = JSON.parse(await T.eval(`JSON.stringify(ind.base.stove.out)`));
+                if (b8.bread !== 24 || b8.bucket !== 8) bad.push('黄铜大锅一炉应该 8 份 ' + JSON.stringify(b8));
+                // 冶炼、木炭一次 1 份
+                await stoveSet({ ore_cu: 3 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
+                if ((await T.eval(`ind.base.stove.out.hot_cu || 0`)) !== 1) bad.push('冶炼一炉不该多份 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await stoveSet({ wood: 8 }, 3, 1200); await T.eval(`indAdvance(31); true;`);
+                if ((await T.eval(`ind.base.stove.out.charcoal || 0`)) !== 1) bad.push('木炭一炉不该多份');
+                // 烧焦：整炉焦，每份 1 焦炭，桶照样还
+                await stoveSet({ wheat: 8, salt: 2, water_boiled: 2 }, 3, 1200); await T.eval(`indAdvance(12); true;`);
+                const bb = JSON.parse(await T.eval(`JSON.stringify(ind.base.stove.out)`));
+                if (bb.char !== 2 || bb.bucket !== 2 || bb.bread) bad.push('整炉烧焦不对 ' + JSON.stringify(bb));
+                // 其他吃的也一炉多份：烤土豆 4 个、一起好
+                await stoveSet({ potato: 6 }, 1, 200); await T.eval(`indAdvance(16); true;`);
+                if ((await T.eval(`ind.base.stove.out.bake_potato || 0`)) !== 4 || (await T.eval(`ind.base.stove.items.potato`)) !== 2) bad.push('烤土豆一炉 4 个不对 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`indFlash = window.__oldFlash; ind.base.pot = false; indBagAdd('brass', 0); true;`);
                 // 黄铜大锅（装在灶台上，存档）和铃铛（30 米内的动物走过来）
                 await T.eval(`indSetRule('hard'); ind.base.rule = 'hard'; ind.bag = {}; indBagAdd('brass', 3); indCraft(IND_CRAFT.findIndex(function (r) { return r.pot; })); true;`);
                 if (!(await T.eval(`ind.base.pot === true && !ind.bag.brass`))) bad.push('做不出黄铜大锅 ' + await T.eval(`JSON.stringify(ind.bag)`));
