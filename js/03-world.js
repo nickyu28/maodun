@@ -197,7 +197,7 @@
             gState.safeOpenedThisGame = false; gState.backpackOpen = false; gState.largeMapOpen = false; gState.monstersSpawned = false; gState.inSafeZone = true; gState.needsLock = false; gState.pAtkCd = 0; gState.timeStop = 0;
             gState.debuff = { type: 0, timer: 0, cooldown: 0 };
             gState.maxHp = 100; gState.hp = effectiveMaxHp(); huntMaxHpSync(true);
-            gState.huntHpCut = 0; gState.speedT = 0; gState.springT = 0; gState.stimT = 0; gState.reviveT = 0;   // H22：血量上限扣减、加速药剂、弹簧鞋的剩余秒数，每局归零
+            huntMergeReset(); gState.godcatUsed = false; gState.speedT = 0; gState.springT = 0; gState.stimT = 0; gState.reviveT = 0;   // H22：护身符本局用过没有、加速药剂、弹簧鞋的剩余秒数，每局归零
             huntLure = null;
             huntLureFx.forEach(function (f) { scene.remove(f.o); }); huntLureFx = [];
             gState.hasLeft = false; gState.deathPos = null; gState.spectating = null; gState.spectateIdx = -1; gState.peerState = {}; hideDeathUI();
@@ -1466,6 +1466,14 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026.10.25-1', date: '10 月 25 日', title: '最近更新', items: [
+                    '合成要等一下了：普通 3 秒，大金 5 秒，材料拿走就取消',
+                    '拿着腰包时，快捷栏上方多出 3 格，点一下就拿到手上',
+                    '猫神护身符不再扣血量上限，还能从仓库带进图',
+                    '一局最多生效一个护身符'
+                ]
+            },
+            {
                 id: '2026.10.24-2', date: '10 月 24 日', title: '最近更新', items: [
                     '丰饶圣餐又能正常合成了',
                     '合成出来的大金每张图最多 4 个',
@@ -1477,11 +1485,6 @@
                 id: '2026.10.24-1', date: '10 月 23 日', title: '最近更新', items: [
                     '修了合成配方的问题',
                     '运气猫爪下架了（已按价值折现返还）'
-                ]
-            },
-            {
-                id: '2026.10.22-2', date: '10 月 22 日', title: '最近更新', items: [
-                    '修了几处小问题'
                 ]
             }
         ];

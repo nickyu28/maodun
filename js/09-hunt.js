@@ -358,8 +358,28 @@
             expandInventory();
             let cells = document.getElementById('pouch-cells');
             let p = isPlaying ? pouchActive() : null;
-            if (!p) { el.classList.add('hidden'); if (cells) cells.style.display = 'none'; return; }
+            if (!isPlaying) huntMergeUiSet(null);
+            if (!p) { el.classList.add('hidden'); if (cells) cells.style.display = 'none'; let b0 = document.getElementById('pouch-bar'); if (b0) b0.style.display = 'none'; return; }
             let bag = pouchBag(p);
+            // 手上拿着腰包（选中的就是腰包）：快捷栏上方出一排 3 格"假快捷栏"，显示腰包里的东西，点一下拿到手上（跟按 4 / 5 / 6 一样）
+            let bar = document.getElementById('pouch-bar'), heldPouch = gState.selectedSlot >= 0 && gState.selectedSlot <= 2 && isPouch(gState.inv[gState.selectedSlot]);
+            if (bar) {
+                bar.style.display = heldPouch ? 'flex' : 'none';
+                if (heldPouch) Array.prototype.forEach.call(bar.children, function (c, n) {
+                    let it = bag[n];
+                    c.className = 'slot pouch-bar-cell' + slotTierClass(it);
+                    c.innerHTML = it ? '<div>' + it.n + '</div>' : '<div style="color:#aaa;">空</div>';
+                    if (!c._wired) { c._wired = true; c.addEventListener('touchstart', function (e) { e.preventDefault(); pouchKeyTake(n); }, { passive: false }); c.addEventListener('click', function () { pouchKeyTake(n); }); }
+                });
+            }
+            if (heldPouch) {
+                if (cells) cells.style.display = 'none';
+                el.style.bottom = '164px';
+                el.innerHTML = '<div style="color:#ffd54f;">腰包（点一下，或按 4 / 5 / 6 拿到手上）</div>';
+                el.classList.remove('hidden');
+                return;
+            }
+            el.style.bottom = '96px';
             if (padOn()) {   // 触屏：快捷栏旁边 3 个小格，点一下把那件拿到手上
                 el.classList.add('hidden');
                 if (cells) {
@@ -617,7 +637,7 @@
             // 背包和身上腰包里的宝物一起上交（H14）
             carriedSlots().forEach(function (sl) {
                 let item = sl[0][sl[1]];
-                if (item && !item.isShop) {
+                if (item && !item.isShop && item.type !== 'godcat') {   // 护身符不上交（不然带进去上交一次、撤离又回仓库，能反复刷额度）
                     nightTreasureEgg(item.n);
 
                     submittedNow += item.v; cashNow += item.v;
