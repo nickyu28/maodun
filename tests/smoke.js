@@ -857,7 +857,7 @@ async function enterExit(tab, key) {
             await T.eval(`${HIDE} gState.nightStat = null; selectGameMode('night'); ${MODES.night.start}; true;`);
             if (!(await until(T, `night && !night.over && night.survivors && night.survivors.length`, 30000))) bad.push('惊魂夜没开起来');
             const pre = await T.eval(`JSON.stringify({ over: night.over, side: night.side, friendly: !!night.friendly, quit: !!night.quit })`);
-            await T.eval(`night.survivors[0].escaped = true; endNightGame('测试'); true;`);
+            await T.eval(`night.friendly = false; night.survivors[0].escaped = true; endNightGame('测试'); true;`);   // 开局有 4% 随机成友谊局（友谊局不记次数），这里测的是记次数，所以固定成正式局
             await until(T, `nightStatOf().esc >= 1`, 30000);   // 等条件成立，不靠固定等待（CI 负载高时曾经没记上）
             const esc = await T.eval(`nightStatOf().esc`);
             if (esc !== 1) bad.push('撤离一局没记上 ' + esc + ' 结束前 ' + pre + ' 结束后 ' + await T.eval(`JSON.stringify({ over: night.over, tut: !!gState.tutorial })`));
