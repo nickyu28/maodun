@@ -78,6 +78,59 @@
             let what = indCylLiquid(g) ? '液态二氧化碳 ' + g.co2 + ' 份' : Object.keys(IND_CYL_GAS).filter(function (x) { return g[x] > 0; }).map(function (x) { return IND_CYL_GAS[x] + ' ' + g[x]; }).join('、') + ' 份';
             return '钢瓶（' + what + '，' + Math.round(indCylP(g, T)) + ' 个大气压）';
         }
+        // 桶分材质：木桶（接水、挤奶、装汤，不能上火）、陶罐（能上火，每次用 1/10 碎掉）、铁桶、黄铜桶（能上火，不碎）。
+        // 装了东西的桶记住材质：生水＝木桶（老档的桶都算木桶），生水@jar／@fe／@cu 是另外三种；用完还回同一种空桶
+        const IND_MATS = { wood: { name: '木桶', empty: 'bucket', suf: '' }, jar: { name: '陶罐', empty: 'jar', suf: '@jar', fire: true, breaks: 0.1 }, fe: { name: '铁桶', empty: 'bucket_fe', suf: '@fe', fire: true }, cu: { name: '黄铜桶', empty: 'bucket_cu', suf: '@cu', fire: true } };
+        const IND_CONT_BASES = ['water_raw', 'water_sea', 'water_boiled', 'milk', 'tomato_soup', 'radish_soup', 'cabbage_stew'];
+        const IND_TAKE_ORDER = ['fe', 'cu', 'wood', 'jar'];   // 配方先用不会碎的
+        function indFilledKey(base, mat) { return base + IND_MATS[mat].suf; }
+        function indEmptyKey(mat) { return IND_MATS[mat].empty; }
+        // k 是装了东西的桶（{ base, mat, empty: false }）、空桶（{ base: null, mat, empty: true }）还是别的东西（null）
+        function indContOf(k) {
+            if (typeof k !== 'string') return null;
+            let r = IND_ITEMS_RAW[k]; if (r && r.cont) return { base: null, mat: r.cont, empty: true };
+            let i = k.indexOf('@'), base = i < 0 ? k : k.slice(0, i), m = i < 0 ? 'wood' : k.slice(i + 1);
+            if (IND_CONT_BASES.indexOf(base) < 0 || !IND_MATS[m] || (i >= 0 && m === 'wood')) return null;
+            return { base: base, mat: m, empty: false };
+        }
+        function indIsEmptyCont(k) { let c = indContOf(k); return !!c && c.empty; }
+        // 这堆东西里 k 有多少个（k 是装了东西的桶时，各种材质的都算）
+        function indHave(items, k) {
+            if (IND_CONT_BASES.indexOf(k) < 0) return items[k] || 0;
+            let n = 0; Object.keys(IND_MATS).forEach(function (m) { n += items[indFilledKey(k, m)] || 0; }); return n;
+        }
+        // 配方扣原料；返回装原料的桶各是什么材质（一份一个）
+        function indConsume(items, r, n) {
+            let mats = [];
+            Object.keys(r.in).forEach(function (k) {
+                let need = r.in[k] * n;
+                if (IND_CONT_BASES.indexOf(k) < 0) { items[k] -= need; if (items[k] <= 0) delete items[k]; return; }
+                IND_TAKE_ORDER.forEach(function (m) {
+                    let key = indFilledKey(k, m), t = Math.min(need, items[key] || 0);
+                    for (let i = 0; i < t; i++) mats.push(m);
+                    if (t > 0) { items[key] -= t; if (items[key] <= 0) delete items[key]; need -= t; }
+                });
+            });
+            return mats;
+        }
+        // 做完出什么：桶按用的材质还回去（陶罐 1/10 碎掉，碎了桶和装在桶里的成品都没了）
+        function indCookResult(r, n, mats, burnt) {
+            let out = {}, broke = 0;
+            for (let i = 0; i < n; i++) {
+                let mat = mats[i] || null, lost = false;
+                if (mat && IND_MATS[mat].breaks && indRand() < IND_MATS[mat].breaks) { lost = true; broke++; }
+                let src = burnt ? (r.out.bucket ? { char: 1, bucket: r.out.bucket } : { char: 1 }) : r.out;
+                Object.keys(src).forEach(function (k) {
+                    let key = k;
+                    if (mat) {
+                        if (k === 'bucket') { if (lost) return; key = indEmptyKey(mat); }
+                        else if (IND_CONT_BASES.indexOf(k) >= 0) { if (lost) return; key = indFilledKey(k, mat); }
+                    }
+                    out[key] = (out[key] || 0) + src[k];
+                });
+            }
+            return { out: out, broke: broke };
+        }
         const IND_ITEMS_RAW = {
             wood: { name: '木头', col: 0x8d6e63, fuel: 60 },
             stone: { name: '石头', col: 0x9e9e9e },
@@ -95,7 +148,7 @@
             pick_stone: { name: '石稿', col: 0x757575, tool: 1 },
             charcoal: { name: '木炭', col: 0x37474f, fuel: 120 },
             char: { name: '焦炭', col: 0x111111, fuel: 40 },
-            bucket: { name: '空桶', col: 0x8d6e63, use: '接水' }, shears: { name: '剪刀', col: 0xb0bec5, shears: true, use: '剪羊毛' },
+            bucket: { name: '木桶', col: 0x8d6e63, cont: 'wood', use: '接水、挤奶、装汤' }, jar: { name: '陶罐', col: 0xbf7b4a, cont: 'jar', use: '装水（能上火，用着用着会碎）' }, bucket_fe: { name: '铁桶', col: 0x78909c, cont: 'fe', use: '装水（能上火）' }, bucket_cu: { name: '黄铜桶', col: 0xfbc02d, cont: 'cu', use: '装水（能上火）' }, shears: { name: '剪刀', col: 0xb0bec5, shears: true, use: '剪羊毛' },
             water_raw: { name: '生水', col: 0x4fc3f7, eat: { w: 15, sick: 0.3, back: 'bucket' } },
             water_sea: { name: '海水', col: 0x0288d1, eat: { w: -10, back: 'bucket' } },
             water_boiled: { name: '开水', col: 0xb3e5fc, eat: { w: 40, back: 'bucket' } },
@@ -128,17 +181,17 @@
             milk: { name: '牛奶', col: 0xfffde7, eat: { f: 5, w: 25, back: 'bucket' } },
             cheese: { name: '奶酪', col: 0xffe082, eat: { f: 35 } },
             ingot_cu: { name: '铜锭', col: 0xd84315 }, ingot_zn: { name: '锌锭', col: 0xb0bec5 }, ingot_fe: { name: '铁锭', col: 0x616161 }, ingot_sn: { name: '锡锭', col: 0xcfd8dc }, bronze: { name: '青铜锭', col: 0xb87333 },
-            brass: { name: '黄铜锭', col: 0xfbc02d }, brick: { name: '砖', col: 0xbf5b3a },
+            brass: { name: '黄铜锭', col: 0xfbc02d }, brick: { name: '砖', col: 0xbf5b3a }, glass_plate: { name: '玻璃板', col: 0xc5e8f2 }, bellows: { name: '风箱', col: 0x8d6e63, use: '装在炉子上' },
             cook_furnace: { name: '小熔炉', col: 0x6d4c41, cook: 'furnace' }, cook_kiln: { name: '大窑', col: 0x8d4b3a, cook: 'kiln' }, bell: { name: '铃铛', col: 0xffd54f, use: '摇铃叫动物' }, steel: { name: '钢锭', col: 0x90a4ae },
-            hot_cu: { name: '铜锭（烫）', col: 0xff3d00, hot: 'ingot_cu' }, hot_zn: { name: '锌锭（烫）', col: 0xff6e40, hot: 'ingot_zn' }, hot_fe: { name: '铁锭（烫）', col: 0xff5722, hot: 'ingot_fe' },
-            hot_sn: { name: '锡锭（烫）', col: 0xff8a65, hot: 'ingot_sn' }, hot_bronze: { name: '青铜锭（烫）', col: 0xff7043, hot: 'bronze' },
-            hot_brass: { name: '黄铜锭（烫）', col: 0xffab00, hot: 'brass' }, hot_steel: { name: '钢锭（烫）', col: 0xff6d00, hot: 'steel' },
+            hot_cu: { name: '铜锭（烫）', col: 0xff3d00, hot: 'ingot_cu', needTool: 'tongs' }, hot_zn: { name: '锌锭（烫）', col: 0xff6e40, hot: 'ingot_zn', needTool: 'tongs' }, hot_fe: { name: '铁锭（烫）', col: 0xff5722, hot: 'ingot_fe', needTool: 'tongs' },
+            hot_sn: { name: '锡锭（烫）', col: 0xff8a65, hot: 'ingot_sn', needTool: 'tongs' }, hot_bronze: { name: '青铜锭（烫）', col: 0xff7043, hot: 'bronze', needTool: 'tongs' },
+            hot_brass: { name: '黄铜锭（烫）', col: 0xffab00, hot: 'brass', needTool: 'tongs' }, hot_steel: { name: '钢锭（烫）', col: 0xff6d00, hot: 'steel', needTool: 'tongs' },
             tongs: { name: '钳子', col: 0x795548, use: '拿烫锭' },
             pick_bronze: { name: '青铜稿', col: 0xb87333, tool: 2 }, pick_iron: { name: '铁稿', col: 0x616161, tool: 2, bonus: 1 }, pick_steel: { name: '钢稿', col: 0x90a4ae, tool: 3 },
             battery: { name: '电池', col: 0x43a047, use: '装进电池组' }, wire: { name: '铜线', col: 0xff7043, use: '接线' },
             dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '发电机', col: 0x546e7a, dev: 'gen' },
             dev_el: { name: '电解槽', col: 0x00838f, dev: 'el' },
-            ash: { name: '草木灰', col: 0x9e9e9e }, bottle: { name: '玻璃瓶', col: 0xb3e5fc },
+            ash: { name: '草木灰', col: 0x9e9e9e, use: '当肥料' }, bottle: { name: '玻璃瓶', col: 0xb3e5fc },
             b_h2: { name: '氢气瓶', col: 0xf8bbd0, gas: 'h2', use: '压进钢瓶' }, b_o2: { name: '氧气瓶', col: 0x90caf9, gas: 'o2' }, b_cl2: { name: '氯气瓶', col: 0xc6ff00, gas: 'cl2', use: '压进钢瓶' },
             naoh: { name: '氢氧化钠', col: 0xeceff1, useLater: '后面的阶段' }, sodium: { name: '钠', col: 0xcfd8dc, useLater: '后面的阶段' },
             dev_lamp: { name: '电灯', col: 0xfff176, dev: 'lamp' }, dev_pump: { name: '水泵', col: 0x0288d1, dev: 'pump' }, dev_furnace: { name: '电炉', col: 0xbf360c, dev: 'furnace' }
@@ -169,9 +222,14 @@
                     return { name: nm, col: c.ty === 'chest' ? 0x6d4c41 : IND_COOK[c.ty].col || 0xb71c1c, furn: c.ty, inst: true };
                 }
                 if (typeof k === 'string' && k.indexOf('cyl:') === 0) { let g = indCylParse(k); return g ? { name: indCylName(g), col: indCylLiquid(g) ? 0x4fc3f7 : 0x78909c, cyl: g } : undefined; }
+                if (typeof k === 'string' && k.indexOf('@') > 0) {   // 陶罐／铁桶／黄铜桶装的东西
+                    let c = indContOf(k); if (!c) return undefined;
+                    let b = t[c.base], e = b.eat ? Object.assign({}, b.eat, { back: indEmptyKey(c.mat) }) : undefined;
+                    return Object.assign({}, b, { eat: e, mat: c.mat });
+                }
                 return t[k];
             },
-            has: function (t, k) { return k in t || !!indCarried(k) || (typeof k === 'string' && k.indexOf('cyl:') === 0 && !!indCylParse(k)); }
+            has: function (t, k) { return k in t || !!indCarried(k) || !!(typeof k === 'string' && k.indexOf('@') > 0 && indContOf(k)) || (typeof k === 'string' && k.indexOf('cyl:') === 0 && !!indCylParse(k)); }
         });
         // 电：rated 额定电压（超过就炸），minV 低于它不工作，draw 每秒耗电；电源：bank 电池组（节数 × 1.5 V），gen 发电机（灶台中火以上 3 米内 12 V）
         const IND_DEVS = {
@@ -185,7 +243,12 @@
             press: { name: '压力机', col: 0x37474f, rated: 24, minV: 18, draw: 6, size: [1.4, 1.4, 1.4] }
         };
         const IND_BAT_V = 1.5, IND_BAT_U = 180, IND_BOOM_R = 3, IND_BOOM_DMG = 40, IND_DEV_CAP = 40, IND_GEN_R = 3, IND_FURNACE_T = 1800;
-        function indName(k) { return (IND_ITEMS[k] && IND_ITEMS[k].name) || k; }
+        // 名字；装了东西的桶写上材质："生水（木桶）"。plain = true 不写材质（配方里用）
+        function indName(k, plain) {
+            let d = IND_ITEMS[k]; if (!d) return k;
+            let c = indContOf(k);
+            return d.name + (c && c.base && !plain ? '（' + IND_MATS[c.mat].name + '）' : '');
+        }
         // 资源点：每种给几个、要什么稿子；seeds 是野生种子堆（随机一种作物）
         const IND_NODES = {
             wood: { give: [2, 4], tool: 0 }, dirt: { give: [2, 3], tool: 0 }, stone: { give: [2, 3], tool: 0 }, sand: { give: [2, 4], tool: 0 }, clay: { give: [1, 3], tool: 0 },
@@ -227,10 +290,10 @@
         // 工作台配方（身上的原料够就能做）；gh 是盖暖棚（不出物品）
         const IND_CRAFT = [
             { out: 'coat', in: { cotton: 4 } }, { out: 'hat', in: { cotton: 2 } }, { out: 'scarf', in: { cotton: 2 } },
-            { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } }, { glass: true, name: '玻璃暖棚（先要有木暖棚）', in: { bottle: 10, wood: 6 } },
+            { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } }, { glass: true, name: '玻璃暖棚（先要有木暖棚）', in: { glass_plate: 6, wood: 6 } },
             { out: 'pickle', in: { radish: 2, salt: 1, bottle: 1 } },
             { out: 'yarn', in: { wool: 2 } }, { out: 'sweater', in: { yarn: 3 } }, { out: 'wool_hat', in: { yarn: 1 } }, { out: 'wool_scarf', in: { yarn: 1 } },
-            { bellows: true, name: '风箱（装在灶台上）', in: { wood: 6, clay: 4 }, hard: true },
+            { out: 'bellows', in: { wood: 6, clay: 4 }, hard: true },
             { pot: true, name: '黄铜大锅（装在灶台上）', in: { brass: 3 }, hard: true },
             { out: 'tongs', in: { ingot_cu: 2 }, hard: true },
             { out: 'battery', in: { ingot_cu: 1, ingot_zn: 1, salt: 1 }, hard: true }, { out: 'wire', n: 4, in: { ingot_cu: 1 }, hard: true },
@@ -242,6 +305,7 @@
             { out: 'bell', in: { brass: 1 }, hard: true },
             { out: 'cook_furnace', in: { brick: 8, stone: 2 }, hard: true }, { out: 'cook_kiln', in: { brick: 30, stone: 6 } },
             { out: 'chest', in: { wood: 8 } },
+            { out: 'bucket_fe', in: { ingot_fe: 2 }, hard: true }, { out: 'bucket_cu', in: { brass: 2 }, hard: true },
             { out: 'cyl', in: { steel: 2, brass: 1 }, hard: true }, { out: 'dev_comp', in: { steel: 3, ingot_cu: 2, wire: 2, brass: 1 }, hard: true },
             { out: 'dev_press', in: { steel: 4, wire: 2 }, hard: true }, { out: 'pick_diamond', in: { diamond: 2, steel: 2, wood: 1 }, hard: true }
         ];
@@ -258,6 +322,7 @@
         const IND_ANIMAL_CAP = 20, IND_WOOL_EVERY = 600, IND_MILK_EVERY = 300, IND_ANIMAL_HUNGER = 1 / 30;
         // 灶台：火候三档；燃料每秒烧掉的量；配方按顺序找第一个原料够的
         const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }, { name: '鼓风', t: 1600, burn: 3, bellows: true }];
+        const IND_FERT = 1.5;   // 草木灰肥料：长得快 50%
         const IND_BATCH = 4, IND_BATCH_POT = 8;   // 灶台做吃的：一炉最多几份（装了黄铜大锅 8 份）
         const IND_STOVE_CAP = 8;
         // 灶台、小熔炉、大窑都是"炉子"：rate 温度每秒变几度，burn 燃料烧得多快（1 = 灶台），batch 一炉每类配方最多几份，only 只做哪类配方，top 大火的温度
@@ -267,7 +332,7 @@
             furnace: { name: '小熔炉', rate: 50, burn: 0.5, only: 'smelt', top: 1300, batch: { smelt: 2 }, r: 1.2, size: [1.6, 1.4, 1.6], col: 0x6d4c41 },
             kiln: { name: '大窑', rate: 10, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 6 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
         };
-        const IND_COOK_CAP = 6, IND_TILE_CAP = 100;   // 灶台上最多放几种
+        const IND_COOK_CAP = 6, IND_TILE_CAP = 100, IND_SPOUT_CAP = 10;   // 出料槽最多 10 块   // 灶台上最多放几种
         const IND_RECIPES = [
             // 面包排在烧水前面：有小麦和盐的时候，生水也是和面用的
             { in: { wheat: 4, salt: 1, water_boiled: 1 }, out: { bread: 3, bucket: 1 }, minT: 180, time: 40, burnT: 300 },
@@ -283,6 +348,7 @@
             { in: { corn: 1 }, out: { bake_corn: 1 }, minT: 180, time: 15, burnT: 400 },
             { in: { wood: 2 }, out: { charcoal: 1 }, minT: 400, time: 30, cls: 'bulk' },
             { in: { clay: 2 }, out: { brick: 1 }, minT: 900, time: 20, cls: 'bulk' },
+            { in: { clay: 2 }, out: { jar: 1 }, minT: 600, time: 20, cls: 'bulk' },
             { in: { milk: 1 }, out: { cheese: 1, bucket: 1 }, minT: 100, time: 30, burnT: 300 },
             // 冶炼（只给硬核）：温度用真实熔点；出来的锭是烫的
             { in: { ingot_fe: 1, charcoal: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1550, time: 40, hard: true },
@@ -293,8 +359,9 @@
             { in: { ore_sn: 1 }, out: { hot_sn: 1 }, cls: 'smelt', minT: 232, time: 15, hard: true },
             { in: { ingot_cu: 3, ingot_sn: 1 }, out: { hot_bronze: 4 }, cls: 'smelt', minT: 950, time: 30, hard: true },
             // 玻璃：草木灰当助熔剂（钾碱），1000°C（悠闲也能做，腌萝卜要用瓶子）；只有沙子要 1700°C（电炉）
-            { in: { sand: 2, ash: 1 }, out: { bottle: 2 }, minT: 1000, time: 20, cls: 'bulk' },
-            { in: { sand: 3 }, out: { bottle: 1 }, minT: 1700, time: 30, hard: true, cls: 'bulk' },
+            { in: { sand: 2, ash: 1 }, out: { glass_plate: 1 }, minT: 1000, time: 20, cls: 'bulk' },
+            { in: { sand: 3 }, out: { glass_plate: 1 }, minT: 1700, time: 30, hard: true, cls: 'bulk' },
+            { in: { glass_plate: 1 }, out: { bottle: 2 }, minT: 600, time: 10, cls: 'bulk' },
             // 压力：木炭在氧气里烧成二氧化碳
             { in: { charcoal: 1, b_o2: 1 }, out: { b_co2: 1 }, minT: 400, time: 10, hard: true, cls: 'bulk' }
         ];
@@ -375,14 +442,23 @@
         const IND_V9_GIFT = { shears: 1 };   // 存档版本 9：新号送一把剪刀，老档读档时补一把
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
-                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, bellows: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
+                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
         }
         function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
         // 炉子的状态（灶台和小熔炉、大窑通用）整理一遍
+        // 出料槽：冶炼出来的烫锭进这里，每块自己 30 秒凉。[{ k: 烫锭, t: 还要几秒 }]，最多 10 块
+        function indFixSpout(S) {
+            S.spout = Array.isArray(S.spout) ? S.spout.filter(function (e) { return e && IND_ITEMS_RAW[e.k] && IND_ITEMS_RAW[e.k].hot; }).slice(0, IND_SPOUT_CAP).map(function (e) { return { k: e.k, t: indNum(e.t, 0, 0, IND_HOT_COOL) }; }) : [];
+            Object.keys(S.out || {}).forEach(function (k) {   // 老档：炉子里留着的烫锭挪进出料槽（放不下的当它凉了）
+                if (!IND_ITEMS_RAW[k] || !IND_ITEMS_RAW[k].hot) return;
+                for (let i = 0; i < S.out[k]; i++) { if (S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: k, t: IND_HOT_COOL }); else S.out[IND_ITEMS_RAW[k].hot] = (S.out[IND_ITEMS_RAW[k].hot] || 0) + 1; }
+                delete S.out[k];
+            });
+        }
         function indFixCook(S, b) {
             b = b || ind.base;
             ['items', 'out'].forEach(function (f) { if (!S[f] || typeof S[f] !== 'object') S[f] = {}; Object.keys(S[f]).forEach(function (k) { if (!IND_ITEMS[k] || !(S[f][k] > 0)) delete S[f][k]; }); });
-            S.fuel = indNum(S.fuel, 0, 0, 1e6); S.ashT = indNum(S.ashT, 0, 0, 1e6); S.fire = indNum(S.fire, 0, 0, 4) | 0; if (S.fire === 4 && !b.bellows) S.fire = 3; S.temp = indNum(S.temp, 20, 20, 2000);
+            S.fuel = indNum(S.fuel, 0, 0, 1e6); S.ashT = indNum(S.ashT, 0, 0, 1e6); S.fire = indNum(S.fire, 0, 0, 4) | 0; S.bellows = !!S.bellows; if (S.fire === 4 && !S.bellows) S.fire = 3; indFixSpout(S); S.temp = indNum(S.temp, 20, 20, 2000);
             if (!S.cook || typeof S.cook !== 'object' || !IND_RECIPES[S.cook.i]) S.cook = null; else S.cook.n = indNum(S.cook.n, 1, 1, 16) | 0;
         }
         // 读档整理：先认搬着的家具（carried），再按它整理别的
@@ -434,7 +510,7 @@
             b.ground.forEach(function (g) { g.x = indNum(g.x, 0, -IND_BASE.x + 0.5, IND_BASE.x - 0.5); g.z = indNum(g.z, 0, -IND_BASE.z + 0.5, IND_BASE.z - 0.5); });
             if (!Array.isArray(b.crops)) b.crops = [];
             b.crops = b.crops.filter(function (c) { return c && IND_CROPS[c.k] && isFinite(c.x) && isFinite(c.z); });
-            b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); });
+            b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); c.fert = !!c.fert; });
             if (typeof b.trips !== 'number') b.trips = 0;
             b.clock = indNum(b.clock, 60, 0, 1e9);
             if (!b.surv || typeof b.surv !== 'object') b.surv = n.surv;
@@ -442,7 +518,7 @@
             b.surv.temp = indNum(b.surv.temp, 37, 25, 45);
             if (!b.wear || typeof b.wear !== 'object') b.wear = {};
             Object.keys(b.wear).forEach(function (sl) { let k = b.wear[sl]; if (!IND_ITEMS[k] || IND_ITEMS[k].wear !== sl) delete b.wear[sl]; });
-            b.gh = !!b.gh; b.glass = b.gh && !!b.glass; b.bellows = !!b.bellows; b.pot = !!b.pot;   // 旧档没有 glass，默认木暖棚
+            b.gh = !!b.gh; b.glass = b.gh && !!b.glass; b.pot = !!b.pot;   // 旧档没有 glass，默认木暖棚
             if (!Array.isArray(b.devs)) b.devs = [];
             b.devs = b.devs.filter(function (d) { return d && IND_DEVS[d.ty] && isFinite(d.x) && isFinite(d.z) && d.id; }).slice(0, IND_DEV_CAP);
             b.devs.forEach(function (d) { if (!d.st || typeof d.st !== 'object') d.st = {}; Object.keys(d.st).forEach(function (k) { if (!IND_ITEMS[k] || !(d.st[k] > 0)) delete d.st[k]; }); d.et = indNum(d.et, 0, 0, 1e3); d.bats = indNum(d.bats, 0, 0, 64) | 0; d.u = indNum(d.u, 0, 0, 64 * IND_BAT_U); d.on = d.on !== false; d.ft = indNum(d.ft, 20, 20, 2000); });
@@ -459,13 +535,15 @@
             b.dseq = indNum(b.dseq, 0, 0, 1e9) | 0; b.devs.forEach(function (d) { b.dseq = Math.max(b.dseq, d.id); });
             if (!Array.isArray(b.fires)) b.fires = [];
             b.fires = b.fires.filter(function (f) { return f && isFinite(f.x) && isFinite(f.z); }).slice(0, 30);
-            b.fires.forEach(function (f) { f.fuel = indNum(f.fuel, 0, 0, 1e5); });
+            b.fires.forEach(function (f) { f.fuel = indNum(f.fuel, 0, 0, 1e5); f.ashT = indNum(f.ashT, 0, 0, 1e6); });
             if (!Array.isArray(b.animals)) b.animals = [];
             b.animals = b.animals.filter(function (a) { return a && IND_ANIMALS[a.k] && isFinite(a.x) && isFinite(a.z); }).slice(0, IND_ANIMAL_CAP);
             b.animals.forEach(function (a) { a.food = indNum(a.food, 60, 0, 100); a.woolAt = Math.min(indNum(a.woolAt, 0, 0, 1e9), b.clock + IND_WOOL_EVERY); a.milkAt = Math.min(indNum(a.milkAt, 0, 0, 1e9), b.clock + IND_MILK_EVERY);   // 旧档里记的下次时间比新间隔晚，改成现在 + 新间隔
              a.x = indNum(a.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); a.z = indNum(a.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1); });
             if (b.surv.hp <= 0) b.surv.hp = 100;
             if (!b.stove || typeof b.stove !== 'object') b.stove = n.stove;
+            if (b.bellows) b.stove.bellows = true;   // 老档：基地装过风箱，算装在原来的灶台上
+            b.bellows = false;
             indFixCook(b.stove, b);
             b.ver = IND_SAVE_VER;
             return b;
@@ -583,9 +661,20 @@
             let se = indSeason(); if (se === ind.grassSeason) return;
             ind.grassSeason = se; ind.grass.material.color.setHex(IND_GRASS[se]);
         }
-        function indFireTick(dt) {
-            indFires().forEach(function (f) { if (f.fuel > 0) { f.fuel = Math.max(0, f.fuel - dt); if (f.fuel <= 0) ind.fireDirty = true; } });
+        // 篝火烧掉燃料：和灶台一样，每烧掉 2 根木头的燃料（120）攒 1 份草木灰，灭了灰掉在原地，左键捡（基地里的才有，远征的篝火灰不留）
+        function indFireBurn(f, secs) {
+            let b = Math.min(secs, f.fuel); if (b <= 0) return;
+            f.fuel -= b; f.ashT = (f.ashT || 0) + b;
+            if (f.fuel <= 0) {
+                f.fuel = 0; ind.fireDirty = true;
+                let n = Math.floor(f.ashT / (IND_ASH_PER * 60)); f.ashT -= n * IND_ASH_PER * 60;
+                if (ind.where === 'base' && n > 0) {
+                    for (let i = 0; i < n && ind.base.ground.length < IND_ITEM_CAP; i++) { let a = i * 2.4; ind.base.ground.push({ k: 'ash', x: f.x + Math.cos(a) * 0.35 * (i % 3), z: f.z + Math.sin(a) * 0.35 * (i % 3) }); }
+                    ind.itemDirty = true; if (!ind.sleeping) indFlash('篝火灭了，留下 ' + n + ' 份草木灰');
+                }
+            }
         }
+        function indFireTick(dt) { indFires().forEach(function (f) { if (f.fuel > 0) indFireBurn(f, dt); }); }
 
         // ── 动物 ──
         function indAnimals() { return ind.where === 'base' ? ind.base.animals : (ind.wild || []); }
@@ -644,10 +733,10 @@
                 if (a.food >= 95) { indFlash(D.name + '吃饱了'); return false; }
                 indBagDel(k, 1); a.food = Math.min(100, a.food + 30); indSave(); indFlash('喂了' + D.name + '（饱食 ' + Math.round(a.food) + '）'); return true;
             }
-            if (a.k === 'cow' && k === 'bucket') {
+            if (a.k === 'cow' && indIsEmptyCont(k)) {
                 if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
                 if (clock < a.milkAt) { indFlash('牛奶还要等 ' + Math.ceil(a.milkAt - clock) + ' 秒'); return false; }
-                indBagDel('bucket', 1); indBagAdd('milk', 1); a.milkAt = clock + IND_MILK_EVERY; indSave(); indFlash('挤了一桶牛奶'); return true;
+                let mm = indContOf(k).mat; indBagDel(k, 1); indBagAdd(indFilledKey('milk', mm), 1); a.milkAt = clock + IND_MILK_EVERY; indSave(); indFlash('挤了一桶牛奶'); return true;
             }
             if (a.k === 'sheep' && k === 'shears') {
                 if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
@@ -761,7 +850,7 @@
             ind.objs.forEach(function (o) { scene.remove(o); });
             ind.geos.forEach(function (g) { g.dispose(); });
             ind.mats.forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); });
-            ind.badges = {}; ind.furnMesh = {}; ind.furnDirty = true; ind.objs = []; ind.geos = []; ind.mats = []; ind.tileMesh = null; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.animalMesh = null; ind.devMesh = null; ind.wireLine = null; ind.booms = []; ind.clouds = []; ind.nodes = []; ind.exits = [];
+            ind.badges = {}; ind.furnMesh = {}; ind.furnDirty = true; ind.objs = []; ind.geos = []; ind.mats = []; ind.fertMesh = null; ind.tileMesh = null; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.animalMesh = null; ind.devMesh = null; ind.wireLine = null; ind.booms = []; ind.clouds = []; ind.nodes = []; ind.exits = [];
         }
         function indBox(w, h, d, col, x, y, z) {
             let m = new THREE.Mesh(indGeo(new THREE.BoxGeometry(w, h, d)), indMat(new THREE.MeshLambertMaterial({ color: col })));
@@ -820,6 +909,12 @@
             }
             ind.cropMesh.count = n; ind.cropMesh.instanceMatrix.needsUpdate = true;
             if (ind.cropMesh.instanceColor) ind.cropMesh.instanceColor.needsUpdate = true;
+            if (ind.fertMesh) {   // 施过肥的地上有一个小白标记
+                let m = 0;
+                for (let i = 0; i < n; i++) { if (!C[i].fert) continue; IND_DUMMY.position.set(C[i].x + 0.55, 0.12, C[i].z + 0.55); IND_DUMMY.rotation.set(0, 0.6, 0); IND_DUMMY.scale.set(1, 1, 1); IND_DUMMY.updateMatrix(); ind.fertMesh.setMatrixAt(m, IND_DUMMY.matrix); ind.fertMesh.setColorAt(m, IND_COL.setHex(0xeeeeee)); m++; }
+                ind.fertMesh.count = m; ind.fertMesh.instanceMatrix.needsUpdate = true;
+                if (ind.fertMesh.instanceColor) ind.fertMesh.instanceColor.needsUpdate = true;
+            }
         }
 
         // 暖棚：半透明的顶和四根柱子
@@ -875,7 +970,9 @@
             indSign('出发（远征）', g.x, 4.3, g.z, 3.2, 0.8);
             ind.itemMesh = indInst(new THREE.BoxGeometry(0.5, 0.5, 0.5), IND_ITEM_CAP); ind.itemDirty = true;
             ind.cropMesh = indInst(new THREE.ConeGeometry(0.5, 1, 6), IND_CROP_CAP); ind.cropDirty = true;
+            ind.fertMesh = indInst(new THREE.BoxGeometry(0.3, 0.2, 0.3), IND_CROP_CAP);
             ind.tileMesh = indInst(new THREE.PlaneGeometry(1.9, 1.9).rotateX(-Math.PI / 2), IND_TILE_CAP); ind.tileDirty = true;
+            indSyncFurn();   // 家具马上画出来（不等第一帧），进出时物体数每次一样
             ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 40);
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             ind.devMesh = indInst(new THREE.BoxGeometry(1, 1, 1), IND_DEV_CAP); ind.devDirty = true;
@@ -1045,7 +1142,7 @@
             let clock = ind.base.clock, ch = false;
             ind.base.crops.forEach(function (c) {
                 let C = IND_CROPS[c.k]; if (c.g >= C.grow || !indCropSeasonOK(c)) return;
-                let was = c.g; c.g = Math.min(C.grow, c.g + dt * (c.wet > clock ? 1 : 0.5));
+                let was = c.g; c.g = Math.min(C.grow, c.g + dt * (c.wet > clock ? 1 : 0.5) * (c.fert ? IND_FERT : 1));   // 草木灰肥料：这一季长得快 50%，和浇水叠加
                 if (Math.floor(was / C.grow * 4) !== Math.floor(c.g / C.grow * 4)) ch = true;
             });
             if (ch) ind.cropDirty = true;
@@ -1137,6 +1234,7 @@
             indAnimals().forEach(function (a) { consider(a, a.x, a.z, 'animal', 0.7); });
             if (R.where === 'base') R.base.devs.forEach(function (d) { consider(d, d.x, d.z, 'dev', 0.7); });
             if (R.where === 'base') R.base.cookers.forEach(function (c) { consider(c, c.x, c.z, 'cook', IND_COOK[c.ty].r + 0.4, IND_COOK[c.ty].r * 0.7); });
+            if (R.where === 'base') indCooks().forEach(function (c) { let sp = indSpoutPos(c); consider(c, sp.x, sp.z, 'spout', 0.8); });
             if (R.where === 'trip') R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node', 0.8); });
             else {
                 R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item', 0.5); });
@@ -1159,6 +1257,40 @@
             });
             return best ? { kind: best.kind, o: best.o, ray: false } : null;
         }
+        // 出料槽：凉了的左键取进背包；拿着钳子（背包里有钳子）烫的也能取
+        function indSpoutTake(c) {
+            let sp = c.C.spout, tongs = !!ind.bag.tongs, took = [], hotLeft = 0, full = false;
+            c.C.spout = sp.filter(function (e) {
+                let hot = e.t > 0;
+                if (hot && !tongs) { hotLeft++; return true; }
+                let k = hot ? e.k : IND_ITEMS_RAW[e.k].hot;
+                if (indBagAdd(k, 1) > 0) { took.push(indName(k)); return false; }
+                full = true; return true;
+            });
+            if (took.length) { indSave(); indFlash('取出了：' + took.join('、')); }
+            else if (full) indFlash('背包满了');
+            else if (hotLeft) indFlash('都还烫着，等凉了再取（拿钳子随时能取，一桶水能马上浇凉）');
+            else indFlash('出料槽是空的');
+            if (ind.panel === 'stove') ind.panelDirty = true;
+            return took.length > 0;
+        }
+        // 拿一桶水对着出料槽右键：槽里的锭马上全凉，桶变空，炉温不变
+        function indQuenchSpout(c, k) {
+            if (!c.C.spout.some(function (e) { return e.t > 0; })) { indFlash('出料槽里没有烫的'); return false; }
+            c.C.spout.forEach(function (e) { e.t = 0; });
+            indBagDel(k, 1); indBagAdd(indEmptyKey(indContOf(k).mat), 1); indSave();
+            indFlash('滋——出料槽里的锭都凉了');
+            return true;
+        }
+        // 风箱：每个炉子单独装（现实里风箱对着一个炉子吹），拿着风箱左键点灶台／小熔炉／大窑，装上多一档「鼓风」1600°C
+        function indInstallBellows(a) {
+            let c = a && a.kind === 'stove' ? indCookById('stove') : a && a.kind === 'cook' ? indCookById(a.o.id) : (a && a.id !== undefined ? a : null);
+            if (!c) { indFlash('风箱要装在炉子上：对着灶台、小熔炉或大窑左键'); return false; }
+            if (c.C.bellows) { indFlash(IND_COOK[c.ty].name + '已经装了风箱'); return false; }
+            indBagDel('bellows', 1); c.C.bellows = true; indSave();
+            indFlash('风箱装好了，' + IND_COOK[c.ty].name + '多了一档「鼓风」');
+            return true;
+        }
         // 铃铛：拿着左键摇，30 米内跟着你的动物、基地里的动物都走到你身边
         function indRing() {
             let n = 0;
@@ -1176,6 +1308,7 @@
         function indAction() {
             if (!ind || ind.over || ind.panel) return;
             if (indSel() === 'bell') return indRing();
+            if (indSel() === 'bellows') return indInstallBellows(indAim());
             let a = indAim();
             if (a && a.kind === 'animal' && indToolish(indSel()) && indSel() !== 'shears') {   // 稿子、铜线、钳子对着动物：找别的目标，没有就只看状态
                 let b = indAim(true);
@@ -1184,6 +1317,7 @@
             if (a && a.kind === 'node') return indGather(a.o);
             if (a && a.kind === 'item') return indPickItem(a.o);
             if (a && a.kind === 'crop' && indCropRipe(a.o)) return indHarvest(a.o);
+            if (a && a.kind === 'spout') return indSpoutTake(a.o);
             if (a && a.kind === 'chest') return indPanelBox(a.o.id);
             if (a && a.kind === 'stove') return indPanelStove('stove');
             if (a && a.kind === 'cook') return indPanelStove(a.o.id);
@@ -1224,12 +1358,16 @@
             if (k === 'dirt') return indPlaceTile();
             if (IND_ITEMS[k].furn) return indPlaceFurn(k);
             if (IND_ITEMS[k].cook) return indPlaceCook(k);
-            if (k === 'bucket') {
-                if (a && a.kind === 'pool') { indBagDel('bucket', 1); indBagAdd('water_raw', 1); indSelect('water_raw'); indFlash('接了一桶生水'); return true; }
-                if (indInWater()) { indBagDel('bucket', 1); indBagAdd('water_sea', 1); indSelect('water_sea'); indFlash('接了一桶海水'); return true; }
+            if (indIsEmptyCont(k)) {   // 空桶：水池接生水，海里接海水（桶是什么材质，水就装在什么材质里）
+                let m = indContOf(k).mat;
+                if (a && a.kind === 'pool') { let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); indSelect(w); indFlash('接了一桶生水'); return true; }
+                if (indInWater()) { let w = indFilledKey('water_sea', m); indBagDel(k, 1); indBagAdd(w, 1); indSelect(w); indFlash('接了一桶海水'); return true; }
                 indFlash('到水池或海边才能接水'); return false;
             }
-            if ((k === 'water_raw' || k === 'water_boiled') && a && a.kind === 'crop') return indWater(a.o, k);
+            if (k === 'ash' && a && a.kind === 'crop') return indFertilize(a.o);
+            let kc = indContOf(k), kb = kc && kc.base;
+            if ((kb === 'water_raw' || kb === 'water_boiled' || kb === 'water_sea') && a && a.kind === 'spout') return indQuenchSpout(a.o, k);
+            if ((kb === 'water_raw' || kb === 'water_boiled') && a && a.kind === 'crop') return indWater(a.o, k);
             if (k === 'dry_ice') return indDryIceBucket();
             if (IND_ITEMS[k].hot) return indQuench(k);
             if (IND_ITEMS[k].eat) return indEat(k);
@@ -1277,8 +1415,15 @@
             return true;
         }
         // 一桶水浇 2.5 米内的作物，管到当天结束
+        // 草木灰当肥料（右键对着有作物的农田用 1 份）：这一格这一季长得快 50%，收获后失效，不能重复施
+        function indFertilize(c) {
+            if (c.fert) { indFlash('已经施过肥了'); return false; }
+            if (indCropRipe(c)) { indFlash('已经熟了，不用施肥'); return false; }
+            indBagDel('ash', 1); c.fert = true; ind.cropDirty = true; indSave(); indFlash('施了肥，这一季长得快 50%');
+            return true;
+        }
         function indWater(c, k) {
-            indBagDel(k, 1); indBagAdd('bucket', 1);
+            indBagDel(k, 1); indBagAdd(indEmptyKey(indContOf(k).mat), 1);
             let end = (Math.floor(ind.base.clock / IND_DAY) + 1) * IND_DAY, n = 0;
             ind.base.crops.forEach(function (o) { if (Math.hypot(o.x - c.x, o.z - c.z) <= 2.5) { o.wet = end; n++; } });
             ind.cropDirty = true; indSave();
@@ -1289,7 +1434,7 @@
             let C = IND_CROPS[c.k], y = indRoll(C.yield), s = indRoll(C.seeds);
             if (indBagAdd(c.k, y) <= 0) { indFlash('背包满了'); return false; }
             if (s > 0) indBagAdd('seed_' + c.k, s);
-            c.times++;
+            c.times++; c.fert = false;   // 肥料收获后失效（番茄每结一次算一季）
             if (C.regrow && c.times < C.times) c.g = C.grow - C.regrow;   // 番茄：再长一阵还能结
             else { let i = ind.base.crops.indexOf(c); if (i >= 0) ind.base.crops.splice(i, 1); }
             ind.cropDirty = true; indSave();
@@ -1304,8 +1449,8 @@
             ind.base.clock += skip;
             S.food = Math.max(0, S.food - IND_SURV.food * 0.3 * skip); S.water = Math.max(0, S.water - IND_SURV.water * 0.3 * skip);
             S.energy = 100;
-            ind.base.crops.forEach(function (c) { let C = IND_CROPS[c.k]; if (indCropSeasonOK(c)) c.g = Math.min(C.grow, c.g + skip * (c.wet > ind.base.clock - skip ? 0.75 : 0.5)); });
-            S.temp = 37; ind.base.fires.forEach(function (f) { f.fuel = Math.max(0, f.fuel - skip); }); ind.fireDirty = true;
+            ind.base.crops.forEach(function (c) { let C = IND_CROPS[c.k]; if (indCropSeasonOK(c)) c.g = Math.min(C.grow, c.g + skip * (c.wet > ind.base.clock - skip ? 0.75 : 0.5) * (c.fert ? IND_FERT : 1)); });
+            S.temp = 37; ind.sleeping = true; ind.base.fires.forEach(function (f) { indFireBurn(f, skip); }); ind.sleeping = false; ind.fireDirty = true;
             ind.base.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * skip * 0.5); });
             ind.sleeping = true; for (let t = 0; t < skip; t += 1) indStoveTick(1); ind.sleeping = false;
             ind.cropDirty = true; indSave();
@@ -1397,6 +1542,7 @@
             if (ind.base.devs.length >= IND_DEV_CAP) { indFlash('设备太多了'); return false; }
             let f = indFace(), x = ind.p.x + f.x * 1.6, z = ind.p.z + f.z * 1.6;
             x = Math.max(-IND_BASE.x + 0.8, Math.min(IND_BASE.x - 0.8, x)); z = Math.max(-IND_BASE.z + 0.8, Math.min(IND_BASE.z - 0.8, z));
+            if (indCooks().some(function (c) { let sp = indSpoutPos(c); return Math.hypot(x - sp.x, z - sp.z) < 1.2; })) { indFlash('这里是出料槽的位置，换个地方'); return false; }
             indBagDel(k, 1);
             ind.base.devs.push({ id: ++ind.base.dseq, ty: IND_ITEMS[k].dev, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} });
             ind.devDirty = true; indSave(); indFlash('放好了' + indName(k) + '（拿铜线点电源再点它，接上电）');
@@ -1423,7 +1569,7 @@
             return null;
         }
         function indFurnName(ty) { return ty === 'tile' ? '农田' : ty === 'chest' ? '仓库箱' : ty === 'bed' ? '床' : ty === 'bench' ? '工作台' : ty === 'pool' ? '水池' : IND_COOK[ty].name; }
-        function indFurnHot(ty, o) { let S = ty === 'stove' ? ind.base.stove : o; return !!S && (S.fire > 0 || !!S.cook || S.temp > 60); }
+        function indFurnHot(ty, o) { let S = ty === 'stove' ? ind.base.stove : o; if (S && !Array.isArray(S.spout)) S.spout = []; return !!S && (S.fire > 0 || !!S.cook || S.temp > 60 || S.spout.some(function (e) { return e.t > 0; })); }   // 出料槽里还有烫的也算
         function indPickFurn(f) {
             let B = ind.base, ty = f.ty, key, id;
             if (ty === 'tile') {   // 空农田收回：还 1 份泥土
@@ -1438,7 +1584,7 @@
                 if (indFits(ind.bag, IND_BAG_SLOTS, key, 1) < 1) { indFlash('背包满了'); return false; }
                 if (ty === 'chest') { B.carried[id] = { ty: 'chest', big: f.o.big, items: f.o.items }; B.chests = B.chests.filter(function (c) { return c !== f.o; }); }
                 else if (ty === 'stove') { B.carried[id] = { ty: 'stove', st: B.stove }; B.stove = { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, ashT: 0 }; B.off.stove = true; }
-                else { let c = f.o, st = {}; ['items', 'out', 'fuel', 'fire', 'temp', 'cook', 'ashT'].forEach(function (k) { st[k] = c[k]; }); B.carried[id] = { ty: ty, st: st }; B.cookers = B.cookers.filter(function (x) { return x !== c; }); }
+                else { let c = f.o, st = {}; ['items', 'out', 'fuel', 'fire', 'temp', 'cook', 'ashT', 'bellows', 'spout'].forEach(function (k) { st[k] = c[k]; }); B.carried[id] = { ty: ty, st: st }; B.cookers = B.cookers.filter(function (x) { return x !== c; }); }
             } else {
                 key = 'furn_' + ty;
                 if (indFits(ind.bag, IND_BAG_SLOTS, key, 1) < 1) { indFlash('背包满了'); return false; }
@@ -1499,6 +1645,11 @@
                 let r = IND_BASE_ST.pool.r, pool = new THREE.Mesh(indGeo(new THREE.CylinderGeometry(r, r, 0.15, 24)), indMat(new THREE.MeshLambertMaterial({ color: 0x29b6f6 })));
                 pool.position.set(x, 0.08, z); m.push(indAdd(pool)); m.push(indSign('水池', x, 1.6, z, 1.8, 0.45));
             } else { let D = IND_COOK[f.ty]; m.push(indBox(D.size[0], D.size[1], D.size[2], D.col, x, D.size[1] / 2, z)); m.push(indSign(D.name, x, D.size[1] + 0.8, z, 2.4, 0.6)); }
+            if (IND_COOK[f.ty]) {   // 炉子外面带一个出料槽（石槽，不受炉温影响）：冶炼出来的烫锭进这里
+                let sp = indSpoutPos({ ty: f.ty, x: x, z: z });
+                m.push(indBox(1.1, 0.35, 0.8, 0x607d8b, sp.x, 0.18, sp.z)); m.push(indBox(1.1, 0.18, 0.1, 0x37474f, sp.x, 0.42, sp.z - 0.4)); m.push(indBox(1.1, 0.18, 0.1, 0x37474f, sp.x, 0.42, sp.z + 0.4));
+                m.push(indSign('出料槽', sp.x, 1.0, sp.z, 1.3, 0.38));
+            }
             return m;
         }
         function indSyncFurn() {
@@ -1511,7 +1662,7 @@
                 if (w && e.x === w.x && e.z === w.z) return;
                 e.m.forEach(function (o) { scene.remove(o); let i = ind.objs.indexOf(o); if (i >= 0) ind.objs.splice(i, 1); });
                 delete ind.furnMesh[key];
-                if (ind.badges) { if (ind.badges[key]) ind.badges[key].mesh.visible = false; if (ind.badges['cook' + key]) ind.badges['cook' + key].mesh.visible = false; }
+                if (ind.badges) { if (ind.badges[key]) ind.badges[key].mesh.visible = false; if (ind.badges['cook' + key]) ind.badges['cook' + key].mesh.visible = false; let sid = key.indexOf('cook') === 0 ? key.slice(4) : key; if (ind.badges['spout' + sid]) ind.badges['spout' + sid].mesh.visible = false; }
             });
             Object.keys(want).forEach(function (key) { if (!ind.furnMesh[key]) ind.furnMesh[key] = { x: want[key].x, z: want[key].z, m: indFurnBuild(want[key]) }; });
         }
@@ -1590,8 +1741,8 @@
             for (let i = 0; i < IND_EL_RECIPES.length; i++) {
                 let r = IND_EL_RECIPES[i];
                 if (V < r.minV) continue;
-                if (!Object.keys(r.in).every(function (k) { return (d.st[k] || 0) >= r.in[k]; })) continue;
-                if (r.in.salt && !r.in.water_raw && (d.st.water_raw || 0) > 0) continue;   // 有水的时候不算熔融盐
+                if (!Object.keys(r.in).every(function (k) { return indHave(d.st, k) >= r.in[k]; })) continue;
+                if (r.in.salt && !r.in.water_raw && indHave(d.st, 'water_raw') > 0) continue;   // 有水的时候不算熔融盐
                 if (r.molten && !(indHeatNear(d.x, d.z, IND_GEN_R).temp >= r.molten)) continue;
                 return i;
             }
@@ -1604,8 +1755,8 @@
             if (d.et < IND_EL_TIME) return;
             d.et = 0;
             let r = IND_EL_RECIPES[i];
-            Object.keys(r.in).forEach(function (k) { d.st[k] -= r.in[k]; if (d.st[k] <= 0) delete d.st[k]; });
-            Object.keys(r.out).forEach(function (k) { d.st[k] = (d.st[k] || 0) + r.out[k]; });
+            let mats = indConsume(d.st, r, 1);
+            Object.keys(r.out).forEach(function (k) { let key = k; if (k === 'bucket' && mats[0]) key = indEmptyKey(mats[0]); d.st[key] = (d.st[key] || 0) + r.out[k]; });   // 电解槽里不上火：桶原样还回来
             Object.keys(r.out).forEach(function (k) { if (IND_ELEM_OF[k] && !ind.base.elems[IND_ELEM_OF[k]]) { ind.base.elems[IND_ELEM_OF[k]] = 1; indFlash('元素表点亮了：' + IND_ELEM_NAME[IND_ELEM_OF[k]]); } });
             if (ind.panel === 'el') ind.panelDirty = true;
             indSave();
@@ -1755,7 +1906,7 @@
         }
         // 干冰放进装水的桶（右键）：冒白雾 30 秒，纯好看
         function indDryIceBucket() {
-            let w = ['water_raw', 'water_boiled', 'water_sea'].filter(function (k) { return ind.bag[k]; })[0];
+            let w = Object.keys(ind.bag).filter(function (k) { let c = indContOf(k); return c && (c.base === 'water_raw' || c.base === 'water_boiled' || c.base === 'water_sea'); })[0];
             if (!w) { indFlash('干冰：身上要有一桶水'); return false; }
             indBagDel('dry_ice', 1);
             ind.fogs = ind.fogs || [];
@@ -1856,11 +2007,11 @@
             return true;
         }
         function indCraftShow(r) { return !r.hard || indHard(); }
-        function indCraftCan(r) { return indCraftShow(r) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.glass && (!ind.base.gh || ind.base.glass)) && !(r.bellows && ind.base.bellows) && !(r.pot && ind.base.pot); }
+        function indCraftCan(r) { return indCraftShow(r) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.glass && (!ind.base.gh || ind.base.glass)) && !(r.pot && ind.base.pot); }
         function indCraft(i) {
             if (!ind) return false;
             let r = IND_CRAFT[i]; if (!r || !indCraftCan(r)) { indFlash('原料不够'); return false; }
-            if (!r.gh && !r.glass && !r.bellows && !r.pot) {   // 先把材料扣掉再看放不放得下成品
+            if (!r.gh && !r.glass && !r.pot) {   // 先把材料扣掉再看放不放得下成品
                 let B = Object.assign({}, ind.bag);
                 Object.keys(r.in).forEach(function (k) { B[k] -= r.in[k]; if (B[k] <= 0) delete B[k]; });
                 if (indFits(B, IND_BAG_SLOTS, r.out, r.n || 1) < (r.n || 1)) { indFlash('背包满了'); return false; }
@@ -1869,18 +2020,31 @@
             if (r.gh) { ind.base.gh = true; if (ind.where === 'base') indBuildGh(); indFlash('暖棚盖好了，棚里的作物不管季节都长'); }
             else if (r.glass) { ind.base.glass = true; if (ind.where === 'base') indBuildGh(); indFlash('玻璃暖棚盖好了，棚子变大了'); }
             else if (r.pot) { ind.base.pot = true; indFlash('黄铜大锅装好了，灶台做吃的一炉最多 ' + IND_BATCH_POT + ' 份'); }
-            else if (r.bellows) { ind.base.bellows = true; indFlash('风箱装好了，灶台多了一档「鼓风」'); }
             else { indBagAdd(r.out, r.n || 1); indFlash('做好了：' + indName(r.out) + (r.n ? '×' + r.n : '')); }
             indSave(); if (ind.panel === 'bench') indPanelBench();
             return true;
+        }
+        // 做最多：身上的原料够几次就做几次（背包放不下就停）
+        function indCraftMax(i) {
+            if (!ind) return;
+            let r = IND_CRAFT[i], n = 0;
+            if (!r || r.gh || r.glass || r.pot) return;
+            while (n < 500 && indCraftCan(r)) {
+                let before = JSON.stringify(ind.bag);
+                if (!indCraft(i)) break;
+                n++; if (JSON.stringify(ind.bag) === before) break;
+            }
+            if (n) indFlash('一共做了 ' + n + ' 次'); else indFlash('原料不够');
+            if (ind.panel === 'bench') indPanelBench();
         }
         function indPanelBench() {
             if (!ind) return;
             let rows = IND_CRAFT.map(function (r, i) {
                 if (!indCraftShow(r)) return '';
-                let nm = r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.glass ? r.name + (ind.base.glass ? '（已经盖了）' : '') : r.bellows ? r.name + (ind.base.bellows ? '（已经装了）' : '') : r.pot ? r.name + (ind.base.pot ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : '');
+                let nm = r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.glass ? r.name + (ind.base.glass ? '（已经盖了）' : '') : r.pot ? r.name + (ind.base.pot ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : '');
                 let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ');
-                return indRow(nm + '<br><small style="color:#888">' + need + '</small>', '<button style="' + IND_BTN + (indCraftCan(r) ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>');
+                let can = indCraftCan(r), once = r.gh || r.glass || r.pot;   // 盖暖棚、装大锅只能一次
+                return indRow(nm + '<br><small style="color:#888">' + need + '</small>', '<span style="white-space:nowrap;"><button style="' + IND_BTN + (can ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>' + (once ? '' : '<button style="' + IND_BTN + (can ? 'background:#1b5e20;' : 'background:#bbb;') + '" onclick="indCraftMax(' + i + ')">做最多</button>') + '</span>');
             }).join('');
             indPanelShow('bench', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">工作台</div><div style="color:#888;margin-bottom:4px;">用身上的原料做</div>' + rows +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
@@ -1893,6 +2057,7 @@
         function indCooks() {
             let St = IND_BASE_ST.stove, L = ind.base.off.stove ? [] : [{ id: 'stove', ty: 'stove', C: ind.base.stove, x: St.x, z: St.z }];
             ind.base.cookers.forEach(function (c) { L.push({ id: c.id, ty: c.ty, C: c, x: c.x, z: c.z }); });
+            L.forEach(function (c) { if (!Array.isArray(c.C.spout)) c.C.spout = []; });
             return L;
         }
         function indCookById(id) { return indCooks().filter(function (c) { return c.id === id; })[0] || null; }
@@ -1903,15 +2068,19 @@
         }
         function indFireDef(ty, lv) { let F = IND_FIRE[lv]; return ty === 'furnace' && lv === 3 ? { name: F.name, t: IND_COOK.furnace.top, burn: F.burn } : F; }
         // 找第一个原料够、这个炉子做得了的配方
-        function indCookFind(items, K) {
+        // targetT：火候定下的温度。原料一样的配方（2 黏土：烧砖要 900°C、烧陶罐 600°C）按火候挑，大火出砖、中火出陶罐；火候不够哪个都挑不到就先等着第一个
+        function indCookFind(items, K, targetT) {
+            let first = -1;
             for (let i = 0; i < IND_RECIPES.length; i++) {
                 let r = IND_RECIPES[i];
                 if (r.hard && !indHard()) continue;
                 if (K && K.only && (r.cls || 'food') !== K.only) continue;
                 if (K && !indBatchCap(K, r)) continue;
-                if (Object.keys(r.in).every(function (k) { return (items[k] || 0) >= r.in[k]; })) return i;
+                if (!Object.keys(r.in).every(function (k) { return indHave(items, k) >= r.in[k]; })) continue;
+                if (targetT === undefined || targetT >= r.minT) return i;
+                if (first < 0) first = i;
             }
-            return -1;
+            return first;
         }
         function indStoveFind(items) { return indCookFind(items, indCookK('stove')); }
         // 灶台一炉多份：做吃的（和烧水、煮盐）原料够几份就同时做几份，最多 4 份（装了黄铜大锅 8 份），时间和 1 份一样，燃料不多烧；
@@ -1919,10 +2088,12 @@
         function indBatchCap(K, r) { return (K.batch[r.cls || 'food']) || 0; }
         function indBatchN(r, items, K) {
             let n = indBatchCap(K, r);
-            Object.keys(r.in).forEach(function (k) { n = Math.min(n, Math.floor((items[k] || 0) / r.in[k])); });
+            Object.keys(r.in).forEach(function (k) { n = Math.min(n, Math.floor(indHave(items, k) / r.in[k])); });
+            let hotPer = 0; Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) hotPer += r.out[k]; });
+            if (hotPer) n = Math.min(n, Math.floor(IND_SPOUT_CAP / hotPer));   // 一炉烫锭要放得进出料槽
             return Math.max(0, n);
         }
-        function indOutTxt(r, n) { return Object.keys(r.out).filter(function (k) { return k !== 'bucket'; }).map(function (k) { return indName(k) + (r.out[k] * n > 1 ? ' ×' + r.out[k] * n : ''); }).join('、'); }
+        function indOutTxt(r, n) { return Object.keys(r.out).filter(function (k) { return k !== 'bucket'; }).map(function (k) { return indName(k, true) + (r.out[k] * n > 1 ? ' ×' + r.out[k] * n : ''); }).join('、'); }
         // 头顶飘的字（进度这类）：同一个 key 只画一张，字变了才重画
         function indBadge(key, x, y, z, text) {
             ind.badges = ind.badges || {};
@@ -1945,7 +2116,17 @@
         }
         // 电炉（电器）放在炉子 3 米内：这个炉子的温度顶到 1800°C
         function indElecBoost(x, z) { return ind.where === 'base' && ind.base.devs.some(function (d) { return d.ty === 'furnace' && d.pw && Math.hypot(d.x - x, d.z - z) <= IND_GEN_R; }); }
+        // 炉子里做好的某样东西有几个（烫锭在出料槽里，别的在"做好的"里）
+        function indOutCount(C, k) { return (C.out[k] || 0) + (C.spout || []).filter(function (e) { return e.k === k; }).length; }
+        function indSpoutTick(c, dt) { c.C.spout.forEach(function (e) { if (e.t > 0) e.t = Math.max(0, e.t - dt); }); }
+        function indSpoutPos(c) { return { x: c.x + IND_COOK[c.ty].r + 0.9, z: c.z }; }
+        function indSpoutTxt(c) {
+            let by = {}, order = [];
+            c.C.spout.forEach(function (e) { let k = IND_ITEMS_RAW[e.k].hot; if (!by[k]) { by[k] = { n: 0, t: 0 }; order.push(k); } by[k].n++; by[k].t = Math.max(by[k].t, e.t); });
+            return order.map(function (k) { let b = by[k]; return indName(k) + ' ×' + b.n + '　' + (b.t > 0 ? '烫，还要 ' + Math.ceil(b.t) + ' 秒' : '已凉'); }).join('　');
+        }
         function indCookTick(c, dt) {
+            indSpoutTick(c, dt);
             let S = c.C, K = indCookK(c.ty), F = indFireDef(c.ty, S.fire);
             if (S.fire > 0) {
                 let burn = F.burn * K.burn * dt;
@@ -1966,21 +2147,26 @@
                 if (boomR) { if (ind.panel === 'stove') ind.panelDirty = true; indBoom(c.x, c.z, boomR); return; }
             }
             if (!S.cook) {
-                let i = indCookFind(S.items, K);
+                let i = indCookFind(S.items, K, Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20));
                 if (i >= 0 && S.temp >= IND_RECIPES[i].minT) S.cook = { i: i, t: 0, burn: 0, n: indBatchN(IND_RECIPES[i], S.items, K) };
                 indCookBadge(c);
                 return;
             }
             let r = IND_RECIPES[S.cook.i], n = S.cook.n || 1;
-            if (Object.keys(r.in).some(function (k) { return (S.items[k] || 0) < r.in[k] * n; })) { S.cook = null; indCookBadge(c); return; }   // 原料被拿走了
+            if (Object.keys(r.in).some(function (k) { return indHave(S.items, k) < r.in[k] * n; })) { S.cook = null; indCookBadge(c); return; }   // 原料被拿走了
             if (S.temp >= r.minT) S.cook.t += dt;
             if (r.burnT && S.temp > r.burnT) S.cook.burn += dt;
             if (S.cook.t >= r.time || S.cook.burn >= IND_BURN_S) {
                 let burnt = S.cook.burn >= IND_BURN_S;
-                Object.keys(r.in).forEach(function (k) { S.items[k] -= r.in[k] * n; if (S.items[k] <= 0) delete S.items[k]; });
-                let out = burnt ? { char: 1 } : r.out;
-                if (burnt && r.out.bucket) out = { char: 1, bucket: r.out.bucket };   // 烧焦了桶还在
-                Object.keys(out).forEach(function (k) { S.out[k] = (S.out[k] || 0) + out[k] * n; });
+                let hotN = 0; if (!burnt) Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k].hot) hotN += r.out[k] * n; });
+                if (hotN && S.spout.length + hotN > IND_SPOUT_CAP) { S.cook.full = true; if (ind.panel === 'stove') ind.panelDirty = true; indCookBadge(c); return; }   // 出料槽满了，先停着不出料
+                S.cook.full = false;
+                let mats = indConsume(S.items, r, n), res = indCookResult(r, n, mats, burnt), out = res.out;   // 桶按用的材质还回去，陶罐有 1/10 碎掉
+                Object.keys(out).forEach(function (k) {
+                    if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) { for (let i = 0; i < out[k]; i++) S.spout.push({ k: k, t: IND_HOT_COOL }); }   // 烫锭进出料槽
+                    else S.out[k] = (S.out[k] || 0) + out[k];
+                });
+                if (res.broke && !ind.sleeping) indFlash('陶罐碎了' + (res.broke > 1 ? '（' + res.broke + ' 个）' : ''));
                 S.cook = null;
                 if (ind.panel === 'stove') ind.panelDirty = true;
                 if (!ind.sleeping) indFlash(burnt ? '烧焦了！' + (n > 1 ? '整炉 ' + n + ' 份都焦了' : '') : '做好了：' + indOutTxt(r, n));
@@ -1992,13 +2178,47 @@
             let S = c.C, txt = '';
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; txt = indOutTxt(r, S.cook.n || 1) + '　' + Math.min(99, Math.floor(S.cook.t / r.time * 100)) + '%'; }
             indBadge('cook' + c.id, c.x, c.ty === 'kiln' ? 3.6 : 3.1, c.z, txt);
+            let sp = indSpoutPos(c), t2 = S.spout.length ? indSpoutTxt(c) : (S.cook && S.cook.full ? '出料槽满了' : '');
+            indBadge('spout' + c.id, sp.x, 1.5, sp.z, t2);
         }
         function indStovePut(k, n) {
             if (!ind || !ind.bag[k]) return;
-            let S = indCookCur().C;
+            let S = indCookCur().C, kc = indContOf(k);
+            if (kc && kc.mat === 'wood') { indFlash('木桶不能上火'); return; }
             if (!S.items[k] && Object.keys(S.items).length >= IND_STOVE_CAP) { indFlash('放不下了'); return; }
             let t = indBagDel(k, n || 1); S.items[k] = (S.items[k] || 0) + t;
             indSave(); indPanelStove();
+        }
+        // 放满一炉：按配方把原料放够最多份数（炉子里已经有的算数；炉子是空的就挑背包里原料齐的第一个配方）
+        function indBagFire(k) {   // 背包里能上火的 k（装在桶里的要不是木桶）
+            if (IND_CONT_BASES.indexOf(k) < 0) return ind.bag[k] || 0;
+            let n = 0; Object.keys(IND_MATS).forEach(function (m) { if (IND_MATS[m].fire) n += ind.bag[indFilledKey(k, m)] || 0; }); return n;
+        }
+        function indStoveFill() {
+            if (!ind) return;
+            let c = indCookCur(), S = c.C, K = indCookK(c.ty), ri = S.cook ? S.cook.i : indCookFind(S.items, K);
+            if (ri < 0 || (!S.cook && Object.keys(S.items).length === 0)) {
+                ri = -1;
+                for (let i = 0; i < IND_RECIPES.length && ri < 0; i++) {
+                    let r = IND_RECIPES[i];
+                    if ((r.hard && !indHard()) || (K.only && (r.cls || 'food') !== K.only) || !indBatchCap(K, r)) continue;
+                    if (Object.keys(r.in).every(function (k) { return indBagFire(k) + indHave(S.items, k) >= r.in[k]; })) ri = i;
+                }
+            }
+            if (ri < 0) { indFlash('背包里的原料凑不出配方'); return; }
+            let r = IND_RECIPES[ri], N = indBatchCap(K, r), hotPer = 0;
+            Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) hotPer += r.out[k]; });
+            if (hotPer) N = Math.min(N, Math.floor(IND_SPOUT_CAP / hotPer));
+            Object.keys(r.in).forEach(function (k) { N = Math.min(N, Math.floor((indBagFire(k) + indHave(S.items, k)) / r.in[k])); });
+            if (N <= 0) { indFlash('原料不够一份'); return; }
+            Object.keys(r.in).forEach(function (k) {
+                let need = r.in[k] * N - indHave(S.items, k);
+                if (need <= 0) return;
+                let keys = IND_CONT_BASES.indexOf(k) < 0 ? [k] : IND_TAKE_ORDER.filter(function (m) { return IND_MATS[m].fire; }).map(function (m) { return indFilledKey(k, m); });
+                keys.forEach(function (key) { let t = Math.min(need, ind.bag[key] || 0); if (t > 0) { indStovePut(key, t); need -= t; } });
+            });
+            indFlash('放了 ' + N + ' 份的原料：' + indOutTxt(r, N));
+            indPanelStove();
         }
         function indStoveFuel(k) {
             if (!ind || !ind.bag[k] || !IND_ITEMS[k].fuel) return;
@@ -2009,7 +2229,7 @@
             if (!ind) return;
             let S = indCookCur().C;
             if (lv > 0 && S.fuel <= 0) { indFlash('先加燃料（木头、木炭、煤）'); return; }
-            if (lv === 4 && !ind.base.bellows) return;
+            if (lv === 4 && !S.bellows) return;
             S.fire = lv; indSave(); indPanelStove();
         }
         function indStoveTakeAll() {
@@ -2032,7 +2252,7 @@
             let p = document.createElement('div'); p.id = 'ind-panel'; p.style.cssText = IND_PANEL_CSS; p.innerHTML = html;
             document.body.appendChild(p);
         }
-        function indRow(left, right) { return '<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eee;"><span>' + left + '</span><span>' + right + '</span></div>'; }
+        function indRow(left, right) { return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 0;border-bottom:1px solid #eee;"><span style="flex:1;min-width:0;">' + left + '</span><span style="white-space:nowrap;">' + right + '</span></div>'; }
         function indChestCur() { let C = ind.base.chests; return C.filter(function (c) { return c.id === ind.boxId; })[0] || indBoxTarget(); }
         function indChestCap(c) { return c.big ? 0 : IND_CHEST_SLOTS; }
         function indPanelBox(id) {
@@ -2077,17 +2297,19 @@
             let st = '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + '<br>';
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; st += '正在做：' + indOutTxt(r, S.cook.n || 1) + (S.cook.n > 1 ? '（' + S.cook.n + ' 份）' : '') + ' ' + Math.floor(S.cook.t / r.time * 100) + '%'; }
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做' + (D.only ? '（只做冶炼）' : '') + '</span>';
-            let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !ind.base.bellows) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
+            let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !S.bellows) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
             let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
             let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';
+            let spt = S.spout.length ? indSpoutTxt(c) + '（左键点炉子旁边的出料槽取出）' : '空';
+            if (S.cook && S.cook.full) st += '<br><b style="color:#c62828">出料槽满了</b>';
             let put = Object.keys(ind.bag).map(function (k) {
-                let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button>';
+                let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button><button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',' + ind.bag[k] + ')">全放</button>';
                 if (IND_ITEMS[k].fuel) b += '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="indStoveFuel(\'' + k + '\')">当柴烧</button>';
                 return indRow(indName(k) + ' × ' + ind.bag[k], b);
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + D.name + '</div><div style="line-height:1.7;">' + st + '</div><div>' + fire + '</div>' +
-                '<div style="margin-top:6px;">锅里：' + on + '<br>做好的：' + out + '</div>' +
-                '<div style="margin-top:6px;font-weight:bold;">身上的东西</div>' + put +
+                '<div style="margin-top:6px;">锅里：' + on + '<br>做好的：' + out + '<br>出料槽：' + spt + '</div>' +
+                '<div style="margin-top:6px;font-weight:bold;">身上的东西　<button style="' + IND_BTN + 'background:#00838f;" onclick="indStoveFill()">放满一炉</button></div>' + put +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indStoveTakeAll()">全部拿出来</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>';
         }
         function indPanelStove(id) { if (!ind) return; let cid = id !== undefined ? id : ind.cookId; ind.cookId = cid; indPanelShow('stove', indStoveHtml()); ind.cookId = cid; }
@@ -2098,11 +2320,11 @@
             let L = [];
             IND_RECIPES.forEach(function (r) {
                 if (r.hard && !indHard()) return;
-                L.push({ ins: Object.keys(r.in), outs: Object.keys(r.out), txt: Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + ' → ' + Object.keys(r.out).map(function (k) { return indName(k) + '×' + r.out[k]; }).join(' + '), where: '灶台 ' + r.minT + '°C 以上，' + r.time + ' 秒' + (r.burnT ? '（超过 ' + r.burnT + '°C 会烧焦）' : '') });
+                L.push({ ins: Object.keys(r.in), outs: Object.keys(r.out), txt: Object.keys(r.in).map(function (k) { return indName(k, true) + (IND_CONT_BASES.indexOf(k) >= 0 ? '（要能上火的容器装的）' : '') + '×' + r.in[k]; }).join(' + ') + ' → ' + Object.keys(r.out).map(function (k) { return (k === 'bucket' ? '空容器（陶罐有 1/10 碎掉）' : indName(k, true)) + '×' + r.out[k]; }).join(' + '), where: '灶台 ' + r.minT + '°C 以上，' + r.time + ' 秒' + (r.burnT ? '（超过 ' + r.burnT + '°C 会烧焦）' : '') });
             });
             IND_CRAFT.forEach(function (r) {
                 if (!indCraftShow(r)) return;
-                let out = r.gh ? '暖棚' : r.glass ? '玻璃暖棚' : r.bellows ? '风箱' : r.pot ? '黄铜大锅' : indName(r.out);
+                let out = r.gh ? '暖棚' : r.glass ? '玻璃暖棚' : r.pot ? '黄铜大锅' : indName(r.out);
                 L.push({ ins: Object.keys(r.in), outs: r.out ? [r.out] : [], name: out, txt: Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + ' → ' + out, where: '工作台' });
             });
             if (indHard()) {   // 压力：不在 IND_RECIPES / IND_CRAFT 里的做法
@@ -2208,10 +2430,11 @@
             if (rh) hint = '收起' + indFurnName(rh.f.ty) + ' ' + Math.min(99, Math.floor(rh.t / IND_PICK_HOLD * 100)) + '%';
             else if (a && a.kind === 'node') { let nd = IND_NODES[a.o.key], nm = a.o.key === 'seeds' ? '野生' + indName(a.o.seed) : indName(a.o.key); hint = nm + ' ×' + a.o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>'; }
             else if (a && a.kind === 'item') hint = indName(a.o.k) + '<br><small>左键：拿</small>';
-            else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水')) + '<br><small>' + (ripe ? '左键：收' : '拿着水，右键：浇水') + '</small>'; }
+            else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水') + (a.o.fert ? '　施过肥了' : '')) + '<br><small>' + (ripe ? '左键：收' : '拿着水右键：浇水　拿草木灰右键：施肥') + '</small>'; }
             else if (a && a.kind === 'fire') hint = '篝火' + (a.o.fuel > 0 ? ' 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒' : '（灭了）') + '<br><small>拿着木头，左键：加柴</small>';
             else if (a && a.kind === 'bench') hint = '工作台<br><small>左键：打开　长按右键：收起</small>';
             else if (a && a.kind === 'tile') hint = '空农田<br><small>拿种子，左键：种　长按右键：收回</small>';
+            else if (a && a.kind === 'spout') hint = '出料槽 ' + (a.o.C.spout.length ? indSpoutTxt(a.o) : '空') + '<br><small>左键：取出（烫的要钳子）　拿水桶右键：浇凉</small>';
             else if (a && a.kind === 'cook') hint = IND_COOK[a.o.ty].name + ' ' + Math.round(a.o.temp) + '°C<br><small>左键：打开</small>';
             else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : a.o.ty === 'bank' ? '拿电池左键：装电池　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
             else if (a && a.kind === 'animal') {
