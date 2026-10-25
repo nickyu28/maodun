@@ -3545,8 +3545,7 @@
             if (!reset && b !== huntBonusSeen && gState.hp > 0) gState.hp = Math.max(1, Math.round(gState.hp * (base + b) / (base + huntBonusSeen)));
             huntBonusSeen = b;
         }
-        // H22：猫神护身符碎掉一次，本局血量上限 −40（最低 30）。huntHpCut 每局归零
-        function huntBaseMax() { return Math.max(30, (gState.maxHp || 100) - (gState.huntHpCut || 0)); }
+        function huntBaseMax() { return gState.maxHp || 100; }
         function effectiveMaxHp() { return huntBaseMax() + weaponHpBonus(); }
 
         // ── 配方图鉴 ──
@@ -3674,7 +3673,7 @@
 
         // ── 药水和猫神护身符（H22）──
         // 开箱时非大金的结果，木箱 6%、银箱 8%、金箱 10% 换成下面三样之一。药水跟别的宝物一样掉在地上、捡进背包（重量 1、值多少钱照旧），
-        // 拿在手上按“用道具”（电脑右键、平板“道具”）才生效，没有读条，按一下马上起效。是宝物，带不进下一局，撤离了进仓库按价值卖。
+        // 拿在手上按“用道具”（电脑右键、平板“道具”）才生效，没有读条，按一下马上起效。是宝物，带不进下一局，撤离了进仓库按价值卖。猫神护身符例外：能从仓库带进下一局。
         const HUNT_POTION_P = { wood: 0.06, silver: 0.08, gold: 0.10 };
         const HUNT_POTIONS = [
             { id: 'heal', n: '治疗药剂', v: 80000, w: 1, tex: 'generic', c: 0xe53935, type: 'potion', heal: 50 },
@@ -3714,12 +3713,12 @@
             scene.add(m); groundItems.push(m);
             return m;
         }
-        // 带着护身符死亡：立刻满血站起来，5 米内的怪全死，护身符碎掉，本局血量上限 −40（最低 30）
+        // 带着护身符死亡：立刻满血站起来，5 米内的怪全死，护身符碎掉。每局最多生效一个（godcatUsed 每局归零，带两个也只算一个）
         function huntGodCatSave() {
+            if (gState.godcatUsed) return false;
             let sl = carriedSlots().filter(function (s) { let it = s[0][s[1]]; return it && it.type === 'godcat'; })[0];
             if (!sl) return false;
-            sl[0][sl[1]] = null;
-            gState.huntHpCut = (gState.huntHpCut || 0) + 40;
+            sl[0][sl[1]] = null; gState.godcatUsed = true;
             gState.hp = effectiveMaxHp(); huntBonusSeen = weaponHpBonus();
             let r = HUNT_M * 5, killed = 0;
             entities = entities.filter(function (e) {
@@ -3750,9 +3749,30 @@
             return huntLure.p;
         }
 
-        function executeGroundCombinationsLogic() {
-            if (groundItems.length < 2) return;
-            let consumed = [];
+        // 合成倒计时：材料凑齐（两件挨在一起）后要等 3 秒才合成，合出大金的要等 5 秒；中间屏幕上显示倒计时，
+        // 材料被拿走（捡起来、扔远了）就取消。dt 是这一帧的秒数；不传 dt 就马上合（测试、旧调用用）。
+        const HUNT_MERGE_SECS = 3, HUNT_MERGE_BIG_SECS = 5;
+        let huntMergePend = new Map();   // 等待中的合成：第一件 → { b: 第二件, tag, t: 已等几秒, need }
+        function huntMergeUiSet(rem) {
+            let el = document.getElementById('merge-timer'); if (!el) return;
+            if (rem === null) { el.style.display = 'none'; return; }
+            el.innerText = '合成中 ' + Math.max(1, Math.ceil(rem)); el.style.display = 'block';
+        }
+        function huntMergeReset() { huntMergePend.clear(); huntMergeUiSet(null); }
+        // 这一对已经等够了吗（够了返回 true，同时清掉等待）。seen 记这一帧还在等的，没出现的会被取消
+        function huntMergeWait(a, b, tag, need, dt, seen) {
+            if (dt === undefined || need <= 0) return true;
+            if (seen.indexOf(a) >= 0) return false;   // 这件这一帧已经在跟另一件等了
+            let pd = huntMergePend.get(a);
+            if (!pd || pd.b !== b || pd.tag !== tag) { pd = { b: b, tag: tag, t: 0, need: need }; huntMergePend.set(a, pd); }
+            pd.t += dt;
+            seen.push(a);
+            if (pd.t >= pd.need) { huntMergePend.delete(a); return true; }
+            return false;
+        }
+        function executeGroundCombinationsLogic(dt) {
+            if (groundItems.length < 2) { if (huntMergePend.size) huntMergeReset(); return; }
+            let consumed = [], seen = [], held = [];
             let isConsumed = function (o) { return consumed.indexOf(o) > -1; };
 
             // 王冠底座会把旁边的宝石吸上去。镶满六颗它自己就变成皇冠。
@@ -3765,6 +3785,7 @@
                     // H28：镶上这一颗就满了（变皇冠 = 一个合成大金）要占一个名额；名额用完了这颗不镶，东西不动，提示一次
                     let completes = crownSockCount(bi.userData) >= HUNT_GEMS.length - 1 && !(bi.userData.sock && bi.userData.sock[gi.userData.gem]);
                     if (completes && huntCraftBigLeft <= 0) { huntBigNoteOnce(bi, gi); return; }
+                    if (completes && !huntMergeWait(bi, gi, 'crown', HUNT_MERGE_BIG_SECS, dt, seen)) return;
                     if (!crownSocketGem(bi.userData, gi.userData.gem)) return;
                     if (completes) huntBigCraftTake();
                     consumed.push(gi); scene.remove(gi);
@@ -3775,9 +3796,10 @@
             // 配方合成（会合出大金、但合成大金名额用完了的组合不算在内，提示一次）：同时有好几种合法组合时，一次选一个——先看产物价值，高的优先；价值一样看消耗的原料总价值，少的优先；
             // 再一样看两件离得近的、配方在表里靠前的、地上先后——同样的摆法每次选的都是同一个。合完一个再选下一个（新合出来的也能继续合）。
             for (let guard = 0; guard < 60; guard++) {
-                let m = huntBestMerge(consumed);
+                let m = huntBestMerge(consumed.concat(held));
                 if (!m) break;
                 let rec = m.rec, ai = m.a, bi = m.b;
+                if (!huntMergeWait(ai, bi, rec.id, huntRecipeBigCost(rec) ? HUNT_MERGE_BIG_SECS : HUNT_MERGE_SECS, dt, seen)) { held.push(ai, bi); continue; }
                 if (huntRecipeBigCost(rec) && !huntBigCraftTake()) break;   // H28（不会发生：huntBestMerge 已经排除了）
                 consumed.push(ai, bi); scene.remove(ai); scene.remove(bi);
                 let up = rec.out;
@@ -3792,6 +3814,11 @@
             }
 
             if (consumed.length > 0) groundItems = groundItems.filter(function (i) { return !isConsumed(i); });
+            if (dt !== undefined) {
+                huntMergePend.forEach(function (pd, a) { if (seen.indexOf(a) < 0 || groundItems.indexOf(a) < 0 || groundItems.indexOf(pd.b) < 0) huntMergePend.delete(a); });
+                let rem = null; huntMergePend.forEach(function (pd) { let r = pd.need - pd.t; if (rem === null || r < rem) rem = r; });
+                huntMergeUiSet(rem);
+            }
         }
         // 候选 x 比 y 好吗：产物价值高的好；一样就消耗原料总价值少的好；再一样距离近的、配方靠前的、地上先后靠前的
         function huntMergeBetter(x, y) {
@@ -4435,7 +4462,7 @@
                 else { item.position.y = tgY; if (!moving) item.userData.settled = true; }
             });
 
-            executeGroundCombinationsLogic();
+            executeGroundCombinationsLogic(dt);
             huntLureTick(dt);
 
             if (gState.timeStop > 0) return;

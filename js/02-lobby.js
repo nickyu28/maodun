@@ -1444,9 +1444,9 @@
 
         // ── 宝物不能带上场 ──
         // 只有商店买的家伙事（鱼叉、医疗包、腰包、徽章……）能跟着进图，
-        // 捡来的宝物一律留在仓库。不然可以把上一局的战利品带进去直接凑够上交额度。
+        // 捡来的宝物一律留在仓库（猫神护身符是例外）。不然可以把上一局的战利品带进去直接凑够上交额度。
         // 找到的功能道具（信号器、时空沙漏、圣剑这些）本身也是宝物，同样留下。
-        function isCarryOn(it) { return !!(it && it.isShop); }
+        function isCarryOn(it) { return !!(it && (it.isShop || it.type === 'godcat')); }   // 猫神护身符也能从仓库带进图
 
         // 旧存档兵库：背包（和背包里的腰包）里本来就不该有宝物（UI 已经不让放了），
         // 但以前存的档可能带着。开局静静挪回仓库，仓库满了就留着 ——
@@ -1590,7 +1590,7 @@
             if ((dstC === 'bag' && isPouch(a)) || (srcC === 'bag' && isPouch(b))) return '腰包不能放进腰包。';
             if (isPlaying) return '';
             let carry = function (c) { return c === 'inv' || c === 'bag'; };
-            if ((carry(dstC) && a && !isCarryOn(a)) || (carry(srcC) && b && !isCarryOn(b))) return '宝物不能带上场，只有商店买的道具能放进背包和腰包。';
+            if ((carry(dstC) && a && !isCarryOn(a)) || (carry(srcC) && b && !isCarryOn(b))) return '宝物不能带上场，只有商店买的道具和猫神护身符能放进背包和腰包。';
             return '';
         }
 
