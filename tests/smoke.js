@@ -4476,7 +4476,7 @@ async function enterExit(tab, key) {
                 Object.keys(IND_ANIMALS).forEach(function (a) { IND_ANIMALS[a].food.forEach(function (k) { used[k] = 1; }); });
                 Object.keys(RAW).forEach(function (k) {
                     const d = RAW[k]; if (later[k] || d.hot) return;
-                    if (used[k] || d.eat || d.wear || d.tool || d.dev || d.place || d.seed || d.fuel || d.use) return;
+                    if (used[k] || d.eat || d.wear || d.tool || d.dev || d.cook || d.place || d.seed || d.fuel || d.use) return;
                     out.useless.push(k + '（' + d.name + '）');
                 });
                 return JSON.stringify(out);
@@ -5119,6 +5119,118 @@ async function enterExit(tab, key) {
             report('IND10 玻璃暖棚（要先有木棚、扩大范围、旧档默认不是）、挤奶剪毛南瓜甘蔗的新等待时间、旧档时间改短、精力走 60 秒掉 4 跑 60 秒掉 8', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND13')) {
+            // IND13 砖、小熔炉、大窑：砖（2 黏土，≥ 900°C，20 秒，悠闲硬核都有，一次 1 份）；小熔炉（8 砖 + 2 石头，只给硬核）只做冶炼、一次 2 份、大火最高 1300°C、燃料烧 2 倍久；
+            // 大窑（30 砖 + 6 石头，悠闲硬核都有）灶台所有配方、吃的 16 份、砖和木炭 10 份、冶炼 6 份、温度每秒变 10°C、燃料烧 3 倍久、黄铜大锅不加份数；
+            // 都能放下（不能压在别的东西上）、存档、被炸、4 米内取暖、头顶进度字；发电机和熔融盐电解的"灶台 3 米内"判定熔炉大窑也算
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; true;`);
+                const stoveSet = (items, fire, temp) => T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null }; true;`);
+                const near3 = (a, b) => Math.abs(a - b) <= 1.2;
+                // 砖
+                await stoveSet({ clay: 2 }, 2, 600); await T.eval(`indAdvance(40); true;`);
+                if (await T.eval(`!!ind.base.stove.out.brick`)) bad.push('600°C 也烧出砖');
+                await stoveSet({ clay: 6 }, 3, 1200); await T.eval(`indAdvance(19); true;`);
+                if (await T.eval(`!!ind.base.stove.out.brick`)) bad.push('砖 19 秒就烧好了');
+                await T.eval(`indAdvance(2); true;`);
+                if ((await T.eval(`ind.base.stove.out.brick || 0`)) !== 1) bad.push('2 黏土烧不出 1 块砖，或一次不止 1 份 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 工作台：小熔炉（硬核）、大窑（都有）
+                const ci = (o) => `IND_CRAFT.findIndex(function (r) { return r.out === '${o}'; })`;
+                await T.eval(`ind.bag = {}; indBagAdd('brick', 8); indBagAdd('stone', 2); indCraft(${ci('cook_furnace')}); true;`);
+                if (!(await T.eval(`ind.bag.cook_furnace === 1 && !ind.bag.brick`))) bad.push('做不出小熔炉 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indBagAdd('brick', 29); indBagAdd('stone', 6); true;`);
+                if (await T.eval(`indCraft(${ci('cook_kiln')})`)) bad.push('29 块砖也做大窑');
+                await T.eval(`indBagAdd('brick', 1); indCraft(${ci('cook_kiln')}); true;`);
+                if (!(await T.eval(`ind.bag.cook_kiln === 1 && !ind.bag.brick && !ind.bag.stone`))) bad.push('做不出大窑 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 放下：右键放在面前；压在别的东西上放不下
+                await T.eval(`(function(){ indTeleport(10, -2); indLookAt(10, -10); indSelect('cook_furnace'); indUse(); })(); true;`);
+                if (!(await T.eval(`ind.base.cookers.length === 1 && ind.base.cookers[0].ty === 'furnace' && !ind.bag.cook_furnace`))) bad.push('小熔炉放不下 ' + await T.eval(`JSON.stringify(ind.base.cookers)`));
+                await T.eval(`(function(){ indBagAdd('cook_furnace', 1); indSelect('cook_furnace'); indUse(); })(); true;`);
+                if (await T.eval(`ind.base.cookers.length !== 1`)) bad.push('两个小熔炉叠在一起');
+                await T.eval(`(function(){ indTeleport(-1, 10); indLookAt(-1, 3); indSelect('cook_kiln'); indUse(); })(); true;`);
+                if (!(await T.eval(`ind.base.cookers.length === 2 && ind.base.cookers[1].ty === 'kiln'`))) bad.push('大窑放不下 ' + await T.eval(`JSON.stringify(ind.base.cookers.map(function (c) { return [c.ty, c.x, c.z]; }))`));
+                await T.eval(`indSyncCookers(); true;`);
+                if (await T.eval(`Object.keys(ind.cookMesh).length !== 2`)) bad.push('炉子没画出来');
+                const F = await T.eval(`ind.base.cookers[0].id`), K = await T.eval(`ind.base.cookers[1].id`);
+                const setC = (id, items, fire, temp, fuel) => T.eval(`(function(){ let c = ind.base.cookers.filter(function (c) { return c.id === ${id}; })[0]; c.items = ${JSON.stringify(items)}; c.out = {}; c.fire = ${fire}; c.temp = ${temp}; c.fuel = ${fuel || 3000}; c.cook = null; })(); true;`);
+                const getC = (id) => T.eval(`JSON.stringify(ind.base.cookers.filter(function (c) { return c.id === ${id}; })[0])`).then(JSON.parse);
+                // 小熔炉：只做冶炼，一次 2 份，大火 1300°C
+                await setC(F, { wheat: 4, salt: 1, water_boiled: 1 }, 1, 200); await T.eval(`indAdvance(45); true;`);
+                if (Object.keys((await getC(F)).out).length) bad.push('小熔炉也做吃的');
+                await setC(F, { ore_cu: 3 }, 3, 1290); await T.eval(`indAdvance(21); true;`);
+                let f = await getC(F);
+                if (Math.abs(f.temp - 1300) > 1) bad.push('小熔炉大火应该 1300°C ' + f.temp);
+                if (f.out.hot_cu !== 2 || f.items.ore_cu !== 1) bad.push('小熔炉一次炼 2 份不对 ' + JSON.stringify(f));
+                await setC(F, { ore_fe: 1 }, 3, 1300); await T.eval(`indAdvance(40); true;`);
+                if ((await getC(F)).out.hot_fe) bad.push('小熔炉没风箱炼出了铁');
+                await T.eval(`ind.base.bellows = true; true;`); await setC(F, { ore_fe: 1 }, 4, 1600); await T.eval(`indAdvance(32); true;`);
+                if ((await getC(F)).out.hot_fe !== 1) bad.push('小熔炉装了风箱炼不出铁 ' + JSON.stringify(await getC(F)));
+                await T.eval(`ind.base.bellows = false; true;`);
+                // 燃料：同样大火烧 10 秒，灶台烧 20，小熔炉烧 10，大窑烧约 6.7
+                await setC(F, {}, 3, 1300, 3000); await setC(K, {}, 3, 1200, 3000); await stoveSet({}, 3, 1200);
+                await T.eval(`indAdvance(10); true;`);
+                const fu = JSON.parse(await T.eval(`JSON.stringify({ s: 3000 - ind.base.stove.fuel, f: 3000 - ind.base.cookers[0].fuel, k: 3000 - ind.base.cookers[1].fuel })`));
+                if (!near3(fu.s, 20) || !near3(fu.f, 10) || !near3(fu.k, 20 / 3)) bad.push('燃料消耗不对（灶台 20、小熔炉 10、大窑 6.7）' + JSON.stringify(fu));
+                // 大窑：温度每秒变 10°C；吃的 16 份；黄铜大锅不加份数；砖 10 份；冶炼 6 份
+                await setC(K, {}, 3, 20); await T.eval(`indAdvance(5); true;`);
+                if (Math.abs((await getC(K)).temp - 70) > 2) bad.push('大窑温度应该每秒变 10°C ' + (await getC(K)).temp);
+                await T.eval(`ind.base.pot = true; true;`);
+                await setC(K, { wheat: 80, salt: 20, water_boiled: 20 }, 1, 200); await T.eval(`indAdvance(20); true;`);
+                const lab = await T.eval(`ind.badges && ind.badges['cook' + ${K}] && ind.badges['cook' + ${K}].mesh.visible ? ind.badges['cook' + ${K}].text : ''`);
+                if (!/^面包 ×48　\d+%$/.test(lab)) bad.push('大窑头顶进度字不对 ' + lab);
+                await T.eval(`indAdvance(21); true;`);
+                f = await getC(K);
+                if (f.out.bread !== 48 || f.out.bucket !== 16) bad.push('大窑吃的应该一次 16 份（装了大锅也不变） ' + JSON.stringify(f.out));
+                await T.eval(`ind.base.pot = false; true;`);
+                await setC(K, { clay: 24 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
+                if ((await getC(K)).out.brick !== 10) bad.push('大窑砖应该一次 10 块 ' + JSON.stringify((await getC(K)).out));
+                await setC(K, { wood: 24 }, 3, 1200); await T.eval(`indAdvance(31); true;`);
+                if ((await getC(K)).out.charcoal !== 10) bad.push('大窑木炭应该一次 10 份');
+                await setC(K, { ore_cu: 8 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
+                f = await getC(K);
+                if (f.out.hot_cu !== 6 || f.items.ore_cu !== 2) bad.push('大窑冶炼应该一次 6 份 ' + JSON.stringify(f));
+                // "灶台 3 米内"的判定：发电机在小熔炉旁边、熔炉中火以上才发电；熔融盐电解旁边的大窑够热
+                await T.eval(`(function(){ let c = ind.base.cookers[0]; ind.base.devs = [{ id: 701, ty: 'gen', x: c.x + 2, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {} }]; c.fire = 0; c.fuel = 0; })(); true;`);
+                if (await T.eval(`indSrcVolt(indDev(701))`) !== 0) bad.push('熔炉没点着发电机也发电');
+                await T.eval(`(function(){ let c = ind.base.cookers[0]; c.fire = 2; c.fuel = 3000; })(); true;`);
+                if (await T.eval(`indSrcVolt(indDev(701))`) !== 12) bad.push('小熔炉旁边的发电机不发电');
+                await T.eval(`(function(){ let c = ind.base.cookers[1]; ind.base.devs.push({ id: 702, ty: 'el', x: c.x + 3.5, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {} }); c.temp = 900; })(); true;`);
+                if (!(await T.eval(`indHeatNear(indDev(702).x, indDev(702).z, 3).temp === 900`))) bad.push('大窑 3 米（算上大小）内的判定不对');
+                // 4 米内取暖：离熔炉近比远暖和
+                await T.eval(`(function(){ ind.base.devs = []; let c = ind.base.cookers[0]; c.fire = 3; c.temp = 1300; indTeleport(c.x + 2, c.z); })(); true;`);
+                const warm = await T.eval(`indAirTemp()`);
+                await T.eval(`indTeleport(-20, 15); true;`);
+                const cold = await T.eval(`indAirTemp()`);
+                if (!(warm > cold + 5)) bad.push('熔炉旁边没有取暖 ' + warm + ' / ' + cold);
+                // 存档
+                await T.eval(`(function(){ ind.base.cookers[0].items = { ore_cu: 1 }; ind.base.cookers[1].fire = 2; indSave(); })(); true;`);
+                await until(T, `IND_SAVING === 0`, 5000);
+                const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify(b.cookers.map(function (c) { return [c.ty, c.id, c.items, c.fire]; }))); }); })`));
+                if (sv.length !== 2 || sv[0][0] !== 'furnace' || sv[0][2].ore_cu !== 1 || sv[1][0] !== 'kiln' || sv[1][3] !== 2) bad.push('炉子存档不对 ' + JSON.stringify(sv));
+                if (await T.eval(`indFixBase({ ver: 9, rule: 'hard', cookers: [{ id: 3, ty: 'stove', x: 1, z: 1 }, { id: 4, ty: 'nope', x: 1, z: 1 }, { id: 5, ty: 'kiln', x: 1, z: 1, items: { zzz: 3, wood: 2 }, fire: 9 }] }).cookers.length !== 1`)) bad.push('乱写的炉子没被丢掉');
+                // 被炸：3 米内的炉子没了（连里面的东西），图也撤了
+                await T.eval(`(function(){ let c = ind.base.cookers[0]; indBoom(c.x, c.z); indSyncCookers(); })(); true;`);
+                if (!(await T.eval(`ind.base.cookers.length === 1 && Object.keys(ind.cookMesh).length === 1`))) bad.push('小熔炉没被炸掉 ' + await T.eval(`JSON.stringify(ind.base.cookers.map(function (c) { return c.ty; }))`));
+                // 面板、配方查询、悠闲
+                await T.eval(`indPanelStove(${K}); true;`);
+                if (!/大窑/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('大窑面板打不开');
+                await T.eval(`indPanelClose(); indPanelBook('砖'); true;`);
+                if (!/黏土×2 → 砖/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('配方查询搜不到砖');
+                await T.eval(`indPanelClose(); ind.base.rule = 'casual'; true;`);
+                if (await T.eval(`indCraftShow(IND_CRAFT.filter(function (r) { return r.out === 'cook_furnace'; })[0]) || !indCraftShow(IND_CRAFT.filter(function (r) { return r.out === 'cook_kiln'; })[0])`)) bad.push('悠闲世界：小熔炉不该有、大窑要有');
+                await stoveSet({ clay: 2 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
+                if ((await T.eval(`ind.base.stove.out.brick || 0`)) !== 1) bad.push('悠闲烧不出砖');
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND13 砖、小熔炉、大窑：烧砖、只做冶炼一次 2 份、大窑吃的 16 份、燃料和温度速度、放下存档被炸取暖、3 米内判定', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
@@ -5204,7 +5316,7 @@ async function enterExit(tab, key) {
                 if (await T.eval(`!!ind.base.stove.out.bread`)) bad.push('3 小麦也做面包');
                 // 一炉 4 份：16 小麦 4 盐 4 水 → 12 面包 4 桶，时间一样；进度字、面板、做好提示
                 await stoveSet({ wheat: 20, salt: 5, water_boiled: 5 }, 1, 200); await T.eval(`indAdvance(20); true;`);
-                const lab = await T.eval(`ind.badges && ind.badges.stove && ind.badges.stove.mesh.visible ? ind.badges.stove.text : ''`);
+                const lab = await T.eval(`ind.badges && ind.badges.cookstove && ind.badges.cookstove.mesh.visible ? ind.badges.cookstove.text : ''`);
                 if (!/^面包 ×12　(4\d|5\d)%$/.test(lab)) bad.push('灶台上方的进度字不对 ' + lab);
                 await T.eval(`indPanelStove(); true;`);
                 if (!/正在做：面包 ×12（4 份）/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('面板"正在做"没写份数 ' + (await T.eval(`document.getElementById('ind-panel').innerText`)).slice(0, 80));
