@@ -5605,6 +5605,10 @@ async function enterExit(tab, key) {
             const st = await A.eval(`document.getElementById('garage-stash-container').scrollTop`);
             if (!scrolled) bad.push('上滑没滚动 scrollTop=' + st);
             if ((await A.eval(names)) !== n0) bad.push('上滑把物品挪了');
+            // 滑完还原成电脑视口、关掉触屏模拟：后面的长按、点一下、鼠标拖放跟原来一样在电脑视口里测
+            await A.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+            await A.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+            await frames(A, 5);
             // 2. 长按后拖：格子变样子，物品移到目标格
             await A.eval(`document.getElementById('garage-stash-container').scrollTop = 0; true;`); await W(100);
             const from = await mouseAt(A, GAR_SLOT(1)), to = await mouseAt(A, GAR_SLOT(6));
