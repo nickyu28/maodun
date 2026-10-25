@@ -5577,6 +5577,64 @@ async function enterExit(tab, key) {
             report('IND12 作者玩出来的 bug：做桶和剪刀、悠闲升级成硬核（确认窗）、左键按准星（工具优先、拿对东西才喂／剪毛、30° 外不选）', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('U1')) {
+            // U1：仓库在触屏上——在有物品的格子上往上滑是滚动列表、物品不动；长按后拖动把物品挪到目标格；点一下是选中；
+            // 鼠标拖放跟原来一样；宽屏上列表比原来的 280 像素宽
+            const bad = [];
+            const A = await openTab(chrome, url);   // 自己的标签页（不依赖前面检查留下的状态，SMOKE_ONLY='U1' 也能单独跑）
+            const fill = `(function(){ let g = []; for (let i = 0; i < 80; i++) g.push(L('杯' + i)); return g; })()`;
+            await A.eval(GARAGE_SETUP(`Array(6).fill(null)`, fill, 0));
+            const names = `gState.garage.slice(0, 80).map(function (q) { return q && q.n; }).join(',')`;
+            const n0 = await A.eval(names);
+            const box = await A.eval(`(function(){ let r = document.getElementById('garage-stash-container').getBoundingClientRect(); return [r.width, r.height]; })()`);
+            if (!(box[0] > 300)) bad.push('宽屏列表还是窄的 ' + box[0]);
+            // 1. 上滑：列表滚动，物品没动
+            // 电脑视口下浏览器不把合成的触摸滑动当滚动手势（pointercancel 发了、scrollTop 不动，跟机器忙不忙无关）：换成触屏设备的视口再滑，位置也在这之后量
+            await A.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+            await A.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: true });
+            await frames(A, 5);
+            const c0 = await mouseAt(A, GAR_SLOT(4));
+            const swipe = []; for (let i = 0; i <= 12; i++) swipe.push([c0[0], c0[1] - i * 14]);
+            const tpU = (type, p) => A.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
+            // 游戏的长按计时器是 300 毫秒真实时间：按下后第一下移动要紧接着发（超过 10 像素就取消长按），不能先等帧，否则机器忙时拖过 300 毫秒就变成"拿起来"、不滚动。
+            // 后面的移动每步等 2 帧；滚动由浏览器处理，等 scrollTop 真的变了（最多 20 秒），不靠固定等待。
+            await tpU('touchStart', swipe[0]); await tpU('touchMove', swipe[1]);
+            for (let i = 2; i < swipe.length; i++) { await frames(A, 2); await tpU('touchMove', swipe[i]); }
+            await tpU('touchEnd', null);
+            const scrolled = await until(A, `document.getElementById('garage-stash-container').scrollTop > 20`, 20000);
+            const st = await A.eval(`document.getElementById('garage-stash-container').scrollTop`);
+            if (!scrolled) bad.push('上滑没滚动 scrollTop=' + st);
+            if ((await A.eval(names)) !== n0) bad.push('上滑把物品挪了');
+            // 2. 长按后拖：格子变样子，物品移到目标格
+            await A.eval(`document.getElementById('garage-stash-container').scrollTop = 0; true;`); await W(100);
+            const from = await mouseAt(A, GAR_SLOT(1)), to = await mouseAt(A, GAR_SLOT(6));
+            const tp = (type, p) => A.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
+            await tp('touchStart', from);
+            // 长按由游戏自己的计时器触发：手指不动，等"拿起来"这个状态真的出现（最多 15 秒）
+            const lifted = await until(A, `document.querySelector('${GAR_SLOT(1)}').classList.contains('lifting') && isDragging`, 15000);
+            if (!lifted) bad.push('长按后没拿起来');
+            for (let i = 1; i <= 8; i++) { await tp('touchMove', [from[0] + (to[0] - from[0]) * i / 8, from[1] + (to[1] - from[1]) * i / 8]); await frames(A, 1); }
+            await tp('touchEnd', null);
+            await until(A, `gState.garage[1].n === '杯6'`, 15000);
+            const sw = await A.eval(`gState.garage[1].n + ',' + gState.garage[6].n`);
+            if (sw !== '杯6,杯1') bad.push('长按拖动没换过去 ' + sw);
+            // 3. 点一下：选中
+            const t3 = await mouseAt(A, GAR_SLOT(2));
+            await touchPath(A, [t3], 0);
+            await until(A, `gState.selectedContainer === 'garage' && gState.selectedSlot === 2`, 15000);
+            const sel = await A.eval(`gState.selectedContainer + ':' + gState.selectedSlot`);
+            if (sel !== 'garage:2') bad.push('点一下没选中 ' + sel);
+            // 4. 鼠标拖放还是原来那样（按下就能拖）
+            await mouseDrag(A, GAR_SLOT(3), GAR_SLOT(4));
+            await until(A, `gState.garage[3].n === '杯4'`, 15000);
+            const ms = await A.eval(`gState.garage[3].n + ',' + gState.garage[4].n`);
+            if (ms !== '杯4,杯3') bad.push('鼠标拖放 ' + ms);
+            await A.eval(`${HIDE} gState.garage = Array(200).fill(null); gState.inv = Array(6).fill(null); nav('screen-lobby'); true;`);
+            if (A.errors.length) bad.push(A.errors.slice(0, 2).join(' / '));
+            await A.close();
+            report('U1 仓库触屏：上滑滚动不挪东西、长按拖、点一下选中；鼠标照旧；宽屏列表变宽', bad.length === 0, bad.join(' / '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
@@ -6090,68 +6148,6 @@ async function enterExit(tab, key) {
             if (r !== 0) bad.push('撤离失败腰包还在 ' + r);
             await A.eval(`${HIDE} returnToGarageFromOver(); gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); nav('screen-lobby'); true;`);
             report('H14 腰包自己装东西：容量、展开收起、不能套娃、进图/上交/撤离/扔/卖/整理', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
-        }
-
-        {
-            // U1：仓库在触屏上——在有物品的格子上往上滑是滚动列表、物品不动；长按后拖动把物品挪到目标格；点一下是选中；
-            // 鼠标拖放跟原来一样；宽屏上列表比原来的 280 像素宽
-            const bad = [];
-            const fill = `(function(){ let g = []; for (let i = 0; i < 80; i++) g.push(L('杯' + i)); return g; })()`;
-            await A.eval(GARAGE_SETUP(`Array(6).fill(null)`, fill, 0));
-            const names = `gState.garage.slice(0, 80).map(function (q) { return q && q.n; }).join(',')`;
-            const n0 = await A.eval(names);
-            const box = await A.eval(`(function(){ let r = document.getElementById('garage-stash-container').getBoundingClientRect(); return [r.width, r.height]; })()`);
-            if (!(box[0] > 300)) bad.push('宽屏列表还是窄的 ' + box[0]);
-            // 1. 上滑：列表滚动，物品没动
-            const c0 = await mouseAt(A, GAR_SLOT(4));
-            const swipe = []; for (let i = 0; i <= 12; i++) swipe.push([c0[0], c0[1] - i * 14]);
-            const tpU = (type, p) => A.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
-            // 手指每动一下，等页面真的画了 2 帧再动下一下（浏览器的滚动手势按帧处理；原来每步睡 16 毫秒，机器忙时事件挤成一团，手势被当成点一下，不滚动）。
-            // 这个标签页前面跑过很多检查，浏览器那头偶尔还留着上一次的触摸状态，第一次滑会被吃掉（单独开新标签页就从来不会）：
-            // 每次滑之前先发一个"手指全抬起"清掉残留，滑完等 scrollTop 真的变了；没变就清掉再滑一次（最多 3 次），不靠加长等待。
-            let scrolled = false;
-            for (let attempt = 0; attempt < 3 && !scrolled; attempt++) {
-                await tpU('touchEnd', null); await frames(A, 2);
-                await tpU('touchStart', swipe[0]); await frames(A, 2);
-                for (let i = 1; i < swipe.length; i++) { await tpU('touchMove', swipe[i]); await frames(A, 2); }
-                await tpU('touchEnd', null);
-                // 滚动由浏览器的手势处理：等 scrollTop 真的变了（每次最多 8 秒）
-                scrolled = await until(A, `document.getElementById('garage-stash-container').scrollTop > 20`, 8000);
-            }
-            const st = await A.eval(`document.getElementById('garage-stash-container').scrollTop`);
-            if (!scrolled) {
-                // 没滚动时把现场写进失败信息（页面状态、触摸点上是什么、列表能不能滚），方便查
-                const dbg = await A.eval(`(function(){ let c = document.getElementById('garage-stash-container'), cs = getComputedStyle(c), e = document.elementFromPoint(${c0[0]}, ${c0[1]});
-                    return JSON.stringify({ ctl: gState.control, sh: c.scrollHeight, ch: c.clientHeight, ov: cs.overflowY, ta: cs.touchAction, top: e ? (e.id || e.className || e.tagName) : null, vis: document.visibilityState, focus: document.hasFocus(), lock: !!document.pointerLockElement, modal: ${MODAL}, scr: document.getElementById('screen-garage') && !document.getElementById('screen-garage').classList.contains('hidden') }); })()`);
-                bad.push('上滑没滚动 scrollTop=' + st + ' ' + dbg);
-            }
-            if ((await A.eval(names)) !== n0) bad.push('上滑把物品挪了');
-            // 2. 长按后拖：格子变样子，物品移到目标格
-            await A.eval(`document.getElementById('garage-stash-container').scrollTop = 0; true;`); await W(100);
-            const from = await mouseAt(A, GAR_SLOT(1)), to = await mouseAt(A, GAR_SLOT(6));
-            const tp = (type, p) => A.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
-            await tp('touchStart', from);
-            // 长按由游戏自己的计时器触发：手指不动，等"拿起来"这个状态真的出现（最多 15 秒）
-            const lifted = await until(A, `document.querySelector('${GAR_SLOT(1)}').classList.contains('lifting') && isDragging`, 15000);
-            if (!lifted) bad.push('长按后没拿起来');
-            for (let i = 1; i <= 8; i++) { await tp('touchMove', [from[0] + (to[0] - from[0]) * i / 8, from[1] + (to[1] - from[1]) * i / 8]); await frames(A, 1); }
-            await tp('touchEnd', null);
-            await until(A, `gState.garage[1].n === '杯6'`, 15000);
-            const sw = await A.eval(`gState.garage[1].n + ',' + gState.garage[6].n`);
-            if (sw !== '杯6,杯1') bad.push('长按拖动没换过去 ' + sw);
-            // 3. 点一下：选中
-            const t3 = await mouseAt(A, GAR_SLOT(2));
-            await touchPath(A, [t3], 0);
-            await until(A, `gState.selectedContainer === 'garage' && gState.selectedSlot === 2`, 15000);
-            const sel = await A.eval(`gState.selectedContainer + ':' + gState.selectedSlot`);
-            if (sel !== 'garage:2') bad.push('点一下没选中 ' + sel);
-            // 4. 鼠标拖放还是原来那样（按下就能拖）
-            await mouseDrag(A, GAR_SLOT(3), GAR_SLOT(4));
-            await until(A, `gState.garage[3].n === '杯4'`, 15000);
-            const ms = await A.eval(`gState.garage[3].n + ',' + gState.garage[4].n`);
-            if (ms !== '杯4,杯3') bad.push('鼠标拖放 ' + ms);
-            await A.eval(`${HIDE} gState.garage = Array(200).fill(null); gState.inv = Array(6).fill(null); nav('screen-lobby'); true;`);
-            report('U1 仓库触屏：上滑滚动不挪东西、长按拖、点一下选中；鼠标照旧；宽屏列表变宽', bad.length === 0, bad.join(' / '));
         }
 
         {
