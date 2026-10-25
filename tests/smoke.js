@@ -1003,7 +1003,8 @@ async function enterExit(tab, key) {
             // L2 大厅减负：不动的装饰合并（墙、台阶）；远处的路人合成一次绘制、近处的还是完整猫盾；盖住大厅的全屏面板打开时不画 3D；每帧绘制次数 ≤ 50
             const bad = [];
             const T = await openTab(chrome, url);
-            await W(1200);
+            if (!(await until(T, `typeof hub !== 'undefined' && hub && hub.wanderers && hub.wanderers.length > 1 && hub.far`, 30000))) bad.push('大厅没准备好');   // 等大厅建好，不等固定时间
+            await frames(T, 5);
             const r = JSON.parse(await T.eval(`(function(){ let o = {};
                 renderer.render(scene, camera); o.calls = renderer.info.render.calls; o.objs = (function () { let n = 0; scene.traverse(function () { n++; }); return n; })();
                 o.statics = hub.meshes.filter(function (m) { return !hub.bg || Object.keys(hub.bg).every(function (n) { return hub.bg[n] !== m; }); }).length;   // 背景（天空、云、山丘、树、房子）单算，见 L3
@@ -1031,16 +1032,17 @@ async function enterExit(tab, key) {
             if (r.lod[0] !== false || r.lod[1] !== true || r.lod[2] !== r.lod[3]) bad.push('远近路人 ' + JSON.stringify(r.lod));
             if (r.hyst.join() !== 'true,true,false') bad.push('边界滞后 ' + r.hyst.join());
             // 面板盖住时不画：数 renderer.render 的次数
-            const cnt = async (ms) => JSON.parse(await T.eval(`new Promise(function (res) { let n = 0, rr = renderer.render.bind(renderer); renderer.render = function () { n++; return rr.apply(null, arguments); };
-                setTimeout(function () { renderer.render = rr; res(n); }, ${ms}); })`));
-            const open0 = await cnt(500);
-            await T.eval(`${HIDE} openSettings(); true;`); await W(200);
-            const covered = await cnt(500);
-            await T.eval(`${HIDE} true;`); await W(200);
-            await T.eval(`raceBoardOpen(1); true;`); await W(200);
-            const covered2 = await cnt(500);
-            await T.eval(`raceBoardClose(); true;`); await W(200);
-            const after = await cnt(500);
+            // 数的是"页面走了 n 帧（requestAnimationFrame）期间 renderer.render 被调了几次"，不是"多少毫秒里调了几次"：机器忙时帧少，按毫秒数会数出 0
+            const cnt = async (n) => JSON.parse(await T.eval(`new Promise(function (res) { let c = 0, rr = renderer.render.bind(renderer); renderer.render = function () { c++; return rr.apply(null, arguments); };
+                let k = 0; (function f() { if (++k > ${n}) { renderer.render = rr; res(c); } else requestAnimationFrame(f); })(); })`));
+            const open0 = await cnt(8);
+            await T.eval(`${HIDE} openSettings(); true;`); await frames(T, 3);   // 面板刚开，让页面先走几帧再数
+            const covered = await cnt(8);
+            await T.eval(`${HIDE} true;`); await frames(T, 3);
+            await T.eval(`raceBoardOpen(1); true;`); await frames(T, 3);
+            const covered2 = await cnt(8);
+            await T.eval(`raceBoardClose(); true;`); await frames(T, 3);
+            const after = await cnt(8);
             if (!(open0 > 0 && covered === 0 && covered2 === 0 && after > 0)) bad.push('面板盖住时应不画、关了恢复 ' + JSON.stringify([open0, covered, covered2, after]));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -1268,27 +1270,36 @@ async function enterExit(tab, key) {
                 return JSON.stringify([Math.round(s * 1000), n, camera.position.x.toFixed(3), camera.position.z.toFixed(3), camera.rotation.y.toFixed(3), typeof timeSecs === 'number' ? timeSecs.toFixed(1) : 0, nums]); })()`;
             for (const key of Object.keys(MODES).filter((k) => !process.env.R1_MODES || process.env.R1_MODES.split(',').indexOf(k) >= 0)) {
                 const before = T.errors.length;
-                await T.eval(`${HIDE} selectGameMode('${key}'); ${MODES[key].start}; true;`); await W(3500);
+                await T.eval(`${HIDE} selectGameMode('${key}'); ${MODES[key].start}; true;`);
+                if (!(await until(T, `chatActiveModeKey() === '${key}'`, 30000))) bad.push(key + ' 模式没开起来（' + await T.eval('chatActiveModeKey()') + '）'); await frames(T, 8);   // 等模式真的开起来、画了几帧（不是等固定时间）
                 await T.eval(`${HIDE} true;`);
-                await T.eval(`keys['w'] = true; true;`); const m0 = await T.eval(SIG); await W(900); const m1 = await T.eval(SIG); await T.eval(`keys['w'] = false; true;`);
-                const moves = m0 !== m1;
-                await T.eval(`introPush('测试卡片', '一二三'); true;`); await W(700);
-                const open = await T.eval(`introOpen && ${MODAL} === '测试卡片'`);
+                // 没有卡片时画面会动：按着 W，等签名真的变了（最多 30 秒），不是睡 0.9 秒就看
+                await T.eval(`keys['w'] = true; true;`); const m0 = await T.eval(SIG); const moves = await until(T, `(${SIG}) !== ${JSON.stringify(m0)}`, 30000); await T.eval(`keys['w'] = false; true;`);
+                await T.eval(`introPush('测试卡片', '一二三'); true;`);
+                const open = await until(T, `introOpen && ${MODAL} === '测试卡片'`, 15000);
                 // 先等游戏真的停住了（卡片刚弹出来放了 2 帧才停；CI 上帧率低，这 2 帧可能要一会儿）
-                for (let i = 0; i < 40 && (await T.eval('introFreezeFrames')) < 2; i++) await W(250);
-                await W(400);
+                await until(T, `introFreezeFrames >= 2`, 30000);
+                // 真的停住了才算：连续两次取样（中间隔几帧）签名一样（最多 40 轮），不是睡一会儿就认为停了
+                for (let i = 0, prev = await T.eval(SIG); i < 40; i++) { await frames(T, 4); const cur = await T.eval(SIG); if (cur === prev) break; prev = cur; }
                 await T.eval(`keys['w'] = true; mouseLook = true; window.dispatchEvent(new MouseEvent('mousemove', { movementX: 60, movementY: 0 })); true;`);
-                const a = await T.eval(SIG); await W(1500); await T.eval(`window.dispatchEvent(new MouseEvent('mousemove', { movementX: 60, movementY: 0 })); true;`); const b = await T.eval(SIG);
+                const a = await T.eval(SIG); await frames(T, 15); await T.eval(`window.dispatchEvent(new MouseEvent('mousemove', { movementX: 60, movementY: 0 })); true;`); const b = await T.eval(SIG);
                 await T.eval(`keys['w'] = false; mouseLook = false; true;`);
                 if (!open) bad.push(key + ' 卡片没开');
                 if (a !== b) { const pa = JSON.parse(a), pb = JSON.parse(b); bad.push(key + ' 卡片开着还在动 ' + pa.slice(0, 6).join(',') + ' → ' + pb.slice(0, 6).join(',') + ' 变化的字段 ' + pb[6].filter((x, i) => x !== pa[6][i]).join(';')); }
-                await clickModal(T, 0); await W(900);
-                for (let i = 0; i < 4 && (await T.eval(MODAL)) !== null; i++) { await clickModal(T, 0); await W(500); }   // 模式自己排着的新手卡片也点掉
-                const c0 = await T.eval(SIG); await W(700); const c1 = await T.eval(SIG);
-                if (moves && c0 === c1) bad.push(key + ' 关了卡片没接着动');
+                await clickModal(T, 0); await frames(T, 5);
+                for (let i = 0; i < 4 && (await T.eval(MODAL)) !== null; i++) { await clickModal(T, 0); await frames(T, 3); }   // 模式自己排着的新手卡片也点掉
+                // 关了卡片要接着动：按着 W，等签名真的变了（卡片关掉后要先放行几帧，机器忙时慢，所以等条件，最多 30 秒）
+                await until(T, `!introOpen`, 15000);
+                await T.eval(`keys['w'] = true; true;`); const c0 = await T.eval(SIG);
+                const resumed = await until(T, `(${SIG}) !== ${JSON.stringify(c0)}`, 30000);
+                await T.eval(`keys['w'] = false; true;`);
+                if (moves && !resumed) bad.push(key + ' 关了卡片没接着动');
                 if (!moves) bad.push(key + '（测试本身：没有卡片时画面也不动，这项没测到）');
                 if (await T.eval('introOpen')) bad.push(key + ' 关了 introOpen 还是 true');
-                await T.eval(`${HIDE} ${MODES[key].exit}; true;`); await W(1500); await T.eval(`${HIDE} true;`);
+                await T.eval(`${HIDE} ${MODES[key].exit}; true;`);
+                // 等这个模式真的退干净了再进下一个（惊魂夜的退出是先弹结算框、再过一会儿自己点"返回大厅"，机器忙时下一个模式已经开了它才点，会把新模式拆掉）
+                await until(T, `chatActiveModeKey() === 'hub' && ${MODAL} === null && !(typeof night !== 'undefined' && night)`, 30000);
+                await frames(T, 10); await T.eval(`${HIDE} true;`);
                 if (T.errors.length > before) bad.push(key + ' 报错 ' + T.errors.slice(before, before + 1).join(''));
             }
             await T.close();
@@ -2818,18 +2829,19 @@ async function enterExit(tab, key) {
             if (c.seesMe || !c.seesDecoy) bad.push('隐身时追捕者还看得见本人/看不见假身 ' + JSON.stringify(c));
             if (!c.lock || !c.mesh) bad.push('正追着我的追捕者没转去追假身/假身没画出来 ' + JSON.stringify(c));
             // 冷却中再按不出新的
-            await T.eval(`nightSurvivorSkill(); true;`);
+            // 假身只有 3 秒（游戏时间），下面几步要用它，先把剩余时间拨满，免得机器忙时中途到期收走
+            await T.eval(`night.decoys.forEach(function (d) { d.left = 3; }); nightSurvivorSkill(); true;`);
             if (await T.eval(`night.decoys.length`) !== 1) bad.push('冷却中又出了一个假身');
             // 追捕者打假身：假身没了、人没掉血
-            const hit = JSON.parse(await T.eval(`(function(){ const me = night.survivors[0], h = night.hunter, d = night.decoys[0];
+            const hit = JSON.parse(await T.eval(`(function(){ if (!night.decoys[0]) { night.c3Cd = 0; nightSurvivorSkill(); } night.decoys[0].left = 3; const me = night.survivors[0], h = night.hunter, d = night.decoys[0];
                 h.p.set(d.p.x - 6, d.p.y, d.p.z); h.faceA = 0; h.recover = 0; h.lockOn = d; h.carrying = null; h.hookPull = null; h.hookMove = null; night.friendly = false;
                 for (let i = 0; i < 20 && !d.out; i++) { h.recover = 0; nightHunterAI(0.05); }
                 return JSON.stringify({ popped: d.out, hp: me.hp, down: me.downed }); })()`));
             if (!hit.popped || hit.hp !== 2 || hit.down) bad.push('追捕者打到假身：假身该消失、人不掉血 ' + JSON.stringify(hit));
             if (!(await until(T, `night.decoys.length === 0`, 5000))) bad.push('假身没被收走');
             // 假身 3 秒、隐身 2 秒（时间按局内时钟走，帧率低时真实时间会更长，所以量刚放出来时剩多少，再把时间拨到只剩一点看它会不会收走）
-            await T.eval(`night.c3Cd = 0; night.survivors[0].invisUntil = 0; nightSurvivorSkill(); true;`);
-            const tm = JSON.parse(await T.eval(`JSON.stringify({ left: night.decoys[0].left, inv: night.survivors[0].invisUntil - performance.now() })`));
+            // 放技能和量时长放在同一次执行里：隐身是按真实时钟（performance.now）算的，分两次执行中间机器忙会白白过掉几百毫秒，就量成 1608 了
+            const tm = JSON.parse(await T.eval(`(function(){ night.c3Cd = 0; night.survivors[0].invisUntil = 0; nightSurvivorSkill(); return JSON.stringify({ left: night.decoys[0].left, inv: night.survivors[0].invisUntil - performance.now() }); })()`));
             if (tm.left < 2.5 || tm.left > 3.01) bad.push('假身时长 ' + tm.left);
             if (tm.inv < 1700 || tm.inv > 2050) bad.push('隐身时长 ' + tm.inv);
             await T.eval(`night.decoys[0].left = 0.05; true;`);
@@ -5736,6 +5748,68 @@ async function enterExit(tab, key) {
             report('IND12 作者玩出来的 bug：做桶和剪刀、悠闲升级成硬核（确认窗）、左键按准星（工具优先、拿对东西才喂／剪毛、30° 外不选）', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('U1')) {
+            // U1：仓库在触屏上——在有物品的格子上往上滑是滚动列表、物品不动；长按后拖动把物品挪到目标格；点一下是选中；
+            // 鼠标拖放跟原来一样；宽屏上列表比原来的 280 像素宽
+            const bad = [];
+            const A = await openTab(chrome, url);   // 自己的标签页（不依赖前面检查留下的状态，SMOKE_ONLY='U1' 也能单独跑）
+            const fill = `(function(){ let g = []; for (let i = 0; i < 80; i++) g.push(L('杯' + i)); return g; })()`;
+            await A.eval(GARAGE_SETUP(`Array(6).fill(null)`, fill, 0));
+            const names = `gState.garage.slice(0, 80).map(function (q) { return q && q.n; }).join(',')`;
+            const n0 = await A.eval(names);
+            const box = await A.eval(`(function(){ let r = document.getElementById('garage-stash-container').getBoundingClientRect(); return [r.width, r.height]; })()`);
+            if (!(box[0] > 300)) bad.push('宽屏列表还是窄的 ' + box[0]);
+            // 1. 上滑：列表滚动，物品没动
+            // 电脑视口下浏览器不把合成的触摸滑动当滚动手势（pointercancel 发了、scrollTop 不动，跟机器忙不忙无关）：换成触屏设备的视口再滑，位置也在这之后量
+            await A.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+            await A.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: true });
+            await frames(A, 5);
+            const c0 = await mouseAt(A, GAR_SLOT(4));
+            const swipe = []; for (let i = 0; i <= 12; i++) swipe.push([c0[0], c0[1] - i * 14]);
+            const tpU = (type, p) => A.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
+            // 游戏的长按计时器是 300 毫秒真实时间：按下后第一下移动要紧接着发（超过 10 像素就取消长按），不能先等帧，否则机器忙时拖过 300 毫秒就变成"拿起来"、不滚动。
+            // 后面的移动每步等 2 帧；滚动由浏览器处理，等 scrollTop 真的变了（最多 20 秒），不靠固定等待。
+            await tpU('touchStart', swipe[0]); await tpU('touchMove', swipe[1]);
+            for (let i = 2; i < swipe.length; i++) { await frames(A, 2); await tpU('touchMove', swipe[i]); }
+            await tpU('touchEnd', null);
+            const scrolled = await until(A, `document.getElementById('garage-stash-container').scrollTop > 20`, 20000);
+            const st = await A.eval(`document.getElementById('garage-stash-container').scrollTop`);
+            if (!scrolled) bad.push('上滑没滚动 scrollTop=' + st);
+            if ((await A.eval(names)) !== n0) bad.push('上滑把物品挪了');
+            // 滑完还原成电脑视口、关掉触屏模拟：后面的长按、点一下、鼠标拖放跟原来一样在电脑视口里测
+            await A.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+            await A.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+            await frames(A, 5);
+            // 2. 长按后拖：格子变样子，物品移到目标格
+            await A.eval(`document.getElementById('garage-stash-container').scrollTop = 0; true;`); await W(100);
+            const from = await mouseAt(A, GAR_SLOT(1)), to = await mouseAt(A, GAR_SLOT(6));
+            const tp = (type, p) => A.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
+            await tp('touchStart', from);
+            // 长按由游戏自己的计时器触发：手指不动，等"拿起来"这个状态真的出现（最多 15 秒）
+            const lifted = await until(A, `document.querySelector('${GAR_SLOT(1)}').classList.contains('lifting') && isDragging`, 15000);
+            if (!lifted) bad.push('长按后没拿起来');
+            for (let i = 1; i <= 8; i++) { await tp('touchMove', [from[0] + (to[0] - from[0]) * i / 8, from[1] + (to[1] - from[1]) * i / 8]); await frames(A, 1); }
+            await tp('touchEnd', null);
+            await until(A, `gState.garage[1].n === '杯6'`, 15000);
+            const sw = await A.eval(`gState.garage[1].n + ',' + gState.garage[6].n`);
+            if (sw !== '杯6,杯1') bad.push('长按拖动没换过去 ' + sw);
+            // 3. 点一下：选中
+            const t3 = await mouseAt(A, GAR_SLOT(2));
+            await touchPath(A, [t3], 0);
+            await until(A, `gState.selectedContainer === 'garage' && gState.selectedSlot === 2`, 15000);
+            const sel = await A.eval(`gState.selectedContainer + ':' + gState.selectedSlot`);
+            if (sel !== 'garage:2') bad.push('点一下没选中 ' + sel);
+            // 4. 鼠标拖放还是原来那样（按下就能拖）
+            await mouseDrag(A, GAR_SLOT(3), GAR_SLOT(4));
+            await until(A, `gState.garage[3].n === '杯4'`, 15000);
+            const ms = await A.eval(`gState.garage[3].n + ',' + gState.garage[4].n`);
+            if (ms !== '杯4,杯3') bad.push('鼠标拖放 ' + ms);
+            await A.eval(`${HIDE} gState.garage = Array(200).fill(null); gState.inv = Array(6).fill(null); nav('screen-lobby'); true;`);
+            if (A.errors.length) bad.push(A.errors.slice(0, 2).join(' / '));
+            await A.close();
+            report('U1 仓库触屏：上滑滚动不挪东西、长按拖、点一下选中；鼠标照旧；宽屏列表变宽', bad.length === 0, bad.join(' / '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
@@ -6249,49 +6323,6 @@ async function enterExit(tab, key) {
             if (r !== 0) bad.push('撤离失败腰包还在 ' + r);
             await A.eval(`${HIDE} returnToGarageFromOver(); gState.inv = Array(6).fill(null); gState.garage = Array(200).fill(null); nav('screen-lobby'); true;`);
             report('H14 腰包自己装东西：容量、展开收起、不能套娃、进图/上交/撤离/扔/卖/整理', bad.length === 0 && A.errors.length === before, bad.join(' / ') + A.errors.slice(before, before + 2).join(' / '));
-        }
-
-        {
-            // U1：仓库在触屏上——在有物品的格子上往上滑是滚动列表、物品不动；长按后拖动把物品挪到目标格；点一下是选中；
-            // 鼠标拖放跟原来一样；宽屏上列表比原来的 280 像素宽
-            const bad = [];
-            const fill = `(function(){ let g = []; for (let i = 0; i < 80; i++) g.push(L('杯' + i)); return g; })()`;
-            await A.eval(GARAGE_SETUP(`Array(6).fill(null)`, fill, 0));
-            const names = `gState.garage.slice(0, 80).map(function (q) { return q && q.n; }).join(',')`;
-            const n0 = await A.eval(names);
-            const box = await A.eval(`(function(){ let r = document.getElementById('garage-stash-container').getBoundingClientRect(); return [r.width, r.height]; })()`);
-            if (!(box[0] > 300)) bad.push('宽屏列表还是窄的 ' + box[0]);
-            // 1. 上滑：列表滚动，物品没动
-            const c0 = await mouseAt(A, GAR_SLOT(4));
-            const swipe = []; for (let i = 0; i <= 12; i++) swipe.push([c0[0], c0[1] - i * 14]);
-            await touchPath(A, swipe, 0);
-            // 滚动由浏览器的手势处理，机器忙的时候会晚一点才到位：最多等 1.5 秒
-            let st = 0;
-            for (let i = 0; i < 15 && !(st > 20); i++) { st = await A.eval(`document.getElementById('garage-stash-container').scrollTop`); if (!(st > 20)) await W(100); }
-            if (!(st > 20)) bad.push('上滑没滚动 scrollTop=' + st);
-            if ((await A.eval(names)) !== n0) bad.push('上滑把物品挪了');
-            // 2. 长按后拖：格子变样子，物品移到目标格
-            await A.eval(`document.getElementById('garage-stash-container').scrollTop = 0; true;`); await W(100);
-            const from = await mouseAt(A, GAR_SLOT(1)), to = await mouseAt(A, GAR_SLOT(6));
-            const tp = (type, p) => A.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
-            await tp('touchStart', from); await W(450);
-            const lifted = await A.eval(`document.querySelector('${GAR_SLOT(1)}').classList.contains('lifting') && isDragging`);
-            if (!lifted) bad.push('长按后没拿起来');
-            for (let i = 1; i <= 8; i++) { await tp('touchMove', [from[0] + (to[0] - from[0]) * i / 8, from[1] + (to[1] - from[1]) * i / 8]); await W(16); }
-            await tp('touchEnd', null); await W(300);
-            const sw = await A.eval(`gState.garage[1].n + ',' + gState.garage[6].n`);
-            if (sw !== '杯6,杯1') bad.push('长按拖动没换过去 ' + sw);
-            // 3. 点一下：选中
-            const t3 = await mouseAt(A, GAR_SLOT(2));
-            await touchPath(A, [t3], 0);
-            const sel = await A.eval(`gState.selectedContainer + ':' + gState.selectedSlot`);
-            if (sel !== 'garage:2') bad.push('点一下没选中 ' + sel);
-            // 4. 鼠标拖放还是原来那样（按下就能拖）
-            await mouseDrag(A, GAR_SLOT(3), GAR_SLOT(4));
-            const ms = await A.eval(`gState.garage[3].n + ',' + gState.garage[4].n`);
-            if (ms !== '杯4,杯3') bad.push('鼠标拖放 ' + ms);
-            await A.eval(`${HIDE} gState.garage = Array(200).fill(null); gState.inv = Array(6).fill(null); nav('screen-lobby'); true;`);
-            report('U1 仓库触屏：上滑滚动不挪东西、长按拖、点一下选中；鼠标照旧；宽屏列表变宽', bad.length === 0, bad.join(' / '));
         }
 
         {
