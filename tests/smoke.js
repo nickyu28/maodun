@@ -4945,8 +4945,10 @@ async function enterExit(tab, key) {
                 // 草木灰：大火每秒烧 2，烧掉 120 燃料出 1 份
                 await T.eval(`(function(){ indBagAdd('wood', 20); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(3); indPanelClose(); indAdvance(62); })(); true;`);
                 if (!((await T.eval(`ind.base.stove.out.ash || 0`)) >= 1)) bad.push('烧柴没出草木灰 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
-                // 玻璃瓶：沙子 2 + 草木灰 1，大火
+                // 玻璃：沙子 2 + 草木灰 1，大火出 1 玻璃板；玻璃板再烧出 2 个玻璃瓶
                 await T.eval(`(function(){ indStoveTakeAll(); indPanelClose(); indBagAdd('sand', 2); indStovePut('sand', 1); indStovePut('sand', 1); indStovePut('ash', 1); indPanelClose(); indAdvance(25); })(); true;`);
+                if ((await T.eval(`ind.base.stove.out.glass_plate || 0`)) !== 1) bad.push('沙子 + 草木灰烧不出玻璃板 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`(function(){ indStoveTakeAll(); indPanelClose(); indStovePut('glass_plate', 1); indPanelClose(); indAdvance(12); })(); true;`);
                 if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('做不出玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 await T.eval(`indStoveTakeAll(); indPanelClose(); true;`);
                 const place = (k, x, z) => T.eval(`(function(){ indBagAdd('${k}', 1); indTeleport(${x}, ${z}); indLookAt(${x}, ${z} - 5); indSelect('${k}'); indUse(); return ind.base.devs[ind.base.devs.length - 1].id; })()`);
@@ -5046,7 +5048,7 @@ async function enterExit(tab, key) {
                 r = JSON.parse(await eat('pickle', 34));
                 if (r.f !== 65 || r.bag.bottle !== 1 || r.bag.pickle || !near(r.t, 34)) bad.push('吃腌萝卜不对 ' + JSON.stringify(r));
                 // 悠闲世界：沙子 + 草木灰 1000°C 出玻璃瓶，腌萝卜也做得了，汤也加体温
-                await T.eval(`ind.base.rule = 'casual'; ind.base.stove = { items: { sand: 2, ash: 1 }, out: {}, fuel: 500, fire: 3, temp: 1200, cook: null }; indAdvance(25); true;`);
+                await T.eval(`ind.base.rule = 'casual'; ind.base.stove = { items: { sand: 2, ash: 1 }, out: {}, fuel: 500, fire: 3, temp: 1200, cook: null }; indAdvance(25); ind.base.stove.items = { glass_plate: 1 }; indAdvance(12); true;`);
                 if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('悠闲做不出玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 await T.eval(`ind.bag = {}; indBagAdd('radish', 2); indBagAdd('salt', 1); indBagAdd('bottle', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pickle'; })); true;`);
                 if ((await T.eval(`ind.bag.pickle || 0`)) !== 1) bad.push('悠闲做不出腌萝卜');
@@ -5078,19 +5080,19 @@ async function enterExit(tab, key) {
                 await T.eval(`${HIDE} indSetRule('casual'); ind.base.surv.food = 100; ind.base.surv.water = 100; ind.base.surv.temp = 37; true;`);
                 // ── 玻璃暖棚 ──
                 const gi = `IND_CRAFT.findIndex(function (r) { return r.glass; })`, wi = `IND_CRAFT.findIndex(function (r) { return r.gh; })`;
-                await T.eval(`ind.bag = {}; indBagAdd('bottle', 10); indBagAdd('wood', 6); true;`);
+                await T.eval(`ind.bag = {}; indBagAdd('glass_plate', 6); indBagAdd('wood', 6); true;`);
                 if (await T.eval(`indCraft(${gi})`) || await T.eval(`ind.base.glass`)) bad.push('没有木暖棚也能升级玻璃暖棚');
                 await T.eval(`ind.bag = {}; indBagAdd('wood', 10); indCraft(${wi}); true;`);
                 if (!(await T.eval(`ind.base.gh && !ind.base.glass && indInGh(-25, 0) && !indInGh(-18, 0)`))) bad.push('木暖棚范围不对');
-                await T.eval(`ind.bag = {}; indBagAdd('bottle', 9); indBagAdd('wood', 6); true;`);
-                if (await T.eval(`indCraft(${gi})`)) bad.push('9 个玻璃瓶也能升级');
-                await T.eval(`ind.bag = {}; indBagAdd('bottle', 10); indBagAdd('wood', 5); true;`);
+                await T.eval(`ind.bag = {}; indBagAdd('glass_plate', 5); indBagAdd('wood', 6); true;`);
+                if (await T.eval(`indCraft(${gi})`)) bad.push('5 块玻璃板也能升级');
+                await T.eval(`ind.bag = {}; indBagAdd('glass_plate', 6); indBagAdd('wood', 5); true;`);
                 if (await T.eval(`indCraft(${gi})`)) bad.push('5 根木头也能升级');
-                await T.eval(`ind.bag = {}; indBagAdd('bottle', 10); indBagAdd('wood', 6); true;`);
+                await T.eval(`ind.bag = {}; indBagAdd('glass_plate', 6); indBagAdd('wood', 6); true;`);
                 if (!(await T.eval(`indCraft(${gi})`))) bad.push('原料够了升级不了');
-                if (await T.eval(`!!ind.bag.bottle || !!ind.bag.wood`)) bad.push('升级没扣原料 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if (await T.eval(`!!ind.bag.glass_plate || !!ind.bag.wood`)) bad.push('升级没扣原料 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 if (!(await T.eval(`ind.base.glass && indInGh(-18, 0) && indInGh(-17, 0) && indInGh(-28, 18) && !indInGh(-16.5, 0) && !indInGh(-29, 0)`))) bad.push('玻璃暖棚范围不对');
-                await T.eval(`ind.bag = {}; indBagAdd('bottle', 10); indBagAdd('wood', 6); true;`);
+                await T.eval(`ind.bag = {}; indBagAdd('glass_plate', 6); indBagAdd('wood', 6); true;`);
                 if (await T.eval(`indCraft(${gi})`)) bad.push('玻璃暖棚能重复做');
                 // 冬天露天不长，玻璃棚里（x -18）长、木棚里（x -25）长
                 await T.eval(`ind.base.clock = 9 * IND_DAY + 10; true;`);
@@ -5880,6 +5882,90 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND17 面板：同一样东西一行写总数、全放、炉子放满一炉（按配方放够最多份数）、工作台做最多', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND18')) {
+            // IND18 草木灰和玻璃板：篝火烧掉 120 燃料攒 1 份草木灰、灭了掉在原地能捡（睡觉时烧完也掉，远征的篝火不留）；草木灰右键给有作物的农田施肥（这一季长得快 50%、和浇水叠加、
+            // 不能重复施、收获后失效、田上有小标记、存档）；玻璃板：2 沙子 + 1 草木灰 1000°C、3 沙子 1700°C（硬核），玻璃板再烧出 2 个玻璃瓶；玻璃暖棚用 6 玻璃板 + 6 木头
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; window.__oldFlash = indFlash; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
+                // ── 篝火出灰 ──
+                await T.eval(`ind.base.ground = []; ind.base.fires = [{ x: 14, z: 8, fuel: 120, ashT: 0 }]; ind.fireDirty = true; indAdvance(119); true;`);
+                if (await T.eval(`ind.base.ground.length !== 0`)) bad.push('篝火还没灭就掉灰了');
+                await T.eval(`indAdvance(2); true;`);
+                let gr = await J(`ind.base.ground.map(function (g) { return [g.k, Math.round(g.x), Math.round(g.z)]; })`);
+                if (gr.length !== 1 || gr[0][0] !== 'ash' || Math.abs(gr[0][1] - 14) > 1 || Math.abs(gr[0][2] - 8) > 1) bad.push('篝火灭了应该在原地掉 1 份草木灰 ' + JSON.stringify(gr));
+                await T.eval(`ind.base.ground = []; ind.base.fires = [{ x: 14, z: 8, fuel: 300, ashT: 0 }]; indAdvance(305); true;`);
+                if ((await T.eval(`ind.base.ground.filter(function (g) { return g.k === 'ash'; }).length`)) !== 2) bad.push('烧掉 300 燃料应该攒 2 份（不到 120 的零头不要） ' + await T.eval(`ind.base.ground.length`));
+                await T.eval(`indPickItem(ind.base.ground[0]); true;`);
+                if ((await T.eval(`ind.bag.ash`)) !== 1) bad.push('草木灰捡不起来');
+                // 睡觉的时候烧完也掉灰
+                await T.eval(`ind.bag = {}; ind.base.ground = []; ind.base.fires = [{ x: 14, z: 8, fuel: 600, ashT: 0 }]; ind.base.surv.energy = 10; indSleep(); true;`);
+                if ((await T.eval(`ind.base.ground.filter(function (g) { return g.k === 'ash'; }).length`)) < 4) bad.push('睡觉时篝火烧完应该掉 5 份灰 ' + await T.eval(`ind.base.ground.length`));
+                // 远征的篝火不留灰
+                const ash0 = await T.eval(`ind.base.ground.filter(function (g) { return g.k === 'ash'; }).length`);
+                await T.eval(`${HIDE} indGoTrip(2024); ind.tripFires = [{ x: 1, z: 1, fuel: 120, ashT: 0 }]; indAdvance(125); true;`);
+                if (await T.eval(`ind.base.ground.filter(function (g) { return g.k === 'ash'; }).length`) !== ash0) bad.push('远征的篝火不该留灰');
+                await T.eval(`indGoBase(false); true;`);
+                // ── 肥料 ──
+                await T.eval(`ind.base.fires = []; ind.base.ground = []; ind.base.crops = [{ k: 'wheat', x: -20, z: 0, g: 0, wet: 1e9, times: 0 }, { k: 'wheat', x: -20, z: 2, g: 0, wet: 1e9, times: 0 }, { k: 'wheat', x: -20, z: 4, g: 0, wet: 0, times: 0 }, { k: 'wheat', x: -20, z: 6, g: 0, wet: 0, times: 0 }]; ind.bag = { ash: 3 }; true;`);
+                const fert = (z) => T.eval(`indTeleport(-18.2, ${z}); indLookAt(-20, ${z}); indSelect('ash'); indUse(); true;`);   // 站在田旁边朝它看，免得前面一格挡住
+                await fert(0);
+                if (!(await T.eval(`ind.base.crops[0].fert === true && ind.bag.ash === 2`))) bad.push('草木灰施肥没用上 ' + await T.eval(`JSON.stringify([ind.base.crops[0], ind.bag])`));
+                await T.eval(`window.__fl = []; true;`); await fert(0);
+                if (!(await T.eval(`ind.bag.ash === 2 && __fl.indexOf('已经施过肥了') >= 0`))) bad.push('不能重复施肥 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
+                await fert(4);
+                await T.eval(`indAdvance(40); true;`);
+                const gg = await J(`ind.base.crops.map(function (c) { return Math.round(c.g * 10) / 10; })`);
+                if (Math.abs(gg[0] - 60) > 1 || Math.abs(gg[1] - 40) > 1 || Math.abs(gg[2] - 30) > 1 || Math.abs(gg[3] - 20) > 1) bad.push('施肥长得快 50%，和浇水叠加（浇水施肥 60、浇水 40、施肥没浇水 30、都没有 20） ' + JSON.stringify(gg));
+                // 小标记
+                await T.eval(`ind.cropDirty = true; ind.cropT = 0; indSyncCrops(); true;`);
+                if ((await T.eval(`ind.fertMesh.count`)) !== 2) bad.push('施过肥的田上要有小标记（2 块） ' + await T.eval(`ind.fertMesh.count`));
+                // 熟了的不用施肥；收获后失效；番茄每结一次算一季
+                await T.eval(`ind.base.crops = [{ k: 'tomato', x: -20, z: 0, g: 0, wet: 1e9, times: 0, fert: true }, { k: 'wheat', x: -20, z: 2, g: 120, wet: 0, times: 0 }]; window.__fl = []; true;`);
+                await fert(2);
+                if (!(await T.eval(`!ind.base.crops[1].fert && ind.bag.ash === 1 && __fl.some(function (t) { return /熟了/.test(t); })`))) bad.push('熟了的不该施肥 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
+                await T.eval(`ind.base.crops[0].g = IND_CROPS.tomato.grow; indHarvest(ind.base.crops[0]); true;`);
+                if (!(await T.eval(`ind.base.crops[0] && ind.base.crops[0].k === 'tomato' && ind.base.crops[0].fert === false && ind.base.crops[0].times === 1`))) bad.push('番茄收一次，肥料失效、作物还在 ' + await T.eval(`JSON.stringify(ind.base.crops)`));
+                await T.eval(`ind.bag = { ash: 1 }; true;`); await fert(0);
+                if (!(await T.eval(`ind.base.crops[0].fert === true`))) bad.push('番茄下一季能再施肥');
+                // 存档
+                await T.eval(`indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
+                const sv = await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify(b.crops.map(function (c) { return !!c.fert; }))); }); })`).then(JSON.parse);
+                if (sv.join() !== 'true,false') bad.push('肥料存档不对 ' + sv.join());
+                // ── 玻璃板 ──
+                const stoveSet = (items, fire, temp) => T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null, spout: [] }; true;`);
+                await stoveSet({ sand: 2, ash: 1 }, 3, 1200); await T.eval(`indAdvance(19); true;`);
+                if (await T.eval(`!!ind.base.stove.out.glass_plate`)) bad.push('玻璃板 19 秒就好了');
+                await T.eval(`indAdvance(2); true;`);
+                let o = await J(`ind.base.stove.out`);
+                if (o.glass_plate !== 1 || o.bottle) bad.push('2 沙子 + 1 草木灰应该出 1 块玻璃板 ' + JSON.stringify(o));
+                await stoveSet({ sand: 2, ash: 1 }, 2, 600); await T.eval(`indAdvance(40); true;`);
+                if (await T.eval(`!!ind.base.stove.out.glass_plate`)) bad.push('600°C 也烧出玻璃板');
+                await stoveSet({ glass_plate: 1 }, 2, 600); await T.eval(`indAdvance(11); true;`);
+                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('1 块玻璃板烧出 2 个玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 3 沙子 1700°C（电炉）只给硬核
+                await T.eval(`window.__oldBoost = indElecBoost; indElecBoost = function () { return true; }; true;`);
+                await stoveSet({ sand: 3 }, 3, 1800); await T.eval(`indAdvance(31); true;`);
+                if ((await T.eval(`ind.base.stove.out.glass_plate || 0`)) !== 1) bad.push('3 沙子 1700°C 应该出 1 块玻璃板 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`ind.base.rule = 'casual'; true;`); await stoveSet({ sand: 3 }, 3, 1800); await T.eval(`indAdvance(31); true;`);
+                if (await T.eval(`!!ind.base.stove.out.glass_plate`)) bad.push('悠闲世界不该有 3 沙子的玻璃板');
+                await stoveSet({ sand: 2, ash: 1 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
+                if ((await T.eval(`ind.base.stove.out.glass_plate || 0`)) !== 1) bad.push('悠闲也能烧玻璃板');
+                await T.eval(`indElecBoost = window.__oldBoost; ind.base.rule = 'hard'; true;`);
+                // 配方查询
+                await T.eval(`indPanelBook('玻璃板'); true;`);
+                if (!/沙子×2 \+ 草木灰×1 → 玻璃板×1/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('配方查询搜不到玻璃板');
+                await T.eval(`indPanelClose(); indFlash = window.__oldFlash; indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND18 草木灰和玻璃板：篝火出灰、草木灰当肥料（快 50%、叠加浇水、不重复、收获失效）、玻璃板和玻璃瓶、玻璃暖棚用玻璃板', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
