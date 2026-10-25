@@ -4404,6 +4404,91 @@ async function enterExit(tab, key) {
         }
 
         // ── 猫盾工业（硬核模式，js/19-industry.js）：检查名字都以 IND 开头 ──
+        if (want('IND0')) {
+            // IND0 猫盾工业的数据体检（以后一直保留，只用数据表推导，不玩画面）：
+            // 1) 从新号能拿到所有东西：从起步物资 + 空手出发，反复用工具等级够的资源点、配方（含温度：没风箱和电炉到不了 1538°C）、作物、动物产物往里加，直到不再变；悠闲、硬核各推一遍；
+            // 2) 每样东西都有用：至少是某个配方、驯养、种植的原料，或能吃喝、能穿、是工具、能放下当设备或篝火。标了 later 的物品（IND_ITEMS_RAW 里的 later 字段）两条都跳过，汇报里列出来
+            const bad = [];
+            const T = await openTab(chrome, url, {});   // 不带 ?hcdebug=1：别把「藏起来」的状态（存在浏览器里）弄坏，IND1 要看
+            const rep = JSON.parse(await T.eval(`(function(){
+                const RAW = typeof IND_ITEMS_RAW !== 'undefined' ? IND_ITEMS_RAW : IND_ITEMS, out = { casual: null, hard: null, useless: [], later: [] };
+                const later = {}; Object.keys(RAW).forEach(function (k) { if (RAW[k].later) { later[k] = RAW[k].later; out.later.push(k + '（' + RAW[k].later + '）'); } });
+                function reach(rule) {
+                    const hard = rule === 'hard', have = {}, why = {};
+                    Object.keys(IND_START_BOX).forEach(function (k) { have[k] = 1; });
+                    const add = function (k) { if (!have[k]) { have[k] = 1; ch = true; } };
+                    let ch = true, guard = 0;
+                    const tools = function () { let t = 0; Object.keys(have).forEach(function (k) { if (RAW[k] && RAW[k].tool) t = Math.max(t, RAW[k].tool); }); return t; };
+                    const power = function () { return (have.dev_bank || have.dev_gen) && have.wire; };
+                    while (ch && guard++ < 60) {
+                        ch = false;
+                        const tl = tools();
+                        // 资源点（哪个地貌刷什么、稿子够不够）
+                        const spawn = {}; Object.keys(IND_BIOMES).forEach(function (b) { Object.keys(IND_BIOMES[b].res).forEach(function (k) { if (!hard && !IND_CASUAL_RES[k]) return; spawn[k] = 1; }); });
+                        Object.keys(IND_NODES).forEach(function (k) {
+                            if (!spawn[k] || IND_NODES[k].tool > tl) return;
+                            if (k === 'seeds') IND_SEED_KINDS.forEach(add); else add(k);
+                        });
+                        // 水
+                        if (have.bucket) { add('water_raw'); add('water_sea'); }
+                        // 灶台：燃料 + 温度
+                        const fuel = have.wood || have.charcoal || have.coal;
+                        let maxT = 1200;
+                        const bellows = IND_CRAFT.some(function (r) { return r.bellows && (!r.hard || hard) && Object.keys(r.in).every(function (k) { return have[k]; }); });
+                        if (bellows) maxT = 1600;
+                        if (have.dev_furnace && power()) maxT = 1800;
+                        if (fuel) { add('ash'); }
+                        IND_RECIPES.forEach(function (r) {
+                            if (r.hard && !hard) return;
+                            if (!fuel || r.minT > maxT) return;
+                            if (!Object.keys(r.in).every(function (k) { return have[k]; })) return;
+                            Object.keys(r.out).forEach(function (k) { add(k); if (RAW[k] && RAW[k].hot) add(RAW[k].hot); });
+                            if (r.burnT) add('char');   // 火开太大烧焦就是焦炭
+                        });
+                        // 工作台
+                        IND_CRAFT.forEach(function (r) {
+                            if (r.hard && !hard) return;
+                            if (!Object.keys(r.in).every(function (k) { return have[k]; })) return;
+                            if (r.out) add(r.out);
+                        });
+                        // 作物
+                        Object.keys(IND_CROPS).forEach(function (k) { if (have['seed_' + k]) { add(k); add('seed_' + k); } });
+                        // 动物：喂它爱吃的就驯服；羊拿剪刀剪毛，牛拿空桶挤奶
+                        Object.keys(IND_ANIMALS).forEach(function (a) { if (!IND_ANIMALS[a].food.some(function (f) { return have[f]; })) return; if (a === 'sheep' && have.shears) add('wool'); if (a === 'cow' && have.bucket) add('milk'); });
+                        // 电解槽
+                        if (hard && have.dev_el && power()) IND_EL_RECIPES.forEach(function (r) { if (Object.keys(r.in).every(function (k) { return have[k]; })) Object.keys(r.out).forEach(add); });
+                    }
+                    return have;
+                }
+                // 硬核：所有东西都要拿得到；悠闲：悠闲能做的配方、喂养、种植用到的和做出来的东西都要拿得到（冶炼、电这些本来就不给悠闲）
+                const hh = reach('hard'), cc = reach('casual'), need = {};
+                out.hard = Object.keys(RAW).filter(function (k) { return !hh[k] && !later[k]; });
+                IND_RECIPES.concat(IND_CRAFT).forEach(function (r) {
+                    if (r.hard) return;
+                    Object.keys(r.in).forEach(function (k) { need[k] = 1; });
+                    if (r.out) Object.keys(typeof r.out === 'string' ? { [r.out]: 1 } : r.out).forEach(function (k) { need[k] = 1; });
+                });
+                Object.keys(IND_ANIMALS).forEach(function (a) { IND_ANIMALS[a].food.forEach(function (k) { need[k] = 1; }); });
+                out.casual = Object.keys(need).filter(function (k) { return RAW[k] && !cc[k] && !RAW[k].hot && !later[k]; });
+                // 每样东西都有用
+                const used = {};
+                IND_RECIPES.concat(IND_CRAFT, IND_EL_RECIPES).forEach(function (r) { Object.keys(r.in).forEach(function (k) { used[k] = 1; }); });
+                Object.keys(IND_ANIMALS).forEach(function (a) { IND_ANIMALS[a].food.forEach(function (k) { used[k] = 1; }); });
+                Object.keys(RAW).forEach(function (k) {
+                    const d = RAW[k]; if (later[k] || d.hot) return;
+                    if (used[k] || d.eat || d.wear || d.tool || d.dev || d.place || d.seed || d.fuel || d.use) return;
+                    out.useless.push(k + '（' + d.name + '）');
+                });
+                return JSON.stringify(out);
+            })()`));
+            if (rep.casual.length) bad.push('悠闲从新号拿不到：' + rep.casual.join('、'));
+            if (rep.hard.length) bad.push('硬核从新号拿不到：' + rep.hard.join('、'));
+            if (rep.useless.length) bad.push('没用的东西：' + rep.useless.join('、'));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND0 数据体检：悠闲和硬核都能从新号拿到所有东西、每样东西都有用' + (rep.later.length ? '　（later：' + rep.later.join('、') + '）' : ''), bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND1')) {
             // IND1 骨架：藏着时看不到、选不到、进不去；?hcdebug=1 能进基地；出门生成远征图（同一个种子同一张图）、采集、稿子等级、
             // 撤离圈站满 3 秒才回基地且东西进仓库箱；基地里放的东西存进 IndexedDB 读得回来；远征里回大厅身上的东西丢；进出 3 次资源不涨
@@ -4711,6 +4796,35 @@ async function enterExit(tab, key) {
                 const bk = await T.eval(`document.getElementById('ind-book-list').innerText`);
                 if (!/铁矿×1 → 铁锭（烫）×1/.test(bk) || !/铁稿/.test(bk) || /小麦种子/.test(bk)) bad.push('配方查询搜"铁"不对 ' + bk.slice(0, 200));
                 await T.eval(`indPanelClose(); true;`);
+                // 锡和青铜（A：铁矿要青铜稿，不再卡死）：锡只刷在山地、石稿挖；锡矿 232°C 15 秒出烫锡锭；3 铜锭 + 1 锡锭 950°C 30 秒出 4 青铜锭；青铜稿等级 2 挖铁矿；铁稿多拿 1 个
+                const tin = JSON.parse(await T.eval(`JSON.stringify({ where: Object.keys(IND_BIOMES).filter(function (b) { return IND_BIOMES[b].res.ore_sn; }), tool: IND_NODES.ore_sn.tool, give: IND_NODES.ore_sn.give, names: IND_TOOL_NAME.slice(0, 4), fe: IND_NODES.ore_fe.tool })`));
+                if (tin.where.join() !== 'mountain' || tin.tool !== 1 || tin.give.join() !== '1,2' || tin.names.join() !== '空手,石稿,青铜稿,钢稿' || tin.fe !== 2) bad.push('锡矿资源点不对 ' + JSON.stringify(tin));
+                await T.eval(`ind.base.stove = { items: { ore_sn: 1 }, out: {}, fuel: 3000, fire: 1, temp: 200, cook: null }; indAdvance(30); true;`);
+                if (await T.eval(`!!ind.base.stove.out.hot_sn`)) bad.push('小火 200°C（不到 232°C）也炼出锡锭');
+                await T.eval(`ind.base.stove = { items: { ore_sn: 1 }, out: {}, fuel: 3000, fire: 2, temp: 600, cook: null }; indAdvance(14); true;`);
+                if (await T.eval(`!!ind.base.stove.out.hot_sn`)) bad.push('锡矿 14 秒就炼好了');
+                await T.eval(`indAdvance(2); true;`);
+                if ((await T.eval(`ind.base.stove.out.hot_sn || 0`)) !== 1) bad.push('中火炼不出锡锭 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`ind.base.stove = { items: { ingot_cu: 3, ingot_sn: 1 }, out: {}, fuel: 3000, fire: 3, temp: 1200, cook: null }; indAdvance(29); true;`);
+                if (await T.eval(`!!ind.base.stove.out.hot_bronze`)) bad.push('青铜 29 秒就好了');
+                await T.eval(`indAdvance(3); true;`);
+                if ((await T.eval(`ind.base.stove.out.hot_bronze || 0`)) !== 4) bad.push('3 铜锭 + 1 锡锭炼不出 4 青铜锭 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`ind.base.stove = { items: { ingot_cu: 3, ingot_sn: 1 }, out: {}, fuel: 3000, fire: 2, temp: 600, cook: null }; indAdvance(40); true;`);
+                if (await T.eval(`!!ind.base.stove.out.hot_bronze`)) bad.push('600°C 也炼出青铜');
+                await T.eval(`ind.bag = {}; indBagAdd('bronze', 3); indBagAdd('wood', 2); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pick_bronze'; })); true;`);
+                if (!(await T.eval(`ind.bag.pick_bronze === 1 && indTool() === 2`))) bad.push('做不出青铜稿 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indBagAdd('ingot_sn', 1); true;`);
+                if (!(await T.eval(`!!ind.base.elems[50]`))) bad.push('锡没点亮元素表');
+                await T.eval(`${HIDE} indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = { pick_stone: 1 }; ind.nodes.push({ key: 'ore_fe', x: 0, z: -4, y: 0, n: 1, dead: false }, { key: 'ore_sn', x: 3, z: -4, y: 0, n: 1, dead: false }); ind.nodeDirty = true; true;`);
+                await T.eval(`indTeleport(0, -2); indLookAt(0, -4); indAction(); true;`);
+                if (await T.eval(`!!ind.bag.ore_fe`)) bad.push('石稿也挖得动铁矿');
+                await T.eval(`indTeleport(3, -2); indLookAt(3, -4); indAction(); true;`);
+                if ((await T.eval(`ind.bag.ore_sn || 0`)) !== 1) bad.push('石稿挖不动锡矿');
+                await T.eval(`ind.bag = { pick_bronze: 1 }; indTeleport(0, -2); indLookAt(0, -4); indAction(); true;`);
+                if ((await T.eval(`ind.bag.ore_fe || 0`)) !== 1) bad.push('青铜稿挖不动铁矿 / 不该多拿 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = { pick_iron: 1 }; ind.nodes.push({ key: 'ore_fe', x: 0, z: -8, y: 0, n: 1, dead: false }); indTeleport(0, -6); indLookAt(0, -8); indAction(); true;`);
+                if ((await T.eval(`ind.bag.ore_fe || 0`)) !== 2) bad.push('铁稿应该多拿 1 个 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indGoBase(false); true;`);
                 // 悠闲：炼不了，工作台不显示硬核的东西，配方查询里也没有
                 await T.eval(`(function(){ ind.base.rule = 'casual'; ind.base.stove = { items: {}, out: {}, fuel: 500, fire: 3, temp: 1200, cook: null }; ind.base.stove.items.ore_cu = 1; indAdvance(30); })(); true;`);
                 if (await T.eval(`!!ind.base.stove.out.hot_cu`)) bad.push('悠闲世界也能炼铜');

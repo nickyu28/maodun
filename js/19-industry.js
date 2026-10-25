@@ -56,16 +56,17 @@
             clay: { name: '黏土', col: 0xbcaaa4 },
             salt: { name: '盐', col: 0xf5f5f5 },
             coal: { name: '煤', col: 0x263238, fuel: 150 },
-            oil: { name: '石油', col: 0x212121 },
+            oil: { name: '石油', col: 0x212121, later: '后面的阶段' },
             ore_cu: { name: '铜矿', col: 0xd84315 },
             ore_zn: { name: '锌矿', col: 0x90a4ae },
             ore_fe: { name: '铁矿', col: 0x795548 },
-            sulfur: { name: '硫', col: 0xfdd835 },
-            ore_u: { name: '铀矿', col: 0x7cb342 },
+            sulfur: { name: '硫', col: 0xfdd835, later: '后面的阶段' },
+            ore_sn: { name: '锡矿', col: 0xb0bec5 },
+            ore_u: { name: '铀矿', col: 0x7cb342, later: '核和火箭' },
             pick_stone: { name: '石稿', col: 0x757575, tool: 1 },
             charcoal: { name: '木炭', col: 0x37474f, fuel: 120 },
             char: { name: '焦炭', col: 0x111111, fuel: 40 },
-            bucket: { name: '空桶', col: 0x8d6e63 }, shears: { name: '剪刀', col: 0xb0bec5, shears: true },
+            bucket: { name: '空桶', col: 0x8d6e63, use: '接水' }, shears: { name: '剪刀', col: 0xb0bec5, shears: true, use: '剪羊毛' },
             water_raw: { name: '生水', col: 0x4fc3f7, eat: { w: 15, sick: 0.3, back: 'bucket' } },
             water_sea: { name: '海水', col: 0x0288d1, eat: { w: -10, back: 'bucket' } },
             water_boiled: { name: '开水', col: 0xb3e5fc, eat: { w: 40, back: 'bucket' } },
@@ -97,18 +98,19 @@
             wool_scarf: { name: '毛围巾', col: 0xf9a825, wear: 'neck', warm: 3 },
             milk: { name: '牛奶', col: 0xfffde7, eat: { f: 5, w: 25, back: 'bucket' } },
             cheese: { name: '奶酪', col: 0xffe082, eat: { f: 35 } },
-            ingot_cu: { name: '铜锭', col: 0xd84315 }, ingot_zn: { name: '锌锭', col: 0xb0bec5 }, ingot_fe: { name: '铁锭', col: 0x616161 },
-            brass: { name: '黄铜锭', col: 0xfbc02d }, steel: { name: '钢锭', col: 0x90a4ae },
+            ingot_cu: { name: '铜锭', col: 0xd84315 }, ingot_zn: { name: '锌锭', col: 0xb0bec5 }, ingot_fe: { name: '铁锭', col: 0x616161 }, ingot_sn: { name: '锡锭', col: 0xcfd8dc }, bronze: { name: '青铜锭', col: 0xb87333 },
+            brass: { name: '黄铜锭', col: 0xfbc02d, later: '黄铜大锅和铃铛' }, steel: { name: '钢锭', col: 0x90a4ae },
             hot_cu: { name: '铜锭（烫）', col: 0xff3d00, hot: 'ingot_cu' }, hot_zn: { name: '锌锭（烫）', col: 0xff6e40, hot: 'ingot_zn' }, hot_fe: { name: '铁锭（烫）', col: 0xff5722, hot: 'ingot_fe' },
+            hot_sn: { name: '锡锭（烫）', col: 0xff8a65, hot: 'ingot_sn' }, hot_bronze: { name: '青铜锭（烫）', col: 0xff7043, hot: 'bronze' },
             hot_brass: { name: '黄铜锭（烫）', col: 0xffab00, hot: 'brass' }, hot_steel: { name: '钢锭（烫）', col: 0xff6d00, hot: 'steel' },
-            tongs: { name: '钳子', col: 0x795548 },
-            pick_iron: { name: '铁稿', col: 0x616161, tool: 2 }, pick_steel: { name: '钢稿', col: 0x90a4ae, tool: 3 },
-            battery: { name: '电池', col: 0x43a047 }, wire: { name: '铜线', col: 0xff7043 },
+            tongs: { name: '钳子', col: 0x795548, use: '拿烫锭' },
+            pick_bronze: { name: '青铜稿', col: 0xb87333, tool: 2 }, pick_iron: { name: '铁稿', col: 0x616161, tool: 2, bonus: 1 }, pick_steel: { name: '钢稿', col: 0x90a4ae, tool: 3 },
+            battery: { name: '电池', col: 0x43a047, use: '装进电池组' }, wire: { name: '铜线', col: 0xff7043, use: '接线' },
             dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '发电机', col: 0x546e7a, dev: 'gen' },
             dev_el: { name: '电解槽', col: 0x00838f, dev: 'el' },
             ash: { name: '草木灰', col: 0x9e9e9e }, bottle: { name: '玻璃瓶', col: 0xb3e5fc },
-            b_h2: { name: '氢气瓶', col: 0xf8bbd0, gas: 'h2' }, b_o2: { name: '氧气瓶', col: 0x90caf9, gas: 'o2' }, b_cl2: { name: '氯气瓶', col: 0xc6ff00, gas: 'cl2' },
-            naoh: { name: '氢氧化钠', col: 0xeceff1 }, sodium: { name: '钠', col: 0xcfd8dc },
+            b_h2: { name: '氢气瓶', col: 0xf8bbd0, gas: 'h2', later: '压力分支' }, b_o2: { name: '氧气瓶', col: 0x90caf9, gas: 'o2', later: '压力分支' }, b_cl2: { name: '氯气瓶', col: 0xc6ff00, gas: 'cl2', later: '压力分支' },
+            naoh: { name: '氢氧化钠', col: 0xeceff1, later: '后面的阶段' }, sodium: { name: '钠', col: 0xcfd8dc, later: '后面的阶段' },
             dev_lamp: { name: '电灯', col: 0xfff176, dev: 'lamp' }, dev_pump: { name: '水泵', col: 0x0288d1, dev: 'pump' }, dev_furnace: { name: '电炉', col: 0xbf360c, dev: 'furnace' }
         };
         // 电：rated 额定电压（超过就炸），minV 低于它不工作，draw 每秒耗电；电源：bank 电池组（节数 × 1.5 V），gen 发电机（灶台中火以上 3 米内 12 V）
@@ -125,20 +127,20 @@
         // 资源点：每种给几个、要什么稿子；seeds 是野生种子堆（随机一种作物）
         const IND_NODES = {
             wood: { give: [2, 4], tool: 0 }, stone: { give: [2, 3], tool: 0 }, sand: { give: [2, 4], tool: 0 }, clay: { give: [1, 3], tool: 0 },
-            salt: { give: [1, 3], tool: 0 }, coal: { give: [1, 3], tool: 1 }, oil: { give: [1, 1], tool: 0 },
+            salt: { give: [1, 3], tool: 0 }, coal: { give: [1, 3], tool: 1 }, ore_sn: { give: [1, 2], tool: 1 }, oil: { give: [1, 1], tool: 0 },
             ore_cu: { give: [1, 2], tool: 1 }, ore_zn: { give: [1, 2], tool: 1 }, ore_fe: { give: [1, 2], tool: 2 },
             sulfur: { give: [1, 3], tool: 1 }, ore_u: { give: [1, 1], tool: 3 }, seeds: { give: [2, 3], tool: 0 }
         };
         const IND_NODE_COL = { seeds: 0x7cb342 };
         // 悠闲世界的远征只刷这些（没有矿，没有科技原料）
         const IND_CASUAL_RES = { wood: 1, stone: 1, sand: 1, clay: 1, salt: 1, seeds: 1 };
-        const IND_TOOL_NAME = ['空手', '石稿', '铁稿', '钢稿'];
+        const IND_TOOL_NAME = ['空手', '石稿', '青铜稿', '钢稿'];
         // 地貌：名字、地面颜色、会刷什么资源（权重）
         const IND_BIOMES = {
             plain: { name: '平原', col: 0x9ccc65, res: { sand: 2, clay: 2, stone: 2, wood: 1, seeds: 2 } },
             forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 1, seeds: 2 } },
             beach: { name: '海边', col: 0xfff59d, res: { sand: 4, salt: 3 } },
-            mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, ore_cu: 2, ore_zn: 2, ore_fe: 2, coal: 2 } },
+            mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, ore_cu: 2, ore_zn: 2, ore_sn: 2, ore_fe: 2, coal: 2 } },
             desert: { name: '盐湖沙漠', col: 0xe6c27a, res: { sand: 3, salt: 3, oil: 1 } },
             volcano: { name: '火山', col: 0x5d4037, res: { sulfur: 5, stone: 1 } },
             ancient: { name: '古老岩层', col: 0x546e7a, res: { ore_u: 2, stone: 2, ore_fe: 1 } }
@@ -172,7 +174,8 @@
             { out: 'dev_bank', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_gen', in: { ingot_cu: 3, ingot_fe: 2, steel: 1 }, hard: true },
             { out: 'dev_el', in: { ingot_fe: 2, ingot_cu: 2, bottle: 1 }, hard: true },
             { out: 'dev_lamp', in: { ingot_cu: 1, sand: 2 }, hard: true }, { out: 'dev_pump', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_furnace', in: { steel: 2, clay: 4, ingot_cu: 2 }, hard: true }, { out: 'pick_iron', in: { ingot_fe: 3, wood: 2 }, hard: true }, { out: 'pick_steel', in: { steel: 3, wood: 2 }, hard: true },
-            { out: 'bucket', in: { wood: 3 } }, { out: 'shears', in: { stone: 2, wood: 1 } }
+            { out: 'bucket', in: { wood: 3 } }, { out: 'shears', in: { stone: 2, wood: 1 } },
+            { out: 'pick_bronze', in: { bronze: 3, wood: 2 }, hard: true }
         ];
         const IND_HOT_SOUP = 1.5;
         const IND_HOT_COOL = 30, IND_HOT_DPS = 15;   // 烫的锭放 30 秒凉；不拿钳子每秒扣 15 血
@@ -207,6 +210,8 @@
             { in: { ore_fe: 1 }, out: { hot_fe: 1 }, minT: 1538, time: 30, hard: true },
             { in: { ore_cu: 1 }, out: { hot_cu: 1 }, minT: 1085, time: 20, hard: true },
             { in: { ore_zn: 1 }, out: { hot_zn: 1 }, minT: 420, time: 15, hard: true },
+            { in: { ore_sn: 1 }, out: { hot_sn: 1 }, minT: 232, time: 15, hard: true },
+            { in: { ingot_cu: 3, ingot_sn: 1 }, out: { hot_bronze: 4 }, minT: 950, time: 30, hard: true },
             // 玻璃：草木灰当助熔剂（钾碱），1000°C（悠闲也能做，腌萝卜要用瓶子）；只有沙子要 1700°C（电炉）
             { in: { sand: 2, ash: 1 }, out: { bottle: 2 }, minT: 1000, time: 20 },
             { in: { sand: 3 }, out: { bottle: 1 }, minT: 1700, time: 30, hard: true }
@@ -219,7 +224,7 @@
         ];
         const IND_EL_TIME = 20, IND_ASH_PER = 2, IND_GAS = { cloud: 45, dps: 8, r: 3, fireR: 3 };
         // 元素表：拿到这些东西就点亮对应的元素（原子序数）
-        const IND_ELEM_OF = { b_h2: 1, charcoal: 6, coal: 6, char: 6, b_o2: 8, sodium: 11, sulfur: 16, b_cl2: 17, ingot_fe: 26, ingot_cu: 29, ingot_zn: 30 };
+        const IND_ELEM_OF = { b_h2: 1, charcoal: 6, coal: 6, char: 6, b_o2: 8, sodium: 11, sulfur: 16, b_cl2: 17, ingot_fe: 26, ingot_cu: 29, ingot_zn: 30, ingot_sn: 50 };
         const IND_ELEM_NAME = ['', '氢', '氦', '锂', '铍', '硼', '碳', '氮', '氧', '氟', '氖', '钠', '镁', '铝', '硅', '磷', '硫', '氯', '氩', '钾', '钙', '钪', '钛', '钒', '铬', '锰', '铁', '钴', '镍', '铜', '锌', '镓', '锗', '砷', '硒', '溴', '氪'];
         const IND_BURN_S = 8;   // 超过烧焦温度累计 8 秒就烧成焦炭
 
@@ -377,6 +382,7 @@
         function indBagDel(k, n) { let B = ind.bag; if (!B[k]) return 0; let t = Math.min(n, B[k]); B[k] -= t; if (B[k] <= 0) delete B[k]; return t; }
         function indSel() { let ks = Object.keys(ind.bag); if (!ks.length) return null; ind.selIdx = Math.max(0, Math.min(ind.selIdx, ks.length - 1)); return ks[ind.selIdx]; }
         function indSelect(k) { let i = Object.keys(ind.bag).indexOf(k); if (i >= 0) ind.selIdx = i; }
+        function indToolBonus(need) { let b = 0; Object.keys(ind.bag).forEach(function (k) { let d = IND_ITEMS[k]; if (d.tool && d.tool >= need && d.bonus) b = Math.max(b, d.bonus); }); return b; }
         function indTool() { let t = 0; Object.keys(ind.bag).forEach(function (k) { if (IND_ITEMS[k].tool) t = Math.max(t, IND_ITEMS[k].tool); }); return t; }
         function indCool(k) { return (IND_ITEMS[k] && IND_ITEMS[k].hot) || k; }
         function indBoxAdd(k, n) { k = indCool(k); let b = ind.base.box; b[k] = (b[k] || 0) + n; }   // 仓库箱里的烫锭当它凉了
@@ -1035,7 +1041,7 @@
             let nd = IND_NODES[o.key], tool = indTool();
             if (tool < nd.tool) { indFlash(indName(o.key) + '要' + IND_TOOL_NAME[nd.tool] + '才挖得动'); return false; }
             let key = o.key === 'seeds' ? o.seed : o.key;
-            let got = indBagAdd(key, o.n);
+            let got = indBagAdd(key, o.n + indToolBonus(nd.tool));   // 铁稿、钻石稿：采一次多拿几个
             if (got <= 0) { indFlash('身上放不下了'); return false; }
             o.n -= got; if (o.n <= 0) { o.dead = true; ind.nodeDirty = true; }
             indFlash('+' + got + ' ' + indName(key));
