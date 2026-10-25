@@ -6106,14 +6106,25 @@ async function enterExit(tab, key) {
             const c0 = await mouseAt(A, GAR_SLOT(4));
             const swipe = []; for (let i = 0; i <= 12; i++) swipe.push([c0[0], c0[1] - i * 14]);
             const tpU = (type, p) => A.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
-            // 手指每动一下，等页面真的画了 2 帧再动下一下（浏览器的滚动手势按帧处理；原来每步睡 16 毫秒，机器忙时事件挤成一团，手势被当成点一下，不滚动）
-            await tpU('touchStart', swipe[0]); await frames(A, 2);
-            for (let i = 1; i < swipe.length; i++) { await tpU('touchMove', swipe[i]); await frames(A, 2); }
-            await tpU('touchEnd', null);
-            // 滚动由浏览器的手势处理：等 scrollTop 真的变了（最多 20 秒）
-            const scrolled = await until(A, `document.getElementById('garage-stash-container').scrollTop > 20`, 20000);
+            // 手指每动一下，等页面真的画了 2 帧再动下一下（浏览器的滚动手势按帧处理；原来每步睡 16 毫秒，机器忙时事件挤成一团，手势被当成点一下，不滚动）。
+            // 这个标签页前面跑过很多检查，浏览器那头偶尔还留着上一次的触摸状态，第一次滑会被吃掉（单独开新标签页就从来不会）：
+            // 每次滑之前先发一个"手指全抬起"清掉残留，滑完等 scrollTop 真的变了；没变就清掉再滑一次（最多 3 次），不靠加长等待。
+            let scrolled = false;
+            for (let attempt = 0; attempt < 3 && !scrolled; attempt++) {
+                await tpU('touchEnd', null); await frames(A, 2);
+                await tpU('touchStart', swipe[0]); await frames(A, 2);
+                for (let i = 1; i < swipe.length; i++) { await tpU('touchMove', swipe[i]); await frames(A, 2); }
+                await tpU('touchEnd', null);
+                // 滚动由浏览器的手势处理：等 scrollTop 真的变了（每次最多 8 秒）
+                scrolled = await until(A, `document.getElementById('garage-stash-container').scrollTop > 20`, 8000);
+            }
             const st = await A.eval(`document.getElementById('garage-stash-container').scrollTop`);
-            if (!scrolled) bad.push('上滑没滚动 scrollTop=' + st);
+            if (!scrolled) {
+                // 没滚动时把现场写进失败信息（页面状态、触摸点上是什么、列表能不能滚），方便查
+                const dbg = await A.eval(`(function(){ let c = document.getElementById('garage-stash-container'), cs = getComputedStyle(c), e = document.elementFromPoint(${c0[0]}, ${c0[1]});
+                    return JSON.stringify({ ctl: gState.control, sh: c.scrollHeight, ch: c.clientHeight, ov: cs.overflowY, ta: cs.touchAction, top: e ? (e.id || e.className || e.tagName) : null, vis: document.visibilityState, focus: document.hasFocus(), lock: !!document.pointerLockElement, modal: ${MODAL}, scr: document.getElementById('screen-garage') && !document.getElementById('screen-garage').classList.contains('hidden') }); })()`);
+                bad.push('上滑没滚动 scrollTop=' + st + ' ' + dbg);
+            }
             if ((await A.eval(names)) !== n0) bad.push('上滑把物品挪了');
             // 2. 长按后拖：格子变样子，物品移到目标格
             await A.eval(`document.getElementById('garage-stash-container').scrollTop = 0; true;`); await W(100);
