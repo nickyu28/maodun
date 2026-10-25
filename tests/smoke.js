@@ -5190,6 +5190,25 @@ async function enterExit(tab, key) {
                 if (await T.eval(`!!ind.bag.wool`)) bad.push('拿稿子对着羊也剪毛了');
                 await T.eval(`indSelect('shears'); indAction(); true;`);
                 if ((await T.eval(`ind.bag.wool || 0`)) !== 2 || (await T.eval(`ind.bag.shears`)) !== 1) bad.push('拿剪刀没剪到毛 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 黄铜大锅（装在灶台上，存档）和铃铛（30 米内的动物走过来）
+                await T.eval(`indSetRule('hard'); ind.base.rule = 'hard'; ind.bag = {}; indBagAdd('brass', 3); indCraft(IND_CRAFT.findIndex(function (r) { return r.pot; })); true;`);
+                if (!(await T.eval(`ind.base.pot === true && !ind.bag.brass`))) bad.push('做不出黄铜大锅 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = {}; indBagAdd('brass', 3); true;`);
+                if (await T.eval(`indCraft(IND_CRAFT.findIndex(function (r) { return r.pot; }))`)) bad.push('黄铜大锅能装两次');
+                await T.eval(`indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
+                if (!(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(b.pot === true && indFixBase({ ver: 9, rule: 'hard' }).pot === false); }); })`))) bad.push('黄铜大锅存档不对');
+                await T.eval(`ind.bag = {}; indBagAdd('brass', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'bell'; })); true;`);
+                if (!(await T.eval(`ind.bag.bell === 1 && !ind.bag.brass`))) bad.push('做不出铃铛 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`(function(){ ind.base.animals = [{ k: 'sheep', x: -25, z: 10, food: 90, woolAt: 0, milkAt: 0 }, { k: 'cow', x: 25, z: -10, food: 90, woolAt: 0, milkAt: 0 }]; indTeleport(0, 5); ind.base.animals.forEach(function (a) { a.tx = a.x; a.tz = a.z; a.wt = 1e9; }); indSelect('bell'); })(); true;`);
+                await T.eval(`indAdvance(5); true;`);
+                if (await T.eval(`ind.base.animals.some(function (a) { return Math.hypot(a.x - ind.p.x, a.z - ind.p.z) < 6; })`)) bad.push('没摇铃动物就过来了');
+                const bell = JSON.parse(await T.eval(`(function(){ indAction(); let best = [99, 99]; for (let i = 0; i < 10; i++) { indAdvance(1); ind.base.animals.forEach(function (a, j) { best[j] = Math.min(best[j], Math.hypot(a.x - ind.p.x, a.z - ind.p.z)); }); } return JSON.stringify(best); })()`));
+                if (bell.some((d) => d > 2.6)) bad.push('摇铃以后基地里的动物没走到身边 ' + JSON.stringify(bell));
+                // 远征里：30 米内跟着的走过来，不跟着的野生动物不理；30 米外的不理
+                await T.eval(`${HIDE} indGoTrip(2024); ind.wild = [{ k: 'sheep', x: 20, z: 0, fed: 3, follow: true }, { k: 'cow', x: -15, z: 5, fed: 0, follow: false }, { k: 'dog', x: 40, z: 0, fed: 1, follow: true }]; ind.bag = { bell: 1 }; true;`);
+                await T.eval(`indTeleport(0, 0); ind.wild.forEach(function (a) { a.tx = a.x; a.tz = a.z; a.wt = 1e9; }); indSelect('bell'); indAction(); true;`);
+                if (await T.eval(`ind.wild[0].call > 0 !== true || !!ind.wild[1].call || !!ind.wild[2].call`)) bad.push('远征里摇铃的范围不对 ' + await T.eval(`JSON.stringify(ind.wild.map(function (a) { return a.call || 0; }))`));
+                await T.eval(`indGoBase(false); true;`);
                 await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
             }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
