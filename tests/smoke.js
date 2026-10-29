@@ -7014,7 +7014,7 @@ async function enterExit(tab, key) {
                 dg = await digAt('plain', true, 1.2);
                 if (!dg || dg.bag.join() !== 'dirt') bad.push('拿着稿子挖地 1 秒 ' + JSON.stringify(dg));
                 await T.eval(`ind.bag = { pick_stone: 1 }; indAction(); indAdvance(1.2); true;`);
-                if (!(await T.eval(`ind.pits.length === 1 && ind.pits[0].d === 2`))) bad.push('同一处再挖，坑更深 ' + await T.eval(`JSON.stringify(ind.pits)`));
+                if (!(await T.eval(`ind.pits.length === 1 && ind.pits[0].d === 3`))) bad.push('同一处再挖（第 3 次），坑更深 ' + await T.eval(`JSON.stringify(ind.pits)`));
                 dg = await digAt('beach', false, 3.2); if (dg && dg.bag.join() !== 'sand') bad.push('海边出沙子 ' + JSON.stringify(dg));
                 dg = await digAt('desert', false, 3.2); if (dg && dg.bag.join() !== 'sand') bad.push('沙漠出沙子 ' + JSON.stringify(dg));
                 dg = await digAt('forest', false, 3.2); if (dg && dg.bag.join() !== 'dirt') bad.push('森林出泥土 ' + JSON.stringify(dg));
@@ -7065,6 +7065,43 @@ async function enterExit(tab, key) {
                 if (!(await T.eval(`ind.bag.ore_cu === 12 && ind.nodes[ind.nodes.length - 1].dead && ind.pits.some(function (p) { return Math.abs(p.x) < 0.1 && Math.abs(p.z + 9) < 0.1 && p.d === 6; })`))) bad.push('挖完变空坑 ' + await T.eval(`JSON.stringify([ind.bag, ind.pits])`));
                 await T.eval(`ind.bag = { pick_iron: 1 }; ind.nodes.push({ key: 'ore_cu', out: true, x: 0, z: -9, y: 0, n: 12, n0: 12, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
                 if (!(await T.eval(`ind.bag.ore_cu === 2`))) bad.push('铁稿 +1：一次 2 份 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // ── 河：每张图 1～3 条，从高处流进海里，宽 4～8 米，浅水为主；河边有黏土、锡砂；河里接的是生水 ──
+                const rv = await J(`(function(){ let bad = [], n = 0, banks = 0, shallow = 0, all = 0; for (let s = 1; s <= 40; s++) { let M = indMakeMap(s * 613); let R = M.rivers; n += R.length; if (R.length < 1 || R.length > 3) bad.push('条数 ' + s + ':' + R.length); R.forEach(function (rv) { let a = rv.pts[0], b = rv.pts[rv.pts.length - 1]; if (indElev(M, a[0], a[1]) < 0.2) bad.push('不是从高处起头'); if (indHeight(M, b[0], b[1]) >= IND_WATER_Y) bad.push('没流进海里'); if (rv.w < 4 || rv.w > 8) bad.push('宽 ' + rv.w); for (let i = 1; i < rv.pts.length - 1; i += 3) { let p = rv.pts[i]; all++; let dep = IND_WATER_Y - indHeight(M, p[0], p[1]); if (dep <= 0) bad.push('河中间不是水 ' + s); } }); } return { bad: bad.slice(0, 5), avg: n / 40 }; })()`);
+                if (rv.bad.length) bad.push('河 ' + JSON.stringify(rv));
+                const rv2 = await J(`(function(){ indGoTrip(977 * 3); let M = ind.map, rv = M.rivers[0], sh = 0, dp = 0; rv.pts.forEach(function (p, i) { if (i < 2 || i > rv.pts.length - 3) return; let a = rv.pts[i - 1], dx = p[0] - a[0], dz = p[1] - a[1], l = Math.hypot(dx, dz); for (let o = -rv.w / 2; o <= rv.w / 2; o += 0.25) { let d = IND_WATER_Y - indHeight(M, p[0] - dz / l * o, p[1] + dx / l * o); if (d > 0) { if (d < IND_WATER.shallow) sh++; else dp++; } } }); let bank = ind.nodes.filter(function (o) { return o.river; }).map(function (o) { return o.key; }); return { sh: sh, dp: dp, bank: bank, mid: rv.pts[Math.floor(rv.pts.length / 2)] }; })()`);
+                if (!(rv2.sh > rv2.dp * 1.5) || !rv2.dp) bad.push('河是浅水为主（中间一溜深） ' + JSON.stringify([rv2.sh, rv2.dp]));
+                if (!rv2.bank.length || rv2.bank.some((k) => k !== 'clay' && k !== 'sand_sn')) bad.push('河边刷黏土和锡砂 ' + JSON.stringify(rv2.bank));
+                await T.eval(`ind.bag = { bucket: 1 }; indSelect('bucket'); indTeleport(${rv2.mid[0]}, ${rv2.mid[1]}); window.__fl = []; indUse(); true;`);
+                if (!(await T.eval(`ind.bag.water_raw === 1 && !ind.bag.water_sea`))) bad.push('河里接到的是生水 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
+                // ── 地形分块：视野外的块不画；山地更陡；火山周围的黑石头 ──
+                const ck = await J(`(function(){ indGoTrip(2024); ind.base.clock = 300; indTeleport(0, 0); ind.nodeView = null; indSyncNodes(); let a = ind.chunks.filter(function (m) { return m.visible; }).length; ind.base.clock = 1000; ind.nodeView = null; indSyncNodes(); let b = ind.chunks.filter(function (m) { return m.visible; }).length; indTeleport(-280, -280); ind.nodeView = null; indSyncNodes(); let c = ind.chunks[0].visible && !ind.chunks[99].visible; ind.base.clock = 300; return { n: ind.chunks.length, day: a, night: b, corner: c, black: ind.nodes.filter(function (o) { return o.black && o.rock; }).length }; })()`);
+                if (ck.n !== 100 || ck.day > 16 || ck.night >= ck.day || !ck.corner) bad.push('地形分块、视野外不画 ' + JSON.stringify(ck));
+                if (!ck.black) bad.push('火山周围要有黑石头 ' + JSON.stringify(ck));
+                // ── 仙人掌：空手采硬核扣 60 血、悠闲只提示；剪刀稿子不扎；生吃口渴 +5 扣 60；拔刺按最快的工具；去刺、烤仙人掌 ──
+                await T.eval(`indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = {}; ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 2, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indTeleport(0, -6.5); indLookAt(0, -9); ind.k = {}; indAction(); true;`);
+                if (!(await T.eval(`ind.bag.cactus === 2 && ind.base.surv.hp === 40`))) bad.push('硬核空手采仙人掌扣 60 血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
+                await T.eval(`ind.bag = { shears: 1 }; indSelect('shears'); ind.base.surv.hp = 100; ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 1, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
+                if (!(await T.eval(`ind.bag.cactus === 1 && ind.base.surv.hp === 100`))) bad.push('拿剪刀采仙人掌不扎 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
+                await T.eval(`ind.base.rule = 'casual'; ind.bag = {}; window.__fl = []; ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 1, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
+                if (!(await T.eval(`ind.bag.cactus === 1 && ind.base.surv.hp === 100 && __fl.indexOf('扎手了') >= 0`))) bad.push('悠闲空手采只提示扎手了 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp, __fl])`));
+                await T.eval(`ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.base.surv.water = 50; ind.bag = { cactus: 1 }; indSelect('cactus'); indRightDown(); indRightUp(); true;`);
+                if (!(await T.eval(`!ind.bag.cactus && ind.base.surv.hp === 40 && ind.base.surv.water === 55`))) bad.push('生吃仙人掌口渴 +5、扣 60 血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv])`));
+                await T.eval(`ind.base.surv.hp = 50; ind.bag = {}; ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 1, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
+                if (!(await T.eval(`!!ind.dead && ind.dead.cause === '仙人掌扎的'`))) bad.push('被仙人掌扎死，死因写仙人掌扎的 ' + await T.eval(`JSON.stringify(ind.dead)`));
+                await T.eval(`indRespawn(); true;`);
+                const pt = await J(`(function(){ let t = function (b) { ind.bag = b; return wdPeelTime(); }; return [t({ knife: 1, shears: 1, tongs: 1 }), t({ shears: 1, tongs: 1 }), t({ tongs: 1 }), t({})]; })()`);
+                if (pt.join() !== '15,30,40,60') bad.push('拔刺时间：小刀 15、剪刀 30、钳子 40、空手 60 ' + pt.join());
+                await T.eval(`if (ind.dead) { ind.dead = null; } if (ind.where !== 'trip') indGoTrip(2024); indTeleport(0, -6.5); ind.k = {}; ind.base.surv.hp = 100; ind.bag = { cactus: 2, knife: 1 }; indSelect('cactus'); indRightDown(); indAdvance(14.5); true;`);
+                if (!(await T.eval(`ind.bag.cactus === 2 && !!ind.ch`))) bad.push('小刀拔刺 14.5 秒还没好 ' + await T.eval(`JSON.stringify([ind.bag, ind.ch && ind.ch.t])`));
+                await T.eval(`indAdvance(0.8); indRightUp(); true;`);
+                if (!(await T.eval(`ind.bag.cactus === 1 && ind.bag.cactus_peeled === 1 && ind.base.surv.hp === 100`))) bad.push('拔完 1 个变去刺仙人掌、不扣血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
+                await T.eval(`indSelect('cactus'); indRightDown(); indAdvance(5); indTeleport(2, -6.5); indAdvance(0.2); indRightUp(); true;`);
+                if (!(await T.eval(`ind.bag.cactus === 1 && !ind.ch`))) bad.push('拔刺时动了要中断 ' + await T.eval(`JSON.stringify([ind.bag, ind.ch])`));
+                const ce = await J(`(function(){ let S = ind.base.surv; S.water = 50; S.food = 50; ind.bag = { cactus_peeled: 1, cactus_roast: 1 }; indEat('cactus_peeled'); let a = [S.water, S.food]; indEat('cactus_roast'); let r = IND_RECIPES.filter(function (x) { return x.in.cactus_peeled && x.out.cactus_roast; })[0]; return { a: a, b: [S.water, S.food], hp: S.hp, r: r && [r.minT, r.time], kn: (IND_CRAFT.filter(function (x) { return x.out === 'knife'; })[0] || {}).in, hint: wdNodeHint({ key: 'cactus', n: 1 }).replace(/<[^>]+>.*$/, ''), book: wdBookLines().some(function (l) { return /小刀 15 秒/.test(l.txt); }) }; })()`);
+                if (ce.a.join() !== '58,53' || ce.b.join() !== '66,58' || ce.hp !== 100) bad.push('去刺仙人掌口渴 +8 饱食 +3、烤仙人掌口渴 +8 饱食 +5 ' + JSON.stringify(ce));
+                if (!ce.r || ce.r.join() !== '180,5') bad.push('烤仙人掌 ≥180°C 5 秒 ' + JSON.stringify(ce.r));
+                if (JSON.stringify(ce.kn) !== '{"stone":2,"wood":1}') bad.push('小刀：2 石头 + 1 木头 ' + JSON.stringify(ce.kn));
+                if (ce.hint !== '仙人掌：有刺' || !ce.book) bad.push('提示只写仙人掌：有刺；配方查询能搜到拔刺时间 ' + JSON.stringify(ce));
             }
             if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
             await T.close();

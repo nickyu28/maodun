@@ -433,6 +433,7 @@
             let r = indRng(seed), M = { seed: seed, volc: [] };
             let nv = 2 + Math.floor(r() * 3);
             for (let i = 0; i < nv; i++) { let a = r() * Math.PI * 2, d = IND_MAP * (0.62 + r() * 0.25); M.volc.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 16 + r() * 6 }); }
+            wdMakeRivers(M);   // 河：1～3 条，从山地流到海边（19-industry-world.js）
             return M;
         }
         function indElev(M, x, z) { return indFbm(x / 70, z / 70, M.seed); }
@@ -441,14 +442,15 @@
             for (let i = 0; i < M.volc.length; i++) { let v = M.volc[i]; if (Math.hypot(x - v.x, z - v.z) < v.r) return 'volcano'; }
             let e = indElev(M, x, z), m = indMoist(M, x, z), rr = Math.hypot(x, z) / IND_MAP;
             if (Math.hypot(x, z) < 14) return 'plain';
-            if (e < -0.28) return 'beach';
+            if (e < -0.05) return 'beach';   // 海边：海岸线上一条沙滩（再往下是海底）
             if (e > 0.32) return rr > 0.78 ? 'ancient' : 'mountain';
             if (m < -0.25) return 'desert';
             if (m > 0.2) return 'forest';
             return 'plain';
         }
         function indHeight(M, x, z) {
-            let h = indElev(M, x, z) * 9;
+            let e0 = indElev(M, x, z), h = e0 * 9 + Math.max(0, e0 - 0.32) * 26;   // 山地更陡
+            if (M.riv) h = wdRiverCarve(M, x, z, h);   // 河（19-industry-world.js）
             let dsp = Math.hypot(x, z), spawn = Math.max(0, 1 - dsp / 14); h *= (1 - spawn); if (dsp < 14) h = Math.max(h, 0.4 * Math.min(1, (14 - dsp) / 4));   // 出生点周围 10 米一定是陆地
             for (let i = 0; i < M.volc.length; i++) {
                 let v = M.volc[i], d = Math.hypot(x - v.x, z - v.z);
@@ -1046,17 +1048,7 @@
             ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
             let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed);
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 30, IND_VIEW.day);
-            let geo = indGeo(new THREE.PlaneGeometry(IND_MAP * 2, IND_MAP * 2, IND_SEG, IND_SEG));
-            geo.rotateX(-Math.PI / 2);
-            let pos = geo.attributes.position, cols = new Float32Array(pos.count * 3), c = new THREE.Color();
-            for (let i = 0; i < pos.count; i++) {
-                let x = pos.getX(i), z = pos.getZ(i), h = indHeight(M, x, z), bm = indBiome(M, x, z);
-                pos.setY(i, h);
-                c.setHex(IND_BIOMES[bm].col); let sh = 0.92 + indHash(i, 3, M.seed) * 0.12; cols[i * 3] = c.r * sh; cols[i * 3 + 1] = c.g * sh; cols[i * 3 + 2] = c.b * sh;
-            }
-            geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-            geo.computeVertexNormals();
-            indAdd(new THREE.Mesh(geo, indMat(new THREE.MeshLambertMaterial({ vertexColors: true }))));
+            wdTerrain(M);   // 地形分成 10 × 10 块，视野外的块不画（19-industry-world.js）
             let wat = new THREE.Mesh(indGeo(new THREE.PlaneGeometry(IND_MAP * 2, IND_MAP * 2)), indMat(new THREE.MeshLambertMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.75 })));
             wat.rotation.x = -Math.PI / 2; wat.position.y = IND_WATER_Y; indAdd(wat);
             // 资源点：按地貌的权重挑；悠闲世界只刷 IND_CASUAL_RES 里的
@@ -1098,6 +1090,7 @@
                 else if (key === 'stone') node.rock = true;   // 大石头
                 ind.nodes.push(node);
             }
+            wdExtraNodes(M, casual);   // 河边的黏土和锡砂、火山周围的黑石头
             ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true; wdMakeMeshes();
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             // 野生动物：平原有羊和牛，森林有狗和猫
@@ -1559,8 +1552,9 @@
             if (indIsEmptyCont(k)) {   // 空桶：水池接生水，海里接海水（桶是什么材质，水就装在什么材质里）
                 let m = indContOf(k).mat;
                 if (a && a.kind === 'pool') { let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); indSelect(w); indFlash('接了一桶生水'); return true; }
+                if (indInWater() && wdRiverNear(ind.map, ind.p.x, ind.p.z, 1)) { let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); indSelect(w); indFlash('接了一桶河水（生水）'); return true; }
                 if (indInWater()) { let w = indFilledKey('water_sea', m); indBagDel(k, 1); indBagAdd(w, 1); indSelect(w); indFlash('接了一桶海水'); return true; }
-                indFlash('到水池或海边才能接水'); return false;
+                indFlash('到水池、河里或海边才能接水'); return false;
             }
             if (k === 'ash' && a && a.kind === 'crop') return indFertilize(a.o);
             let kc = indContOf(k), kb = kc && kc.base;
@@ -1580,6 +1574,11 @@
                 S.water = Math.min(100, S.water + 10);
                 let sick = indRand() < 0.3; if (sick) ind.sickT = IND_SURV.sick;
                 indFlash('喝了一口生水' + (sick ? '，肚子不舒服' : '')); return true;
+            }
+            if (indInWater() && wdRiverNear(ind.map, ind.p.x, ind.p.z, 1)) {   // 河水算生水
+                S.water = Math.min(100, S.water + 10);
+                let sick = indRand() < 0.3; if (sick) ind.sickT = IND_SURV.sick;
+                indFlash('喝了一口河水' + (sick ? '，肚子不舒服' : '')); return true;
             }
             if (indInWater()) { S.water = Math.max(0, S.water - 10); indFlash('喝了一口海水，越喝越渴'); return true; }
             return false;
