@@ -3746,23 +3746,57 @@ async function enterExit(tab, key) {
             await T.eval(`labClear(); lab.hp = 100; lab.p.x = -2; lab.p.z = 3; labSpawn('b:so2', -2, 3.5); true;`);
             const safe = await T.eval(`(labAdvance(2), lab.hp)`);
             if (safe !== 100) bad.push('装瓶的二氧化硫也掉血 ' + safe);
-            // 死亡：丢掉身上和台面的东西、仓库箱不丢、锁 60 秒
-            await T.eval(`labClear(); lab.p.x = -2; lab.p.z = 3; labGive('coal', 5); lab.stove.items = { sand: 2 }; labSpawn('iron', -1, 3); lab.hp = 5; labHurt(10); true;`);
-            if (!(await until(T, `lab === null`, 10000))) bad.push('血没了没出来');
-            const d = JSON.parse(await T.eval(`JSON.stringify({ box: labSt().box, lock: labSt().lockUntil - Date.now(), modal: ${MODAL}, garage: !document.getElementById('screen-lobby').classList.contains('hidden') })`));
-            if (d.box.iron !== 3 || Object.keys(d.box).length !== 2) bad.push('死了以后仓库箱变了（身上、台面、地上的不该进箱子）' + JSON.stringify(d.box));
-            if (!(d.lock > 45000 && d.lock <= 60500)) bad.push('锁定时间应该约 60 秒 ' + d.lock);
-            if (!/实验室/.test(d.modal || '') || !d.garage) bad.push('死了没有提示或没回大厅 ' + JSON.stringify(d));
-            await T.eval(`${HIDE} labEnter(); true;`);
-            if (await T.eval(`lab !== null`)) bad.push('锁定期间居然进去了');
-            if (!/还要等/.test(await T.eval(`document.getElementById('sys-modal-text').innerText`))) bad.push('锁定期间没有提示还要等多久');
+            // 死亡（v4）：身上的直接消失，在门口站起来、血回满，不锁、不出实验室；地上、台面、仓库箱都不动；弹窗写死因
+            await T.eval(`labClear(); lab.p.x = -2; lab.p.z = 3; labGive('coal', 5); lab.stove.items = { sand: 2 }; labSpawn('iron', -1, 3); lab.hp = 3; labSpawn('g:cl2', lab.p.x + 1, lab.p.z, { noFill: 1e9 }); true;`);
+            if (!(await until(T, `lab && lab.deaths === 1`, 10000))) bad.push('血没了没死');
+            const d = JSON.parse(await T.eval(`JSON.stringify({ in: !!lab, bag: lab && lab.bag, hp: lab && lab.hp, p: lab && [lab.p.x, lab.p.z], stove: lab && lab.stove.items, iron: lab && labCount('iron'), box: labSt().box, lock: labSt().lockUntil, modal: (document.getElementById('sys-modal').classList.contains('hidden') ? null : document.getElementById('sys-modal-text').innerText) })`));
+            if (!d.in || Object.keys(d.bag).length || !(d.hp >= 95) || d.p.join() !== '0,2') bad.push('死了：还在实验室、身上的没了、门口站起来血回满 ' + JSON.stringify(d));
+            if (d.stove.sand !== 2 || d.iron !== 1) bad.push('死了：台面和地上的不动 ' + JSON.stringify(d));
+            if (d.box.iron !== 3 || Object.keys(d.box).length !== 2) bad.push('死了以后仓库箱变了 ' + JSON.stringify(d.box));
+            if (d.lock > Date.now()) bad.push('不该再锁 ' + d.lock);
+            if (!/死因：氯气中毒/.test(d.modal || '')) bad.push('弹窗写死因（氯气中毒） ' + JSON.stringify(d.modal));
+            await T.eval(`document.querySelector('#sys-modal-btns button').click(); true;`);
+            await T.eval(`labClear(); lab.hp = 10; labExplode(lab.p.x, lab.p.z); labAdvance(0.1); true;`);
+            if (!/死因：爆炸/.test(await T.eval(`(document.getElementById('sys-modal').classList.contains('hidden') ? null : document.getElementById('sys-modal-text').innerText)`) || '')) bad.push('炸死写死因：爆炸'); await T.eval(`document.querySelector('#sys-modal-btns button').click(); true;`);
+            // 老档里记着的锁不算
+            await T.eval(`labExit(); true;`); await until(T, `lab === null`, 5000);
+            await T.eval(`${HIDE} labSt().lockUntil = Date.now() + 50000; labEnter(); true;`);
+            if (!(await until(T, `!!lab`, 5000))) bad.push('老档的 60 秒锁还挡着');
             await T.eval(`${HIDE} labSt().lockUntil = Date.now() - 1; saveProgress(); true;`);
             await LBENTER(T);
             const saved = await T.eval(`JSON.parse(localStorage.getItem('TH_save_' + gState.id)).lab.box.iron`);
             if (saved !== 3) bad.push('存档里没有 lab.box ' + saved);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
-            report('LB6 爆炸 3 米 40 点只毁范围内、仓库箱不动；毒气每秒 5 点持续 5 秒；死亡丢身上和台面、仓库箱不丢、锁 60 秒', bad.length === 0, bad.join(' / '));
+            report('LB6 爆炸 3 米 40 点只毁范围内、仓库箱不动；毒气每秒 5 点持续 5 秒；死亡（v4）身上的消失、门口站起来、不锁、写死因', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB28')) {
+            // LB28 实验室易用性 v4：Ctrl+Q 手上那一堆瞬间存进仓库（多远都行）；Shift+Q 一次放下手上那一堆；垃圾桶扔掉手上的
+            const bad = [];
+            const T = await LBTAB();
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labSt().box = { iron: 3 }; labSt().lockUntil = 0; true;`);
+            await LBENTER(T);
+            const key = (k, o) => T.eval(`labKeyDown(Object.assign({ key: '${k}', target: document.body, preventDefault: function () {}, repeat: false }, ${JSON.stringify(o || {})})); labKeyUp({ key: '${k}' }); true;`);
+            await T.eval(`labClear(); lab.bag = {}; labGive('coal', 7); labGive('sand', 2); labSel('coal'); lab.p.x = -10; lab.p.z = 7; true;`);
+            await key('q', { ctrlKey: true });
+            let r = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, box: labSt().box, g: lab.ground.length, sel: lab.sel })`));
+            if (r.box.coal !== 7 || r.bag.coal || r.bag.sand !== 2 || r.g || r.sel !== 'sand') bad.push('Ctrl+Q：手上那一堆存进仓库、离箱子很远也行 ' + JSON.stringify(r));
+            await T.eval(`labGive('coal', 40); labSel('coal'); true;`);
+            await key('q', { shiftKey: true });
+            r = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, n: labCount('coal'), far: Math.max.apply(null, lab.ground.map(function (e) { return Math.hypot(e.x - lab.p.x, e.z - lab.p.z); })) })`));
+            if (r.bag.coal || r.n !== 40 || r.far > 0.5) bad.push('Shift+Q：手上 40 个一次放在脚下 ' + JSON.stringify(r));
+            await T.eval(`lab.bag = {}; labGive('sand', 5); labSel('sand'); lab.p.x = LAB_ST.trash.x - 2; lab.p.z = LAB_ST.trash.z; true;`);
+            await T.eval(`labInteractWith('trash'); true;`);
+            r = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, box: labSt().box, near: labNearStation() })`));
+            if (r.bag.sand || r.box.sand) bad.push('垃圾桶：手上的扔进去就没了 ' + JSON.stringify(r));
+            if (r.near !== 'trash') bad.push('站在垃圾桶旁边，最近的台子该是垃圾桶 ' + JSON.stringify(r));
+            await T.eval(`window.__lf = []; let f0 = labFlash; labFlash = function (s) { __lf.push(s); }; labInteractWith('trash'); labStoreHeld(); labFlash = f0; true;`);
+            if (!(await T.eval(`__lf.length === 2 && /先选/.test(__lf[0]) && /先选/.test(__lf[1])`))) bad.push('手上没东西：垃圾桶和 Ctrl+Q 都提示先选 ' + await T.eval(`JSON.stringify(__lf)`));
+            if (!(await T.eval(`!!document.getElementById('lab-btn-store')`))) bad.push('手机上要有存仓库的按钮');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB28 实验室易用性 v4：Ctrl+Q 存进仓库、Shift+Q 放下手上的、垃圾桶', bad.length === 0, bad.join(' / '));
         }
 
         if (want('LB7')) {
@@ -3969,7 +4003,7 @@ async function enterExit(tab, key) {
             await LBENTER(T);
             // 布局：一个房间，只有合成台、灶台、订单板、仓库箱、1 个水池；没有工作台、炼药台、小院、雨
             const lay = JSON.parse(await T.eval(`JSON.stringify({ st: Object.keys(LAB_ST).sort(), room: LAB_ROOM, signs: lab.objs.filter(function (o) { return o.userData.labSign; }).length, pool: !!LAB_POOL, zone: typeof labZone, yard: typeof labInYard, rain: typeof labRainTick, bench: typeof labPanelBench, alch: typeof labPanelAlch })`));
-            if (lay.st.join() !== 'box,craft,orders,stove,table') bad.push('家具应该是 合成台、灶台、订单板、仓库箱、元素表 ' + lay.st);
+            if (lay.st.join() !== 'box,craft,orders,stove,table,trash') bad.push('家具应该是 合成台、灶台、订单板、仓库箱、元素表、垃圾桶 ' + lay.st);
             if (lay.zone !== 'undefined' || lay.yard !== 'undefined' || lay.rain !== 'undefined' || lay.bench !== 'undefined' || lay.alch !== 'undefined') bad.push('还留着旧的区域／雨／工作台／炼药台代码 ' + JSON.stringify(lay));
             // 墙：怎么按都走不出房间；脚下边界在墙里面
             const wall = JSON.parse(await T.eval(`(function(){ let o = {}; lab.p.x = 0; lab.p.z = 0; camera.rotation.set(0, 0, 0, 'YXZ'); lab.k.w = true; for (let i = 0; i < 400; i++) labMove(0.05); lab.k.w = false; o.zMin = lab.p.z;

@@ -109,7 +109,7 @@
             if (/^b:/.test(key)) return '装在瓶里';
             return '';
         }
-        const LAB_ST_DESC = { stove: '摆好材料再点火', craft: '合成药剂和器材', orders: '看订单、拿奖励', box: '存取材料', table: '氢到铁的元素和同位素' };
+        const LAB_ST_DESC = { stove: '摆好材料再点火', craft: '合成药剂和器材', orders: '看订单、拿奖励', box: '存取材料', table: '氢到铁的元素和同位素', trash: '手上的东西扔进去就没了' };
         function labValue(key) { return labDef(key).v || 0; }
 
         // ── 按 key 存数量的小仓库（仓库箱、身上、灶台都是这个形状）──
@@ -245,7 +245,7 @@
         // ══════════════ 运行时：一个能走动的小场景 ══════════════
         let lab = null;
         // 一个大房间（24 × 18 米）：靠北墙一排家具，水池在东南角。四面墙是实的，走不出去
-        const LAB_ST = { stove: { x: -8, z: -7.3, name: '灶台' }, craft: { x: -3, z: -7.3, name: '合成台' }, orders: { x: 3, z: -8.5, name: '订单板' }, box: { x: 8, z: -7.3, name: '仓库箱' }, table: { x: -11.7, z: 0, name: '元素表' } };
+        const LAB_ST = { stove: { x: -8, z: -7.3, name: '灶台' }, craft: { x: -3, z: -7.3, name: '合成台' }, orders: { x: 3, z: -8.5, name: '订单板' }, box: { x: 8, z: -7.3, name: '仓库箱' }, table: { x: -11.7, z: 0, name: '元素表' }, trash: { x: 10.9, z: -2.5, name: '垃圾桶' } };
         const LAB_POOL = { x: 8, z: 4.5, r: 1.7 };
         const LAB_ROOM = { x: 12, z: 9 };   // 墙内侧到中心的距离
         const LAB_BOUND = { x0: -11.4, x1: 11.4, z0: -8.4, z1: 8.4 };   // 人的中心能到的范围（离墙 0.6 米）
@@ -260,8 +260,7 @@
         function labEnter() {
             if (!labVisible() || lab) return;
             let L = labSt(); labBoxCatchUp(Date.now()); labOrdersFill();
-            let left = Math.ceil((L.lockUntil - Date.now()) / 1000);
-            if (left > 0) { showSysModal('实验室', '刚出过事，还要等 ' + left + ' 秒才能再进去。', [{ label: '好' }]); return; }
+            L.lockUntil = 0;   // v4：死了不再锁 60 秒（老档里记着的锁也不算）
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
             ensureScene();
@@ -329,13 +328,20 @@
             nav('screen-lobby'); selectGameMode('lab');   // 回大厅，右上角的「开始游戏！」就在老地方
             if (lost > 0) labFlash('仓库箱放不下，' + lost + ' 件东西没了');
         }
+        // v4：死了身上的东西直接消失，在门口站起来（血回满），不锁；地上、台面、放着的设备和仓库箱都不动。弹窗只写死因
         function labDie() {
             if (!lab || lab.over) return;
-            let L = labSt(); L.lockUntil = Date.now() + LAB_T.lock * 1000;
-            labExit(true);   // 身上、灶台、地上的东西都丢了；仓库箱里的不动
-            showSysModal('实验室', '你倒下了，身上和台面的东西都丢了。仓库箱里的没事。过 ' + LAB_T.lock + ' 秒才能再进来。', [{ label: '好' }]);
+            let cause = lab.lastHurt || '受伤';
+            labHoldStop && labHoldStop();
+            lab.bag = {}; lab.sel = null; lab.selIdx = 0;
+            lab.hp = 100; lab.hurtT = 0; lab.poisonT = 0; lab.speedT = 0; lab.dmgT = 0; lab.springT = 0;
+            lab.p.x = 0; lab.p.y = 0; lab.p.z = 2; lab.p.vy = 0; lab.k = {};
+            lab.deaths = (lab.deaths || 0) + 1; lab.lastDeath = cause; lab.lastHurt = null; lab.hudSig = '';
+            labPanelClose(); labBookClose();
+            showSysModal('实验室', '死因：' + cause + '。身上的东西没了。', [{ label: '好' }]);
         }
-        function labHurt(n) { if (!lab) return; lab.hp -= n; lab.hurtT = 0.3; }
+        // cause：死因（只写事实，比如"爆炸""氯气中毒""伤害药剂"）
+        function labHurt(n, cause) { if (!lab) return; lab.hp -= n; lab.hurtT = 0.3; if (cause) lab.lastHurt = cause; }
 
         // ── 场景 ──
         function labAddObj(o) { scene.add(o); lab.objs.push(o); return o; }
@@ -369,6 +375,8 @@
             labBox(3, 1.1, 1.6, 0x4a148c, st.craft.x, 0.55, st.craft.z); labSign(st.craft.name, st.craft.x, 2.2, st.craft.z, 2.4, 0.6);
             labBox(2.2, 1.2, 1.6, 0x455a64, st.box.x, 0.6, st.box.z); labSign(st.box.name, st.box.x, 2.2, st.box.z, 2.4, 0.6);
             labBox(3.4, 2.4, 0.3, 0xfff59d, st.orders.x, 1.5, st.orders.z); labSign(st.orders.name, st.orders.x, 3.0, st.orders.z + 0.3, 2.4, 0.6);
+            let tc = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.42, 1.0, 16), new THREE.MeshLambertMaterial({ color: 0x607d8b }));   // 垃圾桶
+            tc.position.set(st.trash.x, 0.5, st.trash.z); labAddObj(tc); labSign(st.trash.name, st.trash.x, 1.9, st.trash.z, 1.8, 0.45);
             labBox(0.3, 2.4, 3.6, 0xcfd8dc, -11.85, 1.5, 0); labSign(st.table.name, -11.4, 3.0, 0, 2.4, 0.6);   // 西墙上的元素表牌子
             let pool = new THREE.Mesh(new THREE.CylinderGeometry(LAB_POOL.r, LAB_POOL.r, 0.15, 24), new THREE.MeshLambertMaterial({ color: 0x29b6f6 }));
             pool.position.set(LAB_POOL.x, 0.08, LAB_POOL.z); labAddObj(pool); labSign('水池', LAB_POOL.x, 1.5, LAB_POOL.z, 1.8, 0.45);
@@ -449,7 +457,8 @@
             if (e.repeat) return;
             if (k === 'escape') { if (lab.panel) labPanelClose(); else if (document.getElementById('lab-book')) labBookClose(); return; }
             if (lab.panel || document.getElementById('lab-book')) return;
-            if (k === 'q' || k === 'g') { if (e.shiftKey) labPut(true); else labHoldStart('Q'); } else if (k === 'f') labPick(); else if (k === 'r') labUse('L'); else if (k === 'e') labInteract(); else if (k === 't') labThrow();
+            if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); labStoreHeld(); }
+            else if (k === 'q' || k === 'g') { if (e.shiftKey) labPut(true); else labHoldStart('Q'); } else if (k === 'f') labPick(); else if (k === 'r') labUse('L'); else if (k === 'e') labInteract(); else if (k === 't') labThrow();
             else if (/^[1-6]$/.test(k)) labSelIdx(+k - 1);
         }
         function labKeyUp(e) {
@@ -1103,7 +1112,7 @@
             R.ground.slice().forEach(function (e) { if (Math.hypot(e.x - x, e.z - z) <= LAB_T.boomR) labKill(e); });
             R.devs.slice().forEach(function (d) { if (Math.hypot(d.x - x, d.z - z) <= LAB_T.boomR) labDevRemove(d, false); });   // 设备和接在上面的线也炸没了
             if (Math.hypot(LAB_ST.stove.x - x, LAB_ST.stove.z - z) <= LAB_T.boomR) { R.stove.items = {}; R.stove.cook = null; }
-            if (Math.hypot(R.p.x - x, R.p.z - z) <= LAB_T.boomR) { R.bag = {}; R.sel = null; labHurt(LAB_T.boomDmg); }
+            if (Math.hypot(R.p.x - x, R.p.z - z) <= LAB_T.boomR) { R.bag = {}; R.sel = null; labHurt(LAB_T.boomDmg, '爆炸'); }
             labFxBall(x, z, LAB_T.boomR * 0.6, 0xff9800);
             labFlash('砰！');
         }
@@ -1123,9 +1132,9 @@
         function labToxic(dt) {
             let hit = false;
             lab.ground.forEach(function (g) {
-                if (labDef(g.key).toxic && Math.hypot(g.x - lab.p.x, g.z - lab.p.z) <= LAB_T.poisonR) hit = true;
+                if (labDef(g.key).toxic && Math.hypot(g.x - lab.p.x, g.z - lab.p.z) <= LAB_T.poisonR) hit = hit || g.key;
             });
-            if (hit) { labHurt(LAB_T.poisonDps * dt); lab.poisonT = 0.4; } else if (lab.poisonT > 0) lab.poisonT -= dt;
+            if (hit) { labHurt(LAB_T.poisonDps * dt, labName(hit).replace(/（.*）|\(.*\)/g, '') + '中毒'); lab.poisonT = 0.4; } else if (lab.poisonT > 0) lab.poisonT -= dt;
         }
 
         // ══════════════ 灶台 ══════════════
@@ -1236,7 +1245,7 @@
             labSyncSel();
             let k = lab.sel; if (!k || !labN(lab.bag, k)) { labFlash('先选一样东西'); return false; }
             if (labDevType(k)) return labPutDev(k);   // 设备放在面前，一次一个
-            let n = all ? Math.min(labN(lab.bag, k), 30) : 1;
+            let n = all ? Math.min(labN(lab.bag, k), LAB_PUT_ALL) : 1;   // Shift+Q：手上那一堆一次放下（一次最多 100 个）
             if (labIsParticle(k)) { let room = LAB_PARTICLE_CAP - labParticleCount(); if (room <= 0) return labFull(); n = Math.min(n, room); }
             labDel(lab.bag, k, n);
             for (let i = 0; i < n; i++) {
@@ -1246,6 +1255,26 @@
                 labSpawn(k, lab.p.x + Math.cos(ang) * r, lab.p.z + Math.sin(ang) * r);
             }
             labSyncSel();
+            return true;
+        }
+        const LAB_PUT_ALL = 100;
+        // Ctrl+Q：手上那一堆瞬间存进仓库箱，站在哪都行
+        function labStoreHeld() {
+            if (!lab || lab.over) return false;
+            labSyncSel();
+            let k = lab.sel, n = labN(lab.bag, k); if (!k || !n) { labFlash('先选一样东西'); return false; }
+            if (!labBoxAdd(k, n)) { labFlash('仓库箱满了'); return false; }
+            labDel(lab.bag, k, n); labSyncSel(); lab.hudSig = '';
+            if (lab.panel === 'box') labPanelBox();
+            labFlash('存进仓库：' + labName(k) + ' ×' + n);
+            return true;
+        }
+        // 垃圾桶：手上那一堆扔进去就没了
+        function labTrash() {
+            labSyncSel();
+            let k = lab.sel, n = labN(lab.bag, k); if (!k || !n) { labFlash('先选要扔的东西'); return false; }
+            labDel(lab.bag, k, n); labSyncSel(); lab.hudSig = '';
+            labFlash('扔掉了：' + labName(k) + ' ×' + n);
             return true;
         }
         let labDrop = labPut;   // 老名字，测试和旧代码还在用
@@ -1294,7 +1323,7 @@
             labDel(lab.bag, 'pot:dmg', 1); labBagGive('bottle', 1); labSyncSel();
             let tx = lab.p.x + lab.face.x * 5, tz = lab.p.z + lab.face.z * 5;
             labFxBall(tx, tz, 1.6, 0x8e24aa);
-            if (Math.hypot(lab.p.x - tx, lab.p.z - tz) <= 3) labHurt(50);
+            if (Math.hypot(lab.p.x - tx, lab.p.z - tz) <= 3) labHurt(50, '自己扔的伤害药剂');
             labFlash('扔出去了'); labSyncSel();
             return true;
         }
@@ -1305,6 +1334,7 @@
         }
         function labInteractWith(st) {
             if (!st) { labFlash('附近没有能用的台子'); return false; }
+            if (st === 'trash') return labTrash();
             if (st === 'stove') labPanelStove(); else if (st === 'craft') labPanelCraft(); else if (st === 'orders') labPanelOrders(); else if (st === 'table') labPanelTable(); else labPanelBox();
             return true;
         }
@@ -1363,7 +1393,7 @@
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,640px);text-align:center;pointer-events:auto;">' +
                 '<div id="lab-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:15px;"></div>' +
                 '<div style="margin-top:2px;"><button id="lab-btn-act" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'L\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'L\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">动作</button><button id="lab-btn-put" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'Q\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'Q\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">放下 (Q)</button>' +
-                '<button id="lab-btn-rc" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'R\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'R\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">拆包/接水</button><button style="' + LAB_BTN + '" onclick="labThrow()">扔药 (T)</button><button style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHold(\'jump\',true)" ontouchend="labHold(\'jump\',false)" onmousedown="labHold(\'jump\',true)" onmouseup="labHold(\'jump\',false)">跳</button></div></div>' +
+                '<button id="lab-btn-rc" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'R\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'R\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">拆包/接水</button><button style="' + LAB_BTN + '" onclick="labThrow()">扔药 (T)</button><button id="lab-btn-store" style="' + LAB_BTN + '" onclick="labStoreHeld()">存仓库 (Ctrl+Q)</button><button style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHold(\'jump\',true)" ontouchend="labHold(\'jump\',false)" onmousedown="labHold(\'jump\',true)" onmouseup="labHold(\'jump\',false)">跳</button></div></div>' +
                 '';   // 走路用屏幕上通用的摇杆（左半屏拖动），转视角拖右半屏——和主游戏一样
             document.body.appendChild(d);
         }
@@ -1389,7 +1419,7 @@
             else if (aim.dev) hint = labDevInfo(aim.dev) + '<br><small>' + (aim.dev.ty === 'switch' ? '左键：开关　' : (wh ? '左键：接线　' : '')) + '右键：收起</small>';
             else if (aim.wire) hint = '电线<br><small>' + (wh ? '左键：拆掉' : '拿着电线，左键：拆掉') + '</small>';
             else if (aim.item) { let ds = labDesc(aim.item.key); hint = labName(aim.item.key) + (ds ? '：' + ds : '') + '<br><small>左键：拿</small>'; }
-            else if (aim.station) hint = LAB_ST[aim.station].name + '：' + LAB_ST_DESC[aim.station] + '<br><small>左键：打开</small>';
+            else if (aim.station) hint = LAB_ST[aim.station].name + '：' + LAB_ST_DESC[aim.station] + '<br><small>' + (aim.station === 'trash' ? '左键：扔掉手上的' : '左键：打开') + '</small>';
             else if (Math.hypot(R.p.x - LAB_POOL.x, R.p.z - LAB_POOL.z) <= LAB_POOL.r + 1.6) hint = '水池<br><small>选中空玻璃瓶，右键：接水</small>';
             let hEl = document.getElementById('lab-hint');
             if (hEl && hEl.getAttribute('data-s') !== hint) { hEl.innerHTML = hint; hEl.setAttribute('data-s', hint); hEl.style.display = hint ? '' : 'none'; }   // 内容没变就不碰 DOM
