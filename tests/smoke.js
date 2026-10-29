@@ -5090,11 +5090,11 @@ async function enterExit(tab, key) {
                 await T.eval(`indTeleport(-8, 5); indAdvance(0.2); true;`);
                 const bm = JSON.parse(await T.eval(`JSON.stringify({ lamp: !!indDev(${lamp}), bank: !!indDev(${bank}), wires: ind.base.wires.length, ground: ind.base.ground.filter(function (g) { return g.x > 6; }).length, hp: ind.base.surv.hp })`));
                 if (bm.lamp || !bm.bank || bm.wires !== 0 || bm.ground !== 0 || bm.hp !== 100) bad.push('过压爆炸不对 ' + JSON.stringify(bm));
-                // 人在旁边炸：扣 40
+                // 人在旁边炸：按距离扣血
                 const lamp2 = await place('dev_lamp', 6, 0);
                 await click(bank, 'wire'); await click(lamp2, 'wire');
-                await T.eval(`(function(){ let d = indDev(${lamp2}); indTeleport(d.x + 1, d.z); indAdvance(0.2); })(); true;`);
-                if (Math.abs((await T.eval(`ind.base.surv.hp`)) - 60) > 0.5) bad.push('人在 3 米内没扣 40 血 ' + await T.eval(`ind.base.surv.hp`));
+                await T.eval(`(function(){ let d = indDev(${lamp2}); indTeleport(d.x + 2.9, d.z); indAdvance(0.2); })(); true;`);
+                if (Math.abs((await T.eval(`ind.base.surv.hp`)) - (await T.eval(`100 - indBoomDmg(2.9, IND_BOOM_R)`))) > 0.5) bad.push('人在 2.9 米按距离扣血（离中心越近越多，范围边上 60） ' + await T.eval(`ind.base.surv.hp`));
                 // 发电机：中火灶台 3 米内 12 V，带水泵，水泵把地浇了
                 await T.eval(`(function(){ ind.base.crops.push({ k: 'wheat', x: -17, z: 3, g: 0, wet: 0, times: 0 }); indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(2); indPanelClose(); })(); true;`);
                 const gen = await place('dev_gen', 8, -15), pump = await place('dev_pump', 12, -10);
@@ -5175,9 +5175,10 @@ async function enterExit(tab, key) {
                 await T.eval(`(function(){ let d = indDev(${el}); d.x = IND_BASE_ST.stove.x + 1.5; d.z = IND_BASE_ST.stove.z + 2; ind.wireDirty = true; indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(3); indPanelClose(); indAdvance(20); d.et = 0; indAdvance(21); })(); true;`);
                 const na = JSON.parse(await T.eval(`JSON.stringify({ st: indDev(${el}).st, t: ind.base.stove.temp, e: ind.base.elems })`));
                 if (na.st.sodium !== 1 || na.st.b_cl2 !== 1 || !na.e[11]) bad.push('熔融盐电解不对 ' + JSON.stringify(na));
-                // 氢气：灶台开着、3 米内放气就炸（人在旁边扣 40）；离火远飘走
-                await T.eval(`(function(){ indBagAdd('b_h2', 2); ind.base.surv.hp = 100; indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 2.5); indLookAt(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z); indSelect('b_h2'); indDrop(); })(); true;`);
-                if (Math.abs((await T.eval(`ind.base.surv.hp`)) - 60) > 0.5) bad.push('氢气碰火没炸 ' + await T.eval(`ind.base.surv.hp`));
+                // 氢气：灶台开着、3 米内放气就炸（人在旁边，穿了防爆服）；离火远飘走
+                await T.eval(`(function(){ indBagAdd('b_h2', 2); ind.base.surv.hp = 100; indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 2.5); indLookAt(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z); ind.base.wear = { body: 'blast_suit', head: 'blast_helmet' }; indSelect('b_h2'); indDrop(); })(); true;`);
+                if (Math.abs((await T.eval(`ind.base.surv.hp`)) - 55) > 0.5) bad.push('氢气碰火没炸（1 米内 150，穿防爆服加头盔 −70% = 45） ' + await T.eval(`ind.base.surv.hp`));
+                await T.eval(`ind.base.wear = {}; true;`);
                 await T.eval(`(function(){ ind.base.surv.hp = 100; indTeleport(-20, 15); indSelect('b_h2'); indDrop(); })(); true;`);
                 if ((await T.eval(`ind.base.surv.hp`)) !== 100) bad.push('离火远的氢气也炸了');
                 // 氯气：毒气，站在里面每秒扣 8
@@ -5736,19 +5737,20 @@ async function enterExit(tab, key) {
                 const boomSetup = (key, fire, temp) => T.eval(`(function(){ ind.base.devs = []; ind.base.wires = []; ind.base.ground = []; ind.base.surv.hp = 100;
                     ind.base.stove = { items: { '${key}': 1 }, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null };
                     ind.base.devs.push({ id: 901, ty: 'lamp', x: ${st}.x + 2, z: ${st}.z, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 902, ty: 'lamp', x: ${st}.x + 8, z: ${st}.z, bats: 0, u: 0, on: true, ft: 20, st: {} });
-                    indTeleport(${st}.x - 2, ${st}.z); ind.devDirty = true; })(); true;`);
+                    indTeleport(${st}.x - 3, ${st}.z); ind.devDirty = true; })(); true;`);
                 await boomSetup('cyl:h2=19', 3, 1200); await T.eval(`indAdvance(3); true;`);
                 if (await T.eval(`ind.base.devs.length !== 2 || ind.base.surv.hp !== 100`)) bad.push('19 份氢 1200°C（95 个大气压）就炸了');
                 await boomSetup('cyl:h2=20', 3, 1200); await T.eval(`indAdvance(3); true;`);
                 const b1 = JSON.parse(await T.eval(`JSON.stringify({ ids: ind.base.devs.map(function (d) { return d.id; }), hp: ind.base.surv.hp, items: ind.base.stove.items })`));
-                if (b1.ids.join() !== '902' || b1.hp < 59.9 || b1.hp > 62 || Object.keys(b1.items).length) bad.push('超过 100 个大气压没炸对（3 米内的灯没了、8 米外的还在、人扣 40、钢瓶没了） ' + JSON.stringify(b1));
+                const bHp = 100 - (await T.eval(`indBoomDmg(3, ind.lastBoom.R)`));
+                if (b1.ids.join() !== '902' || Math.abs(b1.hp - bHp) > 2 || b1.hp >= 100 || Object.keys(b1.items).length) bad.push('超过 100 个大气压没炸对（3 米内的灯没了、8 米外的还在、人按距离扣血、钢瓶没了） ' + JSON.stringify(b1) + ' 期望 ' + bHp);
                 // 压力小的钢瓶：半径 = 1 + 压力 ÷ 50，2 米外的灯不受影响。氢氧混装 500°C 以上立即炸（中火 600°C），小火 200°C 不炸
                 await boomSetup('cyl:h2=2,o2=1', 1, 200); await T.eval(`indAdvance(3); true;`);
                 if (await T.eval(`ind.base.devs.length !== 2`)) bad.push('氢氧混装在 200°C 就炸了');
                 await boomSetup('cyl:h2=2,o2=1', 2, 600); await T.eval(`indAdvance(14); true;`);
                 const b2 = JSON.parse(await T.eval(`JSON.stringify({ ids: ind.base.devs.map(function (d) { return d.id; }), hp: ind.base.surv.hp })`));
                 if (b2.ids.join() !== '901,902' && b2.ids.join() !== '902') bad.push('氢氧混装 600°C 炸的范围不对 ' + JSON.stringify(b2));
-                if (b2.hp !== 100 && !(b2.hp > 59.9 && b2.hp < 62)) bad.push('氢氧混装 600°C 的伤害不对 ' + b2.hp);
+                if (Math.abs(b2.hp - (100 - (await T.eval(`indBoomDmg(3, ind.lastBoom.R)`)))) > 2) bad.push('氢氧混装 600°C 的伤害不对 ' + b2.hp);
                 if (await T.eval(`Object.keys(ind.base.stove.items).length`)) bad.push('氢氧混装 600°C 没炸');
                 await boomSetup('cyl:h2=3', 2, 600); await T.eval(`indAdvance(14); true;`);
                 if (await T.eval(`ind.base.devs.length !== 2 || !ind.base.stove.items['cyl:h2=3']`)) bad.push('只有氢气的钢瓶 600°C 也炸了');
@@ -6344,11 +6346,11 @@ async function enterExit(tab, key) {
                 if (!d2 || d2.cause !== '中毒' || !/氯气/.test(d2.detail)) bad.push('毒死应该写中毒、站在氯气里 ' + JSON.stringify(d2));
                 await T.eval(`indRespawn(); ind.clouds = []; true;`);
                 // ── 爆炸：飘字，死因写爆炸和离爆炸点多远 ──
-                await T.eval(`ind.base.surv.hp = 100; ind.floatLog = []; indTeleport(-20, 15); indBoom(-20, 14, 0, '氢气遇到火'); true;`);
-                if (!(await T.eval(`ind.floatLog.indexOf('−40 爆炸') >= 0 && ind.base.surv.hp === 60`))) bad.push('爆炸没飘 −40 爆炸 ' + await T.eval(`JSON.stringify([ind.floatLog, ind.base.surv.hp])`));
-                await T.eval(`ind.base.surv.hp = 30; indBoom(-20, 14, 0, '氢气遇到火'); true;`);
+                await T.eval(`ind.base.surv.hp = 100; ind.floatLog = []; indTeleport(-20, 15); indBoom(-20, 12.2, 0, '氢气遇到火'); true;`);
+                if (!(await T.eval(`ind.floatLog.indexOf('−69 爆炸') >= 0 && Math.abs(ind.base.surv.hp - 31) < 0.5`))) bad.push('爆炸没飘 −69 爆炸（2.8 米：150 − 90 × 1.8 ÷ 2） ' + await T.eval(`JSON.stringify([ind.floatLog, ind.base.surv.hp])`));
+                await T.eval(`ind.base.surv.hp = 30; indBoom(-20, 12.2, 0, '氢气遇到火'); true;`);
                 const d3 = await J(`ind.dead`);
-                if (!d3 || d3.cause !== '爆炸' || !/氢气遇到火/.test(d3.detail) || !/1\.0 米/.test(d3.detail)) bad.push('炸死的死因不对 ' + JSON.stringify(d3));
+                if (!d3 || d3.cause !== '爆炸' || !/氢气遇到火/.test(d3.detail) || !/2\.8 米/.test(d3.detail)) bad.push('炸死的死因不对 ' + JSON.stringify(d3));
                 await T.eval(`indRespawn(); true;`);
                 // ── 饿渴冻：死因写具体数 ──
                 await T.eval(`ind.base.surv.food = 0; ind.base.surv.water = 100; ind.base.surv.hp = 1; indAdvance(3); true;`);
@@ -6486,6 +6488,71 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
             await T.close();
             report('IND23 水里和木筏：浅水深水速度、深水体力、木筏的配方放下上下、水上 2 倍速不上岸、只在这一趟', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND24')) {
+            // IND24 爆炸加强 + 防爆装备（只给硬核）：爆炸伤害按距离（≤1 米 150、范围边上 60、中间线性）；防爆服（6 钢锭 + 4 毛线）−50%、走路 ×0.6、保暖 +10；
+            // 防爆头盔（2 钢锭 + 1 玻璃板）−20%；两样 −70%；悠闲没有这两样、爆炸不伤人
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; ind.bag = {}; indFlash = function () {}; true;`);
+                const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
+                const ci = (o) => `IND_CRAFT.findIndex(function (r) { return r.out === '${o}'; })`;
+                // ── 配方：硬核有，悠闲看不到 ──
+                await T.eval(`indBagAdd('steel', 5); indBagAdd('yarn', 4); if (indCraft(${ci('blast_suit')})) throw 1; indBagAdd('steel', 1); indCraft(${ci('blast_suit')}); true;`);
+                if (!(await T.eval(`ind.bag.blast_suit === 1 && !ind.bag.steel && !ind.bag.yarn`))) bad.push('6 钢锭 + 4 毛线做不出防爆服 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indBagAdd('steel', 2); indBagAdd('glass_plate', 1); indCraft(${ci('blast_helmet')}); true;`);
+                if (!(await T.eval(`ind.bag.blast_helmet === 1 && !ind.bag.steel && !ind.bag.glass_plate`))) bad.push('2 钢锭 + 1 玻璃板做不出防爆头盔 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if (!(await T.eval(`(function(){ ind.base.rule = 'casual'; let c = indCraftShow(IND_CRAFT[${await T.eval(ci('blast_suit'))}]) || indCraftShow(IND_CRAFT[${await T.eval(ci('blast_helmet'))}]); ind.base.rule = 'hard'; return !c; })()`))) bad.push('悠闲不该看到防爆装备的配方');
+                // ── 伤害按距离 ──
+                const hurt = async (d, wear, R) => {
+                    await T.eval(`ind.dead = null; ind.hurt = null; ind.base.surv.hp = 100000; ind.base.wear = ${JSON.stringify(wear)}; indTeleport(-20, 15); indBoom(-20, ${15 - d}, ${R || 0}, '测试'); true;`);
+                    return 100000 - (await T.eval(`ind.base.surv.hp`));
+                };
+                const near = (a, b) => Math.abs(a - b) < 0.05;
+                let v;
+                v = await hurt(0.5, {}); if (!near(v, 150)) bad.push('0.5 米应该 150 ' + v);
+                v = await hurt(1, {}); if (!near(v, 150)) bad.push('1 米应该 150 ' + v);
+                v = await hurt(2, {}); if (!near(v, 105)) bad.push('半径 3，2 米应该 150 − 90 × 1 ÷ 2 = 105 ' + v);
+                v = await hurt(2.999, {}); if (!near(v, 60.05)) bad.push('范围边上应该 60 ' + v);
+                v = await hurt(3.2, {}); if (v !== 0) bad.push('范围外不扣 ' + v);
+                v = await hurt(5, {}, 6); if (!near(v, 150 - 90 * 4 / 5)) bad.push('半径 6，5 米应该 78 ' + v);
+                v = await hurt(1, { body: 'blast_suit' }); if (!near(v, 75)) bad.push('防爆服 1 米应该 75 ' + v);
+                v = await hurt(1, { head: 'blast_helmet' }); if (!near(v, 120)) bad.push('防爆头盔 1 米应该 120 ' + v);
+                v = await hurt(1, { body: 'blast_suit', head: 'blast_helmet' }); if (!near(v, 45)) bad.push('两样都穿 1 米应该 45 ' + v);
+                v = await hurt(2.999, { body: 'blast_suit', head: 'blast_helmet' }); if (!near(v, 60.05 * 0.3)) bad.push('两样都穿范围边上应该 18 ' + v);
+                // 1 米内没穿：死；穿了两样：活着
+                await T.eval(`ind.dead = null; ind.hurt = null; ind.base.surv.hp = 100; ind.base.wear = {}; indTeleport(-20, 15); indBoom(-20, 14.5, 0, '测试'); true;`);
+                if (!(await T.eval(`!!ind.dead && ind.dead.cause === '爆炸'`))) bad.push('1 米内没穿防爆服应该炸死');
+                await T.eval(`indRespawn(); ind.base.wear = { body: 'blast_suit', head: 'blast_helmet' }; ind.base.surv.hp = 100; indTeleport(-20, 15); indBoom(-20, 14.5, 0, '测试'); true;`);
+                if (!(await T.eval(`!ind.dead && Math.abs(ind.base.surv.hp - 55) < 0.05`))) bad.push('两样都穿 1 米内应该扣 45 活着 ' + await T.eval(`ind.base.surv.hp`));
+                // 远征里的爆炸一样
+                await T.eval(`ind.base.wear = {}; indGoTrip(2024); ind.base.surv.hp = 100000; indTeleport(3, 3); indTripBoom(3, 4.5, '测试'); true;`);
+                if (!near(100000 - (await T.eval(`ind.base.surv.hp`)), 150 - 90 * 0.5 / 2)) bad.push('远征里的爆炸也按距离 ' + (100000 - (await T.eval(`ind.base.surv.hp`))));
+                await T.eval(`indGoBase(false); true;`);
+                // ── 走路 ×0.6、保暖 +10 ──
+                const walk = async (wear) => {
+                    await T.eval(`ind.base.wear = ${JSON.stringify(wear)}; ind.base.surv.temp = 37; indTeleport(-20, 15); indLookAt(0, 15); ind.k.w = true; ind.stam = 100; true;`);
+                    const dx = await T.eval(`(function(){ let x0 = ind.p.x; for (let i = 0; i < 20; i++) indMove(0.05); ind.k.w = false; return ind.p.x - x0; })()`);
+                    return dx;
+                };
+                const w0 = await walk({}), w1 = await walk({ body: 'blast_suit' }), w2 = await walk({ head: 'blast_helmet' });
+                if (Math.abs(w0 - 7) > 0.1 || Math.abs(w1 - 4.2) > 0.1 || Math.abs(w2 - 7) > 0.1) bad.push('防爆服走路 ×0.6、头盔不影响：' + [w0, w1, w2].join('/'));
+                await T.eval(`ind.base.wear = { body: 'blast_suit' }; true;`);
+                const wm1 = await T.eval(`indWarmth()`);
+                await T.eval(`ind.base.wear = {}; true;`);
+                if (wm1 !== 10) bad.push('防爆服保暖应该 +10 ' + wm1);
+                // 悠闲：爆炸不伤人
+                await T.eval(`ind.base.rule = 'casual'; ind.base.wear = {}; ind.base.surv.hp = 100; indTeleport(-20, 15); indBoom(-20, 14.5, 0, '测试'); true;`);
+                if ((await T.eval(`ind.base.surv.hp`)) !== 100) bad.push('悠闲爆炸不该伤人');
+                await T.eval(`ind.base.rule = 'hard'; true;`);
+            }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND24 爆炸加强和防爆装备：按距离扣血（1 米 150、边上 60）、防爆服 −50% 头盔 −20%、走路 ×0.6、保暖 +10、悠闲没有', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
