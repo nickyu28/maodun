@@ -1666,7 +1666,7 @@
         // 不能一个文件一个 <script>：函数声明只在自己那个 script 里提前，顶层代码调后面文件里的函数
         // （比如触屏时 selectControl → applyControlHints → kTxt）会报错，那个文件剩下的部分全都不执行。
         // 有一个没下载下来就一个都不执行，盖一层重试提示。
-        const GAME_FILES = ['js/01-core.js', 'js/02-lobby.js', 'js/03-world.js', 'js/04-blaze-2v2.js', 'js/05-shop.js', 'js/06-blaze.js', 'js/07-blaze-net.js', 'js/08-night.js', 'js/09-hunt.js', 'js/10-race.js', 'js/11-jail.js', 'js/12-dodge.js', 'js/13-escape.js', 'js/14-park.js', 'js/15-cake.js', 'js/16-modes.js', 'js/17-hub.js', 'js/18-lab.js', 'js/19-industry.js'];   // 19-industry：猫盾工业（硬核模式），另一条线在 industry 分支上开发
+        const GAME_FILES = ['js/01-core.js', 'js/02-lobby.js', 'js/03-world.js', 'js/04-blaze-2v2.js', 'js/05-shop.js', 'js/06-blaze.js', 'js/07-blaze-net.js', 'js/08-night.js', 'js/09-hunt.js', 'js/10-race.js', 'js/11-jail.js', 'js/12-dodge.js', 'js/13-escape.js', 'js/14-park.js', 'js/15-cake.js', 'js/16-modes.js', 'js/17-hub.js', 'js/18-lab.js', 'js/19-industry.js', 'js/19-industry-nuke.js'];   // 19-industry：猫盾工业（硬核模式），另一条线在 industry 分支上开发
         // 哪个文件没下载下来，就盖一层提示，给个重试按钮
         function gameBootFail() {
             let l = document.getElementById('boot-load'); if (l) l.remove();
