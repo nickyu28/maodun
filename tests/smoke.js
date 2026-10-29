@@ -5708,11 +5708,10 @@ async function enterExit(tab, key) {
                 const sv2 = await T.eval(`new Promise(function (r) { indLoad(function (b) { IND_CTX_BASE = b; let k = Object.keys(b.bag)[0]; let nm = k && IND_ITEMS[k] && IND_ITEMS[k].name; IND_CTX_BASE = null; r(JSON.stringify({ k: k, nm: nm, carried: Object.keys(b.carried).length, chests: b.chests.length })); }); })`).then(JSON.parse);
                 if (!sv2.k || !/^inst:/.test(sv2.k) || !/仓库箱（/.test(sv2.nm) || sv2.carried < 1 || sv2.chests !== 1) bad.push('搬着的箱子存档读不回来 ' + JSON.stringify(sv2));
                 // ── 泥土和农田 ──
-                await T.eval(`${HIDE} indGoTrip(2024); ind.bag = {}; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodes.push({ key: 'dirt', x: 0, z: -4, y: 0, n: 3, dead: false }); ind.nodeDirty = true; true;`);
-                await T.eval(`indTeleport(0, -2); indLookAt(0, -4); indAction(); true;`);
-                if ((await T.eval(`ind.bag.dirt || 0`)) !== 3) bad.push('空手挖不了泥土 ' + await T.eval(`JSON.stringify(ind.bag)`));
-                const dr = await J(`{ plain: IND_BIOMES.plain.res.dirt, forest: IND_BIOMES.forest.res.dirt, other: Object.keys(IND_BIOMES).filter(function (b) { return IND_BIOMES[b].res.dirt; }).join(), tool: IND_NODES.dirt.tool, give: IND_NODES.dirt.give.join() }`);
-                if (!dr.plain || !dr.forest || dr.other !== 'plain,forest' || dr.tool !== 0 || dr.give !== '2,3') bad.push('泥土只在平原和森林、空手挖 2～3 份 ' + JSON.stringify(dr));
+                await T.eval(`${HIDE} indGoTrip(2024); ind.bag = {}; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodeDirty = true; (function(){ for (let r = 3; r < 60; r += 3) for (let a = 0; a < 6.3; a += 0.5) { let x = Math.cos(a) * r, z = Math.sin(a) * r; if (indBiome(ind.map, x, z) === 'plain' && indHeight(ind.map, x, z) > 0.5 && indHeight(ind.map, x + 2, z) > 0.5 && indBiome(ind.map, x + 2, z) === 'plain') { indTeleport(x, z); indLookAt(x + 10, z); return; } } })(); indAction(); indAdvance(3.2); true;`);
+                if ((await T.eval(`ind.bag.dirt || 0`)) !== 1) bad.push('空手对着平原地面左键挖 3 秒应该得 1 份泥土 ' + await T.eval(`JSON.stringify([ind.bag, ind.ch, ind.panel, ind.where, ind.dead, ind.over, indAim(), typeof __fl !== 'undefined' ? __fl.slice(-3) : 0, ind.p])`));
+                const dr = await J(`{ other: Object.keys(IND_BIOMES).filter(function (b) { return IND_BIOMES[b].res.dirt || IND_BIOMES[b].res.sand; }).join(), plain: WD_DIG.plain, forest: WD_DIG.forest, beach: WD_DIG.beach, desert: WD_DIG.desert, mountain: WD_DIG.mountain }`);
+                if (dr.other !== '' || dr.plain !== 'dirt' || dr.forest !== 'dirt' || dr.beach !== 'sand' || dr.desert !== 'sand' || dr.mountain !== 'stone') bad.push('泥土沙子改成对着地面挖，不再是地表小块 ' + JSON.stringify(dr));
                 await T.eval(`indGoBase(false); true;`);
                 await T.eval(`ind.base.tiles = []; ind.bag = { dirt: 3 }; true;`);
                 await face(10, 3, 10, -4);
@@ -6457,26 +6456,26 @@ async function enterExit(tab, key) {
                 await T.eval(`${HIDE} indSetRule('hard'); window.__oldFlash = indFlash; indFlash = function () {}; true;`);
                 const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
                 const st = await J(`(function(){
-                    const ORES = { ore_cu: 1, ore_zn: 1, ore_sn: 1, ore_fe: 1, coal: 1, sulfur: 1, ore_u: 1 };
-                    let sn = 0, san = 0, total = 0, ore = 0, bad = [], clusters = 0, small = 0, maxSpan = 0, maps = 100;
+                    let sn = 0, san = 0, total = 0, ore = 0, units = 0, snUnits = 0, badN = 0, crowd = 0, maps = 100;
                     for (let s = 1; s <= maps; s++) {
                         indGoTrip(s * 7919);
                         let nodes = ind.nodes;
-                        nodes.forEach(function (n) { total++; if (ORES[n.key]) ore++; if (n.key === 'ore_sn') sn++; if (n.key === 'sand_sn') san++; });
-                        // 同一种矿 6 米内连成片：每个矿点 6 米内至少还有 2 个同种（成片的最少 3 个点）
                         nodes.forEach(function (n) {
-                            if (!ORES[n.key]) return;
-                            let mates = nodes.filter(function (m) { return m !== n && m.key === n.key && Math.hypot(m.x - n.x, m.z - n.z) <= 6.01; }).length;
-                            if (mates < 2) small++;
+                            total++; if (n.key === 'sand_sn') san++;
+                            if (!n.out) return;
+                            ore++; units += n.n; if (n.key === 'ore_sn') { sn++; snUnits += n.n; }
+                            if (!(n.n >= 10 && n.n <= 30 && n.n0 === n.n)) badN++;
+                            // 一处 1～2 个露头：6 米内同种的另一个最多 1 个
+                            if (nodes.filter(function (m) { return m !== n && m.out && m.key === n.key && Math.hypot(m.x - n.x, m.z - n.z) <= 6.01; }).length > 1) crowd++;
                         });
                     }
-                    return { sn: sn / maps, san: san / maps, total: total / maps, ore: ore / maps, small: small };
+                    return { sn: sn / maps, snUnits: snUnits / maps, san: san / maps, total: total / maps, ore: ore / maps, units: units / maps, badN: badN, crowd: crowd };
                 })()`);
-                console.log('IND22 100 张图平均每张：锡矿点 ' + st.sn.toFixed(2) + '，锡砂点 ' + st.san.toFixed(2) + '，矿点合计 ' + st.ore.toFixed(1) + '，资源点合计 ' + st.total.toFixed(1) + '，没成片的矿点 ' + st.small);
-                if (st.small !== 0) bad.push('有矿点 6 米内同种不到 3 个（没成片） ' + st.small);
-                // 改前（同样 100 张图）：锡矿点 4.76，矿点合计 48.0，资源点合计 266.3
-                if (st.sn < 4.76 * 1.2) bad.push('锡矿点应该比原来多 ' + st.sn);
-                if (st.ore < 48.0) bad.push('矿点合计不该比原来少 ' + st.ore);
+                console.log('IND22 100 张图平均每张：锡矿露头 ' + st.sn.toFixed(2) + ' 个（共 ' + st.snUnits.toFixed(0) + ' 份），锡砂点 ' + st.san.toFixed(2) + '，矿露头合计 ' + st.ore.toFixed(1) + ' 个（共 ' + st.units.toFixed(0) + ' 份），资源点合计 ' + st.total.toFixed(1));
+                if (st.badN) bad.push('露头每个应该有 10～30 份 ' + st.badN);
+                if (st.crowd > st.ore * 100 * 0.05) bad.push('一处是 1～2 个露头，6 米内同种挤 3 个的不该多 ' + st.crowd);
+                if (st.sn < 1) bad.push('每张图应该有锡矿露头 ' + st.sn);
+                if (st.ore < 20) bad.push('露头太少 ' + st.ore);
                 if (st.san <= 0) bad.push('海边没有锡砂');
                 const cfg = await J(`{ w: IND_BIOMES.mountain.res.ore_sn, b: IND_BIOMES.beach.res.sand_sn, tool: IND_NODES.sand_sn.tool, out: IND_NODES.sand_sn.out, casual: !!IND_CASUAL_RES.sand_sn }`);
                 if (cfg.w !== 3 || cfg.b !== 1 || cfg.tool !== 0 || cfg.out !== 'ore_sn' || cfg.casual) bad.push('锡的配置不对（山地权重 3、海边锡砂权重 1、空手、悠闲没有） ' + JSON.stringify(cfg));
@@ -6871,10 +6870,11 @@ async function enterExit(tab, key) {
                 // ── 存档：反应堆的棒和控制棒、辐射区、原子弹、铅箱 ──
                 await T.eval(`ind.base.devs = [{ id: 5, ty: 'reactor', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0.25 }, { spent: true }, { i: 99, b: 0 }], ctl: 0.37, T: 280.5, melt: 3 }]; ind.base.rad = [{ x: 1, z: 2, r: 40, until: ind.base.clock + 500 }, { x: 'a' }]; ind.base.bombs = [{ id: 1, x: 3, z: 4, t: 12 }, { x: 'a' }]; true;`);
                 const sv = await J(`(function(){ let b = indFixBase(JSON.parse(JSON.stringify(ind.base))), d = b.devs[0]; return { rods: d.rods, ctl: d.ctl, T: d.T, melt: d.melt, rad: b.rad.length, bombs: b.bombs.map(function (o) { return [o.x, o.z, o.t]; }), ver: b.ver }; })()`);
-                if (JSON.stringify(sv.rods) !== JSON.stringify([{ i: 4, b: 0.25 }, { spent: true }]) || sv.ctl !== 0.37 || sv.T !== 280.5 || sv.melt !== 3 || sv.rad !== 1 || JSON.stringify(sv.bombs) !== '[[3,4,12]]' || sv.ver !== 11) bad.push('第 6 阶段存档读回来不对 ' + JSON.stringify(sv));
+                if (JSON.stringify(sv.rods) !== JSON.stringify([{ i: 4, b: 0.25 }, { spent: true }]) || sv.ctl !== 0.37 || sv.T !== 280.5 || sv.melt !== 3 || sv.rad !== 1 || JSON.stringify(sv.bombs) !== '[[3,4,12]]' || sv.ver !== (await T.eval(`IND_SAVE_VER`))) bad.push('第 6 阶段存档读回来不对 ' + JSON.stringify(sv));
                 if (!(await T.eval(`indFixBase({ ver: 10, rule: 'hard', box: {} }).rad.length === 0 && indFixBase({ ver: 10, rule: 'hard', box: {} }).bombs.length === 0`))) bad.push('老档没有辐射区和原子弹要补成空');
                 // 动态物品存档：背包、箱子里的 uf6/pellet/rod 认得出来，乱写的丢掉
                 const dy = await J(`indFixBase({ ver: 10, rule: 'hard', box: { 'uf6:3': 2, 'rod:4:30': 1, 'rod:9': 1, 'pellet:x': 1, 'uf6:2': 0 }, bag: { 'pellet:5': 3, 'rod:0:99': 1, 'rod:0:100': 1 } })`);
+                delete dy.box.compass;
                 if (JSON.stringify(Object.keys(dy.box)) !== '["uf6:3","rod:4:30"]' || JSON.stringify(Object.keys(dy.bag)) !== '["pellet:5","rod:0:99"]') bad.push('动态物品存档不对 ' + JSON.stringify([dy.box, dy.bag]));
             }
             if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
@@ -6889,7 +6889,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else {
-                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; ind.bag = {}; window.__oldFlash = indFlash; indFlash = function () {}; true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; ind.bag = {}; window.__fl = []; indFlash = function (s) { __fl.push(s); }; true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 // ── 进图用时和帧数 ──
                 const perf = await J(`(function(){ let ts = []; for (let s = 1; s <= 5; s++) { let t0 = performance.now(); indGoTrip(s * 7919); ts.push(performance.now() - t0); indGoBase(false); } let n = 0; indGoTrip(2024); return { ms: ts.reduce(function (a, b) { return a + b; }, 0) / ts.length, nodes: ind.nodes.length, wild: ind.wild.length, objs: ind.objs.length, tris: renderer.info.render.triangles, calls: renderer.info.render.calls }; })()`);
@@ -6917,7 +6917,7 @@ async function enterExit(tab, key) {
                 // ── 视野：白天 80 米、夜里 40 米（雾）；视野外的资源点、动物不画 ──
                 const fog = await J(`(function(){ indGoTrip(2024); ind.base.clock = 300; indRender(); let a = scene.fog.far; ind.base.clock = IND_DUSK + 60; indRender(); let b = scene.fog.far; ind.base.clock = 300; return [a, b]; })()`);
                 if (fog[0] !== 80 || fog[1] !== 40) bad.push('雾：白天 80 米、夜里 40 米 ' + JSON.stringify(fog));
-                const cull = async (x, z, clock) => J(`(function(){ ind.base.clock = ${clock}; indTeleport(${x}, ${z}); ind.nodeView = null; indSyncNodes(); indSyncAnimals(); let vr = indViewR() + IND_VIEW.margin; return { shown: ind.nodeMesh.count, want: ind.nodes.filter(function (n) { return !n.dead && Math.hypot(n.x - ind.p.x, n.z - ind.p.z) <= vr; }).length, total: ind.nodes.filter(function (n) { return !n.dead; }).length, an: ind.animalMesh.count, anWant: ind.wild.filter(function (a) { return Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= vr; }).length, vr: vr }; })()`);
+                const cull = async (x, z, clock) => J(`(function(){ ind.base.clock = ${clock}; indTeleport(${x}, ${z}); ind.nodeView = null; indSyncNodes(); indSyncAnimals(); let vr = indViewR() + IND_VIEW.margin; return { shown: ind.nodeMesh.count + ind.wd.trunk.count + ind.wd.rock.count, want: ind.nodes.filter(function (n) { return !n.dead && Math.hypot(n.x - ind.p.x, n.z - ind.p.z) <= vr; }).length, total: ind.nodes.filter(function (n) { return !n.dead; }).length, an: ind.animalMesh.count, anWant: ind.wild.filter(function (a) { return Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= vr; }).length, vr: vr }; })()`);
                 let cu = await cull(0, 0, 300);
                 if (cu.shown !== cu.want || cu.shown >= cu.total / 3 || cu.an !== cu.anWant || cu.anWant >= 56) bad.push('白天只画 80 米内的资源点和动物 ' + JSON.stringify(cu));
                 let cn = await cull(0, 0, 1000);
@@ -6943,8 +6943,8 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.bag = {}; indHudUpdate(); true;`);
                 if (await T.eval(`!!document.getElementById('ind-compass')`)) bad.push('背包里没有指南针不显示');
                 // 磁石：山地成片、空手能捡
-                const mg = await J(`{ b: IND_BIOMES.mountain.res.magnet, tool: IND_NODES.magnet.tool, ore: !!IND_ORE_NODES.magnet, casual: !!IND_CASUAL_RES.magnet }`);
-                if (mg.b !== 1 || mg.tool !== 0 || !mg.ore || mg.casual) bad.push('磁石的配置不对（山地权重 1、空手、成片、悠闲没有） ' + JSON.stringify(mg));
+                const mg = await J(`{ b: IND_BIOMES.mountain.res.magnet, tool: IND_NODES.magnet.tool, ore: !!IND_OUTCROP.magnet, casual: !!IND_CASUAL_RES.magnet }`);
+                if (mg.b !== 1 || mg.tool !== 0 || !mg.ore || !mg.casual) bad.push('磁石的配置不对（山地权重 1、空手、露头、悠闲也有） ' + JSON.stringify(mg));
                 // ── 地图（M）：走过的地方有颜色，没走过的灰，看见过的撤离点，自己的位置 ──
                 await T.eval(`indGoTrip(2024); ind.k = {}; indAdvance(0.3); true;`);
                 const seen0 = await J(`(function(){ let n = 0; for (let k = 0; k < ind.seen.length; k++) if (ind.seen[k]) n++; return n; })()`);
@@ -6962,6 +6962,76 @@ async function enterExit(tab, key) {
                 if (await T.eval(`ind.panel === 'map'`)) bad.push('再按 M 要关地图');
                 await T.eval(`indGoBase(false); indKeyDown({ key: 'm', target: document.body, preventDefault: function () {} }); true;`);
                 if (await T.eval(`ind.panel === 'map'`)) bad.push('基地里不开地图');
+                // ── 出生点周围 10 米一定是陆地 ──
+                const sp = await J(`(function(){ let bad = 0; for (let s = 1; s <= 40; s++) { let M = indMakeMap(s * 131); for (let d = 0; d <= 10; d += 2) for (let a = 0; a < 6.3; a += 0.6) if (indHeight(M, Math.cos(a) * d, Math.sin(a) * d - 4 * (d === 0 ? 1 : 0)) < 0.2) bad++; } return bad; })()`);
+                if (sp) bad.push('出生点周围 10 米有水 ' + sp + ' 处');
+                // ── 对着地面挖：泥土、沙子、石头（要石稿）、硫；空手 3 秒、稿子 1 秒；动了中断；地上留坑、越挖越深 ──
+                const findBiome = (bm) => J(`(function(){ for (let x = -290; x <= 290; x += 5) for (let z = -290; z <= 290; z += 5) { if (indBiome(ind.map, x, z) === '${bm}' && indHeight(ind.map, x, z) > 0.6 && indBiome(ind.map, x + 2, z) === '${bm}' && indHeight(ind.map, x + 2, z) > 0.6 && Math.hypot(x, z) > 20) return [x, z]; } return null; })()`);
+                await T.eval(`indGoTrip(2024); ind.bag = {}; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodeDirty = true; ind.k = {}; true;`);
+                const digAt = async (bm, pick, secs) => {
+                    const pt = await findBiome(bm); if (!pt) return null;
+                    await T.eval(`ind.bag = {}; ${pick ? "indBagAdd('pick_stone', 1);" : ''} ind.ch = null; indTeleport(${pt[0]}, ${pt[1]}); indLookAt(${pt[0] + 10}, ${pt[1]}); indAction(); indAdvance(${secs}); true;`);
+                    return { pt: pt, bag: await J(`Object.keys(ind.bag).filter(function (k) { return k !== 'pick_stone'; })`), ch: await J(`!!ind.ch`) };
+                };
+                let dg = await digAt('plain', false, 2.8);
+                if (!dg || dg.bag.length || !dg.ch) bad.push('空手挖地 2.8 秒还没好 ' + JSON.stringify(dg));
+                await T.eval(`indAdvance(0.4); true;`);
+                if (!(await T.eval(`ind.bag.dirt === 1 && !ind.ch`))) bad.push('空手挖地 3 秒应该得 1 份泥土 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if (!(await T.eval(`ind.pits.length === 1 && ind.pits[0].d === 1`))) bad.push('挖完地上留一个小坑 ' + await T.eval(`JSON.stringify(ind.pits)`));
+                dg = await digAt('plain', true, 1.2);
+                if (!dg || dg.bag.join() !== 'dirt') bad.push('拿着稿子挖地 1 秒 ' + JSON.stringify(dg));
+                await T.eval(`ind.bag = { pick_stone: 1 }; indAction(); indAdvance(1.2); true;`);
+                if (!(await T.eval(`ind.pits.length === 1 && ind.pits[0].d === 2`))) bad.push('同一处再挖，坑更深 ' + await T.eval(`JSON.stringify(ind.pits)`));
+                dg = await digAt('beach', false, 3.2); if (dg && dg.bag.join() !== 'sand') bad.push('海边出沙子 ' + JSON.stringify(dg));
+                dg = await digAt('desert', false, 3.2); if (dg && dg.bag.join() !== 'sand') bad.push('沙漠出沙子 ' + JSON.stringify(dg));
+                dg = await digAt('forest', false, 3.2); if (dg && dg.bag.join() !== 'dirt') bad.push('森林出泥土 ' + JSON.stringify(dg));
+                dg = await digAt('mountain', false, 4);
+                if (dg && (dg.bag.length || dg.ch)) bad.push('山地没有稿子挖不了石头 ' + JSON.stringify(dg));
+                dg = await digAt('mountain', true, 1.2); if (dg && dg.bag.join() !== 'stone') bad.push('山地拿稿子挖出石头 ' + JSON.stringify(dg));
+                dg = await digAt('ancient', true, 1.2); if (dg && dg.bag.join() !== 'stone') bad.push('古老岩层拿稿子挖出石头 ' + JSON.stringify(dg));
+                await T.eval(`window.__rand0 = indRand; indRand = function () { return 0.05; }; true;`);
+                dg = await digAt('volcano', true, 1.2);
+                if (dg && dg.bag.join() !== 'sulfur') bad.push('火山偶尔 1 份硫（随机数 0.05） ' + JSON.stringify(dg));
+                await T.eval(`indRand = window.__rand0; ind.base.rule = 'casual'; true;`);
+                dg = await digAt('volcano', true, 1.2); if (dg && dg.bag.join() !== 'stone') bad.push('悠闲火山只出石头 ' + JSON.stringify(dg));
+                await T.eval(`ind.base.rule = 'hard'; true;`);
+                // 动了就中断；水里挖不了
+                await T.eval(`ind.bag = {}; ind.ch = null; (function(){ let pt = ${JSON.stringify(await findBiome('plain'))}; indTeleport(pt[0], pt[1]); indLookAt(pt[0] + 10, pt[1]); indAction(); indAdvance(1); indTeleport(pt[0] + 2, pt[1]); indAdvance(0.2); })(); true;`);
+                if (!(await T.eval(`!ind.ch && !ind.bag.dirt`))) bad.push('挖地时动了要中断 ' + await T.eval(`JSON.stringify([ind.ch, ind.bag])`));
+                await T.eval(`ind.bag = {}; window.__fl = []; indTeleport(0, 0); ind.map && (window.__ih0 = indHeight); indHeight = function (M, x, z) { return -2; }; indAction(); true;`);
+                const wt = await T.eval(`!ind.ch && __fl.indexOf('水里挖不了') >= 0`); await T.eval(`indHeight = window.__ih0; true;`);
+                if (!wt) bad.push('水里挖不了');
+                // ── 树：空手 8 秒、稿子 3 秒，出 3～6 木头，倒下留树桩 ──
+                const trees = await J(`(function(){ let by = {}; for (let s = 1; s <= 30; s++) { indGoTrip(s * 977); ind.nodes.forEach(function (n) { if (n.tree) { let b = indBiome(ind.map, n.x, n.z); by[n.tree + '@' + b] = (by[n.tree + '@' + b] || 0) + 1; } }); } return by; })()`);
+                if (Object.keys(trees).some((k) => (/^pine@/.test(k) && !/@mountain/.test(k)) || (/^palm@/.test(k) && !/@beach/.test(k)) || (/^oak@/.test(k) && /@(mountain|beach|desert)/.test(k))) || !Object.keys(trees).some((k) => /^oak@/.test(k)) || !Object.keys(trees).some((k) => /^pine@mountain/.test(k)) || !Object.keys(trees).some((k) => /^palm@beach/.test(k))) bad.push('树分种类：森林阔叶、山地松树、海边椰子树 ' + JSON.stringify(trees));
+                const cac = await J(`(function(){ let n = 0, ok = true; for (let s = 1; s <= 30; s++) { indGoTrip(s * 977); ind.nodes.forEach(function (o) { if (o.key === 'cactus') { n++; if (indBiome(ind.map, o.x, o.z) !== 'desert') ok = false; } }); } return [n, ok]; })()`);
+                if (!cac[0] || !cac[1]) bad.push('仙人掌只刷在沙漠 ' + JSON.stringify(cac));
+                await T.eval(`indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = {}; ind.nodes.push({ key: 'wood', tree: 'oak', x: 0, z: -9, y: 0, n: 5, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indTeleport(0, -6.5); indLookAt(0, -9); ind.k = {}; true;`);
+                if ((await J(`indAim() && indAim().kind`)) !== 'node') bad.push('应该瞄到树');
+                await T.eval(`indAction(); indAdvance(7.8); true;`);
+                if (!(await T.eval(`!ind.bag.wood && !!ind.ch`))) bad.push('空手砍树 7.8 秒还没好');
+                await T.eval(`indAdvance(0.4); true;`);
+                if (!(await T.eval(`ind.bag.wood === 5 && ind.nodes[ind.nodes.length - 1].dead && ind.stumps.length === 1`))) bad.push('砍完得到木头，留树桩 ' + await T.eval(`JSON.stringify([ind.bag, ind.stumps])`));
+                await T.eval(`ind.nodes.push({ key: 'wood', tree: 'pine', x: 0, z: -9, y: 0, n: 3, seed: 'seed_wheat', dead: false }); ind.bag = { pick_stone: 1 }; ind.nodeDirty = true; indAction(); indAdvance(3.2); true;`);
+                if (!(await T.eval(`ind.bag.wood === 3`))) bad.push('拿着稿子砍树 3 秒 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // ── 大石头：要石稿，出 3～5 石头 ──
+                await T.eval(`ind.bag = {}; ind.nodes.push({ key: 'stone', rock: true, x: 0, z: -9, y: 0, n: 4, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; window.__fl = []; indAction(); true;`);
+                if (!(await T.eval(`!ind.bag.stone && __fl.some(function (t) { return /石稿/.test(t); })`))) bad.push('大石头没有稿子敲不动 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
+                await T.eval(`indBagAdd('pick_stone', 1); indAction(); true;`);
+                if (!(await T.eval(`ind.bag.stone === 4`))) bad.push('拿稿子敲大石头出 3～5 石头 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                const nd = await J(`[IND_NODES.stone.give, IND_NODES.stone.tool, IND_NODES.wood.give]`);
+                if (JSON.stringify(nd) !== '[[3,5],1,[3,6]]') bad.push('石头 3～5 要石稿、树 3～6 ' + JSON.stringify(nd));
+                // ── 矿脉露头：一次 1 份，10～30 份，越挖越矮，挖完变空坑 ──
+                await T.eval(`ind.bag = { pick_stone: 1 }; ind.nodes.push({ key: 'ore_cu', out: true, x: 0, z: -9, y: 0, n: 12, n0: 12, seed: 'seed_wheat', dead: false }); ind.nodeView = null; ind.nodeDirty = true; true;`);
+                const sc0 = await J(`(function(){ indSyncNodes(); let m = new THREE.Matrix4(); ind.wd.ore.getMatrixAt(ind.wd.ore.count - 1, m); return m.elements[5]; })()`);
+                await T.eval(`indLookAt(0, -9); for (let i = 0; i < 6; i++) indAction(); true;`);
+                const sc1 = await J(`(function(){ indSyncNodes(); let m = new THREE.Matrix4(); ind.wd.ore.getMatrixAt(ind.wd.ore.count - 1, m); return m.elements[5]; })()`);
+                if (!(await T.eval(`ind.bag.ore_cu === 6`)) || !(sc1 < sc0)) bad.push('露头一次 1 份，越挖越矮 ' + JSON.stringify([sc0, sc1, await T.eval(`JSON.stringify(ind.bag)`)]));
+                if (!/剩 6 份/.test(await T.eval(`wdNodeHint(ind.nodes[ind.nodes.length - 1]).replace(/<[^>]+>/g, '')`))) bad.push('提示写剩几份');
+                await T.eval(`for (let i = 0; i < 6; i++) indAction(); true;`);
+                if (!(await T.eval(`ind.bag.ore_cu === 12 && ind.nodes[ind.nodes.length - 1].dead && ind.pits.some(function (p) { return Math.abs(p.x) < 0.1 && Math.abs(p.z + 9) < 0.1 && p.d === 6; })`))) bad.push('挖完变空坑 ' + await T.eval(`JSON.stringify([ind.bag, ind.pits])`));
+                await T.eval(`ind.bag = { pick_iron: 1 }; ind.nodes.push({ key: 'ore_cu', out: true, x: 0, z: -9, y: 0, n: 12, n0: 12, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
+                if (!(await T.eval(`ind.bag.ore_cu === 2`))) bad.push('铁稿 +1：一次 2 份 ' + await T.eval(`JSON.stringify(ind.bag)`));
             }
             if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
             await T.close();

@@ -279,7 +279,7 @@
         const IND_OUTCROP = { magnet: 1, ore_cu: 1, ore_zn: 1, ore_sn: 1, ore_fe: 1, coal: 1, sulfur: 1, ore_u: 1 };   // 矿是露头：一处 1～2 个，每个能挖 10～30 份
         const IND_ORE_NODES = {};   // 还成片刷的（一处 3～6 个小点）：硝石   // 这几种矿成片刷：一处 3～6 个点挤在 6 米内
         // 悠闲世界的远征只刷这些（没有矿，没有科技原料）
-        const IND_CASUAL_RES = { dirt: 1, wood: 1, stone: 1, sand: 1, clay: 1, salt: 1, seeds: 1, cactus: 1 };
+        const IND_CASUAL_RES = { dirt: 1, wood: 1, stone: 1, sand: 1, clay: 1, salt: 1, seeds: 1, cactus: 1, magnet: 1 };
         const IND_TOOL_NAME = ['空手', '石稿', '青铜稿', '钢稿', '钻石稿'];
         // 地貌：名字、地面颜色、会刷什么资源（权重）
         const IND_BIOMES = {
@@ -449,7 +449,7 @@
         }
         function indHeight(M, x, z) {
             let h = indElev(M, x, z) * 9;
-            let spawn = Math.max(0, 1 - Math.hypot(x, z) / 14); h *= (1 - spawn);
+            let dsp = Math.hypot(x, z), spawn = Math.max(0, 1 - dsp / 14); h *= (1 - spawn); if (dsp < 14) h = Math.max(h, 0.4 * Math.min(1, (14 - dsp) / 4));   // 出生点周围 10 米一定是陆地
             for (let i = 0; i < M.volc.length; i++) {
                 let v = M.volc[i], d = Math.hypot(x - v.x, z - v.z);
                 if (d < v.r * 1.6) { let t = 1 - d / (v.r * 1.6); h += t * t * 22 - (d < v.r * 0.3 ? (1 - d / (v.r * 0.3)) * 8 : 0); }
