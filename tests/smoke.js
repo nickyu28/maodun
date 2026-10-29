@@ -4131,6 +4131,76 @@ async function enterExit(tab, key) {
             report('LB29 实验室背包面板（B）、Shift+左键一下全捡（v4）', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('LB30')) {
+            // LB30 实验室 4C：加速器（聚变、预览、电压、散开、转换）、离心机、核反应堆（燃料、充电口、普通电池爆炸、烧煤要氧气）、高级电池、空气分离机、原子弹；聚变能量按 A 方案（每块串联电池一次 30 U）
+            const bad = [];
+            const T = await LBTAB();
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labSt().box = {}; labSt().lockUntil = 0; true;`);
+            await LBENTER(T);
+            const J = async (e) => JSON.parse(await T.eval(`JSON.stringify(${e})`));
+            const RESET = `lab.devs.slice().forEach(function (d) { labDevRemove(d, false); }); labClear(); lab.bag = {}; lab.hp = 100; lab.p.x = 6; lab.p.z = 6; labGive('wire', 60);`;
+            // 回路：给一串设备首尾连成一圈
+            const RING = `function ring(a) { for (let i = 0; i < a.length; i++) labWireAdd(a[i], a[(i + 1) % a.length]); }`;
+            // 配方
+            const rec = await J(`(function(){ let o = {}; LAB_RECIPES.filter(function (r) { return ['accel','centri','reactor','airsep','abat','bomb'].indexOf(r.id) >= 0; }).forEach(function (r) { o[r.id] = [r.in, r.out]; }); return o; })()`);
+            const want = { accel: [{ bottle: 1, motor: 2, wire: 4, iron: 4 }, { accel: 1 }], centri: [{ motor: 2, iron: 4, bottle: 1, wire: 4 }, { centri: 1 }], reactor: [{ iron: 6, coal: 8, motor: 2, wire: 4, bottle: 1 }, { reactor: 1 }], airsep: [{ motor: 2, iron: 6, bottle: 1, wire: 4 }, { airsep: 1 }], abat: [{ bat: 2, iron: 4, 'a:29:34': 4, 'a:30:34': 1 }, { 'abat:0': 1 }], bomb: [{ 'a:92:143': 3, iron: 6, bat: 1, wire: 2, switch: 1 }, { bomb: 1 }] };
+            const sortK = (o) => JSON.stringify(Object.keys(o).sort().reduce((a, k) => { a[k] = o[k]; return a; }, {}));
+            Object.keys(want).forEach((k) => { if (!rec[k] || sortK(rec[k][0]) !== sortK(want[k][0]) || sortK(rec[k][1]) !== sortK(want[k][1])) bad.push('配方 ' + k + ' ' + JSON.stringify(rec[k])); });
+            // 加速器：7 块电池 + 升压器 → 52.5 V；天然铀 = 2 铜-63 + 1 铁 + 8 质子 + 48 中子 + 8 电子；每块电池 30 U
+            let r = await J(`(function(){ ${RESET} ${RING} let A = labPlaceDev('accel', 0, 0), U = labPlaceDev('booster', 2, 0), B = []; for (let i = 0; i < 7; i++) B.push(labPlaceDev('bat', -4 + i * 0.9, 3)); ring(B.concat([U, A])); labAdvance(0.2); let idle = B[0].charge; A.inv = { 'a:29:34': 2, iron: 1, p: 8, n: 48, e: 8 }; labPanelDev(A); let pre = document.getElementById('lab-accel-pre').innerText; let ok = labDevStart(A.id); labAdvance(9.5); let mid = [lab.ground.length, !!A.job]; labAdvance(0.8); return { v: A.v, idle: idle, pre: pre, ok: ok, mid: mid, g: lab.ground.map(function (e) { return e.key; }), ch: B.map(function (b) { return Math.round(b.charge); }), inv: A.inv }; })()`);
+            if (r.v !== 52.5 || r.idle !== 180) bad.push('7 块电池 + 升压器 52.5 V、不干活不耗电 ' + JSON.stringify(r));
+            if (!/Z=92 N=146 e=92 → 天然铀 ✓/.test(r.pre) || !/46 V/.test(r.pre)) bad.push('预览写 Z N e 和结果 ' + r.pre);
+            if (!r.ok || r.mid[0] !== 0 || !r.mid[1] || r.g.join() !== 'a:92:146' || Object.keys(r.inv).length) bad.push('聚变 10 秒出天然铀、放进去的用掉 ' + JSON.stringify(r));
+            if (r.ch.some((c) => c !== 150)) bad.push('一次聚变每块串联电池 30 U（A 方案） ' + JSON.stringify(r.ch));
+            await T.eval(`labPanelClose(); true;`);
+            // 电压不够不让开始；电子数不对散开；中途断电散开；转换
+            r = await J(`(function(){ ${RESET} ${RING} let A = labPlaceDev('accel', 0, 0), U = labPlaceDev('booster', 2, 0), B = [labPlaceDev('bat', -2, 3), labPlaceDev('bat', -1, 3)]; ring(B.concat([U, A])); labAdvance(0.2); let out = { v: A.v };
+                A.inv = { 'a:79:118': 0, 'a:29:34': 2, 'a:6:6': 3, p: 3, n: 32, e: 3 }; delete A.inv['a:79:118']; out.low = labDevStart(A.id); out.lowJob = !!A.job;
+                A.inv = { 'a:29:34': 1, p: 1 }; out.pre = labAccelSum(A); out.go = labDevStart(A.id); labAdvance(10.3); out.g1 = lab.ground.map(function (e) { return e.key; }).sort(); labClear();
+                A.inv = { 'a:29:34': 1, p: 1, e: 1 }; labDevStart(A.id); labAdvance(4); B[0].on = false; labDevRemove(B[0], false); labAdvance(0.3); out.cut = [!!A.job, lab.ground.map(function (e) { return e.key; }).sort(), Object.keys(A.inv).length];
+                return out; })()`);
+            if (r.v !== 15 || r.low !== false || r.lowJob) bad.push('电压不够（金要 39.5 V，只有 15 V）不让开始 ' + JSON.stringify(r));
+            if (r.pre.out !== 'a:30:34' || r.pre.ok || !r.go || r.g1.join() !== 'a:29:34,p') bad.push('锌-64 电子数不对：开始了也散开、东西原样掉出来 ' + JSON.stringify(r));
+            if (r.cut[0] || r.cut[1].join() !== 'a:29:34,e,p' || r.cut[2]) bad.push('中途断电散开 ' + JSON.stringify(r.cut));
+            r = await J(`(function(){ ${RESET} ${RING} let A = labPlaceDev('accel', 0, 0), b = labPlaceDev('bat', 2, 0), L = labPlaceDev('bulb', 1, 2); ring([b, L, A]); labAdvance(0.2); A.inv = { p: 5, e: 3, n: 1 }; let q = function () { return [labN(A.inv, 'p'), labN(A.inv, 'e'), labN(A.inv, 'n')].join(); }; let a = labAccelConv(A.id, 'pe', 10); let s1 = q(); let c = labAccelConv(A.id, 'n', 2); return { v: A.v, a: a, s1: s1, c: c, s2: q(), ch: b.charge }; })()`);
+            if (r.v !== 1.5 || r.a !== 3 || r.s1 !== '2,0,4' || r.c !== 2 || r.s2 !== '4,2,2') bad.push('转换：质子+电子↔中子，1.5 V 就行 ' + JSON.stringify(r));
+            // 离心机：4 块电池 6 V，3 天然铀 → 1 铀-235 + 2 贫铀，每块 25 U；电压不够不转
+            r = await J(`(function(){ ${RESET} ${RING} let C = labPlaceDev('centri', 0, 0), B = [0, 1, 2].map(function (i) { return labPlaceDev('bat', -3 + i * 0.9, 3); }); ring(B.concat([C])); labAdvance(0.2); C.inv = { 'a:92:146': 3 }; let low = labDevStart(C.id); let b4 = labPlaceDev('bat', -0.3, 3); lab.wires = []; lab.cirDirty = true; ring(B.concat([b4, C])); labAdvance(0.2); let go = labDevStart(C.id); labAdvance(10.3); return { low: low, go: go, v: C.v, g: lab.ground.map(function (e) { return e.key; }).sort(), ch: B.concat([b4]).map(function (b) { return Math.round(b.charge); }) }; })()`);
+            if (r.low !== false || !r.go || r.v !== 6 || r.g.join() !== 'a:92:143,du,du' || r.ch.some((c) => c !== 155)) bad.push('离心机 ' + JSON.stringify(r));
+            // 反应堆：铀-235 3000 + 2 煤 50 → 高级电池充到 900，多的浪费；煤有氧气瓶变二氧化碳，没有冒一氧化碳；运行耗 1 U/s
+            r = await J(`(function(){ ${RESET} ${RING} let R = labPlaceDev('reactor', 0, 0), b = labPlaceDev('bat', 2, 0); ring([R, b]); labAdvance(0.2); labGive('a:92:143', 1); labGive('coal', 9); labGive('abat:0', 1); labDevPut(R.id, 'a:92:143', true); labDevPut(R.id, 'coal', true); labDevPort(R.id, 'abat:0'); labSpawn('b:o2', 0.5, 1); let slots = labTotal(R.inv); window.__lf = []; let f0 = labFlash; labFlash = function (t) { __lf.push(t); f0(t); }; let go = labDevStart(R.id); labAdvance(2); let mid = R.port; labAdvance(8.3); labFlash = f0; return { slots: slots, left: lab.bag.coal, go: go, mid: mid, end: R.port, job: !!R.job, ch: Math.round(b.charge), g: lab.ground.map(function (e) { return e.key; }).sort(), fl: __lf }; })()`);
+            if (r.slots !== 8 || r.left !== 2) bad.push('燃料槽 8 个 ' + JSON.stringify(r));
+            if (!r.go || r.end !== 'abat:900' || r.job || r.ch !== 170) bad.push('反应堆充高级电池到 900、运行耗电 1 U/s ' + JSON.stringify(r));
+            if (r.g.filter((k) => k === 'b:co2').length !== 1 || r.g.filter((k) => k === 'g:co').length !== 6) bad.push('烧煤：有氧气瓶出二氧化碳，没有冒一氧化碳 ' + JSON.stringify(r.g));
+            if (!r.fl.some((t) => /浪费/.test(t))) bad.push('电池满了多的浪费要提示 ' + JSON.stringify(r.fl));
+            // 天然铀 600 慢慢充：5 秒 300
+            r = await J(`(function(){ ${RESET} ${RING} let R = labPlaceDev('reactor', 0, 0), b = labPlaceDev('bat', 2, 0); ring([R, b]); labAdvance(0.2); R.inv = { 'a:92:146': 1 }; R.port = 'abat:100'; labDevStart(R.id); labAdvance(5); let mid = R.port; labAdvance(5.3); return [mid, R.port, LAB_FUEL.oil, LAB_FUEL.du, labFuelU('a:6:8'), labFuelU('a:94:145'), labFuelU('sand')]; })()`);
+            if (r.join() !== 'abat:400,abat:700,60,20,40,2000,0') bad.push('燃料发电量（天然铀 600、石油 60、贫铀 20、会衰变的核素 40、钚 2000） ' + JSON.stringify(r));
+            // 普通电池接在充电口：一开始烧就炸（3 米、40 点）；没接电池不运行；电池没电就停、烧着的算没了
+            r = await J(`(function(){ ${RESET} ${RING} let R = labPlaceDev('reactor', 0, 0), b = labPlaceDev('bat', 2, 0); ring([R, b]); labAdvance(0.2); R.inv = { coal: 1 }; R.port = 'bat'; lab.p.x = 1; lab.p.z = 1; let put = !!R.port; labDevStart(R.id); return { put: put, devs: lab.devs.length, hp: lab.hp }; })()`);
+            if (!r.put || r.devs !== 0 || r.hp !== 60) bad.push('普通电池接充电口，开始烧就炸 ' + JSON.stringify(r));
+            r = await J(`(function(){ ${RESET} let R = labPlaceDev('reactor', 0, 0); labAdvance(0.2); R.inv = { coal: 1 }; let a = labDevStart(R.id); let b = labPlaceDev('bat:3', 2, 0); labWireAdd(R, b); labWireAdd(b, R); labAdvance(0.2); R.port = 'abat:0'; let c = labDevStart(R.id); labAdvance(4); return { a: a, c: c, job: !!R.job, port: R.port, inv: R.inv }; })()`);
+            if (r.a !== false || !r.c || r.job || Object.keys(r.inv).length) bad.push('没接电池不运行；电池没电停、燃料算烧掉 ' + JSON.stringify(r));
+            // 高级电池：放进回路就是 1.5 V，容量 900；收起来按电量分堆；价值 70000
+            r = await J(`(function(){ ${RESET} ${RING} let a = labPlaceDev('abat:900', 0, 0), L = labPlaceDev('bulb', 2, 0); ring([a, L]); labAdvance(10.2); let v = L.v, c = Math.round(a.charge); labDevPick(a); return { v: v, c: c, bag: Object.keys(lab.bag), val: labValue('abat:0'), name: labName('abat:890') }; })()`);
+            if (r.v !== 1.5 || r.c !== 890 || r.bag.indexOf('abat:890') < 0 || r.val !== 70000 || !/高级电池/.test(r.name)) bad.push('高级电池 ' + JSON.stringify(r));
+            // 空气分离机：2 米内有空瓶才运行（2 U/s），每 10 秒 1 瓶；按随机数出氧气 55%、氩 20%、氖 15%、氦 10%
+            r = await J(`(function(){ ${RESET} ${RING} let A = labPlaceDev('airsep', 0, 0), b = labPlaceDev('bat', 2, 0), c = labPlaceDev('bat', 2, 2); ring([A, b, c]); labAdvance(2); let idle = b.charge; let out = []; [0.1, 0.6, 0.8, 0.95].forEach(function (x) { labSpawn('bottle', 0.5, 0.5); lab.rnd = function () { return x; }; labAdvance(10.1); }); delete lab.rnd; return { idle: idle, ch: Math.round(b.charge), g: lab.ground.map(function (e) { return e.key; }) }; })()`);
+            if (r.idle !== 180 || r.g.join() !== 'b:o2,b:ar,b:ne,b:he' || Math.abs(r.ch - (180 - 80.8)) > 2) bad.push('空气分离机 ' + JSON.stringify(r));
+            // 原子弹：做得出来，实验室里不能引爆
+            r = await J(`(function(){ ${RESET} labGive('a:92:143', 3); labGive('iron', 6); labGive('bat', 1); labGive('switch', 1); let ok = labCraftMake('bomb'); labSel('bomb'); window.__lf = []; let f0 = labFlash; labFlash = function (t) { __lf.push(t); }; labUse('L'); labFlash = f0; return { ok: ok, bag: lab.bag.bomb, fl: __lf, v: labValue('bomb') }; })()`);
+            if (!r.ok || r.bag !== 1 || !/不能引爆/.test(r.fl.join()) || r.v !== 900000) bad.push('原子弹：做得出来、实验室里不能引爆、价值 900000 ' + JSON.stringify(r));
+            // 收起设备：里面的东西和充电口的电池回到身上；退出时进仓库箱
+            r = await J(`(function(){ ${RESET} let A = labPlaceDev('accel', 0, 0), R = labPlaceDev('reactor', 3, 0); A.inv = { p: 2 }; R.inv = { coal: 1 }; R.port = 'abat:5'; labDevPick(A); return { bag: lab.bag }; })()`);
+            if (r.bag.p !== 2 || r.bag.accel !== 1) bad.push('收起加速器，里面的东西回身上 ' + JSON.stringify(r));
+            await LBEXIT(T);
+            const box = await J(`labSt().box`);
+            if (box.coal !== 1 || box['abat:5'] !== 1 || box.reactor !== 1) bad.push('退出：设备里的东西和充电口的电池进仓库箱 ' + JSON.stringify(box));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('LB30 实验室 4C：加速器、离心机、核反应堆、高级电池、空气分离机、原子弹（聚变能量 A 方案）', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('LB7')) {
             // LB7 订单（v4）：同时 3 张，要到订单板交东西，奖励 = 价值 20%（没标价给 100）、立即补新的
             const bad = [];
@@ -4142,7 +4212,7 @@ async function enterExit(tab, key) {
             if (o.n !== 3 || new Set(o.keys).size !== 3) bad.push('订单应该同时 3 张且不重复 ' + JSON.stringify(o));
             // 订单的题目都是做得出来的化学类
             const pool = await T.eval(`LAB_ORDER_POOL.map(function (c) { return c[0]; }).join()`);
-            if (/accel|bomb|a:30|a:79|a:92/.test(pool)) bad.push('本段做不出来的东西进了订单池 ' + pool);
+            if (/accel|a:30/.test(pool) || !/a:79:118/.test(pool) || !/a:92:143/.test(pool) || !/bomb/.test(pool)) bad.push('订单池：4C 以后有金-197、铀-235、原子弹，没有器材和锌 ' + pool);
             // v4：订单要交东西（先扣身上、不够扣仓库箱），给价值的 20%（没标价 100），交完立刻补新的；造出来不会自动完成
             await T.eval(`labSt().orders = [{ k: 'b:water', n: 2, base: 0 }, { k: 'salt', n: 1, base: 0 }, { k: 'a:3:4', n: 1, base: 0 }]; labSt().box = { 'b:water': 2 }; lab.bag = {}; labGive('b:water', 1); window.__m0 = gState.money; labMade('b:water', 5); true;`);
             if (await T.eval(`labSt().orders.length !== 3 || labSt().orders[0].k !== 'b:water' || gState.money !== window.__m0`)) bad.push('造出来不该自动完成订单');
@@ -4232,7 +4302,7 @@ async function enterExit(tab, key) {
             if (!/订单/.test(pages.order) || !/20%/.test(pages.order)) bad.push('订单页缺内容');
             if (!/611/.test(pages.neutron)) bad.push('中子页缺内容');
             if (!/电线/.test(pages.device) || !/升压器/.test(pages.device) || !/串联/.test(pages.device)) bad.push('器材页缺内容');
-            if (/原子弹|烟花|Boss|离心/.test(Object.values(pages).join(''))) bad.push('手册里出现了范围外的东西');
+            if (/烟花|Boss/.test(Object.values(pages).join(''))) bad.push('手册里出现了范围外的东西');   // 4C 以后原子弹、离心机做得出来了
             // 每个物品标注用在哪些配方里：沙子用在"烧玻璃瓶"
             if (!/沙子.{0,12}用在：[^）]*烧玻璃瓶/.test(pages.react)) bad.push('沙子没标用在烧玻璃瓶 ' + pages.react.slice(0, 200));
             // 实验室里顶上的「配方清单」「手册」按钮能开（进实验室点）
@@ -4751,8 +4821,10 @@ async function enterExit(tab, key) {
                 bulb: [{ bottle: 1, iron: 1, wire: 1 }, { bulb: 1 }], resistor: [{ coal: 1, wire: 1 }, { resistor: 1 }], motor: [{ iron: 2, wire: 2 }, { motor: 1 }],
                 elec: [{ bottle: 1, coal: 2, wire: 2 }, { elec: 1 }], booster: [{ iron: 2, wire: 4 }, { booster: 1 }]
             };
-            if (rec.length !== 8) bad.push('器材配方应该是 8 个 ' + rec.length);
+            const C4 = ['accel', 'centri', 'reactor', 'airsep', 'abat', 'bomb'];   // 4C 的 6 个配方在 LB30 里查
+            if (rec.length !== 8 + C4.length) bad.push('器材配方应该是 8 + 6（4C）个 ' + rec.length);
             rec.forEach((r) => {
+                if (C4.indexOf(r[0]) >= 0) return;
                 const w = rw[r[0]];
                 if (!w) { bad.push('多出来的器材配方 ' + r[0]); return; }
                 if (r[1] !== '合成台') bad.push(r[0] + ' 应该在合成台做');
