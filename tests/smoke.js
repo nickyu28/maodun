@@ -2730,6 +2730,39 @@ async function enterExit(tab, key) {
             report('CH1 化学寻宝队：掉落表只有原料和粒子包、没怪没 AI、扣灯、石油、暗室和隐藏宝箱 ×2、灯和黑暗、撤离进实验室仓库箱、暗室概率累加/重置、失败留商店道具', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('MP4')) {
+            // MP4 地图 4（中等难度，药剂房 + 水池）：选项在仓库里能选；药剂房是一层的紫色死角、里面一瓶药水、走得到；水池在一层中间、走进去慢 30% 体力恢复快一倍；
+            // 怪和撤离目标跟中等图一样，木箱少 1 个；换几个种子每次都有
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const c = JSON.parse(await T.eval(`JSON.stringify({ conf: mapConfigs.map4, med: mapConfigs.med, radio: !!document.querySelector('input[name=map_diff][value=map4]'), safe: HUNT_SAFE_BASE.map4 })`));
+            if (!c.radio || !c.conf || c.conf.extr !== c.med.extr || c.conf.mobs.join() !== c.med.mobs.join() || c.conf.wood !== c.med.wood - 1 || !c.conf.hasPotionRoom || !c.conf.hasPool) bad.push('配置 ' + JSON.stringify(c));
+            await T.eval(`${HIDE} gState.mapDifficulty = 'map4'; selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+            for (let k = 0; k < 3; k++) {
+                if (k > 0) {
+                    await T.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await until(T, `chatActiveModeKey() === 'hub'`, 30000);
+                    await T.eval(`${HIDE} gState.mapDifficulty = 'map4'; selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+                }
+                if (!(await until(T, `chatActiveModeKey() === 'hunt' && isPlaying && typeof huntPool !== 'undefined'`, 30000))) { bad.push('地图 4 没开起来'); break; }
+                await frames(T, 5); await T.eval(`${HIDE} true;`);
+                const r = JSON.parse(await T.eval(`(function(){ let room = null; for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) if (maze[0][z][x] && maze[0][z][x].isPotionRoom) room = { x: x, z: z };
+                    let o = { room: room, pool: huntPool, diff: gState.mapDifficulty, chests: chests.filter(function (q) { return !q.userData.hidden && q.userData.type === 'wood'; }).length };
+                    if (room) { o.potion = groundItems.filter(function (g) { return g.userData.type === 'potion' && Math.abs(g.position.x - room.x * TILE) < 1 && Math.abs(g.position.z - room.z * TILE) < 1; }).length;
+                        o.reach = !!huntRouteFind({ f: 0, x: 1, z: 1 }, { f: 0, x: room.x, z: room.z }, 0); }
+                    if (huntPool) { camera.position.set(huntPool.x * TILE, 9, huntPool.z * TILE); o.inPool = huntInPool(); camera.position.set(TILE, 9, TILE); o.outPool = huntInPool(); }
+                    return JSON.stringify(o); })()`));
+                if (!r.room || r.potion !== 1 || !r.reach) bad.push('药剂房/药水/走得到 ' + JSON.stringify(r));
+                if (!r.pool || !r.inPool || r.outPool) bad.push('水池 ' + JSON.stringify(r));
+                if (r.chests !== 2) bad.push('木箱该是 2 个 ' + r.chests);
+            }
+            // 水池里慢、体力恢复快：用游戏自己的函数算
+            const m = JSON.parse(await T.eval(`(function(){ camera.position.set(huntPool.x * TILE, 9, huntPool.z * TILE); let a = huntInPool(); stamina = 50; return JSON.stringify({ in: a }); })()`));
+            if (!m.in) bad.push('站进水池里 huntInPool 是假');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('MP4 地图 4（药剂房、水池）：能选、药剂房有药水走得到、水池在中间、木箱 2 个、怪和撤离目标同中等图', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('K1')) {
             // K1 合成倒计时：材料凑齐后等 3 秒再合成（合出大金的 5 秒），中间显示倒计时，材料被拿走就取消、放回去重新数
             const bad = [];

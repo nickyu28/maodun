@@ -363,7 +363,7 @@
         function lookY() { return SETTINGS.invertY ? -1 : 1; }
         // P1：进大厅时把上次的三个选择放回去。不在加载时做：NIGHT_CHARS 定义在这个文件后面
         function settingsRestoreChoices() {
-            if (['easy', 'med', 'hard'].indexOf(SETTINGS.mapDiff) >= 0) {
+            if (['easy', 'med', 'map4', 'hard'].indexOf(SETTINGS.mapDiff) >= 0) {
                 gState.mapDifficulty = SETTINGS.mapDiff;
                 let r = document.querySelector('input[name="map_diff"][value="' + SETTINGS.mapDiff + '"]'); if (r) r.checked = true;
             }
@@ -601,7 +601,7 @@
 
                 let waves;
                 if (gState.mapDifficulty === 'easy') waves = [[1, 2], [1, 2], [1, 2, 1]];
-                else if (gState.mapDifficulty === 'med') waves = [[1, 2], [1, 2, 3], [1, 2, 3, 4]];
+                else if (gState.mapDifficulty === 'med' || gState.mapDifficulty === 'map4') waves = [[1, 2], [1, 2, 3], [1, 2, 3, 4]];
                 else waves = [[1, 2, 5], [1, 2, 5], [1, 1, 2, 2, 5, 5]];
 
                 let spawns = [];
