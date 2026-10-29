@@ -255,10 +255,12 @@
         const IND_NODES = {
             wood: { give: [2, 4], tool: 0 }, dirt: { give: [2, 3], tool: 0 }, stone: { give: [2, 3], tool: 0 }, sand: { give: [2, 4], tool: 0 }, clay: { give: [1, 3], tool: 0 },
             salt: { give: [1, 3], tool: 0 }, coal: { give: [1, 3], tool: 1 }, ore_sn: { give: [1, 2], tool: 1 }, oil: { give: [1, 1], tool: 0 },
+            sand_sn: { give: [1, 1], tool: 0, out: 'ore_sn', name: '锡砂' },   // 海边的锡砂：空手捡，每次 1 个锡矿
             ore_cu: { give: [1, 2], tool: 1 }, ore_zn: { give: [1, 2], tool: 1 }, ore_fe: { give: [1, 2], tool: 2 },
             sulfur: { give: [1, 3], tool: 1 }, ore_u: { give: [1, 1], tool: 3 }, seeds: { give: [2, 3], tool: 0 }
         };
-        const IND_NODE_COL = { seeds: 0x7cb342 };
+        const IND_NODE_COL = { seeds: 0x7cb342, sand_sn: 0xb0bec5 };
+        const IND_ORE_NODES = { ore_cu: 1, ore_zn: 1, ore_sn: 1, ore_fe: 1, coal: 1, sulfur: 1, ore_u: 1 };   // 这几种矿成片刷：一处 3～6 个点挤在 6 米内
         // 悠闲世界的远征只刷这些（没有矿，没有科技原料）
         const IND_CASUAL_RES = { dirt: 1, wood: 1, stone: 1, sand: 1, clay: 1, salt: 1, seeds: 1 };
         const IND_TOOL_NAME = ['空手', '石稿', '青铜稿', '钢稿', '钻石稿'];
@@ -266,8 +268,8 @@
         const IND_BIOMES = {
             plain: { name: '平原', col: 0x9ccc65, res: { sand: 2, clay: 2, stone: 2, wood: 1, seeds: 2, dirt: 3 } },
             forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 1, seeds: 2, dirt: 3 } },
-            beach: { name: '海边', col: 0xfff59d, res: { sand: 4, salt: 3 } },
-            mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, ore_cu: 2, ore_zn: 2, ore_sn: 2, ore_fe: 2, coal: 2 } },
+            beach: { name: '海边', col: 0xfff59d, res: { sand: 4, salt: 3, sand_sn: 1 } },
+            mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, ore_cu: 2, ore_zn: 2, ore_sn: 3, ore_fe: 2, coal: 2 } },
             desert: { name: '盐湖沙漠', col: 0xe6c27a, res: { sand: 3, salt: 3, oil: 1 } },
             volcano: { name: '火山', col: 0x5d4037, res: { sulfur: 5, stone: 1 } },
             ancient: { name: '古老岩层', col: 0x546e7a, res: { ore_u: 2, stone: 2, ore_fe: 1 } }
@@ -1046,6 +1048,16 @@
                 let roll = r();
                 if (!key) continue;
                 let nd = IND_NODES[key];
+                if (IND_ORE_NODES[key]) {   // 矿成片：抽到矿 1/4 的机会在这里刷一片（3～6 个点，中心 3 米内），其余作废；矿的总数比原来略多
+                    if (r() > 0.25) continue;
+                    let want = 3 + Math.floor(r() * 4), got = 0;
+                    for (let t = 0; t < 40 && got < want; t++) {
+                        let a = r() * Math.PI * 2, d = Math.sqrt(r()) * 3, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d, ph = indHeight(M, px, pz);
+                        if (ph < -1.0 || Math.abs(px) > IND_MAP - 2 || Math.abs(pz) > IND_MAP - 2 || Math.hypot(px, pz) < 8) continue;
+                        ind.nodes.push({ key: key, x: px, z: pz, y: ph, n: nd.give[0] + Math.floor(r() * (nd.give[1] - nd.give[0] + 1)), seed: IND_SEED_KINDS[0], dead: false }); got++;
+                    }
+                    continue;
+                }
                 ind.nodes.push({ key: key, x: x, z: z, y: h, n: nd.give[0] + Math.floor(roll * (nd.give[1] - nd.give[0] + 1)), seed: IND_SEED_KINDS[Math.floor(r() * IND_SEED_KINDS.length)], dead: false });
             }
             ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true;
@@ -1495,7 +1507,7 @@
         function indGather(o) {
             let nd = IND_NODES[o.key], tool = indTool();
             if (tool < nd.tool) { indFlash(indName(o.key) + '要' + IND_TOOL_NAME[nd.tool] + '才挖得动'); return false; }
-            let key = o.key === 'seeds' ? o.seed : o.key;
+            let key = o.key === 'seeds' ? o.seed : (nd.out || o.key);
             let got = indBagAdd(key, o.n + indToolBonus(nd.tool));   // 铁稿 +1、钻石稿 +2：采一次多拿几个
             if (got <= 0) { indFlash('背包满了'); return false; }
             o.n -= got; if (o.n <= 0) { o.dead = true; ind.nodeDirty = true; }
@@ -2675,7 +2687,7 @@
             let a = indAim(), hint = '';
             let rh = R.rh && !R.rh.done ? R.rh : null;
             if (rh) hint = '收起' + indFurnName(rh.f.ty, rh.f.o) + ' ' + Math.min(99, Math.floor(rh.t / IND_PICK_HOLD * 100)) + '%';
-            else if (a && a.kind === 'node') { let nd = IND_NODES[a.o.key], nm = a.o.key === 'seeds' ? '野生' + indName(a.o.seed) : indName(a.o.key); hint = nm + ' ×' + a.o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>'; }
+            else if (a && a.kind === 'node') { let nd = IND_NODES[a.o.key], nm = a.o.key === 'seeds' ? '野生' + indName(a.o.seed) : (nd.name || indName(a.o.key)); hint = nm + ' ×' + a.o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>'; }
             else if (a && a.kind === 'item') hint = indName(a.o.k) + '<br><small>左键：拿</small>';
             else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水') + (a.o.fert ? '　施过肥了' : '')) + '<br><small>' + (ripe ? '左键：收' : '拿着水右键：浇水　拿草木灰右键：施肥') + '</small>'; }
             else if (a && a.kind === 'fire') hint = '篝火' + (a.o.fuel > 0 ? ' 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒' : '（灭了）') + '<br><small>拿着木头，左键：加柴</small>';

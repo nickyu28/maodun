@@ -4524,7 +4524,7 @@ async function enterExit(tab, key) {
                         const spawn = {}; Object.keys(IND_BIOMES).forEach(function (b) { Object.keys(IND_BIOMES[b].res).forEach(function (k) { if (!hard && !IND_CASUAL_RES[k]) return; spawn[k] = 1; }); });
                         Object.keys(IND_NODES).forEach(function (k) {
                             if (!spawn[k] || IND_NODES[k].tool > tl) return;
-                            if (k === 'seeds') IND_SEED_KINDS.forEach(add); else add(k);
+                            if (k === 'seeds') IND_SEED_KINDS.forEach(add); else add(IND_NODES[k].out || k);
                         });
                         // 水
                         if (have.bucket) { add('water_raw'); add('water_sea'); }
@@ -6252,6 +6252,53 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
             await T.close();
             report('IND21 死因看得见：死亡画面（暂停、死因、具体原因、回基地才继续）、掉血飘字和红边、血 < 30 写原因、烫的格子、毒气云和中毒提示', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND22')) {
+            // IND22 矿成片、锡多一点：所有矿（铜、锌、锡、铁、煤、硫、铀）一处 3～6 个点挤在 6 米内；山地锡权重 3；海边有锡砂（空手捡，每次 1 个锡矿）；
+            // 100 张图平均每张的锡矿点数（打印出来写汇报）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__oldFlash = indFlash; indFlash = function () {}; true;`);
+                const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
+                const st = await J(`(function(){
+                    const ORES = { ore_cu: 1, ore_zn: 1, ore_sn: 1, ore_fe: 1, coal: 1, sulfur: 1, ore_u: 1 };
+                    let sn = 0, san = 0, total = 0, ore = 0, bad = [], clusters = 0, small = 0, maxSpan = 0, maps = 100;
+                    for (let s = 1; s <= maps; s++) {
+                        indGoTrip(s * 7919);
+                        let nodes = ind.nodes;
+                        nodes.forEach(function (n) { total++; if (ORES[n.key]) ore++; if (n.key === 'ore_sn') sn++; if (n.key === 'sand_sn') san++; });
+                        // 同一种矿 6 米内连成片：每个矿点 6 米内至少还有 2 个同种（成片的最少 3 个点）
+                        nodes.forEach(function (n) {
+                            if (!ORES[n.key]) return;
+                            let mates = nodes.filter(function (m) { return m !== n && m.key === n.key && Math.hypot(m.x - n.x, m.z - n.z) <= 6.01; }).length;
+                            if (mates < 2) small++;
+                        });
+                    }
+                    return { sn: sn / maps, san: san / maps, total: total / maps, ore: ore / maps, small: small };
+                })()`);
+                console.log('IND22 100 张图平均每张：锡矿点 ' + st.sn.toFixed(2) + '，锡砂点 ' + st.san.toFixed(2) + '，矿点合计 ' + st.ore.toFixed(1) + '，资源点合计 ' + st.total.toFixed(1) + '，没成片的矿点 ' + st.small);
+                if (st.small !== 0) bad.push('有矿点 6 米内同种不到 3 个（没成片） ' + st.small);
+                // 改前（同样 100 张图）：锡矿点 4.76，矿点合计 48.0，资源点合计 266.3
+                if (st.sn < 4.76 * 1.2) bad.push('锡矿点应该比原来多 ' + st.sn);
+                if (st.ore < 48.0) bad.push('矿点合计不该比原来少 ' + st.ore);
+                if (st.san <= 0) bad.push('海边没有锡砂');
+                const cfg = await J(`{ w: IND_BIOMES.mountain.res.ore_sn, b: IND_BIOMES.beach.res.sand_sn, tool: IND_NODES.sand_sn.tool, out: IND_NODES.sand_sn.out, casual: !!IND_CASUAL_RES.sand_sn }`);
+                if (cfg.w !== 3 || cfg.b !== 1 || cfg.tool !== 0 || cfg.out !== 'ore_sn' || cfg.casual) bad.push('锡的配置不对（山地权重 3、海边锡砂权重 1、空手、悠闲没有） ' + JSON.stringify(cfg));
+                // 空手捡锡砂：每次 1 个锡矿
+                await T.eval(`indGoTrip(555); ind.bag = {}; ind.nodes.push({ key: 'sand_sn', x: 3, z: 3, y: 0, n: 1, seed: 'seed_wheat', dead: false }); indGather(ind.nodes[ind.nodes.length - 1]); true;`);
+                if (!(await T.eval(`ind.bag.ore_sn === 1 && ind.nodes[ind.nodes.length - 1].dead`))) bad.push('空手捡锡砂应该得 1 个锡矿 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 悠闲世界还是不刷矿
+                await T.eval(`ind.base.rule = 'casual'; indGoTrip(777); true;`);
+                if (await T.eval(`ind.nodes.some(function (n) { return !IND_CASUAL_RES[n.key]; })`)) bad.push('悠闲世界不该刷矿和锡砂');
+                await T.eval(`ind.base.rule = 'hard'; indGoBase(false); true;`);
+            }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND22 矿成片、锡多一点、海边锡砂', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
