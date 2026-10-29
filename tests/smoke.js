@@ -5633,10 +5633,11 @@ async function enterExit(tab, key) {
                 lb = await JP(`new Promise(function (r) { indLoad(function (b) { r(b.bag); }); })`);
                 if (Object.keys(lb).length) bad.push('出发以后存档里不该还留着背包（回不来就丢了） ' + JSON.stringify(lb));
                 await T.eval(`indGoBase(false); ind.bag = {}; true;`);
+                const IND_VER_NOW = await T.eval(`IND_SAVE_VER`);
                 const old = await J(`(function(){ let b = indFixBase({ ver: 9, rule: 'hard', box: { wood: 150, bake_potato: 3, sand: 4000 }, crops: [{ k: 'wheat', x: -20, z: 0, g: 5, wet: 0, times: 0 }], cookers: [{ id: 2, ty: 'kiln', x: 5, z: 5, items: { wood: 2 } }], gh: true, stove: { items: { ore_cu: 1 }, out: {}, fuel: 40, fire: 0, temp: 20 } });
                     return { box: b.box, chests: b.chests.map(function (c) { return [c.big, c.items === b.box, Math.round(c.x), Math.round(c.z)]; }), crops: b.crops.length, cookers: b.cookers.length, gh: b.gh, stove: b.stove.items, off: b.off, tiles: b.tiles.length, bag: b.bag, ver: b.ver }; })()`);
                 if (old.box.wood !== 150 || old.box.bake_potato !== 3 || old.box.sand !== 4000 || old.chests.length !== 1 || !old.chests[0][0] || !old.chests[0][1] || old.chests[0][2] !== -2 || old.chests[0][3] !== -19) bad.push('老档的仓库箱东西丢了、没变成不限的那个箱子 ' + JSON.stringify(old));
-                if (old.crops !== 1 || old.cookers !== 1 || !old.gh || old.stove.ore_cu !== 1 || Object.keys(old.off).length || old.tiles !== 0 || old.ver !== 10) bad.push('老档别的东西不对 ' + JSON.stringify(old));
+                if (old.crops !== 1 || old.cookers !== 1 || !old.gh || old.stove.ore_cu !== 1 || Object.keys(old.off).length || old.tiles !== 0 || old.ver !== IND_VER_NOW) bad.push('老档别的东西不对 ' + JSON.stringify(old));
                 // 乱写的搬着的家具被丢掉
                 const wr = await J(`(function(){ let b = indFixBase({ ver: 10, rule: 'hard', carried: { 5: { ty: 'zzz' }, 6: { ty: 'chest' } }, bag: { 'inst:5': 1, 'inst:9': 1, wood: 1 } }); return { carried: Object.keys(b.carried), bag: b.bag }; })()`);
                 if (wr.carried.length || wr.bag['inst:5'] || wr.bag['inst:9'] || wr.bag.wood !== 1) bad.push('乱写的搬着的家具没丢掉 ' + JSON.stringify(wr));
@@ -6480,8 +6481,7 @@ async function enterExit(tab, key) {
                 if (!(await T.eval(`(function(){ ind.base.rule = 'casual'; let c = indCraftShow(IND_CRAFT[${await T.eval(ci('blast_suit'))}]) || indCraftShow(IND_CRAFT[${await T.eval(ci('blast_helmet'))}]); ind.base.rule = 'hard'; return !c; })()`))) bad.push('悠闲不该看到防爆装备的配方');
                 // ── 伤害按距离 ──
                 const hurt = async (d, wear, R) => {
-                    await T.eval(`ind.dead = null; ind.hurt = null; ind.base.surv.hp = 100000; ind.base.wear = ${JSON.stringify(wear)}; indTeleport(-20, 15); indBoom(-20, ${15 - d}, ${R || 0}, '测试'); true;`);
-                    return 100000 - (await T.eval(`ind.base.surv.hp`));
+                    return T.eval(`(function(){ ind.dead = null; ind.hurt = null; ind.base.surv.hp = 100000; ind.base.wear = ${JSON.stringify(wear)}; indTeleport(-20, 15); indBoom(-20, ${15 - d}, ${R || 0}, '测试'); return 100000 - ind.base.surv.hp; })()`);
                 };
                 const near = (a, b) => Math.abs(a - b) < 0.05;
                 let v;
@@ -6501,8 +6501,8 @@ async function enterExit(tab, key) {
                 await T.eval(`indRespawn(); ind.base.wear = { body: 'blast_suit', head: 'blast_helmet' }; ind.base.surv.hp = 100; indTeleport(-20, 15); indBoom(-20, 14.5, 0, '测试'); true;`);
                 if (!(await T.eval(`!ind.dead && Math.abs(ind.base.surv.hp - 55) < 0.05`))) bad.push('两样都穿 1 米内应该扣 45 活着 ' + await T.eval(`ind.base.surv.hp`));
                 // 远征里的爆炸一样
-                await T.eval(`ind.base.wear = {}; indGoTrip(2024); ind.base.surv.hp = 100000; indTeleport(3, 3); indTripBoom(3, 4.5, '测试'); true;`);
-                if (!near(100000 - (await T.eval(`ind.base.surv.hp`)), 150 - 90 * 0.5 / 2)) bad.push('远征里的爆炸也按距离 ' + (100000 - (await T.eval(`ind.base.surv.hp`))));
+                const tripDmg = await T.eval(`(function(){ ind.base.wear = {}; indGoTrip(2024); ind.base.surv.hp = 100000; indTeleport(3, 3); indTripBoom(3, 4.5, '测试'); return 100000 - ind.base.surv.hp; })()`);
+                if (!near(tripDmg, 150 - 90 * 0.5 / 2)) bad.push('远征里的爆炸也按距离 ' + tripDmg);
                 await T.eval(`indGoBase(false); true;`);
                 // ── 走路 ×0.6、保暖 +10 ──
                 const walk = async (wear) => {
