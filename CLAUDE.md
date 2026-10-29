@@ -38,4 +38,5 @@
   3. 猫盾工业会在这 4 处现有位置各加几行：index.html 的 GAME_FILES 列表、大厅模式列表里的一个隐藏按钮（只有 ?hcdebug=1 才显示）、"开始游戏"按钮的模式分发、tests/smoke.js。你以后改这些位置时，保留带"猫盾工业"注释的那几行。
   4. 不要强推（force push）main，不要改写 main 的历史。推送前先拉取最新的 main 再推。
   5. 版本号（GAME_VERSION）和 CHANGELOG 仍然由你负责；猫盾工业合并时会和你协调，不会自己改。
+  7. **排队清单和夜间自动跑（作者的决定）**：作者定好要做的活写在 docs/queue-code1.md（Code1）和 docs/queue-code2.md（Code2），每天北京时间凌晨 2 点前后各起一个会话照着做。白天开工前也先拉 main、看自己的清单。Code2 推了玩家能玩到的代码改动时，可以自己把 GAME_VERSION 的 N 加一（不写 CHANGELOG），免得浏览器一直用旧缓存。
   6. **分工（作者的决定）**：Code2（做猫盾工业的会话）负责猫盾工业 + 实验室：js/18-lab.js、docs/lab-spec.md、docs/chem.md、tests/smoke.js 里 LB 开头的检查。Code1 负责主游戏和其他所有东西，不再改实验室这些文件和检查；实验室的 bug 和需求交给 Code2。猫盾工业不改其他现有模式的代码，它复制需要的部分；你不用为它改任何东西。
