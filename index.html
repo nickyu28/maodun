@@ -1041,10 +1041,10 @@
             </div>
             <div id="mode-detail-panel" class="hidden">
             <div id="game-mode-select" style="display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:10px;">
-                <button id="btn-mode-hunt" onclick="selectGameMode('hunt')" style="margin:0; font-size:11px; padding:7px 2px;">寻宝队</button>
-                <button id="btn-mode-night" onclick="selectGameMode('night')" style="margin:0; font-size:11px; padding:7px 2px;">惊魂夜</button>
-                <button id="btn-mode-blaze" onclick="selectGameMode('blaze')" style="margin:0; font-size:11px; padding:7px 2px;">超燃</button>
-                <button id="btn-mode-race" onclick="selectGameMode('race')" style="margin:0; font-size:11px; padding:7px 2px;">竞速</button>
+                <button id="btn-mode-hunt" onclick="modePick('hunt')" style="margin:0; font-size:11px; padding:7px 2px;">寻宝队</button>
+                <button id="btn-mode-night" onclick="modePick('night')" style="margin:0; font-size:11px; padding:7px 2px;">惊魂夜</button>
+                <button id="btn-mode-blaze" onclick="modePick('blaze')" style="margin:0; font-size:11px; padding:7px 2px;">超燃</button>
+                <button id="btn-mode-race" onclick="modePick('race')" style="margin:0; font-size:11px; padding:7px 2px;">竞速</button>
                 <!-- 实验室入口：和别的模式一样先选模式再点「开始游戏」。LAB_ENABLED 为 false 时不显示（网址带 ?labdebug=1 才出现）；放在寻宝队正下面 -->
                 <button id="btn-mode-lab" onclick="selectGameMode('lab')" style="display:none; margin:0; font-size:11px; padding:7px 2px;">实验室</button>
                 <!-- 作者决定先藏起来：监狱救援、躲避球、合作密室、推推乐、爬塔（代码都在，只是大厅里不放入口；要放回来就取消注释）
@@ -1054,8 +1054,8 @@
                 <button id="btn-mode-sumo" onclick="selectGameMode('sumo')" style="margin:0; font-size:11px; padding:7px 2px;">推推乐</button>
                 <button id="btn-mode-tower" onclick="selectGameMode('tower')" style="margin:0; font-size:11px; padding:7px 2px;">爬塔</button>
                 -->
-                <button id="btn-mode-park" onclick="selectGameMode('park')" style="margin:0; font-size:11px; padding:7px 2px;">猫盾乐园</button>
-                <button id="btn-mode-cake" onclick="selectGameMode('cake')" style="margin:0; font-size:11px; padding:7px 2px;">松饼大作战</button>
+                <button id="btn-mode-park" onclick="modePick('park')" style="margin:0; font-size:11px; padding:7px 2px;">猫盾乐园</button>
+                <button id="btn-mode-cake" onclick="modePick('cake')" style="margin:0; font-size:11px; padding:7px 2px;">松饼大作战</button>
             </div>
 
         <div id="hunt-only">

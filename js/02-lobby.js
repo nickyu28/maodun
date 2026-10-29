@@ -185,6 +185,12 @@
             gState.introSeen[key] = 1; saveProgress();
             introPush(title, '<div style="text-align:left; font-size:14px; line-height:1.75;">' + text + '</div>');
         }
+        // 玩家在大厅里点模式按钮：选中，而且每个模式第一次点开弹一次规则卡片（记进存档 modeIntroShown，之后在「规则」按钮里重看）。
+        // 程序里直接调 selectGameMode 不弹（开机默认选中、测试、邀请进房）；新手教程里不弹。
+        function modePick(k) {
+            selectGameMode(k);
+            if (!gState.tutorial) showModeIntroIfFirstTime(k);
+        }
         function showModeIntroIfFirstTime(key) {
             if (!gState.modeIntroShown) gState.modeIntroShown = {};
             if (gState.modeIntroShown[key]) return;

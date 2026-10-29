@@ -2562,6 +2562,39 @@ async function enterExit(tab, key) {
             report('HM1 隐藏 5 个模式：大厅里没有入口，其余入口还在，代码还能直接调用', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('MI1')) {
+            // MI1 每个模式第一次在大厅点开时弹一次规则卡片（记进存档）；再点不弹；「规则」按钮里能重看；程序里直接 selectGameMode 不弹
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`gState.modeIntroShown = {}; ${HIDE} true;`);
+            await T.eval(`document.getElementById('btn-mode-blaze').click(); true;`);
+            if (!(await until(T, `introOpen && ${MODAL} === '超燃 · 规则'`, 15000))) bad.push('第一次点超燃没弹规则卡片 ' + await T.eval(MODAL));
+            if (!(await T.eval(`gState.modeIntroShown.blaze === true`))) bad.push('没记进 modeIntroShown');
+            await clickModal(T, 0);
+            await until(T, `${MODAL} === null`, 10000);
+            await T.eval(`document.getElementById('btn-mode-hunt').click(); document.getElementById('btn-mode-blaze').click(); true;`);
+            if (!(await until(T, `introOpen && ${MODAL} === '寻宝队 · 规则'`, 15000))) bad.push('第一次点寻宝队没弹规则卡片 ' + await T.eval(MODAL));
+            await clickModal(T, 0); await until(T, `${MODAL} === null`, 10000);
+            // 第二次点超燃：不再弹
+            await T.eval(`document.getElementById('btn-mode-night').click(); true;`);
+            await until(T, `introOpen`, 15000); await clickModal(T, 0); await until(T, `${MODAL} === null`, 10000);
+            await T.eval(`document.getElementById('btn-mode-blaze').click(); true;`); await frames(T, 40);
+            if (await T.eval(MODAL) !== null) bad.push('第二次点超燃又弹了');
+            // 存档带着
+            const saved = JSON.parse(await T.eval(`saveProgress(); JSON.stringify(JSON.parse(localStorage.getItem('TH_save_' + gState.id) || '{}').modeIntroShown || null)`));
+            if (!saved || !saved.blaze || !saved.hunt || !saved.night) bad.push('存档里没有 modeIntroShown ' + JSON.stringify(saved));
+            // 规则按钮重看
+            await T.eval(`openRules('blaze'); true;`);
+            if (!(await until(T, `introOpen && ${MODAL} === '超燃 · 规则'`, 15000))) bad.push('规则按钮打不开');
+            await clickModal(T, 0); await until(T, `${MODAL} === null`, 10000);
+            // 程序里直接选不弹
+            await T.eval(`gState.modeIntroShown = {}; selectGameMode('cake'); true;`); await frames(T, 40);
+            if (await T.eval(MODAL) !== null) bad.push('直接 selectGameMode 也弹了');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('MI1 每个模式第一次点开弹一次规则卡片：记进存档、再点不弹、规则按钮能重看、程序里直接选不弹', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('K1')) {
             // K1 合成倒计时：材料凑齐后等 3 秒再合成（合出大金的 5 秒），中间显示倒计时，材料被拿走就取消、放回去重新数
             const bad = [];
