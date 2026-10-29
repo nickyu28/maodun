@@ -35,10 +35,13 @@
         const IND_BELL_R = 30;
         const IND_PICK_HOLD = 1;
         const IND_AIM_COS = Math.cos(30 * Math.PI / 180);
+        // 视野：白天看得到 80 米（雾），夜里 40 米；更远的资源点、动物、树不画
+        const IND_VIEW = { day: 80, night: 40, margin: 6 };
+        function indViewR(d) { if (d === undefined) d = indDark(); return IND_VIEW.day - (IND_VIEW.day - IND_VIEW.night) * d; }
         const IND_T = { extract: 3, pickR: 2.6, gateR: 2.2, exitR: 3, speed: 7, run: 1.6 };
         const IND_BASE = { x: 30, z: 22.5 };          // 基地半宽、半深（60 × 45 米）
         const IND_FIELD = { x0: -28, x1: -6, z0: -18, z1: 18, tile: 2 };   // 农田（基地左边），2 米一格
-        const IND_MAP = 150;                          // 远征地图半宽（300 × 300 米）
+        const IND_MAP = 300;                          // 远征地图半宽（600 × 600 米）
         const IND_BAG_SLOTS = 24, IND_STACK = 99, IND_CHEST_SLOTS = 30;        // 背包 24 格，每格最多 99 个，同一种能占多格；新做的箱子 30 格，原来那个仓库箱不限
         const IND_EYE = 1.8;
         const IND_CAM = { back: 4.4, up: 1.2 };
@@ -201,7 +204,9 @@
         IND_ITEMS_RAW.chest = { name: '仓库箱', col: 0x6d4c41, furn: 'chest' };
         IND_ITEMS_RAW.furn_bed = { name: '床', col: 0x5c6bc0, furn: 'bed' };
         IND_ITEMS_RAW.furn_bench = { name: '工作台', col: 0xa1887f, furn: 'bench' };
-                IND_ITEMS_RAW.raft = { name: '木筏', col: 0x8d6e63, raft: true, use: '水边放下，上去划着走' };
+                IND_ITEMS_RAW.magnet = { name: '磁石', col: 0x6a1b9a };
+        IND_ITEMS_RAW.compass = { name: '指南针', col: 0xe53935, use: '放在背包里，指向最近的撤离点' };
+        IND_ITEMS_RAW.raft = { name: '木筏', col: 0x8d6e63, raft: true, use: '水边放下，上去划着走' };
         IND_ITEMS_RAW.house_hut = { name: '木屋', col: 0x8d6e63, house: 'hut', use: '放下就是一间房' };
         IND_ITEMS_RAW.house_brick = { name: '砖房', col: 0xb55a4a, house: 'brick', use: '放下就是一间房' };
         IND_ITEMS_RAW.house_big = { name: '大砖房', col: 0xa0453a, house: 'big', use: '放下就是一间房' };
@@ -262,27 +267,31 @@
         }
         // 资源点：每种给几个、要什么稿子；seeds 是野生种子堆（随机一种作物）
         const IND_NODES = {
-            wood: { give: [2, 4], tool: 0 }, dirt: { give: [2, 3], tool: 0 }, stone: { give: [2, 3], tool: 0 }, sand: { give: [2, 4], tool: 0 }, clay: { give: [1, 3], tool: 0 },
+            wood: { give: [3, 6], tool: 0 }, dirt: { give: [2, 3], tool: 0 }, stone: { give: [3, 5], tool: 1 }, sand: { give: [2, 4], tool: 0 }, clay: { give: [1, 3], tool: 0 },
             salt: { give: [1, 3], tool: 0 }, coal: { give: [1, 3], tool: 1 }, ore_sn: { give: [1, 2], tool: 1 }, oil: { give: [1, 1], tool: 0 },
             sand_sn: { give: [1, 1], tool: 0, out: 'ore_sn', name: '锡砂' },   // 海边的锡砂：空手捡，每次 1 个锡矿
             ore_cu: { give: [1, 2], tool: 1 }, ore_zn: { give: [1, 2], tool: 1 }, ore_fe: { give: [1, 2], tool: 2 },
             sulfur: { give: [1, 3], tool: 1 }, ore_u: { give: [1, 1], tool: 3 }, seeds: { give: [2, 3], tool: 0 }
         };
         const IND_NODE_COL = { seeds: 0x7cb342, sand_sn: 0xb0bec5 };
-        const IND_ORE_NODES = { ore_cu: 1, ore_zn: 1, ore_sn: 1, ore_fe: 1, coal: 1, sulfur: 1, ore_u: 1 };   // 这几种矿成片刷：一处 3～6 个点挤在 6 米内
+        IND_NODES.magnet = { give: [1, 2], tool: 0 };
+        IND_NODES.cactus = { give: [1, 2], tool: 0, thorn: true, name: '仙人掌' };
+        const IND_OUTCROP = { magnet: 1, ore_cu: 1, ore_zn: 1, ore_sn: 1, ore_fe: 1, coal: 1, sulfur: 1, ore_u: 1 };   // 矿是露头：一处 1～2 个，每个能挖 10～30 份
+        const IND_ORE_NODES = {};   // 还成片刷的（一处 3～6 个小点）：硝石   // 这几种矿成片刷：一处 3～6 个点挤在 6 米内
         // 悠闲世界的远征只刷这些（没有矿，没有科技原料）
-        const IND_CASUAL_RES = { dirt: 1, wood: 1, stone: 1, sand: 1, clay: 1, salt: 1, seeds: 1 };
+        const IND_CASUAL_RES = { dirt: 1, wood: 1, stone: 1, sand: 1, clay: 1, salt: 1, seeds: 1, cactus: 1 };
         const IND_TOOL_NAME = ['空手', '石稿', '青铜稿', '钢稿', '钻石稿'];
         // 地貌：名字、地面颜色、会刷什么资源（权重）
         const IND_BIOMES = {
-            plain: { name: '平原', col: 0x9ccc65, res: { sand: 2, clay: 2, stone: 2, wood: 1, seeds: 2, dirt: 3 } },
-            forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 1, seeds: 2, dirt: 3 } },
-            beach: { name: '海边', col: 0xfff59d, res: { sand: 4, salt: 3, sand_sn: 1 } },
-            mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, ore_cu: 2, ore_zn: 2, ore_sn: 3, ore_fe: 2, coal: 2 } },
-            desert: { name: '盐湖沙漠', col: 0xe6c27a, res: { sand: 3, salt: 3, oil: 1 } },
+            plain: { name: '平原', col: 0x9ccc65, res: { clay: 2, stone: 2, wood: 1, seeds: 2 } },
+            forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 1, seeds: 2 } },
+            beach: { name: '海边', col: 0xfff59d, res: { salt: 3, sand_sn: 1, wood: 1 } },
+            mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, wood: 2, ore_cu: 2, ore_zn: 2, ore_sn: 3, ore_fe: 2, coal: 2 } },
+            desert: { name: '盐湖沙漠', col: 0xe6c27a, res: { salt: 3, oil: 1, cactus: 3 } },
             volcano: { name: '火山', col: 0x5d4037, res: { sulfur: 5, stone: 1 } },
             ancient: { name: '古老岩层', col: 0x546e7a, res: { ore_u: 2, stone: 2, ore_fe: 1 } }
         };
+        IND_BIOMES.mountain.res.magnet = 1;
         // 作物：生长秒数（游戏时间，浇了水按全速，没浇水半速）、收获几个、留几个种子；番茄熟了以后还能再结
         const IND_CROPS = {
             wheat: { name: '小麦', grow: 120, yield: [2, 3], seeds: [1, 2], col: 0xffca28, s: [0, 1, 2] },
@@ -323,7 +332,7 @@
             { out: 'dev_press', in: { steel: 4, wire: 2 }, hard: true }, { out: 'pick_diamond', in: { diamond: 2, steel: 2, wood: 1 }, hard: true },
             { out: 'house_hut', in: { wood: 60 } }, { out: 'house_brick', in: { brick: 40, wood: 10 } }, { out: 'house_big', in: { brick: 90, wood: 20 } },
             { out: 'bottle', n: 2, in: { glass_plate: 1 } },
-            { out: 'raft', in: { wood: 20 } },
+            { out: 'raft', in: { wood: 20 } }, { out: 'compass', in: { magnet: 1, glass_plate: 1, wood: 1 } },
             { out: 'blast_suit', in: { steel: 6, yarn: 4 }, hard: true }, { out: 'blast_helmet', in: { steel: 2, glass_plate: 1 }, hard: true }
         ];
         // 房子：放在基地里，四面墙 + 屋顶 + 一扇门；w×d 是门朝南（+z）时的宽和深，warm 是屋里比外面高几度
@@ -422,7 +431,7 @@
         // 一张远征地图：种子 → 地形高度、地貌、火山位置
         function indMakeMap(seed) {
             let r = indRng(seed), M = { seed: seed, volc: [] };
-            let nv = 1 + (r() < 0.5 ? 1 : 0);
+            let nv = 2 + Math.floor(r() * 3);
             for (let i = 0; i < nv; i++) { let a = r() * Math.PI * 2, d = IND_MAP * (0.62 + r() * 0.25); M.volc.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 16 + r() * 6 }); }
             return M;
         }
@@ -450,7 +459,7 @@
         const IND_WATER_Y = -1.2;
 
         // ── 存档（IndexedDB，单独存）──
-        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 11;
+        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 12;
         function indDb(cb) {
             try {
                 let rq = indexedDB.open(IND_DB, 1);
@@ -460,8 +469,9 @@
             } catch (e) { cb(null); }
         }
         function indKey() { return 'p_' + (gState.id || 'guest'); }
-        const IND_START_BOX = { pick_stone: 1, shears: 1, bucket: 2, seed_wheat: 6, seed_potato: 4, seed_cotton: 4, seed_cabbage: 3, wood: 8, salt: 2, bake_potato: 3 };
+        const IND_START_BOX = { pick_stone: 1, shears: 1, compass: 1, bucket: 2, seed_wheat: 6, seed_potato: 4, seed_cotton: 4, seed_cabbage: 3, wood: 8, salt: 2, bake_potato: 3 };
         const IND_V3_GIFT = { seed_cotton: 4, seed_cabbage: 3 };
+        const IND_V12_GIFT = { compass: 1 };   // 存档版本 12：新号送一个指南针，老档读档时补一个
         const IND_V9_GIFT = { shears: 1 };   // 存档版本 9：新号送一把剪刀，老档读档时补一把
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
@@ -502,8 +512,9 @@
             if (b.rule !== 'casual' && b.rule !== 'hard') b.rule = null;
             if (!b.box || typeof b.box !== 'object') b.box = {};
             Object.keys(b.box).forEach(function (k) { if (!IND_ITEMS[k] || !(b.box[k] > 0)) delete b.box[k]; });
-            if ((b.ver || 1) < 2) Object.keys(IND_START_BOX).forEach(function (k) { if (k !== 'pick_stone' && !IND_V3_GIFT[k] && !IND_V9_GIFT[k]) b.box[k] = (b.box[k] || 0) + IND_START_BOX[k]; });   // 第 1 阶段的老档补上第 2 阶段的起步物资
+            if ((b.ver || 1) < 2) Object.keys(IND_START_BOX).forEach(function (k) { if (k !== 'pick_stone' && !IND_V3_GIFT[k] && !IND_V9_GIFT[k] && !IND_V12_GIFT[k]) b.box[k] = (b.box[k] || 0) + IND_START_BOX[k]; });   // 第 1 阶段的老档补上第 2 阶段的起步物资
             if ((b.ver || 1) < 3) Object.keys(IND_V3_GIFT).forEach(function (k) { b.box[k] = (b.box[k] || 0) + IND_V3_GIFT[k]; });   // 第 2 阶段的老档补上棉花、白菜种子
+            if ((b.ver || 1) < 12) Object.keys(IND_V12_GIFT).forEach(function (k) { b.box[k] = (b.box[k] || 0) + IND_V12_GIFT[k]; });
             if ((b.ver || 1) < 9) Object.keys(IND_V9_GIFT).forEach(function (k) { b.box[k] = (b.box[k] || 0) + IND_V9_GIFT[k]; });   // 第 5 阶段之前的老档补上剪刀
             // 家具：位置（可搬）、被收起来的、箱子（原来的仓库箱不限，新做的 30 格）、搬着的
             b.cid = indNum(b.cid, 1, 1, 1e9) | 0;
@@ -745,7 +756,7 @@
         function indSyncAnimals() {
             if (!ind.animalMesh) return;
             indDummy();
-            let A = indAnimals(), n = Math.min(A.length, 40);
+            let A = indAnimals(), n; if (ind.where === 'trip') { let vr = indViewR() + IND_VIEW.margin; A = A.filter(function (a) { return Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= vr; }); } n = Math.min(A.length, 120);
             for (let i = 0; i < n; i++) {
                 let a = A[i], D = IND_ANIMALS[a.k], y = indGround(a.x, a.z);
                 IND_DUMMY.position.set(a.x, y + D.size[1] / 2, a.z); IND_DUMMY.rotation.set(0, a.ry || 0, 0); IND_DUMMY.scale.set(D.size[2], D.size[1], D.size[0]); IND_DUMMY.updateMatrix();
@@ -869,7 +880,7 @@
             document.body.onmousedown = null;
             if (R.onMouse) { document.removeEventListener('mouseup', R.onMouseUp); document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); }
             if (document.pointerLockElement) document.exitPointerLock();
-            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
+            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead', 'ind-compass', 'ind-rad', 'ind-geiger', 'ind-flash'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
             indClearWorld();
             if (R.me) scene.remove(R.me);
             scene.background = R.oldBg; scene.fog = R.oldFog;
@@ -1009,7 +1020,7 @@
             ind.fertMesh = indInst(new THREE.BoxGeometry(0.3, 0.2, 0.3), IND_CROP_CAP);
             ind.tileMesh = indInst(new THREE.PlaneGeometry(1.9, 1.9).rotateX(-Math.PI / 2), IND_TILE_CAP); ind.tileDirty = true;
             indSyncFurn();   // 家具马上画出来（不等第一帧），进出时物体数每次一样
-            ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 40);
+            ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 120);
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             ind.devMesh = indInst(new THREE.BoxGeometry(1, 1, 1), IND_DEV_CAP); ind.devDirty = true;
             ind.wireLine = new THREE.LineSegments(indGeo(new THREE.BufferGeometry()), indMat(new THREE.LineBasicMaterial({ color: 0xff7043 }))); ind.wireLine.frustumCulled = false; indAdd(ind.wireLine); ind.wireDirty = true;
@@ -1028,13 +1039,13 @@
         }
 
         // 远征：地形（一个网格，颜色按地貌）、水面、资源点（一个 InstancedMesh）、两个撤离点
-        const IND_SEG = 120, IND_NODE_N = 420;
+        const IND_SEG = 240, IND_NODE_N = 1680, IND_WILD_N = 56;   // 地图 600 × 600：资源点和动物按面积（原来 300 × 300 的 4 倍）
         const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin', 'seed_cotton', 'seed_cabbage', 'seed_radish'];
         function indGoTrip(seed) {
             indClearWorld();
-            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null;
+            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
             let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed);
-            scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 60, 160);
+            scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 30, IND_VIEW.day);
             let geo = indGeo(new THREE.PlaneGeometry(IND_MAP * 2, IND_MAP * 2, IND_SEG, IND_SEG));
             geo.rotateX(-Math.PI / 2);
             let pos = geo.attributes.position, cols = new Float32Array(pos.count * 3), c = new THREE.Color();
@@ -1061,7 +1072,18 @@
                 let roll = r();
                 if (!key) continue;
                 let nd = IND_NODES[key];
-                if (IND_ORE_NODES[key]) {   // 矿成片：抽到矿 1/4 的机会在这里刷一片（3～6 个点，中心 3 米内），其余作废；矿的总数比原来略多
+                if (IND_OUTCROP[key]) {   // 矿是露头：抽到矿有 1/6 的机会在这里刷 1～2 个露头（4 米内），每个能挖 10～30 份
+                    if (r() > 1 / 6) continue;
+                    let want = 1 + Math.floor(r() * 2), got = 0;
+                    for (let t = 0; t < 30 && got < want; t++) {
+                        let a = r() * Math.PI * 2, d = got ? 2 + r() * 2 : 0, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d, ph = indHeight(M, px, pz);
+                        if (ph < -1.0 || Math.abs(px) > IND_MAP - 2 || Math.abs(pz) > IND_MAP - 2 || Math.hypot(px, pz) < 8) continue;
+                        let n = 10 + Math.floor(r() * 21);
+                        ind.nodes.push({ key: key, x: px, z: pz, y: ph, n: n, n0: n, out: true, seed: IND_SEED_KINDS[0], dead: false }); got++;
+                    }
+                    continue;
+                }
+                if (IND_ORE_NODES[key]) {   // 成片：抽到有 1/4 的机会在这里刷一片（3～6 个点，中心 3 米内），其余作废
                     if (r() > 0.25) continue;
                     let want = 3 + Math.floor(r() * 4), got = 0;
                     for (let t = 0; t < 40 && got < want; t++) {
@@ -1071,22 +1093,31 @@
                     }
                     continue;
                 }
-                ind.nodes.push({ key: key, x: x, z: z, y: h, n: nd.give[0] + Math.floor(roll * (nd.give[1] - nd.give[0] + 1)), seed: IND_SEED_KINDS[Math.floor(r() * IND_SEED_KINDS.length)], dead: false });
+                let node = { key: key, x: x, z: z, y: h, n: nd.give[0] + Math.floor(roll * (nd.give[1] - nd.give[0] + 1)), seed: IND_SEED_KINDS[Math.floor(r() * IND_SEED_KINDS.length)], dead: false };
+                if (key === 'wood') { node.tree = indBiome(M, x, z) === 'mountain' ? 'pine' : indBiome(M, x, z) === 'beach' ? 'palm' : 'oak'; }   // 树：森林阔叶、山地松树、海边椰子树
+                else if (key === 'stone') node.rock = true;   // 大石头
+                ind.nodes.push(node);
             }
-            ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true;
+            ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true; wdMakeMeshes();
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             // 野生动物：平原有羊和牛，森林有狗和猫
             ind.wild = [];
-            for (let i = 0, tries = 0; ind.wild.length < 14 && tries < 400; tries++) {
+            for (let i = 0, tries = 0; ind.wild.length < IND_WILD_N && tries < 1600; tries++) {
                 let x = (r() * 2 - 1) * (IND_MAP - 10), z = (r() * 2 - 1) * (IND_MAP - 10), bm = indBiome(M, x, z);
                 if (Math.hypot(x, z) < 12 || indHeight(M, x, z) < -0.8) continue;
                 let ks = Object.keys(IND_ANIMALS).filter(function (k) { return IND_ANIMALS[k].biome.indexOf(bm) >= 0; });
                 if (!ks.length) continue;
                 ind.wild.push({ k: ks[Math.floor(r() * ks.length)], x: x, z: z, fed: 0, follow: false }); i++;
             }
-            ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 40);
-            ind.exits.push({ x: 0, z: 6, name: '回家的门' });
-            for (let i = 0; i < 2; i++) { let a = r() * Math.PI * 2, d = IND_MAP * (0.45 + r() * 0.35); ind.exits.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, name: '撤离点' }); }
+            ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 120);
+            // 撤离点：4 个。1 个就在出生点脚下（走开一次才生效，不然一出生就回家了），另外 3 个每趟随机散在地图里（离出生点和彼此都 ≥ 150 米，找不到就一点点放宽）
+            ind.exits = [{ x: 0, z: -4, name: '撤离点', armed: false }];
+            for (let tries = 0, minD = 150; ind.exits.length < 4 && tries < 2000; tries++) {
+                if (tries && tries % 300 === 0) minD = Math.max(60, minD - 20);
+                let x = (r() * 2 - 1) * (IND_MAP - 20), z = (r() * 2 - 1) * (IND_MAP - 20);
+                if (indHeight(M, x, z) < -0.3 || ind.exits.some(function (e) { return Math.hypot(e.x - x, e.z - z) < minD; })) continue;
+                ind.exits.push({ x: x, z: z, name: '撤离点' });
+            }
             ind.exits.forEach(function (e) {
                 let y = indHeight(M, e.x, e.z);
                 let ring = new THREE.Mesh(indGeo(new THREE.CylinderGeometry(IND_T.exitR, IND_T.exitR, 0.2, 24)), indMat(new THREE.MeshLambertMaterial({ color: 0x66bb6a, transparent: true, opacity: 0.55 })));
@@ -1099,20 +1130,7 @@
             indSave();
             indFlash('出发了！走回绿色撤离圈里站 ' + IND_T.extract + ' 秒才算带回来');
         }
-        function indSyncNodes() {
-            if (!ind.nodeMesh || !ind.nodeDirty) return;
-            indDummy();
-            let n = 0;
-            ind.nodes.forEach(function (o, i) {
-                if (o.dead) return;
-                IND_DUMMY.position.set(o.x, o.y + 0.45, o.z); IND_DUMMY.rotation.set(0, i, 0);
-                IND_DUMMY.scale.setScalar(o.key === 'wood' ? 1.3 : 1); IND_DUMMY.updateMatrix();
-                ind.nodeMesh.setMatrixAt(n, IND_DUMMY.matrix); ind.nodeMesh.setColorAt(n, IND_COL.setHex(IND_NODE_COL[o.key] || IND_ITEMS[o.key].col)); n++;
-            });
-            ind.nodeMesh.count = n; ind.nodeMesh.instanceMatrix.needsUpdate = true;
-            if (ind.nodeMesh.instanceColor) ind.nodeMesh.instanceColor.needsUpdate = true;
-            ind.nodeDirty = false;
-        }
+        function indSyncNodes() { wdSyncNodes(); }   // 19-industry-world.js：视野内的树、石头、露头、坑、树桩
 
         // ── 主循环 ──
         function indLoop() {
@@ -1180,14 +1198,15 @@
             if (!ind || ind.over || ind.dead) return;
             indStoveTick(dt);
             if (!ind || ind.over) return;
-            indRightHoldTick(dt);
+            indRightHoldTick(dt); wdChTick(dt);
             if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
                 let g = IND_BASE_ST.gate;
                 if (Math.abs(ind.p.x - g.x) < IND_T.gateR && ind.p.z < g.z + 0.3) indGoTrip();
             } else {
-                let inExit = ind.exits.some(function (e) { return Math.hypot(ind.p.x - e.x, ind.p.z - e.z) <= IND_T.exitR; });
+                wdTripTick(dt);   // 19-industry-world.js：脚下的撤离点走开才生效、看见过的撤离点、走过的地方、指南针
+                let inExit = ind.exits.some(function (e) { return e.armed !== false && Math.hypot(ind.p.x - e.x, ind.p.z - e.z) <= IND_T.exitR; });
                 ind.exitT = inExit ? ind.exitT + dt : 0;
                 if (ind.exitT >= IND_T.extract) indGoBase(true);
             }
@@ -1221,7 +1240,7 @@
         function indSlow() { let S = ind.base.surv; return S.food <= 0 || S.water <= 0 || S.energy <= 0; }
         function indShiver() { return ind.base.surv.temp < IND_BODY.chill; }
         // ── 受伤和死亡：所有掉血都走 indHurt，记下来源（死因、飘字、血条旁的字都用它） ──
-        const IND_HURT = { starve: { die: '饿死', tag: '饥饿' }, thirst: { die: '渴死', tag: '口渴' }, cold: { die: '冻死', tag: '冻伤' }, heat: { die: '热死', tag: '中暑' }, burn: { die: '烫伤', tag: '烫伤' }, gas: { die: '中毒', tag: '中毒' }, boom: { die: '爆炸', tag: '爆炸' }, rad: { die: '辐射', tag: '辐射' } };
+        const IND_HURT = { starve: { die: '饿死', tag: '饥饿' }, thirst: { die: '渴死', tag: '口渴' }, cold: { die: '冻死', tag: '冻伤' }, heat: { die: '热死', tag: '中暑' }, burn: { die: '烫伤', tag: '烫伤' }, gas: { die: '中毒', tag: '中毒' }, boom: { die: '爆炸', tag: '爆炸' }, rad: { die: '辐射', tag: '辐射' }, thorn: { die: '仙人掌扎的', tag: '扎伤' } };
         function indHurt(n, key, detail, instant) {
             if (!ind || ind.over || ind.dead || !(n > 0)) return false;
             let S = ind.base.surv, R = ind.hurt = ind.hurt || { rec: [], acc: {}, ft: {} };
@@ -1282,7 +1301,7 @@
             if (!ind || !ind.dead) return;
             let e = document.getElementById('ind-dead'); if (e && e.parentNode) e.parentNode.removeChild(e);
             ind.dead = null;
-            indGoBase(null); indSave();
+            indGoBase(null); wdEnsurePick(); indSave();
         }
         // 作物：浇过水（当天）全速长，没浇水半速
         function indCropTick(dt) {
@@ -1333,7 +1352,7 @@
             // 夜里：天空和雾变暗，屏幕盖一层半透明黑（不改场景里原有的灯）
             let d = indDark(), nightEl = document.getElementById('ind-night');
             if (nightEl) nightEl.style.opacity = (d * 0.55 * (indLampNear() ? 0.35 : 1)).toFixed(3);
-            if (ind.where === 'trip' && scene.fog) { scene.fog.far = 160 - d * 110; scene.fog.near = 60 - d * 50; }
+            if (ind.where === 'trip' && scene.fog) { scene.fog.far = indViewR(d); scene.fog.near = indViewR(d) * 0.35; }
             let eye = camera.position.clone(), rx = camera.rotation.x, ry = camera.rotation.y, rz = camera.rotation.z;
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir);
             let dd = IND_CAM.back, cx = eye.x - dir.x * dd, cz = eye.z - dir.z * dd;
@@ -1474,6 +1493,7 @@
         // 左键：采集、拿、收菜、打开；对着空的农田格子、手里拿着种子：种下
         function indAction() {
             if (!ind || ind.over || ind.dead || ind.panel) return;
+            if (ind.ch) { ind.ch = null; indFlash('停了'); return false; }
             if (ind.onRaft) return indRaftToggle(ind.onRaft);
             if (indSel() === 'bell') return indRing();
             if (indSel() === 'bellows') return indInstallBellows(indAim());
@@ -1484,6 +1504,7 @@
             }
             if (a && a.kind === 'raft') return indRaftToggle(a.o);
             if (a && a.kind === 'bomb') return nkBombAct(a.o);
+            if (a && a.kind === 'node' && a.o.tree) return wdChop(a.o);
             if (a && a.kind === 'node') return indGather(a.o);
             if (a && a.kind === 'item') return indPickItem(a.o);
             if (a && a.kind === 'crop' && indCropRipe(a.o)) return indHarvest(a.o);
@@ -1499,15 +1520,18 @@
             if (a && a.kind === 'dev') return indDevAct(a.o);
             let k = indSel();
             if (ind.where === 'base' && k && IND_ITEMS[k].seed) return indPlant(k);
+            if (ind.where === 'trip' && !a) return wdDig();   // 对着地面左键：挖
         }
         // 右键：对着能搬的东西，按住 1 秒收起来，没按够就松开是原来的右键（吃喝、浇水、接水）；别的东西按下就是右键
         function indRightDown() {
             if (!ind || ind.over || ind.dead || ind.panel) return;
             let f = indFurnOf(indAim());
             if (f) { ind.rh = { f: f, t: 0, done: false }; return; }
+            if (indSel() === 'cactus') { wdPeelStart(); return; }   // 选中仙人掌按住右键拔刺，点一下是吃
             indUse();
         }
         function indRightUp() {
+            if (ind && ind.ch && ind.ch.right) { let quick = ind.ch.t < 0.25; ind.ch = null; if (quick) indUse(); return; }
             if (!ind || !ind.rh) return;
             let rh = ind.rh; ind.rh = null;
             if (!rh.done) indUse();
@@ -1563,6 +1587,7 @@
         function indEat(k) {
             let e = IND_ITEMS[k].eat, S = ind.base.surv;
             indBagDel(k, 1);
+            if (k === 'cactus' && indHard() && indHurt(60, 'thorn', '生吃了带刺的仙人掌')) return true;
             if (e.f) S.food = Math.max(0, Math.min(100, S.food + e.f));
             if (e.w) S.water = Math.max(0, Math.min(100, S.water + e.w));
             if (e.back) indBagAdd(e.back, 1);
@@ -1577,9 +1602,11 @@
             let nd = IND_NODES[o.key], tool = indTool();
             if (tool < nd.tool) { indFlash(indName(o.key) + '要' + IND_TOOL_NAME[nd.tool] + '才挖得动'); return false; }
             let key = o.key === 'seeds' ? o.seed : (nd.out || o.key);
-            let got = indBagAdd(key, o.n + indToolBonus(nd.tool));   // 铁稿 +1、钻石稿 +2：采一次多拿几个
+            if (nd.thorn && wdThorn()) return true;   // 空手摘仙人掌被扎
+            let amt = o.out ? Math.min(o.n, 1 + indToolBonus(nd.tool)) : o.n + indToolBonus(nd.tool);   // 铁稿 +1、钻石稿 +2：采一次多拿几个；露头一次只出 1 份
+            let got = indBagAdd(key, amt);
             if (got <= 0) { indFlash('背包满了'); return false; }
-            o.n -= got; if (o.n <= 0) { o.dead = true; ind.nodeDirty = true; }
+            o.n -= got; ind.nodeDirty = true; if (o.n <= 0) { o.dead = true; wdNodeGone(o); }
             indFlash('+' + got + ' ' + indName(key));
             return true;
         }
@@ -2681,7 +2708,7 @@
                 let C = IND_CROPS[k];
                 L.push({ ins: ['seed_' + k], outs: [k, 'seed_' + k], txt: indName('seed_' + k) + ' → ' + C.name + ' + 种子', where: '农田，' + C.grow + ' 秒，' + C.s.map(function (i) { return IND_SEASONS[i].name; }).join('') + '天长' });
             });
-            return L;
+            return L.concat(wdBookLines());
         }
         function indPanelBook(q) {
             if (!ind) return;
@@ -2709,6 +2736,7 @@
             if (k === 'shift') { ind.k.run = true; return; }
             if (e.repeat) return;
             if (k === 'escape') { if (ind.panel) indPanelClose(); return; }
+            if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
             if (ind.panel) return;
             if (k === 'q' || k === 'g') indDrop(); else if (k === 'e' || k === 'f') indAction(); else if (k === 'r') indUse();
             else if (/^[1-9]$/.test(k)) ind.selIdx = +k - 1;
@@ -2753,6 +2781,7 @@
             if (R.panel === 'el' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { p.innerHTML = indElHtml(d); R.panelDirty = false; } }
             if (IND_DEV_HTML[R.panel] && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { p.innerHTML = IND_DEV_HTML[R.panel](d); R.panelDirty = false; } }
             if ((R.panel === 'comp' || R.panel === 'press') && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { p.innerHTML = R.panel === 'comp' ? indCompHtml(d) : indPressHtml(d); R.panelDirty = false; } }
+            wdCompassTick(); if (R.panel === 'map') wdMapDraw();   // 指南针、地图（19-industry-world.js）
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
             let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + indSeasonTxt() + '　' + rule + '<br>';
@@ -2782,8 +2811,9 @@
             }
             let a = indAim(), hint = '';
             let rh = R.rh && !R.rh.done ? R.rh : null;
-            if (rh) hint = '收起' + indFurnName(rh.f.ty, rh.f.o) + ' ' + Math.min(99, Math.floor(rh.t / IND_PICK_HOLD * 100)) + '%';
-            else if (a && a.kind === 'node') { let nd = IND_NODES[a.o.key], nm = a.o.key === 'seeds' ? '野生' + indName(a.o.seed) : (nd.name || indName(a.o.key)); hint = nm + ' ×' + a.o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>'; }
+            if (R.ch) hint = R.ch.label + ' ' + Math.min(99, Math.floor(R.ch.t / R.ch.need * 100)) + '%<br><small>站着别动</small>';
+            else if (rh) hint = '收起' + indFurnName(rh.f.ty, rh.f.o) + ' ' + Math.min(99, Math.floor(rh.t / IND_PICK_HOLD * 100)) + '%';
+            else if (a && a.kind === 'node') hint = wdNodeHint(a.o);
             else if (R.onRaft) hint = '木筏<br><small>左键：下筏（水上 2 倍速，不能上岸）</small>';
             else if (a && a.kind === 'raft') hint = '木筏<br><small>左键：上去</small>';
             else if (a && a.kind === 'bomb') hint = a.o.t >= 0 ? '原子弹：' + Math.ceil(a.o.t) + ' 秒后爆炸，半径 40 米<br><small>左键：拆掉</small>' : '原子弹<br><small>左键：启动（30 秒后爆炸，半径 40 米）　长按右键：收起</small>';

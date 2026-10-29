@@ -4709,6 +4709,8 @@ async function enterExit(tab, key) {
                             if (!spawn[k] || IND_NODES[k].tool > tl) return;
                             if (k === 'seeds') IND_SEED_KINDS.forEach(add); else add(IND_NODES[k].out || k);
                         });
+                        // 对着地面挖：泥土、沙子，拿着稿子挖石头；仙人掌拔刺
+                        add('dirt'); add('sand'); if (tl >= 1) add('stone'); if (have.cactus) add('cactus_peeled');
                         // 水
                         if (have.bucket) { add('water_raw'); add('water_sea'); }
                         // 灶台：燃料 + 温度
@@ -4814,7 +4816,7 @@ async function enterExit(tab, key) {
                 // 从门里走出去 → 远征
                 await T.eval(`indTeleport(0, -IND_BASE.z + 0.1); indAdvance(0.2); true;`);
                 const trip = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, n: ind.nodes.length, e: ind.exits.length, fog: !!scene.fog })`));
-                if (trip.w !== 'trip' || trip.n < 100 || trip.e !== 3) bad.push('出门没生成远征图 ' + JSON.stringify(trip));
+                if (trip.w !== 'trip' || trip.n < 100 || trip.e !== 4) bad.push('出门没生成远征图 ' + JSON.stringify(trip));
                 if (!(await T.eval(`(function(){ let a = indMakeMap(12345), b = indMakeMap(12345); return indHeight(a, 37, -51) === indHeight(b, 37, -51) && indBiome(a, 90, 20) === indBiome(b, 90, 20); })()`))) bad.push('同一个种子生成的图不一样');
                 const bms = await T.eval(`(function(){ let s = {}; for (let x = -140; x <= 140; x += 7) for (let z = -140; z <= 140; z += 7) s[indBiome(ind.map, x, z)] = 1; return Object.keys(s).length; })()`);
                 if (bms < 4) bad.push('一张图里地貌太少 ' + bms);
@@ -5020,7 +5022,7 @@ async function enterExit(tab, key) {
                 const dd = await T.eval(`Math.hypot(ind.wild[ind.wild.length - 2].x - ind.p.x, ind.wild[ind.wild.length - 2].z - ind.p.z)`);
                 if (dd > 4) bad.push('羊没跟上来 ' + dd);
                 // 撤离：一起回家
-                await T.eval(`(function(){ let e = ind.exits[0]; indTeleport(e.x, e.z); ind.wild.slice(-2).forEach(function (a) { a.x = e.x + 1; a.z = e.z + 1; }); indAdvance(3.2); })(); true;`);
+                await T.eval(`(function(){ let e = ind.exits[2]; indTeleport(e.x, e.z); ind.wild.slice(-2).forEach(function (a) { a.x = e.x + 1; a.z = e.z + 1; }); indAdvance(3.2); })(); true;`);
                 const home = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, an: ind.base.animals.map(function (a) { return a.k; }) })`));
                 if (home.w !== 'base' || home.an.indexOf('sheep') < 0 || home.an.indexOf('cow') < 0) bad.push('动物没跟着回家 ' + JSON.stringify(home));
                 // 剪羊毛：刚回家要等一天；时间到了剪 2 份；饿了不给剪
@@ -6892,8 +6894,74 @@ async function enterExit(tab, key) {
                 // ── 进图用时和帧数 ──
                 const perf = await J(`(function(){ let ts = []; for (let s = 1; s <= 5; s++) { let t0 = performance.now(); indGoTrip(s * 7919); ts.push(performance.now() - t0); indGoBase(false); } let n = 0; indGoTrip(2024); return { ms: ts.reduce(function (a, b) { return a + b; }, 0) / ts.length, nodes: ind.nodes.length, wild: ind.wild.length, objs: ind.objs.length, tris: renderer.info.render.triangles, calls: renderer.info.render.calls }; })()`);
                 const fps = await T.eval(`new Promise(function (res) { let n = 0, t0 = performance.now(); (function f() { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(f); else res(n / ((performance.now() - t0) / 1000)); })(); })`);
-                console.log('IND25 进图平均 ' + perf.ms.toFixed(0) + ' 毫秒，资源点 ' + perf.nodes + '，动物 ' + perf.wild + '，场景物体 ' + perf.objs + '，一帧三角形 ' + perf.tris + '，绘制调用 ' + perf.calls + '，空转帧数 ' + fps.toFixed(1) + '/秒（无头浏览器软件渲染）');
+                const perf2 = await J(`{ tris: renderer.info.render.triangles, calls: renderer.info.render.calls, vis: ind.nodeMesh.count }`);
+                console.log('IND25 进图平均 ' + perf.ms.toFixed(0) + ' 毫秒，资源点 ' + perf.nodes + '（画出来 ' + perf2.vis + '），动物 ' + perf.wild + '，场景物体 ' + perf.objs + '，一帧三角形 ' + perf2.tris + '，绘制调用 ' + perf2.calls + '，空转帧数 ' + fps.toFixed(1) + '/秒（无头浏览器软件渲染）');
+                // ── 4 个撤离点：1 个在出生点脚下，另外 3 个离出生点和彼此都 ≥ 150 米，每趟重新刷 ──
+                const exs = [];
+                for (const sd of [11, 22, 33, 44, 55, 66, 77, 88]) {
+                    const e = await J(`(function(){ indGoTrip(${sd}); return ind.exits.map(function (e) { return [Math.round(e.x), Math.round(e.z), e.armed !== false]; }); })()`);
+                    exs.push(e);
+                    if (e.length !== 4) { bad.push('撤离点应该 4 个 ' + JSON.stringify(e)); continue; }
+                    if (e[0][0] !== 0 || e[0][1] !== -4 || e[0][2]) bad.push('第 1 个撤离点在出生点脚下、一开始不生效 ' + JSON.stringify(e[0]));
+                    for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) if (Math.hypot(e[a][0] - e[b][0], e[a][1] - e[b][1]) < 149) bad.push('种子 ' + sd + ' 撤离点离得太近 ' + a + '/' + b + ' ' + JSON.stringify(e));
+                }
+                if (JSON.stringify(exs[0]) === JSON.stringify(exs[1])) bad.push('不同的图撤离点不该一样');
+                // 出生就站在撤离点上不会马上回家；走开再回来站满 3 秒才回
+                await T.eval(`indGoTrip(2024); ind.k = {}; indAdvance(4); true;`);
+                if (await T.eval(`ind.where !== 'trip'`)) bad.push('出生在撤离点上，站着不动不该回家');
+                await T.eval(`indTeleport(ind.exits[0].x + 8, ind.exits[0].z); indAdvance(0.2); indTeleport(ind.exits[0].x, ind.exits[0].z); indAdvance(1.5); true;`);
+                if (await T.eval(`ind.where !== 'trip'`)) bad.push('走开再回来，不到 3 秒不该回家');
+                await T.eval(`indAdvance(2); true;`);
+                if (await T.eval(`ind.where !== 'base'`)) bad.push('走开再回来站满 3 秒应该回家');
                 await T.eval(`indGoBase(false); true;`);
+                // ── 视野：白天 80 米、夜里 40 米（雾）；视野外的资源点、动物不画 ──
+                const fog = await J(`(function(){ indGoTrip(2024); ind.base.clock = 300; indRender(); let a = scene.fog.far; ind.base.clock = IND_DUSK + 60; indRender(); let b = scene.fog.far; ind.base.clock = 300; return [a, b]; })()`);
+                if (fog[0] !== 80 || fog[1] !== 40) bad.push('雾：白天 80 米、夜里 40 米 ' + JSON.stringify(fog));
+                const cull = async (x, z, clock) => J(`(function(){ ind.base.clock = ${clock}; indTeleport(${x}, ${z}); ind.nodeView = null; indSyncNodes(); indSyncAnimals(); let vr = indViewR() + IND_VIEW.margin; return { shown: ind.nodeMesh.count, want: ind.nodes.filter(function (n) { return !n.dead && Math.hypot(n.x - ind.p.x, n.z - ind.p.z) <= vr; }).length, total: ind.nodes.filter(function (n) { return !n.dead; }).length, an: ind.animalMesh.count, anWant: ind.wild.filter(function (a) { return Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= vr; }).length, vr: vr }; })()`);
+                let cu = await cull(0, 0, 300);
+                if (cu.shown !== cu.want || cu.shown >= cu.total / 3 || cu.an !== cu.anWant || cu.anWant >= 56) bad.push('白天只画 80 米内的资源点和动物 ' + JSON.stringify(cu));
+                let cn = await cull(0, 0, 1000);
+                if (cn.vr !== 46 || cn.shown !== cn.want || cn.shown >= cu.shown) bad.push('夜里只画 40 米内的 ' + JSON.stringify([cu, cn]));
+                let cu2 = await cull(150, 100, 300);
+                if (cu2.shown !== cu2.want) bad.push('走到别处视野内的资源点要重画 ' + JSON.stringify(cu2));
+                // ── 指南针（磁石 + 玻璃板 + 木头）：新号送一个，老档补一个；背包里有就显示指向最近撤离点的箭头和距离 ──
+                const gift = await J(`[indNewBase().box.compass, indFixBase({ ver: 11, rule: 'hard', box: {} }).box.compass, indFixBase({ ver: 12, rule: 'hard', box: {} }).box.compass || 0, indFixBase({ ver: 1, rule: 'hard', box: {} }).box.compass]`);
+                if (gift[0] !== 1 || gift[1] !== 1 || gift[2] !== 0 || gift[3] !== 1) bad.push('新号送指南针、老档补一个（只补一次） ' + JSON.stringify(gift));
+                for (const rule of ['hard', 'casual']) {
+                    await T.eval(`ind.base.rule = '${rule}'; ind.bag = {}; indBagAdd('magnet', 1); indBagAdd('glass_plate', 1); indBagAdd('wood', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'compass'; })); true;`);
+                    if (!(await T.eval(`ind.bag.compass === 1 && !ind.bag.magnet`))) bad.push(rule + ' 磁石 + 玻璃板 + 木头做不出指南针');
+                }
+                await T.eval(`ind.base.rule = 'hard'; ind.exits = [{ x: 100, z: 0, name: '撤离点' }, { x: -300, z: 5, name: '撤离点' }]; indTeleport(0, 0); indLookAt(100, 0); indHudUpdate(); true;`);
+                let cp = await J(`{ deg: ind.compass && ind.compass.deg, d: ind.compass && ind.compass.d, el: !!document.getElementById('ind-compass'), txt: document.getElementById('ind-compass') ? document.getElementById('ind-compass').innerText : '' }`);
+                if (!cp.el || Math.abs(cp.deg) > 1 || Math.abs(cp.d - 100) > 0.1 || !/100 米/.test(cp.txt)) bad.push('指南针朝前方的撤离点箭头向上、写距离 ' + JSON.stringify(cp));
+                await T.eval(`indLookAt(0, -100); indHudUpdate(); true;`);
+                cp = await J(`ind.compass`);
+                if (Math.abs(cp.deg - 90) > 1) bad.push('面朝北、撤离点在东边：箭头向右 90° ' + JSON.stringify(cp));
+                await T.eval(`indTeleport(-250, 0); indLookAt(-300, 5); indHudUpdate(); true;`);
+                cp = await J(`ind.compass`);
+                if (Math.abs(cp.d - 50.2) > 0.5) bad.push('指南针指向最近的撤离点 ' + JSON.stringify(cp));
+                await T.eval(`ind.bag = {}; indHudUpdate(); true;`);
+                if (await T.eval(`!!document.getElementById('ind-compass')`)) bad.push('背包里没有指南针不显示');
+                // 磁石：山地成片、空手能捡
+                const mg = await J(`{ b: IND_BIOMES.mountain.res.magnet, tool: IND_NODES.magnet.tool, ore: !!IND_ORE_NODES.magnet, casual: !!IND_CASUAL_RES.magnet }`);
+                if (mg.b !== 1 || mg.tool !== 0 || !mg.ore || mg.casual) bad.push('磁石的配置不对（山地权重 1、空手、成片、悠闲没有） ' + JSON.stringify(mg));
+                // ── 地图（M）：走过的地方有颜色，没走过的灰，看见过的撤离点，自己的位置 ──
+                await T.eval(`indGoTrip(2024); ind.k = {}; indAdvance(0.3); true;`);
+                const seen0 = await J(`(function(){ let n = 0; for (let k = 0; k < ind.seen.length; k++) if (ind.seen[k]) n++; return n; })()`);
+                if (seen0 < 20 || seen0 > 200) bad.push('出生点附近走过的格子数不对 ' + seen0);
+                await T.eval(`ind.exits[1].x = 250; ind.exits[1].z = 250; ind.exits.forEach(function (e) { e.seen = false; }); indTeleport(150, 0); indAdvance(0.2); true;`);
+                const sn = await J(`ind.exits.map(function (e) { return !!e.seen; })`);
+                if (sn[1]) bad.push('没走到 80 米内的撤离点不该标在地图上');
+                await T.eval(`indTeleport(250, 190); indAdvance(0.2); true;`);
+                if (!(await J(`!!ind.exits[1].seen`))) bad.push('走到 80 米内看见了撤离点，地图上要标');
+                await T.eval(`indKeyDown({ key: 'm', target: document.body, preventDefault: function () {} }); true;`);
+                if (!(await T.eval(`ind.panel === 'map' && !!document.getElementById('ind-map')`))) bad.push('按 M 没开地图');
+                const px = await J(`(function(){ let cv = document.getElementById('ind-map'), g = cv.getContext('2d'), s = cv.width / (IND_MAP * 2), at = function (x, z) { let d = g.getImageData(Math.floor((x + IND_MAP) * s), Math.floor((z + IND_MAP) * s), 1, 1).data; return [d[0], d[1], d[2]]; }; return { far: at(-250, -250), near: at(255, 195), me: at(ind.p.x, ind.p.z) }; })()`);
+                if (px.far.join() !== '158,158,158' || px.near.join() === '158,158,158' || px.me.join() !== '229,57,53') bad.push('地图：没走过的灰、走过的有颜色、自己是红点 ' + JSON.stringify(px));
+                await T.eval(`indKeyDown({ key: 'm', target: document.body, preventDefault: function () {} }); true;`);
+                if (await T.eval(`ind.panel === 'map'`)) bad.push('再按 M 要关地图');
+                await T.eval(`indGoBase(false); indKeyDown({ key: 'm', target: document.body, preventDefault: function () {} }); true;`);
+                if (await T.eval(`ind.panel === 'map'`)) bad.push('基地里不开地图');
             }
             if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
             await T.close();
