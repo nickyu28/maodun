@@ -6880,6 +6880,26 @@ async function enterExit(tab, key) {
             report('IND20 第 6 阶段：核和原子弹', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND25')) {
+            // IND25 世界（L）：进图用时和帧数（改前改后对比写进汇报），4 个撤离点、视野、指南针、地图、挖地、露头、河、树、仙人掌
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; ind.bag = {}; window.__oldFlash = indFlash; indFlash = function () {}; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                // ── 进图用时和帧数 ──
+                const perf = await J(`(function(){ let ts = []; for (let s = 1; s <= 5; s++) { let t0 = performance.now(); indGoTrip(s * 7919); ts.push(performance.now() - t0); indGoBase(false); } let n = 0; indGoTrip(2024); return { ms: ts.reduce(function (a, b) { return a + b; }, 0) / ts.length, nodes: ind.nodes.length, wild: ind.wild.length, objs: ind.objs.length, tris: renderer.info.render.triangles, calls: renderer.info.render.calls }; })()`);
+                const fps = await T.eval(`new Promise(function (res) { let n = 0, t0 = performance.now(); (function f() { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(f); else res(n / ((performance.now() - t0) / 1000)); })(); })`);
+                console.log('IND25 进图平均 ' + perf.ms.toFixed(0) + ' 毫秒，资源点 ' + perf.nodes + '，动物 ' + perf.wild + '，场景物体 ' + perf.objs + '，一帧三角形 ' + perf.tris + '，绘制调用 ' + perf.calls + '，空转帧数 ' + fps.toFixed(1) + '/秒（无头浏览器软件渲染）');
+                await T.eval(`indGoBase(false); true;`);
+            }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND25 世界（L）', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
