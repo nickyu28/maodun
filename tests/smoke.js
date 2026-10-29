@@ -4539,7 +4539,7 @@ async function enterExit(tab, key) {
                         const spawn = {}; Object.keys(IND_BIOMES).forEach(function (b) { Object.keys(IND_BIOMES[b].res).forEach(function (k) { if (!hard && !IND_CASUAL_RES[k]) return; spawn[k] = 1; }); });
                         Object.keys(IND_NODES).forEach(function (k) {
                             if (!spawn[k] || IND_NODES[k].tool > tl) return;
-                            if (k === 'seeds') IND_SEED_KINDS.forEach(add); else add(k);
+                            if (k === 'seeds') IND_SEED_KINDS.forEach(add); else add(IND_NODES[k].out || k);
                         });
                         // 水
                         if (have.bucket) { add('water_raw'); add('water_sea'); }
@@ -4749,6 +4749,9 @@ async function enterExit(tab, key) {
                 if (sv.rule !== 'hard' || Math.abs(sv.e - 100) > 0.5 || sv.ver < 2 || Math.abs(sv.clock - (await T.eval(`ind.base.clock`))) > 1) bad.push('存档读回来不对 ' + JSON.stringify(sv));
                 // 硬核：饿渴到血 0 会死，身上的东西没了，回到基地
                 await T.eval(`(function(){ indBagAdd('stone', 3); indGoTrip(4242); let S = ind.base.surv; S.food = 0; S.water = 0; S.hp = 5; indAdvance(3); })(); true;`);
+                const dscr = JSON.parse(await T.eval(`JSON.stringify({ d: ind.dead, el: !!document.getElementById('ind-dead') })`));
+                if (!dscr.d || !dscr.el || !/饿死|渴死/.test(dscr.d.cause)) bad.push('硬核饿渴死了应该停在死亡画面 ' + JSON.stringify(dscr));
+                await T.eval(`indRespawn(); true;`);
                 const dead = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, bag: Object.keys(ind.bag).length, hp: ind.base.surv.hp })`));
                 if (dead.w !== 'base' || dead.bag !== 0 || dead.hp !== 100) bad.push('硬核饿渴没死或死后不对 ' + JSON.stringify(dead));
                 // 悠闲：到 0 不扣血、只变慢；远征不出矿
@@ -4805,6 +4808,8 @@ async function enterExit(tab, key) {
                 if (sv.wear.neck !== 'scarf' || !sv.gh || sv.fires !== 1 || sv.ver < 3) bad.push('存档读回来不对 ' + JSON.stringify(sv));
                 // 硬核冻死：身上和穿着的都没了
                 await T.eval(`(function(){ indGoTrip(99); let S = ind.base.surv; S.temp = 32.5; S.hp = 2; indAdvance(3); })(); true;`);
+                if (!(await T.eval(`!!ind.dead && ind.dead.cause === '冻死'`))) bad.push('冻死应该停在死亡画面、死因冻死 ' + await T.eval(`JSON.stringify(ind.dead)`));
+                await T.eval(`indRespawn(); true;`);
                 const dd = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, wear: Object.keys(ind.base.wear).length, hp: ind.base.surv.hp, t: ind.base.surv.temp })`));
                 if (dd.w !== 'base' || dd.wear !== 0 || dd.hp !== 100 || dd.t < 36.5) bad.push('硬核冻死不对 ' + JSON.stringify(dd));
                 // 悠闲：冻到 30°C 也不扣血
@@ -5047,7 +5052,9 @@ async function enterExit(tab, key) {
                 await T.eval(`(function(){ indStoveTakeAll(); indPanelClose(); indBagAdd('sand', 2); indStovePut('sand', 1); indStovePut('sand', 1); indStovePut('ash', 1); indPanelClose(); indAdvance(25); })(); true;`);
                 if ((await T.eval(`ind.base.stove.out.glass_plate || 0`)) !== 1) bad.push('沙子 + 草木灰烧不出玻璃板 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 await T.eval(`(function(){ indStoveTakeAll(); indPanelClose(); indStovePut('glass_plate', 1); indPanelClose(); indAdvance(12); })(); true;`);
-                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('做不出玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 0) bad.push('炉子不该再烧玻璃瓶（瓶子在工作台用板做） ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`ind.bag = {}; indBagAdd('glass_plate', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'bottle'; })); true;`);
+                if (!(await T.eval(`ind.bag.bottle === 2 && !ind.bag.glass_plate`))) bad.push('工作台 1 玻璃板做不出 2 个玻璃瓶 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 await T.eval(`indStoveTakeAll(); indPanelClose(); true;`);
                 const place = (k, x, z) => T.eval(`(function(){ indBagAdd('${k}', 1); indTeleport(${x}, ${z}); indLookAt(${x}, ${z} - 5); indSelect('${k}'); indUse(); return ind.base.devs[ind.base.devs.length - 1].id; })()`);
                 const click = (id, k) => T.eval(`(function(){ let d = indDev(${id}); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); if ('${k}') indSelect('${k}'); indAction(); indPanelClose(); return true; })()`);
@@ -5146,8 +5153,9 @@ async function enterExit(tab, key) {
                 r = JSON.parse(await eat('pickle', 34));
                 if (r.f !== 65 || r.bag.bottle !== 1 || r.bag.pickle || !near(r.t, 34)) bad.push('吃腌萝卜不对 ' + JSON.stringify(r));
                 // 悠闲世界：沙子 + 草木灰 1000°C 出玻璃瓶，腌萝卜也做得了，汤也加体温
-                await T.eval(`ind.base.rule = 'casual'; ind.base.stove = { items: { sand: 2, ash: 1 }, out: {}, fuel: 500, fire: 3, temp: 1200, cook: null }; indAdvance(25); ind.base.stove.items = { glass_plate: 1 }; indAdvance(12); true;`);
-                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('悠闲做不出玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`ind.base.rule = 'casual'; ind.base.stove = { items: { sand: 2, ash: 1 }, out: {}, fuel: 500, fire: 3, temp: 1200, cook: null }; indAdvance(25); true;`);
+                await T.eval(`ind.bag = {}; indBagAdd('glass_plate', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'bottle'; })); true;`);
+                if (!(await T.eval(`ind.bag.bottle === 2`))) bad.push('悠闲做不出玻璃瓶 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 await T.eval(`ind.bag = {}; indBagAdd('radish', 2); indBagAdd('salt', 1); indBagAdd('bottle', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pickle'; })); true;`);
                 if ((await T.eval(`ind.bag.pickle || 0`)) !== 1) bad.push('悠闲做不出腌萝卜');
                 await cook({ cabbage: 1, radish: 1, water_boiled: 1 }, 26);
@@ -5485,15 +5493,16 @@ async function enterExit(tab, key) {
                 await T.eval(`indSelect('${sk.keys[0]}'); indUse(); true;`);
                 const sp2 = await J(`{ off: !!ind.base.off.stove, x: Math.round(IND_BASE_ST.stove.x), z: Math.round(IND_BASE_ST.stove.z * 10) / 10, items: ind.base.stove.items, out: ind.base.stove.out, ids: indCooks().map(function (c) { return c.id; }) }`);
                 if (sp2.off || Math.abs(sp2.x - 12) > 1 || sp2.items.wheat !== 1 || sp2.out.bread !== 2 || sp2.ids.indexOf('stove') < 0) bad.push('灶台放不回去、位置或里面的东西不对 ' + JSON.stringify([sp, sp2]));
-                // 床、工作台、水池
-                for (const ty of ['bed', 'bench', 'pool']) {
+                // 床、工作台（水池是挖在地上的，不能搬）
+                if (await T.eval(`indFurnOf({ kind: 'pool', o: IND_BASE_ST.pool }) !== null`)) bad.push('水池不该能搬');
+                const op = JSON.parse(await T.eval(`JSON.stringify((function(){ let b = indFixBase({ ver: 10, rule: 'casual', box: {}, bag: { furn_pool: 1, stone: 2 }, off: { pool: true, bed: true }, pos: { pool: { x: 3, z: 3 }, bed: { x: 5, z: 5 } } }); return { off: b.off, pos: b.pos, bag: b.bag }; })())`));
+                if (op.off.pool || op.pos.pool || op.bag.furn_pool || op.bag.stone !== 2 || !op.off.bed || !op.pos.bed) bad.push('老档里收起来的水池要放回原位、背包里的水池物品清掉 ' + JSON.stringify(op));
+                for (const ty of ['bed', 'bench']) {
                     await T.eval(`indPickFurn({ ty: '${ty}', o: null }); true;`);
                     if (!(await T.eval(`!!ind.base.off.${ty} && ind.bag.furn_${ty} === 1`))) bad.push(ty + ' 收不起来');
                 }
                 await T.eval(`indSleep(); true;`);   // 床收了睡不了：没有 bed 目标，直接调只看规则；这里只确认不报错
                 await face(14, -2, 14, -8);
-                await T.eval(`indSelect('furn_pool'); indUse(); true;`);
-                if (await T.eval(`!!ind.base.off.pool`)) bad.push('水池放不回去');
                 await face(24, 0, 24, -6);
                 await T.eval(`indSelect('furn_bed'); indUse(); true;`);
                 await face(-3, 14, -3, 8);
@@ -6046,7 +6055,10 @@ async function enterExit(tab, key) {
                 await stoveSet({ sand: 2, ash: 1 }, 2, 600); await T.eval(`indAdvance(40); true;`);
                 if (await T.eval(`!!ind.base.stove.out.glass_plate`)) bad.push('600°C 也烧出玻璃板');
                 await stoveSet({ glass_plate: 1 }, 2, 600); await T.eval(`indAdvance(11); true;`);
-                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('1 块玻璃板烧出 2 个玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 0 || (await T.eval(`ind.base.stove.items.glass_plate`)) !== 1) bad.push('炉子不烧玻璃板，玻璃板留在炉子里 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`indSetRule('hard'); ind.bag = {}; indBagAdd('glass_plate', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'bottle'; })); true;`);
+                if (!(await T.eval(`ind.bag.bottle === 2 && !ind.bag.glass_plate`))) bad.push('硬核：工作台 1 玻璃板做 2 个玻璃瓶 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if (!(await T.eval(`indCraftShow(IND_CRAFT.filter(function (r) { return r.out === 'bottle'; })[0])`))) bad.push('玻璃瓶配方在工作台里看不到');
                 // 3 沙子 1700°C（电炉）只给硬核
                 await T.eval(`window.__oldBoost = indElecBoost; indElecBoost = function () { return true; }; true;`);
                 await stoveSet({ sand: 3 }, 3, 1800); await T.eval(`indAdvance(31); true;`);
@@ -6187,6 +6199,123 @@ async function enterExit(tab, key) {
             report('IND19 现成房子：三种房子的配方、放下一整间、墙和门挡人、屋里保暖和最低 18°C、隔墙瞄不到、屋顶透明、空房子收起、存档、被炸', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND21')) {
+            // IND21 死因看得见：硬核死了停在死亡画面（游戏暂停、大字死因、一句具体原因、身上的东西没了、点"回基地"才继续）；掉血屏幕边缘闪红、头顶飘"−N 烫伤"；
+            // 血 < 30 血条闪、旁边写正在掉血的原因；烫的东西格子是红的写"烫 N 秒"；毒气云颜色看得见、站进去提示"中毒"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; ind.bag = {}; window.__oldFlash = indFlash; indFlash = function () {}; true;`);
+                const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
+                const hud = () => T.eval(`document.getElementById('ind-hud').innerText`);
+                const hudHtml = () => T.eval(`document.getElementById('ind-hud').innerHTML`);
+                // ── 掉血：飘字、红边、烫的格子 ──
+                await T.eval(`indBagAdd('hot_cu', 1); indBagAdd('stone', 2); ind.floatLog = []; indAdvance(1.3); indHudUpdate(); true;`);
+                if (!(await T.eval(`ind.floatLog.some(function (t) { return /^−\\d+ 烫伤$/.test(t); })`))) bad.push('烫伤没飘字 ' + await T.eval(`JSON.stringify(ind.floatLog)`));
+                if (!(await T.eval(`ind.redT > 0 || document.getElementById('ind-red').style.opacity > 0`))) bad.push('掉血屏幕边缘没闪红');
+                if (!/烫 \d+ 秒/.test(await hud())) bad.push('烫的东西格子没写"烫 N 秒" ' + await hud());
+                if (!/background:\s*(#ffcdd2|rgb\(255, 205, 210\))/.test(await hudHtml())) bad.push('烫的格子不是红的');
+                // 悠闲：烫的格子照样是红的，但不扣血
+                await T.eval(`ind.base.rule = 'casual'; ind.hurt = null; ind.base.surv.hp = 100; ind.floatLog = []; indAdvance(2); indHudUpdate(); true;`);
+                if (!(await T.eval(`ind.base.surv.hp === 100 && ind.floatLog.length === 0`)) || !/烫 \d+ 秒/.test(await hud())) bad.push('悠闲烫的东西不该扣血，格子还是红的 ' + await T.eval(`JSON.stringify([ind.base.surv.hp, ind.floatLog, ind.bag, ind.hotT])`) + await hud());
+                await T.eval(`ind.base.rule = 'hard'; true;`);
+                // ── 血 < 30：血条闪、写原因 ──
+                await T.eval(`ind.base.surv.hp = 25; indAdvance(0.3); indHudUpdate(); true;`);
+                if (!/正在掉血：烫伤/.test(await hud()) || !/ind-low/.test(await hudHtml())) bad.push('血 < 30 应该闪血条并写正在掉血的原因 ' + await hud());
+                // ── 烫死：死亡画面 ──
+                await T.eval(`ind.base.surv.hp = 8; indAdvance(2); true;`);
+                const d1 = await J(`{ d: ind.dead, el: document.getElementById('ind-dead') ? document.getElementById('ind-dead').innerText : '' }`);
+                if (!d1.d || d1.d.cause !== '烫伤' || !/铜锭/.test(d1.d.detail) || d1.d.lost < 1) bad.push('烫死应该有死亡画面、死因烫伤、写背包里有烫的铜锭 ' + JSON.stringify(d1));
+                if (!/烫伤/.test(d1.el) || !/铜锭/.test(d1.el) || !/身上的东西都没了/.test(d1.el) || !/回基地/.test(d1.el)) bad.push('死亡画面字不对 ' + d1.el);
+                // 游戏暂停：时间不走、动不了
+                const t0 = await J(`[ind.t, ind.base.clock, ind.p.x, ind.p.z]`);
+                await T.eval(`ind.k.w = true; indAdvance(2); ind.k.w = false; indAction(); true;`);
+                if (JSON.stringify(await J(`[ind.t, ind.base.clock, ind.p.x, ind.p.z]`)) !== JSON.stringify(t0)) bad.push('死亡画面里游戏没暂停');
+                if (!(await T.eval(`Object.keys(ind.bag).length === 0`))) bad.push('死了背包应该空了');
+                await T.eval(`indRespawn(); true;`);
+                if (!(await T.eval(`ind.dead === null && !document.getElementById('ind-dead') && ind.where === 'base' && ind.base.surv.hp === 100`))) bad.push('点回基地没继续');
+                await T.eval(`indAdvance(1); true;`);
+                if (!(await T.eval(`ind.t > ${t0[0]}`))) bad.push('回基地后游戏没继续走');
+                // ── 毒气：看得见的颜色、站进去提示中毒、毒死写站在氯气里 ──
+                await T.eval(`ind.bag = {}; indBagAdd('b_cl2', 1); indTeleport(-20, 15); indReleaseGas('b_cl2', -20, 15); ind.floatLog = []; ind.base.surv.hp = 100; indAdvance(1.3); indHudUpdate(); true;`);
+                const gc = await J(`{ inGas: ind.inGas, op: ind.clouds[0].m.material.opacity, col: ind.clouds[0].m.material.color.getHex() }`);
+                if (gc.inGas !== '氯气' || gc.op < 0.35 || gc.col !== 0xc6ff00) bad.push('毒气云要看得见（黄绿色）、站进去要知道在氯气里 ' + JSON.stringify(gc));
+                if (!/中毒/.test(await T.eval(`document.getElementById('ind-status').innerText`))) bad.push('站在毒气里没提示中毒');
+                if (!(await T.eval(`ind.floatLog.some(function (t) { return /中毒/.test(t); })`))) bad.push('中毒没飘字 ' + await T.eval(`JSON.stringify(ind.floatLog)`));
+                await T.eval(`ind.base.surv.hp = 4; indAdvance(2); true;`);
+                const d2 = await J(`ind.dead`);
+                if (!d2 || d2.cause !== '中毒' || !/氯气/.test(d2.detail)) bad.push('毒死应该写中毒、站在氯气里 ' + JSON.stringify(d2));
+                await T.eval(`indRespawn(); ind.clouds = []; true;`);
+                // ── 爆炸：飘字，死因写爆炸和离爆炸点多远 ──
+                await T.eval(`ind.base.surv.hp = 100; ind.floatLog = []; indTeleport(-20, 15); indBoom(-20, 14, 0, '氢气遇到火'); true;`);
+                if (!(await T.eval(`ind.floatLog.indexOf('−40 爆炸') >= 0 && ind.base.surv.hp === 60`))) bad.push('爆炸没飘 −40 爆炸 ' + await T.eval(`JSON.stringify([ind.floatLog, ind.base.surv.hp])`));
+                await T.eval(`ind.base.surv.hp = 30; indBoom(-20, 14, 0, '氢气遇到火'); true;`);
+                const d3 = await J(`ind.dead`);
+                if (!d3 || d3.cause !== '爆炸' || !/氢气遇到火/.test(d3.detail) || !/1\.0 米/.test(d3.detail)) bad.push('炸死的死因不对 ' + JSON.stringify(d3));
+                await T.eval(`indRespawn(); true;`);
+                // ── 饿渴冻：死因写具体数 ──
+                await T.eval(`ind.base.surv.food = 0; ind.base.surv.water = 100; ind.base.surv.hp = 1; indAdvance(3); true;`);
+                const d4 = await J(`ind.dead`);
+                if (!d4 || d4.cause !== '饿死' || !/饱食到 0/.test(d4.detail)) bad.push('饿死的原因不对 ' + JSON.stringify(d4));
+                await T.eval(`indRespawn(); ind.base.surv.food = 100; ind.base.surv.temp = 31.5; ind.base.surv.hp = 1; indAdvance(3); true;`);
+                const d5 = await J(`ind.dead`);
+                if (!d5 || d5.cause !== '冻死' || !/体温 3[01]\.\d°C/.test(d5.detail)) bad.push('冻死的原因应该写体温 ' + JSON.stringify(d5));
+                await T.eval(`indRespawn(); true;`);
+            }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND21 死因看得见：死亡画面（暂停、死因、具体原因、回基地才继续）、掉血飘字和红边、血 < 30 写原因、烫的格子、毒气云和中毒提示', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND22')) {
+            // IND22 矿成片、锡多一点：所有矿（铜、锌、锡、铁、煤、硫、铀）一处 3～6 个点挤在 6 米内；山地锡权重 3；海边有锡砂（空手捡，每次 1 个锡矿）；
+            // 100 张图平均每张的锡矿点数（打印出来写汇报）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__oldFlash = indFlash; indFlash = function () {}; true;`);
+                const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
+                const st = await J(`(function(){
+                    const ORES = { ore_cu: 1, ore_zn: 1, ore_sn: 1, ore_fe: 1, coal: 1, sulfur: 1, ore_u: 1 };
+                    let sn = 0, san = 0, total = 0, ore = 0, bad = [], clusters = 0, small = 0, maxSpan = 0, maps = 100;
+                    for (let s = 1; s <= maps; s++) {
+                        indGoTrip(s * 7919);
+                        let nodes = ind.nodes;
+                        nodes.forEach(function (n) { total++; if (ORES[n.key]) ore++; if (n.key === 'ore_sn') sn++; if (n.key === 'sand_sn') san++; });
+                        // 同一种矿 6 米内连成片：每个矿点 6 米内至少还有 2 个同种（成片的最少 3 个点）
+                        nodes.forEach(function (n) {
+                            if (!ORES[n.key]) return;
+                            let mates = nodes.filter(function (m) { return m !== n && m.key === n.key && Math.hypot(m.x - n.x, m.z - n.z) <= 6.01; }).length;
+                            if (mates < 2) small++;
+                        });
+                    }
+                    return { sn: sn / maps, san: san / maps, total: total / maps, ore: ore / maps, small: small };
+                })()`);
+                console.log('IND22 100 张图平均每张：锡矿点 ' + st.sn.toFixed(2) + '，锡砂点 ' + st.san.toFixed(2) + '，矿点合计 ' + st.ore.toFixed(1) + '，资源点合计 ' + st.total.toFixed(1) + '，没成片的矿点 ' + st.small);
+                if (st.small !== 0) bad.push('有矿点 6 米内同种不到 3 个（没成片） ' + st.small);
+                // 改前（同样 100 张图）：锡矿点 4.76，矿点合计 48.0，资源点合计 266.3
+                if (st.sn < 4.76 * 1.2) bad.push('锡矿点应该比原来多 ' + st.sn);
+                if (st.ore < 48.0) bad.push('矿点合计不该比原来少 ' + st.ore);
+                if (st.san <= 0) bad.push('海边没有锡砂');
+                const cfg = await J(`{ w: IND_BIOMES.mountain.res.ore_sn, b: IND_BIOMES.beach.res.sand_sn, tool: IND_NODES.sand_sn.tool, out: IND_NODES.sand_sn.out, casual: !!IND_CASUAL_RES.sand_sn }`);
+                if (cfg.w !== 3 || cfg.b !== 1 || cfg.tool !== 0 || cfg.out !== 'ore_sn' || cfg.casual) bad.push('锡的配置不对（山地权重 3、海边锡砂权重 1、空手、悠闲没有） ' + JSON.stringify(cfg));
+                // 空手捡锡砂：每次 1 个锡矿
+                await T.eval(`indGoTrip(555); ind.bag = {}; ind.nodes.push({ key: 'sand_sn', x: 3, z: 3, y: 0, n: 1, seed: 'seed_wheat', dead: false }); indGather(ind.nodes[ind.nodes.length - 1]); true;`);
+                if (!(await T.eval(`ind.bag.ore_sn === 1 && ind.nodes[ind.nodes.length - 1].dead`))) bad.push('空手捡锡砂应该得 1 个锡矿 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 悠闲世界还是不刷矿
+                await T.eval(`ind.base.rule = 'casual'; indGoTrip(777); true;`);
+                if (await T.eval(`ind.nodes.some(function (n) { return !IND_CASUAL_RES[n.key]; })`)) bad.push('悠闲世界不该刷矿和锡砂');
+                await T.eval(`ind.base.rule = 'hard'; indGoBase(false); true;`);
+            }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND22 矿成片、锡多一点、海边锡砂', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
@@ -6315,6 +6444,22 @@ async function enterExit(tab, key) {
                 await T.eval(`${HIDE} indGoTrip(2024); ind.wild = [{ k: 'sheep', x: 20, z: 0, fed: 3, follow: true }, { k: 'cow', x: -15, z: 5, fed: 0, follow: false }, { k: 'dog', x: 40, z: 0, fed: 1, follow: true }]; ind.bag = { bell: 1 }; true;`);
                 await T.eval(`indTeleport(0, 0); ind.wild.forEach(function (a) { a.tx = a.x; a.tz = a.z; a.wt = 1e9; }); indSelect('bell'); indAction(); true;`);
                 if (await T.eval(`ind.wild[0].call > 0 !== true || !!ind.wild[1].call || !!ind.wild[2].call`)) bad.push('远征里摇铃的范围不对 ' + await T.eval(`JSON.stringify(ind.wild.map(function (a) { return a.call || 0; }))`));
+                await T.eval(`indGoBase(false); true;`);
+                // 水池：空手右键喝一口生水（口渴 +10、30% 拉肚子），水池收不起来；海里空手喝一口海水（−10）
+                await T.eval(`${HIDE} ind.bag = {}; indTeleport(IND_BASE_ST.pool.x - IND_BASE_ST.pool.r - 1.2, IND_BASE_ST.pool.z); indLookAt(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z); ind.base.surv.water = 50; ind.sickT = 0; true;`);
+                if ((await T.eval(`indAim() && indAim().kind`)) !== 'pool') bad.push('站在水池边应该瞄到水池 ' + await T.eval(`JSON.stringify(indAim())`));
+                await T.eval(`window.__r = 0.9; indRand = function () { return window.__r; }; indUse(); true;`);
+                if (!(await T.eval(`Math.abs(ind.base.surv.water - 60) < 0.1 && !(ind.sickT > 0)`))) bad.push('空手喝池水口渴没 +10（或不该拉肚子） ' + await T.eval(`ind.base.surv.water`));
+                await T.eval(`window.__r = 0.1; indUse(); true;`);
+                if (!(await T.eval(`Math.abs(ind.base.surv.water - 70) < 0.1 && ind.sickT > 0`))) bad.push('池水 30% 拉肚子（随机数 0.1 应该拉） ' + await T.eval(`JSON.stringify([ind.base.surv.water, ind.sickT])`));
+                await T.eval(`indRightDown(); indRightHoldTick(1.5); indRightUp(); true;`);
+                if (await T.eval(`!!ind.base.off.pool || Math.abs(ind.base.surv.water - 80) > 0.1`)) bad.push('长按右键不该收起水池，只是再喝一口 ' + await T.eval(`JSON.stringify([ind.base.off, ind.base.surv.water])`));
+                await T.eval(`indGoTrip(2024); indTeleport(0, 0); true;`);
+                const sea = await T.eval(`(function(){ let M = ind.map; for (let x = -140; x < 140; x += 4) for (let z = -140; z < 140; z += 4) { if (indHeight(M, x, z) < IND_WATER_Y + 0.2) { indTeleport(x, z); return true; } } return false; })()`);
+                if (sea) {
+                    await T.eval(`ind.bag = {}; ind.base.surv.water = 50; indUse(); true;`);
+                    if (Math.abs((await T.eval(`ind.base.surv.water`)) - 40) > 0.1) bad.push('海里空手喝一口海水应该口渴 −10 ' + await T.eval(`ind.base.surv.water`));
+                }
                 await T.eval(`indGoBase(false); true;`);
                 await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
             }

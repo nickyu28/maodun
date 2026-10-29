@@ -1466,7 +1466,7 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026.10.29-1', date: '10 月 29 日', title: '最近更新', items: [
+                id: '2026.10.29-4', date: '10 月 29 日', title: '最近更新', items: [
                     '监狱救援、躲避球、合作密室、推推乐、爬塔先藏起来了'
                 ]
             },
