@@ -4088,8 +4088,43 @@ async function enterExit(tab, key) {
             report('LB28 实验室易用性 v4：Ctrl+Q 存进仓库、Shift+Q 放下手上的、垃圾桶', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('LB29')) {
+            // LB29 实验室背包和批量拾放（v4）：B 开背包面板（6 格、拿在手上／放下／存进仓库）；Shift+左键一下捡完身边 2.4 米内的（放不下的留着）
+            const bad = [];
+            const T = await LBTAB();
+            await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labSt().box = {}; labSt().lockUntil = 0; true;`);
+            await LBENTER(T);
+            const key = (k, o) => T.eval(`labKeyDown(Object.assign({ key: '${k}', target: document.body, preventDefault: function () {}, repeat: false }, ${JSON.stringify(o || {})})); labKeyUp({ key: '${k}' }); true;`);
+            await T.eval(`labClear(); lab.bag = {}; lab.p.x = 0; lab.p.z = 2; for (let i = 0; i < 5; i++) labSpawn('coal', 0.3 * i, 2.5); labSpawn('sand', -1, 2); labSpawn('iron', 0, 4); labSpawn('salt', 0, 6); true;`);
+            await key('f', { shiftKey: true });
+            let r = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, left: lab.ground.map(function (e) { return e.key; }) })`));
+            if (r.bag.coal !== 5 || r.bag.sand !== 1 || r.bag.iron !== 1 || r.bag.salt || r.left.join() !== 'salt') bad.push('Shift+F：身边 2.4 米内全捡、远的不捡 ' + JSON.stringify(r));
+            await T.eval(`labClear(); lab.bag = { coal: 1, sand: 1, iron: 1, salt: 1, rubber: 1, sugar: 1 }; labSyncSel(); labSpawn('coal', 0.5, 2); labSpawn('b:water', 0.4, 2.2); true;`);
+            const n = await T.eval(`labPickAll()`);
+            r = JSON.parse(await T.eval(`JSON.stringify({ n: ${n}, bag: lab.bag, left: lab.ground.map(function (e) { return e.key; }) })`));
+            if (r.bag.coal !== 2 || r.left.join() !== 'b:water') bad.push('身上满了：能叠的捡、新的一种留在地上 ' + JSON.stringify(r));
+            // 鼠标 Shift+左键走的也是全捡
+            if (!/labPickAll\(\)/.test(await T.eval(`lab.onMouse.toString()`))) bad.push('Shift+左键要接到全捡');
+            // 背包面板
+            await T.eval(`labClear(); lab.bag = {}; labGive('coal', 3); labGive('sand', 2); labSel('coal'); true;`);
+            await key('b');
+            r = JSON.parse(await T.eval(`JSON.stringify({ p: lab.panel, txt: document.getElementById('lab-panel') ? document.getElementById('lab-panel').innerText : '' })`));
+            if (r.p !== 'bag' || !/煤（碳） ×3/.test(r.txt) || !/沙子 ×2/.test(r.txt) || !/2\/6/.test(r.txt)) bad.push('B 打开背包面板，写每样多少、几格 ' + JSON.stringify(r));
+            await T.eval(`[].slice.call(document.querySelectorAll('#lab-panel button')).filter(function (b) { return b.innerText === '存进仓库'; })[1].click(); true;`);
+            r = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, box: labSt().box, p: lab.panel })`));
+            if (r.bag.sand || r.box.sand !== 2 || r.bag.coal !== 3 || r.p !== 'bag') bad.push('背包面板里存进仓库 ' + JSON.stringify(r));
+            await T.eval(`[].slice.call(document.querySelectorAll('#lab-panel button')).filter(function (b) { return b.innerText === '放下'; })[0].click(); true;`);
+            if (!(await T.eval(`!lab.bag.coal && labCount('coal') === 3`))) bad.push('背包面板里放下整堆');
+            await key('b');
+            if (await T.eval(`!!lab.panel`)) bad.push('再按 B 关背包');
+            if (!(await T.eval(`!!document.getElementById('lab-btn-bag') && !!document.getElementById('lab-btn-pickall')`))) bad.push('手机上要有背包和全捡按钮');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB29 实验室背包面板（B）、Shift+左键一下全捡（v4）', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('LB7')) {
-            // LB7 订单：同时 3 张，只认订单出现之后刚造出来的，完成后东西不扣、奖励 = 价值 10%（没标价给 100）、立即补新的；药剂效果；药剂不动寻宝队的 HUNT_POTIONS
+            // LB7 订单（v4）：同时 3 张，要到订单板交东西，奖励 = 价值 20%（没标价给 100）、立即补新的
             const bad = [];
             const T = await LBTAB();
             await T.eval(`${HIDE} nav('screen-garage'); initGarage(); true;`);
@@ -4100,27 +4135,26 @@ async function enterExit(tab, key) {
             // 订单的题目都是做得出来的化学类
             const pool = await T.eval(`LAB_ORDER_POOL.map(function (c) { return c[0]; }).join()`);
             if (/accel|bomb|a:30|a:79|a:92/.test(pool)) bad.push('本段做不出来的东西进了订单池 ' + pool);
-            // 水池装水：先在订单之前造一瓶（不算）；再把订单设成 2 瓶水，造 2 瓶才算
-            await T.eval(`lab.p.x = LAB_POOL.x; lab.p.z = LAB_POOL.z + 2.5; labGive('bottle', 4); labSel('bottle'); labRightClick(); true;`);
-            await T.eval(`labSt().orders = [{ k: 'b:water', n: 2, base: labSt().made['b:water'] || 0 }, { k: 'salt', n: 1, base: 0 }, { k: 'a:3:4', n: 1, base: 0 }]; window.__m0 = gState.money; true;`);
-            await T.eval(`labUse(); true;`);
-            if (await T.eval(`labSt().orders.length !== 3 || labSt().orders[0].k !== 'b:water'`)) bad.push('才造了 1 瓶（订单出现之后）就完成了');
-            await T.eval(`labUse(); true;`);
-            const done = JSON.parse(await T.eval(`JSON.stringify({ n: labSt().orders.length, first: labSt().orders.map(function (q) { return q.k; }), gain: gState.money - window.__m0, water: lab.bag['b:water'] })`));
-            if (done.gain !== 100) bad.push('水没标价，奖励应该固定 100 ' + JSON.stringify(done));
-            if (done.n !== 3) bad.push('完成后没有立即补新订单 ' + JSON.stringify(done));
-            if (done.water !== 3) bad.push('完成订单不该扣东西（共造了 3 瓶，应还在身上）' + JSON.stringify(done));
-            // 订单出现之前就有的东西不算：直接发（调试发材料）一件锂-7 不算"造出来"
-            await T.eval(`window.__m0 = gState.money; labGive('a:3:4', 1); true;`);
-            if (await T.eval(`gState.money !== window.__m0 || !labSt().orders.some(function (q) { return q.k === 'a:3:4'; })`)) bad.push('发出来的东西也算了订单');
-            // 拼出来的算：1 质子 + 1 电子...锂-7 要 3p 3e 4n；这里用现成的 labMade 路径验证价值奖励
-            await T.eval(`labSt().orders = [{ k: 'pot:heal', n: 1, base: 0 }, { k: 'pot:spring', n: 1, base: 0 }, { k: 'a:2:2', n: 1, base: 0 }]; window.__m0 = gState.money; true;`);
-            await T.eval(`labGive('sugar', 1); labGive('salt', 1); labGive('b:water', 1); labGive('rubber', 2); labGive('iron', 2); labCraftMake('heal'); labCraftMake('spring'); true;`);
-            const g2 = await T.eval(`gState.money - window.__m0`);
-            if (g2 !== 2000 + 1200) bad.push('治疗药剂 20000 的 10% = 2000、弹簧鞋 12000 的 10% = 1200，共 3200，实际 ' + g2);
+            // v4：订单要交东西（先扣身上、不够扣仓库箱），给价值的 20%（没标价 100），交完立刻补新的；造出来不会自动完成
+            await T.eval(`labSt().orders = [{ k: 'b:water', n: 2, base: 0 }, { k: 'salt', n: 1, base: 0 }, { k: 'a:3:4', n: 1, base: 0 }]; labSt().box = { 'b:water': 2 }; lab.bag = {}; labGive('b:water', 1); window.__m0 = gState.money; labMade('b:water', 5); true;`);
+            if (await T.eval(`labSt().orders.length !== 3 || labSt().orders[0].k !== 'b:water' || gState.money !== window.__m0`)) bad.push('造出来不该自动完成订单');
+            await T.eval(`labPanelOrders(); true;`);
+            if (!(await T.eval(`/有 3\\/2/.test(document.getElementById('lab-panel').innerText)`))) bad.push('订单板写身上加仓库一共有几个 ' + await T.eval(`document.getElementById('lab-panel').innerText`));
+            await T.eval(`document.getElementById('lab-order-0').click(); true;`);
+            const done = JSON.parse(await T.eval(`JSON.stringify({ n: labSt().orders.length, ks: labSt().orders.map(function (q) { return q.k; }), gain: gState.money - window.__m0, bag: lab.bag['b:water'] || 0, box: labSt().box['b:water'] || 0 })`));
+            if (done.gain !== 100) bad.push('水没标价，奖励固定 100 ' + JSON.stringify(done));
+            if (done.n !== 3) bad.push('交完立即补新订单 ' + JSON.stringify(done));
+            if (done.bag !== 0 || done.box !== 1) bad.push('交 2 瓶水：先扣身上 1 瓶、再扣仓库 1 瓶 ' + JSON.stringify(done));
+            // 东西不够交不了
+            await T.eval(`labSt().orders = [{ k: 'pot:heal', n: 1, base: 0 }, { k: 'pot:spring', n: 1, base: 0 }, { k: 'a:2:2', n: 1, base: 0 }]; labSt().box = {}; lab.bag = {}; window.__m0 = gState.money; true;`);
+            if (await T.eval(`labOrderDeliver(0) || labSt().orders.length !== 3 || gState.money !== window.__m0`)) bad.push('没东西也交了');
+            await T.eval(`labGive('sugar', 1); labGive('salt', 1); labGive('b:water', 1); labGive('rubber', 2); labGive('iron', 2); labCraftMake('heal'); labCraftMake('spring'); labOrderDeliver(1); labOrderDeliver(0); true;`);
+            const g2 = JSON.parse(await T.eval(`JSON.stringify({ g: gState.money - window.__m0, bag: lab.bag })`));
+            if (g2.g !== 4000 + 2400) bad.push('治疗药剂 20000 的 20% = 4000、弹簧鞋 12000 的 20% = 2400，共 6400 ' + JSON.stringify(g2));
+            if (g2.bag['pot:heal'] || g2.bag['pot:spring']) bad.push('交了以后药剂要扣掉 ' + JSON.stringify(g2));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
-            report('LB7 订单：3 张不重复、只认订单出现之后造出来的、完成后东西不扣、奖励 = 价值的 10%（没标价 100）、立即补新的', bad.length === 0, bad.join(' / '));
+            report('LB7 订单（v4）：3 张不重复、到订单板交东西（先扣身上再扣仓库）、奖励 = 价值的 20%（没标价 100）、立即补新的', bad.length === 0, bad.join(' / '));
         }
 
         if (want('LB8')) {
@@ -4187,7 +4221,7 @@ async function enterExit(tab, key) {
             if (!/氢/.test(pages.table) || !/氦-4/.test(pages.table) || !/半衰期|分钟|天|年|秒/.test(pages.table)) bad.push('周期表页内容不对');
             if (!/两个氢-1 原子|爆炸|苏打水/.test(pages.react) || !/用在/.test(pages.react)) bad.push('反应页缺内容或没标"用在哪些配方里"');
             if (!/治疗药剂/.test(pages.potion) || !/弹簧鞋/.test(pages.potion) || !/用在/.test(pages.potion)) bad.push('药剂页缺内容');
-            if (!/订单/.test(pages.order) || !/10%/.test(pages.order)) bad.push('订单页缺内容');
+            if (!/订单/.test(pages.order) || !/20%/.test(pages.order)) bad.push('订单页缺内容');
             if (!/611/.test(pages.neutron)) bad.push('中子页缺内容');
             if (!/电线/.test(pages.device) || !/升压器/.test(pages.device) || !/串联/.test(pages.device)) bad.push('器材页缺内容');
             if (/原子弹|烟花|Boss|离心/.test(Object.values(pages).join(''))) bad.push('手册里出现了范围外的东西');
@@ -4205,7 +4239,7 @@ async function enterExit(tab, key) {
             const st = JSON.parse(await T.eval(`(function(){ let s = {}; labAdd(s, 'coal'); labAdd(s, 'coal'); labAdd(s, 'coal', 3); labAdd(s, 'iron'); return JSON.stringify(s); })()`));
             if (st.coal !== 5 || st.iron !== 1 || Object.keys(st).length !== 2) bad.push('同名物品没叠在一起 ' + JSON.stringify(st));
             const ver = JSON.parse(await T.eval(`JSON.stringify({ sv: SAVE_VER, dw: typeof DATA_WIPE_VER !== 'undefined' ? DATA_WIPE_VER : null, np: NET_PROTO })`));
-            if (ver.sv !== 2 || ver.np !== 10) bad.push('SAVE_VER 或 NET_PROTO 变了 ' + JSON.stringify(ver));
+            if (ver.sv !== 2 || ver.np !== 11) bad.push('SAVE_VER 或 NET_PROTO 变了 ' + JSON.stringify(ver));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('LB9 配方清单（现有 X / 需要 Y 红绿、筛现在能做的）、手册 6 页并标"用在哪些配方里"、仓库里能直接开、同名叠放', bad.length === 0, bad.join(' / '));

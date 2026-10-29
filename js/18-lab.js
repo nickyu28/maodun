@@ -214,7 +214,7 @@
 
         // ── 订单（只出化学类，本段做得出来的）──
         const LAB_ORDER_POOL = [['b:water', 2], ['salt', 1], ['a:3:4', 1], ['b:naoh', 1], ['pot:heal', 1], ['pot:spring', 1], ['a:2:2', 1]];
-        function labOrderReward(key) { let v = labValue(key); return v ? Math.round(v * 0.1) : 100; }
+        function labOrderReward(key) { let v = labValue(key); return v ? Math.round(v * 0.2) : 100; }   // v4：价值的 20%（没标价的给 100）
         function labOrdersFill(rnd) {
             let L = labSt(); rnd = rnd || Math.random;
             let guard = 0;
@@ -224,22 +224,27 @@
                 L.orders.push({ k: c[0], n: c[1], base: L.made[c[0]] || 0 });
             }
         }
-        // 造出来一件：只算订单出现之后的
+        // 造出来一件：记个数（v4 起订单不靠这个完成，要到订单板交东西）
         function labMade(key, n) {
             let L = labSt(); n = n === undefined ? 1 : n;
             L.made[key] = (L.made[key] || 0) + n;
-            let done = 0;
-            for (let i = L.orders.length - 1; i >= 0; i--) {
-                let o = L.orders[i];
-                if (o.k === key && (L.made[key] - o.base) >= o.n) {
-                    let reward = labOrderReward(o.k);
-                    gState.money += reward; done++;
-                    L.orders.splice(i, 1);
-                    try { blazeFlash('订单完成：' + labName(o.k) + (o.n > 1 ? ' ×' + o.n : '') + '，得到 ' + reward); } catch (e) { }
-                }
-            }
-            if (done) labOrdersFill();
+        }
+        // v4：订单要交东西——身上的先扣、不够再扣仓库箱里的；给价值的 20%；交完立刻补一张新的
+        function labOrderHave(k) { return labN(lab ? lab.bag : {}, k) + labN(labSt().box, k); }
+        function labOrderDeliver(i) {
+            let L = labSt(), o = L.orders[i]; if (!o) return false;
+            if (labOrderHave(o.k) < o.n) { labFlash('东西不够：要 ' + labName(o.k) + ' ×' + o.n); return false; }
+            let left = o.n, fromBag = Math.min(left, labN(lab.bag, o.k));
+            if (fromBag) { labDel(lab.bag, o.k, fromBag); left -= fromBag; }
+            if (left) labDel(L.box, o.k, left);
+            let reward = labOrderReward(o.k);
+            gState.money += reward;
+            L.orders.splice(i, 1); labOrdersFill();
+            labSyncSel(); lab.hudSig = '';
+            labFlash('订单完成：' + labName(o.k) + (o.n > 1 ? ' ×' + o.n : '') + '，得到 ' + reward);
             saveProgress();
+            if (lab.panel === 'orders') labPanelOrders();
+            return true;
         }
 
         // ══════════════ 运行时：一个能走动的小场景 ══════════════
@@ -290,7 +295,7 @@
             lab.onMouse = function (e) {
                 if (!lab || lab.over || !document.pointerLockElement) return;
                 if (e.target && e.target.closest && e.target.closest('button, #lab-panel, #lab-book, #lab-bag, #sys-modal')) return;
-                if (e.button === 0) labHoldStart('L'); else if (e.button === 2) labHoldStart('R');
+                if (e.button === 0 && e.shiftKey) labPickAll(); else if (e.button === 0) labHoldStart('L'); else if (e.button === 2) labHoldStart('R');
             };
             lab.onMouseUp = function (e) { if (lab && lab.hold && lab.hold.kind !== 'Q') labHoldStop(); };
             document.addEventListener('mouseup', lab.onMouseUp);
@@ -456,7 +461,10 @@
             if (k === ' ') { lab.k.jump = true; e.preventDefault(); return; }
             if (e.repeat) return;
             if (k === 'escape') { if (lab.panel) labPanelClose(); else if (document.getElementById('lab-book')) labBookClose(); return; }
+            if (k === 'b' && lab.panel === 'bag') { labPanelClose(); return; }
             if (lab.panel || document.getElementById('lab-book')) return;
+            if (k === 'b') { labPanelBag(); return; }
+            if (k === 'f' && e.shiftKey) { labPickAll(); return; }
             if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); labStoreHeld(); }
             else if (k === 'q' || k === 'g') { if (e.shiftKey) labPut(true); else labHoldStart('Q'); } else if (k === 'f') labPick(); else if (k === 'r') labUse('L'); else if (k === 'e') labInteract(); else if (k === 't') labThrow();
             else if (/^[1-6]$/.test(k)) labSelIdx(+k - 1);
@@ -1232,6 +1240,28 @@
             return true;
         }
         function labPick() { return labPickEntity(labNearestItem(LAB_T.pickR)); }
+        // Shift+左键：身边 2.4 米内地上的东西一下全捡起来（气体不算；身上放不下的那种留在地上）
+        function labPickAll() {
+            if (!lab || lab.over || lab.panel) return 0;
+            let got = 0, full = false;
+            lab.ground.slice().sort(function (a, b) { return labD(a, lab.p) - labD(b, lab.p); }).forEach(function (e) {
+                if (e.dead || labDef(e.key).gas || Math.hypot(e.x - lab.p.x, e.z - lab.p.z) > LAB_T.pickR) return;
+                if (!lab.bag[e.key] && Object.keys(lab.bag).length >= LAB_BAG_CAP) { full = true; return; }
+                labKill(e); labAdd(lab.bag, e.key, 1); got++;
+            });
+            labSyncSel(); lab.hudSig = '';
+            labFlash(got ? '捡起来 ' + got + ' 个' + (full ? '，有的身上放不下' : '') : (full ? '身上放不下了' : '附近没有能拿的东西'));
+            return got;
+        }
+        // 背包（B）：身上 6 格一目了然，拿在手上、放下、存进仓库
+        function labPanelBag() {
+            let ks = Object.keys(lab.bag);
+            let rows = ks.map(function (k, i) {
+                return '<div style="border-bottom:1px solid #eee;padding:5px 0;">' + (i < LAB_HOT ? '快捷栏 ' : '背包 ') + (i + 1) + '　<b>' + labName(k) + '</b> ×' + labN(lab.bag, k) + (lab.sel === k ? '　<span style="color:#1565c0;">手上</span>' : '') +
+                    '<br><button style="' + LAB_BTN2 + '" onclick="labSel(\'' + k + '\');labPanelBag()">拿在手上</button><button style="' + LAB_BTN2 + '" onclick="labSel(\'' + k + '\');labPut(true);labPanelBag()">放下</button><button style="' + LAB_BTN2 + '" onclick="labSel(\'' + k + '\');labStoreHeld();labPanelBag()">存进仓库</button></div>';
+            }).join('') || '<div style="color:#888;">身上没有东西</div>';
+            labPanelOpen('bag', '背包', '<div style="margin:4px 0;color:#666;">身上 ' + ks.length + '/' + LAB_BAG_CAP + ' 格（快捷栏 3 + 背包 3）。存进仓库站在哪都行。</div>' + rows);
+        }
         // 在 (x, z) 附近 maxR 米内随机找一个落点（东西落地都就近落在原处，不飞出去）
         function labNear(x, z, maxR) {
             let a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * maxR;
@@ -1393,7 +1423,7 @@
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,640px);text-align:center;pointer-events:auto;">' +
                 '<div id="lab-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:15px;"></div>' +
                 '<div style="margin-top:2px;"><button id="lab-btn-act" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'L\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'L\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">动作</button><button id="lab-btn-put" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'Q\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'Q\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">放下 (Q)</button>' +
-                '<button id="lab-btn-rc" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'R\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'R\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">拆包/接水</button><button style="' + LAB_BTN + '" onclick="labThrow()">扔药 (T)</button><button id="lab-btn-store" style="' + LAB_BTN + '" onclick="labStoreHeld()">存仓库 (Ctrl+Q)</button><button style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHold(\'jump\',true)" ontouchend="labHold(\'jump\',false)" onmousedown="labHold(\'jump\',true)" onmouseup="labHold(\'jump\',false)">跳</button></div></div>' +
+                '<button id="lab-btn-rc" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'R\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'R\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">拆包/接水</button><button style="' + LAB_BTN + '" onclick="labThrow()">扔药 (T)</button><button id="lab-btn-store" style="' + LAB_BTN + '" onclick="labStoreHeld()">存仓库 (Ctrl+Q)</button><button id="lab-btn-bag" style="' + LAB_BTN + '" onclick="labPanelBag()">背包 (B)</button><button id="lab-btn-pickall" style="' + LAB_BTN + '" onclick="labPickAll()">全捡</button><button style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHold(\'jump\',true)" ontouchend="labHold(\'jump\',false)" onmousedown="labHold(\'jump\',true)" onmouseup="labHold(\'jump\',false)">跳</button></div></div>' +
                 '';   // 走路用屏幕上通用的摇杆（左半屏拖动），转视角拖右半屏——和主游戏一样
             document.body.appendChild(d);
         }
@@ -1480,11 +1510,12 @@
         }
         function labPanelOrders() {
             let L = labSt(); labOrdersFill();
-            let rows = L.orders.map(function (o) {
-                let got = Math.min(o.n, (L.made[o.k] || 0) - o.base);
-                return '<div style="border-bottom:1px solid #eee;padding:6px 0;"><b>' + labName(o.k) + (o.n > 1 ? ' ×' + o.n : '') + '</b>　进度 ' + got + '/' + o.n + '　奖励 ' + labOrderReward(o.k) + '</div>';
+            let rows = L.orders.map(function (o, i) {
+                let have = labOrderHave(o.k), ok = have >= o.n;
+                return '<div style="border-bottom:1px solid #eee;padding:6px 0;"><b>' + labName(o.k) + (o.n > 1 ? ' ×' + o.n : '') + '</b>　<span style="color:' + (ok ? '#2e7d32' : '#c62828') + ';">有 ' + have + '/' + o.n + '</span>　奖励 ' + labOrderReward(o.k) +
+                    ' <button id="lab-order-' + i + '" style="' + LAB_BTN2 + (ok ? '' : 'opacity:.4;') + '" onclick="labOrderDeliver(' + i + ')">交</button></div>';
             }).join('');
-            labPanelOpen('orders', '订单板', '<div style="margin:4px 0;color:#666;">没有时限。订单出现之后，你做出来的才算数；做出来就算完成，东西不扣。</div>' + rows);
+            labPanelOpen('orders', '订单板', '<div style="margin:4px 0;color:#666;">没有时限。点"交"把东西交上去（先扣身上的，不够再扣仓库箱的），给价值的 20%。</div>' + rows);
         }
         function labBoxTake(k, all) {
             let L = labSt(), n = all ? labN(L.box, k) : 1;
@@ -1574,7 +1605,7 @@
             }
             if (tab === 'order') {
                 let L = labSt();
-                return '<div style="color:#666;margin-bottom:6px;">订单板同时 3 张，没有时限，完成立刻补新的。订单出现之后你做出来的才算，做出来就算完成，东西不扣。奖励是东西价值的 10%（没标价的给 100）。</div>' +
+                return '<div style="color:#666;margin-bottom:6px;">订单板同时 3 张，没有时限。到订单板点“交”把东西交上去（先扣身上的，不够再扣仓库箱的），交完立刻补新的。奖励是东西价值的 20%（没标价的给 100）。</div>' +
                     '<div><b>现在的订单</b></div>' + (L.orders.map(function (o) { return '<div>' + labName(o.k) + (o.n > 1 ? ' ×' + o.n : '') + '　奖励 ' + labOrderReward(o.k) + '</div>'; }).join('') || '<div style="color:#888;">还没有（进一次实验室就有了）</div>') +
                     '<div style="margin-top:6px;"><b>可能出现的题目</b></div>' + LAB_ORDER_POOL.map(function (c) { return '<div>' + labItemTag(c[0]) + (c[1] > 1 ? ' ×' + c[1] : '') + '</div>'; }).join('');
             }
