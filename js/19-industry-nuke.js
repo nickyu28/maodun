@@ -45,7 +45,7 @@
 
         // ── 资源点：萤石、方铅矿成片（山地、古老岩层），硝石只在盐湖沙漠（空手能挖） ──
         Object.assign(IND_NODES, { fluorite: { give: [1, 2], tool: 1 }, ore_pb: { give: [1, 2], tool: 1 }, saltpeter: { give: [1, 3], tool: 0 } });
-        Object.assign(IND_ORE_NODES, { fluorite: 1, ore_pb: 1, saltpeter: 1 });
+        Object.assign(IND_OUTCROP, { fluorite: 1, ore_pb: 1 }); IND_ORE_NODES.saltpeter = 1;
         IND_BIOMES.mountain.res.fluorite = 1; IND_BIOMES.mountain.res.ore_pb = 2;
         IND_BIOMES.ancient.res.fluorite = 2; IND_BIOMES.desert.res.saltpeter = 2;
 
