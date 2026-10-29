@@ -1466,9 +1466,11 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026.10.29-5', date: '10 月 29 日', title: '最近更新', items: [
+                id: '2026.10.29-6', date: '10 月 29 日', title: '最近更新', items: [
                     '监狱救援、躲避球、合作密室、推推乐、爬塔先藏起来了',
-                    '每个模式第一次点开会弹一次规则，之后在“规则”里看'
+                    '每个模式第一次点开会弹一次规则，之后在“规则”里看',
+                    '竞速加了 10 张固定地图，每张有自己的记录榜',
+                    '竞速的记录榜在大厅里打得开了'
                 ]
             },
             {
