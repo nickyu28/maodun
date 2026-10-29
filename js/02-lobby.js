@@ -704,7 +704,7 @@
         }
 
         function setAiFill(v) { gState.aiFill = !!v; settingsRemember('aiFill', gState.aiFill); }
-        function huntAiOn() { return gState.aiFill !== false; }
+        function huntAiOn() { return gState.aiFill !== false && !gState.chemHunt; }
 
         const NIGHT_CHARS = {
             cat: {

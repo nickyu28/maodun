@@ -660,7 +660,8 @@
         function completeExtraction(text) {
             if (gState.tutorial) { tutEvent('extract'); return; }   // T0：教程里的撤离不结算、不进仓库
             // huntDiffPlayed 不在这清零了——进图那一刻（startGameMap）已经处理过。
-            gState.matchHistory.push(true); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
+            if (gState.chemHunt) text += chemExtract();   // 化学寻宝队：原料和粒子包进实验室仓库箱，不算撤离统计
+            else { gState.matchHistory.push(true); if (gState.matchHistory.length > 10) gState.matchHistory.shift(); }
 
             gState.inv.forEach(function (i) { if (i) nightTreasureEgg(i.n); });
 
@@ -819,6 +820,11 @@
         function forfeitRun() {
             let confiscated = (gState.submittedItems || []).length;
             gState.submittedItems = [];
+            if (gState.chemHunt) {   // 化学寻宝队：不算进撤离失败的统计，也不加保险柜概率；只丢这一局捡的，商店道具留着
+                carriedSlots().forEach(function (sl) { let it = sl[0][sl[1]]; if (it && !it.isShop) sl[0][sl[1]] = null; });
+                expandInventory();
+                return confiscated;
+            }
             gState.matchHistory.push(false); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
             if (!gState.quitNoPay) huntSafeAddFail();   // S4：死了（倒下后离开 / 全队阵亡）算一次；活着中途退出（quitNoPay）不加
             // 撤离失败：背包里剩下的全部丢掉，腰包和徽章也一样（H5）
@@ -871,11 +877,12 @@
             isPlaying = false; if (document.pointerLockElement) document.exitPointerLock();
 
             gState.huntRunActive = false;
+            if (gState.chemHunt) chemRunEnd(won);   // 化学寻宝队：暗室概率累加、灯收起来、没有金币
             if (!won) { let lost = forfeitRun(); text += lost > 0 ? '这局上交的 ' + lost + ' 件东西没收了，背包里的也全丢了。' : '背包里的东西全丢了。'; }
             // 活着撤离也告诉队友一声，不然他们那边你的身体停止同步 6 秒后会被当成"掉线"
             else if (!gState.isDead) bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*', alive: true, extracted: true });
             if (!gState.quitNoPay) { coinsSettle('hunt', won); text += '\n' + coinsBreakText(); }
-            gState.quitNoPay = false;
+            gState.quitNoPay = false; gState.chemHunt = false;
             hideDeathUI(); gState.spectating = null;
 
             document.getElementById('ui-layer').classList.add('hidden'); const goView = document.getElementById('game-over'); goView.classList.remove('hidden');
@@ -1505,3 +1512,164 @@
             mobDexRenderer().raf = requestAnimationFrame(mobDexLoop);
         }
         function mobDexStart() { let D = mobDexRenderer(); if (!D.raf) D.raf = requestAnimationFrame(mobDexLoop); }
+
+        // ══════════════ 化学寻宝队（lab-spec 7.1）══════════════
+        // 寻宝队的一个开关（gState.chemHunt），不是新地图：只开简单图、没有怪、宝箱只出原料和粒子包（带回实验室仓库箱，不卖不结算、没有金币）、
+        // 地上刷 0–2 桶石油、一半的图有暗室（里面一个隐藏宝箱，内容 ×2）、带灯泡 + 电池（+ 开关）进暗室。
+        // 实验室（js/18-lab.js）是 Code2 的文件，这里只调它的 labSt / labDef / labName。物品用实验室的 key（labKey）和数量（cnt）。
+        const CHEM_RAW = [['coal', 30], ['iron', 25], ['a:29:34', 20], ['sand', 20], ['salt', 5]];   // 原料权重：煤、铁块、铜-63、沙子、食盐（食盐概率低）
+        // 宝箱掉落表（我定的，规格里没给数）：raw = 出原料的概率（剩下出粒子包）；rawN / packN = 一箱的个数范围
+        const CHEM_LOOT = {
+            wood: { raw: 0.70, rawN: [1, 2], packN: [1, 1] },
+            silver: { raw: 0.55, rawN: [2, 3], packN: [1, 1] },
+            gold: { raw: 0.40, rawN: [3, 4], packN: [1, 2] }
+        };
+        const CHEM_DARK_BASE = 0.5, CHEM_DARK_STEP = 0.15, CHEM_BAT_SECS = 180, CHEM_KIT_MAX = 6;
+        let chem = null;   // 这一局的状态（chemSetupMap 里建）
+        let chemPrevDiff = 'easy';
+        function chemItem(key, cnt) {
+            let d = labDef(key);
+            return { n: d.name + (cnt > 1 ? ' ×' + cnt : ''), labKey: key, cnt: cnt, v: 0, w: 1, tex: 'generic', c: d.col, chem: true };
+        }
+        function chemRoll(rnd, range) { return range[0] + Math.floor(rnd() * (range[1] - range[0] + 1)); }
+        // 一个箱子的东西：原料（带数量）或粒子包（质子数 1–26，中子 0–2 倍质子数）。mul = 暗室里隐藏宝箱的 2 倍
+        function chemRollChest(boxType, rnd, mul) {
+            rnd = rnd || Math.random; mul = mul || 1;
+            let t = CHEM_LOOT[boxType] || CHEM_LOOT.wood;
+            if (rnd() < t.raw) {
+                let sum = CHEM_RAW.reduce(function (s, r) { return s + r[1]; }, 0), x = rnd() * sum, key = CHEM_RAW[0][0];
+                for (let i = 0; i < CHEM_RAW.length; i++) { x -= CHEM_RAW[i][1]; if (x < 0) { key = CHEM_RAW[i][0]; break; } }
+                return chemItem(key, chemRoll(rnd, t.rawN) * mul);
+            }
+            let z = 1 + Math.floor(rnd() * 26), n = Math.floor(rnd() * (2 * z + 1));
+            return chemItem('pack:' + z + ':' + n, chemRoll(rnd, t.packN) * mul);
+        }
+        // 开局：从实验室仓库箱取灯（灯泡 + 电池，开关可带可不带，一共最多 6 件）。没灯泡或没电池就不带
+        function chemTakeKit() {
+            let L = labSt(), kit = { bulb: 0, sw: 0, bats: [] };
+            if ((L.box.bulb || 0) < 1 || (L.box.bat || 0) < 1) return kit;
+            let take = function (k, n) { L.box[k] -= n; if (L.box[k] <= 0) delete L.box[k]; };
+            take('bulb', 1); kit.bulb = 1;
+            if ((L.box.switch || 0) >= 1) { take('switch', 1); kit.sw = 1; }
+            let n = Math.min(L.box.bat, CHEM_KIT_MAX - kit.bulb - kit.sw);
+            take('bat', n); for (let i = 0; i < n; i++) kit.bats.push(CHEM_BAT_SECS);
+            return kit;
+        }
+        function chemKitText(kit) {
+            return kit.bulb ? '灯泡 ×1' + (kit.sw ? '、开关 ×1' : '') + '、电池 ×' + kit.bats.length : '';
+        }
+        function chemHuntStart() {
+            if (lobbyParty.length > 0) { showSysModal('提示', '化学寻宝队先自己玩，先退出队伍。', [{ label: '知道了' }]); return; }
+            chemPrevDiff = gState.mapDifficulty; gState.mapDifficulty = 'easy';
+            gState.chemHunt = true; gState.chemRun = true;
+            chem = { kit: chemTakeKit(), fresh: true };
+            huntOptOut = false; huntRebuildTeam(); requestEnterMap();
+        }
+        // 造完图以后（buildProceduralMaze 末尾）：没怪、没上交、随时能撤离，地上放石油，暗室和隐藏宝箱
+        function chemSetupMap() {
+            for (let wi = 0; wi < MOB_WAVES_AT.length; wi++) gState['wave' + (wi + 1) + 'Spawned'] = true;   // 没有怪
+            gState.monstersSpawned = true;
+            gState.extractTarget = 0;
+            let sp = document.getElementById('submit-progress'); if (sp) { sp.innerText = '化学寻宝：捡够了回出生点撤离'; sp.style.color = '#80cbc4'; }
+            ['btn-submit', 'btn-lottery'].forEach(function (id) { let b = document.getElementById(id); if (b) b.classList.add('hidden'); });
+            huntRefreshSubmitUI();
+            let kit = (chem && chem.kit) || { bulb: 0, sw: 0, bats: [] };
+            chem = { kit: kit, hiddenOpened: false, zone: null, on: true, lamp: null, fog0: null, bg0: null, dark: false };
+            // 石油：每趟 0–2 桶，地上随机一格
+            let cells = [];
+            for (let f = 0; f < FLOORS; f++) for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
+                let c = maze[f] && maze[f][z] && maze[f][z][x]; if (c && c.type === 0 && !(f === 0 && x <= 2 && z <= 2)) cells.push({ f: f, x: x, z: z });
+            }
+            let oil = Math.min(cells.length, Math.floor(seededRandom() * 3));
+            for (let i = 0; i < oil; i++) {
+                let s = cells.splice(Math.floor(seededRandom() * cells.length), 1)[0];
+                let it = chemItem('oil', 1); it.n = '石油'; it.c = 0x212121;
+                let m = huntGroundMesh(it); m.position.set(s.x * TILE, s.f * TILE + 1.5, s.z * TILE);
+                m.userData = Object.assign({}, it, { isItem: true, vel: new THREE.Vector3(0, 0, 0) });
+                huntItemGlow(m); scene.add(m); groundItems.push(m);
+            }
+            // 暗室：一半的图有（连着没开隐藏宝箱的局数一局 +15%），选一个离出生点远的一格死角，周围 3×3 格是暗的
+            if (seededRandom() < Math.min(1, CHEM_DARK_BASE + (gState.chemDarkBoost || 0))) {
+                let leaves = cells.filter(function (s) { return s.f === 0 && s.x + s.z > 12 && maze[0][s.z][s.x].isLeaf; });
+                if (!leaves.length) leaves = cells.filter(function (s) { return s.f === 0 && s.x + s.z > 12; });
+                if (leaves.length) {
+                    let s = leaves[Math.floor(seededRandom() * leaves.length)];
+                    chem.zone = { x: s.x, z: s.z };
+                    let tex = createProceduralTexture('gold_chest', '#4a148c', '#1a0033');
+                    let c = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 4), new THREE.MeshLambertMaterial({ map: tex }));
+                    c.position.set(s.x * TILE, 2, s.z * TILE);
+                    c.userData = { isChest: true, type: 'gold', opened: false, hidden: true, chemHidden: true, loot: chemRollChest('gold', seededRandom, 2) };
+                    scene.add(c); chests.push(c);
+                }
+            }
+            // 灯：预先放一个强度为 0 的点光源挂在镜头上，用强度开关，不增删光源（r128 增删会重新编译着色器）
+            let light = new THREE.PointLight(0xfff3c4, 0, HUNT_M * 24); camera.add(light); chem.light = light;
+            chem.sw = false;   // 带了开关：默认关，按 L 开关；没带开关：一直亮
+            chemHud();
+        }
+        function chemLampOn() { let k = chem && chem.kit; return !!(k && k.bulb && k.bats.length && (!k.sw || chem.sw)); }
+        function chemInDark() {
+            if (!chem || !chem.zone || gState.isDead) return false;
+            let cx = Math.floor((camera.position.x + TILE / 2) / TILE), cz = Math.floor((camera.position.z + TILE / 2) / TILE);
+            return camera.position.y < TILE && Math.abs(cx - chem.zone.x) <= 1 && Math.abs(cz - chem.zone.z) <= 1;
+        }
+        function chemHud() {
+            let el = document.getElementById('chem-lamp'); if (!el) return;
+            let k = chem && chem.kit;
+            if (!gState.chemHunt || !k || !k.bulb) { el.style.display = 'none'; return; }
+            let left = k.bats.length ? Math.ceil(k.bats[0]) : 0, more = Math.max(0, k.bats.length - 1);
+            el.innerText = '灯 ' + (chemLampOn() ? '亮' : (k.bats.length ? '关' : '没电了')) + (k.bats.length ? '　电 ' + left + ' 秒' + (more ? ' + ' + more + ' 块' : '') : '') + (k.sw ? '　按 L 开关' : '');
+            el.style.display = 'block';
+        }
+        function chemToggleLamp() { if (chem && chem.kit && chem.kit.sw) { chem.sw = !chem.sw; chemHud(); } }
+        // 每帧（寻宝队主循环里调）：灯耗电、暗室里视野只有 2 米（没灯）、开灯放宽
+        function chemTick(dt) {
+            if (!chem || !chem.on) return;
+            let k = chem.kit, on = chemLampOn();
+            if (on) {
+                k.bats[0] -= dt;
+                if (k.bats[0] <= 0) { k.bats.shift(); if (!k.bats.length) blazeFlash('灯没电了'); }
+            }
+            if (chem.light) chem.light.intensity = chemLampOn() ? 1.1 : 0;
+            let dark = chemInDark();
+            if (dark !== chem.dark) {
+                chem.dark = dark;
+                if (dark) { chem.fog0 = scene.fog; chem.bg0 = scene.background; }
+            }
+            if (dark) {
+                let lit = chemLampOn();
+                scene.background = new THREE.Color(0x000000);
+                scene.fog = new THREE.Fog(0x000000, lit ? HUNT_M * 4 : HUNT_M * 0.5, lit ? HUNT_M * 18 : HUNT_M * 2);   // 没灯：2 米外全黑
+            } else if (chem.fog0 !== null && (scene.fog !== chem.fog0)) { scene.fog = chem.fog0; scene.background = chem.bg0; }
+            chem.hud = (chem.hud || 0) - dt; if (chem.hud <= 0) { chem.hud = 0.25; chemHud(); }
+        }
+        // 暗室里的隐藏宝箱开了（08-night.js 开箱处调）
+        function chemOnChestOpened(c) { if (chem && c && c.userData.chemHidden) chem.hiddenOpened = true; }
+        // 撤离：箱子里的原料和粒子包进实验室仓库箱；灯剩下的东西也还回去。返回给结算框的一句话
+        function chemExtract() {
+            let moved = {}, lost = 0;
+            carriedSlots().forEach(function (sl) {
+                let it = sl[0][sl[1]]; if (!it || !it.chem) return;
+                if (labBoxAdd(it.labKey, it.cnt || 1)) moved[it.labKey] = (moved[it.labKey] || 0) + (it.cnt || 1); else lost += it.cnt || 1;
+                sl[0][sl[1]] = null;
+            });
+            let k = chem && chem.kit;
+            if (k && k.bulb) {
+                labBoxAdd('bulb', 1); if (k.sw) labBoxAdd('switch', 1);
+                k.bats.forEach(function (s) { labBoxAdd(s >= CHEM_BAT_SECS - 0.5 ? 'bat' : 'bat:' + Math.max(1, Math.round(s / CHEM_BAT_SECS * 180)), 1); });
+                k.bulb = 0; k.sw = 0; k.bats = [];
+            }
+            let names = Object.keys(moved).map(function (key) { return labName(key) + ' ×' + moved[key]; });
+            return '<br>带回实验室仓库箱：' + (names.length ? names.join('、') : '什么都没捡到') + (lost ? '。仓库箱满了，' + lost + ' 个没放下' : '');
+        }
+        // 一局结束（撤离、失败、中途退出，都走 finishGame）：暗室概率累加——这一局没开隐藏宝箱 +15%，开了回到 50%
+        function chemRunEnd(won) {
+            if (chem) {
+                if (chem.light) { chem.light.intensity = 0; camera.remove(chem.light); chem.light = null; }
+                if (chem.fog0 !== null && scene) { scene.fog = chem.fog0; scene.background = chem.bg0; }
+                gState.chemDarkBoost = chem.hiddenOpened ? 0 : Math.min(CHEM_DARK_BASE, Math.round(((gState.chemDarkBoost || 0) + CHEM_DARK_STEP) * 100) / 100);
+            }
+            let el = document.getElementById('chem-lamp'); if (el) el.style.display = 'none';
+            gState.chemRun = false; gState.mapDifficulty = chemPrevDiff; gState.quitNoPay = true;   // 没有金币
+            chem = null;
+        }

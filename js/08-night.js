@@ -3682,7 +3682,7 @@
         ];
         const GODCAT_V = 120000;
         function huntPotionRoll(boxType, loot, r1, r2) {
-            let p = HUNT_POTION_P[boxType]; if (!p || huntIsBig(loot)) return null;
+            let p = HUNT_POTION_P[boxType]; if (!p || huntIsBig(loot) || gState.chemHunt) return null;
             return r1 < p ? Object.assign({}, HUNT_POTIONS[Math.floor(r2 * HUNT_POTIONS.length) % HUNT_POTIONS.length]) : null;
         }
         function huntPotionUse(p) {
@@ -3696,7 +3696,7 @@
         // 每张图 25% 概率把一个猫神护身符藏在桌面或顶楼死角。造图时用种子定（各端一样）
         function huntPlaceGodCat() {
             groundItems = groundItems.filter(function (g) { if (g.userData.type === 'godcat') { scene.remove(g); return false; } return true; });
-            if (gState.tutorial || seededRandom() >= 0.25) return null;
+            if (gState.tutorial || gState.chemHunt || seededRandom() >= 0.25) return null;
             let spots = [];
             for (let f = 0; f < FLOORS; f++) for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
                 let c = maze[f] && maze[f][z] && maze[f][z][x]; if (!c) continue;
@@ -3937,6 +3937,7 @@
             }
             if (isPlaying && !gState.isDead) {
                 if (keyStr === 'e') { toggleBackpackUI(); }
+                if (keyStr === 'l' && gState.chemHunt) chemToggleLamp();   // 化学寻宝队：带了开关就按 L 开关灯
                 if (keyStr === 'tab') { e.preventDefault(); toggleLargeMapUI(); }   // S1：大地图从 M 改到 Tab（M 是一键静音）
                 if (!gState.backpackOpen && !gState.largeMapOpen) {
                     if (keyStr === 'q') { if (gState.selectedSlot >= 0 && gState.selectedSlot <= 2 && gState.inv[gState.selectedSlot]) executeThrow(gState.selectedSlot); }
@@ -4359,6 +4360,7 @@
                     else if (activeObj.userData.isChest && !activeObj.userData.opened) {
                         activeObj.userData.opened = true; activeObj.material.color.setHex(0x1a1a1a);
                         tutEvent('chest');
+                        if (gState.chemHunt) chemOnChestOpened(activeObj);
                         bc.postMessage({ type: 'CHEST_OPENED', target: '*', cx: Math.floor(activeObj.position.x / TILE), cz: Math.floor(activeObj.position.z / TILE), cf: Math.floor(activeObj.position.y / TILE) });
 
                         let boxType = activeObj.userData.type;
@@ -4464,6 +4466,7 @@
 
             executeGroundCombinationsLogic(dt);
             huntLureTick(dt);
+            if (gState.chemHunt) chemTick(dt);
 
             if (gState.timeStop > 0) return;
 
