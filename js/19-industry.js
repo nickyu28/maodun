@@ -177,6 +177,8 @@
             wool: { name: '羊毛', col: 0xf5f5f5 }, yarn: { name: '毛线', col: 0xeeeeee },
             sweater: { name: '毛衣', col: 0xc62828, wear: 'body', warm: 8 },
             wool_hat: { name: '毛帽', col: 0x1565c0, wear: 'head', warm: 3 },
+            blast_suit: { name: '防爆服', col: 0x455a64, wear: 'body', warm: 10, blast: 0.5, heavy: 0.6, use: '爆炸伤害少一半，很重（走路 ×0.6）' },
+            blast_helmet: { name: '防爆头盔', col: 0x607d8b, wear: 'head', warm: 0, blast: 0.2, use: '爆炸伤害少两成' },
             wool_scarf: { name: '毛围巾', col: 0xf9a825, wear: 'neck', warm: 3 },
             milk: { name: '牛奶', col: 0xfffde7, eat: { f: 5, w: 25, back: 'bucket' } },
             cheese: { name: '奶酪', col: 0xffe082, eat: { f: 35 } },
@@ -245,7 +247,7 @@
             comp: { name: '压缩机', col: 0x6d4c41, rated: 12, minV: 6, draw: 3, size: [1.2, 1, 1] },
             press: { name: '压力机', col: 0x37474f, rated: 24, minV: 18, draw: 6, size: [1.4, 1.4, 1.4] }
         };
-        const IND_BAT_V = 1.5, IND_BAT_U = 180, IND_BOOM_R = 3, IND_BOOM_DMG = 40, IND_DEV_CAP = 40, IND_GEN_R = 3, IND_FURNACE_T = 1800;
+        const IND_BAT_V = 1.5, IND_BAT_U = 180, IND_BOOM_R = 3, IND_DEV_CAP = 40, IND_GEN_R = 3, IND_FURNACE_T = 1800;
         // 名字；装了东西的桶写上材质："生水（木桶）"。plain = true 不写材质（配方里用）
         function indName(k, plain) {
             let d = IND_ITEMS[k]; if (!d) return k;
@@ -315,7 +317,8 @@
             { out: 'dev_press', in: { steel: 4, wire: 2 }, hard: true }, { out: 'pick_diamond', in: { diamond: 2, steel: 2, wood: 1 }, hard: true },
             { out: 'house_hut', in: { wood: 60 } }, { out: 'house_brick', in: { brick: 40, wood: 10 } }, { out: 'house_big', in: { brick: 90, wood: 20 } },
             { out: 'bottle', n: 2, in: { glass_plate: 1 } },
-            { out: 'raft', in: { wood: 20 } }
+            { out: 'raft', in: { wood: 20 } },
+            { out: 'blast_suit', in: { steel: 6, yarn: 4 }, hard: true }, { out: 'blast_helmet', in: { steel: 2, glass_plate: 1 }, hard: true }
         ];
         // 房子：放在基地里，四面墙 + 屋顶 + 一扇门；w×d 是门朝南（+z）时的宽和深，warm 是屋里比外面高几度
         const IND_HOUSE = {
@@ -671,6 +674,7 @@
             }
             return t;
         }
+        function indHeavy() { let f = 1; Object.keys(ind.base.wear).forEach(function (sl) { f *= IND_ITEMS[ind.base.wear[sl]].heavy || 1; }); return f; }   // 防爆服 ×0.6
         function indWarmth() { let w = 0; Object.keys(ind.base.wear).forEach(function (sl) { w += IND_ITEMS[ind.base.wear[sl]].warm || 0; }); return w; }
         function indBodyTick(dt) {
             let S = ind.base.surv, B = IND_BODY, eff = indAirTemp() + indWarmth() * B.warmMul;
@@ -1291,7 +1295,7 @@
             let S = R.base.surv, deep = R.where === 'trip' && indDeep(), canRun = k.run && moving && R.stam > 0 && S.energy > 0 && !deep && !R.onRaft;
             R.running = canRun;
             R.stam = deep ? Math.max(0, R.stam - IND_WATER.stamDrain * dt) : canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt);
-            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * (R.where === 'trip' ? indWaterSpeed() : 1);
+            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1);
             if (moving) {
                 let n = Math.hypot(mx, mz), run = Math.min(1, n); mx /= n; mz /= n;
                 let len = sp * run * dt, hs = R.where === 'base' && R.base.houses.length, steps = hs ? Math.max(1, Math.ceil(len / 0.2)) : 1;   // 有房子时一小步一小步走，不穿墙
@@ -1678,8 +1682,18 @@
             ind.devDirty = true;
         }
         // 爆炸：3 米内基地里的东西（设备、电线、地上的东西、篝火、作物）全没了，仓库箱不动；人在范围里扣 40 血
+        // 爆炸伤害按离中心的距离：≤ 1 米 150，范围边上 60，中间线性递减；防爆服 −50%、防爆头盔 −20%（只给硬核）
+        const IND_BOOM_NEAR = 150, IND_BOOM_EDGE = 60, IND_BOOM_CLOSE = 1;
+        function indBoomDmg(d, R) { if (d > R) return 0; if (d <= IND_BOOM_CLOSE || R <= IND_BOOM_CLOSE) return IND_BOOM_NEAR; return IND_BOOM_NEAR - (IND_BOOM_NEAR - IND_BOOM_EDGE) * (d - IND_BOOM_CLOSE) / (R - IND_BOOM_CLOSE); }
+        function indBlastCut() { let c = 0; Object.keys(ind.base.wear).forEach(function (sl) { c += IND_ITEMS[ind.base.wear[sl]].blast || 0; }); return Math.min(0.9, c); }
+        function indBoomHurt(x, z, R, why) {
+            let d = Math.hypot(ind.p.x - x, ind.p.z - z), dmg = indBoomDmg(d, R) * (1 - indBlastCut());
+            if (dmg <= 0 || !indHard()) return false;
+            return indHurt(dmg, 'boom', (why || '爆炸') + '，离爆炸点 ' + d.toFixed(1) + ' 米' + (indBlastCut() > 0 ? '（穿了防爆装备）' : ''), true);
+        }
         function indBoom(x, z, rad, why) {
             let B = ind.base, R = rad || IND_BOOM_R, gone = {};
+            ind.lastBoom = { x: x, z: z, R: R };
             B.devs = B.devs.filter(function (d) { if (Math.hypot(d.x - x, d.z - z) <= R) { gone[d.id] = 1; return false; } return true; });
             B.wires = B.wires.filter(function (w) { return !gone[w[0]] && !gone[w[1]]; });
             B.ground = B.ground.filter(function (g) { return Math.hypot(g.x - x, g.z - z) > R; });
@@ -1692,7 +1706,7 @@
             indBoomFx(x, z);
             indSave();
             if (Math.hypot(ind.p.x - x, ind.p.z - z) <= R && indHard()) {
-                if (indHurt(IND_BOOM_DMG, 'boom', (why || '爆炸') + '，离爆炸点 ' + Math.hypot(ind.p.x - x, ind.p.z - z).toFixed(1) + ' 米', true)) return;
+                if (indBoomHurt(x, z, R, why)) return;
             }
             indFlash('轰！');
         }
@@ -2232,7 +2246,8 @@
         }
         function indTripBoom(x, z, why) {
             indBoomFx(x, z);
-            if (Math.hypot(ind.p.x - x, ind.p.z - z) <= IND_BOOM_R && indHard()) { if (indHurt(IND_BOOM_DMG, 'boom', (why || '爆炸') + '，离爆炸点 ' + Math.hypot(ind.p.x - x, ind.p.z - z).toFixed(1) + ' 米', true)) return; }
+            ind.lastBoom = { x: x, z: z, R: IND_BOOM_R };
+            if (Math.hypot(ind.p.x - x, ind.p.z - z) <= IND_BOOM_R && indHard()) { if (indBoomHurt(x, z, IND_BOOM_R, why)) return; }
             indFlash('轰！');
         }
         function indCloudTick(dt) {
@@ -2283,7 +2298,7 @@
             let sl = IND_ITEMS[k].wear, old = ind.base.wear[sl];
             indBagDel(k, 1); ind.base.wear[sl] = k;
             if (old) indBagAdd(old, 1);
-            indSave(); indFlash('穿上了' + indName(k));
+            indSave(); indFlash('穿上了' + indName(k) + (IND_ITEMS[k].blast ? '：' + IND_ITEMS[k].use : ''));
             return true;
         }
         function indTakeOff(sl) {
