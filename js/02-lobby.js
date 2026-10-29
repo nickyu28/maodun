@@ -614,7 +614,8 @@
                     });
                 });
 
-                bc.postMessage({ type: 'START_MAP', target: '*', sender: gState.id, seed: s, mapDiff: gState.mapDifficulty, spawns: spawns });
+                huntBossRun = bossDebugOn();   // Boss 测试版（?bossdebug=1）；队员跟着这个字段走
+                bc.postMessage({ type: 'START_MAP', target: '*', sender: gState.id, seed: s, mapDiff: gState.mapDifficulty, spawns: spawns, boss: huntBossRun });
                 startGameMap(s, spawns);
             }
         }
@@ -1528,6 +1529,7 @@
         // H26：格子底色。宝物 ≥200 万红、3 万～200 万金、<3 万紫；商店道具蓝，地窖徽章金，鱼叉、腰包紫
         function slotTier(it) {
             if (!it) return '';
+            if (it.type === 'bcrown') return 'red';
             if (it.isShop) return it.type === 'badge' ? 'gold' : (it.n === '鱼叉' || it.type === 'backpack_ext') ? 'purple' : 'blue';
             let v = it.v || 0;
             return v >= 2000000 ? 'red' : v >= 30000 ? 'gold' : 'purple';
@@ -1742,8 +1744,8 @@
 
             if (gState.selectedContainer === 'garage' && gState.garage[gState.selectedSlot]) {
                 let item = gState.garage[gState.selectedSlot];
-                if (item.type === 'badge') {
-                    let t = document.createElement('div'); t.innerText = '地窖徽章不能卖'; t.style.cssText = 'color:#999; font-size:13px; margin:6px 0;'; sellDiv.appendChild(t);
+                if (item.type === 'badge' || item.type === 'bcrown') {
+                    let t = document.createElement('div'); t.innerText = item.type === 'bcrown' ? '头目皇冠不能卖，只能戴' : '地窖徽章不能卖'; t.style.cssText = 'color:#999; font-size:13px; margin:6px 0;'; sellDiv.appendChild(t);
                 } else {
                     let sBtn = document.createElement('button'); sBtn.innerText = '卖掉（$' + garageSellPrice(item).toLocaleString() + '）' + kTxt('　Backspace', ''); sBtn.style.background = '#f39c12'; sBtn.style.color = '#fff'; sBtn.style.minWidth = '200px';
                     sBtn.onclick = garageSellSelected; sellDiv.appendChild(sBtn);
@@ -1772,6 +1774,35 @@
                     });
                     sellDiv.appendChild(box);
                 }
+                // 头目皇冠底座（Boss 掉的）：5 种新宝石各一颗，再加一颗钻石，镶满变头目皇冠
+                if (item.type === 'bbase') {
+                    let box = document.createElement('div');
+                    box.style.cssText = 'position:relative; z-index:5; margin:8px auto 0; padding:8px 10px; background:#fff; border:1px solid #ddd; border-radius:6px; font-size:12px; color:#666; max-width:320px;';
+                    box.innerHTML = '镶宝石（' + bossCrownCount(item) + '/' + BOSS_CROWN_SLOTS.length + '）—— 五种宝石各一颗，钻石要两颗<br>';
+                    BOSS_GEMS.forEach(function (g) {
+                        if (!bossCrownFreeSlot(item, g.id)) return;
+                        let gi = gState.garage.findIndex(function (q) { return q && q.type === 'bgem' && q.gem === g.id; });
+                        if (gi < 0) return;
+                        let b = document.createElement('button');
+                        b.innerText = g.n; b.className = 'bcrown-gem-btn';
+                        b.style.cssText = 'margin:3px; padding:4px 8px; font-size:12px; background:#' + ('000000' + g.c.toString(16)).slice(-6) + '; color:#fff; border:none; text-shadow:0 1px 1px #000;';
+                        b.onclick = function () {
+                            if (!bossCrownSocket(item, g.id)) return;
+                            gState.garage[gi] = null;
+                            saveProgress(); initGarage();
+                        };
+                        box.appendChild(b);
+                    });
+                    sellDiv.appendChild(box);
+                }
+                if (item.type === 'bcrown') {
+                    let on = myMark() === 'crown';
+                    let wb = document.createElement('button'); wb.id = 'bcrown-wear-btn';
+                    wb.innerText = on ? '摘下皇冠' : '戴在头上';
+                    wb.style.cssText = 'margin:6px auto; display:block; background:' + (on ? '#9e9e9e' : '#f9a825') + '; color:#fff; min-width:160px;';
+                    wb.onclick = function () { bossCrownWear(!on); };
+                    sellDiv.appendChild(wb);
+                }
             }
 
             let me = gState.team.find(function (t) { return t.id === gState.id; }); document.getElementById('start-game-btn').style.display = (me && me.isLeader) ? 'block' : 'none';
@@ -1784,6 +1815,7 @@
             let item = gState.selectedContainer === 'garage' ? gState.garage[gState.selectedSlot] : null;
             if (!item) return;
             if (item.type === 'badge') { showSysModal('卖不了', '地窖徽章不能卖。', [{ label: '知道了' }]); return; }
+            if (item.type === 'bcrown') { showSysModal('卖不了', '头目皇冠不能卖，只能戴。', [{ label: '知道了' }]); return; }
             if (pouchCount(item) > 0) { showSysModal('卖不了', '腰包里还有东西，先拿出来再卖。', [{ label: '知道了' }]); return; }
             if (openPouch === item) openPouch = null;
             gState.money += garageSellPrice(item); gState.garage[gState.selectedSlot] = null;

@@ -4367,7 +4367,15 @@
             if (!activeObj && executeClick) activeObj = huntNearestInteract();
             if (activeObj) {
                 if (executeClick) {
-                    if (activeObj.userData.type === 'angel' || activeObj.userData.type === 'puppet' || activeObj.userData.type === 'high' || activeObj.userData.type === 'splitter' || activeObj.userData.type === 'curser') {
+                    if (activeObj.userData.type === 'boss') {   // Boss 测试版：只有真人能打，血量归房主
+                        let hasWep = gState.inv.find(function (i) { return i && i.type === 'wep'; });
+                        if (hasWep && gState.pAtkCd <= 0) {
+                            gState.pAtkCd = 1.0;
+                            let equippedWep = gState.inv[gState.selectedSlot];
+                            huntBossHit((equippedWep && equippedWep.type === 'wep') ? (equippedWep.dmg || 5) : 5);
+                        }
+                    }
+                    else if (activeObj.userData.type === 'angel' || activeObj.userData.type === 'puppet' || activeObj.userData.type === 'high' || activeObj.userData.type === 'splitter' || activeObj.userData.type === 'curser') {
                         if (activeObj.userData.type === 'curser') activeObj.userData.attacked = true;
                         let hasWep = gState.inv.find(function (i) { return i && i.type === 'wep'; });
                         if (hasWep && gState.pAtkCd <= 0) {
@@ -4432,7 +4440,7 @@
             }
         }
 
-        const HUNT_GRAB_TYPES = { angel: 1, puppet: 1, high: 1, splitter: 1, curser: 1 };
+        const HUNT_GRAB_TYPES = { angel: 1, puppet: 1, high: 1, splitter: 1, curser: 1, boss: 1 };
         // 第一次碰到某种怪/某种道具，弹一张说明（只弹一次）
         const HUNT_MOB_INTRO = {
             angel: '你看着它，它就不动；一转身它就冲过来。',
@@ -4576,6 +4584,7 @@
                         let chase = (lureC || camera.position).clone().sub(entity.position).normalize(); moveWithCollision(entity, chase.x * meta.speed * dt, chase.z * meta.speed * dt);
                     }
                 }
+                else if (meta.type === 'boss') huntBossTick(entity, dt);
                 else if (meta.type === 'fake' || meta.type === 'puppet' || meta.type === 'high' || meta.type === 'splitter') {
                     let distToPlayer = entity.position.distanceTo(camera.position); let aiMovementPermit = !hasOath;
                     if (meta.type === 'puppet' && viewFrustum.containsPoint(entity.position)) aiMovementPermit = false;
@@ -4592,7 +4601,7 @@
                     }
                 }
 
-                if (meta.type !== 'ai' || !meta.isRealPlayer) {
+                if ((meta.type !== 'ai' || !meta.isRealPlayer) && meta.type !== 'boss') {   // Boss 自己贴地（huntBossTick）
                     let downRay = new THREE.Raycaster(entity.position, new THREE.Vector3(0, -1, 0), 0, 10);
                     let intersects = downRay.intersectObjects(walkableMeshes);
                     let eFloor = Math.floor(entity.position.y / TILE);

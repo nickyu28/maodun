@@ -254,7 +254,8 @@
         // v6：超燃镜猫换位的 'swap' 事件多了楼层字段、收到的一方开始照着换位（原来发了没人收）；
         //     同一版 ROOM_HELLO 去掉了 stats 字段（A6 删游玩记录）
         // v7：寻宝队多了 HUNT_BIG_REQ / HUNT_BIG_ACK（大金上限全队共用，H16b），返魂药水多了 HUNT_REVIVE（H24）
-        const NET_PROTO = 10;
+        // v11：Boss 测试版——START_MAP 多了 boss 字段，新消息 BOSS_HIT / BOSS_HP，ROOM_HELLO 多了 mark（头顶皇冠）；地图 4 的 mapDiff 'map4' 也算在这一版
+        const NET_PROTO = 11;
         const NET_PREFIX = 'maodun-v' + NET_PROTO + '-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
         // 这一整套匹配等待（matchPool/matchLeader/night-wait 那个浮层）早就写好了，
@@ -541,6 +542,7 @@
                 acc: gState.acc || null,
                 face: myFace(),
                 title: myTitle(),
+                mark: myMark(),
                 bzgold: blazeGoldKeys()
             };
         }
@@ -575,6 +577,7 @@
                 acc: m.acc || null,
                 face: m.face || 'cat',
                 title: m.title || null,
+                mark: m.mark === 'crown' ? 'crown' : null,
                 bzgold: Array.isArray(m.bzgold) ? m.bzgold.filter(function (k) { return typeof k === 'string' && BLAZE_CHARS[k]; }) : [],
                 at: performance.now()
             };
@@ -987,9 +990,12 @@
             if (boxType === 'safe') return huntTakeBig(huntBigPool('safe'), pick);
             if (rnd() < (HUNT_BIG_P[boxType] || 0) * huntPityMul) return huntTakeBig(huntBigPool(boxType), pick);
             // 宝石：少量、值钱的金色收藏品
-            if (rnd() < 0.034) return pick(HUNT_GEMS.map(huntGemItem));
+            // Boss 测试版开着时（4.2 节"乙"）老宝石和王冠底座不再掉，换成这个箱子平常会出的东西；随机数取的次数跟原来一样
+            let fall = boxType === 'gold' ? itemPool.gold : [...itemPool.purple, ...itemPool.gold];
+            if (rnd() < 0.034) return huntBossRun && (boxType === 'wood' || boxType === 'silver' || boxType === 'gold') ? pick(fall) : pick(HUNT_GEMS.map(huntGemItem));
             // 王冠底座：只这里出，保险柜里永远没有
-            if (rnd() < 0.02) return crownBaseItem();
+            let rb = rnd();
+            if (rb < 0.02) return huntBossRun && (boxType === 'wood' || boxType === 'silver' || boxType === 'gold') ? fall[Math.floor(rb / 0.02 * fall.length)] : crownBaseItem();
             if (boxType === 'wood' || boxType === 'silver') return pick([...itemPool.purple, ...itemPool.gold]);
             if (boxType === 'gold') return pick([...itemPool.gold]);
             return null;
@@ -1006,6 +1012,7 @@
             huntBigLeft = HUNT_BIG_CAP; huntCraftBigLeft = HUNT_CRAFT_BIG_CAP;
             let order = boxes.filter(function (c) { return c.userData.type === 'safe'; }).concat(boxes.filter(function (c) { return c.userData.type !== 'safe'; }));
             order.forEach(function (c) { c.userData.loot = huntRollChest(c.userData.type, rnd); });
+            huntBossLoot = huntBossRollLoot(rnd);   // Boss 测试版：有 Boss 的图才取随机数（保险柜 → 箱子 → Boss 的顺序占大金上限）
             huntSignalLoot = [];
             for (let k = 0; k < teamSize; k++) huntSignalLoot.push([]);
             for (let n = 0; n < HUNT_SIGNAL_SLOTS; n++) for (let k = 0; k < teamSize; k++) huntSignalLoot[k].push(huntRollSignal(rnd));
@@ -1101,7 +1108,7 @@
         function saveProgress() {
             if (!gState.id) return;
             if (gState.tutorial) return;   // T0：教程里什么都不存（背包、任务、进度都是练习用的），做完或跳过时再存
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, huntDiffPlayed: gState.huntDiffPlayed || {}, safeBoost: gState.safeBoost || 0, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, towerDay: gState.towerDay, escDaily: gState.escDaily, escDraft: gState.escDraft, quest: gState.quest || null, blazeMastery: gState.blazeMastery || null, perkBook: gState.perkBook || null, nightStat: gState.nightStat || null, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntRunActive: !!gState.huntRunActive, lab: gState.lab || null, badgeGiven: !!gState.badgeGiven, huntTutorialShown: !!gState.huntTutorialShown, weightWarnShown: !!gState.weightWarnShown, skinPity: gState.skinPity || 0, blazeChar: gState.blazeChar || 'bow', tutDone: gState.tutDone || false, huntMobSeen: gState.huntMobSeen || {}, huntMobKills: gState.huntMobKills || {}, chemDarkBoost: gState.chemDarkBoost || 0, chemRun: !!gState.chemRun };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, huntDiffPlayed: gState.huntDiffPlayed || {}, safeBoost: gState.safeBoost || 0, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, towerDay: gState.towerDay, escDaily: gState.escDaily, escDraft: gState.escDraft, quest: gState.quest || null, blazeMastery: gState.blazeMastery || null, perkBook: gState.perkBook || null, nightStat: gState.nightStat || null, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntRunActive: !!gState.huntRunActive, lab: gState.lab || null, badgeGiven: !!gState.badgeGiven, huntTutorialShown: !!gState.huntTutorialShown, weightWarnShown: !!gState.weightWarnShown, skinPity: gState.skinPity || 0, blazeChar: gState.blazeChar || 'bow', tutDone: gState.tutDone || false, huntMobSeen: gState.huntMobSeen || {}, huntMobKills: gState.huntMobKills || {}, chemDarkBoost: gState.chemDarkBoost || 0, chemRun: !!gState.chemRun, overMark: gState.overMark || null };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -1134,7 +1141,7 @@
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
                         gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.huntDiffPlayed = data.huntDiffPlayed || {}; gState.safeBoost = +data.safeBoost || 0; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = Math.max(0, +data.mcoin || 0);   // H27：余额不封顶；读到负数（老 bug 留下的）改成 0 gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {}; gState.escProg = data.escProg || null;
-                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.towerDay = data.towerDay || null; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.quest = data.quest || null; gState.blazeMastery = data.blazeMastery || null; gState.perkBook = data.perkBook || null; gState.nightStat = data.nightStat || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {}; gState.huntRunActive = !!data.huntRunActive; gState.lab = (data.lab && typeof data.lab === 'object') ? data.lab : null; gState.badgeGiven = !!data.badgeGiven; gState.huntTutorialShown = !!data.huntTutorialShown; gState.weightWarnShown = !!data.weightWarnShown; gState.skinPity = data.skinPity || 0; gState.blazeChar = data.blazeChar || 'bow'; gState.tutDone = data.tutDone === undefined ? 'old' : data.tutDone; gState.huntMobSeen = data.huntMobSeen || {}; gState.huntMobKills = data.huntMobKills || {}; gState.chemDarkBoost = Math.max(0, Math.min(0.5, +data.chemDarkBoost || 0)); gState.chemRun = !!data.chemRun;
+                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.towerDay = data.towerDay || null; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.quest = data.quest || null; gState.blazeMastery = data.blazeMastery || null; gState.perkBook = data.perkBook || null; gState.nightStat = data.nightStat || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {}; gState.huntRunActive = !!data.huntRunActive; gState.lab = (data.lab && typeof data.lab === 'object') ? data.lab : null; gState.badgeGiven = !!data.badgeGiven; gState.huntTutorialShown = !!data.huntTutorialShown; gState.weightWarnShown = !!data.weightWarnShown; gState.skinPity = data.skinPity || 0; gState.blazeChar = data.blazeChar || 'bow'; gState.tutDone = data.tutDone === undefined ? 'old' : data.tutDone; gState.huntMobSeen = data.huntMobSeen || {}; gState.huntMobKills = data.huntMobKills || {}; gState.chemDarkBoost = Math.max(0, Math.min(0.5, +data.chemDarkBoost || 0)); gState.chemRun = !!data.chemRun; gState.overMark = data.overMark === 'crown' ? 'crown' : null;
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); huntFixSwordValue(); grantBadgeIfMissing();
                         if (gState.huntRunActive) huntRunAbandoned();
@@ -1145,7 +1152,7 @@
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.huntDiffPlayed = {}; gState.safeBoost = 0; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
             gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { head: null, waist: null }; gState.ownedAcc = {}; gState.escProg = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
-            gState.dailyWin = {}; gState.towerBest = 0; gState.towerDay = null; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.quest = null; gState.blazeMastery = null; gState.perkBook = null; gState.nightStat = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false; gState.introSeen = {}; gState.modeIntroShown = {}; gState.huntRunActive = false; gState.lab = null; gState.badgeGiven = true; gState.huntTutorialShown = false; gState.weightWarnShown = false; gState.skinPity = 0; gState.tutDone = false; gState.huntMobSeen = {}; gState.huntMobKills = {}; gState.chemDarkBoost = 0; gState.chemRun = false;
+            gState.dailyWin = {}; gState.towerBest = 0; gState.towerDay = null; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.quest = null; gState.blazeMastery = null; gState.perkBook = null; gState.nightStat = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false; gState.introSeen = {}; gState.modeIntroShown = {}; gState.huntRunActive = false; gState.lab = null; gState.badgeGiven = true; gState.huntTutorialShown = false; gState.weightWarnShown = false; gState.skinPity = 0; gState.tutDone = false; gState.huntMobSeen = {}; gState.huntMobKills = {}; gState.chemDarkBoost = 0; gState.chemRun = false; gState.overMark = null;
             expandInventory();
         }
 
@@ -1255,6 +1262,10 @@
                 huntBigOnReq(msg);
             } else if (msg.type === 'HUNT_BIG_ACK') {
                 huntBigOnAck(msg);
+            } else if (msg.type === 'BOSS_HIT') {
+                huntBossOnHit(msg);
+            } else if (msg.type === 'BOSS_HP') {
+                huntBossOnHp(msg);
             } else if (msg.type === 'CHEST_OPENED') {
                 let chest = chests.find(c => Math.floor(c.position.x / TILE) === msg.cx && Math.floor(c.position.z / TILE) === msg.cz && Math.floor(c.position.y / TILE) === msg.cf);
                 if (chest && !chest.userData.opened) { chest.userData.opened = true; chest.material.color.setHex(0x1a1a1a); }
@@ -1407,6 +1418,7 @@
                 } else if (msg.type === 'START_MAP') {
                     if (huntOptOut) return;   // 从仓库回了大厅的人，不再被拉进这一局（H7）
                     gState.mapDifficulty = msg.mapDiff; gState.extractTarget = mapConfigs[msg.mapDiff].extr;
+                    huntBossRun = msg.boss === true;   // Boss 测试版跟着房主的开关走
                     startGameMap(msg.seed, msg.spawns);
                 }
             }

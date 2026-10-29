@@ -133,7 +133,7 @@ async function openTab(chrome, url, opts) {
     await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []).concat(opts && opts.blockHosts ? opts.blockHosts.map((h) => ({ urlPattern: '*' + h + '*' })) : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
     // 实验室开关会被 localStorage 记住（TH_labdebug）；同一个 Chrome 里所有标签页共用存档，所以每个新页面一开始先清掉，免得前一个标签页开了开关、后面不带参数的检查也看到实验室入口。测开关记忆本身的检查传 keepStorage: true。
-    if (!(opts && opts.keepStorage)) await send('Page.addScriptToEvaluateOnNewDocument', { source: "try{localStorage.removeItem('TH_labdebug')}catch(e){}" });
+    if (!(opts && opts.keepStorage)) await send('Page.addScriptToEvaluateOnNewDocument', { source: "try{localStorage.removeItem('TH_labdebug');localStorage.removeItem('TH_bossdebug')}catch(e){}" });
     if (opts && opts.mobile) {   // 触屏设备：has_touch + is_mobile
         await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
         await send('Emulation.setDeviceMetricsOverride', { width: 1180, height: 820, deviceScaleFactor: 2, mobile: true });
@@ -2761,6 +2761,295 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('MP4 地图 4（药剂房、水池）：能选、药剂房有药水走得到、水池在中间、木箱 2 个、怪和撤离目标同中等图', bad.length === 0, bad.join(' / '));
+        }
+
+        // ── Boss 测试版（排队第 8 条，docs/boss.md 方案 A）。BOSS_GO：用固定的随机数开一局寻宝队（diff 难度、flag 是不是开着 ?bossdebug），开局消息记在 window.__start ──
+        const BOSS_GO = (diff, flag, rs) => `(function(){ ${HIDE} BOSS_DBG_CACHE = ${flag}; HUNT_TEST_NOMOB = false; gState.huntDiffPlayed = { easy: true, med: true, hard: true, map4: true }; gState.safeBoost = 0; gState.aiFill = false;
+            selectGameMode('hunt'); gState.mapDifficulty = '${diff}'; requestStartGame(); gState.mapDifficulty = '${diff}';
+            let sent = [], op = bc.postMessage.bind(bc), mr = Math.random, s0 = ${rs || 777};
+            bc.postMessage = function (m) { sent.push(m); return op(m); };
+            Math.random = function () { s0 = (s0 * 16807) % 2147483647; return s0 / 2147483647; };
+            try { requestEnterMap(); } finally { Math.random = mr; bc.postMessage = op; }
+            window.__start = sent.filter(function (m) { return m.type === 'START_MAP'; })[0] || null; window.__seedAfter = gameSeed;
+            ${HIDE} return true; })()`;
+        const BOSS_SNAP = `JSON.stringify({ start: window.__start && { seed: window.__start.seed, spawns: window.__start.spawns, boss: window.__start.boss }, seedAfter: window.__seedAfter,
+            chests: chests.map(function (c) { return [c.userData.type, Math.round(c.position.x), Math.round(c.position.y), Math.round(c.position.z), c.userData.loot ? c.userData.loot.n : null]; }),
+            bosses: entities.filter(function (e) { return e.userData.type === 'boss'; }).length, bossLoot: huntBossLoot, big: huntBigLeft })`;
+        const BOSS_EXIT = `(function(){ ${HIDE} ${MODES.hunt.exit}; BOSS_DBG_CACHE = false; return true; })()`;
+        const OLD_GEM_NAMES = `HUNT_GEMS.map(function (g) { return g.n; }).concat(['王冠底座'])`;
+
+        if (want('BS1')) {
+            // BS1 简单图不变 + 不开开关没有 Boss：同一个种子的简单图开不开 ?bossdebug，怪、箱子、种子随机数用到哪一步都一样（老宝石的格子除外，开着时换成普通东西）；
+            // 中等、困难图不开开关时没有 Boss、开局消息 boss 为假、箱子和以前一样；教程、"不刷怪"开关下没有 Boss
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const run = async (diff, flag, rs) => { await T.eval(BOSS_GO(diff, flag, rs)); await until(T, `isPlaying`, 20000); const s = JSON.parse(await T.eval(BOSS_SNAP)); await T.eval(BOSS_EXIT); await until(T, `!isPlaying`, 20000); return s; };
+            const oldNames = await T.eval(OLD_GEM_NAMES);
+            for (const rs of [777, 4242, 99991]) {
+                const off = await run('easy', false, rs), on = await run('easy', true, rs);
+                if (JSON.stringify(off.start.spawns) !== JSON.stringify(on.start.spawns) || off.start.seed !== on.start.seed) bad.push('简单图怪不一样 ' + rs);
+                if (off.seedAfter !== on.seedAfter) bad.push('简单图随机数多取了 ' + rs + ' ' + off.seedAfter + '/' + on.seedAfter);
+                if (off.chests.length !== on.chests.length) bad.push('简单图箱子数 ' + rs);
+                else off.chests.forEach((c, i) => {
+                    const d = on.chests[i];
+                    if (c.slice(0, 4).join() !== d.slice(0, 4).join()) bad.push('简单图箱子位置 ' + rs + ' ' + c + ' / ' + d);
+                    else if (c[4] !== d[4] && oldNames.indexOf(c[4]) < 0) bad.push('简单图箱子东西 ' + rs + ' ' + c[4] + ' / ' + d[4]);
+                    if (oldNames.indexOf(d[4]) >= 0) bad.push('开着开关简单图还掉老宝石 ' + d[4]);
+                });
+                if (on.bosses || off.bosses || on.bossLoot || off.big !== on.big) bad.push('简单图有 Boss 或大金数变了 ' + JSON.stringify([on.bosses, on.bossLoot, off.big, on.big]));
+                if (off.start.boss !== false) bad.push('不开开关 START_MAP 的 boss 不是 false');
+            }
+            for (const diff of ['med', 'hard', 'map4']) {
+                const a = await run(diff, false, 31337), b = await run(diff, false, 31337);
+                if (a.bosses || a.bossLoot || a.start.boss !== false) bad.push(diff + ' 不开开关也有 Boss ' + JSON.stringify([a.bosses, a.bossLoot]));
+                if (JSON.stringify(a.chests) !== JSON.stringify(b.chests)) bad.push(diff + ' 同种子两次不一样（测试本身的问题）');
+            }
+            const m4 = await run('map4', true, 31337);
+            if (m4.bosses || m4.bossLoot) bad.push('地图 4 不该有 Boss');
+            // "不刷怪"开关：Boss 也没有（掉落照样按种子定，各端一致）
+            await T.eval(BOSS_GO('med', true, 555).replace('HUNT_TEST_NOMOB = false;', 'HUNT_TEST_NOMOB = true;')); await until(T, `isPlaying`, 20000);
+            const nm = JSON.parse(await T.eval(BOSS_SNAP)); await T.eval(`HUNT_TEST_NOMOB = false; true;`); await T.eval(BOSS_EXIT); await until(T, `!isPlaying`, 20000);
+            if (nm.bosses !== 0 || !nm.bossLoot) bad.push('不刷怪开关 ' + JSON.stringify([nm.bosses, !!nm.bossLoot]));
+            // 教程：开关开着也没有
+            await T.eval(`BOSS_DBG_CACHE = true; huntBossRun = true; tutorialStart(); true;`); await until(T, `isPlaying && gState.tutorial`, 20000);
+            const tu = await T.eval(`entities.filter(function (e) { return e.userData.type === 'boss'; }).length + '|' + JSON.stringify(huntBossLoot)`);
+            if (tu !== '0|null') bad.push('教程里有 Boss ' + tu);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('BS1 Boss 测试版：不开开关跟原来一样；简单图开着开关怪、箱子、随机数也一样；地图 4、教程、不刷怪没有 Boss', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('BS2')) {
+            // BS2 Boss 出场：开关记在本机（?bossdebug=1 开、=0 关）；中等图 1 个伪装者头目（2.2 倍、200 血）、困难图 1 个凝视者头目（2.8 倍、速度 40、600 血），
+            // 站在离出生点最远的金箱子旁边一格、同一层，不在出生点的安全区；血量按真人数 ×1.0／×1.5／×2.0
+            const bad = [];
+            const F1 = await openTab(chrome, url, { query: 'bossdebug=1', keepStorage: true });
+            const f1 = await F1.eval(`bossDebugOn()`); await F1.close();
+            const F2 = await openTab(chrome, url, { keepStorage: true });
+            const f2 = await F2.eval(`bossDebugOn()`); await F2.close();
+            const F3 = await openTab(chrome, url, { query: 'bossdebug=0', keepStorage: true });
+            const f3 = await F3.eval(`bossDebugOn() + '|' + localStorage.getItem('TH_bossdebug')`); await F3.close();
+            if (!f1 || !f2 || f3 !== 'false|null') bad.push('开关记忆 ' + [f1, f2, f3].join(' '));
+            const T = await openTab(chrome, url);
+            for (const [diff, rs] of [['med', 11], ['med', 2024], ['hard', 11], ['hard', 2024]]) {
+                await T.eval(BOSS_GO(diff, true, rs)); if (!(await until(T, `isPlaying`, 20000))) { bad.push(diff + ' 没开起来'); continue; }
+                const r = JSON.parse(await T.eval(`(function(){ let bs = entities.filter(function (e) { return e.userData.type === 'boss'; }), e = bs[0]; if (!e) return JSON.stringify({ n: 0 });
+                    let u = e.userData, sp = new THREE.Vector3(TILE, 0, TILE), golds = chests.filter(function (c) { return c.userData.type === 'gold' && !c.userData.hidden; });
+                    let far = golds.reduce(function (a, c) { return !a || c.position.distanceTo(sp) > a.position.distanceTo(sp) ? c : a; }, null);
+                    let bc_ = huntBossCellOf({ x: e.position.x, y: u.fl * TILE + 1, z: e.position.z }), cc = huntBossCellOf(far.position);
+                    return JSON.stringify({ n: bs.length, start: window.__start.boss, kind: u.kind, mob: u.mob, scale: u.model.scale.x, speed: u.speed, hp: u.hp, max: u.maxHp, name: u.name,
+                        adj: bc_.f === cc.f && Math.abs(bc_.x - cc.x) + Math.abs(bc_.z - cc.z) === 1, safe: huntBossSafeCell(bc_.f, bc_.x, bc_.z), wall: maze[bc_.f][bc_.z][bc_.x].type === 1, chest: u.chest === far,
+                        scale3: [1, 2, 3].map(function (n) { return huntBossMaxHp(u.kind, n); }) }); })()`));
+                const want_ = diff === 'med' ? { mob: 'puppet', scale: 2.2, speed: 30, hp: 200 } : { mob: 'angel', scale: 2.8, speed: 40, hp: 600 };
+                if (r.n !== 1 || r.start !== true) bad.push(diff + ' Boss 个数 ' + JSON.stringify(r));
+                else {
+                    if (r.mob !== want_.mob || Math.abs(r.scale - want_.scale) > 1e-6 || r.speed !== want_.speed || r.hp !== want_.hp || r.max !== want_.hp) bad.push(diff + ' 数值 ' + JSON.stringify(r));
+                    if (!r.adj || r.safe || r.wall || !r.chest) bad.push(diff + ' 位置 ' + JSON.stringify(r));
+                    if (r.scale3.join() !== [want_.hp, want_.hp * 1.5, want_.hp * 2].join()) bad.push(diff + ' 血量缩放 ' + r.scale3);
+                }
+                await T.eval(BOSS_EXIT); await until(T, `!isPlaying`, 20000);
+            }
+            // 真人数怎么数：AI 不算，最多 3 个
+            const hc = await T.eval(`(function(){ let keep = gState.team, me = gState.id, o = [];
+                gState.team = [{ id: me, isAI: false }, { id: 'a1', isAI: true }, { id: 'a2', isAI: true }]; o.push(huntBossHumans());
+                gState.team = [{ id: me, isAI: false }, { id: 'p1', isAI: false }, { id: 'a2', isAI: true }]; o.push(huntBossHumans());
+                gState.team = [{ id: me, isAI: false }, { id: 'p1', isAI: false }, { id: 'p2', isAI: false }]; o.push(huntBossHumans());
+                gState.team = keep; return o.join(); })()`);
+            if (hc !== '1,2,3') bad.push('真人数 ' + hc);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('BS2 Boss 出场：开关记在本机；中等 1 个伪装者头目、困难 1 个凝视者头目，数值对，在最远金箱旁、不在安全区；血量 ×1／×1.5／×2', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('BS3')) {
+            // BS3 预警招式：蓄力期间站在范围里不扣血、蓄力完才扣；躲开不扣；单次伤害 ≤ 50；冲撞完眩晕 2 秒；拉得太远不出招回守点。
+            // 时空沙漏停住主循环，测试自己一帧一帧调 huntBossTick
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const setup = (diff) => T.eval(BOSS_GO(diff, true, 77)).then(() => until(T, `isPlaying && huntBoss`, 20000));
+            const prep = `window.__b = huntBoss; let u = __b.userData; gState.timeStop = 99999; gState.hp = 100; gState.isDead = false; gState.inSafeZone = false; u.st = 'idle'; u.cd = 0; __b.position.copy(u.home);
+                window.__put = function (dx, dz) { camera.position.set(__b.position.x + dx, u.fl * TILE + 9, __b.position.z + dz); camera.updateMatrixWorld(); };
+                window.__run = function (sec) { let n = Math.round(sec / 0.02); for (let i = 0; i < n; i++) huntBossTick(__b, 0.02); return gState.hp; };`;
+            // 中等：扑击
+            if (!(await setup('med'))) bad.push('中等 Boss 没出来');
+            else {
+                const r = JSON.parse(await T.eval(`(function(){ ${prep} let o = {};
+                    __put(15, 0); __run(0.02); o.st = u.st; o.fx = huntBossFx.visible; o.r = huntBossFx.scale.x;
+                    o.during = __run(1.1); o.after = __run(0.2); o.st2 = u.st; o.cd = Math.round(u.cd);
+                    // 躲开：蓄力开始以后走出红圈
+                    gState.hp = 100; u.cd = 0; __b.position.copy(u.home); __put(15, 0); __run(0.02); __put(15 + 30, 0); o.dodge = __run(1.4);
+                    // 拉得太远：守点外面不出招
+                    gState.hp = 100; u.cd = 0; u.st = 'idle'; __b.position.set(u.home.x + HUNT_BOSS_LEASH + 30, __b.position.y, u.home.z); __put(10, 0); __run(0.02); o.leash = u.st;
+                    // 玩家回安全区／倒地：不出招
+                    __b.position.copy(u.home); u.cd = 0; __put(10, 0); gState.inSafeZone = true; __run(0.02); o.safe = u.st; gState.inSafeZone = false;
+                    gState.timeStop = 0; return JSON.stringify(o); })()`));
+                if (r.st !== 'wind' || !r.fx || r.r !== 12) bad.push('扑击蓄力 ' + JSON.stringify(r));
+                if (r.during !== 100 || r.after !== 70 || r.st2 !== 'idle' || r.cd !== 6) bad.push('扑击伤害时机 ' + JSON.stringify(r));
+                if (r.dodge !== 100) bad.push('躲开了还扣血 ' + r.dodge);
+                if (r.leash !== 'idle' || r.safe !== 'idle') bad.push('太远／安全区还出招 ' + JSON.stringify([r.leash, r.safe]));
+                await T.eval(BOSS_EXIT); await until(T, `!isPlaying`, 20000);
+            }
+            // 困难：冲撞
+            if (!(await setup('hard'))) bad.push('困难 Boss 没出来');
+            else {
+                const r = JSON.parse(await T.eval(`(function(){ ${prep} let o = {};
+                    __put(u.R + 2, 0); __run(0.02); o.st = u.st; o.fx = huntBossFx.visible; o.len = huntBossFx.scale.y;
+                    o.during = __run(1.4); o.st1 = u.st; o.after = __run(0.2);
+                    for (let k = 0; u.st === 'dash' && k < 100; k++) huntBossTick(__b, 0.02); o.st2 = u.st;
+                    o.stun1 = __run(1.8) && u.st; o.stun2 = __run(0.3) && u.st; o.cd = Math.round(u.cd);
+                    gState.timeStop = 0; return JSON.stringify(o); })()`));
+                if (r.st !== 'wind' || !r.fx || r.len !== 70) bad.push('冲撞蓄力 ' + JSON.stringify(r));
+                if (r.during !== 100 || r.after !== 50 || r.st2 !== 'stun') bad.push('冲撞伤害时机 ' + JSON.stringify(r));
+                if (r.stun1 !== 'stun' || r.stun2 !== 'idle' || r.cd !== 8) bad.push('眩晕 2 秒、冷却 8 秒 ' + JSON.stringify(r));
+                await T.eval(BOSS_EXIT); await until(T, `!isPlaying`, 20000);
+            }
+            const mx = await T.eval(`Math.max(HUNT_BOSS.med.dmg, HUNT_BOSS.hard.dmg)`);
+            if (mx > 50) bad.push('单次伤害超过 50');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('BS3 Boss 预警：蓄力时不扣血、蓄力完才扣（扑击 30、冲撞 50）、躲开不扣、冲撞完眩晕 2 秒、太远／安全区不出招', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('BS4')) {
+            // BS4 掉落：底座／宝石概率（大样本）、中等只掉 3 种、困难只掉 4 种；另带 1 个大金、占每图大金上限（所有来源 ≤ 4）；单人打死掉在 Boss 脚下；
+            // 打 Boss 不影响撤离；开着开关时老宝石和王冠底座不从宝箱掉；AI 队友不打 Boss；draw 数不超过基线 +10
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const st = JSON.parse(await T.eval(`(function(){ let o = {}, keepD = gState.mapDifficulty, keepR = huntBossRun; huntBossRun = true;
+                ['med', 'hard'].forEach(function (d) { gState.mapDifficulty = d; let n = 20000, base = 0, gems = {}, big = 0;
+                    for (let i = 0; i < n; i++) { huntBigLeft = 4; let l = huntBossRollLoot(Math.random); if (l[0].type === 'bbase') base++; else gems[l[0].gem] = (gems[l[0].gem] || 0) + 1; if (huntIsBig(l[1]) && huntBigLeft === 3) big++; }
+                    huntBigLeft = 0; let l0 = huntBossRollLoot(Math.random);
+                    o[d] = { base: base / n, gems: gems, n: n - base, big: big / n, capGold: itemPool.gold.indexOf(l0[1]) >= 0 && huntBigLeft === 0 }; });
+                let old = 0, oldOff = 0, names = ${OLD_GEM_NAMES};
+                for (let i = 0; i < 30000; i++) { let t = ['wood', 'silver', 'gold'][i % 3]; huntBigLeft = 4; let a = huntRollChest(t, Math.random); if (a && (names.indexOf(a.n) >= 0 || a.type === 'gem' || a.type === 'base')) old++; }
+                huntBossRun = false; for (let i = 0; i < 30000; i++) { let t = ['wood', 'silver', 'gold'][i % 3]; huntBigLeft = 4; let a = huntRollChest(t, Math.random); if (a && (a.type === 'gem' || a.type === 'base')) oldOff++; }
+                o.old = old; o.oldOff = oldOff; gState.mapDifficulty = keepD; huntBossRun = keepR; huntBigLeft = 4; return JSON.stringify(o); })()`));
+            const near = (a, b, tol) => Math.abs(a - b) <= tol;
+            if (!near(st.med.base, 0.10, 0.015) || !near(st.hard.base, 0.25, 0.02)) bad.push('底座概率 ' + st.med.base + ' / ' + st.hard.base);
+            const share = (g, k) => (g[k] || 0) / Object.values(g).reduce((s, v) => s + v, 0);
+            if (Object.keys(st.med.gems).sort().join() !== 'b_amet,b_ruby,b_sapph' || !near(share(st.med.gems, 'b_amet'), 0.5, 0.03) || !near(share(st.med.gems, 'b_ruby'), 0.3, 0.03)) bad.push('中等宝石 ' + JSON.stringify(st.med.gems));
+            if (Object.keys(st.hard.gems).sort().join() !== 'b_dia,b_emer,b_ruby,b_sapph' || !near(share(st.hard.gems, 'b_ruby'), 0.4, 0.03) || !near(share(st.hard.gems, 'b_dia'), 0.1, 0.02)) bad.push('困难宝石 ' + JSON.stringify(st.hard.gems));
+            if (st.med.big !== 1 || st.hard.big !== 1 || !st.med.capGold || !st.hard.capGold) bad.push('大金 ' + JSON.stringify([st.med.big, st.hard.big, st.med.capGold, st.hard.capGold]));
+            if (st.old !== 0 || st.oldOff === 0) bad.push('开着开关宝箱还掉老宝石/底座 ' + st.old + '（关着 ' + st.oldOff + '）');
+            // 真开一局困难图：所有来源的大金（保险柜、箱子、Boss、信号接收器）一共 ≤ 4，跟剩余数对得上
+            for (const rs of [5, 6, 7]) {
+                await T.eval(BOSS_GO('hard', true, rs)); await until(T, `isPlaying && huntBoss`, 20000);
+                const c = JSON.parse(await T.eval(`(function(){ let n = 0; chests.forEach(function (q) { if (huntIsBig(q.userData.loot)) n++; }); (huntBossLoot || []).forEach(function (q) { if (huntIsBig(q)) n++; });
+                    huntSignalLoot.forEach(function (a) { a.forEach(function (q) { if (huntIsBig(q)) n++; }); }); return JSON.stringify({ n: n, left: huntBigLeft, loot: (huntBossLoot || []).length }); })()`));
+                if (c.n > 4 || c.n + c.left !== 4 || c.loot !== 2) bad.push('大金上限 ' + JSON.stringify(c));
+                await T.eval(BOSS_EXIT); await until(T, `!isPlaying`, 20000);
+            }
+            // 单人：打到 0 血，两件东西掉在 Boss 脚下；Boss 活着也能撤离；AI 队友不打；draw 数
+            await T.eval(`gState.aiFill = true; true;`);
+            await T.eval(BOSS_GO('med', true, 8).replace('gState.aiFill = false;', 'gState.aiFill = true;')); await until(T, `isPlaying && huntBoss`, 20000);
+            const r = JSON.parse(await T.eval(`(function(){ let o = {}, e = huntBoss, u = e.userData;
+                gState.totalSubmitted = gState.extractTarget; huntRefreshSubmitUI(); o.extract = !document.getElementById('btn-extract').classList.contains('hidden');
+                // AI 队友就在 Boss 旁边、手上有武器：一轮下来 Boss 不掉血
+                let ai = entities.find(function (q) { return q.userData.type === 'ai' && !q.userData.isRealPlayer; });
+                if (ai) { ai.position.copy(e.position).add(new THREE.Vector3(6, 0, 0)); ai.userData.hasWep = true; ai.userData.atkCd = 0; gState.timeStop = 0; let h0 = u.hp; handleThrownItemsAndEntitiesEngine(0.02); o.ai = u.hp === h0; } else o.ai = 'no-ai';
+                // draw：看着 Boss，开着／藏起来各画一次
+                let cp = camera.position.clone(), cr = camera.rotation.clone();
+                camera.position.set(e.position.x + 30, u.fl * TILE + 12, e.position.z); camera.lookAt(e.position); camera.updateMatrixWorld();
+                huntBossFx.visible = true; renderer.render(scene, camera); let on = renderer.info.render.calls;
+                e.visible = false; huntBossFx.visible = false; renderer.render(scene, camera); let off = renderer.info.render.calls; e.visible = true;
+                camera.position.copy(cp); camera.rotation.copy(cr); o.draw = on - off;
+                let names = huntBossLoot.map(function (q) { return q.n; }), g0 = groundItems.length;
+                u.hp = 5; huntBossHit(5);
+                let got = groundItems.slice(g0).filter(function (g) { return Math.hypot(g.position.x - e.position.x, g.position.z - e.position.z) < 3; }).map(function (g) { return g.userData.n; });
+                o.drop = got.sort().join() === names.slice().sort().join(); o.gone = entities.indexOf(e) < 0 && u.dead; o.names = names; o.got = got;
+                return JSON.stringify(o); })()`));
+            if (!r.extract) bad.push('Boss 活着不能撤离');
+            if (r.ai !== true) bad.push('AI 队友打了 Boss ' + r.ai);
+            if (!(r.draw >= 1 && r.draw <= 10)) bad.push('draw 增加 ' + r.draw);
+            if (!r.drop || !r.gone) bad.push('单人掉落 ' + JSON.stringify(r));
+            await T.eval(`gState.aiFill = false; true;`); await T.eval(BOSS_EXIT); await until(T, `!isPlaying`, 20000);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('BS4 Boss 掉落：底座 10%／25%、宝石种类和比例、另带 1 个大金占上限（≤4）、掉在脚下；能撤离；AI 不打；老宝石不从宝箱掉；draw +' + r.draw, bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('BS5')) {
+            // BS5 联机：两个标签页组队，房主开着开关开中等图，队员也有 Boss、血量 ×1.5；队员打一下，房主和队员的血条都掉；最后一击是队员，东西只掉在队员那边；
+            // 房主以外发的 BOSS_HP、队外的人发的 BOSS_HIT 都不认
+            const bad = [];
+            const H = await openTab(chrome, url), G = await openTab(chrome, url);
+            const [h, g] = [await H.eval('gState.id'), await G.eval('gState.id')];
+            await H.eval(`peerIsHost = true; teamAddMember(${JSON.stringify(g)}); true;`); await G.eval(`teamAddMember(${JSON.stringify(h)}); true;`);
+            await W(3000);
+            await H.eval(`${HIDE} gState.aiFill = false; HUNT_TEST_NOMOB = false; selectGameMode('hunt'); requestStartGame(); true;`);
+            await until(G, `!document.getElementById('screen-garage').classList.contains('hidden')`, 10000);
+            await G.eval(`HUNT_TEST_NOMOB = false; BOSS_DBG_CACHE = false; true;`);
+            await H.eval(`gState.mapDifficulty = 'med'; BOSS_DBG_CACHE = true; requestEnterMap(); ${HIDE} true;`);
+            const both = await until(G, `isPlaying && huntBoss`, 15000) && await until(H, `isPlaying && huntBoss`, 5000);
+            if (!both) bad.push('没都开出 Boss ' + (await G.eval(`isPlaying + ' ' + !!huntBoss + ' ' + gState.mapDifficulty`)));
+            else {
+                await G.eval(`${HIDE} true;`); await H.eval(`${HIDE} true;`);
+                const hp = (t) => t.eval(`huntBoss ? huntBoss.userData.hp + '/' + huntBoss.userData.maxHp : 'none'`);
+                if ((await hp(H)) !== '300/300' || (await hp(G)) !== '300/300') bad.push('两个真人血量该是 300 ' + (await hp(H)) + ' ' + (await hp(G)));
+                await G.eval(`huntBossHit(5); true;`);
+                await until(G, `huntBoss.userData.hp === 295`, 5000);
+                if ((await hp(H)) !== '295/300' || (await hp(G)) !== '295/300') bad.push('队员打一下没同步 ' + (await hp(H)) + ' ' + (await hp(G)));
+                const bar = await G.eval(`document.getElementById('boss-bar').style.display + '|' + document.getElementById('boss-bar-name').innerText`);
+                if (!/^block\|伪装者头目　295 \/ 300$/.test(bar)) bad.push('队员血条 ' + bar);
+                // 冒充房主发 BOSS_HP、队外的人发 BOSS_HIT：不认
+                await G.eval(`bc.onmessage({ data: { type: 'BOSS_HP', target: '*', sender: 'stranger', hp: 1, by: 'stranger' } }); true;`);
+                await H.eval(`bc.onmessage({ data: { type: 'BOSS_HIT', target: gState.id, sender: 'stranger', dmg: 100 } }); true;`);
+                await W(500);
+                if ((await hp(H)) !== '295/300' || (await hp(G)) !== '295/300') bad.push('冒充的消息被认了 ' + (await hp(H)) + ' ' + (await hp(G)));
+                // 最后一击是队员：只在队员那边掉
+                await H.eval(`huntBoss.userData.hp = 5; true;`);
+                const g0 = await G.eval(`groundItems.length`), h0 = await H.eval(`groundItems.length`);
+                await W(1000);
+                await G.eval(`huntBossHit(5); true;`);
+                const dead = await until(G, `!huntBoss || huntBoss.userData.dead`, 5000) && await until(H, `!huntBoss || huntBoss.userData.dead`, 5000);
+                await W(300);
+                const g1 = await G.eval(`groundItems.length`), h1 = await H.eval(`groundItems.length`);
+                if (!dead || g1 - g0 !== 2 || h1 !== h0) bad.push('最后一击的掉落 ' + JSON.stringify({ dead, g: g1 - g0, h: h1 - h0 }));
+            }
+            for (const t of [H, G]) if (t.errors.length) bad.push(t.errors.slice(0, 2).join(' / '));
+            for (const t of [H, G]) await t.eval(`${HIDE} ${MODES.hunt.exit}; BOSS_DBG_CACHE = false; true;`).catch(() => { });
+            await W(800);
+            for (const t of [H, G]) await t.close();
+            report('BS5 Boss 联机：跟着房主的开关、血量 ×1.5、队员打房主扣血两边同步、最后一击的人才掉东西、冒充的 BOSS_HP／BOSS_HIT 不认', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('BS6')) {
+            // BS6 头目皇冠：仓库里选中头目皇冠底座，点宝石镶（5 种各一颗 + 再一颗钻石），镶满变头目皇冠；不能卖；能戴，头顶名字牌上画皇冠；
+            // gState.overMark 刷新不丢；房间心跳带 mark，别人那边看得到
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} selectGameMode('hunt'); requestStartGame(); ${HIDE} true;`);
+            await T.eval(`(function(){ gState.garage = Array(200).fill(null); gState.garage[0] = bossBaseItem(); ['b_amet', 'b_ruby', 'b_sapph', 'b_emer', 'b_dia', 'b_dia'].forEach(function (k, i) { gState.garage[1 + i] = bossGemItem(k); });
+                gState.selectedContainer = 'garage'; gState.selectedSlot = 0; initGarage(); return true; })()`);
+            for (let i = 0; i < 6; i++) {
+                const ok = await T.eval(`(function(){ let b = document.querySelector('.bcrown-gem-btn'); if (!b) return false; b.click(); gState.selectedContainer = 'garage'; gState.selectedSlot = gState.garage.findIndex(function (q) { return q && (q.type === 'bbase' || q.type === 'bcrown'); }); initGarage(); return true; })()`);
+                if (!ok) { bad.push('第 ' + (i + 1) + ' 颗没按钮'); break; }
+            }
+            const c = JSON.parse(await T.eval(`(function(){ let i = gState.garage.findIndex(function (q) { return q && q.type === 'bcrown'; }), it = gState.garage[i]; if (!it) return JSON.stringify({ none: true, g: gState.garage.slice(0, 8) });
+                gState.selectedContainer = 'garage'; gState.selectedSlot = i; initGarage();
+                let m0 = gState.money, txt = document.getElementById('sell-btn-container').innerText; garageSellSelected(); ${HIDE}
+                let o = { n: it.n, left: gState.garage.filter(function (q) { return q && q.type === 'bgem'; }).length, sold: gState.money !== m0 || !gState.garage[i], txt: txt, tier: slotTier(it) };
+                document.getElementById('bcrown-wear-btn').click(); o.mark = gState.overMark; o.my = myMark(); o.hello = roomSelfMsg().mark; o.label = nightMakeLabel(gState.id, 0xffffff, false).userData.mark;
+                saveProgress(); gState.overMark = null; loadProgress(gState.id); o.saved = gState.overMark;
+                roomOnHello({ type: 'ROOM_HELLO', sender: 'peer-c', mark: 'crown', title: null }); o.peer = peerMarkOf('peer-c'); o.peerLabel = nightMakeLabel('peer-c', 0xffffff, false).userData.mark;
+                roomOnHello({ type: 'ROOM_HELLO', sender: 'peer-d', mark: 'bogus' }); o.bogus = peerMarkOf('peer-d');
+                o.ai = nightMakeLabel('3号', 0xffffff, false).userData.mark;
+                // 没有皇冠了就不显示
+                gState.garage[i] = null; o.lost = myMark();
+                return JSON.stringify(o); })()`));
+            if (c.none) bad.push('没镶成头目皇冠 ' + JSON.stringify(c.g));
+            else {
+                if (c.n !== '头目皇冠' || c.left !== 0 || c.tier !== 'red') bad.push('镶满 ' + JSON.stringify(c));
+                if (c.sold || !/不能卖/.test(c.txt) || /卖掉/.test(c.txt)) bad.push('头目皇冠能卖 ' + JSON.stringify(c));
+                if (c.mark !== 'crown' || c.my !== 'crown' || c.hello !== 'crown' || c.label !== 'crown' || c.saved !== 'crown') bad.push('戴皇冠 ' + JSON.stringify(c));
+                if (c.peer !== 'crown' || c.peerLabel !== 'crown' || c.bogus !== null || c.ai !== null || c.lost !== null) bad.push('别人的皇冠 ' + JSON.stringify(c));
+            }
+            // 半路：底座能卖（4 万 + 镶上的宝石）；钻石只有一颗时第 6 个孔镶不上
+            const half = await T.eval(`(function(){ let b = bossBaseItem(); bossCrownSocket(b, 'b_dia'); let a = bossCrownSocket(b, 'b_dia'), c = bossCrownSocket(b, 'b_dia'); return [b.v, a, c, bossCrownCount(b)].join(); })()`);
+            if (half !== '100000,true,false,2') bad.push('钻石两个孔 ' + half);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('BS6 头目皇冠：仓库里镶 6 颗（钻石 2 颗）、不能卖、能戴、名字牌画皇冠、存档和联机心跳带着', bad.length === 0, bad.join(' / '));
         }
 
         if (want('K1')) {

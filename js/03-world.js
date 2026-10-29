@@ -244,6 +244,7 @@
         let mapExtraMeshes = [];
         function mapExtraAdd(m) { scene.add(m); mapExtraMeshes.push(m); return m; }
         function clearMazeMeshes() {
+            huntBossClear();
             mapExtraMeshes.forEach(function (m) { scene.remove(m); }); mapExtraMeshes = [];
             // 寻宝图的墙/地板在开局后会合并成几块大网格（huntMergeStatic），原来的格子早就
             // 从场景里拿掉了，只清 maze 清不到它们——寻宝撤离/离开回大厅，整张迷宫还罩在
@@ -278,6 +279,7 @@
             huntMergeStatic();
             huntMap4Setup();   // 地图 4：药剂房里放一瓶药水、造水池
             if (gState.chemHunt) chemSetupMap();   // 化学寻宝队：没怪、石油、暗室和隐藏宝箱、灯
+            huntBossSetup();   // Boss 测试版：中等／困难图在最远的金箱子旁放 1 个（没开就什么都不做）
             if (gState.tutorial) { gState.huntTask = null; huntTaskHud(); } else huntTaskNew();
             camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
             // 出生点在角落的安全屋里，原来一律面朝 -Z——那边正好是地图边墙，开局第一眼
