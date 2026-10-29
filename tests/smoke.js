@@ -2891,7 +2891,7 @@ async function enterExit(tab, key) {
                 const tag = mobile ? '触屏' : '电脑';
                 const T = await openTab(chrome, url, mobile ? { mobile: true } : {});
                 await T.eval(`${HIDE} selectGameMode('hunt'); true;`);
-                const lob = JSON.parse(await T.eval(`JSON.stringify({ chars: !!document.querySelector('#hunt-only #btn-green, #hunt-only #btn-yellow'), map: !!document.querySelector('#hunt-only input[name="map_diff"]'), recipe: /合成配方/.test(document.getElementById('hunt-only').innerText), setup: !!document.querySelector('#screen-garage #garage-hunt-setup #btn-green') && !!document.querySelector('#screen-garage #btn-yellow') && document.querySelectorAll('#screen-garage input[name="map_diff"]').length === 3 && !!document.querySelector('#screen-garage #garage-recipe-btn') })`));
+                const lob = JSON.parse(await T.eval(`JSON.stringify({ chars: !!document.querySelector('#hunt-only #btn-green, #hunt-only #btn-yellow'), map: !!document.querySelector('#hunt-only input[name="map_diff"]'), recipe: /合成配方/.test(document.getElementById('hunt-only').innerText), setup: !!document.querySelector('#screen-garage #garage-hunt-setup #btn-green') && !!document.querySelector('#screen-garage #btn-yellow') && document.querySelectorAll('#screen-garage input[name="map_diff"]').length === 4 && !!document.querySelector('#screen-garage #garage-recipe-btn') })`));
                 if (lob.chars || lob.map || lob.recipe) bad.push(tag + ' 大厅面板上还有 ' + JSON.stringify(lob));
                 if (!lob.setup) bad.push(tag + ' 仓库里没有角色/地图/合成配方');
                 await T.eval(`nav('screen-garage'); initGarage(); true;`); await W(500);
