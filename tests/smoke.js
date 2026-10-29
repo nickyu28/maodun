@@ -4632,6 +4632,10 @@ async function enterExit(tab, key) {
                         if (hard && have.dev_comp && power() && have.cyl && have.b_co2) add('dry_ice');
                         if (hard && have.dev_press && power() && (have.charcoal || have.coal || have.char) && maxT >= 1200) add('diamond');
                         // 电解槽
+                        // 第 6 阶段：粉碎机 铀矿 → 铀矿粉；离心机 六氟化铀罐一档档往上；反应堆（水池冷却）烧燃料棒 → 乏燃料棒
+                        if (hard && have.dev_crusher && power() && have.ore_u) add('ore_u_dust');
+                        if (hard && have.dev_centrifuge && power() && have['uf6:0']) { for (let i = 1; i <= 5; i++) add('uf6:' + i); add('uf6_dep'); }
+                        if (hard && have.dev_reactor && (have['rod:4'] || have['rod:5'])) add('rod_spent');
                         if (hard && have.dev_el && power()) IND_EL_RECIPES.forEach(function (r) { if (Object.keys(r.in).every(function (k) { return have[k]; })) Object.keys(r.out).forEach(add); });
                     }
                     return have;

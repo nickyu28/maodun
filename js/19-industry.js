@@ -219,11 +219,15 @@
             let B = IND_CTX_BASE || (typeof ind !== 'undefined' && ind && ind.base);
             return (B && B.carried && B.carried[k.slice(5)]) || null;
         }
+        // 动态物品（名字里带参数的）：第 6 阶段的六氟化铀罐、芯块、燃料棒等在 19-industry-nuke.js 里登记 {prefix, get(k)}
+        const IND_DYN = [];
+        function indDynItem(k) { if (typeof k !== 'string') return undefined; for (let i = 0; i < IND_DYN.length; i++) if (k.indexOf(IND_DYN[i].prefix) === 0) return IND_DYN[i].get(k); return undefined; }
         const IND_ITEMS = new Proxy(IND_ITEMS_RAW, {
             get: function (t, k) {
+                if (typeof k === 'string' && IND_DYN.length && t[k] === undefined) { let dy = indDynItem(k); if (dy) return dy; }
                 if (typeof k === 'string' && k.indexOf('inst:') === 0) {
                     let c = indCarried(k); if (!c) return undefined;
-                    let nm = c.ty === 'chest' ? '仓库箱（' + (Object.keys(c.items).length ? '装着 ' + Object.keys(c.items).length + ' 样' : '空') + '）' : IND_COOK[c.ty].name;
+                    let nm = c.ty === 'chest' ? (c.lead ? '铅箱（' : '仓库箱（') + (Object.keys(c.items).length ? '装着 ' + Object.keys(c.items).length + ' 样' : '空') + '）' : IND_COOK[c.ty].name;
                     return { name: nm, col: c.ty === 'chest' ? 0x6d4c41 : IND_COOK[c.ty].col || 0xb71c1c, furn: c.ty, inst: true };
                 }
                 if (typeof k === 'string' && k.indexOf('cyl:') === 0) { let g = indCylParse(k); return g ? { name: indCylName(g), col: indCylLiquid(g) ? 0x4fc3f7 : 0x78909c, cyl: g } : undefined; }
@@ -234,7 +238,7 @@
                 }
                 return t[k];
             },
-            has: function (t, k) { return k in t || !!indCarried(k) || !!(typeof k === 'string' && k.indexOf('@') > 0 && indContOf(k)) || (typeof k === 'string' && k.indexOf('cyl:') === 0 && !!indCylParse(k)); }
+            has: function (t, k) { return k in t || !!indDynItem(k) || !!indCarried(k) || !!(typeof k === 'string' && k.indexOf('@') > 0 && indContOf(k)) || (typeof k === 'string' && k.indexOf('cyl:') === 0 && !!indCylParse(k)); }
         });
         // 电：rated 额定电压（超过就炸），minV 低于它不工作，draw 每秒耗电；电源：bank 电池组（节数 × 1.5 V），gen 发电机（灶台中火以上 3 米内 12 V）
         const IND_DEVS = {
@@ -247,6 +251,8 @@
             comp: { name: '压缩机', col: 0x6d4c41, rated: 12, minV: 6, draw: 3, size: [1.2, 1, 1] },
             press: { name: '压力机', col: 0x37474f, rated: 24, minV: 18, draw: 6, size: [1.4, 1.4, 1.4] }
         };
+        // 新设备（第 6 阶段）在 19-industry-nuke.js 里登记：busy（有活干才耗电）、tick、html（面板）、fix（读档整理）、volt（电源的电压）
+        const IND_DEV_BUSY = {}, IND_DEV_TICK = {}, IND_DEV_HTML = {}, IND_DEV_FIX = {}, IND_DEV_VOLT = {}, IND_DEV_INFO = {};
         const IND_BAT_V = 1.5, IND_BAT_U = 180, IND_BOOM_R = 3, IND_DEV_CAP = 40, IND_GEN_R = 3, IND_FURNACE_T = 1800;
         // 名字；装了东西的桶写上材质："生水（木桶）"。plain = true 不写材质（配方里用）
         function indName(k, plain) {
@@ -348,7 +354,7 @@
         const IND_COOK = {
             stove: { name: '灶台', rate: 50, burn: 1, r: 1.5, col: 0xb71c1c },
             furnace: { name: '小熔炉', rate: 50, burn: 0.5, only: 'smelt', top: 1300, batch: { smelt: 2 }, r: 1.2, size: [1.6, 1.4, 1.6], col: 0x6d4c41 },
-            kiln: { name: '大窑', rate: 10, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 6 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
+            kiln: { name: '大窑', rate: 10, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 6, chem: 1 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
         };
         const IND_COOK_CAP = 6, IND_TILE_CAP = 100, IND_SPOUT_CAP = 10;   // 出料槽最多 10 块   // 灶台上最多放几种
         const IND_RECIPES = [
@@ -444,7 +450,7 @@
         const IND_WATER_Y = -1.2;
 
         // ── 存档（IndexedDB，单独存）──
-        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 10;
+        const IND_DB = 'maodun_industry', IND_STORE = 'base', IND_SAVE_VER = 11;
         function indDb(cb) {
             try {
                 let rq = indexedDB.open(IND_DB, 1);
@@ -459,7 +465,7 @@
         const IND_V9_GIFT = { shears: 1 };   // 存档版本 9：新号送一把剪刀，老档读档时补一把
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
-                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], houses: [], fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
+                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], houses: [], rad: [], bombs: [], fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
         }
         function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
         // 炉子的状态（灶台和小熔炉、大窑通用）整理一遍
@@ -509,13 +515,13 @@
             b.chests = b.chests.filter(function (c) { return c && isFinite(c.x) && isFinite(c.z) && c.items && typeof c.items === 'object'; }).slice(0, 20);
             let seen = {};
             b.chests.forEach(function (c) {
-                c.big = !!c.big; c.x = indNum(c.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); c.z = indNum(c.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1);
+                c.big = !!c.big; c.lead = !!c.lead; c.x = indNum(c.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); c.z = indNum(c.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1);
                 Object.keys(c.items).forEach(function (k) { if (!IND_ITEMS[k] || !(c.items[k] > 0)) delete c.items[k]; else c.items[k] = Math.floor(c.items[k]); });
                 c.id = indNum(c.id, 0, 0, 1e9) | 0; while (!c.id || seen[c.id]) c.id = ++b.cid; seen[c.id] = 1; b.cid = Math.max(b.cid, c.id);
             });
             Object.keys(b.carried).forEach(function (id) {
                 let c = b.carried[id]; b.cid = Math.max(b.cid, +id || 0);
-                if (c.ty === 'chest') { c.big = !!c.big; Object.keys(c.items).forEach(function (k) { if (!IND_ITEMS[k] || !(c.items[k] > 0) || k === 'inst:' + id) delete c.items[k]; }); }
+                if (c.ty === 'chest') { c.big = !!c.big; c.lead = !!c.lead; Object.keys(c.items).forEach(function (k) { if (!IND_ITEMS[k] || !(c.items[k] > 0) || k === 'inst:' + id) delete c.items[k]; }); }
                 else indFixCook(c.st, b);
             });
             let bigC = b.chests.filter(function (c) { return c.big; })[0]; b.box = bigC ? bigC.items : {};
@@ -526,6 +532,7 @@
                 h.side = indNum(h.side, 0, 0, 3) | 0; h.open = !!h.open;
                 h.id = indNum(h.id, 0, 0, 1e9) | 0; while (!h.id || seen[h.id]) h.id = ++b.cid; seen[h.id] = 1; b.cid = Math.max(b.cid, h.id);
             });
+            nkFixBase(b);   // 辐射区、原子弹（19-industry-nuke.js）
             if (!b.bag || typeof b.bag !== 'object') b.bag = {};
             Object.keys(b.bag).forEach(function (k) { if (!IND_ITEMS[k] || !(b.bag[k] > 0)) delete b.bag[k]; else b.bag[k] = Math.floor(b.bag[k]); });
             if (indSlotsOf(b.bag) > IND_BAG_SLOTS) b.bag = {};   // 超过 24 格的（乱写的）不要
@@ -550,7 +557,7 @@
             b.cookers = b.cookers.filter(function (c) { return c && IND_COOK[c.ty] && c.ty !== 'stove' && isFinite(c.x) && isFinite(c.z) && c.id; }).slice(0, IND_COOK_CAP);
             b.cookers.forEach(function (c) { indFixCook(c, b); });
             b.cseq = indNum(b.cseq, 0, 0, 1e9) | 0; b.cookers.forEach(function (c) { b.cseq = Math.max(b.cseq, c.id); });
-            b.devs.forEach(function (d) { d.cy = typeof d.cy === 'string' && indCylParse(d.cy) ? d.cy : null; d.ct = indNum(d.ct, 0, 0, 100); d.pt = indNum(d.pt, 0, 0, 100); });
+            b.devs.forEach(function (d) { d.cy = typeof d.cy === 'string' && indCylParse(d.cy) ? d.cy : null; d.ct = indNum(d.ct, 0, 0, 100); d.pt = indNum(d.pt, 0, 0, 100); if (IND_DEV_FIX[d.ty]) IND_DEV_FIX[d.ty](d); });
             let ids = {}; b.devs.forEach(function (d) { ids[d.id] = d; });
             if (!Array.isArray(b.wires)) b.wires = [];
             b.wires = b.wires.filter(function (w) { return Array.isArray(w) && ids[w[0]] && ids[w[1]] && IND_DEVS[ids[w[0]].ty].src && !IND_DEVS[ids[w[1]].ty].src; });
@@ -914,9 +921,9 @@
         function indSyncItems() {
             if (!ind.itemMesh || !ind.itemDirty) return;
             indDummy();
-            let G = ind.base.ground, n = Math.min(G.length, IND_ITEM_CAP);
+            let G = ind.where === 'trip' ? (ind.tripGround || []) : ind.base.ground, n = Math.min(G.length, IND_ITEM_CAP);
             for (let i = 0; i < n; i++) {
-                IND_DUMMY.position.set(G[i].x, 0.25, G[i].z); IND_DUMMY.rotation.set(0, (i * 0.7) % 6.28, 0); IND_DUMMY.scale.setScalar(1); IND_DUMMY.updateMatrix();
+                IND_DUMMY.position.set(G[i].x, (ind.where === 'trip' ? indGround(G[i].x, G[i].z) : 0) + 0.25, G[i].z); IND_DUMMY.rotation.set(0, (i * 0.7) % 6.28, 0); IND_DUMMY.scale.setScalar(1); IND_DUMMY.updateMatrix();
                 ind.itemMesh.setMatrixAt(i, IND_DUMMY.matrix); ind.itemMesh.setColorAt(i, IND_COL.setHex(IND_ITEMS[G[i].k].col));
             }
             ind.itemMesh.count = n; ind.itemMesh.instanceMatrix.needsUpdate = true;
@@ -982,7 +989,7 @@
         function indApplyPos(b) { ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { let p = b.pos && b.pos[k]; IND_BASE_ST[k].x = p ? p.x : IND_ST_DEF[k].x; IND_BASE_ST[k].z = p ? p.z : IND_ST_DEF[k].z; }); }
         function indGoBase(fromTrip) {
             let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];
-            ind.wild = []; ind.rafts = []; ind.onRaft = null;
+            ind.wild = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null;
             indClearWorld();
             ind.where = 'base'; ind.map = null; ind.exitT = 0;
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
@@ -1025,7 +1032,7 @@
         const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin', 'seed_cotton', 'seed_cabbage', 'seed_radish'];
         function indGoTrip(seed) {
             indClearWorld();
-            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null;
+            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null;
             let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed);
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 60, 160);
             let geo = indGeo(new THREE.PlaneGeometry(IND_MAP * 2, IND_MAP * 2, IND_SEG, IND_SEG));
@@ -1169,6 +1176,8 @@
             indBoomTick(dt); indCloudTick(dt); indFogTick(dt);
             if (!ind || ind.over || ind.dead) return;
             indHurtTick(dt);
+            nkTick(dt);   // 第 6 阶段（19-industry-nuke.js）：原子弹倒计时、辐射
+            if (!ind || ind.over || ind.dead) return;
             indStoveTick(dt);
             if (!ind || ind.over) return;
             indRightHoldTick(dt);
@@ -1212,7 +1221,7 @@
         function indSlow() { let S = ind.base.surv; return S.food <= 0 || S.water <= 0 || S.energy <= 0; }
         function indShiver() { return ind.base.surv.temp < IND_BODY.chill; }
         // ── 受伤和死亡：所有掉血都走 indHurt，记下来源（死因、飘字、血条旁的字都用它） ──
-        const IND_HURT = { starve: { die: '饿死', tag: '饥饿' }, thirst: { die: '渴死', tag: '口渴' }, cold: { die: '冻死', tag: '冻伤' }, heat: { die: '热死', tag: '中暑' }, burn: { die: '烫伤', tag: '烫伤' }, gas: { die: '中毒', tag: '中毒' }, boom: { die: '爆炸', tag: '爆炸' } };
+        const IND_HURT = { starve: { die: '饿死', tag: '饥饿' }, thirst: { die: '渴死', tag: '口渴' }, cold: { die: '冻死', tag: '冻伤' }, heat: { die: '热死', tag: '中暑' }, burn: { die: '烫伤', tag: '烫伤' }, gas: { die: '中毒', tag: '中毒' }, boom: { die: '爆炸', tag: '爆炸' }, rad: { die: '辐射', tag: '辐射' } };
         function indHurt(n, key, detail, instant) {
             if (!ind || ind.over || ind.dead || !(n > 0)) return false;
             let S = ind.base.surv, R = ind.hurt = ind.hurt || { rec: [], acc: {}, ft: {} };
@@ -1380,12 +1389,15 @@
             };
             indFires().forEach(function (f) { consider(f, f.x, f.z, 'fire', 0.7); });
             indAnimals().forEach(function (a) { consider(a, a.x, a.z, 'animal', 0.7); });
-            if (R.where === 'base') R.base.devs.forEach(function (d) { consider(d, d.x, d.z, 'dev', 0.7); });
+            if (R.where === 'base') R.base.devs.forEach(function (d) { consider(d, d.x, d.z, 'dev', Math.max(0.7, IND_DEVS[d.ty].size[0] / 2 + 0.2), IND_DEVS[d.ty].size[0] > 2 ? IND_DEVS[d.ty].size[0] / 2 : 0); });
             if (R.where === 'base') R.base.cookers.forEach(function (c) { consider(c, c.x, c.z, 'cook', IND_COOK[c.ty].r + 0.4, IND_COOK[c.ty].r * 0.7); });
             if (R.where === 'base') indCooks().forEach(function (c) { let sp = indSpoutPos(c); consider(c, sp.x, sp.z, 'spout', 0.8); });
-            if (R.where === 'trip') R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node', 0.8); });
-            if (R.where === 'trip' && !R.onRaft) (R.rafts || []).forEach(function (o) { consider(o, o.x, o.z, 'raft', 1.3, 0.8); });
-            else {
+            nkAim(consider);
+            if (R.where === 'trip') {
+                R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node', 0.8); });
+                if (!R.onRaft) (R.rafts || []).forEach(function (o) { consider(o, o.x, o.z, 'raft', 1.3, 0.8); });
+                (R.tripGround || []).forEach(function (o) { consider(o, o.x, o.z, 'item', 0.5); });
+            } else {
                 R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item', 0.5); });
                 R.base.crops.forEach(function (c) { consider(c, c.x, c.z, 'crop', 0.6); });
                 R.base.tiles.forEach(function (t) { consider(t, t.x, t.z, 'tile', 0.9); });
@@ -1471,6 +1483,7 @@
                 if (b) a = b;
             }
             if (a && a.kind === 'raft') return indRaftToggle(a.o);
+            if (a && a.kind === 'bomb') return nkBombAct(a.o);
             if (a && a.kind === 'node') return indGather(a.o);
             if (a && a.kind === 'item') return indPickItem(a.o);
             if (a && a.kind === 'crop' && indCropRipe(a.o)) return indHarvest(a.o);
@@ -1517,6 +1530,7 @@
             if (IND_ITEMS[k].furn) return indPlaceFurn(k);
             if (IND_ITEMS[k].house) return indPlaceHouse(k);
             if (IND_ITEMS[k].raft) return indPlaceRaft(k);
+            if (IND_ITEMS[k].nuke) return nkPlaceBomb(k);
             if (IND_ITEMS[k].cook) return indPlaceCook(k);
             if (indIsEmptyCont(k)) {   // 空桶：水池接生水，海里接海水（桶是什么材质，水就装在什么材质里）
                 let m = indContOf(k).mat;
@@ -1571,7 +1585,7 @@
         }
         function indPickItem(o) {
             if (indBagAdd(o.k, 1) <= 0) { indFlash('背包满了'); return; }
-            let G = ind.base.ground, i = G.indexOf(o); if (i >= 0) G.splice(i, 1);
+            let G = ind.where === 'trip' ? (ind.tripGround || []) : ind.base.ground, i = G.indexOf(o); if (i >= 0) G.splice(i, 1);
             ind.itemDirty = true; indSave();
         }
         function indPlant(k) {
@@ -1633,6 +1647,7 @@
             if (!ind || ind.over || ind.panel) return;
             let k = indSel(); if (!k) return;
             if (IND_ITEMS[k].gas) { let f = indFace(); indReleaseGas(k, ind.p.x + f.x, ind.p.z + f.z); return; }
+            if (IND_ITEMS[k].poison) { let f = indFace(); nkReleasePoison(k, ind.p.x + f.x, ind.p.z + f.z); return; }
             if (IND_ITEMS[k].cyl && indCylN(IND_ITEMS[k].cyl) > 0) { let f = indFace(); indReleaseCyl(k, ind.p.x + f.x, ind.p.z + f.z); return; }
             if (ind.where === 'trip') { indBagDel(k, 1); indFlash('扔掉了 1 个' + indName(k)); return; }
             if (ind.base.ground.length >= IND_ITEM_CAP) { indFlash('地上放太多了'); return; }
@@ -1652,6 +1667,7 @@
         function indSrcVolt(d) {
             if (d.ty === 'bank') return d.u > 0 ? d.bats * IND_BAT_V : 0;
             if (d.ty === 'gen') return indHeatNear(d.x, d.z, IND_GEN_R).fire >= 2 ? IND_DEVS.gen.volt : 0;
+            if (IND_DEV_VOLT[d.ty]) return IND_DEV_VOLT[d.ty](d);
             return 0;
         }
         // 每帧：按电线算电压；超过额定就炸；够电压、开着、电池有电就工作并耗电
@@ -1668,12 +1684,13 @@
                 if (d.ty === 'el' && indElRecipe(d, V) < 0) return;   // 电解槽没活干不耗电
                 if (d.ty === 'comp' && !indCompBusy(d)) return;   // 压缩机、压力机也是有活干才耗电
                 if (d.ty === 'press' && !indPressBusy(d)) return;
+                if (IND_DEV_BUSY[d.ty] && !IND_DEV_BUSY[d.ty](d)) return;
                 if (s.ty === 'bank') { if (s.u <= 0) return; s.u = Math.max(0, s.u - D.draw * dt); }
                 d.pw = true;
             });
             booms.forEach(function (d) { if (ind && !ind.over && ind.where === 'base' && indDev(d.id)) indBoom(d.x, d.z, 0, '电压太高，设备炸了'); });
             if (!ind || ind.over || ind.where !== 'base') return;
-            B.devs.forEach(function (d) { if (d.ty === 'el') indElTick(d, dt); else if (d.ty === 'comp') indCompTick(d, dt); else if (d.ty === 'press') indPressTick(d, dt); });
+            B.devs.forEach(function (d) { if (d.ty === 'el') indElTick(d, dt); else if (d.ty === 'comp') indCompTick(d, dt); else if (d.ty === 'press') indPressTick(d, dt); else if (IND_DEV_TICK[d.ty]) IND_DEV_TICK[d.ty](d, dt); });
             if (!ind || ind.over || ind.where !== 'base') return;
             if (B.devs.some(function (d) { return d.ty === 'pump' && d.pw; })) {
                 let end = (Math.floor(B.clock / IND_DAY) + 1) * IND_DAY;
@@ -1684,7 +1701,7 @@
         // 爆炸：3 米内基地里的东西（设备、电线、地上的东西、篝火、作物）全没了，仓库箱不动；人在范围里扣 40 血
         // 爆炸伤害按离中心的距离：≤ 1 米 150，范围边上 60，中间线性递减；防爆服 −50%、防爆头盔 −20%（只给硬核）
         const IND_BOOM_NEAR = 150, IND_BOOM_EDGE = 60, IND_BOOM_CLOSE = 1;
-        function indBoomDmg(d, R) { if (d > R) return 0; if (d <= IND_BOOM_CLOSE || R <= IND_BOOM_CLOSE) return IND_BOOM_NEAR; return IND_BOOM_NEAR - (IND_BOOM_NEAR - IND_BOOM_EDGE) * (d - IND_BOOM_CLOSE) / (R - IND_BOOM_CLOSE); }
+        function indBoomDmg(d, R, near, close) { near = near || IND_BOOM_NEAR; close = close || IND_BOOM_CLOSE; if (d > R) return 0; if (d <= close || R <= close) return near; return near - (near - IND_BOOM_EDGE) * (d - close) / (R - close); }
         function indBlastCut() { let c = 0; Object.keys(ind.base.wear).forEach(function (sl) { c += IND_ITEMS[ind.base.wear[sl]].blast || 0; }); return Math.min(0.9, c); }
         function indBoomHurt(x, z, R, why) {
             let d = Math.hypot(ind.p.x - x, ind.p.z - z), dmg = indBoomDmg(d, R) * (1 - indBlastCut());
@@ -1696,6 +1713,7 @@
             ind.lastBoom = { x: x, z: z, R: R };
             B.devs = B.devs.filter(function (d) { if (Math.hypot(d.x - x, d.z - z) <= R) { gone[d.id] = 1; return false; } return true; });
             B.wires = B.wires.filter(function (w) { return !gone[w[0]] && !gone[w[1]]; });
+            let powder = nkPowderNear(x, z, R);   // 地上的火药碰到爆炸也炸
             B.ground = B.ground.filter(function (g) { return Math.hypot(g.x - x, g.z - z) > R; });
             B.fires = B.fires.filter(function (f) { return Math.hypot(f.x - x, f.z - z) > R; });
             B.crops = B.crops.filter(function (c) { return Math.hypot(c.x - x, c.z - z) > R; });
@@ -1708,6 +1726,7 @@
             if (Math.hypot(ind.p.x - x, ind.p.z - z) <= R && indHard()) {
                 if (indBoomHurt(x, z, R, why)) return;
             }
+            if (powder.length) nkChain(powder);
             indFlash('轰！');
         }
         function indBoomFx(x, z) {
@@ -1849,14 +1868,16 @@
             if (a.kind === 'cook') return { ty: a.o.ty, o: a.o };
             if (a.kind === 'tile') return { ty: 'tile', o: a.o };
             if (a.kind === 'door' || a.kind === 'house') return { ty: 'house', o: a.o };
+            if (a.kind === 'bomb') return { ty: 'bomb', o: a.o };
             if (a.kind === 'stove' || a.kind === 'bed' || a.kind === 'bench') return { ty: a.kind, o: null };   // 水池不能搬
             return null;
         }
-        function indFurnName(ty, o) { return ty === 'house' ? (o ? IND_HOUSE[o.ty].name : '房子') : ty === 'tile' ? '农田' : ty === 'chest' ? '仓库箱' : ty === 'bed' ? '床' : ty === 'bench' ? '工作台' : ty === 'pool' ? '水池' : IND_COOK[ty].name; }
+        function indFurnName(ty, o) { return ty === 'bomb' ? '原子弹' : ty === 'house' ? (o ? IND_HOUSE[o.ty].name : '房子') : ty === 'tile' ? '农田' : ty === 'chest' ? '仓库箱' : ty === 'bed' ? '床' : ty === 'bench' ? '工作台' : ty === 'pool' ? '水池' : IND_COOK[ty].name; }
         function indFurnHot(ty, o) { let S = ty === 'stove' ? ind.base.stove : o; if (S && !Array.isArray(S.spout)) S.spout = []; return !!S && (S.fire > 0 || !!S.cook || S.temp > 60 || S.spout.some(function (e) { return e.t > 0; })); }   // 出料槽里还有烫的也算
         function indPickFurn(f) {
             let B = ind.base, ty = f.ty, key, id;
             if (ty === 'house') return indPickHouse(f.o);
+            if (ty === 'bomb') return nkPickBomb(f.o);
             if (ty === 'tile') {   // 空农田收回：还 1 份泥土
                 if (indCropAt(f.o.x, f.o.z)) { indFlash('上面种着东西'); return false; }
                 if (indFits(ind.bag, IND_BAG_SLOTS, 'dirt', 1) < 1) { indFlash('背包满了'); return false; }
@@ -1867,7 +1888,7 @@
             if (ty === 'chest' || ty === 'stove' || IND_COOK[ty]) {
                 id = ++B.cid; key = 'inst:' + id;
                 if (indFits(ind.bag, IND_BAG_SLOTS, key, 1) < 1) { indFlash('背包满了'); return false; }
-                if (ty === 'chest') { B.carried[id] = { ty: 'chest', big: f.o.big, items: f.o.items }; B.chests = B.chests.filter(function (c) { return c !== f.o; }); }
+                if (ty === 'chest') { B.carried[id] = { ty: 'chest', big: f.o.big, lead: !!f.o.lead, items: f.o.items }; B.chests = B.chests.filter(function (c) { return c !== f.o; }); }
                 else if (ty === 'stove') { B.carried[id] = { ty: 'stove', st: B.stove }; B.stove = { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, ashT: 0 }; B.off.stove = true; }
                 else { let c = f.o, st = {}; ['items', 'out', 'fuel', 'fire', 'temp', 'cook', 'ashT', 'bellows', 'spout'].forEach(function (k) { st[k] = c[k]; }); B.carried[id] = { ty: ty, st: st }; B.cookers = B.cookers.filter(function (x) { return x !== c; }); }
             } else {
@@ -1889,7 +1910,7 @@
             x = Math.max(-IND_BASE.x + r, Math.min(IND_BASE.x - r, x)); z = Math.max(-IND_BASE.z + r, Math.min(IND_BASE.z - r, z));
             if (!indSpotFree(x, z, r)) { indFlash('这里放不下，换个空地'); return false; }
             indBagDel(k, 1);
-            if (ty === 'chest') B.chests.push({ id: pay ? +k.slice(5) : ++B.cid, x: x, z: z, big: pay ? pay.big : false, items: pay ? pay.items : {} });
+            if (ty === 'chest') B.chests.push({ id: pay ? +k.slice(5) : ++B.cid, x: x, z: z, big: pay ? pay.big : false, lead: pay ? !!pay.lead : !!d.lead, items: pay ? pay.items : {} });
             else if (ty === 'stove') { B.off.stove = false; B.pos.stove = { x: x, z: z }; if (pay) B.stove = pay.st; indApplyPos(B); }
             else if (ty === 'bed' || ty === 'bench' || ty === 'pool') { B.off[ty] = false; B.pos[ty] = { x: x, z: z }; indApplyPos(B); }
             else B.cookers.push(Object.assign({ id: ++B.cseq, ty: ty, x: x, z: z }, pay ? pay.st : { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, ashT: 0 }));
@@ -1914,7 +1935,7 @@
         function indFurnList() {
             let L = [], S = IND_BASE_ST, B = ind.base;
             ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { if (!B.off[k]) L.push({ key: k, ty: k, x: S[k].x, z: S[k].z }); });
-            B.chests.forEach(function (c) { L.push({ key: 'chest' + c.id, ty: 'chest', big: c.big, x: c.x, z: c.z }); });
+            B.chests.forEach(function (c) { L.push({ key: 'chest' + c.id, ty: 'chest', big: c.big, lead: c.lead, x: c.x, z: c.z }); });
             B.cookers.forEach(function (c) { L.push({ key: 'cook' + c.id, ty: c.ty, x: c.x, z: c.z }); });
             B.houses.forEach(function (h) { L.push({ key: 'house' + h.id, ty: 'house', h: h, x: h.x, z: h.z, sig: h.ty + h.side + (h.open ? 'o' : 'c') }); });
             return L;
@@ -1924,6 +1945,7 @@
             if (f.ty === 'house') return indHouseBuild(f);
             if (f.ty === 'chest') {
                 if (f.big) { m.push(indBox(2.2, 1.2, 1.6, 0x455a64, x, 0.6, z)); m.push(indSign('仓库箱', x, 2.2, z, 2.4, 0.6)); }
+                else if (f.lead) { m.push(indBox(1.6, 1.0, 1.2, 0x546e7a, x, 0.5, z)); m.push(indSign('铅箱', x, 1.9, z, 2.0, 0.5)); }
                 else { m.push(indBox(1.6, 1.0, 1.2, 0x6d4c41, x, 0.5, z)); m.push(indSign('仓库箱', x, 1.9, z, 2.0, 0.5)); }
             } else if (f.ty === 'stove') { m.push(indBox(2.4, 1.0, 1.6, 0xb71c1c, x, 0.5, z)); m.push(indSign('灶台', x, 2.2, z, 2.4, 0.6)); }
             else if (f.ty === 'bed') { m.push(indBox(2.2, 0.5, 3.2, 0x5c6bc0, x, 0.25, z)); m.push(indSign('床', x, 1.8, z, 2, 0.5)); }
@@ -1984,6 +2006,7 @@
             let k = 'dev_' + d.ty; if (indBagAdd(k, 1) <= 0) { indFlash('背包满了'); return false; }
             if (d.ty === 'bank') { let b = Math.ceil(d.u / IND_BAT_U - 1e-9); if (b > 0) indBagAdd('battery', b); }
             if (d.st) Object.keys(d.st).forEach(function (k) { indBoxAdd(k, d.st[k]); });   // 电解槽里的东西放回仓库箱
+            if (d.rods) d.rods.forEach(function (r) { indBoxAdd(r.spent ? 'rod_spent' : nkRodKey(r), 1); });   // 反应堆里的燃料棒
             if (d.cy) indBoxAdd(d.cy, 1);
             ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
             ind.base.wires = ind.base.wires.filter(function (w) { return w[0] !== d.id && w[1] !== d.id; });
@@ -1995,6 +2018,7 @@
         function indDevAct(d) {
             let k = indSel(), D = IND_DEVS[d.ty];
             if (k === 'wire') {
+                if (D.nowire) { indFlash(D.name + '不用接线'); return false; }
                 if (!ind.wirePend) { ind.wirePend = d.id; ind.devDirty = true; indFlash('选了' + D.name + '，再点另一个'); return true; }
                 if (ind.wirePend === d.id) { ind.wirePend = null; ind.devDirty = true; indFlash('取消了'); return true; }
                 let a = indDev(ind.wirePend); ind.wirePend = null; ind.devDirty = true;
@@ -2014,12 +2038,14 @@
             if (d.ty === 'el') { indPanelEl(d.id); return true; }
             if (d.ty === 'comp') { indPanelComp(d.id); return true; }
             if (d.ty === 'press') { indPanelPress(d.id); return true; }
+            if (IND_DEV_HTML[d.ty]) { indPanelNk(d.id); return true; }
             if (!D.src) { d.on = !d.on; indSave(); indFlash(D.name + (d.on ? '开了' : '关了')); return true; }
             indFlash(D.name + (d.ty === 'bank' ? '：拿电池左键装电池' : '：放在点着的灶台 3 米内（中火以上）就发电'));
             return false;
         }
         function indDevInfo(d) {
             let D = IND_DEVS[d.ty];
+            if (IND_DEV_INFO[d.ty]) return IND_DEV_INFO[d.ty](d);
             if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' U';
             if (d.ty === 'gen') return D.name + ' ' + (indSrcVolt(d) > 0 ? '发电中 12 V' : '没在发电');
             let w = ind.base.wires.filter(function (x) { return x[1] === d.id; })[0], s = w ? indDev(w[0]) : null;
@@ -2034,7 +2060,7 @@
                 let d = A[i], D = IND_DEVS[d.ty];
                 IND_DUMMY.position.set(d.x, D.size[1] / 2, d.z); IND_DUMMY.rotation.set(0, 0, 0); IND_DUMMY.scale.set(D.size[0], D.size[1], D.size[2]); IND_DUMMY.updateMatrix();
                 ind.devMesh.setMatrixAt(i, IND_DUMMY.matrix);
-                let c = D.col; if (!D.src && !d.pw) c = 0x757575; if (ind.wirePend === d.id) c = 0xe040fb;
+                let c = D.col; if (!D.src && !d.pw && !D.always) c = 0x757575; if (ind.wirePend === d.id) c = 0xe040fb;
                 ind.devMesh.setColorAt(i, IND_COL.setHex(c));
             }
             ind.devMesh.count = n; ind.devMesh.instanceMatrix.needsUpdate = true;
@@ -2151,7 +2177,7 @@
             if (left) indFlash('身上放不下了，还剩 ' + left + ' 个');
             indSave(); indPanelDev(id);
         }
-        function indPanelDev(id) { let d = indDev(id); if (!d) return; if (d.ty === 'comp') indPanelComp(id); else if (d.ty === 'press') indPanelPress(id); }
+        function indPanelDev(id) { let d = indDev(id); if (!d) return; if (d.ty === 'comp') indPanelComp(id); else if (d.ty === 'press') indPanelPress(id); else if (IND_DEV_HTML[d.ty]) indPanelNk(id); }
         function indCompHtml(d) {
             let V = indDevVolt(d), g = d.cy ? indCylParse(d.cy) : null;
             let st = '电压 <b>' + V.toFixed(1) + ' V</b>（额定 12 V）' + (d.pw ? '　正在压 ' + Math.floor((d.ct || 0) / IND_COMP_TIME * 100) + '%' : '');
@@ -2380,7 +2406,7 @@
         function indCookCur() { return indCookById(ind.cookId || 'stove') || indCookById('stove'); }
         function indCookK(ty) {
             let D = IND_COOK[ty];
-            return { rate: D.rate, burn: D.burn, only: D.only || null, top: D.top || 0, batch: ty === 'stove' ? { food: ind.base.pot ? IND_BATCH_POT : IND_BATCH, smelt: 1, bulk: 1 } : D.batch };
+            return { rate: D.rate, burn: D.burn, only: D.only || null, top: D.top || 0, batch: ty === 'stove' ? { food: ind.base.pot ? IND_BATCH_POT : IND_BATCH, smelt: 1, bulk: 1, chem: 1 } : D.batch };
         }
         function indFireDef(ty, lv) { let F = IND_FIRE[lv]; return ty === 'furnace' && lv === 3 ? { name: F.name, t: IND_COOK.furnace.top, burn: F.burn } : F; }
         // 找第一个原料够、这个炉子做得了的配方
@@ -2474,7 +2500,7 @@
             if (r.burnT && S.temp > r.burnT) S.cook.burn += dt;
             if (S.cook.t >= r.time || S.cook.burn >= IND_BURN_S) {
                 let burnt = S.cook.burn >= IND_BURN_S;
-                let hotN = 0; if (!burnt) Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k].hot) hotN += r.out[k] * n; });
+                let hotN = 0; if (!burnt) Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) hotN += r.out[k] * n; });
                 if (hotN && S.spout.length + hotN > IND_SPOUT_CAP) { S.cook.full = true; if (ind.panel === 'stove') ind.panelDirty = true; indCookBadge(c); return; }   // 出料槽满了，先停着不出料
                 S.cook.full = false;
                 let mats = indConsume(S.items, r, n), res = indCookResult(r, n, mats, burnt), out = res.out;   // 桶按用的材质还回去，陶罐有 1/10 碎掉
@@ -2499,6 +2525,7 @@
         }
         function indStovePut(k, n) {
             if (!ind || !ind.bag[k]) return;
+            if (k === 'gunpowder') { nkPowderInCooker(indCookCur()); return; }   // 火药放进炉子就炸
             let S = indCookCur().C, kc = indContOf(k);
             if (kc && kc.mat === 'wood') { indFlash('木桶不能上火'); return; }
             if (!S.items[k] && Object.keys(S.items).length >= IND_STOVE_CAP) { indFlash('放不下了'); return; }
@@ -2722,6 +2749,7 @@
             let R = ind; if (!R || R.over) return;
             if (R.panel === 'stove' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'); if (p) { p.innerHTML = indStoveHtml(); R.panelDirty = false; } }
             if (R.panel === 'el' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { p.innerHTML = indElHtml(d); R.panelDirty = false; } }
+            if (IND_DEV_HTML[R.panel] && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { p.innerHTML = IND_DEV_HTML[R.panel](d); R.panelDirty = false; } }
             if ((R.panel === 'comp' || R.panel === 'press') && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { p.innerHTML = R.panel === 'comp' ? indCompHtml(d) : indPressHtml(d); R.panelDirty = false; } }
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
@@ -2756,6 +2784,7 @@
             else if (a && a.kind === 'node') { let nd = IND_NODES[a.o.key], nm = a.o.key === 'seeds' ? '野生' + indName(a.o.seed) : (nd.name || indName(a.o.key)); hint = nm + ' ×' + a.o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>'; }
             else if (R.onRaft) hint = '木筏<br><small>左键：下筏（水上 2 倍速，不能上岸）</small>';
             else if (a && a.kind === 'raft') hint = '木筏<br><small>左键：上去</small>';
+            else if (a && a.kind === 'bomb') hint = a.o.t >= 0 ? '原子弹：' + Math.ceil(a.o.t) + ' 秒后爆炸，半径 40 米<br><small>左键：拆掉</small>' : '原子弹<br><small>左键：启动（30 秒后爆炸，半径 40 米）　长按右键：收起</small>';
             else if (a && a.kind === 'item') hint = indName(a.o.k) + '<br><small>左键：拿</small>';
             else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水') + (a.o.fert ? '　施过肥了' : '')) + '<br><small>' + (ripe ? '左键：收' : '拿着水右键：浇水　拿草木灰右键：施肥') + '</small>'; }
             else if (a && a.kind === 'fire') hint = '篝火' + (a.o.fuel > 0 ? ' 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒' : '（灭了）') + '<br><small>拿着木头，左键：加柴</small>';
@@ -2781,6 +2810,7 @@
             else if (sel && IND_ITEMS[sel].eat) hint = '<small>右键：' + (IND_ITEMS[sel].eat.f ? '吃' : '喝') + indName(sel) + '</small>';
             else if (sel && IND_ITEMS[sel].wear) hint = '<small>右键：穿上' + indName(sel) + '</small>';
             else if (sel === 'dirt') hint = '<small>右键：在面前开一格农田</small>';
+            else if (sel && IND_ITEMS[sel].nuke) hint = '<small>右键：在面前放下原子弹</small>';
             else if (sel && IND_ITEMS[sel].raft) hint = '<small>右键：对着水面放下木筏</small>';
             else if (sel && IND_ITEMS[sel].house) hint = '<small>右键：在面前放下' + indName(sel) + '（门朝着你）</small>';
             else if (sel && IND_ITEMS[sel].furn) hint = '<small>右键：放下' + indName(sel) + '</small>';
