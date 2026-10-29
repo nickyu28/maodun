@@ -1383,9 +1383,10 @@
             if (R.where === 'base') R.base.devs.forEach(function (d) { consider(d, d.x, d.z, 'dev', 0.7); });
             if (R.where === 'base') R.base.cookers.forEach(function (c) { consider(c, c.x, c.z, 'cook', IND_COOK[c.ty].r + 0.4, IND_COOK[c.ty].r * 0.7); });
             if (R.where === 'base') indCooks().forEach(function (c) { let sp = indSpoutPos(c); consider(c, sp.x, sp.z, 'spout', 0.8); });
-            if (R.where === 'trip') R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node', 0.8); });
-            if (R.where === 'trip' && !R.onRaft) (R.rafts || []).forEach(function (o) { consider(o, o.x, o.z, 'raft', 1.3, 0.8); });
-            else {
+            if (R.where === 'trip') {
+                R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node', 0.8); });
+                if (!R.onRaft) (R.rafts || []).forEach(function (o) { consider(o, o.x, o.z, 'raft', 1.3, 0.8); });
+            } else {
                 R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item', 0.5); });
                 R.base.crops.forEach(function (c) { consider(c, c.x, c.z, 'crop', 0.6); });
                 R.base.tiles.forEach(function (t) { consider(t, t.x, t.z, 'tile', 0.9); });
