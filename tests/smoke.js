@@ -2595,6 +2595,35 @@ async function enterExit(tab, key) {
             report('MI1 每个模式第一次点开弹一次规则卡片：记进存档、再点不弹、规则按钮能重看、程序里直接选不弹', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('BR1')) {
+            // BR1 寻宝队分普通 / 化学两个分支：实验室藏着时没有分支条；开着时有，选化学出「进实验室」，开始游戏 = 进实验室；选回普通恢复原来的设置
+            const bad = [];
+            const N = await openTab(chrome, url);
+            const n0 = JSON.parse(await N.eval(`JSON.stringify({ bar: getComputedStyle(document.getElementById('hunt-branch')).display, chem: document.getElementById('hunt-chem-box').classList.contains('hidden') })`));
+            if (n0.bar !== 'none' || !n0.chem) bad.push('实验室藏着时分支条还在 ' + JSON.stringify(n0));
+            await N.close();
+            const T = await openTab(chrome, url, { query: 'labdebug=1' });
+            await T.eval(`window.__lab = 0; labEnter = function () { window.__lab++; }; selectGameMode('hunt'); true;`);
+            const st = () => T.eval(`JSON.stringify({ bar: getComputedStyle(document.getElementById('hunt-branch')).display, normal: !document.getElementById('hunt-normal-box').classList.contains('hidden'), chem: !document.getElementById('hunt-chem-box').classList.contains('hidden'), br: huntBranch })`).then(JSON.parse);
+            let r = await st();
+            if (r.bar !== 'flex' || !r.normal || r.chem || r.br !== 'normal') bad.push('默认应是普通分支 ' + JSON.stringify(r));
+            await T.eval(`document.getElementById('hunt-br-chem').click(); true;`);
+            r = await st();
+            if (!r.chem || r.normal || r.br !== 'chem') bad.push('选化学后 ' + JSON.stringify(r));
+            await T.eval(`lobbyPrimaryStart(); true;`);
+            if ((await T.eval(`window.__lab`)) !== 1) bad.push('化学分支点开始游戏没进实验室');
+            await T.eval(`huntChemEnter(); true;`);
+            if ((await T.eval(`window.__lab`)) !== 2) bad.push('「进实验室」按钮没进实验室');
+            await T.eval(`document.getElementById('hunt-br-normal').click(); true;`);
+            r = await st();
+            if (!r.normal || r.chem || r.br !== 'normal') bad.push('选回普通后 ' + JSON.stringify(r));
+            // 实验室入口（btn-mode-lab）照旧在
+            if (await T.eval(`getComputedStyle(document.getElementById('btn-mode-lab')).display === 'none'`)) bad.push('实验室入口不见了');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('BR1 寻宝队分普通 / 化学分支：实验室藏着时不出现；化学分支进实验室；选回普通恢复', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('K1')) {
             // K1 合成倒计时：材料凑齐后等 3 秒再合成（合出大金的 5 秒），中间显示倒计时，材料被拿走就取消、放回去重新数
             const bad = [];
