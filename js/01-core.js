@@ -755,6 +755,7 @@
                 return;
             }
             if (m === 'lab') { labEnter(); return; }   // 实验室是单人的，不跟队伍走
+            if (m === 'hunt' && huntBranch === 'chem' && huntBranchOn()) { labEnter(); return; }   // 寻宝队选了化学分支：开始游戏 = 进实验室
             if (m !== 'night' && m !== 'cake' && lobbyParty.length > 0 && !peerIsHost) {
                 lobbySuggestModeToHost(m);
                 return;

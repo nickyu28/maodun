@@ -185,6 +185,12 @@
             gState.introSeen[key] = 1; saveProgress();
             introPush(title, '<div style="text-align:left; font-size:14px; line-height:1.75;">' + text + '</div>');
         }
+        // 玩家在大厅里点模式按钮：选中，而且每个模式第一次点开弹一次规则卡片（记进存档 modeIntroShown，之后在「规则」按钮里重看）。
+        // 程序里直接调 selectGameMode 不弹（开机默认选中、测试、邀请进房）；新手教程里不弹。
+        function modePick(k) {
+            selectGameMode(k);
+            if (!gState.tutorial) showModeIntroIfFirstTime(k);
+        }
         function showModeIntroIfFirstTime(key) {
             if (!gState.modeIntroShown) gState.modeIntroShown = {};
             if (gState.modeIntroShown[key]) return;
@@ -630,6 +636,24 @@
             let p = document.getElementById('mode-detail-panel');
             if (p) p.classList.toggle('hidden');
         }
+        // 寻宝队的分支：普通 / 化学。化学分支现在只是进实验室的入口，实验室藏着的时候分支条也不出现
+        let huntBranch = 'normal';
+        function huntBranchOn() { return typeof labVisible === 'function' && labVisible(); }
+        function huntBranchSync() {
+            if (!huntBranchOn()) huntBranch = 'normal';
+            let bar = document.getElementById('hunt-branch'); if (!bar) return;
+            bar.style.display = huntBranchOn() ? 'flex' : 'none';
+            [['hunt-br-normal', 'normal', '#5cb85c'], ['hunt-br-chem', 'chem', '#00897b']].forEach(function (e) {
+                let b = document.getElementById(e[0]); if (!b) return;
+                let on = huntBranch === e[1];
+                b.style.borderColor = on ? e[2] : '#ccc'; b.style.color = on ? e[2] : '#333'; b.style.fontWeight = on ? 'bold' : 'normal';
+            });
+            let n = document.getElementById('hunt-normal-box'), c = document.getElementById('hunt-chem-box');
+            if (n) n.classList.toggle('hidden', huntBranch === 'chem');
+            if (c) c.classList.toggle('hidden', huntBranch !== 'chem');
+        }
+        function huntBranchSet(b) { huntBranch = (b === 'chem' && huntBranchOn()) ? 'chem' : 'normal'; huntBranchSync(); }
+        function huntChemEnter() { if (huntBranchOn()) labEnter(); }
         function selectGameMode(m) {
             if (m === 'paint') m = 'hunt';   // 这个模式下架了，老存档里记着的模式改回寻宝队
             if (m === 'lab' && !labVisible()) m = 'hunt';   // 实验室藏起来的时候选不到
@@ -641,6 +665,7 @@
             ['sumo', 'tower'].forEach(function (k) { let e = document.getElementById(k + '-only'); if (e) e.classList.toggle('hidden', m !== k); });
             if (m === 'tower') { let tb = document.getElementById('tower-best'); if (tb) tb.innerText = gState.towerBest ? '你的最好成绩：第 ' + gState.towerBest + ' 块' : ''; }
             document.getElementById('hunt-only').classList.toggle('hidden', !isHunt);
+            huntBranchSync();
             document.getElementById('night-only').classList.toggle('hidden', !isNight);
             document.getElementById('blaze-only').classList.toggle('hidden', !isBlaze);
             document.getElementById('race-only').classList.toggle('hidden', !isRace);

@@ -2562,6 +2562,68 @@ async function enterExit(tab, key) {
             report('HM1 隐藏 5 个模式：大厅里没有入口，其余入口还在，代码还能直接调用', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('MI1')) {
+            // MI1 每个模式第一次在大厅点开时弹一次规则卡片（记进存档）；再点不弹；「规则」按钮里能重看；程序里直接 selectGameMode 不弹
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`gState.modeIntroShown = {}; ${HIDE} true;`);
+            await T.eval(`document.getElementById('btn-mode-blaze').click(); true;`);
+            if (!(await until(T, `introOpen && ${MODAL} === '超燃 · 规则'`, 15000))) bad.push('第一次点超燃没弹规则卡片 ' + await T.eval(MODAL));
+            if (!(await T.eval(`gState.modeIntroShown.blaze === true`))) bad.push('没记进 modeIntroShown');
+            await clickModal(T, 0);
+            await until(T, `${MODAL} === null`, 10000);
+            await T.eval(`document.getElementById('btn-mode-hunt').click(); document.getElementById('btn-mode-blaze').click(); true;`);
+            if (!(await until(T, `introOpen && ${MODAL} === '寻宝队 · 规则'`, 15000))) bad.push('第一次点寻宝队没弹规则卡片 ' + await T.eval(MODAL));
+            await clickModal(T, 0); await until(T, `${MODAL} === null`, 10000);
+            // 第二次点超燃：不再弹
+            await T.eval(`document.getElementById('btn-mode-night').click(); true;`);
+            await until(T, `introOpen`, 15000); await clickModal(T, 0); await until(T, `${MODAL} === null`, 10000);
+            await T.eval(`document.getElementById('btn-mode-blaze').click(); true;`); await frames(T, 40);
+            if (await T.eval(MODAL) !== null) bad.push('第二次点超燃又弹了');
+            // 存档带着
+            const saved = JSON.parse(await T.eval(`saveProgress(); JSON.stringify(JSON.parse(localStorage.getItem('TH_save_' + gState.id) || '{}').modeIntroShown || null)`));
+            if (!saved || !saved.blaze || !saved.hunt || !saved.night) bad.push('存档里没有 modeIntroShown ' + JSON.stringify(saved));
+            // 规则按钮重看
+            await T.eval(`openRules('blaze'); true;`);
+            if (!(await until(T, `introOpen && ${MODAL} === '超燃 · 规则'`, 15000))) bad.push('规则按钮打不开');
+            await clickModal(T, 0); await until(T, `${MODAL} === null`, 10000);
+            // 程序里直接选不弹
+            await T.eval(`gState.modeIntroShown = {}; selectGameMode('cake'); true;`); await frames(T, 40);
+            if (await T.eval(MODAL) !== null) bad.push('直接 selectGameMode 也弹了');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('MI1 每个模式第一次点开弹一次规则卡片：记进存档、再点不弹、规则按钮能重看、程序里直接选不弹', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('BR1')) {
+            // BR1 寻宝队分普通 / 化学两个分支：实验室藏着时没有分支条；开着时有，选化学出「进实验室」，开始游戏 = 进实验室；选回普通恢复原来的设置
+            const bad = [];
+            const N = await openTab(chrome, url);
+            const n0 = JSON.parse(await N.eval(`JSON.stringify({ bar: getComputedStyle(document.getElementById('hunt-branch')).display, chem: document.getElementById('hunt-chem-box').classList.contains('hidden') })`));
+            if (n0.bar !== 'none' || !n0.chem) bad.push('实验室藏着时分支条还在 ' + JSON.stringify(n0));
+            await N.close();
+            const T = await openTab(chrome, url, { query: 'labdebug=1' });
+            await T.eval(`window.__lab = 0; labEnter = function () { window.__lab++; }; selectGameMode('hunt'); true;`);
+            const st = () => T.eval(`JSON.stringify({ bar: getComputedStyle(document.getElementById('hunt-branch')).display, normal: !document.getElementById('hunt-normal-box').classList.contains('hidden'), chem: !document.getElementById('hunt-chem-box').classList.contains('hidden'), br: huntBranch })`).then(JSON.parse);
+            let r = await st();
+            if (r.bar !== 'flex' || !r.normal || r.chem || r.br !== 'normal') bad.push('默认应是普通分支 ' + JSON.stringify(r));
+            await T.eval(`document.getElementById('hunt-br-chem').click(); true;`);
+            r = await st();
+            if (!r.chem || r.normal || r.br !== 'chem') bad.push('选化学后 ' + JSON.stringify(r));
+            await T.eval(`lobbyPrimaryStart(); true;`);
+            if ((await T.eval(`window.__lab`)) !== 1) bad.push('化学分支点开始游戏没进实验室');
+            await T.eval(`huntChemEnter(); true;`);
+            if ((await T.eval(`window.__lab`)) !== 2) bad.push('「进实验室」按钮没进实验室');
+            await T.eval(`document.getElementById('hunt-br-normal').click(); true;`);
+            r = await st();
+            if (!r.normal || r.chem || r.br !== 'normal') bad.push('选回普通后 ' + JSON.stringify(r));
+            // 实验室入口（btn-mode-lab）照旧在
+            if (await T.eval(`getComputedStyle(document.getElementById('btn-mode-lab')).display === 'none'`)) bad.push('实验室入口不见了');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('BR1 寻宝队分普通 / 化学分支：实验室藏着时不出现；化学分支进实验室；选回普通恢复', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('K1')) {
             // K1 合成倒计时：材料凑齐后等 3 秒再合成（合出大金的 5 秒），中间显示倒计时，材料被拿走就取消、放回去重新数
             const bad = [];

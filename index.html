@@ -1041,10 +1041,10 @@
             </div>
             <div id="mode-detail-panel" class="hidden">
             <div id="game-mode-select" style="display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:10px;">
-                <button id="btn-mode-hunt" onclick="selectGameMode('hunt')" style="margin:0; font-size:11px; padding:7px 2px;">寻宝队</button>
-                <button id="btn-mode-night" onclick="selectGameMode('night')" style="margin:0; font-size:11px; padding:7px 2px;">惊魂夜</button>
-                <button id="btn-mode-blaze" onclick="selectGameMode('blaze')" style="margin:0; font-size:11px; padding:7px 2px;">超燃</button>
-                <button id="btn-mode-race" onclick="selectGameMode('race')" style="margin:0; font-size:11px; padding:7px 2px;">竞速</button>
+                <button id="btn-mode-hunt" onclick="modePick('hunt')" style="margin:0; font-size:11px; padding:7px 2px;">寻宝队</button>
+                <button id="btn-mode-night" onclick="modePick('night')" style="margin:0; font-size:11px; padding:7px 2px;">惊魂夜</button>
+                <button id="btn-mode-blaze" onclick="modePick('blaze')" style="margin:0; font-size:11px; padding:7px 2px;">超燃</button>
+                <button id="btn-mode-race" onclick="modePick('race')" style="margin:0; font-size:11px; padding:7px 2px;">竞速</button>
                 <!-- 实验室入口：和别的模式一样先选模式再点「开始游戏」。LAB_ENABLED 为 false 时不显示（网址带 ?labdebug=1 才出现）；放在寻宝队正下面 -->
                 <button id="btn-mode-lab" onclick="selectGameMode('lab')" style="display:none; margin:0; font-size:11px; padding:7px 2px;">实验室</button>
                 <!-- 作者决定先藏起来：监狱救援、躲避球、合作密室、推推乐、爬塔（代码都在，只是大厅里不放入口；要放回来就取消注释）
@@ -1054,17 +1054,27 @@
                 <button id="btn-mode-sumo" onclick="selectGameMode('sumo')" style="margin:0; font-size:11px; padding:7px 2px;">推推乐</button>
                 <button id="btn-mode-tower" onclick="selectGameMode('tower')" style="margin:0; font-size:11px; padding:7px 2px;">爬塔</button>
                 -->
-                <button id="btn-mode-park" onclick="selectGameMode('park')" style="margin:0; font-size:11px; padding:7px 2px;">猫盾乐园</button>
-                <button id="btn-mode-cake" onclick="selectGameMode('cake')" style="margin:0; font-size:11px; padding:7px 2px;">松饼大作战</button>
+                <button id="btn-mode-park" onclick="modePick('park')" style="margin:0; font-size:11px; padding:7px 2px;">猫盾乐园</button>
+                <button id="btn-mode-cake" onclick="modePick('cake')" style="margin:0; font-size:11px; padding:7px 2px;">松饼大作战</button>
             </div>
 
         <div id="hunt-only">
-        <div style="margin:6px 0; font-size:12px; color:#666; width:100%; text-align:left; box-sizing:border-box;">
+        <!-- 寻宝队分两个分支：普通、化学。化学分支现在只是进实验室的入口（实验室开着才出现，跟实验室入口同一个开关） -->
+        <div id="hunt-branch" style="display:none; gap:6px; margin:6px 0;">
+            <button id="hunt-br-normal" onclick="huntBranchSet('normal')" style="flex:1; margin:0; font-size:13px; padding:8px 0;">普通</button>
+            <button id="hunt-br-chem" onclick="huntBranchSet('chem')" style="flex:1; margin:0; font-size:13px; padding:8px 0;">化学</button>
+        </div>
+        <div id="hunt-normal-box" style="margin:6px 0; font-size:12px; color:#666; width:100%; text-align:left; box-sizing:border-box;">
             <label><input type="checkbox" id="hunt-ai-fill" onchange="setAiFill(this.checked)"> AI 补齐队友</label>
             <div style="font-size:11px; color:#999; line-height:1.6; margin-top:4px;">
                 开：两个 AI 队友，会救你，也会自己开箱上交，但箱子也被他们开走了。<br>
                 关：箱子全是你的，倒了没人救。
             </div>
+        </div>
+        <div id="hunt-chem-box" class="hidden" style="width:100%; box-sizing:border-box; margin:6px 0; background:#e0f2f1; border:1px solid #80cbc4; border-radius:6px; padding:12px 14px; text-align:left;">
+            <div style="font-size:14px; color:#00695c; font-weight:bold; margin-bottom:2px;">寻宝队 · 化学</div>
+            <div style="font-size:12px; color:#00796b; line-height:1.6;">用原子和分子造东西。现在先进实验室玩。</div>
+            <button onclick="huntChemEnter()" style="width:100%; margin:8px 0 0; background:#00897b; color:#fff; border:none; padding:9px 0; font-size:14px;">进实验室</button>
         </div>
 
         </div>
