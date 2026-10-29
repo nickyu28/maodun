@@ -1215,7 +1215,7 @@
                     if (cold && indHurt(dt, 'cold', '体温 ' + S.temp.toFixed(1) + '°C')) return;
                     if (hot && indHurt(dt, 'heat', '体温 ' + S.temp.toFixed(1) + '°C')) return;
                 }
-                else if (S.food > 30 && S.water > 30) S.hp = Math.min(100, S.hp + Q.regen * dt);
+                else if (S.food > 30 && S.water > 30 && !ind.radHurt) S.hp = Math.min(100, S.hp + Q.regen * dt);   // 受辐射的时候不自己恢复
             }
         }
         function indSlow() { let S = ind.base.surv; return S.food <= 0 || S.water <= 0 || S.energy <= 0; }
@@ -2413,8 +2413,9 @@
         // targetT：火候定下的温度。原料一样的配方（2 黏土：烧砖要 900°C、烧陶罐 600°C）按火候挑，大火出砖、中火出陶罐；火候不够哪个都挑不到就先等着第一个
         function indCookFind(items, K, targetT) {
             let first = -1;
-            for (let i = 0; i < IND_RECIPES.length; i++) {
-                let r = IND_RECIPES[i];
+            for (let j = 0; j < IND_RECIPES.length * 2; j++) {   // 先看带 pri 的配方（第 6 阶段的化学配方，原料里有水也不被"烧水"抢走），再看别的
+                let i = j % IND_RECIPES.length, r = IND_RECIPES[i];
+                if (!!r.pri !== (j < IND_RECIPES.length)) continue;
                 if (r.hard && !indHard()) continue;
                 if (K && K.only && (r.cls || 'food') !== K.only) continue;
                 if (K && !indBatchCap(K, r)) continue;

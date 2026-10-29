@@ -6526,6 +6526,254 @@ async function enterExit(tab, key) {
             report('IND24 爆炸加强和防爆装备：按距离扣血（1 米 150、边上 60）、防爆服 −50% 头盔 −20%、走路 ×0.6、保暖 +10、悠闲没有', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND20')) {
+            // IND20 第 6 阶段（核和原子弹，只给硬核）：从铀矿一路做到燃料棒（各步配方、离心机四轮到 3.5%、到 5% 封顶）；反应堆控制棒全插不发热、拔出升温、有水冷却稳定、没水过热 20 秒熔毁；
+            // 汽轮发电机 250°C 以上有电；乏燃料棒在背包扣血、放铅箱不扣；盖格计数器读数；后处理出钚；火药碰爆炸会炸；原子弹倒计时能拆、远征图 40 米内资源 ×2 掉落和辐射区、10 米内必死
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const ci = (o) => `IND_CRAFT.findIndex(function (r) { return r.out === '${o}'; })`;
+                // 清出一片空地：别的家具收起来，离水池远一点好测"没水"
+                await T.eval(`ind.base.off = { stove: false, bed: true, bench: true, pool: false }; ind.base.cookers = []; ind.base.devs = []; ind.base.wires = []; ind.base.ground = []; ind.base.fires = []; ind.base.crops = []; ind.furnDirty = true; indSyncFurn(); true;`);
+                // ── 炉子上的一路配方 ──
+                const cook = async (items, secs, temp, fire) => {
+                    await T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 5000, fire: ${fire || 2}, temp: ${temp || 600}, cook: null, spout: [] }; indAdvance(${secs}); true;`);
+                    return J(`{ out: ind.base.stove.out, items: ind.base.stove.items, spout: ind.base.stove.spout.map(function (e) { return e.k; }) }`);
+                };
+                let c = await cook({ ore_pb: 2 }, 16);
+                if (c.spout.join() !== 'hot_pb,hot_pb' || c.out.sulfur !== 1) bad.push('2 方铅矿应该出 2 铅锭（烫）+ 1 硫 ' + JSON.stringify(c));
+                c = await cook({ ore_pb: 2 }, 16, 300, 1);
+                if (c.spout.length) bad.push('327°C 以下不该炼铅 ' + JSON.stringify(c));
+                c = await cook({ sulfur: 1, b_o2: 1 }, 11);
+                if (c.out.b_so2 !== 1) bad.push('硫 + 氧气瓶应该出二氧化硫瓶 ' + JSON.stringify(c));
+                c = await cook({ b_so2: 1, b_o2: 1, water_raw: 1 }, 16);
+                if (c.out.b_h2so4 !== 1 || c.out.bottle !== 1 || c.out.bucket !== 1) bad.push('二氧化硫 + 氧气 + 水应该出硫酸瓶 + 空瓶 + 桶 ' + JSON.stringify(c));
+                c = await cook({ ore_u_dust: 2, b_h2so4: 1, naoh: 1 }, 31, 200, 1);
+                if (c.out.yellowcake !== 1 || c.out.bottle !== 1) bad.push('铀矿粉 + 硫酸 + 氢氧化钠应该出黄饼 ' + JSON.stringify(c));
+                c = await cook({ fluorite: 1, b_h2so4: 1 }, 16);
+                if (c.out.b_hf !== 1) bad.push('萤石 + 硫酸应该出氟化氢瓶 ' + JSON.stringify(c));
+                if (await T.eval(`!!ind.base.elems[9]`)) bad.push('氟化氢瓶还没拿到手，元素表不该点亮氟');
+                await T.eval(`indStoveTakeAll(); indPanelClose(); true;`);
+                if (!(await T.eval(`!!ind.base.elems[9]`))) bad.push('拿到氟化氢瓶元素表要点亮氟');
+                c = await cook({ yellowcake: 1, b_hf: 3 }, 31);
+                if (c.out['uf6:0'] !== 1 || c.out.bottle !== 3) bad.push('黄饼 + 3 氟化氢应该出六氟化铀罐（0.7%）+ 3 空瓶 ' + JSON.stringify(c));
+                if (!/0\.7%/.test(await T.eval(`indName('uf6:0')`))) bad.push('罐子名字上要写丰度');
+                c = await cook({ 'uf6:3': 1, b_h2: 2 }, 21);
+                if (c.out['pellet:4'] || c.out['pellet:5'] || c.items['uf6:3'] !== 1) bad.push('丰度 2.4%（不到 3%）不该做芯块 ' + JSON.stringify(c));
+                c = await cook({ 'uf6:4': 1, b_h2: 2 }, 21);
+                if (c.out['pellet:4'] !== 1 || c.out.bottle !== 2) bad.push('丰度 3.5% 的罐 + 2 氢气应该出芯块 ' + JSON.stringify(c));
+                c = await cook({ 'uf6:5': 1, b_h2: 2 }, 21);
+                if (c.out['pellet:5'] !== 1) bad.push('丰度 5% 的罐也能做芯块 ' + JSON.stringify(c));
+                c = await cook({ rod_spent: 1, b_h2so4: 2 }, 41, 400);
+                if (c.out.plutonium !== 1 || c.out.nuclear_waste !== 1 || c.out.bottle !== 2) bad.push('乏燃料棒 + 2 硫酸应该出钚 + 核废料 + 2 空瓶 ' + JSON.stringify(c));
+                await T.eval(`indStoveTakeAll(); indPanelClose(); true;`);
+                if (!(await T.eval(`!!ind.base.elems[94]`))) bad.push('钚要点亮元素表');
+                // 工作台：燃料棒 2 芯块 + 2 钢锭
+                await T.eval(`ind.bag = {}; indBagAdd('pellet:4', 2); indBagAdd('steel', 2); indCraft(${ci('rod:4')}); true;`);
+                if (!(await T.eval(`ind.bag['rod:4'] === 1 && !ind.bag['pellet:4'] && !ind.bag.steel`))) bad.push('2 芯块 + 2 钢锭做不出燃料棒 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if (!/3\.5%/.test(await T.eval(`indName('rod:4')`))) bad.push('燃料棒名字上要写丰度');
+                // 二氧化硫瓶放掉是毒气云
+                await T.eval(`ind.bag = {}; indBagAdd('b_so2', 1); indTeleport(-20, 15); indSelect('b_so2'); indDrop(); true;`);
+                if (!(await T.eval(`ind.clouds && ind.clouds.length === 1 && ind.clouds[0].n === '二氧化硫' && ind.bag.bottle === 1`))) bad.push('二氧化硫瓶放掉应该出毒气云 ' + await T.eval(`JSON.stringify([ind.bag, ind.clouds && ind.clouds.length])`));
+                await T.eval(`ind.clouds = []; true;`);
+                // ── 粉碎机、离心机（电池组供电） ──
+                const dev = (id, ty, x, z, extra) => T.eval(`(function(){ ind.base.devs.push(Object.assign({ id: ${id}, ty: '${ty}', x: ${x}, z: ${z}, bats: 0, u: 0, on: true, ft: 20, st: {} }, ${JSON.stringify(extra || {})})); ind.devDirty = true; })(); true;`);
+                const wire = (a, b) => T.eval(`ind.base.wires.push([${a}, ${b}]); true;`);
+                await T.eval(`ind.base.devs = []; ind.base.wires = []; true;`);
+                await dev(1, 'bank', -20, 10, { bats: 6, u: 99999 }); await dev(2, 'crusher', -18, 10, { st: { ore_u: 3 } }); await wire(1, 2);
+                await T.eval(`indAdvance(9); true;`);
+                if (await J(`indDev(2).st.ore_u_dust || 0`) !== 0) bad.push('粉碎机 9 秒不该出粉');
+                await T.eval(`indAdvance(2); true;`);
+                let cr = await J(`indDev(2).st`);
+                if (cr.ore_u !== 2 || cr.ore_u_dust !== 2) bad.push('粉碎机 10 秒应该 1 铀矿 → 2 铀矿粉 ' + JSON.stringify(cr));
+                await T.eval(`indDev(1).bats = 2; indAdvance(12); true;`);   // 3 V 不够 6 V
+                if ((await J(`indDev(2).st.ore_u`)) !== 2) bad.push('电压不够粉碎机不该干活');
+                await T.eval(`indDev(1).bats = 6; indDev(1).u = 1000; let u0 = indDev(1).u; indDev(2).st = {}; indAdvance(5); window.__u = u0 - indDev(1).u; true;`);
+                if ((await T.eval(`__u`)) > 0.01) bad.push('没活干不该耗电');
+                await T.eval(`indDev(2).st = { ore_u: 5 }; indDev(1).u = 1000; indAdvance(5); window.__u = 1000 - indDev(1).u; true;`);
+                if (Math.abs((await T.eval(`__u`)) - 10) > 0.5) bad.push('粉碎机有活干每秒耗 2 U ' + await T.eval(`__u`));
+                // 离心机：额定 24 V，18 V 才转；2 个一样的罐 60 秒 → 高一档 + 贫铀罐
+                await T.eval(`ind.base.devs = []; ind.base.wires = []; true;`);
+                await dev(1, 'bank', -20, 10, { bats: 14, u: 99999 }); await dev(3, 'centrifuge', -18, 10, { st: { 'uf6:0': 2 } }); await wire(1, 3);
+                await T.eval(`indAdvance(59); true;`);
+                if ((await J(`indDev(3).st['uf6:1'] || 0`)) !== 0) bad.push('离心机 59 秒不该好');
+                await T.eval(`indAdvance(2); true;`);
+                let ce = await J(`indDev(3).st`);
+                if (ce['uf6:1'] !== 1 || ce.uf6_dep !== 1 || ce['uf6:0']) bad.push('离心机 60 秒应该出高一档的罐 + 贫铀罐 ' + JSON.stringify(ce));
+                // 4 轮到 3.5%
+                const steps = [];
+                for (let i = 1; i < 4; i++) { await T.eval(`indDev(3).st = { 'uf6:${i}': 2 }; indDev(3).ct = 0; indAdvance(61); true;`); steps.push(await J(`Object.keys(indDev(3).st).filter(function (k) { return k.indexOf('uf6:') === 0; })`)); }
+                if (steps.join('|') !== 'uf6:2|uf6:3|uf6:4') bad.push('离心机一档档往上 ' + steps.join('|'));
+                if (!/3\.5%/.test(await T.eval(`indName('uf6:4')`))) bad.push('4 轮后应该是 3.5%');
+                await T.eval(`indDev(3).st = { 'uf6:4': 2 }; indDev(3).ct = 0; indAdvance(61); true;`);
+                if ((await J(`indDev(3).st['uf6:5'] || 0`)) !== 1) bad.push('3.5% → 5% 一轮');
+                await T.eval(`indDev(3).st = { 'uf6:5': 2 }; indDev(3).ct = 0; indAdvance(70); indPanelNk(3); true;`);
+                if ((await J(`indDev(3).st['uf6:5']`)) !== 2 || (await J(`Object.keys(indDev(3).st).length`)) !== 1) bad.push('到 5% 不再涨 ' + await T.eval(`JSON.stringify(indDev(3).st)`));
+                if (!/到头了/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('到 5% 面板要写到头了');
+                await T.eval(`indPanelClose(); true;`);
+                // ── 反应堆 ──
+                const rx = (extra) => T.eval(`ind.base.devs = []; ind.base.wires = []; ind.base.rad = []; ind.base.off.pool = true; (function(){ ind.base.devs.push(Object.assign({ id: 5, ty: 'reactor', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }], ctl: 1, T: 20, melt: 0 }, ${JSON.stringify(extra || {})})); ind.devDirty = true; indTeleport(10, 10); })(); true;`);
+                await rx(); await T.eval(`indAdvance(60); true;`);
+                if ((await J(`indDev(5).T`)) > 20.01) bad.push('控制棒全插不该发热 ' + await T.eval(`indDev(5).T`));
+                await T.eval(`indDev(5).ctl = 0.5; indAdvance(20); true;`);   // 2 根满功率 = 200，空气冷却 20：每秒 +10 封顶
+                if (Math.abs((await J(`indDev(5).T`)) - 220) > 1) bad.push('拔出一半温度每秒最多升 10°C：20 秒 +200 ' + await T.eval(`indDev(5).T`));
+                // 有水（水池 6 米内）：4 根 ctl 0.4 → 发热 240 < 冷却 250，温度降回去不熔
+                await rx({ ctl: 0.4, T: 300, x: 15, z: 10 }); await T.eval(`ind.base.off.pool = false; indAdvance(80); true;`);
+                if (!(await T.eval(`!!indDev(5)`)) || Math.abs((await J(`indDev(5).T`)) - 220) > 1) bad.push('有水冷却 + 控制棒插一部分（发热 240 < 冷却 250）温度每秒降 1°C：80 秒 300 → 220 ' + await T.eval(`indDev(5) && indDev(5).T`));
+                // 水泵也算水（开着的水泵 6 米内）
+                await rx({ ctl: 0.4, T: 300 }); await T.eval(`ind.base.off.pool = true; ind.base.devs.push({ id: 6, ty: 'pump', x: -22, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, pw: true }); true;`);
+                const pc = await J(`(function(){ ind.base.devs.find(function (d) { return d.id === 6; }).pw = true; let c = nkReactorCool(indDev(5)); ind.base.devs.find(function (d) { return d.id === 6; }).pw = false; return [c, nkReactorCool(indDev(5))]; })()`);
+                if (pc[0] !== 250 || pc[1] !== 20) bad.push('开着的水泵 6 米内算水（没开不算） ' + JSON.stringify(pc));
+                // 没水全拔：过热 > 400°C 持续 20 秒熔毁
+                await rx({ ctl: 0 }); await T.eval(`ind.base.fires = []; ind.base.devs.push({ id: 7, ty: 'lamp', x: -26, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }); indAdvance(37); true;`);
+                if (!(await T.eval(`!!indDev(5) && indDev(5).T >= 389`))) bad.push('没水全拔 37 秒应该快到 400°C ' + await T.eval(`indDev(5) && indDev(5).T`));
+                await T.eval(`indAdvance(15); true;`);
+                if (!(await T.eval(`!!indDev(5) && indDev(5).melt > 0`))) bad.push('超过 400°C 要开始计 20 秒');
+                await T.eval(`indAdvance(10); true;`);
+                const mt = await J(`{ rx: !!indDev(5), lamp: !!indDev(7), rad: ind.base.rad.map(function (z) { return [z.x, z.z, z.r, z.until - ind.base.clock > 3 * IND_DAY - 5]; }) }`);
+                if (mt.rx || mt.lamp || mt.rad.length !== 1 || mt.rad[0][2] !== 10 || !mt.rad[0][3]) bad.push('熔毁：反应堆和 6 米内的东西没了，留下半径 10 米 3 天的辐射区 ' + JSON.stringify(mt));
+                // 燃料棒烧 2 个游戏日变乏燃料棒
+                await rx({ ctl: 0.99, rods: [{ i: 4, b: 0 }] }); await T.eval(`ind.base.off.pool = false; indAdvance(10); true;`);
+                await T.eval(`indDev(5).ctl = 0; indDev(5).T = 20; indDev(5).rods[0].b = 0.999999; indAdvance(0.5); true;`);
+                if (!(await J(`indDev(5).rods[0].spent === true`))) bad.push('烧完的燃料棒要变乏燃料棒 ' + await T.eval(`JSON.stringify(indDev(5).rods)`));
+                // 面板：放棒、取棒（取出的乏燃料棒是物品）、温度颜色
+                await T.eval(`ind.bag = {}; indBagAdd('rod:5', 1); indPanelNk(5); nkRodIn(5, 'rod:5'); nkRodOut(5, 0); true;`);
+                if (!(await T.eval(`ind.bag.rod_spent === 1 && indDev(5).rods.length === 1 && indDev(5).rods[0].i === 5`))) bad.push('放棒取棒不对 ' + await T.eval(`JSON.stringify([ind.bag, indDev(5).rods])`));
+                await T.eval(`indPanelClose(); true;`);
+                // ── 汽轮发电机：反应堆 ≥ 250°C 时 3 米内输出 48 V ──
+                await rx({ T: 300 }); await dev(8, 'turbine', -17, 0, {}); await dev(9, 'turbine', -10, 0, {});
+                const tv = await J(`[indSrcVolt(indDev(8)), indSrcVolt(indDev(9))]`);
+                if (tv[0] !== 48 || tv[1] !== 0) bad.push('汽轮发电机 3 米内 48 V、远的没电 ' + JSON.stringify(tv));
+                await T.eval(`indDev(5).T = 200; true;`);
+                if ((await J(`indSrcVolt(indDev(8))`)) !== 0) bad.push('反应堆不到 250°C 汽轮发电机没电');
+                // ── 辐射：强每秒 2 血、弱 0.2、很弱不扣；铅箱里的不辐射；铅围裙 −50%；盖格计数器读数；辐射区 ──
+                const rad = async (setup, secs) => { await T.eval(`ind.dead = null; ind.hurt = null; ind.base.devs = []; ind.base.wires = []; ind.base.ground = []; ind.base.rad = []; ind.base.wear = {}; ind.bag = {}; ind.base.chests.forEach(function (c) { if (!c.big) c.items = {}; }); ind.base.chests = ind.base.chests.filter(function (c) { return c.big; }); ind.base.surv.hp = 100; ind.base.surv.food = 100; ind.base.surv.water = 100; indTeleport(0, 0); ${setup}; indAdvance(${secs}); true;`); return 100 - (await T.eval(`ind.base.surv.hp`)); };
+                const near2 = (a, b, tol) => Math.abs(a - b) <= (tol === undefined ? 0.15 : tol);
+                let v = await rad(`indBagAdd('rod_spent', 1)`, 5);
+                if (!near2(v, 10, 0.5)) bad.push('背包里有乏燃料棒每秒 2 血：5 秒 10 ' + v);
+                v = await rad(`indBagAdd('plutonium', 1)`, 5); if (!near2(v, 10, 0.5)) bad.push('钚也是强辐射 ' + v);
+                v = await rad(`indBagAdd('rod:4', 1)`, 10); if (!near2(v, 2, 0.15)) bad.push('燃料棒弱辐射每秒 0.2：10 秒 2 ' + v);
+                v = await rad(`indBagAdd('pellet:4', 1); indBagAdd('rod:5:20', 1)`, 10); if (!near2(v, 2, 0.15)) bad.push('弱辐射不叠加（芯块 + 燃料棒还是每秒 0.2） ' + v);
+                v = await rad(`indBagAdd('ore_u', 1); indBagAdd('ore_u_dust', 1); indBagAdd('yellowcake', 1); indBagAdd('uf6:3', 1)`, 10); if (v !== 0) bad.push('铀矿、铀矿粉、黄饼、六氟化铀罐很弱，不扣血 ' + v);
+                v = await rad(`indBagAdd('rod_spent', 1); ind.base.wear = { body: 'lead_apron' }`, 5); if (!near2(v, 5, 0.5)) bad.push('铅围裙辐射伤害少一半：5 秒 5 ' + v);
+                v = await rad(`ind.base.rad.push({ x: 0, z: 0, r: 5, until: ind.base.clock + 1000 })`, 5); if (!near2(v, 10, 0.5)) bad.push('站在辐射区里每秒 2 血 ' + v);
+                v = await rad(`ind.base.rad.push({ x: 20, z: 0, r: 5, until: ind.base.clock + 1000 })`, 5); if (v !== 0) bad.push('辐射区外面不扣血 ' + v);
+                v = await rad(`ind.base.rad.push({ x: 0, z: 0, r: 5, until: ind.base.clock + 1 })`, 5); if (!(v > 0 && v < 4)) bad.push('辐射区过期就没了（5 秒里只受 1 秒的辐射） ' + v);
+                // 地上、普通箱子里的强辐射东西 3 米内也算；铅箱里的不算
+                v = await rad(`ind.base.ground.push({ k: 'rod_spent', x: 2, z: 0 })`, 5); if (!near2(v, 10, 0.5)) bad.push('3 米内地上的乏燃料棒扣血 ' + v);
+                v = await rad(`ind.base.ground.push({ k: 'rod_spent', x: 5, z: 0 })`, 5); if (v !== 0) bad.push('5 米外地上的乏燃料棒不扣血 ' + v);
+                v = await rad(`ind.base.chests.push({ id: 71, x: 2, z: 0, big: false, items: { rod_spent: 1 } })`, 5); if (!near2(v, 10, 0.5)) bad.push('普通箱子里的乏燃料棒 3 米内也辐射 ' + v);
+                v = await rad(`ind.base.chests.push({ id: 72, x: 2, z: 0, big: false, lead: true, items: { rod_spent: 1, plutonium: 4 } })`, 5); if (v !== 0) bad.push('铅箱里的东西不辐射 ' + v);
+                // 铅箱：8 铅锭，30 格，存档带 lead，搬起来还是铅箱
+                await T.eval(`ind.bag = {}; indBagAdd('ingot_pb', 8); indCraft(${ci('chest_lead')}); true;`);
+                if (!(await T.eval(`ind.bag.chest_lead === 1 && !ind.bag.ingot_pb`))) bad.push('8 铅锭做不出铅箱');
+                await T.eval(`ind.base.chests = ind.base.chests.filter(function (c) { return c.big; }); indTeleport(0, 0); indLookAt(0, -10); indSelect('chest_lead'); indUse(); true;`);
+                const lc = await J(`ind.base.chests.filter(function (c) { return c.lead; }).map(function (c) { return [c.big, c.lead, Object.keys(c.items).length]; })`);
+                if (lc.length !== 1 || lc[0][0] !== false) bad.push('铅箱放不下 ' + JSON.stringify(lc));
+                if (!(await J(`indFixBase(JSON.parse(JSON.stringify(ind.base))).chests.filter(function (c) { return c.lead; }).length`))) bad.push('铅箱存档丢了 lead');
+                // 屏幕发绿 + 盖格计数器
+                await rad(`indBagAdd('rod_spent', 1)`, 1);
+                if (!(await T.eval(`parseFloat(document.getElementById('ind-rad').style.opacity) > 0.2`))) bad.push('受强辐射屏幕要发绿');
+                await T.eval(`ind.bag = {}; indBagAdd('geiger', 1); indBagAdd('rod_spent', 1); indSelect('geiger'); indAdvance(0.3); true;`);
+                const gg = await T.eval(`document.getElementById('ind-geiger') ? document.getElementById('ind-geiger').innerText : ''`);
+                if (!/辐射 2\.00/.test(gg)) bad.push('盖格计数器应该显示辐射 2.00 ' + gg);
+                await T.eval(`ind.bag = {}; indBagAdd('geiger', 1); indSelect('geiger'); indAdvance(0.3); true;`);
+                if (!/辐射 0\.00/.test(await T.eval(`document.getElementById('ind-geiger').innerText`))) bad.push('没有辐射读数 0.00');
+                await T.eval(`ind.bag = { rod_spent: 1, geiger: 1 }; indSelect('rod_spent'); indAdvance(0.3); true;`);
+                if (await T.eval(`!!document.getElementById('ind-geiger')`)) bad.push('不拿盖格计数器不显示读数');
+                // 悠闲不扣血
+                await T.eval(`ind.base.rule = 'casual'; true;`);
+                v = await rad(`indBagAdd('rod_spent', 1)`, 3); if (v !== 0) bad.push('悠闲不扣辐射血 ' + v);
+                await T.eval(`ind.base.rule = 'hard'; true;`);
+                // 铅围裙配方 6 铅锭 + 2 毛线，走路 ×0.8
+                await T.eval(`ind.bag = {}; indBagAdd('ingot_pb', 6); indBagAdd('yarn', 2); indCraft(${ci('lead_apron')}); true;`);
+                if (!(await T.eval(`ind.bag.lead_apron === 1`))) bad.push('铅围裙做不出');
+                await T.eval(`ind.base.wear = { body: 'lead_apron' }; indTeleport(-20, 15); indLookAt(0, 15); ind.k.w = true; true;`);
+                const wk = await T.eval(`(function(){ let x0 = ind.p.x; for (let i = 0; i < 20; i++) indMove(0.05); ind.k.w = false; ind.base.wear = {}; return ind.p.x - x0; })()`);
+                if (Math.abs(wk - 5.6) > 0.1) bad.push('铅围裙走路 ×0.8（5.6 米/秒） ' + wk);
+                // ── 火药：工作台 1 硫 + 1 木炭 + 3 硝石 → 4；放进炉子就炸；碰到爆炸连锁 ──
+                await T.eval(`ind.bag = {}; indBagAdd('sulfur', 1); indBagAdd('charcoal', 1); indBagAdd('saltpeter', 3); indCraft(${ci('gunpowder')}); true;`);
+                if (!(await T.eval(`ind.bag.gunpowder === 4 && !ind.bag.saltpeter`))) bad.push('火药做不出 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.dead = null; ind.hurt = null; ind.base.surv.hp = 100; ind.base.wear = {}; ind.base.devs = [{ id: 1, ty: 'lamp', x: IND_BASE_ST.stove.x + 1.5, z: IND_BASE_ST.stove.z, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 2, ty: 'lamp', x: IND_BASE_ST.stove.x + 6, z: IND_BASE_ST.stove.z, bats: 0, u: 0, on: true, ft: 20, st: {} }]; ind.base.stove = { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, spout: [] }; indTeleport(IND_BASE_ST.stove.x - 10, IND_BASE_ST.stove.z); indBagAdd('gunpowder', 1); indStovePut('gunpowder', 1); true;`);
+                const pw = await J(`{ ids: ind.base.devs.map(function (d) { return d.id; }), gp: ind.bag.gunpowder, hp: ind.base.surv.hp }`);
+                if (pw.ids.join() !== '2' || pw.gp !== 4 || pw.hp !== 100) bad.push('火药放进炉子应该炸（半径 2 米：1.5 米的灯没了、6 米的还在、人离得远没事） ' + JSON.stringify(pw));
+                // 碰到爆炸：地上的火药（离第一次爆炸 2.5 米）炸，连锁炸掉它 1.5 米内的灯
+                await T.eval(`ind.base.devs = [{ id: 3, ty: 'lamp', x: -20, z: -3.5, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 4, ty: 'lamp', x: -20, z: 6, bats: 0, u: 0, on: true, ft: 20, st: {} }]; ind.base.ground = [{ k: 'gunpowder', x: -20, z: -2.5 }, { k: 'gunpowder', x: -20, z: 6.5 }]; indTeleport(10, 10); indBoom(-20, 0, 0, '测试'); true;`);
+                const ch = await J(`{ ids: ind.base.devs.map(function (d) { return d.id; }), gp: ind.base.ground.filter(function (g) { return g.k === 'gunpowder'; }).length }`);
+                if (ch.ids.join() !== '4' || ch.gp !== 1) bad.push('地上的火药碰到爆炸要连锁炸（3 号灯被连锁炸掉，远处的 4 号灯和火药还在） ' + JSON.stringify(ch));
+                // ── 原子弹：右键放、左键启动、30 秒倒计时、倒计时里左键拆掉变回原子弹 ──
+                const bomb0 = async (px, pz) => T.eval(`ind.dead = null; ind.hurt = null; ind.base.wear = {}; ind.base.surv.hp = 100; ind.base.surv.food = 100; ind.base.surv.water = 100; ind.base.bombs = []; ind.base.rad = []; ind.base.devs = []; ind.base.wires = []; ind.base.ground = []; ind.base.chests = ind.base.chests.filter(function (c) { return c.big; }); ind.bag = {}; indBagAdd('nuke', 1); indTeleport(${px}, ${pz}); indLookAt(${px}, ${pz} - 10); indSelect('nuke'); indUse(); true;`);
+                await bomb0(-3, 14);
+                if (!(await T.eval(`ind.base.bombs.length === 1 && ind.base.bombs[0].t < 0 && !ind.bag.nuke`))) bad.push('原子弹放不下 ' + await T.eval(`JSON.stringify([ind.base.bombs, ind.bag])`));
+                await T.eval(`indLookAt(ind.base.bombs[0].x, ind.base.bombs[0].z); indAction(); true;`);
+                if (!(await T.eval(`ind.base.bombs[0].t > 29 && ind.base.bombs[0].t <= 30`))) bad.push('左键没启动倒计时 ' + await T.eval(`JSON.stringify(ind.base.bombs)`));
+                await T.eval(`indTeleport(28, 20); indAdvance(10); true;`);
+                if (!(await T.eval(`ind.base.bombs.length === 1 && Math.abs(ind.base.bombs[0].t - 20) < 0.7`))) bad.push('倒计时 30 秒 ' + await T.eval(`JSON.stringify(ind.base.bombs)`));
+                await T.eval(`indTeleport(-3, 12 - 1.3); indLookAt(ind.base.bombs[0].x, ind.base.bombs[0].z); indAction(); true;`);
+                if (!(await T.eval(`ind.base.bombs.length === 0 && ind.bag.nuke === 1`))) bad.push('倒计时里左键应该拆掉变回原子弹 ' + await T.eval(`JSON.stringify([ind.base.bombs, ind.bag])`));
+                // 爆炸（基地）：半径 40 米，仓库箱不炸，其余全炸，之后是 3 个游戏日的辐射区；离中心 ≤ 10 米扣 1000 必死
+                const boom = async (px, pz, wear) => {
+                    await bomb0(-3, 14);
+                    await T.eval(`ind.base.devs = [{ id: 1, ty: 'lamp', x: -29, z: 12, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 2, ty: 'lamp', x: 25, z: -18, bats: 0, u: 0, on: true, ft: 20, st: {} }]; ind.base.ground = [{ k: 'stone', x: 2, z: 5 }]; ind.base.chests.push({ id: 61, x: -20, z: 12, big: false, items: { iron: 3 } }); ind.base.wear = ${JSON.stringify(wear || {})}; ind.base.bombs[0].t = 0.05; indTeleport(${px}, ${pz}); indAdvance(0.2); true;`);
+                };
+                await boom(28, -18);   // 离中心 43 米：不受伤
+                const b1 = await J(`{ devs: ind.base.devs.map(function (d) { return d.id; }), ground: ind.base.ground.length, chest: ind.base.chests.some(function (c) { return c.id === 61 && c.items.iron === 3; }), rad: ind.base.rad.map(function (z) { return [z.r, z.until - ind.base.clock > 3 * IND_DAY - 5]; }), hp: ind.base.surv.hp, dead: !!ind.dead, bombs: ind.base.bombs.length, stove: !ind.base.off.stove, flash: !!document.getElementById('ind-flash') }`);
+                if (b1.devs.join() !== '2') bad.push('原子弹基地里的设备要全炸（半径 40） ' + JSON.stringify(b1));
+                if (b1.devs.indexOf(1) >= 0 || b1.ground !== 0 || !b1.chest || b1.rad.length !== 1 || b1.rad[0][0] !== 40 || !b1.rad[0][1] || b1.bombs !== 0 || !b1.stove || !b1.flash) bad.push('原子弹基地里 40 米内除了仓库箱全炸没、留 3 天辐射区、白闪 ' + JSON.stringify(b1));
+                await boom(-3, 20);   // 离中心 8 米
+                if (!(await T.eval(`!!ind.dead && ind.dead.cause === '爆炸' && /原子弹/.test(ind.dead.detail)`))) bad.push('10 米内必死 ' + await T.eval(`JSON.stringify([ind.dead, ind.base.surv.hp])`));
+                await T.eval(`indRespawn(); true;`);
+                await boom(-3, 20, { body: 'blast_suit', head: 'blast_helmet' });   // 防爆装备 −70% 也扛不住 1000
+                if (!(await T.eval(`!!ind.dead`))) bad.push('10 米内穿防爆服也必死（1000 × 0.3 = 300） ' + await T.eval(`ind.base.surv.hp`));
+                await T.eval(`indRespawn(); true;`);
+                // 40 米边上：60 点，穿防爆装备 18
+                await bomb0(-3, 14);
+                await T.eval(`ind.base.wear = {}; ind.base.bombs[0].t = 0.05; indTeleport(28, -13.1); indAdvance(0.2); true;`);   // 离中心约 39.9 米
+                const edgeHp = await T.eval(`100 - ind.base.surv.hp`);
+                if (!(edgeHp > 60 && edgeHp < 70)) bad.push('40 米边上扣血 60 多点 ' + edgeHp);
+                // 辐射区里扣血（死因：辐射）
+                if (!(await T.eval(`ind.radNow > 1.9`))) bad.push('爆炸后 40 米内是强辐射区 ' + await T.eval(`ind.radNow`));
+                await T.eval(`ind.base.rad = []; ind.base.surv.hp = 100; true;`);
+                // ── 远征图上 ──
+                await T.eval(`ind.base.rule = 'hard'; indGoTrip(2024); ind.bag = {}; ind.base.surv.hp = 100; ind.base.wear = {}; true;`);
+                const tb = await J(`(function(){ let N = ind.nodes.filter(function (n) { return !n.dead; }), cx = 0, cz = 0; let best = null, bn = 0; N.forEach(function (c) { let n = N.filter(function (m) { return Math.hypot(m.x - c.x, m.z - c.z) <= 40; }).length; if (n > bn && Math.hypot(c.x, c.z) < 100) { bn = n; best = c; } }); return { x: best.x, z: best.z, n: bn }; })()`);
+                await T.eval(`window.__bx = ${tb.x} + 30; window.__bz = ${tb.z}; indTeleport(${tb.x} + 30, ${tb.z} + 30); indLookAt(${tb.x} + 30, ${tb.z} - 20); indBagAdd('nuke', 1); indSelect('nuke'); indUse(); true;`);
+                if (!(await T.eval(`ind.tripBombs.length === 1`))) bad.push('远征里也能放原子弹');
+                const before = await J(`(function(){ let b = ind.tripBombs[0], inN = ind.nodes.filter(function (n) { return !n.dead && Math.hypot(n.x - b.x, n.z - b.z) <= 40; }), outN = ind.nodes.filter(function (n) { return !n.dead && Math.hypot(n.x - b.x, n.z - b.z) > 40; }); return { in: inN.length, out: outN.length, give: inN.reduce(function (a, n) { return a + n.n * 2; }, 0), bx: b.x, bz: b.z }; })()`);
+                await T.eval(`ind.tripBombs[0].t = 0.05; indTeleport(ind.tripBombs[0].x + 60, ind.tripBombs[0].z); indAdvance(0.2); true;`);
+                const after = await J(`(function(){ let bx = ${before.bx}, bz = ${before.bz}; return { in: ind.nodes.filter(function (n) { return !n.dead && Math.hypot(n.x - bx, n.z - bz) <= 40; }).length, out: ind.nodes.filter(function (n) { return !n.dead && Math.hypot(n.x - bx, n.z - bz) > 40; }).length, ground: ind.tripGround.length, zone: ind.tripRad.map(function (z) { return z.r; }), bombs: ind.tripBombs.length }; })()`);
+                if (after.in !== 0 || after.out !== before.out || after.ground !== Math.min(400, before.give) || after.zone.join() !== '40' || after.bombs !== 0) bad.push('远征图爆炸：40 米内资源点全炸开、东西 ×2 掉地上、之后强辐射区 ' + JSON.stringify([before, after]));
+                // 地上的东西能捡
+                await T.eval(`(function(){ let g = ind.tripGround[0]; indTeleport(g.x + 0.5, g.z); indLookAt(g.x, g.z); })(); true;`);
+                const pk = await J(`(function(){ let n0 = ind.tripGround.length, a = indAim(); if (a && a.kind === 'item') indAction(); return [a && a.kind, n0 - ind.tripGround.length, Object.keys(ind.bag).length]; })()`);
+                if (pk[0] !== 'item' || pk[1] !== 1 || pk[2] < 1) bad.push('炸开的矿能捡 ' + JSON.stringify(pk));
+                // 回基地：远征里的这些都没了
+                await T.eval(`indGoBase(false); true;`);
+                if (!(await T.eval(`ind.tripGround.length === 0 && ind.tripBombs.length === 0 && ind.tripRad.length === 0`))) bad.push('回基地远征里的东西要清掉');
+                // ── 配方查询都能搜到 ──
+                for (const w of ['硫酸', '氟化氢', '黄饼', '六氟化铀', '芯块', '燃料棒', '反应堆', '汽轮', '粉碎机', '离心机', '铅围裙', '铅箱', '盖格', '火药', '原子弹', '方铅矿', '二氧化硫', '钚']) {
+                    await T.eval(`indPanelBook('${w}'); true;`);
+                    if (!(await T.eval(`document.getElementById('ind-panel').innerText.indexOf('${w}') >= 0 && !/没有.*配方|没找到/.test(document.getElementById('ind-panel').innerText.slice(0, 40))`))) bad.push('配方查询搜不到：' + w);
+                }
+                await T.eval(`indPanelClose(); true;`);
+                // ── 存档：反应堆的棒和控制棒、辐射区、原子弹、铅箱 ──
+                await T.eval(`ind.base.devs = [{ id: 5, ty: 'reactor', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0.25 }, { spent: true }, { i: 99, b: 0 }], ctl: 0.37, T: 280.5, melt: 3 }]; ind.base.rad = [{ x: 1, z: 2, r: 40, until: ind.base.clock + 500 }, { x: 'a' }]; ind.base.bombs = [{ id: 1, x: 3, z: 4, t: 12 }, { x: 'a' }]; true;`);
+                const sv = await J(`(function(){ let b = indFixBase(JSON.parse(JSON.stringify(ind.base))), d = b.devs[0]; return { rods: d.rods, ctl: d.ctl, T: d.T, melt: d.melt, rad: b.rad.length, bombs: b.bombs.map(function (o) { return [o.x, o.z, o.t]; }), ver: b.ver }; })()`);
+                if (JSON.stringify(sv.rods) !== JSON.stringify([{ i: 4, b: 0.25 }, { spent: true }]) || sv.ctl !== 0.37 || sv.T !== 280.5 || sv.melt !== 3 || sv.rad !== 1 || JSON.stringify(sv.bombs) !== '[[3,4,12]]' || sv.ver !== 11) bad.push('第 6 阶段存档读回来不对 ' + JSON.stringify(sv));
+                if (!(await T.eval(`indFixBase({ ver: 10, rule: 'hard', box: {} }).rad.length === 0 && indFixBase({ ver: 10, rule: 'hard', box: {} }).bombs.length === 0`))) bad.push('老档没有辐射区和原子弹要补成空');
+                // 动态物品存档：背包、箱子里的 uf6/pellet/rod 认得出来，乱写的丢掉
+                const dy = await J(`indFixBase({ ver: 10, rule: 'hard', box: { 'uf6:3': 2, 'rod:4:30': 1, 'rod:9': 1, 'pellet:x': 1, 'uf6:2': 0 }, bag: { 'pellet:5': 3, 'rod:0:99': 1, 'rod:0:100': 1 } })`);
+                if (JSON.stringify(Object.keys(dy.box)) !== '["uf6:3","rod:4:30"]' || JSON.stringify(Object.keys(dy.bag)) !== '["pellet:5","rod:0:99"]') bad.push('动态物品存档不对 ' + JSON.stringify([dy.box, dy.bag]));
+            }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND20 第 6 阶段：核和原子弹', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

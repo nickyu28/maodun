@@ -52,14 +52,14 @@
         // ── 配方（炉子上；硬核） ──
         IND_RECIPES.push(
             { in: { ore_pb: 2 }, out: { hot_pb: 2, sulfur: 1 }, cls: 'smelt', minT: 327, time: 15, hard: true },   // 2 份方铅矿 → 2 铅锭 + 1 硫
-            { in: { sulfur: 1, b_o2: 1 }, out: { b_so2: 1 }, cls: 'chem', minT: 400, time: 10, hard: true },
-            { in: { b_so2: 1, b_o2: 1, water_raw: 1 }, out: { b_h2so4: 1, bottle: 1, bucket: 1 }, cls: 'chem', minT: 450, time: 15, hard: true },
-            { in: { ore_u_dust: 2, b_h2so4: 1, naoh: 1 }, out: { yellowcake: 1, bottle: 1 }, cls: 'chem', minT: 80, time: 30, hard: true },
-            { in: { fluorite: 1, b_h2so4: 1 }, out: { b_hf: 1 }, cls: 'chem', minT: 250, time: 15, hard: true },
-            { in: { yellowcake: 1, b_hf: 3 }, out: { 'uf6:0': 1, bottle: 3 }, cls: 'chem', minT: 400, time: 30, hard: true },
-            { in: { 'uf6:4': 1, b_h2: 2 }, out: { 'pellet:4': 1, bottle: 2 }, cls: 'chem', minT: 600, time: 20, hard: true },
-            { in: { 'uf6:5': 1, b_h2: 2 }, out: { 'pellet:5': 1, bottle: 2 }, cls: 'chem', minT: 600, time: 20, hard: true },
-            { in: { rod_spent: 1, b_h2so4: 2 }, out: { plutonium: 1, nuclear_waste: 1, bottle: 2 }, cls: 'chem', minT: 300, time: 40, hard: true }
+            { in: { sulfur: 1, b_o2: 1 }, out: { b_so2: 1 }, cls: 'chem', pri: true, minT: 400, time: 10, hard: true },
+            { in: { b_so2: 1, b_o2: 1, water_raw: 1 }, out: { b_h2so4: 1, bottle: 1, bucket: 1 }, cls: 'chem', pri: true, minT: 450, time: 15, hard: true },
+            { in: { ore_u_dust: 2, b_h2so4: 1, naoh: 1 }, out: { yellowcake: 1, bottle: 1 }, cls: 'chem', pri: true, minT: 80, time: 30, hard: true },
+            { in: { fluorite: 1, b_h2so4: 1 }, out: { b_hf: 1 }, cls: 'chem', pri: true, minT: 250, time: 15, hard: true },
+            { in: { yellowcake: 1, b_hf: 3 }, out: { 'uf6:0': 1, bottle: 3 }, cls: 'chem', pri: true, minT: 400, time: 30, hard: true },
+            { in: { 'uf6:4': 1, b_h2: 2 }, out: { 'pellet:4': 1, bottle: 2 }, cls: 'chem', pri: true, minT: 600, time: 20, hard: true },
+            { in: { 'uf6:5': 1, b_h2: 2 }, out: { 'pellet:5': 1, bottle: 2 }, cls: 'chem', pri: true, minT: 600, time: 20, hard: true },
+            { in: { rod_spent: 1, b_h2so4: 2 }, out: { plutonium: 1, nuclear_waste: 1, bottle: 2 }, cls: 'chem', pri: true, minT: 300, time: 40, hard: true }
         );
         // ── 配方（工作台；硬核） ──
         IND_CRAFT.push(
@@ -213,7 +213,8 @@
             if (!ind || ind.dead) return;
             let r = nkRadNow(), rate = r.lv ? NK_RAD[r.lv] : 0, cut = nkRadCut();
             ind.radNow = r.lv ? NK_RAD_READ[r.lv] * (r.lv === 'vweak' ? 1 : 1 - cut) : 0;
-            if (rate > 0 && indHard()) indHurt(rate * (1 - cut) * dt, 'rad', r.why);
+            ind.radHurt = rate > 0 && indHard();
+            if (ind.radHurt) indHurt(rate * (1 - cut) * dt, 'rad', r.why);
             let g = document.getElementById('ind-rad');
             if (!g) { g = document.createElement('div'); g.id = 'ind-rad'; g.style.cssText = 'position:fixed;inset:0;z-index:38;pointer-events:none;background:#43a047;opacity:0;'; document.body.appendChild(g); }
             g.style.opacity = rate > 0 && indHard() ? (r.lv === 'strong' ? 0.3 : 0.12) : 0;
