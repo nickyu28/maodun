@@ -521,7 +521,7 @@
 
         // title：称号 key（TITLES），有的话在名字上面多画一个小牌子
         function nightMakeLabel(text, colorHex, through, title) {
-            let T = title && TITLES[title], top = T ? 40 : 0;
+            let T = title && TITLES[title], mark = labelMarkOf(text), top = (T || mark) ? 40 : 0;   // mark：头顶皇冠（Boss 测试版，画在称号那一条）
             let cv = document.createElement('canvas'); cv.width = 320; cv.height = 80 + top;
             let ctx = cv.getContext('2d');
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -532,7 +532,8 @@
                 ctx.fillRect(160 - tw / 2, 8, tw, 34);
                 ctx.fillStyle = T.col;
                 ctx.fillText(T.name, 160, 26);
-            }
+                if (mark === 'crown') drawMarkCrown(ctx, Math.max(18, 160 - tw / 2 - 20), 25, 1);
+            } else if (mark === 'crown') drawMarkCrown(ctx, 160, 25, 1.1);
             ctx.fillStyle = 'rgba(15,15,20,0.78)';
             ctx.fillRect(0, 12 + top, 320, 56);
             ctx.fillStyle = cssColor(colorHex, '#ffffff');
@@ -552,7 +553,8 @@
             sp.scale.set(ntBaseW, ntBaseH, 1);
             sp.userData.aspect = cv.height / 320;
             sp.userData.label = dispNameText(text);   // 画上去的名字（测试看这个）
-            if (T) sp.center.set(0.5, 40 / cv.height);   // 名字还在原来的位置，称号往上长
+            sp.userData.mark = mark;
+            if (T || mark) sp.center.set(0.5, 40 / cv.height);   // 名字还在原来的位置，称号往上长
             sp.onBeforeRender = function (renderer, sc, cam) {
                 sp.getWorldPosition(ntWorldPos);
                 let d = cam.position.distanceTo(ntWorldPos);

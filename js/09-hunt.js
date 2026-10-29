@@ -1673,3 +1673,332 @@
             gState.chemRun = false; gState.mapDifficulty = chemPrevDiff; gState.quitNoPay = true;   // 没有金币
             chem = null;
         }
+
+        // ══════════════ Boss 测试版（docs/boss.md 方案 A，排队第 8 条）══════════════
+        // 开关：网址带 ?bossdebug=1 才有（记在本机 TH_bossdebug，?bossdebug=0 清掉）；不带的时候寻宝队跟原来一模一样（不多取随机数、宝箱照旧）。
+        // 联机时以房主开局时的开关为准（START_MAP 里的 boss 字段），各端造出来的图才一样。
+        // 中等图：伪装者放大 2.2 倍（扑击）；困难图：凝视者放大 2.8 倍、速度 40（冲撞）。简单图、地图 4、教程、化学寻宝队没有 Boss。
+        // Boss 本体各端各自跑（只追本地玩家），只有血量归房主：队员打到发 BOSS_HIT，房主扣血广播 BOSS_HP（带最后一击的人 by），房主以外发的不认。
+        // 掉落只给最后一击的人；掉什么造图时就按种子定好（huntAssignLoot 里，箱子之后、信号接收器之前），另带 1 个大金（占每图大金上限）。
+        const BOSS_DBG_KEY = 'TH_bossdebug';
+        function bossDebugRead() {
+            let q = null;
+            try { let m = /[?&]bossdebug=([01])(&|$)/.exec(location.search); if (m) q = m[1]; } catch (e) { }
+            if (q === '1') { try { localStorage.setItem(BOSS_DBG_KEY, '1'); } catch (e) { } return true; }
+            if (q === '0') { try { localStorage.removeItem(BOSS_DBG_KEY); } catch (e) { } return false; }
+            try { return localStorage.getItem(BOSS_DBG_KEY) === '1'; } catch (e) { return false; }
+        }
+        let BOSS_DBG_CACHE = null;
+        function bossDebugOn() { if (BOSS_DBG_CACHE === null) BOSS_DBG_CACHE = bossDebugRead(); return BOSS_DBG_CACHE; }
+        let huntBossRun = false;   // 这一局开着 Boss 测试版（房主开局时定）
+        // 数值（作者定的）。冒烟会读这些数，别写死在别处
+        const HUNT_BOSS = {
+            med: { mob: 'puppet', name: '伪装者头目', scale: 2.2, hp: 200, speed: 30, move: 'pounce', wind: 1.2, radius: 12, dmg: 30, cd: 6, baseP: 0.10,
+                gems: [['b_amet', 50], ['b_ruby', 30], ['b_sapph', 20]] },
+            hard: { mob: 'angel', name: '凝视者头目', scale: 2.8, hp: 600, speed: 40, move: 'charge', wind: 1.5, len: 70, dmg: 50, cd: 8, stun: 2, dashSpeed: 140, baseP: 0.25,
+                gems: [['b_ruby', 40], ['b_sapph', 30], ['b_emer', 20], ['b_dia', 10]] }
+        };
+        const HUNT_BOSS_LEASH = 5 * TILE;    // 离守点超过这么远就回去
+        const HUNT_BOSS_HIT_MAX = 150;       // 一下最多扣这么多（猫盾骑士剑 150），房主收到更大的按这个算
+        const HUNT_BOSS_HIT_GAP = 0.8;       // 房主收同一个人的 BOSS_HIT 最短间隔（秒），武器冷却是 1 秒
+        // 新宝石和头目皇冠（4.2 节的"乙"：老的王冠底座和 6 颗老宝石在开着 Boss 时不再从宝箱掉，已有的照老规则能镶能卖）
+        const BOSS_GEMS = [
+            { id: 'b_amet', n: '紫水晶', c: 0x9c27b0, v: 5000 },
+            { id: 'b_ruby', n: '红宝石', c: 0xd50000, v: 8000 },
+            { id: 'b_sapph', n: '蓝宝石', c: 0x1565c0, v: 10000 },
+            { id: 'b_emer', n: '祖母绿', c: 0x00a152, v: 15000 },
+            { id: 'b_dia', n: '钻石', c: 0xb3e5fc, v: 30000 }
+        ];
+        // 头目皇冠的 6 个孔：5 种新宝石各 1 颗，第 6 个孔再镶 1 颗钻石
+        const BOSS_CROWN_SLOTS = [['b_amet', 'b_amet'], ['b_ruby', 'b_ruby'], ['b_sapph', 'b_sapph'], ['b_emer', 'b_emer'], ['b_dia', 'b_dia'], ['b_dia2', 'b_dia']];
+        const BOSS_BASE_V = 40000;
+        function bossGemDef(id) { return BOSS_GEMS.filter(function (g) { return g.id === id; })[0] || null; }
+        function bossGemItem(g) { if (typeof g === 'string') g = bossGemDef(g); return { n: g.n, v: g.v, w: 1, tex: 'jade', c: g.c, type: 'bgem', gem: g.id, gold: true }; }
+        function bossBaseItem() { return { n: '头目皇冠底座', v: BOSS_BASE_V, w: 3, tex: 'disc', c: 0x8d6e63, type: 'bbase', sock: {} }; }
+        function bossCrownCount(it) { let n = 0; BOSS_CROWN_SLOTS.forEach(function (s) { if (it.sock && it.sock[s[0]]) n++; }); return n; }
+        // 这颗宝石能镶进哪个孔（钻石先镶第 5 个孔，再镶第 6 个），没有空孔返回 null
+        function bossCrownFreeSlot(base, gemId) {
+            let s = BOSS_CROWN_SLOTS.filter(function (q) { return q[1] === gemId && !(base.sock && base.sock[q[0]]); })[0];
+            return s ? s[0] : null;
+        }
+        function bossCrownSocket(base, gemId) {
+            if (!base || base.type !== 'bbase') return false;
+            let slot = bossCrownFreeSlot(base, gemId), g = bossGemDef(gemId);
+            if (!slot || !g) return false;
+            base.sock = base.sock || {}; base.sock[slot] = 1;
+            base.v = BOSS_BASE_V + BOSS_CROWN_SLOTS.reduce(function (s, q) { return s + (base.sock[q[0]] ? bossGemDef(q[1]).v : 0); }, 0);
+            if (bossCrownCount(base) >= BOSS_CROWN_SLOTS.length) {
+                base.n = '头目皇冠'; base.type = 'bcrown'; base.v = 0; base.w = 4; base.tex = 'cup'; base.c = 0xffd54f;
+            } else base.n = '头目皇冠底座（' + bossCrownCount(base) + '/' + BOSS_CROWN_SLOTS.length + '）';
+            return true;
+        }
+        function bossOwnsCrown() { return gState.inv.concat(gState.garage).some(function (q) { return q && q.type === 'bcrown'; }); }
+        // 头顶标志（4.3 节做法 1：画进名字牌）：gState.overMark = null / 'crown'（以后彩蛋 8 的 'mycat' 也用这个字段，二选一）
+        function myMark() { return gState.overMark === 'crown' && bossOwnsCrown() ? 'crown' : null; }
+        function peerMarkOf(id) { let p = roomPeers[id]; return p && p.mark === 'crown' ? 'crown' : null; }
+        function labelMarkOf(text) { if (!text) return null; if (text === gState.id) return myMark(); return roomPeers[text] ? peerMarkOf(text) : null; }
+        function bossCrownWear(on) {
+            if (on && !bossOwnsCrown()) return;
+            gState.overMark = on ? 'crown' : null; saveProgress(); roomHello();
+            if (!isPlaying) initGarage();
+        }
+        // 名字牌上画一个小皇冠（cx, cy 是中心）
+        function drawMarkCrown(ctx, cx, cy, s) {
+            ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s);
+            ctx.beginPath(); ctx.moveTo(-14, 9); ctx.lineTo(-16, -8); ctx.lineTo(-7, 0); ctx.lineTo(0, -12); ctx.lineTo(7, 0); ctx.lineTo(16, -8); ctx.lineTo(14, 9); ctx.closePath();
+            ctx.fillStyle = '#ffd54f'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#b8860b'; ctx.stroke();
+            ctx.fillStyle = '#e53935'; ctx.beginPath(); ctx.arc(0, 3, 3, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+        }
+
+        // ── 造图时：掉落（huntAssignLoot 里调）和位置（buildProceduralMaze 末尾调）──
+        function huntBossKind() {
+            if (!huntBossRun || gState.tutorial || gState.chemHunt) return null;
+            return HUNT_BOSS[gState.mapDifficulty] ? gState.mapDifficulty : null;
+        }
+        let huntBossLoot = null, huntBoss = null, huntBossFx = null;
+        function huntBossPickGem(list, r) {
+            let tot = list.reduce(function (s, q) { return s + q[1]; }, 0), acc = 0;
+            for (let i = 0; i < list.length; i++) { acc += list[i][1] / tot; if (r < acc) return list[i][0]; }
+            return list[list.length - 1][0];
+        }
+        // 只在有 Boss 的图上取随机数：先定底座还是宝石，再抽大金（huntTakeBig 占上限，用完了改出金色一档）
+        function huntBossRollLoot(rnd) {
+            let k = huntBossKind(); if (!k) return null;
+            let B = HUNT_BOSS[k], pick = function (a) { return a[Math.floor(rnd() * a.length)]; };
+            let first = rnd() < B.baseP ? bossBaseItem() : bossGemItem(huntBossPickGem(B.gems, rnd()));
+            return [first, huntTakeBig(huntBigPool('gold'), pick)];
+        }
+        function huntBossHumans() { return Math.max(1, Math.min(HUNT_TEAM_SIZE, (gState.team || []).filter(function (m) { return m && !m.isAI; }).length)); }
+        function huntBossMaxHp(kind, humans) { return Math.round(HUNT_BOSS[kind].hp * (1 + 0.5 * ((humans || 1) - 1))); }
+        function huntBossCellOf(p) { return { f: Math.max(0, Math.min(FLOORS - 1, Math.floor((p.y - 0.5) / TILE))), x: Math.floor((p.x + TILE / 2) / TILE), z: Math.floor((p.z + TILE / 2) / TILE) }; }
+        function huntBossSafeCell(f, x, z) { return f === 0 && x <= 2 && z <= 2; }
+        // 守点：离出生点最远的金箱子旁边的一格空地（不在出生点那 3×3 里）；没有金箱子就用最远的箱子
+        function huntBossHome() {
+            let spawn = new THREE.Vector3(TILE, 0, TILE);
+            let list = chests.filter(function (c) { return c.userData.type === 'gold' && !c.userData.hidden; });
+            if (!list.length) list = chests.filter(function (c) { return !c.userData.hidden; });
+            if (!list.length) return null;
+            let far = list.reduce(function (a, c) { return c.position.distanceTo(spawn) > a.position.distanceTo(spawn) ? c : a; });
+            let cc = huntBossCellOf(far.position), best = null;
+            [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) {   // 箱子那一格留给箱子，站在旁边一格
+                if (best) return;
+                let x = cc.x + d[0], z = cc.z + d[1], c = maze[cc.f] && maze[cc.f][z] && maze[cc.f][z][x];
+                if (!c || c.type === 1 || huntBossSafeCell(cc.f, x, z)) return;
+                best = { f: cc.f, x: x, z: z };
+            });
+            if (!best) best = cc;
+            return { chest: far, cell: best };
+        }
+        function huntBossSetup() {
+            huntBossClear();
+            let k = huntBossKind(); if (!k || HUNT_TEST_NOMOB) return;
+            let h = huntBossHome(); if (!h) return;
+            let B = HUNT_BOSS[k], R = 4.5 * B.scale;
+            let root = new THREE.Mesh(new THREE.SphereGeometry(R, 10, 8), new THREE.MeshBasicMaterial({ visible: false }));
+            let model = huntBossMergeModel(huntMobModel(B.mob, B.mob === 'puppet' ? { variant: 0 } : {}));
+            model.scale.setScalar(B.scale); root.add(model);
+            let home = new THREE.Vector3(h.cell.x * TILE, h.cell.f * TILE + R, h.cell.z * TILE);
+            root.position.copy(home);
+            let hp = huntBossMaxHp(k, huntBossHumans());
+            root.userData = { type: 'boss', kind: k, mob: B.mob, name: B.name, hp: hp, maxHp: hp, speed: B.speed, model: model, R: R, fl: h.cell.f,
+                home: home, chest: h.chest, st: 'idle', t: 0, cd: 2, dir: null, aim: null, left: 0, hitDone: false, dead: false, seenT: 0, gap: {} };
+            scene.add(root); entities.push(root); huntBoss = root;
+            // 预警：一个预先造好的网格，显示／隐藏（扑击是地上的红圈，冲撞是红色长条）
+            let fx = B.move === 'pounce' ? new THREE.Mesh(new THREE.CircleGeometry(1, 28), new THREE.MeshBasicMaterial({ color: 0xff1744, transparent: true, opacity: 0.4, depthWrite: false }))
+                : new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xff1744, transparent: true, opacity: 0.4, depthWrite: false }));
+            fx.rotation.x = -Math.PI / 2; fx.visible = false; fx.renderOrder = 5;
+            mapExtraAdd(fx); huntBossFx = fx;
+            huntBossBar();
+        }
+        // 老怪的模型零件太多（伪装者 12 个网格），Boss 只要几个 draw：按材质把零件合并成几块（不再动眼睛这些小动画，转身还在）
+        function huntBossMergeModel(model) {
+            model.updateMatrixWorld(true);
+            let inv = new THREE.Matrix4().copy(model.matrixWorld).invert(), groups = {}, order = [];
+            model.traverse(function (o) {
+                if (!o.isMesh || !o.visible || !o.geometry || Array.isArray(o.material)) return;
+                let m = o.material, key = [m.type, m.color ? m.color.getHex() : 0, m.transparent ? 1 : 0, m.opacity, m.side, m.depthWrite ? 1 : 0, m.blending].join('|');
+                if (!groups[key]) { groups[key] = { mat: m, pos: [], nor: [], uv: [] }; order.push(key); }
+                let g = o.geometry.clone(); g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+                if (g.index) g = g.toNonIndexed();
+                if (!g.attributes.normal) g.computeVertexNormals();
+                groups[key].pos.push(g.attributes.position.array); groups[key].nor.push(g.attributes.normal.array);
+                groups[key].uv.push(g.attributes.uv ? g.attributes.uv.array : new Float32Array(g.attributes.position.count * 2));
+                g.dispose();
+            });
+            let out = new THREE.Group(); out.userData = { mobType: 'boss', t0: 0 };
+            let cat = function (list) { let n = list.reduce(function (s, a) { return s + a.length; }, 0), r = new Float32Array(n), k = 0; list.forEach(function (a) { r.set(a, k); k += a.length; }); return r; };
+            order.forEach(function (key) {
+                let G = groups[key], geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(cat(G.pos), 3));
+                geo.setAttribute('normal', new THREE.BufferAttribute(cat(G.nor), 3));
+                geo.setAttribute('uv', new THREE.BufferAttribute(cat(G.uv), 2));
+                out.add(new THREE.Mesh(geo, G.mat));
+            });
+            model.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });   // 材质还要用，只扔几何体
+            return out;
+        }
+        function huntBossClear() {
+            huntBoss = null; huntBossFx = null;
+            let b = document.getElementById('boss-bar'); if (b) b.style.display = 'none';
+        }
+
+        // ── 血条（DOM，屏幕上方）──
+        function huntBossBar() {
+            let el = document.getElementById('boss-bar');
+            if (!el) {
+                el = document.createElement('div'); el.id = 'boss-bar';
+                el.style.cssText = 'position:fixed; top:176px; left:50%; transform:translateX(-50%); width:min(420px, 70vw); z-index:40; pointer-events:none; display:none; text-align:center; font:bold 14px sans-serif; color:#fff; text-shadow:0 1px 2px #000;';
+                el.innerHTML = '<div id="boss-bar-name"></div><div style="height:12px; background:rgba(0,0,0,0.55); border:1px solid #ffcdd2; border-radius:6px; overflow:hidden; margin-top:2px;"><div id="boss-bar-fill" style="height:100%; width:100%; background:linear-gradient(90deg,#ff1744,#ff8a80);"></div></div>';
+                document.body.appendChild(el);
+            }
+            return el;
+        }
+        function huntBossBarSync(show) {
+            let el = huntBossBar(), u = huntBoss && huntBoss.userData;
+            if (!u || !show) { if (el.style.display !== 'none') el.style.display = 'none'; return; }
+            if (el.style.display !== 'block') el.style.display = 'block';
+            let txt = u.name + '　' + Math.max(0, Math.ceil(u.hp)) + ' / ' + u.maxHp;
+            if (el.dataset.txt === txt) return;   // 每帧都会调，没变就不碰 DOM
+            el.dataset.txt = txt;
+            document.getElementById('boss-bar-name').innerText = txt;
+            document.getElementById('boss-bar-fill').style.width = Math.max(0, Math.min(100, u.hp / u.maxHp * 100)) + '%';
+        }
+
+        // ── 打 Boss：只有真人；血量归房主 ──
+        function huntBossHit(dmg) {
+            let u = huntBoss && huntBoss.userData; if (!u || u.dead) return;
+            u.seenT = 5;
+            if (huntBigSolo()) huntBossApply(dmg, gState.id);
+            else bc.postMessage({ type: 'BOSS_HIT', target: huntBigLeader(), sender: gState.id, dmg: dmg });
+        }
+        // 房主（或单人）扣血；有真人队友就广播
+        function huntBossApply(dmg, by) {
+            let u = huntBoss && huntBoss.userData; if (!u || u.dead) return;
+            let hp = Math.max(0, u.hp - Math.max(0, Math.min(HUNT_BOSS_HIT_MAX, +dmg || 0)));
+            if (huntHasHumanMates()) bc.postMessage({ type: 'BOSS_HP', target: '*', sender: gState.id, hp: hp, by: by });
+            huntBossSetHp(hp, by);
+        }
+        function huntBossSetHp(hp, by) {
+            let u = huntBoss && huntBoss.userData; if (!u || u.dead) return;
+            u.hp = Math.min(u.hp, hp); u.seenT = Math.max(u.seenT, 3);
+            huntBossBarSync(true);
+            if (u.hp <= 0) huntBossDie(by);
+        }
+        function huntBossOnHit(m) {
+            if (m.target !== gState.id || !isPlaying || huntBigLeader() !== gState.id) return;
+            if (!(gState.team || []).some(function (x) { return x && !x.isAI && x.id === m.sender && x.id !== gState.id; })) return;   // 只认自己队里的真人
+            let u = huntBoss && huntBoss.userData; if (!u || u.dead) return;
+            let now = performance.now() / 1000;
+            if (u.gap[m.sender] && now - u.gap[m.sender] < HUNT_BOSS_HIT_GAP) return;
+            u.gap[m.sender] = now;
+            huntBossApply(m.dmg, m.sender);
+        }
+        function huntBossOnHp(m) {
+            if (!isPlaying || m.sender === gState.id || m.sender !== huntBigLeader() || typeof m.hp !== 'number') return;   // 只认房主
+            huntBossSetHp(m.hp, typeof m.by === 'string' ? m.by : null);
+        }
+        function huntBossDie(by) {
+            let e = huntBoss, u = e && e.userData; if (!u || u.dead) return;
+            u.dead = true;
+            if (huntBossFx) huntBossFx.visible = false;
+            if (by === gState.id) {
+                huntTaskEvent('kill');
+                (huntBossLoot || []).forEach(function (it, i) {
+                    if (!it) return;
+                    let item = Object.assign({}, it); if (it.sock) item.sock = {};
+                    let box = huntGroundMesh(item);
+                    box.position.set(e.position.x, u.fl * TILE + 3, e.position.z);
+                    let ang = i * Math.PI + 0.6;
+                    box.userData = Object.assign({}, item, { isItem: true, vel: new THREE.Vector3(Math.cos(ang) * 14, 0, Math.sin(ang) * 14) });
+                    huntItemGlow(box); scene.add(box); groundItems.push(box);
+                });
+                blazeFlash('打倒了' + u.name + '！');
+            } else blazeFlash(u.name + '被打倒了');
+            scene.remove(e); let i = entities.indexOf(e); if (i > -1) entities.splice(i, 1);
+            setTimeout(function () { if (!huntBoss || huntBoss.userData.dead) huntBossBarSync(false); }, 2500);
+        }
+
+        // ── 每帧（handleThrownItemsAndEntitiesEngine 里，时空沙漏停着的时候不走）──
+        function huntBossPlayerOk(u) {
+            if (gState.isDead || gState.hasLeft || gState.inSafeZone) return false;
+            return playerFloor() === u.fl;
+        }
+        function huntBossFlat(a, b) { return Math.hypot(a.x - b.x, a.z - b.z); }
+        function huntBossStep(e, dx, dz) {
+            let u = e.userData, n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 4)), x0 = e.position.x, z0 = e.position.z;
+            for (let i = 0; i < n; i++) {
+                let px = e.position.x, pz = e.position.z;
+                moveWithCollision(e, dx / n, dz / n);
+                let c = huntBossCellOf({ x: e.position.x, y: u.fl * TILE + 1, z: e.position.z });
+                if (huntBossSafeCell(c.f, c.x, c.z)) { e.position.x = px; e.position.z = pz; break; }   // 不进安全区
+            }
+            return Math.hypot(e.position.x - x0, e.position.z - z0);
+        }
+        function huntBossHurt(dmg) {
+            gState.hp -= dmg; updateHUD();
+            if (gState.hp <= 0) triggerAgentDeath();
+        }
+        function huntBossTick(e, dt) {
+            let u = e.userData, B = HUNT_BOSS[u.kind]; if (u.dead) return;
+            let p = camera.position, d = huntBossFlat(p, e.position);
+            if (u.seenT > 0) u.seenT -= dt;
+            let ok = huntBossPlayerOk(u);
+            if (ok && d < 60) introOnce('hunt.boss', '头目', '它守着最远的金箱子，血很厚。<br>地上变红就快躲开。打倒它会掉好东西。');
+            let inView = viewFrustum.containsPoint(e.position) && d < 130 && playerFloor() === u.fl;
+            huntBossBarSync(inView || u.seenT > 0);
+            // 被看着就不能走（伪装者：在视野里；凝视者：正对着看），但招式照出
+            let seen = u.mob === 'puppet' ? viewFrustum.containsPoint(e.position) : (function () { let cd = new THREE.Vector3(); camera.getWorldDirection(cd); return cd.dot(e.position.clone().sub(p).normalize()) > 0.5 && d < 150; })();
+            let far = e.position.distanceTo(u.home) > HUNT_BOSS_LEASH || (ok && huntBossFlat(p, u.home) > HUNT_BOSS_LEASH + 60);
+            let blink = false;
+            if (u.st === 'wind') {
+                u.t -= dt; blink = true;
+                if (B.move === 'charge') {   // 长条跟着 Boss 的位置走，方向开始时就定了
+                    huntBossFx.position.set(e.position.x + u.dir.x * B.len / 2, u.fl * TILE + 0.35, e.position.z + u.dir.z * B.len / 2);
+                }
+                if (u.t <= 0) {
+                    huntBossFx.visible = false;
+                    if (B.move === 'pounce') {
+                        huntBossStep(e, u.aim.x - e.position.x, u.aim.z - e.position.z);
+                        if (huntBossPlayerOk(u) && huntBossFlat(p, u.aim) <= B.radius) huntBossHurt(B.dmg);
+                        u.st = 'idle'; u.cd = B.cd;
+                    } else { u.st = 'dash'; u.left = B.len; u.hitDone = false; }
+                }
+            } else if (u.st === 'dash') {
+                let step = Math.min(u.left, B.dashSpeed * dt), moved = huntBossStep(e, u.dir.x * step, u.dir.z * step);
+                u.left -= step;
+                if (!u.hitDone && huntBossPlayerOk(u) && huntBossFlat(p, e.position) < u.R + 4) { u.hitDone = true; huntBossHurt(B.dmg); }
+                if (u.left <= 0 || moved < step * 0.3) { u.st = 'stun'; u.t = B.stun; }
+            } else if (u.st === 'stun') {
+                u.t -= dt; if (u.t <= 0) { u.st = 'idle'; u.cd = B.cd; }
+            } else {
+                if (u.cd > 0) u.cd -= dt;
+                if (far || !ok) {   // 拉得太远、玩家倒了／回安全区／换了楼层：回守点
+                    let back = huntBossFlat(e.position, u.home);
+                    if (back > 3) huntBossStep(e, (u.home.x - e.position.x) / back * u.speed * dt, (u.home.z - e.position.z) / back * u.speed * dt);
+                } else if (d < 120) {
+                    let range = B.move === 'pounce' ? u.R + 25 : 80;   // 扑击：玩家打得到它的距离就会扑
+                    if (u.cd <= 0 && d < range) {
+                        u.st = 'wind'; u.t = B.wind;
+                        if (B.move === 'pounce') {
+                            u.aim = new THREE.Vector3(p.x, u.fl * TILE, p.z);
+                            huntBossFx.scale.set(B.radius, B.radius, 1); huntBossFx.position.set(p.x, u.fl * TILE + 0.35, p.z);
+                        } else {
+                            u.dir = new THREE.Vector3(p.x - e.position.x, 0, p.z - e.position.z).normalize();
+                            huntBossFx.rotation.set(-Math.PI / 2, 0, Math.atan2(-u.dir.x, -u.dir.z));   // 平面的长边（本地 y）转到冲的方向
+                            huntBossFx.scale.set(u.R * 2, B.len, 1);
+                            huntBossFx.position.set(e.position.x + u.dir.x * B.len / 2, u.fl * TILE + 0.35, e.position.z + u.dir.z * B.len / 2);
+                        }
+                        huntBossFx.visible = true;
+                    } else if (!seen && d > u.R + 2) {
+                        huntBossStep(e, (p.x - e.position.x) / d * u.speed * dt, (p.z - e.position.z) / d * u.speed * dt);
+                    }
+                }
+            }
+            if (u.model) {
+                u.model.visible = !blink || Math.floor(performance.now() / 120) % 2 === 0;
+                u.model.scale.set(B.scale, B.scale * (u.st === 'wind' && B.move === 'pounce' ? 0.75 : 1), B.scale);   // 扑击蓄力时下蹲
+                u.model.rotation.z = u.st === 'stun' ? 0.35 : 0;
+            }
+            e.position.y = u.fl * TILE + u.R;
+        }
