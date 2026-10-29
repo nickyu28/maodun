@@ -1091,8 +1091,11 @@
         </div>
         <div id="hunt-chem-box" class="hidden" style="width:100%; box-sizing:border-box; margin:6px 0; background:#e0f2f1; border:1px solid #80cbc4; border-radius:6px; padding:12px 14px; text-align:left;">
             <div style="font-size:14px; color:#00695c; font-weight:bold; margin-bottom:2px;">寻宝队 · 化学</div>
-            <div style="font-size:12px; color:#00796b; line-height:1.6;">用原子和分子造东西。现在先进实验室玩。</div>
-            <button onclick="huntChemEnter()" style="width:100%; margin:8px 0 0; background:#00897b; color:#fff; border:none; padding:9px 0; font-size:14px;">进实验室</button>
+            <div style="font-size:12px; color:#00796b; line-height:1.6;">没有怪，宝箱只出原料和粒子包，带回实验室用。地上有石油，有的图有暗室，进去要带灯。</div>
+            <div style="display:flex; gap:6px; margin-top:8px;">
+                <button onclick="chemHuntStart()" style="flex:1; margin:0; background:#00897b; color:#fff; border:none; padding:9px 0; font-size:14px;">开始化学寻宝</button>
+                <button onclick="huntChemEnter()" style="flex:1; margin:0; background:#00695c; color:#fff; border:none; padding:9px 0; font-size:14px;">进实验室</button>
+            </div>
         </div>
 
         </div>
@@ -1376,6 +1379,7 @@
         <div id="progress-bg"><div id="progress-fill"></div></div>
         <div id="debuff-msg"></div>
         <div id="merge-timer" style="display:none; position:absolute; top:38%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.7); color:#ffd54f; font-size:22px; font-weight:bold; padding:6px 16px; border-radius:8px; pointer-events:none; z-index:30;"></div>
+        <div id="chem-lamp" style="display:none; position:absolute; top:62px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.65); color:#ffe082; font-size:13px; padding:4px 12px; border-radius:6px; pointer-events:auto; z-index:25;" onclick="chemToggleLamp()"></div>
         <div id="crosshair" class="hidden">+</div>
 
         <div id="bottom-ui-wrapper">

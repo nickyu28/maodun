@@ -220,7 +220,7 @@
             // 续几局都失败/没撤出去的人会一直卡在保底状态，每局都重复吃保底。放在生
             // 成地图之后清零：这局造图的时候两个标记还是 true，能正常生效。
             // 组队局里保底不生效，标记留到下一次自己打的时候
-            if (!gState.tutorial && !huntHasHumanMates()) { if (!gState.huntDiffPlayed) gState.huntDiffPlayed = {}; gState.huntDiffPlayed[gState.mapDifficulty] = true; saveProgress(); }
+            if (!gState.tutorial && !gState.chemHunt && !huntHasHumanMates()) { if (!gState.huntDiffPlayed) gState.huntDiffPlayed = {}; gState.huntDiffPlayed[gState.mapDifficulty] = true; saveProgress(); }
 
             if (syncSpawns) gState.preGenSpawns = syncSpawns;
 
@@ -276,6 +276,7 @@
             huntPlaceGodCat();
             gState.signalN = 0;
             huntMergeStatic();
+            if (gState.chemHunt) chemSetupMap();   // 化学寻宝队：没怪、石油、暗室和隐藏宝箱、灯
             if (gState.tutorial) { gState.huntTask = null; huntTaskHud(); } else huntTaskNew();
             camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
             // 出生点在角落的安全屋里，原来一律面朝 -Z——那边正好是地图边墙，开局第一眼

@@ -755,12 +755,12 @@
                 return;
             }
             if (m === 'lab') { labEnter(); return; }   // 实验室是单人的，不跟队伍走
-            if (m === 'hunt' && huntBranch === 'chem' && huntBranchOn()) { labEnter(); return; }   // 寻宝队选了化学分支：开始游戏 = 进实验室
+            if (m === 'hunt' && huntBranch === 'chem' && huntBranchOn()) { chemHuntStart(); return; }   // 寻宝队选了化学分支：开始游戏 = 开化学寻宝队
             if (m !== 'night' && m !== 'cake' && lobbyParty.length > 0 && !peerIsHost) {
                 lobbySuggestModeToHost(m);
                 return;
             }
-            if (m === 'hunt') requestStartGame();
+            if (m === 'hunt') { gState.chemHunt = false; requestStartGame(); }
             else if (m === 'night') enterNightMatch('survivor');
             else if (m === 'blaze') blazeUnifiedStart();
             else if (m === 'race') raceStartGo();
@@ -892,7 +892,7 @@
         function huntHasHumanMates() { return (gState.team || []).some(function (m) { return m && !m.isAI && m.id !== gState.id; }); }
         // H17：每种难度第一次单人打是"多一个金箱子 + 大金概率 ×2"的局（所有图都一样；huntDiffPlayed 记哪几种打过，进图就算用掉；组队的局不算、不记）
         function huntDiffFirst() { return !(gState.huntDiffPlayed || {})[gState.mapDifficulty]; }
-        function huntPityActive() { return huntDiffFirst() && !huntHasHumanMates(); }
+        function huntPityActive() { return huntDiffFirst() && !huntHasHumanMates() && !gState.chemHunt; }
         // S4 保险柜（作者的决定）：每张图有自己的基础概率（地图 1 简单图永远没有；地图 4 在第 3 段加）。
         // 每死亡一次（撤离失败）下次 +15%，累加到 100% 封顶，存档记这个数（gState.safeBoost）；中途退出不加；开到保险柜后清零。
         // 组队局里每个人的地图要一模一样，所以有真人队友时只用基础概率（累加的数不起作用，也不清零）。
@@ -983,6 +983,7 @@
         function huntRollChest(boxType, rnd) {
             rnd = rnd || Math.random;
             let pick = function (a) { return a[Math.floor(rnd() * a.length)]; };
+            if (gState.chemHunt) return chemRollChest(boxType, rnd);   // 化学寻宝队：宝箱只出原料和粒子包
             if (boxType === 'safe') return huntTakeBig(huntBigPool('safe'), pick);
             if (rnd() < (HUNT_BIG_P[boxType] || 0) * huntPityMul) return huntTakeBig(huntBigPool(boxType), pick);
             // 宝石：少量、值钱的金色收藏品
@@ -995,6 +996,7 @@
         }
         function huntRollSignal(rnd) {
             let pick = function (a) { return a[Math.floor(rnd() * a.length)]; };
+            if (gState.chemHunt) return chemRollChest('silver', rnd);
             if (rnd() < HUNT_SIGNAL_BIG_P * huntPityMul) return huntTakeBig(ultraNoCarriage(), pick);
             return rnd() < 0.6 / 0.9 ? pick(itemPool.purple) : pick(itemPool.gold);
         }
@@ -1098,7 +1100,7 @@
         function saveProgress() {
             if (!gState.id) return;
             if (gState.tutorial) return;   // T0：教程里什么都不存（背包、任务、进度都是练习用的），做完或跳过时再存
-            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, huntDiffPlayed: gState.huntDiffPlayed || {}, safeBoost: gState.safeBoost || 0, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, towerDay: gState.towerDay, escDaily: gState.escDaily, escDraft: gState.escDraft, quest: gState.quest || null, blazeMastery: gState.blazeMastery || null, perkBook: gState.perkBook || null, nightStat: gState.nightStat || null, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntRunActive: !!gState.huntRunActive, lab: gState.lab || null, badgeGiven: !!gState.badgeGiven, huntTutorialShown: !!gState.huntTutorialShown, weightWarnShown: !!gState.weightWarnShown, skinPity: gState.skinPity || 0, blazeChar: gState.blazeChar || 'bow', tutDone: gState.tutDone || false, huntMobSeen: gState.huntMobSeen || {}, huntMobKills: gState.huntMobKills || {} };
+            const data = { ver: SAVE_VER, money: gState.money, inv: gState.inv, garage: gState.garage, huntDiffPlayed: gState.huntDiffPlayed || {}, safeBoost: gState.safeBoost || 0, matchHistory: gState.matchHistory, nightHistory: gState.nightHistory, nightFriendlyStreak: gState.nightFriendlyStreak, mcoin: gState.mcoin, skins: gState.skins, skinColor: gState.skinColor, acc: gState.acc, ownedAcc: gState.ownedAcc, parkUnlocked: gState.parkUnlocked, owned: gState.owned, streak: gState.streak, checkinStreak: gState.checkinStreak, checkinLastDay: gState.checkinLastDay, shop: gState.shop, rank: gState.rank, recipes: gState.recipes, raceRec: gState.raceRec, escProg: gState.escProg, dailyWin: gState.dailyWin, towerBest: gState.towerBest, towerDay: gState.towerDay, escDaily: gState.escDaily, escDraft: gState.escDraft, quest: gState.quest || null, blazeMastery: gState.blazeMastery || null, perkBook: gState.perkBook || null, nightStat: gState.nightStat || null, ach: gState.ach, title: gState.title, titles: gState.titles, parkDraft: gState.parkDraft, parkDraftName: gState.parkDraftName, parkRefunded: gState.parkRefunded, introSeen: gState.introSeen, modeIntroShown: gState.modeIntroShown, huntRunActive: !!gState.huntRunActive, lab: gState.lab || null, badgeGiven: !!gState.badgeGiven, huntTutorialShown: !!gState.huntTutorialShown, weightWarnShown: !!gState.weightWarnShown, skinPity: gState.skinPity || 0, blazeChar: gState.blazeChar || 'bow', tutDone: gState.tutDone || false, huntMobSeen: gState.huntMobSeen || {}, huntMobKills: gState.huntMobKills || {}, chemDarkBoost: gState.chemDarkBoost || 0, chemRun: !!gState.chemRun };
             try { localStorage.setItem('TH_save_' + gState.id, JSON.stringify(data)); } catch (e) { }
         }
 
@@ -1131,7 +1133,7 @@
                     const data = JSON.parse(saved);
                     if (data.ver === SAVE_VER) {
                         gState.money = data.money; gState.inv = data.inv; gState.garage = data.garage || new Array(200).fill(null); gState.huntDiffPlayed = data.huntDiffPlayed || {}; gState.safeBoost = +data.safeBoost || 0; gState.matchHistory = data.matchHistory || []; gState.nightHistory = data.nightHistory || []; gState.nightFriendlyStreak = data.nightFriendlyStreak || 0; gState.mcoin = Math.max(0, +data.mcoin || 0);   // H27：余额不封顶；读到负数（老 bug 留下的）改成 0 gState.skins = data.skins || {}; gState.skinColor = data.skinColor || null; gState.parkUnlocked = data.parkUnlocked || {}; gState.owned = data.owned || {}; gState.streak = data.streak || { hunt: 0, night: 0, blaze: 0 }; gState.acc = migrateAccData(data.acc); gState.ownedAcc = data.ownedAcc || {}; gState.checkinStreak = data.checkinStreak || 0; gState.checkinLastDay = (data.checkinLastDay === undefined) ? -1 : data.checkinLastDay; gState.recipes = data.recipes || {}; gState.raceRec = data.raceRec || {}; gState.escProg = data.escProg || null;
-                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.towerDay = data.towerDay || null; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.quest = data.quest || null; gState.blazeMastery = data.blazeMastery || null; gState.perkBook = data.perkBook || null; gState.nightStat = data.nightStat || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {}; gState.huntRunActive = !!data.huntRunActive; gState.lab = (data.lab && typeof data.lab === 'object') ? data.lab : null; gState.badgeGiven = !!data.badgeGiven; gState.huntTutorialShown = !!data.huntTutorialShown; gState.weightWarnShown = !!data.weightWarnShown; gState.skinPity = data.skinPity || 0; gState.blazeChar = data.blazeChar || 'bow'; gState.tutDone = data.tutDone === undefined ? 'old' : data.tutDone; gState.huntMobSeen = data.huntMobSeen || {}; gState.huntMobKills = data.huntMobKills || {};
+                        gState.dailyWin = data.dailyWin || {}; gState.towerBest = data.towerBest || 0; gState.towerDay = data.towerDay || null; gState.escDaily = data.escDaily || null; gState.escDraft = data.escDraft || null; gState.ach = data.ach || null; gState.quest = data.quest || null; gState.blazeMastery = data.blazeMastery || null; gState.perkBook = data.perkBook || null; gState.nightStat = data.nightStat || null; gState.title = data.title || null; gState.titles = data.titles || {}; gState.parkDraft = data.parkDraft || null; gState.parkDraftName = data.parkDraftName || ''; gState.parkRefunded = !!data.parkRefunded; gState.introSeen = data.introSeen || {}; gState.modeIntroShown = data.modeIntroShown || {}; gState.huntRunActive = !!data.huntRunActive; gState.lab = (data.lab && typeof data.lab === 'object') ? data.lab : null; gState.badgeGiven = !!data.badgeGiven; gState.huntTutorialShown = !!data.huntTutorialShown; gState.weightWarnShown = !!data.weightWarnShown; gState.skinPity = data.skinPity || 0; gState.blazeChar = data.blazeChar || 'bow'; gState.tutDone = data.tutDone === undefined ? 'old' : data.tutDone; gState.huntMobSeen = data.huntMobSeen || {}; gState.huntMobKills = data.huntMobKills || {}; gState.chemDarkBoost = Math.max(0, Math.min(0.5, +data.chemDarkBoost || 0)); gState.chemRun = !!data.chemRun;
                         gState.shop = data.shop || null; gState.rank = data.rank || null;
                         expandInventory(); huntFixSwordValue(); grantBadgeIfMissing();
                         if (gState.huntRunActive) huntRunAbandoned();
@@ -1142,7 +1144,7 @@
             } catch (e) { }
             gState.money = 10000; gState.inv = new Array(6).fill(null); gState.inv[0] = { ...shopItems['鱼叉'] }; gState.inv[1] = { ...shopItems['地窖徽章'] }; gState.garage = new Array(200).fill(null); gState.huntDiffPlayed = {}; gState.safeBoost = 0; gState.matchHistory = []; gState.nightHistory = []; gState.nightFriendlyStreak = 0;
             gState.mcoin = 0; gState.skins = {}; gState.skinColor = null; gState.acc = { head: null, waist: null }; gState.ownedAcc = {}; gState.escProg = null; gState.parkUnlocked = {}; gState.owned = {}; gState.streak = { hunt: 0, night: 0, blaze: 0 }; gState.checkinStreak = 0; gState.checkinLastDay = -1;
-            gState.dailyWin = {}; gState.towerBest = 0; gState.towerDay = null; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.quest = null; gState.blazeMastery = null; gState.perkBook = null; gState.nightStat = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false; gState.introSeen = {}; gState.modeIntroShown = {}; gState.huntRunActive = false; gState.lab = null; gState.badgeGiven = true; gState.huntTutorialShown = false; gState.weightWarnShown = false; gState.skinPity = 0; gState.tutDone = false; gState.huntMobSeen = {}; gState.huntMobKills = {};
+            gState.dailyWin = {}; gState.towerBest = 0; gState.towerDay = null; gState.escDaily = null; gState.escDraft = null; gState.ach = null; gState.quest = null; gState.blazeMastery = null; gState.perkBook = null; gState.nightStat = null; gState.title = null; gState.titles = {}; gState.parkDraft = null; gState.parkDraftName = ''; gState.parkRefunded = false; gState.introSeen = {}; gState.modeIntroShown = {}; gState.huntRunActive = false; gState.lab = null; gState.badgeGiven = true; gState.huntTutorialShown = false; gState.weightWarnShown = false; gState.skinPity = 0; gState.tutDone = false; gState.huntMobSeen = {}; gState.huntMobKills = {}; gState.chemDarkBoost = 0; gState.chemRun = false;
             expandInventory();
         }
 
@@ -1161,6 +1163,12 @@
         // 按撤离失败算，背包清空，这局的东西都不留，弹一次说明。不靠 beforeunload（手机上经常不触发）。
         function huntRunAbandoned() {
             gState.huntRunActive = false;
+            if (gState.chemRun) {   // 化学寻宝队：不算进撤离失败的统计；只丢这一局捡的东西（商店道具留着），暗室概率照"没开隐藏宝箱"累加（带进去的灯已经在开局时从仓库箱扣掉了）
+                gState.chemRun = false; gState.chemDarkBoost = Math.min(0.5, Math.round(((gState.chemDarkBoost || 0) + 0.15) * 100) / 100);
+                gState.inv = gState.inv.map(function (q) { return q && q.isShop ? q : null; }); expandInventory();
+                saveProgress();
+                return;
+            }
             gState.matchHistory = gState.matchHistory || [];
             gState.matchHistory.push(false); if (gState.matchHistory.length > 10) gState.matchHistory.shift();
             gState.inv = new Array(INV_BASE).fill(null); expandInventory();

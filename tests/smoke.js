@@ -2610,10 +2610,10 @@ async function enterExit(tab, key) {
             await T.eval(`document.getElementById('hunt-br-chem').click(); true;`);
             r = await st();
             if (!r.chem || r.normal || r.br !== 'chem') bad.push('选化学后 ' + JSON.stringify(r));
-            await T.eval(`lobbyPrimaryStart(); true;`);
-            if ((await T.eval(`window.__lab`)) !== 1) bad.push('化学分支点开始游戏没进实验室');
+            await T.eval(`window.__chem = 0; chemHuntStart = function () { window.__chem++; }; lobbyPrimaryStart(); true;`);
+            if ((await T.eval(`window.__chem`)) !== 1) bad.push('化学分支点开始游戏没开化学寻宝队');
             await T.eval(`huntChemEnter(); true;`);
-            if ((await T.eval(`window.__lab`)) !== 2) bad.push('「进实验室」按钮没进实验室');
+            if ((await T.eval(`window.__lab`)) !== 1) bad.push('「进实验室」按钮没进实验室');
             await T.eval(`document.getElementById('hunt-br-normal').click(); true;`);
             r = await st();
             if (!r.normal || r.chem || r.br !== 'normal') bad.push('选回普通后 ' + JSON.stringify(r));
@@ -2621,7 +2621,7 @@ async function enterExit(tab, key) {
             if (await T.eval(`getComputedStyle(document.getElementById('btn-mode-lab')).display === 'none'`)) bad.push('实验室入口不见了');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('BR1 寻宝队分普通 / 化学分支：实验室藏着时不出现；化学分支进实验室；选回普通恢复', bad.length === 0, bad.join(' / '));
+            report('BR1 寻宝队分普通 / 化学分支：实验室藏着时不出现；化学分支开始 = 化学寻宝、另有进实验室按钮；选回普通恢复', bad.length === 0, bad.join(' / '));
         }
 
 
@@ -2655,6 +2655,79 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('RM1 竞速 10 张固定地图：段落固定、各有记录榜、大厅里记录榜打得开、跑完记进这张图的榜不淘汰', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('CH1')) {
+            // CH1 化学寻宝队：掉落表（只有原料和粒子包、个数范围、隐藏宝箱 ×2）；开局没怪没 AI 队友、扣灯、地上 0–2 桶石油、暗室和隐藏宝箱（小地图不显示）；
+            // 暗室里没灯 2 米外全黑、开灯放宽、灯耗电；撤离东西进实验室仓库箱、灯还回去、开了隐藏宝箱暗室概率重置；失败不进仓库、商店道具留着、暗室概率 +15%
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const t = JSON.parse(await T.eval(`(function(){ let o = { keys: {}, bad: 0, salt: 0, packs: 0, raws: 0, big: 0, n: 6000 };
+                let allowed = { coal: 1, iron: 1, 'a:29:34': 1, sand: 1, salt: 1 };
+                ['wood', 'silver', 'gold'].forEach(function (b) { for (let i = 0; i < o.n; i++) {
+                    let it = chemRollChest(b, Math.random), r = CHEM_LOOT[b], m = /^pack:(\\d+):(\\d+)$/.exec(it.labKey);
+                    if (m) { o.packs++; let z = +m[1], n = +m[2]; if (z < 1 || z > 26 || n < 0 || n > 2 * z || it.cnt < r.packN[0] || it.cnt > r.packN[1]) o.bad++; }
+                    else { o.raws++; if (!allowed[it.labKey] || it.cnt < r.rawN[0] || it.cnt > r.rawN[1]) o.bad++; if (it.labKey === 'salt') o.salt++; }
+                    if (it.v !== 0 || !it.chem) o.bad++;
+                    let d = chemRollChest(b, function () { return 0.99; }, 2); if (d.cnt % 2) o.big++; } });
+                return JSON.stringify(o); })()`));
+            if (t.bad || t.big) bad.push('掉落表有不合规的 ' + JSON.stringify(t));
+            if (!(t.salt / t.raws < 0.1 && t.salt > 0 && t.packs > 0 && t.raws > 0)) bad.push('食盐该少、原料和粒子包都要有 ' + JSON.stringify([t.salt, t.raws, t.packs]));
+            // 开一局
+            await T.eval(`gState.lab = { box: { bulb: 1, bat: 3, switch: 1 } }; gState.chemDarkBoost = 0.5; gState.inv[1] = Object.assign({}, shopItems['医疗包'], { isShop: true }); true;`);
+            await T.eval(`${HIDE} chemHuntStart(); true;`);
+            if (!(await until(T, `isPlaying && typeof chem !== 'undefined' && chem && chem.on`, 30000))) bad.push('化学寻宝队没开起来');
+            await T.eval(`${HIDE} true;`);
+            const g = JSON.parse(await T.eval(`JSON.stringify({ chem: gState.chemHunt, mobs: entities.filter(function (e) { return e.userData.type !== 'ai'; }).length, ai: (gState.team || []).filter(function (m) { return m.isAI; }).length,
+                box: gState.lab.box, kit: chem.kit, oil: groundItems.filter(function (i) { return i.userData.labKey === 'oil'; }).length, tgt: gState.extractTarget, diff: gState.mapDifficulty,
+                loot: chests.filter(function (c) { return !c.userData.loot || !c.userData.loot.chem; }).length, hid: chests.filter(function (c) { return c.userData.hidden; }).length, zone: chem.zone,
+                hidLoot: chests.filter(function (c) { return c.userData.hidden; }).map(function (c) { return c.userData.loot.cnt; }), run: gState.chemRun })`));
+            if (!g.chem || g.mobs || g.ai) bad.push('该没怪没 AI 队友 ' + JSON.stringify([g.chem, g.mobs, g.ai]));
+            if (g.box.bulb || g.box.switch || (g.box.bat || 0) + g.kit.bats.length !== 3) bad.push('灯没从仓库箱扣 ' + JSON.stringify(g.box));
+            if (g.kit.bulb !== 1 || g.kit.sw !== 1 || g.kit.bats.length < 1 || g.kit.bats.length + 2 > 6) bad.push('带入的灯 ' + JSON.stringify(g.kit));
+            if (g.oil > 2) bad.push('石油超过 2 桶 ' + g.oil);
+            if (g.tgt !== 0 || g.diff !== 'easy') bad.push('撤离目标/地图 ' + JSON.stringify([g.tgt, g.diff]));
+            if (g.loot !== 0) bad.push('有箱子里不是原料/粒子包 ' + g.loot);
+            if (!g.zone || g.hid !== 1 || !g.hidLoot.length || g.hidLoot[0] % 2) bad.push('暗室/隐藏宝箱 ' + JSON.stringify([g.zone, g.hid, g.hidLoot]));
+            // 暗室：带了开关默认关灯，2 米外全黑；按 L 开灯放宽；灯耗电
+            const fog = (extra) => T.eval(`(function(){ ${extra || ''} camera.position.set(chem.zone.x * TILE, 9, chem.zone.z * TILE); chemTick(0.01); return JSON.stringify({ fog: scene.fog && scene.fog.far, dark: chem.dark, on: chemLampOn() }); })()`).then(JSON.parse);
+            let f = await fog();
+            if (!f.dark || f.on || !(f.fog <= 10.5)) bad.push('暗室里没灯该只看 2 米 ' + JSON.stringify(f));
+            await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', keyCode: 76 })); true;`);
+            f = await fog();
+            if (!f.on || !(f.fog >= 80)) bad.push('按 L 开灯没放宽 ' + JSON.stringify(f));
+            const b0 = await T.eval(`chem.kit.bats[0]`); await T.eval(`chemTick(10); true;`);
+            const b1 = await T.eval(`chem.kit.bats[0]`);
+            if (!(b0 - b1 > 9.9 && b0 - b1 < 10.1)) bad.push('灯没按时间耗电 ' + b0 + '→' + b1);
+            // 隐藏宝箱不在小地图上：把画方块的调用记下来，小地图和大地图都不画它（探过的格子也不画）
+            const mm = await T.eval(`(function(){ let h = chests.filter(function (c) { return c.userData.hidden; })[0], hx = Math.floor(h.position.x / TILE), hz = Math.floor(h.position.z / TILE);
+                for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) explored[0][z][x] = true;
+                let n = 0; ['minimap', 'largemap'].forEach(function (id) { let ctx = document.getElementById(id).getContext('2d'), rec = ctx.fillRect, cw = document.getElementById(id).width / mSize;
+                    ctx.fillRect = function (x, y, w, hh) { if (Math.abs(x - hx * cw) < 0.01 && Math.abs(y - hz * cw) < 0.01 && w < cw) n++; return rec.apply(ctx, arguments); };
+                    camera.position.set(TILE, 9, TILE); if (id === 'minimap') refreshRadarMinimap(); else refreshLargeMinimap(); ctx.fillRect = rec; });
+                return n; })()`);
+            if (mm !== 0) bad.push('隐藏宝箱出现在地图上 ' + mm);
+            // 开隐藏宝箱 + 撤离
+            await T.eval(`chemOnChestOpened(chests.filter(function (c) { return c.userData.hidden; })[0]); gState.inv[0] = chemItem('coal', 3); gState.inv[2] = chemItem('pack:2:3', 1); completeExtraction('测试'); true;`);
+            await until(T, `!gState.chemHunt`, 15000);
+            const e = JSON.parse(await T.eval(`JSON.stringify({ box: gState.lab.box, boost: gState.chemDarkBoost, diff: gState.mapDifficulty, inv: gState.inv.map(function (q) { return q && q.n; }), run: gState.chemRun, over: document.getElementById('go-title').innerText })`));
+            if (e.box.coal !== 3 || e.box['pack:2:3'] !== 1) bad.push('原料没进实验室仓库箱 ' + JSON.stringify(e.box));
+            if (!e.box.bulb || !e.box.switch || !(e.box.bat >= 1)) bad.push('灯没还回去 ' + JSON.stringify(e.box));
+            if (e.boost !== 0 || e.run || e.over !== '撤离成功') bad.push('撤离后状态 ' + JSON.stringify([e.boost, e.run, e.over]));
+            if (e.inv.indexOf('医疗包') < 0 || e.inv.some(function (n) { return n && /煤|粒子包/.test(n); })) bad.push('撤离后背包 ' + e.inv.join());
+            // 第二局：没开隐藏宝箱就失败 → 暗室概率 +15%、东西不进仓库、商店道具留着、没金币
+            await T.eval(`${HIDE} gState.chemDarkBoost = 0; chemHuntStart(); true;`);
+            await until(T, `isPlaying && chem && chem.on`, 30000);
+            const coin0 = await T.eval(`gState.mcoin`);
+            await T.eval(`${HIDE} gState.inv[2] = chemItem('iron', 2); finishGame(false, '测试'); true;`);
+            await until(T, `!gState.chemHunt`, 15000);
+            const x = JSON.parse(await T.eval(`JSON.stringify({ box: gState.lab.box, boost: gState.chemDarkBoost, inv: gState.inv.map(function (q) { return q && q.n; }), mcoin: gState.mcoin, hist: (gState.matchHistory || []).length })`));
+            if (x.box.iron || x.boost !== 0.15) bad.push('失败后 ' + JSON.stringify(x));
+            if (x.inv.indexOf('医疗包') < 0 || x.inv.some(function (n) { return n && /铁块/.test(n); })) bad.push('失败后背包 ' + x.inv.join());
+            if (x.mcoin !== coin0) bad.push('化学寻宝不该给金币 ' + coin0 + '→' + x.mcoin);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('CH1 化学寻宝队：掉落表只有原料和粒子包、没怪没 AI、扣灯、石油、暗室和隐藏宝箱 ×2、灯和黑暗、撤离进实验室仓库箱、暗室概率累加/重置、失败留商店道具', bad.length === 0, bad.join(' / '));
         }
 
         if (want('K1')) {
