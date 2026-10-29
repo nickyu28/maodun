@@ -276,6 +276,7 @@
             huntPlaceGodCat();
             gState.signalN = 0;
             huntMergeStatic();
+            huntMap4Setup();   // 地图 4：药剂房里放一瓶药水、造水池
             if (gState.chemHunt) chemSetupMap();   // 化学寻宝队：没怪、石油、暗室和隐藏宝箱、灯
             if (gState.tutorial) { gState.huntTask = null; huntTaskHud(); } else huntTaskNew();
             camera.position.set(TILE, 9, TILE); camera.rotation.set(0, 0, 0);
@@ -317,10 +318,10 @@
 
             const wallTex = createProceduralTexture('wall', '#e5e5ea', '#cccccc'); const floorTex = createProceduralTexture('floor', '#ffffff', '#e5e5ea');
             const safeFloorTex = createProceduralTexture('safe_floor', '#a8e6cf', '#dcedc1'); const safeWallTex = createProceduralTexture('safe_wall', '#1abc9c', '#16a085');
-            const tableTex = createProceduralTexture('table', '#7f8c8d', '#95a5a6'); const goldShopWallTex = createProceduralTexture('gold_shop_wall', '#ffd700', '#daa520'); const goldShopFloorTex = createProceduralTexture('gold_shop_floor', '#ffd700', '#b8860b');
+            const potionWallTex = createProceduralTexture('safe_wall', '#8e24aa', '#6a1b9a'), potionFloorTex = createProceduralTexture('safe_floor', '#d1c4e9', '#b39ddb'); const tableTex = createProceduralTexture('table', '#7f8c8d', '#95a5a6'); const goldShopWallTex = createProceduralTexture('gold_shop_wall', '#ffd700', '#daa520'); const goldShopFloorTex = createProceduralTexture('gold_shop_floor', '#ffd700', '#b8860b');
 
             let conf = mapConfigs[gState.mapDifficulty];
-            let allLeaves = []; let goldShopLoc = { x: -1, z: -1 };
+            let allLeaves = []; let goldShopLoc = { x: -1, z: -1 }; let potionLoc = { x: -1, z: -1 };   // potionLoc：地图 4 的药剂房（一层的一个死角，墙和地板是紫色）
 
             for (let fl = 0; fl < FLOORS; fl++) {
                 let grid = Array(mSize).fill().map(function () { return Array(mSize).fill(1); }); let stack = [{ x: 1, z: 1 }], leaves = []; grid[1][1] = 0;
@@ -334,6 +335,7 @@
                 }
 
                 if (fl === 0 && conf.hasGoldShop && leaves.length > 1) { goldShopLoc = leaves[1]; }
+                if (fl === 0 && conf.hasPotionRoom && leaves.length > 1) { potionLoc = leaves[1]; }
 
                 maze[fl] = Array(mSize).fill().map(function () { return Array(mSize).fill(null); });
 
@@ -342,14 +344,16 @@
                         let px = x * TILE, py = fl * TILE, pz = z * TILE;
                         let isGoldShopCell = (fl === 0 && x === goldShopLoc.x && z === goldShopLoc.z);
                         let isAdjacentToGoldShop = (fl === 0 && conf.hasGoldShop && goldShopLoc.x !== -1 && Math.abs(x - goldShopLoc.x) <= 1 && Math.abs(z - goldShopLoc.z) <= 1);
+                        let isPotionCell = (fl === 0 && x === potionLoc.x && z === potionLoc.z);
+                        let isNearPotion = (fl === 0 && potionLoc.x !== -1 && Math.abs(x - potionLoc.x) <= 1 && Math.abs(z - potionLoc.z) <= 1);
                         let isHomeCell = (fl === 0 && x === 1 && z === 1);
                         let isHomeWall = (fl === 0 && x <= 2 && z <= 2 && grid[z][x] === 1);
 
                         if (grid[z][x] === 1) {
-                            let tex = isAdjacentToGoldShop ? goldShopWallTex : (isHomeWall ? safeWallTex : wallTex);
+                            let tex = isAdjacentToGoldShop ? goldShopWallTex : (isNearPotion ? potionWallTex : (isHomeWall ? safeWallTex : wallTex));
                             let m = new THREE.Mesh(new THREE.BoxGeometry(TILE, 24, TILE), new THREE.MeshLambertMaterial({ map: tex })); m.position.set(px, py + TILE / 2, pz); scene.add(m); maze[fl][z][x] = { type: 1, mesh: m };
                         } else {
-                            let tex = isGoldShopCell ? goldShopFloorTex : (isHomeCell ? safeFloorTex : floorTex);
+                            let tex = isGoldShopCell ? goldShopFloorTex : (isPotionCell ? potionFloorTex : (isHomeCell ? safeFloorTex : floorTex));
 
                             let f;
                             if (fl === 0) {
@@ -359,7 +363,7 @@
                                 f = new THREE.Mesh(new THREE.BoxGeometry(TILE, FLOOR_SLAB, TILE), new THREE.MeshLambertMaterial({ map: tex }));
                                 f.position.set(px, py - FLOOR_SLAB / 2, pz);
                             }
-                            scene.add(f); maze[fl][z][x] = { type: 0, mesh: f, isLeaf: false, isGoldShop: isGoldShopCell }; walkableMeshes.push(f);
+                            scene.add(f); maze[fl][z][x] = { type: 0, mesh: f, isLeaf: false, isGoldShop: isGoldShopCell, isPotionRoom: isPotionCell }; walkableMeshes.push(f);
 
                             if (conf.hasTables && seededRandom() < 0.08 && !isGoldShopCell && !isHomeCell) {
 
@@ -1467,11 +1471,12 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026.10.29-6', date: '10 月 29 日', title: '最近更新', items: [
+                id: '2026.10.29-8', date: '10 月 29 日', title: '最近更新', items: [
                     '监狱救援、躲避球、合作密室、推推乐、爬塔先藏起来了',
                     '每个模式第一次点开会弹一次规则，之后在“规则”里看',
                     '竞速加了 10 张固定地图，每张有自己的记录榜',
-                    '竞速的记录榜在大厅里打得开了'
+                    '竞速的记录榜在大厅里打得开了',
+                    '寻宝队新图“地图 4”：有药剂房和水池'
                 ]
             },
             {

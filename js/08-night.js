@@ -3691,6 +3691,38 @@
             else if (p.id === 'spring') { gState.springT = p.secs; blazeFlash('穿上了' + p.n + '，' + p.secs + ' 秒内跳得更高'); }
             sfxPlay([660, 880], 0.3, 0.05, 'triangle');
         }
+        // 地图 4（药剂房、水池）。药剂房：一层的一个紫色死角，里面一瓶药水（治疗/加速/弹簧鞋随机，掉在地上，捡走后手上按“用道具”才生效）；
+        // 水池：一层靠中间的一格浅水，走进去慢 30%，体力恢复快一倍。两个位置都是造图时用种子定的（各端一样）
+        let huntPool = null;   // { x, z } 水池所在格
+        function huntMap4Setup() {
+            huntPool = null;
+            let conf = mapConfigs[gState.mapDifficulty];
+            if (!conf || !conf.hasPotionRoom || gState.chemHunt) return;
+            for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) {
+                let c = maze[0] && maze[0][z] && maze[0][z][x];
+                if (c && c.isPotionRoom) {
+                    let p = Object.assign({}, HUNT_POTIONS[Math.floor(seededRandom() * HUNT_POTIONS.length)]);
+                    let m = huntGroundMesh(p); m.position.set(x * TILE, 1.5, z * TILE);
+                    m.userData = Object.assign({}, p, { isItem: true, vel: new THREE.Vector3(0, 0, 0) });
+                    huntItemGlow(m); scene.add(m); groundItems.push(m);
+                }
+            }
+            let best = null, mid = (mSize - 1) / 2;
+            for (let z = 3; z < mSize - 3; z++) for (let x = 3; x < mSize - 3; x++) {
+                let c = maze[0][z][x]; if (!c || c.type !== 0 || c.isPotionRoom || c.isGoldShop) continue;
+                let d = Math.abs(x - mid) + Math.abs(z - mid) + seededRandom() * 0.5;
+                if (!best || d < best.d) best = { x: x, z: z, d: d };
+            }
+            if (!best) return;
+            huntPool = { x: best.x, z: best.z };
+            let w = new THREE.Mesh(new THREE.BoxGeometry(TILE * 0.9, 0.6, TILE * 0.9), new THREE.MeshBasicMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.6 }));
+            w.position.set(best.x * TILE, 0.3, best.z * TILE); mapExtraAdd(w);
+        }
+        function huntInPool() {
+            if (!huntPool || !isPlaying || gState.isDead || camera.position.y > TILE * 0.6) return false;
+            let cx = Math.floor((camera.position.x + TILE / 2) / TILE), cz = Math.floor((camera.position.z + TILE / 2) / TILE);
+            return cx === huntPool.x && cz === huntPool.z;
+        }
         function huntSpeedPotionMul() { return gState.speedT > 0 ? 1.5 : 1; }
         function huntJumpVel() { return gState.springT > 0 ? 44 * Math.SQRT2 : 44; }   // 跳得高度 ×2 → 起跳速度 ×√2
         // 每张图 25% 概率把一个猫神护身符藏在桌面或顶楼死角。造图时用种子定（各端一样）
@@ -4275,7 +4307,7 @@
 
             if (gState.speedT > 0) gState.speedT -= dt;
             if (gState.springT > 0) gState.springT -= dt;
-            let baseMoveSpeed = 42 * wMod * DAILY_MOD.speedMul * bondSpeedMul() * weaponSpeedMul() * huntSpeedPotionMul() * skillMul;
+            let baseMoveSpeed = 42 * wMod * DAILY_MOD.speedMul * bondSpeedMul() * weaponSpeedMul() * huntSpeedPotionMul() * skillMul * (huntInPool() ? 0.7 : 1);
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); let side = new THREE.Vector3(-dir.z, 0, dir.x); let moveX = 0, moveZ = 0;
 
             let fwd = 0; let strafe = 0;
@@ -4289,7 +4321,7 @@
             let drainMult = gState.debuff.type === 2 ? 2.5 : 1.0;
             if (isRunning && gState.tutorial) gState.tutorial.runT += dt;
             if (gState.stimT > 0) gState.stimT -= dt;
-            if (isRunning) { baseMoveSpeed *= staminaBoostMul(stamina, 1.6); if (!(gState.stimT > 0)) stamina = Math.max(0, stamina - 28 * drainMult * dt); } else { stamina = Math.min(100, stamina + 16 * dt); } document.getElementById('stamina-fill').style.width = stamina + '%';
+            if (isRunning) { baseMoveSpeed *= staminaBoostMul(stamina, 1.6); if (!(gState.stimT > 0)) stamina = Math.max(0, stamina - 28 * drainMult * dt); } else { stamina = Math.min(100, stamina + 16 * (huntInPool() ? 2 : 1) * dt); } document.getElementById('stamina-fill').style.width = stamina + '%';
             let staminaTxt = document.getElementById('stamina-num'); if (staminaTxt) staminaTxt.innerText = Math.floor(stamina) + '/100';
 
             let isMovingAllowed = (actionTarget !== 'med' && actionTarget !== 'time_stop');

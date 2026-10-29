@@ -896,7 +896,7 @@
         // S4 保险柜（作者的决定）：每张图有自己的基础概率（地图 1 简单图永远没有；地图 4 在第 3 段加）。
         // 每死亡一次（撤离失败）下次 +15%，累加到 100% 封顶，存档记这个数（gState.safeBoost）；中途退出不加；开到保险柜后清零。
         // 组队局里每个人的地图要一模一样，所以有真人队友时只用基础概率（累加的数不起作用，也不清零）。
-        const HUNT_SAFE_BASE = { easy: 0, med: 0.15, hard: 0.25 };
+        const HUNT_SAFE_BASE = { easy: 0, med: 0.15, map4: 0.15, hard: 0.25 };
         const HUNT_SAFE_STEP = 0.15;
         function huntSafeBase(diff) { return HUNT_SAFE_BASE[diff || gState.mapDifficulty] || 0; }
         function huntSafeProb(diff) {
@@ -925,7 +925,7 @@
         let huntBigLeft = HUNT_BIG_CAP, huntSignalLoot = [];
         function huntIsBig(it) { return !!it && (itemPool.ultra.indexOf(it) >= 0 || itemPool.god.indexOf(it) >= 0); }
         function huntBigPool(boxType) {
-            if (boxType === 'safe') return gState.mapDifficulty === 'hard' ? itemPool.god : gState.mapDifficulty === 'med' ? itemPool.ultra : ultraNoCarriage();
+            if (boxType === 'safe') return gState.mapDifficulty === 'hard' ? itemPool.god : (gState.mapDifficulty === 'med' || gState.mapDifficulty === 'map4') ? itemPool.ultra : ultraNoCarriage();
             if (boxType === 'wood') return [itemPool.ultra[0]];
             if (boxType === 'silver') return itemPool.ultra.slice(0, 3);
             if (boxType === 'gold') return itemPool.ultra.filter(function (u) { return u.v <= 1000000; });
@@ -1087,6 +1087,7 @@
             easy: { extr: 140000, gold: 2, silver: 4, wood: 3, hasGoldShop: false, hasSafe: false, hasTables: true, mobs: [1, 2] },
             med: { extr: 170000, gold: 3, silver: 5, wood: 3, hasGoldShop: true, hasSafe: false, hasTables: false, mobs: [1, 2, 3, 4] },
             hard: { extr: 200000, gold: 4, silver: 6, wood: 3, hasGoldShop: false, hasSafe: true, hasTables: false, mobs: [1, 2, 5] },
+            map4: { extr: 170000, gold: 3, silver: 5, wood: 2, hasGoldShop: false, hasSafe: false, hasTables: false, hasPotionRoom: true, hasPool: true, mobs: [1, 2, 3, 4] },   // 地图 4：中等难度（跟中等图一样的怪和撤离目标），有药剂房和水池；药剂房里有一瓶药水，所以木箱少 1 个
             tutorial: { extr: 10000, gold: 0, silver: 0, wood: 1, hasGoldShop: false, hasSafe: false, hasTables: false, mobs: [] }   // T0：新手教程的小图，只有一个木箱
         };
 
