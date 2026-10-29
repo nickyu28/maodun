@@ -22,7 +22,7 @@
         function labVisible() { return LAB_ENABLED || labDebugOn(); }
 
         // 时间和距离（"米" = 场景里的 1 个单位）。冒烟测试会改这几个数把等待缩短。
-        const LAB_T = { gather: 4, gasLife: 10, poisonLife: 5, rust: 120, glass: 5, mergeR: 0.5, reactR: 0.5, fillR: 2, boomR: 3, boomDmg: 40, poisonDps: 5, poisonR: 4, lock: 60, pickR: 2.4, stationR: 3.4, elec: 5 };
+        const LAB_T = { gather: 4, gasLife: 10, poisonLife: 45, rust: 120, glass: 5, mergeR: 0.5, reactR: 0.5, fillR: 2, boomR: 3, boomDmg: 40, poisonDps: 8, poisonR: 4, lock: 60, pickR: 2.4, stationR: 3.4, elec: 5 };
         // 身上 6 格：快捷栏 3 格 + 背包 3 格（一格一种东西，数量不限）；房间里散落的粒子最多 300 个
         const LAB_BOX_CAP = 60, LAB_BAG_CAP = 6, LAB_HOT = 3, LAB_PARTICLE_CAP = 300;
         const LAB_HOLD_RATE = { Q: 5, L: 6, R: 5 };   // 长按：每秒放 5 个／捡 6 个／拆 5 个包
@@ -66,10 +66,10 @@
             salt: { name: '食盐', col: 0xf5f5f5, shape: 'b' }, bottle: { name: '玻璃瓶', col: 0xb3e5fc, shape: 'c', op: 0.55 },
             sugar: { name: '糖', col: 0xfff8e1, shape: 'b' }, rubber: { name: '橡胶', col: 0x424242, shape: 'b' }, fes: { name: '硫化铁', v: 1500, col: 0x5d4037, shape: 'b' }, rust: { name: '铁锈', col: 0x8d4a2b, shape: 'b' },
             'b:water': { name: '水', col: 0x4fc3f7, shape: 'c', op: 0.8 }, 'b:h2': { name: '氢气瓶', col: 0xffcdd2, shape: 'c', op: 0.8 }, 'b:o2': { name: '氧气瓶', col: 0x80deea, shape: 'c', op: 0.8 },
-            'b:co2': { name: '二氧化碳瓶', col: 0xb0bec5, shape: 'c', op: 0.8 }, 'b:so2': { name: '二氧化硫瓶', col: 0xfff176, shape: 'c', op: 0.8 }, 'b:cl2': { name: '氯气瓶', col: 0xc5e1a5, shape: 'c', op: 0.8 },
+            'b:co2': { name: '二氧化碳瓶', col: 0xb0bec5, shape: 'c', op: 0.8 }, 'b:so2': { name: '二氧化硫瓶', col: 0xfff176, shape: 'c', op: 0.8 }, 'b:cl2': { name: '氯气瓶', col: 0xc5e1a5, shape: 'c', op: 0.8 }, 'b:co': { name: '一氧化碳瓶', col: 0x9e9e9e, shape: 'c', op: 0.8 },
             'b:soda': { name: '苏打水', col: 0x81d4fa, shape: 'c', op: 0.8 }, 'b:naoh': { name: '氢氧化钠溶液', col: 0xe1bee7, shape: 'c', op: 0.8 },
             'g:h2': { name: '氢气', col: 0xffcdd2, shape: 'g', op: 0.35, gas: 1 }, 'g:o2': { name: '氧气', col: 0x80deea, shape: 'g', op: 0.35, gas: 1 },
-            'g:co2': { name: '二氧化碳', col: 0xb0bec5, shape: 'g', op: 0.35, gas: 1 }, 'g:so2': { name: '二氧化硫', col: 0xfff176, shape: 'g', op: 0.45, gas: 1, toxic: 1 }, 'g:cl2': { name: '氯气', col: 0xaed581, shape: 'g', op: 0.45, gas: 1, toxic: 1 },
+            'g:co2': { name: '二氧化碳', col: 0xb0bec5, shape: 'g', op: 0.35, gas: 1 }, 'g:so2': { name: '二氧化硫', col: 0xfff176, shape: 'g', op: 0.45, gas: 1, toxic: 1 }, 'g:cl2': { name: '氯气', col: 0xaed581, shape: 'g', op: 0.45, gas: 1, toxic: 1 }, 'g:co': { name: '一氧化碳', col: 0x9e9e9e, shape: 'g', op: 0.45, gas: 1, toxic: 1 },
             'pot:heal': { name: '治疗药剂', v: 20000, col: 0xe53935, shape: 'c', op: 0.9 }, 'pot:speed': { name: '加速药剂', v: 25000, col: 0x29b6f6, shape: 'c', op: 0.9 },
             'pot:dmg': { name: '伤害药剂', v: 30000, col: 0x8e24aa, shape: 'c', op: 0.9 }, 'pot:spring': { name: '弹簧鞋', v: 12000, col: 0x66bb6a, shape: 'b' },
             'b:brine': { name: '盐水', col: 0xb3e5fc, shape: 'c', op: 0.8 }, 'b:melt': { name: '熔融食盐', col: 0xffcc80, shape: 'c', op: 0.8 },
@@ -77,7 +77,7 @@
             bulb: { name: '灯泡', v: 6000, col: 0xfff59d, shape: 's' }, resistor: { name: '电阻', v: 4000, col: 0xffcc80, shape: 'b' }, motor: { name: '电动机', v: 15000, col: 0x78909c, shape: 'c' },
             elec: { name: '电解槽', v: 15000, col: 0x4dd0e1, shape: 'c' }, booster: { name: '升压器', v: 20000, col: 0xff7043, shape: 'b' }
         };
-        const LAB_BOTTLE_OF = { h2: 'b:h2', o2: 'b:o2', co2: 'b:co2', so2: 'b:so2', cl2: 'b:cl2' };
+        const LAB_BOTTLE_OF = { h2: 'b:h2', o2: 'b:o2', co2: 'b:co2', so2: 'b:so2', cl2: 'b:cl2', co: 'b:co' };
         const LAB_DEF_CACHE = {};
         function labDef(key) {
             if (LAB_DEF_CACHE[key]) return LAB_DEF_CACHE[key];
@@ -199,17 +199,19 @@
             { id: 'motor', where: '合成台', kind: 'device', name: '电动机', in: { iron: 2, wire: 2 }, out: { motor: 1 } },
             { id: 'elec', where: '合成台', kind: 'device', name: '电解槽', in: { bottle: 1, coal: 2, wire: 2 }, out: { elec: 1 } },
             { id: 'booster', where: '合成台', kind: 'device', name: '升压器', in: { iron: 2, wire: 4 }, out: { booster: 1 } },
-            { id: 'h2', where: '接触', name: '氢分子', note: '两个氢-1 原子碰到一起，变成氢气（要装瓶，不然 10 秒后飘走）', in: { 'a:1:0': 2 }, out: { 'g:h2': 1 } },
-            { id: 'o2', where: '接触', name: '氧分子', note: '两个氧-16 原子碰到一起，变成氧气（要装瓶）', in: { 'a:8:8': 2 }, out: { 'g:o2': 1 } },
-            { id: 'cl2', where: '接触', name: '氯分子', note: '两个氯-35 原子碰到一起，变成氯气（有毒，一定要装瓶）', in: { 'a:17:18': 2 }, out: { 'g:cl2': 1 } },
-            { id: 'boom1', where: '接触', name: '爆炸（氢氧混合）', note: '没装瓶的氢气和氧气碰到一起会爆炸', in: { 'g:h2': 1, 'g:o2': 1 }, out: {} },
+            { id: 'h2', where: '接触', auto: 1, name: '氢分子', note: '两个氢-1 原子碰到一起，变成氢气（要装瓶，不然 10 秒后飘走）', in: { 'a:1:0': 2 }, out: { 'g:h2': 1 } },
+            { id: 'o2', where: '接触', auto: 1, name: '氧分子', note: '两个氧-16 原子碰到一起，变成氧气（要装瓶）', in: { 'a:8:8': 2 }, out: { 'g:o2': 1 } },
+            { id: 'cl2', where: '接触', auto: 1, name: '氯分子', note: '两个氯-35 原子碰到一起，变成氯气（有毒，一定要装瓶）', in: { 'a:17:18': 2 }, out: { 'g:cl2': 1 } },
+            { id: 'boom1', where: '接触', auto: 1, name: '爆炸（氢氧混合）', note: '没装瓶的氢气和氧气碰到一起会爆炸', in: { 'g:h2': 1, 'g:o2': 1 }, out: {} },
             { id: 'naoh', where: '接触', name: '钠碰水', note: '钠-23 碰到水（瓶装的、水池里的）：爆炸，炸完留下氢氧化钠溶液', in: { 'a:11:12': 1, 'b:water': 1 }, out: { 'b:naoh': 1 } },
             { id: 'salt', where: '接触', name: '钠碰氯气', note: '钠-23 碰到氯气（瓶装或没装瓶），变成食盐', in: { 'a:11:12': 1, 'b:cl2': 1 }, out: { salt: 1, bottle: 1 } },
-            { id: 'rust', where: '接触', name: '铁生锈', note: '铁块挨着水（瓶装或水池）2 分钟，变成铁锈', in: { iron: 1, 'b:water': 1 }, out: { rust: 1 } },
+            { id: 'rust', where: '接触', auto: 1, name: '铁生锈', note: '铁块挨着水（瓶装或水池）2 分钟，变成铁锈', in: { iron: 1, 'b:water': 1 }, out: { rust: 1 } },
             { id: 'soda', where: '接触', name: '苏打水', note: '一瓶水碰一瓶二氧化碳，变成苏打水', in: { 'b:water': 1, 'b:co2': 1 }, out: { 'b:soda': 1, bottle: 1 } }
         ];
+        // auto：自己发生的（原子拼成分子、生锈、氢氧碰到爆炸），不用玩家去做，手册里不列（v3：手册只留要主动做的配方）
+        function labActive() { return LAB_RECIPES.filter(function (r) { return !r.auto; }); }
         function labUsedIn(key) {
-            return LAB_RECIPES.filter(function (r) { return r.in[key] !== undefined; }).map(function (r) { return r.name; });
+            return labActive().filter(function (r) { return r.in[key] !== undefined; }).map(function (r) { return r.name; });
         }
 
         // ── 订单（只出化学类，本段做得出来的）──
@@ -1136,7 +1138,7 @@
                 }
             });
         }
-        // 没装瓶的氯气、二氧化硫：每秒 5 点伤害（气体存在 5 秒）
+        // 没装瓶的氯气、一氧化碳、二氧化硫：停 45 秒，4 米内每秒 8 点伤害
         function labToxic(dt) {
             let hit = false;
             lab.ground.forEach(function (g) {
@@ -1566,7 +1568,7 @@
         }
         function labBookPage(tab) {
             if (tab === 'list') {
-                let rows = LAB_RECIPES.filter(function (r) { return r.id !== 'boom1'; }).filter(function (r) {
+                let rows = labActive().filter(function (r) {
                     return !LAB_UI.only || Object.keys(r.in).every(function (k) { return labHave(k) >= r.in[k]; });
                 }).map(function (r) {
                     let ins = Object.keys(r.in).map(function (k) { let h = labHave(k), ok = h >= r.in[k]; return '<span class="lab-have" style="color:' + (ok ? '#2e7d32' : '#c62828') + ';">' + labName(k) + ' 现有 ' + h + ' / 需要 ' + r.in[k] + '</span>'; }).join('　');
@@ -1585,9 +1587,9 @@
                 return '<div style="color:#888;margin-bottom:4px;">质子数 1～26 的核素，地上的粒子会按质子数、中子数、电子数自动拼成它们。红字的会衰变。数据待核对。</div>' + rows;
             }
             if (tab === 'react') {
-                return LAB_RECIPES.filter(function (r) { return r.where !== '合成台'; }).map(function (r) {
+                return labActive().filter(function (r) { return r.where !== '合成台'; }).map(function (r) {
                     return '<div style="border-bottom:1px solid #eee;padding:5px 0;"><b>' + r.name + '</b> <span style="color:#888;font-size:11px;">' + r.where + '</span><br>' + labRecipeLine(r) + (r.note ? '<br><span style="color:#666;">' + r.note + '</span>' : '') + '</div>';
-                }).join('') + '<div style="margin-top:6px;color:#666;">气体必须装瓶：空玻璃瓶在 2 米内会自动装；没装进瓶的气体 10 秒后飘走。氯气、二氧化硫没装瓶有毒（每秒 5 点伤害，5 秒）。爆炸 3 米、40 点伤害，会毁掉范围内所有东西，仓库箱除外。</div>';
+                }).join('') + '<div style="margin-top:6px;color:#666;">气体必须装瓶：空玻璃瓶在 2 米内会自动装；没装进瓶的气体 10 秒后飘走。两个同样的原子碰到一起会自己变成分子（氢气、氧气、氯气）。氯气、一氧化碳、二氧化硫没装瓶有毒：停 45 秒，靠近每秒掉 8 血。爆炸 3 米、40 点伤害，会毁掉范围内所有东西，仓库箱除外。</div>';
             }
             if (tab === 'device') {
                 return LAB_RECIPES.filter(function (r) { return r.kind === 'device'; }).map(function (r) {

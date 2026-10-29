@@ -4004,7 +4004,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('LB6')) {
-            // LB6 爆炸／毒气／死亡：爆炸只毁 3 米内（地上、灶台、身上），仓库箱不动；毒气每秒 5 点、持续 5 秒；死亡丢身上和台面的东西、仓库箱不丢、锁 60 秒（时间戳）
+            // LB6 爆炸／毒气／死亡：爆炸只毁 3 米内（地上、灶台、身上），仓库箱不动；毒气（v3）每秒 8 点、停 45 秒；死亡（v4）
             const bad = [];
             const T = await LBTAB();
             await T.eval(`${HIDE} nav('screen-garage'); initGarage(); labSt().box = { iron: 3, 'a:2:2': 2 }; labSt().lockUntil = 0; true;`);
@@ -4020,14 +4020,19 @@ async function enterExit(tab, key) {
             const r2 = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, stove: lab.stove.items, hp: lab.hp, box: labSt().box })`));
             if (Object.keys(r2.bag).length || Object.keys(r2.stove).length || r2.hp !== 60) bad.push('范围内：身上、灶台全毁，扣 40 ' + JSON.stringify(r2));
             if (r2.box.iron !== 3) bad.push('仓库箱被炸了（二）' + JSON.stringify(r2.box));
-            // 毒气：氯气没装瓶，每秒 5 点，5 秒；人走开就没事
-            await T.eval(`labClear(); lab.hp = 100; lab.p.x = -2; lab.p.z = 3; window.__hp = 100; labSpawn('g:cl2', lab.p.x + 1, lab.p.z, { noFill: 1e9 }); true;`);
+            // 毒气（v3）：氯气、一氧化碳、二氧化硫没装瓶，停 45 秒，4 米内每秒 8 点；人走开就没事
+            await T.eval(`labClear(); lab.hp = 1000; lab.p.x = -2; lab.p.z = 3; labSpawn('g:cl2', lab.p.x + 1, lab.p.z, { noFill: 1e9 }); true;`);
             await T.eval(`labAdvance(1.0); true;`);
-            if (!(await T.eval(`lab.hp < 100 && lab.hp > 90`))) bad.push('站在氯气里 1 秒应该掉约 5 点 ' + await T.eval(`lab.hp`));
-            await T.eval(`labAdvance(4.6); true;`);
-            if (await T.eval(`labCount('g:cl2')`) !== 0) bad.push('氯气 5 秒后没散');
-            const lost = await T.eval(`100 - lab.hp`);
-            if (!(lost >= 24 && lost <= 25.1)) bad.push('毒气总伤害应该约 25（每秒 5 × 5 秒），实际 ' + lost);
+            if (!(await T.eval(`lab.hp < 993 && lab.hp > 991`))) bad.push('站在氯气里 1 秒应该掉约 8 点 ' + await T.eval(`lab.hp`));
+            await T.eval(`labAdvance(43.5); true;`);
+            if (await T.eval(`labCount('g:cl2')`) !== 1) bad.push('氯气 44.5 秒还该在');
+            await T.eval(`labAdvance(1.0); true;`);
+            if (await T.eval(`labCount('g:cl2')`) !== 0) bad.push('氯气 45 秒后该散');
+            const lost = await T.eval(`1000 - lab.hp`);
+            if (!(lost >= 357 && lost <= 361)) bad.push('毒气总伤害应该约 360（每秒 8 × 45 秒），实际 ' + lost);
+            const co = await T.eval(`(function(){ labClear(); lab.hp = 100; lab.p.x = -2; lab.p.z = 3; labSpawn('g:co', -1, 3, { noFill: 1e9 }); labAdvance(1); return [lab.hp, labDef('g:co').toxic, LAB_BOTTLE_OF.co]; })().join()`);
+            if (!/^9[12]\.\d*,1,b:co$|^92,1,b:co$/.test(co)) bad.push('一氧化碳一样有毒、能装瓶 ' + co);
+            await T.eval(`labClear(); lab.hp = 100; true;`);
             await T.eval(`lab.hp = 100; lab.p.x = -10; lab.p.z = -2; labSpawn('g:so2', 6, 5, { noFill: 1e9 }); true;`);
             const far = await T.eval(`(labAdvance(2), lab.hp)`);
             if (far !== 100) bad.push('离得远也中毒 ' + far);
@@ -4057,7 +4062,7 @@ async function enterExit(tab, key) {
             if (saved !== 3) bad.push('存档里没有 lab.box ' + saved);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
-            report('LB6 爆炸 3 米 40 点只毁范围内、仓库箱不动；毒气每秒 5 点持续 5 秒；死亡（v4）身上的消失、门口站起来、不锁、写死因', bad.length === 0, bad.join(' / '));
+            report('LB6 爆炸 3 米 40 点只毁范围内、仓库箱不动；毒气（氯气、一氧化碳、二氧化硫）每秒 8 点停 45 秒；死亡（v4）身上的消失、门口站起来、不锁、写死因', bad.length === 0, bad.join(' / '));
         }
 
         if (want('LB28')) {
@@ -4083,9 +4088,12 @@ async function enterExit(tab, key) {
             await T.eval(`window.__lf = []; let f0 = labFlash; labFlash = function (s) { __lf.push(s); }; labInteractWith('trash'); labStoreHeld(); labFlash = f0; true;`);
             if (!(await T.eval(`__lf.length === 2 && /先选/.test(__lf[0]) && /先选/.test(__lf[1])`))) bad.push('手上没东西：垃圾桶和 Ctrl+Q 都提示先选 ' + await T.eval(`JSON.stringify(__lf)`));
             if (!(await T.eval(`!!document.getElementById('lab-btn-store')`))) bad.push('手机上要有存仓库的按钮');
+            // 手册（v3）：只留要主动做的配方（原子自己拼分子、生锈、氢氧碰到爆炸不列）
+            const bk = JSON.parse(await T.eval(`(function(){ LAB_UI.only = false; labBook('react'); let a = document.getElementById('lab-book').innerText; labBook('list'); let b = document.getElementById('lab-book').innerText; labBookClose(); return JSON.stringify({ a: a, b: b, used: labUsedIn('a:1:0') }); })()`));
+            if (/氢分子|氧分子|氯分子|铁生锈|爆炸（氢氧混合）/.test(bk.a + bk.b) || !/钠碰水/.test(bk.a) || !/苏打水/.test(bk.a) || !/合成水/.test(bk.b) || bk.used.length) bad.push('手册只留要主动做的配方 ' + JSON.stringify({ used: bk.used, a: bk.a.slice(0, 300) }));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
-            report('LB28 实验室易用性 v4：Ctrl+Q 存进仓库、Shift+Q 放下手上的、垃圾桶', bad.length === 0, bad.join(' / '));
+            report('LB28 实验室易用性 v4：Ctrl+Q 存进仓库、Shift+Q 放下手上的、垃圾桶；手册只留要主动做的配方', bad.length === 0, bad.join(' / '));
         }
 
         if (want('LB29')) {
