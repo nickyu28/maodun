@@ -6349,6 +6349,83 @@ async function enterExit(tab, key) {
             report('IND22 矿成片、锡多一点、海边锡砂', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND23')) {
+            // IND23 水里和木筏：浅水（水深 < 0.6 米）0.8 倍速能跑；深水游泳 0.6 倍速不能跑、体力每秒掉 5、体力 0 变 0.3 倍速；木筏（工作台 20 木头，悠闲硬核都有）水边右键放、
+            // 左键上下、水上 2 倍速、不能上岸、下筏 4 米内有岸就上岸、只在这一趟；坐在筏上不降温
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
+                const ci = `IND_CRAFT.findIndex(function (r) { return r.out === 'raft'; })`;
+                for (const rule of ['hard', 'casual']) {
+                    await T.eval(`ind.base.rule = '${rule}'; ind.bag = {}; indBagAdd('wood', 19); if (indCraft(${ci})) throw 1; indBagAdd('wood', 1); indCraft(${ci}); true;`);
+                    if (!(await T.eval(`ind.bag.raft === 1 && !ind.bag.wood`))) bad.push(rule + ' 20 木头做不出木筏 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                }
+                await T.eval(`ind.base.rule = 'hard'; indGoTrip(2024); window.__ih = indHeight; window.__hf = null; indHeight = function (M, x, z) { return window.__hf ? window.__hf(x, z) : window.__ih(M, x, z); }; ind.nodes = []; ind.nodeDirty = true; true;`);
+                // 水面 −1.2：陆地 0.5；浅水（深 0.3）−1.5；深水（深 1.0）−2.2
+                const run = async (hf, keys, secs) => J(`(function(){ window.__hf = ${hf}; indTeleport(0, 0); indLookAt(30, 0); ind.stam = ${keys.stam === undefined ? 100 : keys.stam}; ind.k.w = true; ind.k.run = ${!!keys.run}; ind.onRaft = ${keys.raft ? 'ind.rafts[0]' : 'null'}; let x0 = ind.p.x, s0 = ind.stam; for (let i = 0; i < ${secs * 20}; i++) indMove(0.05); ind.k.w = false; ind.k.run = false; return { dx: ind.p.x - x0, stam: ind.stam - s0 }; })()`);
+                const near = (a, b) => Math.abs(a - b) < b * 0.04 + 0.05;
+                let r = await run('function () { return 0.5; }', {}, 1);
+                if (!near(r.dx, 7)) bad.push('陆地走路应该 7 米/秒 ' + JSON.stringify(r));
+                r = await run('function () { return -1.5; }', {}, 1);
+                if (!near(r.dx, 5.6)) bad.push('浅水应该 0.8 倍速（5.6 米/秒） ' + JSON.stringify(r));
+                r = await run('function () { return -1.5; }', { run: true }, 1);
+                if (!near(r.dx, 7 * 1.6 * 0.8)) bad.push('浅水能跑（0.8 × 跑步） ' + JSON.stringify(r));
+                r = await run('function () { return -2.2; }', {}, 1);
+                if (!near(r.dx, 4.2) || !near(-r.stam, 5)) bad.push('深水应该 0.6 倍速（4.2）、体力每秒掉 5 ' + JSON.stringify(r));
+                r = await run('function () { return -2.2; }', { run: true }, 1);
+                if (!near(r.dx, 4.2)) bad.push('深水不能跑 ' + JSON.stringify(r));
+                r = await run('function () { return -2.2; }', { stam: 0 }, 1);
+                if (!near(r.dx, 2.1)) bad.push('深水没体力应该 0.3 倍速（2.1） ' + JSON.stringify(r));
+                // 下水降温照旧
+                await T.eval(`window.__hf = function () { return -2.2; }; indTeleport(0, 0); true;`);
+                const tWater = await T.eval(`indAirTemp()`);
+                await T.eval(`window.__hf = function () { return 0.5; }; true;`);
+                const tLand = await T.eval(`indAirTemp()`);
+                if (Math.abs(tLand - tWater - 10) > 0.01) bad.push('下水降温 10°C 应该照旧 ' + [tLand, tWater]);
+                // ── 木筏：岸在 x ≥ 10，水在 x < 10 ──
+                await T.eval(`window.__hf = function (x) { return x < 10 ? -2.2 : 0.5; }; ind.bag = {}; indBagAdd('raft', 2); indTeleport(15, 0); indLookAt(0, 0); indSelect('raft'); indUse(); true;`);
+                if (await T.eval(`ind.rafts.length !== 0 || ind.bag.raft !== 2`)) bad.push('对着陆地不该放得下木筏');
+                await T.eval(`indTeleport(10.5, 0); indLookAt(0, 0); indUse(); true;`);
+                if (!(await T.eval(`ind.rafts.length === 1 && ind.bag.raft === 1 && Math.abs(ind.rafts[0].x - 7.9) < 0.1`))) bad.push('水边右键应该放下木筏 ' + await T.eval(`JSON.stringify([ind.rafts.map(function (q) { return [q.x, q.z]; }), ind.bag])`));
+                await T.eval(`indUse(); true;`);
+                if (await T.eval(`ind.rafts.length !== 1`)) bad.push('同一个位置不该放两个筏');
+                // 左键上筏
+                await T.eval(`indTeleport(10.2, 0); indLookAt(7.9, 0); true;`);
+                if ((await J(`indAim() && indAim().kind`)) !== 'raft') bad.push('应该能瞄到木筏 ' + await T.eval(`JSON.stringify(indAim() && indAim().kind)`));
+                await T.eval(`indAction(); true;`);
+                if (!(await T.eval(`ind.onRaft === ind.rafts[0]`))) bad.push('左键没上筏');
+                // 水上 2 倍速，向岸走不上岸
+                r = await J(`(function(){ indLookAt(-30, 0); ind.k.w = true; let x0 = ind.p.x; for (let i = 0; i < 20; i++) indMove(0.05); ind.k.w = false; return ind.p.x - x0; })()`);
+                if (!near(-r, 14)) bad.push('筏上应该 2 倍速（14 米/秒） ' + r);
+                await T.eval(`indLookAt(60, 0); ind.k.w = true; for (let i = 0; i < 100; i++) indMove(0.05); ind.k.w = false; true;`);
+                const edge = await J(`[ind.p.x, ind.rafts[0].x]`);
+                if (edge[0] >= 10 || edge[1] >= 10 || Math.abs(edge[0] - edge[1]) > 0.01) bad.push('筏不能上岸、人跟着筏走 ' + JSON.stringify(edge));
+                // 筏上不降温、不耗体力
+                if (Math.abs((await T.eval(`indAirTemp()`)) - tLand) > 0.01) bad.push('筏上不该降温');
+                // 下筏：4 米内有岸就上岸
+                await T.eval(`indAction(); true;`);
+                if (!(await T.eval(`ind.onRaft === null && ind.p.x >= 10`))) bad.push('下筏应该上岸 ' + await T.eval(`JSON.stringify([ind.onRaft, ind.p.x])`));
+                // 远处的筏：离岸远下筏就在水里
+                await T.eval(`indTeleport(2, 0); ind.onRaft = null; indLookAt(0, 0); ind.rafts[0].x = 2; ind.rafts[0].z = 0; indRaftToggle(ind.rafts[0]); true;`);
+                if (!(await T.eval(`ind.onRaft === ind.rafts[0]`))) bad.push('走到筏上');
+                await T.eval(`indAction(); true;`);
+                if (!(await T.eval(`ind.onRaft === null && ind.p.x < 10`))) bad.push('离岸远下筏应该留在水里 ' + await T.eval(`ind.p.x`));
+                // 只在这一趟
+                await T.eval(`indHeight = window.__ih; indGoBase(false); true;`);
+                if (!(await T.eval(`ind.rafts.length === 0 && ind.onRaft === null`))) bad.push('回基地筏要没了');
+                await T.eval(`indGoTrip(2024); true;`);
+                if (await T.eval(`ind.rafts.length !== 0`)) bad.push('新的一趟不该有筏');
+                await T.eval(`indGoBase(false); true;`);
+            }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND23 水里和木筏：浅水深水速度、深水体力、木筏的配方放下上下、水上 2 倍速不上岸、只在这一趟', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
