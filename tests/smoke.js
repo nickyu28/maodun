@@ -2547,6 +2547,21 @@ async function enterExit(tab, key) {
             report('S4 保险柜：基础概率 0/15%/25%；每死一次 +15%（死 3 次 +45%）、封顶 100%、存档记；中途退出不加；开到保险柜单人清零、有真人队友不清；组队只用基础概率；第一局不再必出', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('HM1')) {
+            // HM1 作者决定先藏起来的 5 个模式（监狱救援、躲避球、合作密室、推推乐、爬塔）：大厅里没有入口，别的模式的入口还在；代码还在，直接调用照样能进
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`JSON.stringify({ hidden: ['jail', 'dodge', 'escape', 'sumo', 'tower'].filter(function (k) { return !!document.getElementById('btn-mode-' + k); }),
+                shown: ['hunt', 'night', 'blaze', 'race', 'park', 'cake'].filter(function (k) { return !document.getElementById('btn-mode-' + k); }) })`));
+            if (r.hidden.length) bad.push('这些入口还在 ' + r.hidden.join());
+            if (r.shown.length) bad.push('这些入口不见了 ' + r.shown.join());
+            await T.eval(`${HIDE} selectGameMode('jail'); true;`);
+            if ((await T.eval(`gState.gameMode`)) !== 'jail') bad.push('直接调用 selectGameMode 进不了隐藏的模式');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('HM1 隐藏 5 个模式：大厅里没有入口，其余入口还在，代码还能直接调用', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('K1')) {
             // K1 合成倒计时：材料凑齐后等 3 秒再合成（合出大金的 5 秒），中间显示倒计时，材料被拿走就取消、放回去重新数
             const bad = [];
@@ -6592,6 +6607,81 @@ async function enterExit(tab, key) {
             report('U1 仓库触屏：上滑滚动不挪东西、长按拖、点一下选中；鼠标照旧；宽屏列表变宽', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('H10')) {
+            // H10：信号接收器的蓝色路线
+            const A = await openTab(chrome, url);   // 自己的标签页（不依赖前面检查留下的状态，SMOKE_ONLY 能单独跑）
+            const before = A.errors.length, bad = [], out = [];
+            for (const [m, diff] of ['easy', 'med', 'hard', 'easy', 'med'].entries()) {
+                await A.eval(`${HIDE} gState.mapDifficulty = '${diff}'; selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await until(A, `chatActiveModeKey() === 'hunt' && isPlaying`, 30000); await frames(A, 5); await A.eval(`${HIDE} true;`);
+                const o = JSON.parse(await A.eval(`(${ROUTE_SIM.toString()})(80, ${m * 7 + 3})`));
+                out.push(diff + ' ' + o.found + '/' + o.endOk + '/' + o.walked);
+                if (o.found !== 80 || o.endOk !== 80 || o.ptBad || o.walked !== 80) bad.push(diff + ' ' + JSON.stringify(o));
+                if (m < 4) { await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await until(A, `chatActiveModeKey() === 'hub'`, 30000); }
+            }
+            // 楼梯井旁边是桌子（换种子找 30 处）：路线不斜着穿进桌子
+            const lp = JSON.parse(await A.eval(`(function(){ let o = { cases: 0, bad: 0 }, seed0 = gameSeed, d0 = gState.mapDifficulty; gState.mapDifficulty = 'easy';
+                for (let s = 1; s <= 400 && o.cases < 30; s++) { gameSeed = s * 104729 % 233280 || 1; buildProceduralMaze();
+                    for (let f = 1; f < FLOORS; f++) for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
+                        if (huntCellKind(f, x, z) !== 'stairHi') continue;
+                        let st = maze[f][z][x].stair, ax = huntStairAxis(st), bx = x - ax.dx, bz = z - ax.dz;
+                        if (huntCellKind(f, bx, bz) !== 'table') continue;
+                        o.cases++;
+                        // 两个方向都查：从平台跳过井落到桌子上；从桌子上走进井里掉到台阶上
+                        let routes = [huntRoutePoints([{ f: f, x: x, z: z }, { f: f, x: bx, z: bz, via: 'leap' }], huntStairPt(st, x, z, huntPlatT(st), f * TILE))];
+                        let w = huntRouteNbrs({ f: f, x: bx, z: bz }).filter(function (m) { return m.via === 'well' && m.x === x && m.z === z; })[0];
+                        if (w) { o.well = (o.well || 0) + 1; routes.push(huntRoutePoints([{ f: f, x: bx, z: bz }, w], new THREE.Vector3(bx * TILE, huntSurfY(f, bx, bz), bz * TILE))); }
+                        routes.forEach(function (pts) { let hit = false;
+                        for (let i = 1; i < pts.length && !hit; i++) { let m = Math.max(1, Math.ceil(pts[i - 1].distanceTo(pts[i]) / 0.5));
+                            for (let j = 0; j <= m; j++) { let p = pts[i - 1].clone().lerp(pts[i], j / m), top = huntSurfaceAt(p.x, p.z, p.y + 0.02); if (top === Infinity || p.y + 0.02 < top - 0.05) { hit = true; break; } } }
+                        if (hit) o.bad++; });
+                    } }
+                gameSeed = seed0; gState.mapDifficulty = d0; return JSON.stringify(o); })()`));
+            if (lp.cases < 10 || !lp.well || lp.bad) bad.push('楼梯井旁边是桌子 ' + JSON.stringify(lp));
+            await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await until(A, `chatActiveModeKey() === 'hub'`, 30000);
+            await A.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await until(A, `chatActiveModeKey() === 'hunt' && isPlaying`, 30000); await frames(A, 5); await A.eval(`${HIDE} true;`);
+            // 用接收器：出东西、有蓝线；换楼层路线跟着变；连续重算 50 次几何体不涨；诅咒藏起来再恢复；没路给提示；捡走清掉
+            let r = JSON.parse(await A.eval(`(function(){
+                let o = {};
+                camera.position.set(TILE, 9, TILE); pVel.set(0, 0, 0); onGround = true;
+                gState.signal = { active: true, timer: 2, mesh: null }; tickSignal(0);
+                let it = gState.signal.mesh;
+                o.made = !!it && groundItems.indexOf(it) >= 0 && huntSignalRoute.ok && !!huntSignalRoute.mesh && huntSignalRoute.mesh.parent === scene;
+                let pts = huntSignalRoute.pts, end = pts && pts[pts.length - 1];
+                o.endNear = !!end && Math.hypot(end.x - it.position.x, end.z - it.position.z) < 0.5 && Math.floor(end.y / TILE) === Math.floor(it.position.y / TILE);
+                // 传送到另一层
+                let f0 = huntPlayerNode().f, other = null;
+                for (let f = 0; f < FLOORS && !other; f++) if (f !== f0) for (let z = 1; z < mSize && !other; z++) for (let x = 1; x < mSize; x++) if (maze[f][z][x].type === 0) { other = { f: f, x: x, z: z }; break; }
+                let k0 = huntSignalRoute.key;
+                camera.position.set(other.x * TILE, other.f * TILE + 9, other.z * TILE); signalRouteTick(false);
+                let p0 = huntSignalRoute.pts && huntSignalRoute.pts[0];
+                o.teleport = huntSignalRoute.key !== k0 && huntSignalRoute.ok && !!p0 && Math.floor((p0.y + 0.1) / TILE) === other.f && Math.hypot(p0.x - camera.position.x, p0.z - camera.position.z) < 1;
+                o.hintOtherFloor = other.f === Math.floor(it.position.y / TILE) || /楼，跟着蓝线走/.test(document.getElementById('signal-hint').innerText);
+                // 50 次重算
+                signalRouteTick(true); let g0 = renderer.info.memory.geometries, c0 = scene.children.length;
+                for (let i = 0; i < 50; i++) signalRouteTick(true);
+                o.geo = [g0, renderer.info.memory.geometries, c0, scene.children.length];
+                // 诅咒
+                gState.debuff.type = 1; signalRouteTick(false); o.cursedHidden = huntSignalRoute.mesh.visible === false;
+                gState.debuff.type = 0; signalRouteTick(false); o.restored = huntSignalRoute.mesh.visible === true;
+                // 找不到路
+                let keep = window.huntRouteFind; window.huntRouteFind = function () { return null; };
+                signalRouteTick(true); o.noRoute = !huntSignalRoute.mesh && /楼，在你(前面|后面|左边|右边)/.test(document.getElementById('signal-hint').innerText);
+                window.huntRouteFind = keep; signalRouteTick(true);
+                // 捡走
+                groundItems.splice(groundItems.indexOf(it), 1); scene.remove(it); signalRouteTick(false);
+                o.cleared = !huntSignalRoute.mesh && !huntSignalRoute.key && document.getElementById('signal-hint').style.display === 'none';
+                return JSON.stringify(o); })()`));
+            if (!r.made || !r.endNear) bad.push('用了没出蓝线 ' + JSON.stringify(r));
+            if (!r.teleport || !r.hintOtherFloor) bad.push('换楼层没更新 ' + JSON.stringify(r));
+            if (r.geo[1] > r.geo[0] || r.geo[3] > r.geo[2]) bad.push('重算 50 次几何体涨了 ' + r.geo.join(','));
+            if (!r.cursedHidden || !r.restored) bad.push('诅咒 ' + JSON.stringify(r));
+            if (!r.noRoute) bad.push('没路时没提示');
+            if (!r.cleared) bad.push('捡走后没清');
+            await A.eval(`${HIDE} ${MODES.hunt.exit}; gState.mapDifficulty = 'easy'; true;`); await until(A, `chatActiveModeKey() === 'hub'`, 30000);
+            await A.close();
+            report('H10 信号接收器蓝线：5 张图各 80 次能找到能走到、点不进墙、换层更新、重算不涨、诅咒藏起来', bad.length === 0 && A.errors.length === before, bad.length ? bad.join(' / ') + A.errors.slice(before, before + 2).join(' / ') : out.join(' | '));
+        }
+
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
@@ -7497,78 +7587,6 @@ async function enterExit(tab, key) {
                 bad.length ? bad.join(' / ') + A.errors.slice(before, before + 2).join(' / ') : ['easy', 'med', 'hard'].map((d) => d + ' 重造 ' + r[d].rebuilt + ' 张').join(' | '));
         }
 
-        {
-            // H10：信号接收器的蓝色路线
-            const before = A.errors.length, bad = [], out = [];
-            for (const [m, diff] of ['easy', 'med', 'hard', 'easy', 'med'].entries()) {
-                await A.eval(`${HIDE} gState.mapDifficulty = '${diff}'; ${MODES.hunt.start}; true;`); await W(2500); await A.eval(`${HIDE} true;`);
-                const o = JSON.parse(await A.eval(`(${ROUTE_SIM.toString()})(80, ${m * 7 + 3})`));
-                out.push(diff + ' ' + o.found + '/' + o.endOk + '/' + o.walked);
-                if (o.found !== 80 || o.endOk !== 80 || o.ptBad || o.walked !== 80) bad.push(diff + ' ' + JSON.stringify(o));
-                if (m < 4) { await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000); }
-            }
-            // 楼梯井旁边是桌子（换种子找 30 处）：路线不斜着穿进桌子
-            const lp = JSON.parse(await A.eval(`(function(){ let o = { cases: 0, bad: 0 }, seed0 = gameSeed, d0 = gState.mapDifficulty; gState.mapDifficulty = 'easy';
-                for (let s = 1; s <= 400 && o.cases < 30; s++) { gameSeed = s * 104729 % 233280 || 1; buildProceduralMaze();
-                    for (let f = 1; f < FLOORS; f++) for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
-                        if (huntCellKind(f, x, z) !== 'stairHi') continue;
-                        let st = maze[f][z][x].stair, ax = huntStairAxis(st), bx = x - ax.dx, bz = z - ax.dz;
-                        if (huntCellKind(f, bx, bz) !== 'table') continue;
-                        o.cases++;
-                        // 两个方向都查：从平台跳过井落到桌子上；从桌子上走进井里掉到台阶上
-                        let routes = [huntRoutePoints([{ f: f, x: x, z: z }, { f: f, x: bx, z: bz, via: 'leap' }], huntStairPt(st, x, z, huntPlatT(st), f * TILE))];
-                        let w = huntRouteNbrs({ f: f, x: bx, z: bz }).filter(function (m) { return m.via === 'well' && m.x === x && m.z === z; })[0];
-                        if (w) { o.well = (o.well || 0) + 1; routes.push(huntRoutePoints([{ f: f, x: bx, z: bz }, w], new THREE.Vector3(bx * TILE, huntSurfY(f, bx, bz), bz * TILE))); }
-                        routes.forEach(function (pts) { let hit = false;
-                        for (let i = 1; i < pts.length && !hit; i++) { let m = Math.max(1, Math.ceil(pts[i - 1].distanceTo(pts[i]) / 0.5));
-                            for (let j = 0; j <= m; j++) { let p = pts[i - 1].clone().lerp(pts[i], j / m), top = huntSurfaceAt(p.x, p.z, p.y + 0.02); if (top === Infinity || p.y + 0.02 < top - 0.05) { hit = true; break; } } }
-                        if (hit) o.bad++; });
-                    } }
-                gameSeed = seed0; gState.mapDifficulty = d0; return JSON.stringify(o); })()`));
-            if (lp.cases < 10 || !lp.well || lp.bad) bad.push('楼梯井旁边是桌子 ' + JSON.stringify(lp));
-            await A.eval(`${HIDE} ${MODES.hunt.exit}; true;`); await W(1000);
-            await A.eval(`${HIDE} ${MODES.hunt.start}; true;`); await W(2500); await A.eval(`${HIDE} true;`);
-            // 用接收器：出东西、有蓝线；换楼层路线跟着变；连续重算 50 次几何体不涨；诅咒藏起来再恢复；没路给提示；捡走清掉
-            let r = JSON.parse(await A.eval(`(function(){
-                let o = {};
-                camera.position.set(TILE, 9, TILE); pVel.set(0, 0, 0); onGround = true;
-                gState.signal = { active: true, timer: 2, mesh: null }; tickSignal(0);
-                let it = gState.signal.mesh;
-                o.made = !!it && groundItems.indexOf(it) >= 0 && huntSignalRoute.ok && !!huntSignalRoute.mesh && huntSignalRoute.mesh.parent === scene;
-                let pts = huntSignalRoute.pts, end = pts && pts[pts.length - 1];
-                o.endNear = !!end && Math.hypot(end.x - it.position.x, end.z - it.position.z) < 0.5 && Math.floor(end.y / TILE) === Math.floor(it.position.y / TILE);
-                // 传送到另一层
-                let f0 = huntPlayerNode().f, other = null;
-                for (let f = 0; f < FLOORS && !other; f++) if (f !== f0) for (let z = 1; z < mSize && !other; z++) for (let x = 1; x < mSize; x++) if (maze[f][z][x].type === 0) { other = { f: f, x: x, z: z }; break; }
-                let k0 = huntSignalRoute.key;
-                camera.position.set(other.x * TILE, other.f * TILE + 9, other.z * TILE); signalRouteTick(false);
-                let p0 = huntSignalRoute.pts && huntSignalRoute.pts[0];
-                o.teleport = huntSignalRoute.key !== k0 && huntSignalRoute.ok && !!p0 && Math.floor((p0.y + 0.1) / TILE) === other.f && Math.hypot(p0.x - camera.position.x, p0.z - camera.position.z) < 1;
-                o.hintOtherFloor = other.f === Math.floor(it.position.y / TILE) || /楼，跟着蓝线走/.test(document.getElementById('signal-hint').innerText);
-                // 50 次重算
-                signalRouteTick(true); let g0 = renderer.info.memory.geometries, c0 = scene.children.length;
-                for (let i = 0; i < 50; i++) signalRouteTick(true);
-                o.geo = [g0, renderer.info.memory.geometries, c0, scene.children.length];
-                // 诅咒
-                gState.debuff.type = 1; signalRouteTick(false); o.cursedHidden = huntSignalRoute.mesh.visible === false;
-                gState.debuff.type = 0; signalRouteTick(false); o.restored = huntSignalRoute.mesh.visible === true;
-                // 找不到路
-                let keep = window.huntRouteFind; window.huntRouteFind = function () { return null; };
-                signalRouteTick(true); o.noRoute = !huntSignalRoute.mesh && /楼，在你(前面|后面|左边|右边)/.test(document.getElementById('signal-hint').innerText);
-                window.huntRouteFind = keep; signalRouteTick(true);
-                // 捡走
-                groundItems.splice(groundItems.indexOf(it), 1); scene.remove(it); signalRouteTick(false);
-                o.cleared = !huntSignalRoute.mesh && !huntSignalRoute.key && document.getElementById('signal-hint').style.display === 'none';
-                return JSON.stringify(o); })()`));
-            if (!r.made || !r.endNear) bad.push('用了没出蓝线 ' + JSON.stringify(r));
-            if (!r.teleport || !r.hintOtherFloor) bad.push('换楼层没更新 ' + JSON.stringify(r));
-            if (r.geo[1] > r.geo[0] || r.geo[3] > r.geo[2]) bad.push('重算 50 次几何体涨了 ' + r.geo.join(','));
-            if (!r.cursedHidden || !r.restored) bad.push('诅咒 ' + JSON.stringify(r));
-            if (!r.noRoute) bad.push('没路时没提示');
-            if (!r.cleared) bad.push('捡走后没清');
-            await A.eval(`${HIDE} ${MODES.hunt.exit}; gState.mapDifficulty = 'easy'; true;`); await W(1000);
-            report('H10 信号接收器蓝线：5 张图各 80 次能找到能走到、点不进墙、换层更新、重算不涨、诅咒藏起来', bad.length === 0 && A.errors.length === before, bad.length ? bad.join(' / ') + A.errors.slice(before, before + 2).join(' / ') : out.join(' | '));
-        }
 
         {
             // H11：小地图导航（绿线，只在这一层）和信号接收器的蓝线各管各的
