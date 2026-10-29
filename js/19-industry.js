@@ -199,8 +199,7 @@
         IND_ITEMS_RAW.chest = { name: '仓库箱', col: 0x6d4c41, furn: 'chest' };
         IND_ITEMS_RAW.furn_bed = { name: '床', col: 0x5c6bc0, furn: 'bed' };
         IND_ITEMS_RAW.furn_bench = { name: '工作台', col: 0xa1887f, furn: 'bench' };
-        IND_ITEMS_RAW.furn_pool = { name: '水池', col: 0x29b6f6, furn: 'pool' };
-        IND_ITEMS_RAW.house_hut = { name: '木屋', col: 0x8d6e63, house: 'hut', use: '放下就是一间房' };
+                IND_ITEMS_RAW.house_hut = { name: '木屋', col: 0x8d6e63, house: 'hut', use: '放下就是一间房' };
         IND_ITEMS_RAW.house_brick = { name: '砖房', col: 0xb55a4a, house: 'brick', use: '放下就是一间房' };
         IND_ITEMS_RAW.house_big = { name: '大砖房', col: 0xa0453a, house: 'big', use: '放下就是一间房' };
         IND_ITEMS_RAW.cyl = { name: '钢瓶（空）', col: 0x78909c, cyl: {}, use: '装气' };
@@ -496,8 +495,9 @@
             // 家具：位置（可搬）、被收起来的、箱子（原来的仓库箱不限，新做的 30 格）、搬着的
             b.cid = indNum(b.cid, 1, 1, 1e9) | 0;
             if (!b.pos || typeof b.pos !== 'object') b.pos = {};
-            ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { let p = b.pos[k]; if (!p || !isFinite(p.x) || !isFinite(p.z)) delete b.pos[k]; else b.pos[k] = { x: indNum(p.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1), z: indNum(p.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1) }; });
-            let off = {}; ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { if (b.off && b.off[k]) off[k] = true; }); b.off = off;
+            ['stove', 'bed', 'bench'].forEach(function (k) { let p = b.pos[k]; if (!p || !isFinite(p.x) || !isFinite(p.z)) delete b.pos[k]; else b.pos[k] = { x: indNum(p.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1), z: indNum(p.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1) }; });
+            delete b.pos.pool;   // 水池是挖在地上的，不能搬：以前收起来的读档时放回原位（背包里的 furn_pool 下面按未知物品清掉）
+            let off = {}; ['stove', 'bed', 'bench'].forEach(function (k) { if (b.off && b.off[k]) off[k] = true; }); b.off = off;
             if (!Array.isArray(b.chests)) { let bp = b.pos.box; b.chests = [{ id: 1, x: bp ? bp.x : IND_ST_DEF.box.x, z: bp ? bp.z : IND_ST_DEF.box.z, big: true, items: b.box }]; }   // 老档：原来的仓库箱变成不限格数的那个箱子
             b.chests = b.chests.filter(function (c) { return c && isFinite(c.x) && isFinite(c.z) && c.items && typeof c.items === 'object'; }).slice(0, 20);
             let seen = {};
@@ -854,7 +854,7 @@
             document.body.onmousedown = null;
             if (R.onMouse) { document.removeEventListener('mouseup', R.onMouseUp); document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); }
             if (document.pointerLockElement) document.exitPointerLock();
-            ['ind-hud', 'ind-night'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
+            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
             indClearWorld();
             if (R.me) scene.remove(R.me);
             scene.background = R.oldBg; scene.fog = R.oldFog;
@@ -1101,16 +1101,18 @@
         function indGround(x, z) { return ind.where === 'trip' ? Math.max(IND_WATER_Y, indHeight(ind.map, x, z)) : 0; }
         function indInWater() { return ind.where === 'trip' && indHeight(ind.map, ind.p.x, ind.p.z) < IND_WATER_Y + 0.2; }
         function indTick(dt) {
+            if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
             if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); indCropTick(dt); }
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
-            if (!ind || ind.over) return;
+            if (!ind || ind.over || ind.dead) return;
             if (live) indElecTick(dt);
-            if (!ind || ind.over) return;
+            if (!ind || ind.over || ind.dead) return;
             indBoomTick(dt); indCloudTick(dt); indFogTick(dt);
-            if (!ind || ind.over) return;
+            if (!ind || ind.over || ind.dead) return;
+            indHurtTick(dt);
             indStoveTick(dt);
             if (!ind || ind.over) return;
             indRightHoldTick(dt);
@@ -1142,21 +1144,80 @@
             if (indHard()) {
                 let cold = S.temp < IND_BODY.freeze ? 1 : 0, hot = S.temp > IND_BODY.boil ? 1 : 0;
                 let dmg = (S.food <= 0 ? Q.starveHp : 0) + (S.water <= 0 ? Q.thirstHp : 0) + cold + hot;
-                if (dmg > 0) { S.hp -= dmg * dt; ind.lastHurt = cold ? '冻死' : hot ? '热死' : S.water <= 0 ? '渴死' : '饿死'; }
+                if (dmg > 0) {
+                    if (S.food <= 0 && indHurt(Q.starveHp * dt, 'starve', '饱食到 0')) return;
+                    if (S.water <= 0 && indHurt(Q.thirstHp * dt, 'thirst', '口渴到 0')) return;
+                    if (cold && indHurt(dt, 'cold', '体温 ' + S.temp.toFixed(1) + '°C')) return;
+                    if (hot && indHurt(dt, 'heat', '体温 ' + S.temp.toFixed(1) + '°C')) return;
+                }
                 else if (S.food > 30 && S.water > 30) S.hp = Math.min(100, S.hp + Q.regen * dt);
-                if (S.hp <= 0) indDie(ind.lastHurt || '倒下');
             }
         }
         function indSlow() { let S = ind.base.surv; return S.food <= 0 || S.water <= 0 || S.energy <= 0; }
         function indShiver() { return ind.base.surv.temp < IND_BODY.chill; }
-        function indDie(cause) {
-            if (!ind || ind.over) return;
+        // ── 受伤和死亡：所有掉血都走 indHurt，记下来源（死因、飘字、血条旁的字都用它） ──
+        const IND_HURT = { starve: { die: '饿死', tag: '饥饿' }, thirst: { die: '渴死', tag: '口渴' }, cold: { die: '冻死', tag: '冻伤' }, heat: { die: '热死', tag: '中暑' }, burn: { die: '烫伤', tag: '烫伤' }, gas: { die: '中毒', tag: '中毒' }, boom: { die: '爆炸', tag: '爆炸' } };
+        function indHurt(n, key, detail, instant) {
+            if (!ind || ind.over || ind.dead || !(n > 0)) return false;
+            let S = ind.base.surv, R = ind.hurt = ind.hurt || { rec: [], acc: {}, ft: {} };
+            S.hp -= n; ind.redT = 1; ind.lastHurt = IND_HURT[key].die;
+            R.rec.push({ t: ind.t, key: key, n: n, detail: detail || '' });
+            R.rec = R.rec.filter(function (r) { return ind.t - r.t <= 2; });
+            R.acc[key] = (R.acc[key] || 0) + n;
+            if (instant) indHurtFloat(key);
+            if (S.hp > 0) return false;
+            let sum = {}, best = key; R.rec.forEach(function (r) { sum[r.key] = (sum[r.key] || 0) + r.n; if (sum[r.key] > (sum[best] || 0)) best = r.key; });
+            let last = R.rec.filter(function (r) { return r.key === best; }).pop();
+            indDie(IND_HURT[best].die, last ? last.detail : '');
+            return true;
+        }
+        function indHurtFloat(key) {
+            let R = ind.hurt, a = R.acc[key] || 0; R.acc[key] = 0; R.ft[key] = 0;
+            if (a >= 0.5) indFloat('−' + Math.round(a) + ' ' + IND_HURT[key].tag);
+        }
+        function indHurtTick(dt) {
+            let R = ind.hurt; if (!R) return;
+            Object.keys(R.acc).forEach(function (k) { R.ft[k] = (R.ft[k] || 0) + dt; if (R.ft[k] >= 1) indHurtFloat(k); });
+            R.rec = R.rec.filter(function (r) { return ind.t - r.t <= 2; });
+            ind.redT = Math.max(0, (ind.redT || 0) - dt * 1.5);
+            let e = document.getElementById('ind-red'); if (e) e.style.opacity = Math.min(1, ind.redT).toFixed(2);
+        }
+        // 头顶飘字
+        function indFloat(text) {
+            ind.floatLog = ind.floatLog || []; ind.floatLog.push(text); if (ind.floatLog.length > 50) ind.floatLog.shift();
+            let h = document.getElementById('ind-hud'); if (!h) return;
+            let e = document.createElement('div');
+            e.style.cssText = 'position:absolute;left:50%;top:36%;transform:translateX(-50%);color:#ff5252;font-size:26px;font-weight:bold;text-shadow:0 0 4px #000,0 0 4px #000;white-space:nowrap;';
+            e.textContent = text; h.appendChild(e);
+            let done = function () { if (e.parentNode) e.parentNode.removeChild(e); };
+            if (e.animate) e.animate([{ transform: 'translate(-50%,0)', opacity: 1 }, { transform: 'translate(-50%,-70px)', opacity: 0 }], { duration: 1300 }).onfinish = done; else setTimeout(done, 1300);
+        }
+        function indHotDetail() {
+            let L = Object.keys(ind.bag).filter(function (k) { return IND_ITEMS[k].hot; }).map(function (k) { return indName(k).replace('（烫）', ''); });
+            return L.length ? '背包里有烫的' + L.join('、') + '，没有钳子' : '背包里有烫的东西';
+        }
+        // 死：身上的东西没了、状态恢复先存好，停在死亡画面（游戏暂停），点"回基地"才继续
+        function indDie(cause, detail) {
+            if (!ind || ind.over || ind.dead) return;
             let lost = Object.keys(ind.bag).length + Object.keys(ind.base.wear).length;
-            ind.bag = {}; ind.base.wear = {};
+            ind.bag = {}; ind.base.wear = {}; ind.hotT = {};
             let S = ind.base.surv; S.hp = 100; S.temp = 37; S.food = Math.max(S.food, 40); S.water = Math.max(S.water, 40); S.energy = Math.max(S.energy, 50);
-            indGoBase(null);
+            ind.dead = { cause: cause, detail: detail || '', lost: lost };
+            ind.rh = null; ind.hurt = null; ind.redT = 0; if (ind.panel) indPanelClose();
+            if (document.pointerLockElement) document.exitPointerLock();
+            let d = document.createElement('div'); d.id = 'ind-dead';
+            d.style.cssText = 'position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.85);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;text-align:center;padding:20px;';
+            d.innerHTML = '<div style="font-size:44px;font-weight:bold;color:#ff5252;">' + cause + '</div>' + (detail ? '<div style="font-size:22px;margin-top:12px;">' + detail + '</div>' : '') +
+                '<div style="font-size:18px;margin-top:14px;color:#ccc;">' + (lost ? '身上的东西都没了' : '身上没带东西') + '</div>' +
+                '<button onclick="indRespawn()" style="margin-top:26px;padding:12px 34px;font-size:20px;border:none;border-radius:8px;background:#fff;color:#222;cursor:pointer;">回基地</button>';
+            document.body.appendChild(d);
             indSave();
-            indFlash('死因：' + cause + (lost ? '。身上的东西都没了' : ''));
+        }
+        function indRespawn() {
+            if (!ind || !ind.dead) return;
+            let e = document.getElementById('ind-dead'); if (e && e.parentNode) e.parentNode.removeChild(e);
+            ind.dead = null;
+            indGoBase(null); indSave();
         }
         // 作物：浇过水（当天）全速长，没浇水半速
         function indCropTick(dt) {
@@ -1336,7 +1397,7 @@
         function indToolish(k) { return !!k && (!!IND_ITEMS[k].tool || k === 'wire' || k === 'tongs' || k === 'shears'); }
         // 左键：采集、拿、收菜、打开；对着空的农田格子、手里拿着种子：种下
         function indAction() {
-            if (!ind || ind.over || ind.panel) return;
+            if (!ind || ind.over || ind.dead || ind.panel) return;
             if (indSel() === 'bell') return indRing();
             if (indSel() === 'bellows') return indInstallBellows(indAim());
             let a = indAim();
@@ -1362,7 +1423,7 @@
         }
         // 右键：对着能搬的东西，按住 1 秒收起来，没按够就松开是原来的右键（吃喝、浇水、接水）；别的东西按下就是右键
         function indRightDown() {
-            if (!ind || ind.over || ind.panel) return;
+            if (!ind || ind.over || ind.dead || ind.panel) return;
             let f = indFurnOf(indAim());
             if (f) { ind.rh = { f: f, t: 0, done: false }; return; }
             indUse();
@@ -1381,10 +1442,10 @@
         }
         // 右键：吃喝、浇水、接水
         function indUse() {
-            if (!ind || ind.over || ind.panel) return;
+            if (!ind || ind.over || ind.dead || ind.panel) return;
             let k = indSel(), a = indAim();
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
-            if (!k) return;
+            if (!k) return indSip(a);
             if (IND_ITEMS[k].dev) return indPlaceDev(k);
             if (k === 'dirt') return indPlaceTile();
             if (IND_ITEMS[k].furn) return indPlaceFurn(k);
@@ -1405,6 +1466,17 @@
             if (IND_ITEMS[k].eat) return indEat(k);
             if (IND_ITEMS[k].wear) return indWear(k);
             if (k === 'campfire') return indPlaceFire();
+            return indSip(a);
+        }
+        // 手里没有能用的东西，对着水池右键喝一口生水（口渴 +10，30% 拉肚子，和桶装生水一样）；在海里喝一口海水（越喝越渴，同桶装海水）
+        function indSip(a) {
+            let S = ind.base.surv;
+            if (ind.where === 'base' && a && a.kind === 'pool') {
+                S.water = Math.min(100, S.water + 10);
+                let sick = indRand() < 0.3; if (sick) ind.sickT = IND_SURV.sick;
+                indFlash('喝了一口生水' + (sick ? '，肚子不舒服' : '')); return true;
+            }
+            if (indInWater()) { S.water = Math.max(0, S.water - 10); indFlash('喝了一口海水，越喝越渴'); return true; }
             return false;
         }
         function indEat(k) {
@@ -1532,7 +1604,7 @@
                 if (s.ty === 'bank') { if (s.u <= 0) return; s.u = Math.max(0, s.u - D.draw * dt); }
                 d.pw = true;
             });
-            booms.forEach(function (d) { if (ind && !ind.over && ind.where === 'base' && indDev(d.id)) indBoom(d.x, d.z); });
+            booms.forEach(function (d) { if (ind && !ind.over && ind.where === 'base' && indDev(d.id)) indBoom(d.x, d.z, 0, '电压太高，设备炸了'); });
             if (!ind || ind.over || ind.where !== 'base') return;
             B.devs.forEach(function (d) { if (d.ty === 'el') indElTick(d, dt); else if (d.ty === 'comp') indCompTick(d, dt); else if (d.ty === 'press') indPressTick(d, dt); });
             if (!ind || ind.over || ind.where !== 'base') return;
@@ -1543,7 +1615,7 @@
             ind.devDirty = true;
         }
         // 爆炸：3 米内基地里的东西（设备、电线、地上的东西、篝火、作物）全没了，仓库箱不动；人在范围里扣 40 血
-        function indBoom(x, z, rad) {
+        function indBoom(x, z, rad, why) {
             let B = ind.base, R = rad || IND_BOOM_R, gone = {};
             B.devs = B.devs.filter(function (d) { if (Math.hypot(d.x - x, d.z - z) <= R) { gone[d.id] = 1; return false; } return true; });
             B.wires = B.wires.filter(function (w) { return !gone[w[0]] && !gone[w[1]]; });
@@ -1557,8 +1629,7 @@
             indBoomFx(x, z);
             indSave();
             if (Math.hypot(ind.p.x - x, ind.p.z - z) <= R && indHard()) {
-                B.surv.hp -= IND_BOOM_DMG; ind.lastHurt = '爆炸';
-                if (B.surv.hp <= 0) { indDie('爆炸'); return; }
+                if (indHurt(IND_BOOM_DMG, 'boom', (why || '爆炸') + '，离爆炸点 ' + Math.hypot(ind.p.x - x, ind.p.z - z).toFixed(1) + ' 米', true)) return;
             }
             indFlash('轰！');
         }
@@ -1701,7 +1772,7 @@
             if (a.kind === 'cook') return { ty: a.o.ty, o: a.o };
             if (a.kind === 'tile') return { ty: 'tile', o: a.o };
             if (a.kind === 'door' || a.kind === 'house') return { ty: 'house', o: a.o };
-            if (a.kind === 'stove' || a.kind === 'bed' || a.kind === 'bench' || a.kind === 'pool') return { ty: a.kind, o: null };
+            if (a.kind === 'stove' || a.kind === 'bed' || a.kind === 'bench') return { ty: a.kind, o: null };   // 水池不能搬
             return null;
         }
         function indFurnName(ty, o) { return ty === 'house' ? (o ? IND_HOUSE[o.ty].name : '房子') : ty === 'tile' ? '农田' : ty === 'chest' ? '仓库箱' : ty === 'bed' ? '床' : ty === 'bench' ? '工作台' : ty === 'pool' ? '水池' : IND_COOK[ty].name; }
@@ -2042,13 +2113,13 @@
             let g = IND_ITEMS[k].gas;
             indBagDel(k, 1); indBagAdd('bottle', 1);
             if (g === 'h2') {
-                if (indFireNear(x, z)) { if (ind.where === 'base') indBoom(x, z); else indTripBoom(x, z); }
+                if (indFireNear(x, z)) { if (ind.where === 'base') indBoom(x, z, 0, '氢气遇到火'); else indTripBoom(x, z, '氢气遇到火'); }
                 else indFlash('氢气飘走了');
             } else if (g === 'cl2') {
                 ind.clouds = ind.clouds || [];
-                let m = new THREE.Mesh(indGeo(new THREE.SphereGeometry(IND_GAS.r, 12, 8)), indMat(new THREE.MeshBasicMaterial({ color: 0xc6ff00, transparent: true, opacity: 0.25, depthWrite: false })));
+                let m = new THREE.Mesh(indGeo(new THREE.SphereGeometry(IND_GAS.r, 12, 8)), indMat(new THREE.MeshBasicMaterial({ color: 0xc6ff00, transparent: true, opacity: 0.4, depthWrite: false })));
                 m.position.set(x, 1, z); indAdd(m);
-                ind.clouds.push({ x: x, z: z, t: IND_GAS.cloud, m: m });
+                ind.clouds.push({ x: x, z: z, t: IND_GAS.cloud, m: m, n: '氯气' });
                 indFlash('一团黄绿色的气飘出来了');
             } else if (g === 'co2') indFlash('二氧化碳散了');
             else indFlash(indFireNear(x, z) ? '火一下子旺了' : '氧气散了');
@@ -2061,11 +2132,11 @@
                 let m = Math.floor(g.co2 / 10); indBagAdd('dry_ice', m);
                 indFlash('放气放出了干冰 ×' + m); return true;
             }
-            if (g.h2 && indFireNear(x, z)) { if (ind.where === 'base') indBoom(x, z); else indTripBoom(x, z); return true; }
+            if (g.h2 && indFireNear(x, z)) { if (ind.where === 'base') indBoom(x, z, 0, '氢气遇到火'); else indTripBoom(x, z, '氢气遇到火'); return true; }
             if (g.cl2) {
                 ind.clouds = ind.clouds || [];
-                let m = new THREE.Mesh(indGeo(new THREE.SphereGeometry(IND_GAS.r, 12, 8)), indMat(new THREE.MeshBasicMaterial({ color: 0xc6ff00, transparent: true, opacity: 0.25, depthWrite: false })));
-                m.position.set(x, 1, z); indAdd(m); ind.clouds.push({ x: x, z: z, t: IND_GAS.cloud, m: m });
+                let m = new THREE.Mesh(indGeo(new THREE.SphereGeometry(IND_GAS.r, 12, 8)), indMat(new THREE.MeshBasicMaterial({ color: 0xc6ff00, transparent: true, opacity: 0.4, depthWrite: false })));
+                m.position.set(x, 1, z); indAdd(m); ind.clouds.push({ x: x, z: z, t: IND_GAS.cloud, m: m, n: '氯气' });
                 indFlash('一团黄绿色的气飘出来了'); return true;
             }
             indFlash('钢瓶里的气放光了'); return true;
@@ -2096,17 +2167,18 @@
             });
             ind.fogs = ind.fogs.filter(function (fg) { return fg.t > 0; });
         }
-        function indTripBoom(x, z) {
+        function indTripBoom(x, z, why) {
             indBoomFx(x, z);
-            if (Math.hypot(ind.p.x - x, ind.p.z - z) <= IND_BOOM_R && indHard()) { ind.base.surv.hp -= IND_BOOM_DMG; ind.lastHurt = '爆炸'; if (ind.base.surv.hp <= 0) { indDie('爆炸'); return; } }
+            if (Math.hypot(ind.p.x - x, ind.p.z - z) <= IND_BOOM_R && indHard()) { if (indHurt(IND_BOOM_DMG, 'boom', (why || '爆炸') + '，离爆炸点 ' + Math.hypot(ind.p.x - x, ind.p.z - z).toFixed(1) + ' 米', true)) return; }
             indFlash('轰！');
         }
         function indCloudTick(dt) {
+            ind.inGas = null;
             if (!ind.clouds || !ind.clouds.length) return;
-            let hit = false;
-            ind.clouds.forEach(function (c) { c.t -= dt; if (c.t <= 0) { c.m.visible = false; return; } if (Math.hypot(ind.p.x - c.x, ind.p.z - c.z) <= IND_GAS.r) hit = true; });
+            let hit = null;
+            ind.clouds.forEach(function (c) { c.t -= dt; if (c.t <= 0) { c.m.visible = false; return; } if (Math.hypot(ind.p.x - c.x, ind.p.z - c.z) <= IND_GAS.r) hit = c; });
             ind.clouds = ind.clouds.filter(function (c) { return c.t > 0; });
-            if (hit && indHard()) { ind.base.surv.hp -= IND_GAS.dps * dt; ind.lastHurt = '中毒'; if (ind.base.surv.hp <= 0) indDie('中毒'); }
+            if (hit) { ind.inGas = hit.n || '毒气'; if (indHard()) indHurt(IND_GAS.dps * dt, 'gas', '站在' + ind.inGas + '里'); }
         }
         function indPanelElems() {
             if (!ind) return;
@@ -2129,7 +2201,7 @@
                 if (ind.hotT[k] <= 0) { let n = ind.bag[k]; delete ind.bag[k]; delete ind.hotT[k]; indBagAdd(c, n); }
             });
             Object.keys(ind.hotT).forEach(function (k) { if (!ind.bag[k]) delete ind.hotT[k]; });
-            if (hot && indHard() && !ind.bag.tongs) { ind.base.surv.hp -= IND_HOT_DPS * dt; ind.lastHurt = '烫伤'; if (ind.base.surv.hp <= 0) indDie('烫伤'); }
+            if (hot && indHard() && !ind.bag.tongs) indHurt(IND_HOT_DPS * dt, 'burn', indHotDetail());
             if (ind && ind.where === 'base') ind.base.ground.forEach(function (g) {
                 let c = IND_ITEMS[g.k].hot; if (!c) return;
                 g.ht = (g.ht === undefined ? IND_HOT_COOL : g.ht) - dt;
@@ -2310,7 +2382,7 @@
                     let P = indCylP(g, S.temp);
                     if (P > IND_CYL_MAX_P || (g.h2 && g.o2 && S.temp > 500)) { boomR = Math.max(boomR, 1 + P / 50); delete S.items[k]; S.cook = null; }
                 });
-                if (boomR) { if (ind.panel === 'stove') ind.panelDirty = true; indBoom(c.x, c.z, boomR); return; }
+                if (boomR) { if (ind.panel === 'stove') ind.panelDirty = true; indBoom(c.x, c.z, boomR, '钢瓶炸了'); return; }
             }
             if (!S.cook) {
                 let i = indCookFind(S.items, K, Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20));
@@ -2522,7 +2594,7 @@
         // ── 键盘、界面 ──
         const IND_KEYMAP = { w: 'w', a: 'a', s: 's', d: 'd', arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' };
         function indKeyDown(e) {
-            if (!ind || ind.over) return;
+            if (!ind || ind.over || ind.dead) return;
             let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
             let k = (e.key || '').toLowerCase();
             if (IND_KEYMAP[k]) { ind.k[IND_KEYMAP[k]] = true; e.preventDefault(); return; }
@@ -2546,6 +2618,10 @@
             let n = document.createElement('div'); n.id = 'ind-night';
             n.style.cssText = 'position:fixed;inset:0;z-index:39;pointer-events:none;background:#0a1030;opacity:0;';
             document.body.appendChild(n);
+            let rd = document.createElement('div'); rd.id = 'ind-red';
+            rd.style.cssText = 'position:fixed;inset:0;z-index:41;pointer-events:none;opacity:0;box-shadow:inset 0 0 140px 50px rgba(229,57,53,.85);';
+            document.body.appendChild(rd);
+            if (!document.getElementById('ind-style')) { let st = document.createElement('style'); st.id = 'ind-style'; st.textContent = '@keyframes indblink{50%{opacity:.25}}.ind-low{animation:indblink .6s infinite}'; document.head.appendChild(st); }
             let d = document.createElement('div'); d.id = 'ind-hud';
             d.style.cssText = 'position:fixed;inset:0;z-index:40;pointer-events:none;font-family:"Microsoft YaHei",sans-serif;color:#222;';
             d.innerHTML =
@@ -2572,10 +2648,15 @@
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
             let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + indSeasonTxt() + '　' + rule + '<br>';
-            st += (indHard() ? indBar('血', S.hp, '#e53935') : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047');
+            st += (indHard() ? (S.hp < 30 ? '<span class="ind-low">' + indBar('血', S.hp, '#e53935') + '</span>' : indBar('血', S.hp, '#e53935')) : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047');
             let tc = S.temp < IND_BODY.chill ? '#1565c0' : S.temp > IND_BODY.sweat ? '#c62828' : '#2e7d32';
             st += '<br>体温 <b style="color:' + tc + '">' + S.temp.toFixed(1) + '°C</b>　气温 ' + Math.round(indAirTemp()) + '°C　保暖 ' + indWarmth();
             if (S.temp < IND_BODY.chill) st += '　<b style="color:#1565c0">冷得发抖</b>'; else if (S.temp > IND_BODY.sweat) st += '　<b style="color:#c62828">热得冒汗</b>';
+            if (indHard() && S.hp < 30 && R.hurt) {
+                let tags = {}; R.hurt.rec.forEach(function (r) { if (R.t - r.t <= 1.5) tags[IND_HURT[r.key].tag] = 1; });
+                if (Object.keys(tags).length) st += '<br><b style="color:#e53935">正在掉血：' + Object.keys(tags).join('、') + '</b>';
+            }
+            if (R.inGas) st += '<br><b style="color:#c62828">' + (indHard() ? '中毒' : R.inGas + '（悠闲不扣血）') + '</b>';
             if (R.sickT > 0) st += '<br><b style="color:#c62828">拉肚子 ' + Math.ceil(R.sickT) + ' 秒</b>';
             if (indSlow()) st += '<br><b style="color:#c62828">' + (S.energy <= 0 ? '累得走不动' : '饿得/渴得走不动') + '</b>';
             if (R.where === 'base') st += '<br>基地　远征过 ' + R.base.trips + ' 次';
@@ -2588,8 +2669,8 @@
             for (let i = 0; i < IND_BAG_SLOTS; i++) {
                 let it = SL[i];
                 if (!it) { bag += '<span style="display:inline-block;margin:1px;padding:2px 6px;border-radius:10px;border:2px dashed #e0e0e0;color:#ccc;font-size:12px;">' + (i + 1) + '</span>'; continue; }
-                let on = i === ind.selIdx;
-                bag += '<span onclick="ind.selIdx=' + i + '" style="display:inline-block;margin:1px;padding:2px 6px;border-radius:10px;cursor:pointer;font-size:12px;border:2px solid ' + (on ? '#5e35b1' : '#cfd8dc') + ';background:' + (on ? '#ede7f6' : '#fff') + ';">' + (i + 1) + ' ' + indName(it.k) + '×' + it.n + '</span>';
+                let on = i === ind.selIdx, hotS = IND_ITEMS[it.k].hot ? Math.ceil(ind.hotT && ind.hotT[it.k] !== undefined ? ind.hotT[it.k] : IND_HOT_COOL) : 0;
+                bag += '<span onclick="ind.selIdx=' + i + '" style="display:inline-block;margin:1px;padding:2px 6px;border-radius:10px;cursor:pointer;font-size:12px;border:2px solid ' + (on ? '#5e35b1' : hotS ? '#c62828' : '#cfd8dc') + ';background:' + (hotS ? '#ffcdd2;color:#b71c1c' : on ? '#ede7f6' : '#fff') + ';">' + (i + 1) + ' ' + indName(it.k) + '×' + it.n + (hotS ? ' 烫 ' + hotS + ' 秒' : '') + '</span>';
             }
             let a = indAim(), hint = '';
             let rh = R.rh && !R.rh.done ? R.rh : null;
@@ -2613,7 +2694,7 @@
             else if (a && a.kind === 'chest') hint = '仓库箱' + (a.o.big ? '' : '（' + indSlotsOf(a.o.items) + '/' + IND_CHEST_SLOTS + ' 格）') + '<br><small>左键：打开　长按右键：收起</small>';
             else if (a && a.kind === 'stove') hint = '灶台 ' + Math.round(R.base.stove.temp) + '°C<br><small>左键：打开</small>';
             else if (a && a.kind === 'bed') hint = '床<br><small>左键：睡觉（夜里或累了）</small>';
-            else if (a && a.kind === 'pool') hint = '水池<br><small>拿着空桶，右键：接水</small>';
+            else if (a && a.kind === 'pool') hint = '水池<br><small>右键：喝一口，拿空桶右键接水</small>';
             else if (R.where === 'base' && sel && IND_ITEMS[sel].seed && indInField(R.p.x + indFace().x * 1.4, R.p.z + indFace().z * 1.4)) hint = '左键：种' + indName(sel);
             else if (R.where === 'base' && Math.hypot(R.p.x - IND_BASE_ST.gate.x, R.p.z - IND_BASE_ST.gate.z) < 6) hint = '从门里走出去就是远征';
             else if (sel === 'bell') hint = '<small>左键：摇铃，30 米内的动物走过来</small>';
