@@ -199,7 +199,8 @@
         IND_ITEMS_RAW.chest = { name: '仓库箱', col: 0x6d4c41, furn: 'chest' };
         IND_ITEMS_RAW.furn_bed = { name: '床', col: 0x5c6bc0, furn: 'bed' };
         IND_ITEMS_RAW.furn_bench = { name: '工作台', col: 0xa1887f, furn: 'bench' };
-                IND_ITEMS_RAW.house_hut = { name: '木屋', col: 0x8d6e63, house: 'hut', use: '放下就是一间房' };
+                IND_ITEMS_RAW.raft = { name: '木筏', col: 0x8d6e63, raft: true, use: '水边放下，上去划着走' };
+        IND_ITEMS_RAW.house_hut = { name: '木屋', col: 0x8d6e63, house: 'hut', use: '放下就是一间房' };
         IND_ITEMS_RAW.house_brick = { name: '砖房', col: 0xb55a4a, house: 'brick', use: '放下就是一间房' };
         IND_ITEMS_RAW.house_big = { name: '大砖房', col: 0xa0453a, house: 'big', use: '放下就是一间房' };
         IND_ITEMS_RAW.cyl = { name: '钢瓶（空）', col: 0x78909c, cyl: {}, use: '装气' };
@@ -313,7 +314,8 @@
             { out: 'cyl', in: { steel: 2, brass: 1 }, hard: true }, { out: 'dev_comp', in: { steel: 3, ingot_cu: 2, wire: 2, brass: 1 }, hard: true },
             { out: 'dev_press', in: { steel: 4, wire: 2 }, hard: true }, { out: 'pick_diamond', in: { diamond: 2, steel: 2, wood: 1 }, hard: true },
             { out: 'house_hut', in: { wood: 60 } }, { out: 'house_brick', in: { brick: 40, wood: 10 } }, { out: 'house_big', in: { brick: 90, wood: 20 } },
-            { out: 'bottle', n: 2, in: { glass_plate: 1 } }
+            { out: 'bottle', n: 2, in: { glass_plate: 1 } },
+            { out: 'raft', in: { wood: 20 } }
         ];
         // 房子：放在基地里，四面墙 + 屋顶 + 一扇门；w×d 是门朝南（+z）时的宽和深，warm 是屋里比外面高几度
         const IND_HOUSE = {
@@ -656,7 +658,7 @@
                 if (bm === 'desert') t += indIsNight() ? -4 : 10;
                 else if (bm === 'mountain' || bm === 'ancient') t -= 5;
                 ind.map.volc.forEach(function (v) { let d = Math.hypot(ind.p.x - v.x, ind.p.z - v.z); if (d < v.r * 1.6) t += 25 * (1 - d / (v.r * 1.6)); });
-                if (indInWater()) t -= IND_BODY.waterCold;
+                if (indInWater() && !ind.onRaft) t -= IND_BODY.waterCold;
             } else {
                 let hot = 0;   // 灶台、小熔炉、大窑 4 米内取暖，取最热的一个
                 indCooks().forEach(function (c) { if (c.C.temp > 100 && Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < IND_BODY.fireR + (c.ty === 'kiln' ? 1 : 0)) hot = Math.max(hot, Math.min(25, c.C.temp / 40)); });
@@ -976,7 +978,7 @@
         function indApplyPos(b) { ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { let p = b.pos && b.pos[k]; IND_BASE_ST[k].x = p ? p.x : IND_ST_DEF[k].x; IND_BASE_ST[k].z = p ? p.z : IND_ST_DEF[k].z; }); }
         function indGoBase(fromTrip) {
             let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];
-            ind.wild = [];
+            ind.wild = []; ind.rafts = []; ind.onRaft = null;
             indClearWorld();
             ind.where = 'base'; ind.map = null; ind.exitT = 0;
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
@@ -1019,7 +1021,7 @@
         const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin', 'seed_cotton', 'seed_cabbage', 'seed_radish'];
         function indGoTrip(seed) {
             indClearWorld();
-            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = [];
+            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null;
             let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed);
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 60, 160);
             let geo = indGeo(new THREE.PlaneGeometry(IND_MAP * 2, IND_MAP * 2, IND_SEG, IND_SEG));
@@ -1112,6 +1114,44 @@
         }
         function indGround(x, z) { return ind.where === 'trip' ? Math.max(IND_WATER_Y, indHeight(ind.map, x, z)) : 0; }
         function indInWater() { return ind.where === 'trip' && indHeight(ind.map, ind.p.x, ind.p.z) < IND_WATER_Y + 0.2; }
+        // 水深：水面比脚下地面高多少（陆地 0）。浅水 < 0.6 米能跑、0.8 倍速；深水游泳 0.6 倍速不能跑，体力每秒掉 5，没体力 0.3 倍速；木筏上 2 倍速
+        const IND_WATER = { shallow: 0.6, shallowSp: 0.8, deepSp: 0.6, tiredSp: 0.3, stamDrain: 5, raftSp: 2 };
+        function indWaterDepth(x, z) { return ind.where === 'trip' ? Math.max(0, IND_WATER_Y - indHeight(ind.map, x, z)) : 0; }
+        function indDeep() { return !ind.onRaft && ind.where === 'trip' && indWaterDepth(ind.p.x, ind.p.z) >= IND_WATER.shallow; }
+        function indWaterSpeed() {
+            if (ind.onRaft) return IND_WATER.raftSp;
+            if (!indInWater()) return 1;
+            if (!indDeep()) return IND_WATER.shallowSp;
+            return ind.stam > 0 ? IND_WATER.deepSp : IND_WATER.tiredSp;
+        }
+        // 木筏：水边右键放下（远征的只在这一趟），左键上去／下来；水上不能上岸
+        function indPlaceRaft(k) {
+            if (ind.where !== 'trip') { indFlash('木筏只能在远征的水边放'); return false; }
+            if (ind.onRaft) { indFlash('先下筏'); return false; }
+            let f = indFace(), x = ind.p.x + f.x * 2.6, z = ind.p.z + f.z * 2.6;
+            if (indWaterDepth(x, z) <= 0.05) { indFlash('对着水面放'); return false; }
+            ind.rafts = ind.rafts || [];
+            if (ind.rafts.some(function (r) { return Math.hypot(r.x - x, r.z - z) < 2.4; })) { indFlash('这里已经有筏了'); return false; }
+            let r = { x: x, z: z }; r.m = [indBox(2.4, 0.25, 2.4, 0x8d6e63, x, IND_WATER_Y + 0.1, z), indBox(2.4, 0.08, 0.3, 0x5d4037, x, IND_WATER_Y + 0.26, z - 0.7), indBox(2.4, 0.08, 0.3, 0x5d4037, x, IND_WATER_Y + 0.26, z + 0.7)];
+            ind.rafts.push(r); indBagDel(k, 1); indFlash('放好了木筏：左键上去');
+            return true;
+        }
+        function indRaftMove(r, x, z) { r.x = x; r.z = z; r.m.forEach(function (m, i) { m.position.x = x; m.position.z = z + (i === 1 ? -0.7 : i === 2 ? 0.7 : 0); }); }
+        function indRaftToggle(r) {
+            if (ind.onRaft) {   // 下筏：4 米内有岸就上岸，没有就留在水里
+                let best = null, bd = 1e9;
+                for (let a = 0; a < 16; a++) for (let d = 2; d <= 4.01; d += 1) {
+                    let x = ind.p.x + Math.cos(a * Math.PI / 8) * d, z = ind.p.z + Math.sin(a * Math.PI / 8) * d;
+                    if (indHeight(ind.map, x, z) >= IND_WATER_Y + 0.2 && d < bd) { bd = d; best = { x: x, z: z }; }
+                }
+                ind.onRaft = null;
+                if (best) { ind.p.x = best.x; ind.p.z = best.z; ind.p.y = indGround(best.x, best.z); indFlash('上岸了'); }
+                else indFlash('下了筏，在水里');
+                return true;
+            }
+            ind.onRaft = r; ind.p.x = r.x; ind.p.z = r.z; ind.p.vy = 0; indFlash('上筏了：左键下筏');
+            return true;
+        }
         function indTick(dt) {
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
@@ -1248,14 +1288,21 @@
             let fwd = blocked ? 0 : (k.w ? 1 : 0) - (k.s ? 1 : 0), strafe = blocked ? 0 : (k.d ? 1 : 0) - (k.a ? 1 : 0);
             if (!blocked && !fwd && !strafe && gState.control === 'pad') { fwd = -tMove.y; strafe = tMove.x; }
             let mx = cd.x * fwd - cd.z * strafe, mz = cd.z * fwd + cd.x * strafe, moving = !!(mx || mz);
-            let S = R.base.surv, canRun = k.run && moving && R.stam > 0 && S.energy > 0;
+            let S = R.base.surv, deep = R.where === 'trip' && indDeep(), canRun = k.run && moving && R.stam > 0 && S.energy > 0 && !deep && !R.onRaft;
             R.running = canRun;
-            R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt);
-            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * (indInWater() ? 0.6 : 1);
+            R.stam = deep ? Math.max(0, R.stam - IND_WATER.stamDrain * dt) : canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt);
+            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * (R.where === 'trip' ? indWaterSpeed() : 1);
             if (moving) {
                 let n = Math.hypot(mx, mz), run = Math.min(1, n); mx /= n; mz /= n;
                 let len = sp * run * dt, hs = R.where === 'base' && R.base.houses.length, steps = hs ? Math.max(1, Math.ceil(len / 0.2)) : 1;   // 有房子时一小步一小步走，不穿墙
+                let ox = R.p.x, oz = R.p.z;
                 for (let i = 0; i < steps; i++) { R.p.x += mx * len / steps; R.p.z += mz * len / steps; if (hs) indHouseCollide(R.p); }
+                if (R.onRaft) {   // 筏在水上走，不能上岸：碰到岸就沿着岸滑，实在不行停住
+                    let wet = function (x, z) { return indHeight(R.map, x, z) < IND_WATER_Y - 0.05; };
+                    let nx = R.p.x, nz = R.p.z;
+                    if (!wet(nx, nz)) { if (wet(nx, oz)) nz = oz; else if (wet(ox, nz)) nx = ox; else { nx = ox; nz = oz; } }
+                    R.p.x = nx; R.p.z = nz; indRaftMove(R.onRaft, nx, nz);
+                }
                 R.me.rotation.y = Math.atan2(mx, mz);
             }
             let lim = R.where === 'base' ? { x: IND_BASE.x - 0.6, z: IND_BASE.z - 0.6 } : { x: IND_MAP - 1, z: IND_MAP - 1 };
@@ -1264,7 +1311,7 @@
             R.p.z = Math.max(zMin, Math.min(lim.z, R.p.z));
             if (R.where === 'base' && R.base.houses.length) indHouseCollide(R.p);
             let gy = indGround(R.p.x, R.p.z);
-            if (k.jump && R.p.y <= gy + 0.001 && !blocked) R.p.vy = 9;
+            if (k.jump && R.p.y <= gy + 0.001 && !blocked && !R.onRaft) R.p.vy = 9;
             R.p.vy -= 25 * dt; R.p.y += R.p.vy * dt;
             if (R.p.y < gy) { R.p.y = gy; R.p.vy = 0; }
             R.me.position.set(R.p.x, R.p.y, R.p.z);
@@ -1333,6 +1380,7 @@
             if (R.where === 'base') R.base.cookers.forEach(function (c) { consider(c, c.x, c.z, 'cook', IND_COOK[c.ty].r + 0.4, IND_COOK[c.ty].r * 0.7); });
             if (R.where === 'base') indCooks().forEach(function (c) { let sp = indSpoutPos(c); consider(c, sp.x, sp.z, 'spout', 0.8); });
             if (R.where === 'trip') R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node', 0.8); });
+            if (R.where === 'trip' && !R.onRaft) (R.rafts || []).forEach(function (o) { consider(o, o.x, o.z, 'raft', 1.3, 0.8); });
             else {
                 R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item', 0.5); });
                 R.base.crops.forEach(function (c) { consider(c, c.x, c.z, 'crop', 0.6); });
@@ -1410,6 +1458,7 @@
         // 左键：采集、拿、收菜、打开；对着空的农田格子、手里拿着种子：种下
         function indAction() {
             if (!ind || ind.over || ind.dead || ind.panel) return;
+            if (ind.onRaft) return indRaftToggle(ind.onRaft);
             if (indSel() === 'bell') return indRing();
             if (indSel() === 'bellows') return indInstallBellows(indAim());
             let a = indAim();
@@ -1417,6 +1466,7 @@
                 let b = indAim(true);
                 if (b) a = b;
             }
+            if (a && a.kind === 'raft') return indRaftToggle(a.o);
             if (a && a.kind === 'node') return indGather(a.o);
             if (a && a.kind === 'item') return indPickItem(a.o);
             if (a && a.kind === 'crop' && indCropRipe(a.o)) return indHarvest(a.o);
@@ -1462,6 +1512,7 @@
             if (k === 'dirt') return indPlaceTile();
             if (IND_ITEMS[k].furn) return indPlaceFurn(k);
             if (IND_ITEMS[k].house) return indPlaceHouse(k);
+            if (IND_ITEMS[k].raft) return indPlaceRaft(k);
             if (IND_ITEMS[k].cook) return indPlaceCook(k);
             if (indIsEmptyCont(k)) {   // 空桶：水池接生水，海里接海水（桶是什么材质，水就装在什么材质里）
                 let m = indContOf(k).mat;
@@ -2688,6 +2739,8 @@
             let rh = R.rh && !R.rh.done ? R.rh : null;
             if (rh) hint = '收起' + indFurnName(rh.f.ty, rh.f.o) + ' ' + Math.min(99, Math.floor(rh.t / IND_PICK_HOLD * 100)) + '%';
             else if (a && a.kind === 'node') { let nd = IND_NODES[a.o.key], nm = a.o.key === 'seeds' ? '野生' + indName(a.o.seed) : (nd.name || indName(a.o.key)); hint = nm + ' ×' + a.o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>'; }
+            else if (R.onRaft) hint = '木筏<br><small>左键：下筏（水上 2 倍速，不能上岸）</small>';
+            else if (a && a.kind === 'raft') hint = '木筏<br><small>左键：上去</small>';
             else if (a && a.kind === 'item') hint = indName(a.o.k) + '<br><small>左键：拿</small>';
             else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水') + (a.o.fert ? '　施过肥了' : '')) + '<br><small>' + (ripe ? '左键：收' : '拿着水右键：浇水　拿草木灰右键：施肥') + '</small>'; }
             else if (a && a.kind === 'fire') hint = '篝火' + (a.o.fuel > 0 ? ' 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒' : '（灭了）') + '<br><small>拿着木头，左键：加柴</small>';
@@ -2713,6 +2766,7 @@
             else if (sel && IND_ITEMS[sel].eat) hint = '<small>右键：' + (IND_ITEMS[sel].eat.f ? '吃' : '喝') + indName(sel) + '</small>';
             else if (sel && IND_ITEMS[sel].wear) hint = '<small>右键：穿上' + indName(sel) + '</small>';
             else if (sel === 'dirt') hint = '<small>右键：在面前开一格农田</small>';
+            else if (sel && IND_ITEMS[sel].raft) hint = '<small>右键：对着水面放下木筏</small>';
             else if (sel && IND_ITEMS[sel].house) hint = '<small>右键：在面前放下' + indName(sel) + '（门朝着你）</small>';
             else if (sel && IND_ITEMS[sel].furn) hint = '<small>右键：放下' + indName(sel) + '</small>';
             else if (sel && IND_ITEMS[sel].cook) hint = '<small>右键：放下' + indName(sel) + '</small>';
