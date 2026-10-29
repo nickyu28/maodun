@@ -2624,6 +2624,39 @@ async function enterExit(tab, key) {
             report('BR1 寻宝队分普通 / 化学分支：实验室藏着时不出现；化学分支进实验室；选回普通恢复', bad.length === 0, bad.join(' / '));
         }
 
+
+        if (want('RM1')) {
+            // RM1 竞速 10 张固定地图（编号 + 名字）：每张段落固定、第一段直跑道；记录榜在大厅里点得开（以前弹层放在仓库界面里面，大厅里看不见）；
+            // 每张地图一个榜；起一张图跑完记进这张图的榜、不淘汰
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const d = JSON.parse(await T.eval(`JSON.stringify({ n: RACE_MAPS.length, names: RACE_MAPS.map(function (m) { return m.no + m.name; }), badSeg: RACE_MAPS.filter(function (m) { return m.segs[0] !== 'straight' || m.segs.some(function (id) { return !RACE_SEGS.some(function (s) { return s.id === id; }); }); }).length, btns: document.querySelectorAll('#race-maps button').length })`));
+            if (d.n !== 10 || d.names.join() !== '1新手草坪,2老宅走廊,3地窖迷宫,4雾中墓园,5废弃工厂,6钟楼,7花园迷阵,8河湾,9山顶,10终局大厅' || d.badSeg || d.btns !== 10) bad.push('地图表 ' + JSON.stringify(d));
+            // 大厅里点「记录榜」看得见
+            await T.eval(`selectGameMode('race'); document.querySelector('#race-only button[onclick="raceBoardOpen(1)"]').click(); true;`);
+            const b = JSON.parse(await T.eval(`(function(){ let r = document.getElementById('race-board').getBoundingClientRect(); return JSON.stringify({ w: r.width, h: r.height, rows: document.querySelectorAll('#race-board-body span').length, tabs: document.querySelectorAll('#race-board-body button').length }); })()`));
+            if (!(b.w > 100 && b.h > 100 && b.rows > 20 && b.tabs === 15)) bad.push('大厅里记录榜看不见 ' + JSON.stringify(b));
+            await T.eval(`raceBoardOpen('m7'); true;`);
+            if (!(await T.eval(`/7 花园迷阵/.test(document.getElementById('race-board-body').innerText) && /固定地图 7/.test(document.getElementById('race-board-body').innerText)`))) bad.push('固定地图的榜打不开');
+            await T.eval(`raceBoardClose(); true;`);
+            // 起第 4 张图：段落是定好的
+            await T.eval(`${HIDE} raceMapStart(3); true;`);
+            if (!(await until(T, `race && race.segs && race.segs.length > 0 && race.racers.length === 16`, 30000))) bad.push('固定地图没起来');
+            const sg = await T.eval(`race.segs.join() === RACE_MAPS[3].segs.join() && race.fixedMap === 3`);
+            if (!sg) bad.push('段落不是这张图定好的 ' + await T.eval(`race.segs.join()`));
+            // 完赛：记进这张图的榜、标题带编号名字、不淘汰
+            await T.eval(`(function(){ let me = race.racers[0]; me.finished = true; me.time = 33.3; race.finishOrder.push(me); raceRoundOver(); })(); true;`);
+            if (!(await until(T, `/4 雾中墓园 · 第 1 名/.test(${MODAL} || '')`, 10000))) bad.push('结果标题 ' + await T.eval(MODAL));
+            const rec = await T.eval(`(raceRecords()['m4'] || []).filter(function (e) { return e.me; }).map(function (e) { return e.t; }).join()`);
+            if (rec !== '33.3') bad.push('没记进第 4 张图的榜 ' + rec);
+            if (await T.eval(`race.racers.some(function (r) { return r.out; })`)) bad.push('固定地图不该淘汰人');
+            await clickModal(T, 2);
+            if (!(await until(T, `race === null`, 10000))) bad.push('返回大厅没退出');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('RM1 竞速 10 张固定地图：段落固定、各有记录榜、大厅里记录榜打得开、跑完记进这张图的榜不淘汰', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('K1')) {
             // K1 合成倒计时：材料凑齐后等 3 秒再合成（合出大金的 5 秒），中间显示倒计时，材料被拿走就取消、放回去重新数
             const bad = [];

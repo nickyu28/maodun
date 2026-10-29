@@ -56,6 +56,24 @@
             { id: 'gate', name: '扫杆闸' }
         ];
 
+        // ── 固定地图 ──
+        // 10 张固定的赛道（编号 + 名字），每张的段落顺序是定好的，每张一个记录榜（key 是 'm1'…'m10'）。
+        // 一个人带 15 个 AI 跑一轮，不淘汰，只看完赛时间；第一段永远是直跑道。
+        const RACE_MAPS = [
+            { no: 1, name: '新手草坪', segs: ['straight', 'boost', 'gaps', 'bounce', 'straight', 'boost'] },
+            { no: 2, name: '老宅走廊', segs: ['straight', 'zigzag', 'narrow', 'gaps', 'zigzag', 'crumble'] },
+            { no: 3, name: '地窖迷宫', segs: ['straight', 'zigzag', 'crumble', 'narrow', 'lift', 'zigzag', 'gaps'] },
+            { no: 4, name: '雾中墓园', segs: ['straight', 'narrow', 'gaps', 'spinner', 'chasm', 'bounce', 'narrow'] },
+            { no: 5, name: '废弃工厂', segs: ['straight', 'spinner', 'lift', 'gate', 'crumble', 'boost', 'spinner', 'gaps'] },
+            { no: 6, name: '钟楼', segs: ['straight', 'lift', 'narrow', 'spinner', 'bounce', 'lift', 'chasm', 'narrow'] },
+            { no: 7, name: '花园迷阵', segs: ['straight', 'zigzag', 'bounce', 'zigzag', 'gaps', 'boost', 'zigzag', 'narrow'] },
+            { no: 8, name: '河湾', segs: ['straight', 'gaps', 'chasm', 'boost', 'gaps', 'narrow', 'chasm', 'bounce', 'gaps'] },
+            { no: 9, name: '山顶', segs: ['straight', 'bounce', 'chasm', 'spinner', 'crumble', 'lift', 'gate', 'narrow', 'chasm'] },
+            { no: 10, name: '终局大厅', segs: ['straight', 'gate', 'spinner', 'chasm', 'crumble', 'lift', 'narrow', 'gaps', 'zigzag', 'bounce', 'boost', 'gate'] }
+        ];
+        // 当前这局的记录榜 key：固定地图是 'm编号'，淘汰赛是 'r轮次'
+        function raceRecKey() { return race && race.fixedMap != null ? 'm' + RACE_MAPS[race.fixedMap].no : 'r' + (race.round + 1); }
+
         // 竞速自己的粒子池。blazeBurst 依赖全局 blaze，这个模式里 blaze 是 null。
         function raceBurst(x, y, z, color, r0, r1, life) {
             if (!race) return;
@@ -1218,7 +1236,8 @@
             let segLenArr = race.duo ? RACE_DUO.segLen : RACE.segLen;
             let eventId = race.round === 0 ? 'none'
                 : RACE_EVENTS[1 + Math.floor(Math.random() * (RACE_EVENTS.length - 1))].id;
-            raceBuildTrack(segLenArr[Math.min(idx, segLenArr.length - 1)], null);
+            if (race.fixedMap != null) { raceBuildTrack(0, RACE_MAPS[race.fixedMap].segs.slice()); eventId = 'none'; }
+            else raceBuildTrack(segLenArr[Math.min(idx, segLenArr.length - 1)], null);
             if (race.net) bc.postMessage({ type: 'RACE_ROUND', target: '*', sender: gState.id, round: idx, segs: race.segs, event: eventId });
             raceApplyRoundCommon(eventId);
         }
@@ -1321,6 +1340,7 @@
                 .sort(function (a, b) { return b.p.z - a.p.z; });
             let order = race.finishOrder.concat(unfinished);
             order.forEach(function (r, i) { r.place = i + 1; });
+            if (race.fixedMap != null) { raceMapOver(order); return; }
 
             let next = RACE.ladder[race.round + 1] || 1;
             let cut = order.slice(next);
@@ -1367,6 +1387,23 @@
             }
             if (title === '冠军') sfxChime(4); else if (justOut) sfxBuzz();
             showSysModal(title, lines, btns);
+        }
+
+        // 固定地图跑完：不淘汰，记完赛时间（进这张图的记录榜），按完赛顺序列前 8 名
+        function raceMapOver(order) {
+            let idx = race.fixedMap, mp = RACE_MAPS[idx], me = race.racers[0];
+            if (me.finished) raceSubmitRecord('m' + mp.no, me.time);
+            let lines = order.slice(0, 8).map(function (r, i) {
+                return (i + 1) + '. ' + r.name + (r.finished ? '　' + r.time.toFixed(2) + 's' : '　未完赛') + (r === me ? '　← 你' : '');
+            }).join('<br>');
+            if (!race.coinsDone) { race.coinsDone = true; coinsSettle('race', me.place <= 4); lines += coinsLine(); }
+            let title = mp.no + ' ' + mp.name + ' · ' + (me.finished ? '第 ' + me.place + ' 名　' + me.time.toFixed(2) + 's' : '没跑完');
+            if (me.finished && me.place <= 3) sfxChime(4); else sfxBuzz();
+            showSysModal(title, lines, [
+                { label: '再跑一次', color: '#5cb85c', onClick: function () { raceExit(); raceMapStart(idx); } },
+                { label: '记录榜', color: '#455a64', onClick: function () { raceExit(); raceBoardOpen('m' + mp.no); } },
+                { label: '返回大厅', color: '#888', onClick: function () { raceExit(); } }
+            ]);
         }
 
         function raceRoundOverDuo() {
@@ -1461,7 +1498,7 @@
         }
         function raceSubmitRecord(roundN, t) {
             let all = raceRecords();
-            let key = 'r' + roundN;
+            let key = typeof roundN === 'string' ? roundN : 'r' + roundN;   // 固定地图传 'm编号'，淘汰赛传轮次
             let list = all[key] || (all[key] = raceSeedRecords(roundN));
             // 只留自己的最好成绩 —— 不然玩十把这一轮，榜单前十全是自己的名字，
             // 别人的成绩全被自己以前跑得慢的那几次挤下去了。
@@ -1476,14 +1513,15 @@
             all[key] = list.slice(0, 100);
             saveProgress();
             let rank = all[key].findIndex(function (e) { return e.me; }) + 1;
-            if (rank > 0 && rank <= 100) blazeFlash('进榜！第 ' + roundN + ' 轮第 ' + rank + ' 名');
+            if (rank > 0 && rank <= 100) blazeFlash('进榜！' + (typeof roundN === 'string' ? RACE_MAPS[+roundN.slice(1) - 1].name : '第 ' + roundN + ' 轮') + '第 ' + rank + ' 名');
         }
         // 预填 AI 记录，不然开服第一天榜是空的没法玩
         const RACE_AI_NAMES = ['猫步', '风筝', '老登', '一脚油', '慢半拍', '铁憨憨', '小碎步', '飞天鼠',
             '不落地', '踩点王', '橘子汽水', '夜航船', '半糖', '钉子户', '空中楼阁', '打滑',
             '三段跳', '拐弯抹角', '起飞', '稳住'];
         function raceSeedRecords(roundN) {
-            let segN = RACE.segLen[Math.max(0, Math.min(RACE.segLen.length - 1, roundN - 1))];
+            let segN = typeof roundN === 'string' ? RACE_MAPS[+roundN.slice(1) - 1].segs.length
+                : RACE.segLen[Math.max(0, Math.min(RACE.segLen.length - 1, roundN - 1))];
             let base = segN * 11;   // 一段大约 11 秒
             let out = [];
             for (let i = 0; i < 60; i++) {
@@ -1492,7 +1530,7 @@
             }
             return out.sort(function (a, b) { return a.t - b.t; });
         }
-        function raceBoardOpen(roundN) {
+        function raceBoardOpen(roundN) {   // roundN：数字是淘汰赛第几轮，'m3' 是固定地图 3
             race_boardSeg = roundN || 1;
             document.getElementById('race-board').classList.remove('hidden');
             raceBoardRender();
@@ -1501,20 +1539,25 @@
         let race_boardSeg = 1;
         function raceBoardRender() {
             let all = raceRecords();
-            let key = 'r' + race_boardSeg;
+            let isMap = typeof race_boardSeg === 'string';
+            let key = isMap ? race_boardSeg : 'r' + race_boardSeg;
             // 第一次打开才造 AI 榜；存档晚一点再写，别让整份存档的序列化和写盘卡在点开这一下里（存档大的时候要好几毫秒）
             if (!all[key]) { all[key] = raceSeedRecords(race_boardSeg); setTimeout(saveProgress, 400); }
             let list = all[key];
-            let tabs = [1, 2, 3, 4, 5].map(function (n) {
-                return '<button onclick="race_boardSeg=' + n + ';raceBoardRender()" style="margin:2px; padding:4px 10px; font-size:12px; ' +
-                    'background:' + (n === race_boardSeg ? '#5e35b1' : '#eee') + '; color:' + (n === race_boardSeg ? '#fff' : '#666') + '; border:none;">' +
-                    '第 ' + n + ' 轮</button>';
-            }).join('');
+            let btn = function (on, js, txt) {
+                return '<button onclick="' + js + '" style="margin:2px; padding:4px 8px; font-size:12px; ' +
+                    'background:' + (on ? '#5e35b1' : '#eee') + '; color:' + (on ? '#fff' : '#666') + '; border:none;">' + txt + '</button>';
+            };
+            let mapTabs = RACE_MAPS.map(function (m) { return btn(race_boardSeg === 'm' + m.no, "race_boardSeg='m" + m.no + "';raceBoardRender()", m.no + ' ' + m.name); }).join('');
+            let tabs = [1, 2, 3, 4, 5].map(function (n) { return btn(race_boardSeg === n, 'race_boardSeg=' + n + ';raceBoardRender()', '第 ' + n + ' 轮'); }).join('');
+            let mp = isMap ? RACE_MAPS[+race_boardSeg.slice(1) - 1] : null;
             document.getElementById('race-board-body').innerHTML =
-                '<div style="font-size:12px; color:#888; margin-bottom:6px;">单轮最快完赛时间 · ' +
-                RACE.ladder[race_boardSeg - 1] + ' 人开跑，' + RACE.segLen[race_boardSeg - 1] + ' 段赛道</div>' +
+                '<div style="font-size:12px; color:#888; margin-bottom:6px;">' + (isMap
+                    ? '固定地图 ' + mp.no + ' · ' + mp.name + '：完赛时间 · 16 人开跑，' + mp.segs.length + ' 段赛道'
+                    : '淘汰赛单轮最快完赛时间 · ' + RACE.ladder[race_boardSeg - 1] + ' 人开跑，' + RACE.segLen[race_boardSeg - 1] + ' 段赛道') + '</div>' +
+                '<div style="margin-bottom:4px;">' + mapTabs + '</div>' +
                 '<div style="margin-bottom:8px;">' + tabs + '</div>' +
-                '<div style="max-height:52vh; overflow:auto;">' +
+                '<div style="max-height:44vh; overflow:auto;">' +
                 list.slice(0, 100).map(function (e, i) {
                     return '<div style="display:flex; justify-content:space-between; padding:3px 8px; font-size:13px; border-radius:4px;' +
                         (e.me ? 'background:#fff3e0; font-weight:bold; color:#e65100;' : 'color:#555;') + '">' +
@@ -1582,7 +1625,9 @@
                 // 因为网络延迟不完整（对面的撞线消息还没到），提前判定会跟房主结果对不上。
                 if (!race.net || race.host === gState.id) {
                     let alive = race.racers.filter(function (r) { return !r.out; });
-                    if (race.duo) {
+                    if (race.fixedMap != null) {
+                        if (race.racers[0].finished || race.finishOrder.length >= alive.length || race.clock > RACE.roundLimit) raceRoundOver();
+                    } else if (race.duo) {
                         if (race.finishOrder.length >= alive.length || race.clock > RACE.roundLimit) raceRoundOverDuo();
                     } else {
                         let need = RACE.ladder[race.round + 1] || 1;
@@ -1653,7 +1698,7 @@
             if (race.ghost) { scene.remove(race.ghost); race.ghost = null; }
             let me = race.racers[0];
             if (me.out || race.duo) return;
-            let rec = (raceRecords()['r' + (race.round + 1)] || []).find(function (e) { return e.me; });
+            let rec = (raceRecords()[raceRecKey()] || []).find(function (e) { return e.me; });
             if (!rec) return;
             let g = raceMakeBody(mySkinColor(0x66bb6a), 0, true, null, myFace());
             g.traverse(function (o) { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.32; o.material.depthWrite = false; } });
@@ -1682,9 +1727,10 @@
             document.getElementById('blaze-score').innerText =
                 race.phase === 'ready' ? Math.ceil(race.wait) : race.clock.toFixed(1);
             let ladder = race.duo ? RACE_DUO.ladder : RACE.ladder;
+            let fm = race.fixedMap != null ? RACE_MAPS[race.fixedMap] : null;
             document.getElementById('blaze-round').innerText =
-                (race.duo ? '竞速·双人 · 第 ' : '竞速 · 第 ') + (race.round + 1) + ' / ' + ladder.length + ' 轮　' +
-                ladder[race.round] + (race.duo ? ' 队开跑，留 ' + (ladder[race.round + 1] || 1) + ' 队　' : ' 人开跑，留 ' + (ladder[race.round + 1] || 1) + ' 人　') +
+                (fm ? '竞速 · ' + fm.no + ' ' + fm.name + '　' : (race.duo ? '竞速·双人 · 第 ' : '竞速 · 第 ') + (race.round + 1) + ' / ' + ladder.length + ' 轮　' +
+                ladder[race.round] + (race.duo ? ' 队开跑，留 ' + (ladder[race.round + 1] || 1) + ' 队　' : ' 人开跑，留 ' + (ladder[race.round + 1] || 1) + ' 人　')) +
                 (me.out ? (race.duo ? '你的队伍已淘汰（观战）' : '你已淘汰（观战）')
                     : race.duo ? (function () {
                         let mate = raceTeammateOf(me);
@@ -1891,7 +1937,12 @@
                     : { label: '继续', color: '#5cb85c', onClick: function () { race.phase = 'waitRound'; } }]);
         }
 
-        function raceStart(duo, plan, hostId) {
+        // 固定地图：一个人带 15 个 AI 在选定的这张图上跑一轮（暂时不联机、不淘汰）
+        function raceMapStart(i) {
+            if (i < 0 || i >= RACE_MAPS.length) return;
+            raceStart(false, null, null, i);
+        }
+        function raceStart(duo, plan, hostId, mapIdx) {
             showModeIntroIfFirstTime('race');
             ensureScene();
             nav('none');
@@ -1909,7 +1960,7 @@
                 checkpoints: [], finishOrder: [], segs: [], segSeen: {}, fx: [], savePads: [], boxes: [], draw: null, event: 'none',
                 last: performance.now(), raf: null, finishZ: 0,
                 net: plan ? plan.some(function (q) { return q.id && q.id !== gState.id; }) : false,
-                host: hostId || gState.id, sendSelf: 0
+                host: hostId || gState.id, sendSelf: 0, fixedMap: (typeof mapIdx === 'number' ? mapIdx : null)
             };
             if (plan) {
                 // 联机：其它地方到处硬编码 race.racers[0] 就是"我"，所以不管 plan 里
