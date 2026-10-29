@@ -22,7 +22,7 @@
         function labVisible() { return LAB_ENABLED || labDebugOn(); }
 
         // 时间和距离（"米" = 场景里的 1 个单位）。冒烟测试会改这几个数把等待缩短。
-        const LAB_T = { gather: 4, gasLife: 10, poisonLife: 5, rust: 120, glass: 5, mergeR: 0.5, reactR: 0.5, fillR: 2, boomR: 3, boomDmg: 40, poisonDps: 5, poisonR: 4, lock: 60, pickR: 2.4, stationR: 3.4, elec: 5 };
+        const LAB_T = { gather: 4, gasLife: 10, poisonLife: 45, rust: 120, glass: 5, mergeR: 0.5, reactR: 0.5, fillR: 2, boomR: 3, boomDmg: 40, poisonDps: 8, poisonR: 4, lock: 60, pickR: 2.4, stationR: 3.4, elec: 5 };
         // 身上 6 格：快捷栏 3 格 + 背包 3 格（一格一种东西，数量不限）；房间里散落的粒子最多 300 个
         const LAB_BOX_CAP = 60, LAB_BAG_CAP = 6, LAB_HOT = 3, LAB_PARTICLE_CAP = 300;
         const LAB_HOLD_RATE = { Q: 5, L: 6, R: 5 };   // 长按：每秒放 5 个／捡 6 个／拆 5 个包
@@ -66,18 +66,26 @@
             salt: { name: '食盐', col: 0xf5f5f5, shape: 'b' }, bottle: { name: '玻璃瓶', col: 0xb3e5fc, shape: 'c', op: 0.55 },
             sugar: { name: '糖', col: 0xfff8e1, shape: 'b' }, rubber: { name: '橡胶', col: 0x424242, shape: 'b' }, fes: { name: '硫化铁', v: 1500, col: 0x5d4037, shape: 'b' }, rust: { name: '铁锈', col: 0x8d4a2b, shape: 'b' },
             'b:water': { name: '水', col: 0x4fc3f7, shape: 'c', op: 0.8 }, 'b:h2': { name: '氢气瓶', col: 0xffcdd2, shape: 'c', op: 0.8 }, 'b:o2': { name: '氧气瓶', col: 0x80deea, shape: 'c', op: 0.8 },
-            'b:co2': { name: '二氧化碳瓶', col: 0xb0bec5, shape: 'c', op: 0.8 }, 'b:so2': { name: '二氧化硫瓶', col: 0xfff176, shape: 'c', op: 0.8 }, 'b:cl2': { name: '氯气瓶', col: 0xc5e1a5, shape: 'c', op: 0.8 },
+            'b:co2': { name: '二氧化碳瓶', col: 0xb0bec5, shape: 'c', op: 0.8 }, 'b:so2': { name: '二氧化硫瓶', col: 0xfff176, shape: 'c', op: 0.8 }, 'b:cl2': { name: '氯气瓶', col: 0xc5e1a5, shape: 'c', op: 0.8 }, 'b:co': { name: '一氧化碳瓶', col: 0x9e9e9e, shape: 'c', op: 0.8 },
             'b:soda': { name: '苏打水', col: 0x81d4fa, shape: 'c', op: 0.8 }, 'b:naoh': { name: '氢氧化钠溶液', col: 0xe1bee7, shape: 'c', op: 0.8 },
             'g:h2': { name: '氢气', col: 0xffcdd2, shape: 'g', op: 0.35, gas: 1 }, 'g:o2': { name: '氧气', col: 0x80deea, shape: 'g', op: 0.35, gas: 1 },
-            'g:co2': { name: '二氧化碳', col: 0xb0bec5, shape: 'g', op: 0.35, gas: 1 }, 'g:so2': { name: '二氧化硫', col: 0xfff176, shape: 'g', op: 0.45, gas: 1, toxic: 1 }, 'g:cl2': { name: '氯气', col: 0xaed581, shape: 'g', op: 0.45, gas: 1, toxic: 1 },
+            'g:co2': { name: '二氧化碳', col: 0xb0bec5, shape: 'g', op: 0.35, gas: 1 }, 'g:so2': { name: '二氧化硫', col: 0xfff176, shape: 'g', op: 0.45, gas: 1, toxic: 1 }, 'g:cl2': { name: '氯气', col: 0xaed581, shape: 'g', op: 0.45, gas: 1, toxic: 1 }, 'g:co': { name: '一氧化碳', col: 0x9e9e9e, shape: 'g', op: 0.45, gas: 1, toxic: 1 },
             'pot:heal': { name: '治疗药剂', v: 20000, col: 0xe53935, shape: 'c', op: 0.9 }, 'pot:speed': { name: '加速药剂', v: 25000, col: 0x29b6f6, shape: 'c', op: 0.9 },
             'pot:dmg': { name: '伤害药剂', v: 30000, col: 0x8e24aa, shape: 'c', op: 0.9 }, 'pot:spring': { name: '弹簧鞋', v: 12000, col: 0x66bb6a, shape: 'b' },
             'b:brine': { name: '盐水', col: 0xb3e5fc, shape: 'c', op: 0.8 }, 'b:melt': { name: '熔融食盐', col: 0xffcc80, shape: 'c', op: 0.8 },
             wire: { name: '电线', v: 3500, col: 0xff8a65, shape: 'b' }, bat: { name: '电池', v: 6000, col: 0x43a047, shape: 'c' }, switch: { name: '开关', v: 5000, col: 0xbcaaa4, shape: 'b' },
             bulb: { name: '灯泡', v: 6000, col: 0xfff59d, shape: 's' }, resistor: { name: '电阻', v: 4000, col: 0xffcc80, shape: 'b' }, motor: { name: '电动机', v: 15000, col: 0x78909c, shape: 'c' },
-            elec: { name: '电解槽', v: 15000, col: 0x4dd0e1, shape: 'c' }, booster: { name: '升压器', v: 20000, col: 0xff7043, shape: 'b' }
+            elec: { name: '电解槽', v: 15000, col: 0x4dd0e1, shape: 'c' }, booster: { name: '升压器', v: 20000, col: 0xff7043, shape: 'b' },
+            // 4C：加速器、离心机、反应堆、空气分离机、原子弹；Z > 26 的核素；空气分离出来的瓶装气体；石油
+            accel: { name: '加速器', v: 150000, col: 0x7e57c2, shape: 'b' }, centri: { name: '离心机', v: 80000, col: 0x26a69a, shape: 'c' }, reactor: { name: '核反应堆', v: 100000, col: 0x546e7a, shape: 'b' },
+            airsep: { name: '空气分离机', v: 80000, col: 0x90caf9, shape: 'c' }, bomb: { name: '原子弹', v: 900000, col: 0x37474f, shape: 'b' }, du: { name: '贫铀', col: 0x6d8b74, shape: 's' },
+            'a:27:32': { name: '钴-59', col: 0x3949ab, shape: 's', atom: [27, 32] }, 'a:30:34': { name: '锌-64', col: 0x9fa8da, shape: 's', atom: [30, 34] }, 'a:47:60': { name: '银-107', col: 0xe0e0e0, shape: 's', atom: [47, 60] },
+            'a:78:117': { name: '铂-195', col: 0xcfd8dc, shape: 's', atom: [78, 117] }, 'a:79:118': { name: '金-197', v: 1000000, col: 0xffd54f, shape: 's', atom: [79, 118] },
+            'a:92:146': { name: '天然铀', col: 0x7cb342, shape: 's', atom: [92, 146] }, 'a:92:143': { name: '铀-235', v: 250000, col: 0x9ccc65, shape: 's', atom: [92, 143] }, 'a:94:145': { name: '钚-239', col: 0xff8a65, shape: 's', atom: [94, 145] },
+            'b:he': { name: '氦-4（瓶）', col: 0xfff9c4, shape: 'c', op: 0.8 }, 'b:ne': { name: '氖-20（瓶）', col: 0xff8a80, shape: 'c', op: 0.8 }, 'b:ar': { name: '氩-40（瓶）', col: 0xce93d8, shape: 'c', op: 0.8 },
+            oil: { name: '石油', col: 0x212121, shape: 'c', op: 0.9 }
         };
-        const LAB_BOTTLE_OF = { h2: 'b:h2', o2: 'b:o2', co2: 'b:co2', so2: 'b:so2', cl2: 'b:cl2' };
+        const LAB_BOTTLE_OF = { h2: 'b:h2', o2: 'b:o2', co2: 'b:co2', so2: 'b:so2', cl2: 'b:cl2', co: 'b:co' };
         const LAB_DEF_CACHE = {};
         function labDef(key) {
             if (LAB_DEF_CACHE[key]) return LAB_DEF_CACHE[key];
@@ -86,6 +94,8 @@
             else if ((m = /^a:(\d+):(\d+)$/.exec(key))) {
                 let z = +m[1], n = +m[2];
                 d = { key: key, name: labAtomName(z, n), v: 0, shape: 's', op: 1, atom: [z, n], col: new THREE.Color().setHSL(((z * 37) % 360) / 360, 0.65, 0.55).getHex() };
+            } else if ((m = /^abat:(\d+)$/.exec(key))) {
+                d = { key: key, name: '高级电池（' + m[1] + ' U）', v: 70000, shape: 'c', op: 1, col: 0x8e24aa };   // 高级电池：出厂 0 U，只有反应堆能充；按电量分堆
             } else if ((m = /^bat:(\d+)$/.exec(key))) {
                 d = { key: key, name: '电池（剩 ' + m[1] + ' U）', v: 0, shape: 'c', op: 1, col: 0x43a047 };   // 用过的电池：按剩下的电量分堆，不能卖
             } else if ((m = /^pack:(\d+):(\d+)$/.exec(key))) {
@@ -105,11 +115,12 @@
             if (d.atom) return '原子：质子 ' + d.atom[0] + '，中子 ' + d.atom[1] + '，电子 ' + d.atom[0];
             if (LAB_DEV_DESC[key]) return LAB_DEV_DESC[key];
             if (/^bat:/.test(key)) return LAB_DEV_DESC.bat;
+            if (/^abat:/.test(key)) return LAB_DEV_DESC.abat;
             if (d.gas) return '气体，要用空瓶装起来';
             if (/^b:/.test(key)) return '装在瓶里';
             return '';
         }
-        const LAB_ST_DESC = { stove: '摆好材料再点火', craft: '合成药剂和器材', orders: '看订单、拿奖励', box: '存取材料', table: '氢到铁的元素和同位素' };
+        const LAB_ST_DESC = { stove: '摆好材料再点火', craft: '合成药剂和器材', orders: '看订单、拿奖励', box: '存取材料', table: '氢到铁的元素和同位素', trash: '手上的东西扔进去就没了' };
         function labValue(key) { return labDef(key).v || 0; }
 
         // ── 按 key 存数量的小仓库（仓库箱、身上、灶台都是这个形状）──
@@ -199,22 +210,30 @@
             { id: 'motor', where: '合成台', kind: 'device', name: '电动机', in: { iron: 2, wire: 2 }, out: { motor: 1 } },
             { id: 'elec', where: '合成台', kind: 'device', name: '电解槽', in: { bottle: 1, coal: 2, wire: 2 }, out: { elec: 1 } },
             { id: 'booster', where: '合成台', kind: 'device', name: '升压器', in: { iron: 2, wire: 4 }, out: { booster: 1 } },
-            { id: 'h2', where: '接触', name: '氢分子', note: '两个氢-1 原子碰到一起，变成氢气（要装瓶，不然 10 秒后飘走）', in: { 'a:1:0': 2 }, out: { 'g:h2': 1 } },
-            { id: 'o2', where: '接触', name: '氧分子', note: '两个氧-16 原子碰到一起，变成氧气（要装瓶）', in: { 'a:8:8': 2 }, out: { 'g:o2': 1 } },
-            { id: 'cl2', where: '接触', name: '氯分子', note: '两个氯-35 原子碰到一起，变成氯气（有毒，一定要装瓶）', in: { 'a:17:18': 2 }, out: { 'g:cl2': 1 } },
-            { id: 'boom1', where: '接触', name: '爆炸（氢氧混合）', note: '没装瓶的氢气和氧气碰到一起会爆炸', in: { 'g:h2': 1, 'g:o2': 1 }, out: {} },
+            { id: 'accel', where: '合成台', kind: 'device', name: '加速器', in: { bottle: 1, motor: 2, wire: 4, iron: 4 }, out: { accel: 1 } },
+            { id: 'centri', where: '合成台', kind: 'device', name: '离心机', in: { motor: 2, iron: 4, bottle: 1, wire: 4 }, out: { centri: 1 } },
+            { id: 'reactor', where: '合成台', kind: 'device', name: '核反应堆', in: { iron: 6, coal: 8, motor: 2, wire: 4, bottle: 1 }, out: { reactor: 1 } },
+            { id: 'airsep', where: '合成台', kind: 'device', name: '空气分离机', in: { motor: 2, iron: 6, bottle: 1, wire: 4 }, out: { airsep: 1 } },
+            { id: 'abat', where: '合成台', kind: 'device', name: '高级电池', in: { bat: 2, iron: 4, 'a:29:34': 4, 'a:30:34': 1 }, out: { 'abat:0': 1 } },
+            { id: 'bomb', where: '合成台', kind: 'device', name: '原子弹', in: { 'a:92:143': 3, iron: 6, bat: 1, wire: 2, switch: 1 }, out: { bomb: 1 } },
+            { id: 'h2', where: '接触', auto: 1, name: '氢分子', note: '两个氢-1 原子碰到一起，变成氢气（要装瓶，不然 10 秒后飘走）', in: { 'a:1:0': 2 }, out: { 'g:h2': 1 } },
+            { id: 'o2', where: '接触', auto: 1, name: '氧分子', note: '两个氧-16 原子碰到一起，变成氧气（要装瓶）', in: { 'a:8:8': 2 }, out: { 'g:o2': 1 } },
+            { id: 'cl2', where: '接触', auto: 1, name: '氯分子', note: '两个氯-35 原子碰到一起，变成氯气（有毒，一定要装瓶）', in: { 'a:17:18': 2 }, out: { 'g:cl2': 1 } },
+            { id: 'boom1', where: '接触', auto: 1, name: '爆炸（氢氧混合）', note: '没装瓶的氢气和氧气碰到一起会爆炸', in: { 'g:h2': 1, 'g:o2': 1 }, out: {} },
             { id: 'naoh', where: '接触', name: '钠碰水', note: '钠-23 碰到水（瓶装的、水池里的）：爆炸，炸完留下氢氧化钠溶液', in: { 'a:11:12': 1, 'b:water': 1 }, out: { 'b:naoh': 1 } },
             { id: 'salt', where: '接触', name: '钠碰氯气', note: '钠-23 碰到氯气（瓶装或没装瓶），变成食盐', in: { 'a:11:12': 1, 'b:cl2': 1 }, out: { salt: 1, bottle: 1 } },
-            { id: 'rust', where: '接触', name: '铁生锈', note: '铁块挨着水（瓶装或水池）2 分钟，变成铁锈', in: { iron: 1, 'b:water': 1 }, out: { rust: 1 } },
+            { id: 'rust', where: '接触', auto: 1, name: '铁生锈', note: '铁块挨着水（瓶装或水池）2 分钟，变成铁锈', in: { iron: 1, 'b:water': 1 }, out: { rust: 1 } },
             { id: 'soda', where: '接触', name: '苏打水', note: '一瓶水碰一瓶二氧化碳，变成苏打水', in: { 'b:water': 1, 'b:co2': 1 }, out: { 'b:soda': 1, bottle: 1 } }
         ];
+        // auto：自己发生的（原子拼成分子、生锈、氢氧碰到爆炸），不用玩家去做，手册里不列（v3：手册只留要主动做的配方）
+        function labActive() { return LAB_RECIPES.filter(function (r) { return !r.auto; }); }
         function labUsedIn(key) {
-            return LAB_RECIPES.filter(function (r) { return r.in[key] !== undefined; }).map(function (r) { return r.name; });
+            return labActive().filter(function (r) { return r.in[key] !== undefined; }).map(function (r) { return r.name; });
         }
 
         // ── 订单（只出化学类，本段做得出来的）──
-        const LAB_ORDER_POOL = [['b:water', 2], ['salt', 1], ['a:3:4', 1], ['b:naoh', 1], ['pot:heal', 1], ['pot:spring', 1], ['a:2:2', 1]];
-        function labOrderReward(key) { let v = labValue(key); return v ? Math.round(v * 0.1) : 100; }
+        const LAB_ORDER_POOL = [['b:water', 2], ['salt', 1], ['a:3:4', 1], ['b:naoh', 1], ['pot:heal', 1], ['pot:spring', 1], ['a:2:2', 1], ['a:79:118', 1], ['a:92:143', 1], ['bomb', 1]];   // 4C 以后金-197、铀-235、原子弹也做得出来了
+        function labOrderReward(key) { let v = labValue(key); return v ? Math.round(v * 0.2) : 100; }   // v4：价值的 20%（没标价的给 100）
         function labOrdersFill(rnd) {
             let L = labSt(); rnd = rnd || Math.random;
             let guard = 0;
@@ -224,28 +243,33 @@
                 L.orders.push({ k: c[0], n: c[1], base: L.made[c[0]] || 0 });
             }
         }
-        // 造出来一件：只算订单出现之后的
+        // 造出来一件：记个数（v4 起订单不靠这个完成，要到订单板交东西）
         function labMade(key, n) {
             let L = labSt(); n = n === undefined ? 1 : n;
             L.made[key] = (L.made[key] || 0) + n;
-            let done = 0;
-            for (let i = L.orders.length - 1; i >= 0; i--) {
-                let o = L.orders[i];
-                if (o.k === key && (L.made[key] - o.base) >= o.n) {
-                    let reward = labOrderReward(o.k);
-                    gState.money += reward; done++;
-                    L.orders.splice(i, 1);
-                    try { blazeFlash('订单完成：' + labName(o.k) + (o.n > 1 ? ' ×' + o.n : '') + '，得到 ' + reward); } catch (e) { }
-                }
-            }
-            if (done) labOrdersFill();
+        }
+        // v4：订单要交东西——身上的先扣、不够再扣仓库箱里的；给价值的 20%；交完立刻补一张新的
+        function labOrderHave(k) { return labN(lab ? lab.bag : {}, k) + labN(labSt().box, k); }
+        function labOrderDeliver(i) {
+            let L = labSt(), o = L.orders[i]; if (!o) return false;
+            if (labOrderHave(o.k) < o.n) { labFlash('东西不够：要 ' + labName(o.k) + ' ×' + o.n); return false; }
+            let left = o.n, fromBag = Math.min(left, labN(lab.bag, o.k));
+            if (fromBag) { labDel(lab.bag, o.k, fromBag); left -= fromBag; }
+            if (left) labDel(L.box, o.k, left);
+            let reward = labOrderReward(o.k);
+            gState.money += reward;
+            L.orders.splice(i, 1); labOrdersFill();
+            labSyncSel(); lab.hudSig = '';
+            labFlash('订单完成：' + labName(o.k) + (o.n > 1 ? ' ×' + o.n : '') + '，得到 ' + reward);
             saveProgress();
+            if (lab.panel === 'orders') labPanelOrders();
+            return true;
         }
 
         // ══════════════ 运行时：一个能走动的小场景 ══════════════
         let lab = null;
         // 一个大房间（24 × 18 米）：靠北墙一排家具，水池在东南角。四面墙是实的，走不出去
-        const LAB_ST = { stove: { x: -8, z: -7.3, name: '灶台' }, craft: { x: -3, z: -7.3, name: '合成台' }, orders: { x: 3, z: -8.5, name: '订单板' }, box: { x: 8, z: -7.3, name: '仓库箱' }, table: { x: -11.7, z: 0, name: '元素表' } };
+        const LAB_ST = { stove: { x: -8, z: -7.3, name: '灶台' }, craft: { x: -3, z: -7.3, name: '合成台' }, orders: { x: 3, z: -8.5, name: '订单板' }, box: { x: 8, z: -7.3, name: '仓库箱' }, table: { x: -11.7, z: 0, name: '元素表' }, trash: { x: 10.9, z: -2.5, name: '垃圾桶' } };
         const LAB_POOL = { x: 8, z: 4.5, r: 1.7 };
         const LAB_ROOM = { x: 12, z: 9 };   // 墙内侧到中心的距离
         const LAB_BOUND = { x0: -11.4, x1: 11.4, z0: -8.4, z1: 8.4 };   // 人的中心能到的范围（离墙 0.6 米）
@@ -260,8 +284,7 @@
         function labEnter() {
             if (!labVisible() || lab) return;
             let L = labSt(); labBoxCatchUp(Date.now()); labOrdersFill();
-            let left = Math.ceil((L.lockUntil - Date.now()) / 1000);
-            if (left > 0) { showSysModal('实验室', '刚出过事，还要等 ' + left + ' 秒才能再进去。', [{ label: '好' }]); return; }
+            L.lockUntil = 0;   // v4：死了不再锁 60 秒（老档里记着的锁也不算）
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
             ensureScene();
@@ -291,7 +314,7 @@
             lab.onMouse = function (e) {
                 if (!lab || lab.over || !document.pointerLockElement) return;
                 if (e.target && e.target.closest && e.target.closest('button, #lab-panel, #lab-book, #lab-bag, #sys-modal')) return;
-                if (e.button === 0) labHoldStart('L'); else if (e.button === 2) labHoldStart('R');
+                if (e.button === 0 && e.shiftKey) labPickAll(); else if (e.button === 0) labHoldStart('L'); else if (e.button === 2) labHoldStart('R');
             };
             lab.onMouseUp = function (e) { if (lab && lab.hold && lab.hold.kind !== 'Q') labHoldStop(); };
             document.addEventListener('mouseup', lab.onMouseUp);
@@ -315,7 +338,7 @@
                 let dump = function (st) { Object.keys(st).forEach(function (k) { if (!labBoxAdd(k, st[k])) lost += st[k]; }); };
                 dump(R.bag); dump(R.stove.items);
                 R.ground.forEach(function (e) { if (!labDef(e.key).gas) { if (!labBoxAdd(e.key, 1)) lost++; } });
-                R.devs.forEach(function (d) { if (!labBoxAdd(labDevItem(d), 1)) lost++; });   // 放着的设备和电线也收回仓库箱（用过的电池带着剩下的电量）
+                R.devs.forEach(function (d) { if (!labBoxAdd(labDevItem(d), 1)) lost++; dump(labDevContents(d)); });   // 放着的设备和电线也收回仓库箱（用过的电池带着剩下的电量）
                 if (R.wires.length && !labBoxAdd('wire', R.wires.length)) lost += R.wires.length;
             }
             R.objs.forEach(function (o) { scene.remove(o); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });   // 房间、家具、文字牌、成组的物品、光球、标签：全部是 objs，一起释放
@@ -329,13 +352,20 @@
             nav('screen-lobby'); selectGameMode('lab');   // 回大厅，右上角的「开始游戏！」就在老地方
             if (lost > 0) labFlash('仓库箱放不下，' + lost + ' 件东西没了');
         }
+        // v4：死了身上的东西直接消失，在门口站起来（血回满），不锁；地上、台面、放着的设备和仓库箱都不动。弹窗只写死因
         function labDie() {
             if (!lab || lab.over) return;
-            let L = labSt(); L.lockUntil = Date.now() + LAB_T.lock * 1000;
-            labExit(true);   // 身上、灶台、地上的东西都丢了；仓库箱里的不动
-            showSysModal('实验室', '你倒下了，身上和台面的东西都丢了。仓库箱里的没事。过 ' + LAB_T.lock + ' 秒才能再进来。', [{ label: '好' }]);
+            let cause = lab.lastHurt || '受伤';
+            labHoldStop && labHoldStop();
+            lab.bag = {}; lab.sel = null; lab.selIdx = 0;
+            lab.hp = 100; lab.hurtT = 0; lab.poisonT = 0; lab.speedT = 0; lab.dmgT = 0; lab.springT = 0;
+            lab.p.x = 0; lab.p.y = 0; lab.p.z = 2; lab.p.vy = 0; lab.k = {};
+            lab.deaths = (lab.deaths || 0) + 1; lab.lastDeath = cause; lab.lastHurt = null; lab.hudSig = '';
+            labPanelClose(); labBookClose();
+            showSysModal('实验室', '死因：' + cause + '。身上的东西没了。', [{ label: '好' }]);
         }
-        function labHurt(n) { if (!lab) return; lab.hp -= n; lab.hurtT = 0.3; }
+        // cause：死因（只写事实，比如"爆炸""氯气中毒""伤害药剂"）
+        function labHurt(n, cause) { if (!lab) return; lab.hp -= n; lab.hurtT = 0.3; if (cause) lab.lastHurt = cause; }
 
         // ── 场景 ──
         function labAddObj(o) { scene.add(o); lab.objs.push(o); return o; }
@@ -369,6 +399,8 @@
             labBox(3, 1.1, 1.6, 0x4a148c, st.craft.x, 0.55, st.craft.z); labSign(st.craft.name, st.craft.x, 2.2, st.craft.z, 2.4, 0.6);
             labBox(2.2, 1.2, 1.6, 0x455a64, st.box.x, 0.6, st.box.z); labSign(st.box.name, st.box.x, 2.2, st.box.z, 2.4, 0.6);
             labBox(3.4, 2.4, 0.3, 0xfff59d, st.orders.x, 1.5, st.orders.z); labSign(st.orders.name, st.orders.x, 3.0, st.orders.z + 0.3, 2.4, 0.6);
+            let tc = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.42, 1.0, 16), new THREE.MeshLambertMaterial({ color: 0x607d8b }));   // 垃圾桶
+            tc.position.set(st.trash.x, 0.5, st.trash.z); labAddObj(tc); labSign(st.trash.name, st.trash.x, 1.9, st.trash.z, 1.8, 0.45);
             labBox(0.3, 2.4, 3.6, 0xcfd8dc, -11.85, 1.5, 0); labSign(st.table.name, -11.4, 3.0, 0, 2.4, 0.6);   // 西墙上的元素表牌子
             let pool = new THREE.Mesh(new THREE.CylinderGeometry(LAB_POOL.r, LAB_POOL.r, 0.15, 24), new THREE.MeshLambertMaterial({ color: 0x29b6f6 }));
             pool.position.set(LAB_POOL.x, 0.08, LAB_POOL.z); labAddObj(pool); labSign('水池', LAB_POOL.x, 1.5, LAB_POOL.z, 1.8, 0.45);
@@ -448,8 +480,12 @@
             if (k === ' ') { lab.k.jump = true; e.preventDefault(); return; }
             if (e.repeat) return;
             if (k === 'escape') { if (lab.panel) labPanelClose(); else if (document.getElementById('lab-book')) labBookClose(); return; }
+            if (k === 'b' && lab.panel === 'bag') { labPanelClose(); return; }
             if (lab.panel || document.getElementById('lab-book')) return;
-            if (k === 'q' || k === 'g') { if (e.shiftKey) labPut(true); else labHoldStart('Q'); } else if (k === 'f') labPick(); else if (k === 'r') labUse('L'); else if (k === 'e') labInteract(); else if (k === 't') labThrow();
+            if (k === 'b') { labPanelBag(); return; }
+            if (k === 'f' && e.shiftKey) { labPickAll(); return; }
+            if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); labStoreHeld(); }
+            else if (k === 'q' || k === 'g') { if (e.shiftKey) labPut(true); else labHoldStart('Q'); } else if (k === 'f') labPick(); else if (k === 'r') labUse('L'); else if (k === 'e') labInteract(); else if (k === 't') labThrow();
             else if (/^[1-6]$/.test(k)) labSelIdx(+k - 1);
         }
         function labKeyUp(e) {
@@ -556,6 +592,7 @@
             labSyncMeshes();
             labCamera();
             lab.hudT -= dt; if (lab.hudT <= 0) { lab.hudT = 0.2; labHudUpdate(); labDevLabels(); }
+            if (lab.panel === 'dev') { let pd = lab.dmap[lab.panelDev]; if (!pd) labPanelClose(); else if (labDevPanelSig(pd) !== lab.devPanelSig) labPanelDev(pd); }
             lab.boxT -= dt; if (lab.boxT <= 0) { lab.boxT = 5; labBoxCatchUp(Date.now()); }
             if (lab.hp <= 0) { labDie(); return; }
             labRender();
@@ -640,18 +677,29 @@
             bulb: { name: '灯泡', base: 1, y: 0.5, col: 0xfff59d, basic: true, geo: function () { return new THREE.SphereGeometry(0.3, 12, 8); } },
             resistor: { name: '电阻', base: 0.5, y: 0.12, col: 0xffcc80, geo: function () { return new THREE.BoxGeometry(0.85, 0.24, 0.3); } },
             elec: { name: '电解槽', base: 2, y: 0.45, col: 0x4dd0e1, geo: function () { return new THREE.CylinderGeometry(0.4, 0.4, 0.9, 12); } },
-            booster: { name: '升压器', base: 2, y: 0.32, col: 0xff7043, geo: function () { return new THREE.BoxGeometry(0.7, 0.64, 0.7); } }
+            booster: { name: '升压器', base: 2, y: 0.32, col: 0xff7043, geo: function () { return new THREE.BoxGeometry(0.7, 0.64, 0.7); } },
+            // 4C：job = 只在干活时耗电
+            accel: { name: '加速器', base: 1, job: true, y: 0.4, col: 0x7e57c2, geo: function () { return new THREE.TorusGeometry(0.42, 0.14, 8, 18).rotateX(Math.PI / 2).translate(0, 0, 0); } },
+            centri: { name: '离心机', base: 2.5, job: true, y: 0.45, col: 0x26a69a, geo: function () { return new THREE.CylinderGeometry(0.45, 0.5, 0.9, 14); } },
+            reactor: { name: '核反应堆', base: 1, job: true, y: 0.55, col: 0x546e7a, geo: function () { return new THREE.BoxGeometry(0.9, 1.1, 0.9); } },
+            airsep: { name: '空气分离机', base: 2, job: true, y: 0.5, col: 0x90caf9, geo: function () { return new THREE.CylinderGeometry(0.35, 0.35, 1.0, 12); } }
         };
         const LAB_DEV_DESC = {
             wire: '接线用：拿在手上，左键先点一个设备再点另一个', bat: '一次性电池，1.5 V，容量 180 U', switch: '放在回路里，左键断开／接通', bulb: '通电会亮，耗电 1 U/s', resistor: '耗电 0.5 U/s',
-            motor: '只是零件，不能单独用', elec: '耗电 2 U/s，旁边放装了水的瓶子和空瓶', booster: '电压 ×5，后面设备的耗电不变，自己有电流通过时耗电 2 U/s'
+            motor: '只是零件，不能单独用', elec: '耗电 2 U/s，旁边放装了水的瓶子和空瓶', booster: '电压 ×5，后面设备的耗电不变，自己有电流通过时耗电 2 U/s',
+            accel: '聚变（10 秒，电压 ≥ Z × 0.5 V，耗电 1 U/s）和质子电子中子互换（≥ 1.5 V）；左键打开', centri: '3 个天然铀 → 1 个铀-235 + 2 个贫铀；≥ 6 V，10 秒，耗电 2.5 U/s；左键打开',
+            reactor: '8 个燃料槽一起烧，每个 10 秒；充电口只接高级电池，接普通电池会爆炸；运行耗电 1 U/s；左键打开', airsep: '2 米内放空瓶，每 10 秒装 1 瓶：氧气、氩-40、氖-20、氦-4；耗电 2 U/s',
+            abat: '高级电池，1.5 V，容量 900 U，只能在核反应堆的充电口充', bomb: '实验室里不能引爆，只能带进正常寻宝队'
         };
         // 电解：放在电解槽 2 米内的瓶子。水 ≥ 2 V，盐水 ≥ 3 V（要 3 个空瓶），熔融食盐 ≥ 4 V
         const LAB_ELEC_MODE = [{ key: 'b:water', v: 2 }, { key: 'b:brine', v: 3 }, { key: 'b:melt', v: 4 }];
-        function labDevType(key) { if (key === 'bat' || /^bat:\d+$/.test(key)) return 'bat'; return LAB_DEV[key] ? key : null; }
-        function labBatKey(c) { c = Math.max(0, Math.round(c)); return c >= LAB_ELEC.cap ? 'bat' : 'bat:' + c; }
-        function labBatCharge(key) { return key === 'bat' ? LAB_ELEC.cap : +key.slice(4); }
-        function labDevItem(d) { return d.ty === 'bat' ? labBatKey(d.charge) : d.key; }
+        function labDevType(key) { if (key === 'bat' || /^a?bat:\d+$/.test(key)) return 'bat'; return LAB_DEV[key] ? key : null; }
+        function labBatKey(c, adv) { c = Math.max(0, Math.round(c)); if (adv) return 'abat:' + Math.min(LAB_ABAT_CAP, c); return c >= LAB_ELEC.cap ? 'bat' : 'bat:' + c; }
+        function labBatCharge(key) { return key === 'bat' ? LAB_ELEC.cap : /^abat:/.test(key) ? +key.slice(5) : +key.slice(4); }
+        function labIsAbat(key) { return /^abat:\d+$/.test(key); }
+        function labBatCap(d) { return d.adv ? LAB_ABAT_CAP : LAB_ELEC.cap; }
+        function labDevItem(d) { return d.ty === 'bat' ? labBatKey(d.charge, d.adv) : d.key; }
+        const LAB_ABAT_CAP = 900;
         function labNum(x) { return String(Math.round(x * 10) / 10); }
 
         function labDevBuild() {
@@ -689,7 +737,8 @@
             if (lab.devs.length >= LAB_DEV_CAP) { labFlash('设备太多了'); return null; }
             let q = { x: x, z: z }; labClampP(q);
             if (lab.devs.some(function (d) { return labD(d, q) < 0.8; })) { labFlash('离别的设备太近了'); return null; }
-            let d = { id: ++lab.dseq, key: ty === 'bat' ? labBatKey(labBatCharge(key)) : key, ty: ty, x: q.x, z: q.z, charge: ty === 'bat' ? labBatCharge(key) : 0, on: true, run: false, v: 0, draw: 0, bdraw: 0, k: 0, job: null, work: false, warnAt: 0 };
+            let adv = labIsAbat(key);
+            let d = { id: ++lab.dseq, key: ty === 'bat' ? labBatKey(labBatCharge(key), adv) : key, ty: ty, adv: adv, x: q.x, z: q.z, charge: ty === 'bat' ? labBatCharge(key) : 0, on: true, run: false, v: 0, draw: 0, bdraw: 0, k: 0, job: null, work: false, warnAt: 0, inv: {}, port: null };
             lab.devs.push(d); lab.dmap[d.id] = d; lab.cirDirty = true; lab.devSig = '';
             return d;
         }
@@ -698,7 +747,8 @@
             lab.wires = lab.wires.filter(function (w) { if (w.a === d.id || w.b === d.id) { nw++; return false; } return true; });
             lab.devs.splice(lab.devs.indexOf(d), 1); delete lab.dmap[d.id];
             if (lab.wirePend === d.id) lab.wirePend = null;
-            if (d.job && give) labSpawn(d.job.mode, d.x, d.z);
+            if (d.job && give && d.ty === 'elec') labSpawn(d.job.mode, d.x, d.z);
+            if (give) labDevSpill(d);   // 4C：加速器、离心机、反应堆里放着的东西和充电口的电池掉在旁边
             lab.cirDirty = true; lab.devSig = '';
             if (give) { labBagGive(labDevItem(d), 1); if (nw) labBagGive('wire', nw); }
         }
@@ -729,10 +779,11 @@
             return !!labWireAdd(a, d);
         }
         function labDevClick(d) {
+            if (LAB_DEV[d.ty].job && d.ty !== 'airsep') { labPanelDev(d); return true; }
             if (d.ty === 'switch') { d.on = !d.on; lab.cirDirty = true; lab.devSig = ''; labFlash(d.on ? '开关接通了' : '开关断开了'); return true; }
             labFlash(labDevInfo(d)); return true;
         }
-        function labDevPick(d) { let nm = LAB_DEV[d.ty].name; labDevRemove(d, true); labFlash('收起了' + nm); return true; }
+        function labDevPick(d) { let nm = d.adv ? '高级电池' : LAB_DEV[d.ty].name; labDevRemove(d, true); labFlash('收起了' + nm); return true; }
         // Q：设备放在面前 1 米（被别的设备挡住就换个方向）；每次只放 1 个
         function labPutDev(k) {
             if (lab.devs.length >= LAB_DEV_CAP) { labFlash('设备太多了'); return false; }
@@ -801,12 +852,12 @@
             let cyc = lab.cyc || [];
             lab.devs.forEach(function (d) { d.run = false; d.v = 0; d.k = 0; d.draw = 0; d.bdraw = 0; });
             cyc.forEach(function (c) { c.rows.forEach(function (r) { let d = r.d, V = c.vbase * r.m; d.run = true; d.k++; if (V > d.v) d.v = V; }); });
-            lab.devs.forEach(function (d) { if (d.ty !== 'elec') return; if (d.run) labElecCheck(d); d.work = !!(d.run && d.job); });
+            lab.devs.forEach(function (d) { if (d.ty === 'elec') { if (d.run) labElecCheck(d); d.work = !!(d.run && d.job); } else if (LAB_DEV[d.ty].job) labJobWork(d); });
             cyc.forEach(function (c) {
                 // 升压器：电压 ×5，但下游耗电不 ×5（功率守恒）；自己每秒 2 U 只在这一圈有别的设备在耗电（有电流通过）时才耗
                 let D = 0;
                 c.rows.forEach(function (r) {
-                    let d = r.d, b = d.ty === 'elec' ? (d.work ? LAB_DEV.elec.base : 0) : d.ty === 'booster' ? 0 : LAB_DEV[d.ty].base;
+                    let d = r.d, T = LAB_DEV[d.ty], b = (d.ty === 'elec' || T.job) ? (d.work ? T.base : 0) : d.ty === 'booster' ? 0 : T.base;
                     if (b) { let x = b / d.k; D += x; d.draw += x; }
                 });
                 if (D > 0) c.rows.forEach(function (r) { if (r.d.ty === 'booster') { let x = LAB_DEV.booster.base / r.d.k; D += x; r.d.draw += x; } });
@@ -814,10 +865,11 @@
             });
             lab.devs.forEach(function (d) {
                 if (d.ty === 'bat' && d.bdraw > 0) {
-                    d.charge -= d.bdraw * dt;
+                    d.charge -= d.bdraw * dt; d.key = labBatKey(d.charge, d.adv);
                     if (d.charge <= 0) { d.charge = 0; lab.cirDirty = true; labFlash('电池没电了'); }
                 }
                 if (d.ty === 'elec' && d.job && d.run) { d.job.t += dt; if (d.job.t >= LAB_T.elec - 1e-9) labElecDone(d); }
+                if (LAB_DEV[d.ty].job) labJobTick(d, dt);
             });
         }
 
@@ -854,6 +906,207 @@
             d.warnAt = 0;
         }
 
+        // ══════════════ 4C：加速器、离心机、核反应堆、空气分离机、高级电池（lab-spec 第 5 节）══════════════
+        // 聚变能量按 A 方案（功率守恒）：加速器 1 U/s，升压器 2 U/s 只在有电流时耗，聚变 10 秒，每块串联电池一次 30 U。
+        const LAB_JOB_T = 10;
+        const LAB_FUSION = { '27:32': 'a:27:32', '29:34': 'a:29:34', '30:34': 'a:30:34', '47:60': 'a:47:60', '78:117': 'a:78:117', '79:118': 'a:79:118', '92:146': 'a:92:146', '94:145': 'a:94:145' };
+        const LAB_FUEL = { 'a:92:143': 3000, 'a:94:145': 2000, 'a:92:146': 600, oil: 60, coal: 25, du: 20 };
+        const LAB_FUEL_SLOTS = 8, LAB_AIR = [['b:o2', 0.55], ['b:ar', 0.2], ['b:ne', 0.15], ['b:he', 0.1]];
+        // 每个燃料发多少电：表里的按表；别的会衰变的核素（核素表里的）每个 40；不能烧返回 0
+        const LAB_UNST_SET = {}; LAB_UNST.forEach(function (u) { LAB_UNST_SET['a:' + u[0] + ':' + u[1]] = 1; });
+        function labFuelU(k) { if (LAB_FUEL[k]) return LAB_FUEL[k]; return LAB_UNST_SET[k] ? 40 : 0; }
+        // 原子的 (Z, N)；铁块当铁-56
+        function labZN(k) { if (k === 'iron') return [26, 30]; let d = labDef(k); return d.atom || null; }
+        function labDevAccepts(d, k) {
+            if (d.ty === 'accel') return k === 'p' || k === 'n' || k === 'e' || !!labZN(k);
+            if (d.ty === 'centri') return k === 'a:92:146';
+            if (d.ty === 'reactor') return labFuelU(k) > 0;
+            return false;
+        }
+        function labAccelSum(d) {
+            let Z = 0, N = 0, E = 0;
+            Object.keys(d.inv).forEach(function (k) {
+                let c = d.inv[k];
+                if (k === 'p') { Z += c; } else if (k === 'n') { N += c; } else if (k === 'e') { E += c; }
+                else { let zn = labZN(k); if (zn) { Z += zn[0] * c; N += zn[1] * c; E += zn[0] * c; } }
+            });
+            let out = LAB_FUSION[Z + ':' + N] || null, why = '';
+            if (!Z && !N && !E) why = '里面是空的';
+            else if (!out) why = '不存在';
+            else if (E !== Z) why = '电子数要等于 Z';
+            return { Z: Z, N: N, e: E, need: Z * 0.5, out: out, ok: !!out && E === Z, why: why };
+        }
+        function labDevContents(d) {
+            let st = {}; Object.keys(d.inv || {}).forEach(function (k) { if (d.inv[k] > 0) st[k] = d.inv[k]; });
+            if (d.port) st[d.port] = (st[d.port] || 0) + 1;
+            return st;
+        }
+        function labDevSpill(d) {
+            let st = labDevContents(d); d.inv = {}; d.port = null;
+            Object.keys(st).forEach(function (k) { labBagGive(k, st[k]); });
+        }
+        // 散开：加速器里的东西原样掉在旁边（没成功、断电）
+        function labAccelScatter(d, txt) {
+            let st = d.inv; d.inv = {}; d.job = null;
+            Object.keys(st).forEach(function (k) { for (let i = 0; i < st[k]; i++) { let q = labNear(d.x, d.z, 0.5); labSpawn(k, q.x, q.z); } });
+            labFlash(txt);
+        }
+        // 每帧：这个设备现在在不在干活（干活才耗电）
+        function labJobWork(d) {
+            let j = d.job;
+            if (d.ty === 'accel') {
+                if (j && (!d.run || d.v + 1e-9 < j.need)) { labAccelScatter(d, '断电了，加速器里的东西散开了'); d.work = false; return; }
+                d.work = !!(j && d.run); return;
+            }
+            if (d.ty === 'centri') { d.work = !!(j && d.run && d.v + 1e-9 >= 6); return; }
+            if (d.ty === 'reactor') {
+                if (j && !d.run) { d.job = null; d.work = false; labFlash('反应堆断电停了，烧着的燃料没了'); return; }
+                d.work = !!(j && d.run); return;
+            }
+            if (d.ty === 'airsep') {
+                let b = d.run && lab.ground.some(function (e) { return e.key === 'bottle' && !e.dead && labD(e, d) <= LAB_T.fillR; });
+                if (b && !j) d.job = { t: 0 };
+                if (!b && j) d.job = null;
+                d.work = !!(b && d.run);
+            }
+        }
+        function labJobTick(d, dt) {
+            let j = d.job; if (!j || !d.work) return;
+            j.t += dt;
+            if (d.ty === 'reactor') {
+                let add = j.rate * Math.min(dt, Math.max(0, LAB_JOB_T - (j.t - dt)));
+                labReactorCharge(d, add);
+            }
+            if (j.t < LAB_JOB_T - 1e-9) return;
+            if (d.ty === 'accel') {
+                let P = labAccelSum(d);
+                if (!P.ok) { labAccelScatter(d, '聚变没成：' + (P.why || '不存在') + '，东西散开了'); return; }
+                d.inv = {}; d.job = null;
+                labSpawn(P.out, d.x + 0.7, d.z); labMade(P.out, 1);
+                labFlash('聚变成功：' + labName(P.out));
+            } else if (d.ty === 'centri') {
+                d.job = null; labDel(d.inv, 'a:92:146', 3);
+                labSpawn('a:92:143', d.x + 0.7, d.z); labSpawn('du', d.x - 0.7, d.z); labSpawn('du', d.x, d.z + 0.7); labMade('a:92:143', 1);
+                labFlash('离心好了：1 个铀-235 + 2 个贫铀');
+            } else if (d.ty === 'reactor') {
+                d.job = null; labFlash('燃料烧完了' + (j.waste > 0.5 ? '，浪费了 ' + Math.round(j.waste) + ' U' : ''));
+            } else if (d.ty === 'airsep') {
+                j.t = 0;
+                let b = lab.ground.filter(function (e) { return e.key === 'bottle' && !e.dead && labD(e, d) <= LAB_T.fillR; }).sort(function (p, q) { return labD(p, d) - labD(q, d); })[0];
+                if (!b) return;
+                let r = (lab.rnd || Math.random)(), out = LAB_AIR[LAB_AIR.length - 1][0];
+                for (let i = 0, acc = 0; i < LAB_AIR.length; i++) { acc += LAB_AIR[i][1]; if (r < acc) { out = LAB_AIR[i][0]; break; } }
+                labKill(b); labSpawn(out, b.x, b.z);
+            }
+            if (lab.panel === 'dev') lab.devPanelSig = '';
+        }
+        // 反应堆往充电口的电池里充电；没有电池、普通电池、满了的部分都浪费
+        function labReactorCharge(d, u) {
+            let j = d.job; if (!(u > 0)) return;
+            if (!d.port || !labIsAbat(d.port)) { j.waste += u; if (!j.warned) { j.warned = 1; labFlash('充电口没接高级电池，电浪费了'); } return; }
+            if (j.pc === undefined) j.pc = labBatCharge(d.port);
+            let put = Math.max(0, Math.min(LAB_ABAT_CAP - j.pc, u)); j.pc += put; d.port = labBatKey(j.pc, true);
+            if (u - put > 1e-9) { j.waste += u - put; if (!j.warned) { j.warned = 1; labFlash('高级电池满了，多的电浪费了'); } }
+        }
+        function labDevStart(id) {
+            let d = lab.dmap[id]; if (!d || d.job) return false;
+            if (d.ty === 'accel') {
+                let P = labAccelSum(d);
+                if (!P.Z && !P.N && !P.e) { labFlash('先放东西进去'); return false; }
+                if (!d.run) { labFlash('加速器没通电'); return false; }
+                if (d.v + 1e-9 < P.need) { labFlash('电压不够，要 ' + labNum(P.need) + ' V'); return false; }
+                d.job = { kind: 'fuse', t: 0, need: P.need };
+            } else if (d.ty === 'centri') {
+                if (labN(d.inv, 'a:92:146') < 3) { labFlash('要 3 个天然铀'); return false; }
+                if (!d.run || d.v + 1e-9 < 6) { labFlash('电压不够，要 6 V'); return false; }
+                d.job = { kind: 'spin', t: 0 };
+            } else if (d.ty === 'reactor') {
+                let fu = Object.keys(d.inv).filter(function (k) { return d.inv[k] > 0; });
+                if (!fu.length) { labFlash('先放燃料'); return false; }
+                if (!d.run) { labFlash('反应堆要接电池才能运行'); return false; }
+                if (d.port && !labIsAbat(d.port)) { labExplode(d.x, d.z); return false; }   // 普通电池接在充电口：一开始烧就炸
+                let tot = 0;
+                fu.forEach(function (k) {
+                    let n = d.inv[k]; tot += labFuelU(k) * n;
+                    if (k === 'coal' || k === 'oil') for (let i = 0; i < n; i++) {   // 烧煤、烧石油：每个耗 1 瓶氧气（变成二氧化碳）；没有氧气瓶就冒一氧化碳
+                        let o = lab.ground.filter(function (e) { return e.key === 'b:o2' && !e.dead && labD(e, d) <= LAB_T.fillR; })[0];
+                        if (o) { labKill(o); labSpawn('b:co2', o.x, o.z); } else { let q = labNear(d.x, d.z, 0.5); labSpawn('g:co', q.x, q.z); }
+                    }
+                });
+                d.inv = {};
+                d.job = { kind: 'burn', t: 0, total: tot, rate: tot / LAB_JOB_T, waste: 0 };
+            } else return false;
+            lab.devSig = ''; lab.devPanelSig = '';
+            if (lab.panel === 'dev') labPanelDev(d);
+            return true;
+        }
+        // 加速器：质子 + 电子 → 中子（dir 'pe'），中子 → 质子 + 电子（dir 'n'）；≥ 1.5 V，不计能量
+        function labAccelConv(id, dir, cnt) {
+            let d = lab.dmap[id]; if (!d || d.ty !== 'accel') return 0;
+            if (d.job) { labFlash('正在聚变'); return 0; }
+            if (!d.run || d.v + 1e-9 < 1.5) { labFlash('电压不够，要 1.5 V'); return 0; }
+            let n = 0; cnt = cnt || 1;
+            for (; n < cnt; n++) {
+                if (dir === 'pe') { if (labN(d.inv, 'p') < 1 || labN(d.inv, 'e') < 1) break; labDel(d.inv, 'p', 1); labDel(d.inv, 'e', 1); labAdd(d.inv, 'n', 1); }
+                else { if (labN(d.inv, 'n') < 1) break; labDel(d.inv, 'n', 1); labAdd(d.inv, 'p', 1); labAdd(d.inv, 'e', 1); }
+            }
+            if (!n) labFlash(dir === 'pe' ? '要质子和电子各 1 个' : '要中子');
+            lab.devPanelSig = ''; if (lab.panel === 'dev') labPanelDev(d);
+            return n;
+        }
+        function labDevPut(id, k, all) {
+            let d = lab.dmap[id]; if (!d) return false;
+            if (d.job) { labFlash('正在运行，等一下'); return false; }
+            if (!labDevAccepts(d, k)) { labFlash(LAB_DEV[d.ty].name + '不收这个'); return false; }
+            let n = all ? labN(lab.bag, k) : Math.min(1, labN(lab.bag, k));
+            if (d.ty === 'reactor') { let used = labTotal(d.inv); n = Math.min(n, LAB_FUEL_SLOTS - used); if (n <= 0) { labFlash('燃料槽满了（8 个）'); return false; } }
+            if (n <= 0) return false;
+            labDel(lab.bag, k, n); labAdd(d.inv, k, n); labSyncSel();
+            lab.devPanelSig = ''; if (lab.panel === 'dev') labPanelDev(d);
+            return true;
+        }
+        function labDevTake(id, k) {
+            let d = lab.dmap[id]; if (!d || d.job) return false;
+            let n = labN(d.inv, k); if (!n) return false;
+            labDel(d.inv, k, n); labBagGive(k, n);
+            lab.devPanelSig = ''; if (lab.panel === 'dev') labPanelDev(d);
+            return true;
+        }
+        // 反应堆的充电口：放一块电池（高级电池才对，普通电池开始烧就炸）；拿回
+        function labDevPort(id, k) {
+            let d = lab.dmap[id]; if (!d || d.ty !== 'reactor') return false;
+            if (d.job) { labFlash('正在烧，等一下'); return false; }
+            if (k === undefined) { if (!d.port) return false; labBagGive(d.port, 1); d.port = null; }
+            else { if (labDevType(k) !== 'bat' || !labN(lab.bag, k)) { labFlash('充电口只接电池'); return false; } if (d.port) labBagGive(d.port, 1); labDel(lab.bag, k, 1); d.port = k; labSyncSel(); }
+            lab.devPanelSig = ''; if (lab.panel === 'dev') labPanelDev(d);
+            return true;
+        }
+        function labPanelDev(d) {
+            if (!d) return;
+            lab.panelDev = d.id;
+            let T = LAB_DEV[d.ty], id = d.id, j = d.job;
+            let inv = Object.keys(d.inv).filter(function (k) { return d.inv[k] > 0; }).map(function (k) { return labItemRow(k, d.inv[k], j ? '' : '<button style="' + LAB_BTN2 + '" onclick="labDevTake(' + id + ',\'' + k + '\')">拿回</button>'); }).join('') || '<div style="color:#888;">里面没有东西</div>';
+            let bag = Object.keys(lab.bag).filter(function (k) { return labDevAccepts(d, k); }).map(function (k) { return labItemRow(k, lab.bag[k], '<button style="' + LAB_BTN2 + '" onclick="labDevPut(' + id + ',\'' + k + '\')">放 1 个</button><button style="' + LAB_BTN2 + '" onclick="labDevPut(' + id + ',\'' + k + '\',true)">全放</button>'); }).join('') || '<div style="color:#888;">身上没有能放进去的</div>';
+            let pw = d.run ? '通电 ' + labNum(d.v) + ' V' : '<span style="color:#c62828;">没通电</span>';
+            let head = '<div style="margin:4px 0;color:#666;">' + (LAB_DEV_DESC[d.ty] || '') + '</div><div>' + pw + (j ? '　<b>运行中 ' + Math.floor(j.t) + '/' + LAB_JOB_T + ' 秒</b>' : '') + '</div>';
+            let act = '';
+            if (d.ty === 'accel') {
+                let P = labAccelSum(d);
+                head += '<div id="lab-accel-pre" style="margin:6px 0;font-size:15px;"><b>Z=' + P.Z + ' N=' + P.N + ' e=' + P.e + ' → ' + (P.out ? labName(P.out) : '不存在') + ' ' + (P.ok ? '✓' : '✗') + '</b>' + (P.Z ? '　要 ' + labNum(P.need) + ' V' : '') + (P.why && P.out ? '（' + P.why + '）' : '') + '</div>';
+                act = '<button id="lab-dev-go" style="' + LAB_BTN2 + '" onclick="labDevStart(' + id + ')">聚变（10 秒）</button><button style="' + LAB_BTN2 + '" onclick="labAccelConv(' + id + ',\'pe\',1)">质子+电子→中子</button><button style="' + LAB_BTN2 + '" onclick="labAccelConv(' + id + ',\'pe\',10)">×10</button><button style="' + LAB_BTN2 + '" onclick="labAccelConv(' + id + ',\'n\',1)">中子→质子+电子</button><button style="' + LAB_BTN2 + '" onclick="labAccelConv(' + id + ',\'n\',10)">×10</button>';
+            } else if (d.ty === 'centri') {
+                act = '<button id="lab-dev-go" style="' + LAB_BTN2 + '" onclick="labDevStart(' + id + ')">离心（3 个天然铀，10 秒）</button>';
+            } else if (d.ty === 'reactor') {
+                head += '<div style="margin:6px 0;color:#c62828;font-weight:bold;">⚠ 充电口只能接高级电池，接普通电池会爆炸</div><div>燃料槽 ' + labTotal(d.inv) + '/' + LAB_FUEL_SLOTS + '　充电口：' + (d.port ? labName(d.port) + ' <button style="' + LAB_BTN2 + '" onclick="labDevPort(' + id + ')">拿回</button>' : '空') + '</div>';
+                let bats = Object.keys(lab.bag).filter(function (k) { return labDevType(k) === 'bat'; }).map(function (k) { return '<button style="' + LAB_BTN2 + '" onclick="labDevPort(' + id + ',\'' + k + '\')">' + labName(k) + ' 接上充电口</button>'; }).join('');
+                act = (bats ? '<div>' + bats + '</div>' : '') + '<button id="lab-dev-go" style="' + LAB_BTN2 + '" onclick="labDevStart(' + id + ')">开始烧（每个 10 秒）</button>';
+                head += '<div style="color:#666;font-size:12px;">每个燃料：铀-235 3000、钚-239 2000、天然铀 600、石油 60、煤 25、贫铀 20、别的会衰变的核素 40 U。烧煤和石油每个要 1 瓶氧气（2 米内），没有就冒一氧化碳。</div>';
+            }
+            lab.devPanelSig = labDevPanelSig(d);
+            labPanelOpen('dev', T.name, head + '<div style="margin-top:6px;"><b>里面</b></div>' + inv + '<div style="margin-top:6px;">' + act + '</div><div style="margin-top:6px;"><b>身上</b></div>' + bag);
+        }
+        function labDevPanelSig(d) { return d.id + '|' + JSON.stringify(d.inv) + '|' + d.port + '|' + (d.job ? Math.floor(d.job.t) : -1) + '|' + d.run + '|' + labNum(d.v) + '|' + JSON.stringify(lab.bag); }
+
         // ── 画出来：设备、光晕、连线都用现成的实例网格，只改矩阵和颜色 ──
         function labDevSync() {
             let R = lab;
@@ -867,7 +1120,8 @@
                 i--;
                 LAB_DUMMY.position.set(d.x, T.y, d.z); LAB_DUMMY.scale.setScalar(R.wirePend === d.id ? 1.25 : 1); LAB_DUMMY.rotation.set(0, 0, 0); LAB_DUMMY.updateMatrix();
                 m.setMatrixAt(i, LAB_DUMMY.matrix);
-                if (d.ty === 'bat') col = d.charge <= 0 ? 0x616161 : LAB_COL.setHSL(0.33 * Math.min(1, d.charge / LAB_ELEC.cap), 0.6, 0.42).getHex();
+                if (d.ty === 'bat') col = d.charge <= 0 ? 0x616161 : d.adv ? LAB_COL.setHSL(0.8, 0.6, 0.25 + 0.3 * Math.min(1, d.charge / LAB_ABAT_CAP)).getHex() : LAB_COL.setHSL(0.33 * Math.min(1, d.charge / LAB_ELEC.cap), 0.6, 0.42).getHex();
+                else if (LAB_DEV[d.ty].job) col = d.work ? 0xffee58 : T.col;
                 else if (d.ty === 'switch') col = d.on ? 0x66bb6a : 0xe53935;
                 else if (d.ty === 'bulb') col = d.run ? 0xffee58 : 0x8d8a6a;
                 else if (d.ty === 'resistor') col = d.run ? 0xff7043 : 0xffcc80;
@@ -896,7 +1150,7 @@
         }
         function labDevInfo(d) {
             let T = LAB_DEV[d.ty];
-            if (d.ty === 'bat') return '电池：剩 ' + Math.ceil(d.charge) + '/' + LAB_ELEC.cap + ' U' + (d.bdraw ? '　耗电 ' + labNum(d.bdraw) + ' U/s' : '');
+            if (d.ty === 'bat') return (d.adv ? '高级电池' : '电池') + '：剩 ' + Math.ceil(d.charge) + '/' + labBatCap(d) + ' U' + (d.bdraw ? '　耗电 ' + labNum(d.bdraw) + ' U/s' : '');
             if (d.ty === 'switch') return '开关：' + (d.on ? '接通' : '断开');
             if (!d.run) return T.name + '：没通电';
             return T.name + (d.ty === 'bulb' ? '：亮着　' : '：') + labNum(d.v) + ' V　耗电 ' + labNum(d.draw) + ' U/s';
@@ -905,9 +1159,10 @@
         function labDevLabels() {
             let R = lab, list = R.devs.slice().sort(function (a, b) { return labD(a, R.p) - labD(b, R.p); }).filter(function (d) { return labD(d, R.p) <= 7; }).slice(0, LAB_DLABEL_MAX).map(function (d) {
                 let T = LAB_DEV[d.ty], l1 = T.name, l2;
-                if (d.ty === 'bat') { l1 = '电池 ' + Math.ceil(d.charge) + '/' + LAB_ELEC.cap + ' U'; l2 = d.bdraw ? '耗电 ' + labNum(d.bdraw) + ' U/s' : (d.charge <= 0 ? '没电了' : '没接通'); }
+                if (d.ty === 'bat') { l1 = (d.adv ? '高级电池 ' : '电池 ') + Math.ceil(d.charge) + '/' + labBatCap(d) + ' U'; l2 = d.bdraw ? '耗电 ' + labNum(d.bdraw) + ' U/s' : (d.charge <= 0 ? '没电了' : '没接通'); }
                 else if (d.ty === 'switch') l2 = d.on ? '接通' : '断开';
                 else l2 = d.run ? labNum(d.v) + ' V　耗电 ' + labNum(d.draw) + ' U/s' : '没通电';
+                if (d.job && d.job.t !== undefined && LAB_DEV[d.ty].job) l2 += '　' + Math.floor(d.job.t) + '/' + LAB_JOB_T + ' 秒';
                 return { x: d.x, z: d.z, l1: l1, l2: l2 };
             });
             labLabelsShow(list, R.dlabels, LAB_DLABEL_MAX, 1.5);
@@ -1103,7 +1358,7 @@
             R.ground.slice().forEach(function (e) { if (Math.hypot(e.x - x, e.z - z) <= LAB_T.boomR) labKill(e); });
             R.devs.slice().forEach(function (d) { if (Math.hypot(d.x - x, d.z - z) <= LAB_T.boomR) labDevRemove(d, false); });   // 设备和接在上面的线也炸没了
             if (Math.hypot(LAB_ST.stove.x - x, LAB_ST.stove.z - z) <= LAB_T.boomR) { R.stove.items = {}; R.stove.cook = null; }
-            if (Math.hypot(R.p.x - x, R.p.z - z) <= LAB_T.boomR) { R.bag = {}; R.sel = null; labHurt(LAB_T.boomDmg); }
+            if (Math.hypot(R.p.x - x, R.p.z - z) <= LAB_T.boomR) { R.bag = {}; R.sel = null; labHurt(LAB_T.boomDmg, '爆炸'); }
             labFxBall(x, z, LAB_T.boomR * 0.6, 0xff9800);
             labFlash('砰！');
         }
@@ -1119,13 +1374,13 @@
                 }
             });
         }
-        // 没装瓶的氯气、二氧化硫：每秒 5 点伤害（气体存在 5 秒）
+        // 没装瓶的氯气、一氧化碳、二氧化硫：停 45 秒，4 米内每秒 8 点伤害
         function labToxic(dt) {
             let hit = false;
             lab.ground.forEach(function (g) {
-                if (labDef(g.key).toxic && Math.hypot(g.x - lab.p.x, g.z - lab.p.z) <= LAB_T.poisonR) hit = true;
+                if (labDef(g.key).toxic && Math.hypot(g.x - lab.p.x, g.z - lab.p.z) <= LAB_T.poisonR) hit = hit || g.key;
             });
-            if (hit) { labHurt(LAB_T.poisonDps * dt); lab.poisonT = 0.4; } else if (lab.poisonT > 0) lab.poisonT -= dt;
+            if (hit) { labHurt(LAB_T.poisonDps * dt, labName(hit).replace(/（.*）|\(.*\)/g, '') + '中毒'); lab.poisonT = 0.4; } else if (lab.poisonT > 0) lab.poisonT -= dt;
         }
 
         // ══════════════ 灶台 ══════════════
@@ -1223,6 +1478,28 @@
             return true;
         }
         function labPick() { return labPickEntity(labNearestItem(LAB_T.pickR)); }
+        // Shift+左键：身边 2.4 米内地上的东西一下全捡起来（气体不算；身上放不下的那种留在地上）
+        function labPickAll() {
+            if (!lab || lab.over || lab.panel) return 0;
+            let got = 0, full = false;
+            lab.ground.slice().sort(function (a, b) { return labD(a, lab.p) - labD(b, lab.p); }).forEach(function (e) {
+                if (e.dead || labDef(e.key).gas || Math.hypot(e.x - lab.p.x, e.z - lab.p.z) > LAB_T.pickR) return;
+                if (!lab.bag[e.key] && Object.keys(lab.bag).length >= LAB_BAG_CAP) { full = true; return; }
+                labKill(e); labAdd(lab.bag, e.key, 1); got++;
+            });
+            labSyncSel(); lab.hudSig = '';
+            labFlash(got ? '捡起来 ' + got + ' 个' + (full ? '，有的身上放不下' : '') : (full ? '身上放不下了' : '附近没有能拿的东西'));
+            return got;
+        }
+        // 背包（B）：身上 6 格一目了然，拿在手上、放下、存进仓库
+        function labPanelBag() {
+            let ks = Object.keys(lab.bag);
+            let rows = ks.map(function (k, i) {
+                return '<div style="border-bottom:1px solid #eee;padding:5px 0;">' + (i < LAB_HOT ? '快捷栏 ' : '背包 ') + (i + 1) + '　<b>' + labName(k) + '</b> ×' + labN(lab.bag, k) + (lab.sel === k ? '　<span style="color:#1565c0;">手上</span>' : '') +
+                    '<br><button style="' + LAB_BTN2 + '" onclick="labSel(\'' + k + '\');labPanelBag()">拿在手上</button><button style="' + LAB_BTN2 + '" onclick="labSel(\'' + k + '\');labPut(true);labPanelBag()">放下</button><button style="' + LAB_BTN2 + '" onclick="labSel(\'' + k + '\');labStoreHeld();labPanelBag()">存进仓库</button></div>';
+            }).join('') || '<div style="color:#888;">身上没有东西</div>';
+            labPanelOpen('bag', '背包', '<div style="margin:4px 0;color:#666;">身上 ' + ks.length + '/' + LAB_BAG_CAP + ' 格（快捷栏 3 + 背包 3）。存进仓库站在哪都行。</div>' + rows);
+        }
         // 在 (x, z) 附近 maxR 米内随机找一个落点（东西落地都就近落在原处，不飞出去）
         function labNear(x, z, maxR) {
             let a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * maxR;
@@ -1236,7 +1513,7 @@
             labSyncSel();
             let k = lab.sel; if (!k || !labN(lab.bag, k)) { labFlash('先选一样东西'); return false; }
             if (labDevType(k)) return labPutDev(k);   // 设备放在面前，一次一个
-            let n = all ? Math.min(labN(lab.bag, k), 30) : 1;
+            let n = all ? Math.min(labN(lab.bag, k), LAB_PUT_ALL) : 1;   // Shift+Q：手上那一堆一次放下（一次最多 100 个）
             if (labIsParticle(k)) { let room = LAB_PARTICLE_CAP - labParticleCount(); if (room <= 0) return labFull(); n = Math.min(n, room); }
             labDel(lab.bag, k, n);
             for (let i = 0; i < n; i++) {
@@ -1246,6 +1523,26 @@
                 labSpawn(k, lab.p.x + Math.cos(ang) * r, lab.p.z + Math.sin(ang) * r);
             }
             labSyncSel();
+            return true;
+        }
+        const LAB_PUT_ALL = 100;
+        // Ctrl+Q：手上那一堆瞬间存进仓库箱，站在哪都行
+        function labStoreHeld() {
+            if (!lab || lab.over) return false;
+            labSyncSel();
+            let k = lab.sel, n = labN(lab.bag, k); if (!k || !n) { labFlash('先选一样东西'); return false; }
+            if (!labBoxAdd(k, n)) { labFlash('仓库箱满了'); return false; }
+            labDel(lab.bag, k, n); labSyncSel(); lab.hudSig = '';
+            if (lab.panel === 'box') labPanelBox();
+            labFlash('存进仓库：' + labName(k) + ' ×' + n);
+            return true;
+        }
+        // 垃圾桶：手上那一堆扔进去就没了
+        function labTrash() {
+            labSyncSel();
+            let k = lab.sel, n = labN(lab.bag, k); if (!k || !n) { labFlash('先选要扔的东西'); return false; }
+            labDel(lab.bag, k, n); labSyncSel(); lab.hudSig = '';
+            labFlash('扔掉了：' + labName(k) + ' ×' + n);
             return true;
         }
         let labDrop = labPut;   // 老名字，测试和旧代码还在用
@@ -1282,6 +1579,7 @@
                 labDel(lab.bag, k, 1); lab.speedT = 30; labBagGive('bottle', 1); labFlash('喝了加速药剂，30 秒内跑得更快');
             } else if (k === 'pot:dmg') {
                 labDel(lab.bag, k, 1); lab.dmgT = 30; labBagGive('bottle', 1); labFlash('喝了伤害药剂，30 秒内伤害 ×1.5');
+            } else if (k === 'bomb') { labFlash('实验室里不能引爆'); return false;
             } else if (k === 'pot:spring') {
                 labDel(lab.bag, k, 1); lab.springT = 30; labFlash('穿上了弹簧鞋，30 秒内跳得更高');
             } else { labFlash('这个不能直接用'); return false; }
@@ -1294,7 +1592,7 @@
             labDel(lab.bag, 'pot:dmg', 1); labBagGive('bottle', 1); labSyncSel();
             let tx = lab.p.x + lab.face.x * 5, tz = lab.p.z + lab.face.z * 5;
             labFxBall(tx, tz, 1.6, 0x8e24aa);
-            if (Math.hypot(lab.p.x - tx, lab.p.z - tz) <= 3) labHurt(50);
+            if (Math.hypot(lab.p.x - tx, lab.p.z - tz) <= 3) labHurt(50, '自己扔的伤害药剂');
             labFlash('扔出去了'); labSyncSel();
             return true;
         }
@@ -1305,6 +1603,7 @@
         }
         function labInteractWith(st) {
             if (!st) { labFlash('附近没有能用的台子'); return false; }
+            if (st === 'trash') return labTrash();
             if (st === 'stove') labPanelStove(); else if (st === 'craft') labPanelCraft(); else if (st === 'orders') labPanelOrders(); else if (st === 'table') labPanelTable(); else labPanelBox();
             return true;
         }
@@ -1363,7 +1662,7 @@
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,640px);text-align:center;pointer-events:auto;">' +
                 '<div id="lab-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:15px;"></div>' +
                 '<div style="margin-top:2px;"><button id="lab-btn-act" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'L\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'L\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">动作</button><button id="lab-btn-put" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'Q\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'Q\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">放下 (Q)</button>' +
-                '<button id="lab-btn-rc" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'R\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'R\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">拆包/接水</button><button style="' + LAB_BTN + '" onclick="labThrow()">扔药 (T)</button><button style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHold(\'jump\',true)" ontouchend="labHold(\'jump\',false)" onmousedown="labHold(\'jump\',true)" onmouseup="labHold(\'jump\',false)">跳</button></div></div>' +
+                '<button id="lab-btn-rc" style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHoldStart(\'R\')" ontouchend="labHoldStop()" ontouchcancel="labHoldStop()" onmousedown="labHoldStart(\'R\')" onmouseup="labHoldStop()" onmouseleave="labHoldStop()">拆包/接水</button><button style="' + LAB_BTN + '" onclick="labThrow()">扔药 (T)</button><button id="lab-btn-store" style="' + LAB_BTN + '" onclick="labStoreHeld()">存仓库 (Ctrl+Q)</button><button id="lab-btn-bag" style="' + LAB_BTN + '" onclick="labPanelBag()">背包 (B)</button><button id="lab-btn-pickall" style="' + LAB_BTN + '" onclick="labPickAll()">全捡</button><button style="' + LAB_BTN + '" ontouchstart="event.preventDefault();labHold(\'jump\',true)" ontouchend="labHold(\'jump\',false)" onmousedown="labHold(\'jump\',true)" onmouseup="labHold(\'jump\',false)">跳</button></div></div>' +
                 '';   // 走路用屏幕上通用的摇杆（左半屏拖动），转视角拖右半屏——和主游戏一样
             document.body.appendChild(d);
         }
@@ -1389,7 +1688,7 @@
             else if (aim.dev) hint = labDevInfo(aim.dev) + '<br><small>' + (aim.dev.ty === 'switch' ? '左键：开关　' : (wh ? '左键：接线　' : '')) + '右键：收起</small>';
             else if (aim.wire) hint = '电线<br><small>' + (wh ? '左键：拆掉' : '拿着电线，左键：拆掉') + '</small>';
             else if (aim.item) { let ds = labDesc(aim.item.key); hint = labName(aim.item.key) + (ds ? '：' + ds : '') + '<br><small>左键：拿</small>'; }
-            else if (aim.station) hint = LAB_ST[aim.station].name + '：' + LAB_ST_DESC[aim.station] + '<br><small>左键：打开</small>';
+            else if (aim.station) hint = LAB_ST[aim.station].name + '：' + LAB_ST_DESC[aim.station] + '<br><small>' + (aim.station === 'trash' ? '左键：扔掉手上的' : '左键：打开') + '</small>';
             else if (Math.hypot(R.p.x - LAB_POOL.x, R.p.z - LAB_POOL.z) <= LAB_POOL.r + 1.6) hint = '水池<br><small>选中空玻璃瓶，右键：接水</small>';
             let hEl = document.getElementById('lab-hint');
             if (hEl && hEl.getAttribute('data-s') !== hint) { hEl.innerHTML = hint; hEl.setAttribute('data-s', hint); hEl.style.display = hint ? '' : 'none'; }   // 内容没变就不碰 DOM
@@ -1450,11 +1749,12 @@
         }
         function labPanelOrders() {
             let L = labSt(); labOrdersFill();
-            let rows = L.orders.map(function (o) {
-                let got = Math.min(o.n, (L.made[o.k] || 0) - o.base);
-                return '<div style="border-bottom:1px solid #eee;padding:6px 0;"><b>' + labName(o.k) + (o.n > 1 ? ' ×' + o.n : '') + '</b>　进度 ' + got + '/' + o.n + '　奖励 ' + labOrderReward(o.k) + '</div>';
+            let rows = L.orders.map(function (o, i) {
+                let have = labOrderHave(o.k), ok = have >= o.n;
+                return '<div style="border-bottom:1px solid #eee;padding:6px 0;"><b>' + labName(o.k) + (o.n > 1 ? ' ×' + o.n : '') + '</b>　<span style="color:' + (ok ? '#2e7d32' : '#c62828') + ';">有 ' + have + '/' + o.n + '</span>　奖励 ' + labOrderReward(o.k) +
+                    ' <button id="lab-order-' + i + '" style="' + LAB_BTN2 + (ok ? '' : 'opacity:.4;') + '" onclick="labOrderDeliver(' + i + ')">交</button></div>';
             }).join('');
-            labPanelOpen('orders', '订单板', '<div style="margin:4px 0;color:#666;">没有时限。订单出现之后，你做出来的才算数；做出来就算完成，东西不扣。</div>' + rows);
+            labPanelOpen('orders', '订单板', '<div style="margin:4px 0;color:#666;">没有时限。点"交"把东西交上去（先扣身上的，不够再扣仓库箱的），给价值的 20%。</div>' + rows);
         }
         function labBoxTake(k, all) {
             let L = labSt(), n = all ? labN(L.box, k) : 1;
@@ -1505,7 +1805,7 @@
         }
         function labBookPage(tab) {
             if (tab === 'list') {
-                let rows = LAB_RECIPES.filter(function (r) { return r.id !== 'boom1'; }).filter(function (r) {
+                let rows = labActive().filter(function (r) {
                     return !LAB_UI.only || Object.keys(r.in).every(function (k) { return labHave(k) >= r.in[k]; });
                 }).map(function (r) {
                     let ins = Object.keys(r.in).map(function (k) { let h = labHave(k), ok = h >= r.in[k]; return '<span class="lab-have" style="color:' + (ok ? '#2e7d32' : '#c62828') + ';">' + labName(k) + ' 现有 ' + h + ' / 需要 ' + r.in[k] + '</span>'; }).join('　');
@@ -1524,9 +1824,9 @@
                 return '<div style="color:#888;margin-bottom:4px;">质子数 1～26 的核素，地上的粒子会按质子数、中子数、电子数自动拼成它们。红字的会衰变。数据待核对。</div>' + rows;
             }
             if (tab === 'react') {
-                return LAB_RECIPES.filter(function (r) { return r.where !== '合成台'; }).map(function (r) {
+                return labActive().filter(function (r) { return r.where !== '合成台'; }).map(function (r) {
                     return '<div style="border-bottom:1px solid #eee;padding:5px 0;"><b>' + r.name + '</b> <span style="color:#888;font-size:11px;">' + r.where + '</span><br>' + labRecipeLine(r) + (r.note ? '<br><span style="color:#666;">' + r.note + '</span>' : '') + '</div>';
-                }).join('') + '<div style="margin-top:6px;color:#666;">气体必须装瓶：空玻璃瓶在 2 米内会自动装；没装进瓶的气体 10 秒后飘走。氯气、二氧化硫没装瓶有毒（每秒 5 点伤害，5 秒）。爆炸 3 米、40 点伤害，会毁掉范围内所有东西，仓库箱除外。</div>';
+                }).join('') + '<div style="margin-top:6px;color:#666;">气体必须装瓶：空玻璃瓶在 2 米内会自动装；没装进瓶的气体 10 秒后飘走。两个同样的原子碰到一起会自己变成分子（氢气、氧气、氯气）。氯气、一氧化碳、二氧化硫没装瓶有毒：停 45 秒，靠近每秒掉 8 血。爆炸 3 米、40 点伤害，会毁掉范围内所有东西，仓库箱除外。</div>';
             }
             if (tab === 'device') {
                 return LAB_RECIPES.filter(function (r) { return r.kind === 'device'; }).map(function (r) {
@@ -1544,7 +1844,7 @@
             }
             if (tab === 'order') {
                 let L = labSt();
-                return '<div style="color:#666;margin-bottom:6px;">订单板同时 3 张，没有时限，完成立刻补新的。订单出现之后你做出来的才算，做出来就算完成，东西不扣。奖励是东西价值的 10%（没标价的给 100）。</div>' +
+                return '<div style="color:#666;margin-bottom:6px;">订单板同时 3 张，没有时限。到订单板点“交”把东西交上去（先扣身上的，不够再扣仓库箱的），交完立刻补新的。奖励是东西价值的 20%（没标价的给 100）。</div>' +
                     '<div><b>现在的订单</b></div>' + (L.orders.map(function (o) { return '<div>' + labName(o.k) + (o.n > 1 ? ' ×' + o.n : '') + '　奖励 ' + labOrderReward(o.k) + '</div>'; }).join('') || '<div style="color:#888;">还没有（进一次实验室就有了）</div>') +
                     '<div style="margin-top:6px;"><b>可能出现的题目</b></div>' + LAB_ORDER_POOL.map(function (c) { return '<div>' + labItemTag(c[0]) + (c[1] > 1 ? ' ×' + c[1] : '') + '</div>'; }).join('');
             }
