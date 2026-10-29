@@ -5032,7 +5032,9 @@ async function enterExit(tab, key) {
                 await T.eval(`(function(){ indStoveTakeAll(); indPanelClose(); indBagAdd('sand', 2); indStovePut('sand', 1); indStovePut('sand', 1); indStovePut('ash', 1); indPanelClose(); indAdvance(25); })(); true;`);
                 if ((await T.eval(`ind.base.stove.out.glass_plate || 0`)) !== 1) bad.push('沙子 + 草木灰烧不出玻璃板 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 await T.eval(`(function(){ indStoveTakeAll(); indPanelClose(); indStovePut('glass_plate', 1); indPanelClose(); indAdvance(12); })(); true;`);
-                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('做不出玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 0) bad.push('炉子不该再烧玻璃瓶（瓶子在工作台用板做） ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`ind.bag = {}; indBagAdd('glass_plate', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'bottle'; })); true;`);
+                if (!(await T.eval(`ind.bag.bottle === 2 && !ind.bag.glass_plate`))) bad.push('工作台 1 玻璃板做不出 2 个玻璃瓶 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 await T.eval(`indStoveTakeAll(); indPanelClose(); true;`);
                 const place = (k, x, z) => T.eval(`(function(){ indBagAdd('${k}', 1); indTeleport(${x}, ${z}); indLookAt(${x}, ${z} - 5); indSelect('${k}'); indUse(); return ind.base.devs[ind.base.devs.length - 1].id; })()`);
                 const click = (id, k) => T.eval(`(function(){ let d = indDev(${id}); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); if ('${k}') indSelect('${k}'); indAction(); indPanelClose(); return true; })()`);
@@ -5131,8 +5133,9 @@ async function enterExit(tab, key) {
                 r = JSON.parse(await eat('pickle', 34));
                 if (r.f !== 65 || r.bag.bottle !== 1 || r.bag.pickle || !near(r.t, 34)) bad.push('吃腌萝卜不对 ' + JSON.stringify(r));
                 // 悠闲世界：沙子 + 草木灰 1000°C 出玻璃瓶，腌萝卜也做得了，汤也加体温
-                await T.eval(`ind.base.rule = 'casual'; ind.base.stove = { items: { sand: 2, ash: 1 }, out: {}, fuel: 500, fire: 3, temp: 1200, cook: null }; indAdvance(25); ind.base.stove.items = { glass_plate: 1 }; indAdvance(12); true;`);
-                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('悠闲做不出玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`ind.base.rule = 'casual'; ind.base.stove = { items: { sand: 2, ash: 1 }, out: {}, fuel: 500, fire: 3, temp: 1200, cook: null }; indAdvance(25); true;`);
+                await T.eval(`ind.bag = {}; indBagAdd('glass_plate', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'bottle'; })); true;`);
+                if (!(await T.eval(`ind.bag.bottle === 2`))) bad.push('悠闲做不出玻璃瓶 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 await T.eval(`ind.bag = {}; indBagAdd('radish', 2); indBagAdd('salt', 1); indBagAdd('bottle', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pickle'; })); true;`);
                 if ((await T.eval(`ind.bag.pickle || 0`)) !== 1) bad.push('悠闲做不出腌萝卜');
                 await cook({ cabbage: 1, radish: 1, water_boiled: 1 }, 26);
@@ -6031,7 +6034,10 @@ async function enterExit(tab, key) {
                 await stoveSet({ sand: 2, ash: 1 }, 2, 600); await T.eval(`indAdvance(40); true;`);
                 if (await T.eval(`!!ind.base.stove.out.glass_plate`)) bad.push('600°C 也烧出玻璃板');
                 await stoveSet({ glass_plate: 1 }, 2, 600); await T.eval(`indAdvance(11); true;`);
-                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 2) bad.push('1 块玻璃板烧出 2 个玻璃瓶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                if ((await T.eval(`ind.base.stove.out.bottle || 0`)) !== 0 || (await T.eval(`ind.base.stove.items.glass_plate`)) !== 1) bad.push('炉子不烧玻璃板，玻璃板留在炉子里 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`indSetRule('hard'); ind.bag = {}; indBagAdd('glass_plate', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'bottle'; })); true;`);
+                if (!(await T.eval(`ind.bag.bottle === 2 && !ind.bag.glass_plate`))) bad.push('硬核：工作台 1 玻璃板做 2 个玻璃瓶 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if (!(await T.eval(`indCraftShow(IND_CRAFT.filter(function (r) { return r.out === 'bottle'; })[0])`))) bad.push('玻璃瓶配方在工作台里看不到');
                 // 3 沙子 1700°C（电炉）只给硬核
                 await T.eval(`window.__oldBoost = indElecBoost; indElecBoost = function () { return true; }; true;`);
                 await stoveSet({ sand: 3 }, 3, 1800); await T.eval(`indAdvance(31); true;`);

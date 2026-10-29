@@ -311,7 +311,8 @@
             { out: 'bucket_fe', in: { ingot_fe: 2 }, hard: true }, { out: 'bucket_cu', in: { brass: 2 }, hard: true },
             { out: 'cyl', in: { steel: 2, brass: 1 }, hard: true }, { out: 'dev_comp', in: { steel: 3, ingot_cu: 2, wire: 2, brass: 1 }, hard: true },
             { out: 'dev_press', in: { steel: 4, wire: 2 }, hard: true }, { out: 'pick_diamond', in: { diamond: 2, steel: 2, wood: 1 }, hard: true },
-            { out: 'house_hut', in: { wood: 60 } }, { out: 'house_brick', in: { brick: 40, wood: 10 } }, { out: 'house_big', in: { brick: 90, wood: 20 } }
+            { out: 'house_hut', in: { wood: 60 } }, { out: 'house_brick', in: { brick: 40, wood: 10 } }, { out: 'house_big', in: { brick: 90, wood: 20 } },
+            { out: 'bottle', n: 2, in: { glass_plate: 1 } }
         ];
         // 房子：放在基地里，四面墙 + 屋顶 + 一扇门；w×d 是门朝南（+z）时的宽和深，warm 是屋里比外面高几度
         const IND_HOUSE = {
@@ -372,7 +373,6 @@
             // 玻璃：草木灰当助熔剂（钾碱），1000°C（悠闲也能做，腌萝卜要用瓶子）；只有沙子要 1700°C（电炉）
             { in: { sand: 2, ash: 1 }, out: { glass_plate: 1 }, minT: 1000, time: 20, cls: 'bulk' },
             { in: { sand: 3 }, out: { glass_plate: 1 }, minT: 1700, time: 30, hard: true, cls: 'bulk' },
-            { in: { glass_plate: 1 }, out: { bottle: 2 }, minT: 600, time: 10, cls: 'bulk' },
             // 压力：木炭在氧气里烧成二氧化碳
             { in: { charcoal: 1, b_o2: 1 }, out: { b_co2: 1 }, minT: 400, time: 10, hard: true, cls: 'bulk' }
         ];
