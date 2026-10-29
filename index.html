@@ -948,6 +948,24 @@
     <canvas id="gameCanvas"></canvas>
     <div id="time-stop-overlay"></div>
 
+    <!-- 记录榜弹层放在最外层：以前放在仓库界面（#screen-garage）里面，在大厅里它是 display:none 的子元素，点「记录榜」什么都看不到 -->
+    <div id="race-board" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);
+             z-index:60; display:flex; align-items:center; justify-content:center;">
+            <div style="background:#fff; border-radius:10px; padding:16px; width:min(92vw,420px); text-align:left;">
+                <h2 style="margin:0 0 4px; color:#00897b;">竞速·记录榜</h2>
+                <div id="race-board-body"></div>
+                <button onclick="raceBoardClose()" style="width:100%; margin-top:12px; background:#888; color:#fff; border:none;">关闭</button>
+            </div>
+        </div>
+    <div id="tower-board" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);
+             z-index:60; display:flex; align-items:center; justify-content:center;">
+            <div style="background:#fff; border-radius:10px; padding:16px; width:min(92vw,420px); text-align:left;">
+                <h2 style="margin:0 0 4px; color:#4527a0;">爬塔·今日最高</h2>
+                <div id="tower-board-body"></div>
+                <button onclick="towerBoardClose()" style="width:100%; margin-top:12px; background:#888; color:#fff; border:none;">关闭</button>
+            </div>
+        </div>
+
     <div id="sys-modal" class="hidden">
         <div class="sys-modal-box">
             <h3 id="sys-modal-title" style="margin-top:0;">提示</h3>
@@ -1095,6 +1113,19 @@
             <div style="display:flex; gap:6px;">
                 <button onclick="raceStartGo()" style="flex:1; margin:0; background:#00897b; color:#fff; border:none; padding:10px 0; font-size:15px;">开跑</button>
                 <button onclick="raceDuoStart()" style="flex:1; margin:0; background:#00695c; color:#fff; border:none; padding:10px 0; font-size:15px;">双人</button>
+            </div>
+            <div style="font-size:12px; color:#00695c; font-weight:bold; margin-top:10px; border-top:1px solid #80cbc4; padding-top:8px;">固定地图 · 单人（每张一个记录榜）</div>
+            <div id="race-maps" style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-top:6px;">
+                <button onclick="raceMapStart(0)" style="margin:0; background:#b2dfdb; color:#004d40; border:none; padding:7px 0; font-size:12px;">1 新手草坪</button>
+                <button onclick="raceMapStart(1)" style="margin:0; background:#b2dfdb; color:#004d40; border:none; padding:7px 0; font-size:12px;">2 老宅走廊</button>
+                <button onclick="raceMapStart(2)" style="margin:0; background:#b2dfdb; color:#004d40; border:none; padding:7px 0; font-size:12px;">3 地窖迷宫</button>
+                <button onclick="raceMapStart(3)" style="margin:0; background:#b2dfdb; color:#004d40; border:none; padding:7px 0; font-size:12px;">4 雾中墓园</button>
+                <button onclick="raceMapStart(4)" style="margin:0; background:#b2dfdb; color:#004d40; border:none; padding:7px 0; font-size:12px;">5 废弃工厂</button>
+                <button onclick="raceMapStart(5)" style="margin:0; background:#b2dfdb; color:#004d40; border:none; padding:7px 0; font-size:12px;">6 钟楼</button>
+                <button onclick="raceMapStart(6)" style="margin:0; background:#b2dfdb; color:#004d40; border:none; padding:7px 0; font-size:12px;">7 花园迷阵</button>
+                <button onclick="raceMapStart(7)" style="margin:0; background:#b2dfdb; color:#004d40; border:none; padding:7px 0; font-size:12px;">8 河湾</button>
+                <button onclick="raceMapStart(8)" style="margin:0; background:#b2dfdb; color:#004d40; border:none; padding:7px 0; font-size:12px;">9 山顶</button>
+                <button onclick="raceMapStart(9)" style="margin:0; background:#b2dfdb; color:#004d40; border:none; padding:7px 0; font-size:12px;">10 终局大厅</button>
             </div>
             <button onclick="raceBoardOpen(1)" style="width:100%; margin:6px 0 0; background:#455a64; color:#fff; border:none; padding:8px 0; font-size:13px;">记录榜</button>
             <button id="race-testcard-btn" onclick="raceTestPickCard()" style="width:100%; margin:6px 0 0; background:#eceff1; color:#607d8b; border:1px solid #cfd8dc; padding:7px 0; font-size:12px;">测试：自选牌（随机）</button>
@@ -1285,22 +1316,6 @@
         <button onclick="bookOpen()" style="background:#5e35b1; color:#fff; border:none;">图鉴</button>
         <button onclick="tidyAll()" style="background:#607d8b; color:#fff; border:none;">一键整理</button>
         <button id="start-game-btn" onclick="requestEnterMap()">开始游戏</button>
-        <div id="race-board" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);
-             z-index:60; display:flex; align-items:center; justify-content:center;">
-            <div style="background:#fff; border-radius:10px; padding:16px; width:min(92vw,420px); text-align:left;">
-                <h2 style="margin:0 0 4px; color:#00897b;">竞速·记录榜</h2>
-                <div id="race-board-body"></div>
-                <button onclick="raceBoardClose()" style="width:100%; margin-top:12px; background:#888; color:#fff; border:none;">关闭</button>
-            </div>
-        </div>
-        <div id="tower-board" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);
-             z-index:60; display:flex; align-items:center; justify-content:center;">
-            <div style="background:#fff; border-radius:10px; padding:16px; width:min(92vw,420px); text-align:left;">
-                <h2 style="margin:0 0 4px; color:#4527a0;">爬塔·今日最高</h2>
-                <div id="tower-board-body"></div>
-                <button onclick="towerBoardClose()" style="width:100%; margin-top:12px; background:#888; color:#fff; border:none;">关闭</button>
-            </div>
-        </div>
         <div id="book-modal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55);
              z-index:60; display:flex; align-items:center; justify-content:center;">
             <div style="background:#fff; border-radius:10px; padding:16px; width:min(92vw,430px);
