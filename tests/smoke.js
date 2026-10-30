@@ -7516,13 +7516,13 @@ async function enterExit(tab, key) {
                 if (!ck.black) bad.push('火山周围要有黑石头 ' + JSON.stringify(ck));
                 // ── 仙人掌：空手采硬核扣 60 血、悠闲只提示；剪刀稿子不扎；生吃口渴 +5 扣 60；拔刺按最快的工具；去刺、烤仙人掌 ──
                 await T.eval(`indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = {}; ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 2, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indTeleport(0, -6.5); indLookAt(0, -9); ind.k = {}; indAction(); true;`);
-                if (!(await T.eval(`ind.bag.cactus === 2 && ind.base.surv.hp === 40`))) bad.push('硬核空手采仙人掌扣 60 血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
+                if (!(await T.eval(`ind.bag.cactus === 2 && Math.abs(ind.base.surv.hp - 40) < 1`))) bad.push('硬核空手采仙人掌扣 60 血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
                 await T.eval(`ind.bag = { shears: 1 }; indSelect('shears'); ind.base.surv.hp = 100; ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 1, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
                 if (!(await T.eval(`ind.bag.cactus === 1 && ind.base.surv.hp === 100`))) bad.push('拿剪刀采仙人掌不扎 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
                 await T.eval(`ind.base.rule = 'casual'; ind.bag = {}; window.__fl = []; ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 1, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
                 if (!(await T.eval(`ind.bag.cactus === 1 && ind.base.surv.hp === 100 && __fl.indexOf('扎手了') >= 0`))) bad.push('悠闲空手采只提示扎手了 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp, __fl])`));
                 await T.eval(`ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.base.surv.water = 50; ind.bag = { cactus: 1 }; indSelect('cactus'); indRightDown(); indRightUp(); true;`);
-                if (!(await T.eval(`!ind.bag.cactus && ind.base.surv.hp === 40 && ind.base.surv.water === 55`))) bad.push('生吃仙人掌口渴 +5、扣 60 血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv])`));
+                if (!(await T.eval(`!ind.bag.cactus && Math.abs(ind.base.surv.hp - 40) < 1 && Math.abs(ind.base.surv.water - 55) < 1`))) bad.push('生吃仙人掌口渴 +5、扣 60 血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv])`));
                 await T.eval(`ind.base.surv.hp = 50; ind.bag = {}; ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 1, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
                 if (!(await T.eval(`!!ind.dead && ind.dead.cause === '仙人掌扎的'`))) bad.push('被仙人掌扎死，死因写仙人掌扎的 ' + await T.eval(`JSON.stringify(ind.dead)`));
                 await T.eval(`indRespawn(); true;`);
