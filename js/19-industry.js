@@ -2569,9 +2569,10 @@
         function indStovePut(k, n) {
             if (!ind || !ind.bag[k]) return;
             if (k === 'gunpowder') { nkPowderInCooker(indCookCur()); return; }   // 火药放进炉子就炸
-            if (indHard()) { let cc0 = indContOf(k); if (cc0 && (cc0.empty || cc0.base === 'oil')) { indFlash(cc0.base === 'oil' ? '得用进料漏斗' : '空桶不用放进炉子'); return; } }   // 硬核：油桶和空桶不能直接放进炉子
             let S = indCookCur().C, kc = indContOf(k);
+            if (indHard() && kc && kc.base === 'oil') { indFlash('得用进料漏斗'); return; }   // 硬核：油桶不能直接放进炉子
             if (kc && kc.mat === 'wood') { indFlash('木桶不能上火'); return; }
+            if (indHard() && kc && kc.empty) { indFlash('空桶不用放进炉子'); return; }   // 装水、牛奶、汤的桶做菜还要放，不拦   // 硬核：油桶和空桶不能直接放进炉子（装水、牛奶、汤的桶做菜还要放，不拦）
             if (!S.items[k] && Object.keys(S.items).length >= IND_STOVE_CAP) { indFlash('放不下了'); return; }
             let t = indBagDel(k, n || 1); S.items[k] = (S.items[k] || 0) + t;
             indSave(); indPanelStove();
