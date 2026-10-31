@@ -8575,16 +8575,16 @@ async function enterExit(tab, key) {
                 const setStove = (fuel, fire, items) => T.eval(`(function(){ let S = ind.base.stove; S.items = ${JSON.stringify(items)}; S.out = {}; S.fuel = ${fuel}; S.fire = ${fire}; S.temp = 20; S.cook = null; S.spout = []; S.ashT = 0; let s = ind.base.surv; s.food = 80; s.water = 80; s.hp = 100; s.temp = 37; ind.base.crops = []; ind.base.fires = []; ind.base.away = null; return true; })()`);
                 // ── 1 放木头和锡矿，出门，远征里家里不动 ──
                 await setStove(2000, 2, { ore_sn: 3 });
-                await T.eval(`indGoTrip(2024); true;`);
+                const st0 = await J(`(function(){ indGoTrip(2024); let S = ind.base.stove; return [S.fuel, S.temp]; })()`);   // 放好到出门之间基地里会走几帧，按出门那一刻的数比
                 const a0 = await J(`[ind.base.away, ind.base.clock]`);
                 if (!(typeof a0[0] === 'number' && Math.abs(a0[0] - a0[1]) < 0.5)) bad.push('出门该记下时刻 ' + JSON.stringify(a0));
                 await T.eval(`indAdvance(5); true;`);
-                if (!(await T.eval(`ind.base.stove.fuel === 2000 && ind.base.stove.temp === 20`))) bad.push('远征里家里的灶台不该在这儿跑（回家补算） ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                if (!(await T.eval(`ind.base.stove.fuel === ${st0[0]} && ind.base.stove.temp === ${st0[1]}`))) bad.push('远征里家里的灶台不该在这儿跑（回家补算） ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 // 模拟离开 10 分钟
                 const sv0 = await J(`[ind.base.surv.food, ind.base.surv.water]`);
                 const r1 = await J(`(function(){ ind.base.away = ind.base.clock - 600; let c = ind.base.clock, t0 = performance.now(); indGoBase(true); let S = ind.base.stove; return { ms: performance.now() - t0, fuel: S.fuel, temp: S.temp, ore: S.items.ore_sn || 0, sn: (S.out.hot_sn || 0) + (S.out.ingot_sn || 0) + S.spout.length + Object.keys(S.out).filter(function (k) { return /sn/.test(k); }).length, out: S.out, sp: S.spout.length, away: ind.base.away, clock: ind.base.clock, c: c }; })()`);
                 const sv1 = await J(`[ind.base.surv.food, ind.base.surv.water]`);
-                if (!(r1.fuel < 2000 - 100 && r1.fuel > 0 && r1.ore === 0 && r1.temp > 500 && (r1.out.hot_sn || 0) + (r1.out.ingot_sn || 0) + r1.sp === 3)) bad.push('离开 10 分钟：燃料该少、锡矿炼成、炉子热着 ' + JSON.stringify(r1));
+                if (!(r1.fuel < st0[0] - 100 && r1.fuel > 0 && r1.ore === 0 && r1.temp > 500 && (r1.out.hot_sn || 0) + (r1.out.ingot_sn || 0) + r1.sp === 3)) bad.push('离开 10 分钟：燃料该少、锡矿炼成、炉子热着 ' + JSON.stringify(r1));
                 if (!(r1.away === null && Math.abs(r1.clock - r1.c) < 0.01)) bad.push('补完时钟回到现在、离开时刻清掉 ' + JSON.stringify(r1));
                 if (JSON.stringify(sv0) !== JSON.stringify(sv1)) bad.push('身上的饱食口渴不跟着补算 ' + JSON.stringify([sv0, sv1]));
                 if (!(r1.ms < 1000)) bad.push('补算 10 分钟太慢 ' + r1.ms + ' 毫秒');
