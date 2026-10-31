@@ -3065,6 +3065,36 @@ async function enterExit(tab, key) {
             report('BS6 头目皇冠：仓库里镶 6 颗（钻石 2 颗）、不能卖、能戴、名字牌画皇冠、存档和联机心跳带着', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('SG1')) {
+            // SG1 信号接收器的蓝线（huntRouteFind，不限楼层）：4 种图 + 化学寻宝队各 120 个种子，从出生点到每个宝箱、到接收器自己生成的东西，每次都找得到路；
+            // 找路用的就是游戏自己的走路图（huntRouteNbrs：含楼梯、桌子）。小地图绿线是"只在这一层"找（floor 参数），目标在同一层但要绕别的楼层才到的格子它找不到，
+            // 这是设计，所以这里也证明一下：限楼层的找法确实会有找不到的（说明这条检查能抓得到找不到的情况）
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} gState.mapDifficulty = 'easy'; selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+            if (!(await until(T, `isPlaying`, 30000))) bad.push('寻宝队没开起来');
+            await T.eval(`${HIDE} true;`);
+            let floorOnlyMiss = 0;
+            for (const kind of ['easy', 'med', 'hard', 'map4', 'chem']) {
+                const r = JSON.parse(await T.eval(`(function(){ let bad = [], seed0 = gameSeed, d0 = gState.mapDifficulty, nChest = 0, nSig = 0, miss = 0, isChem = ${kind === 'chem'};
+                    gState.mapDifficulty = isChem ? 'easy' : '${kind}'; gState.chemHunt = isChem;
+                    for (let s = 1; s <= 120; s++) { gameSeed = s * 104729 % 233280 || 1; buildProceduralMaze(); camera.position.set(TILE, 9, TILE);
+                        let from = huntPlayerNode();
+                        chests.forEach(function (c) { nChest++; let to = { f: Math.floor(c.position.y / TILE), x: Math.floor((c.position.x + TILE / 2) / TILE), z: Math.floor((c.position.z + TILE / 2) / TILE) };
+                            if (!huntRouteFind(from, to)) bad.push('chest ' + gameSeed + ' ' + JSON.stringify(to)); else if (!huntRouteFind(from, to, from.f) && to.f === from.f) miss++; });
+                        gState.signal = { active: true, timer: 2, mesh: null }; tickSignal(0); nSig++;
+                        if (!huntSignalRoute.ok) bad.push('signal ' + gameSeed); signalRouteClear();
+                        if (isChem && chem && chem.light) { camera.remove(chem.light); chem.light = null; } }
+                    gameSeed = seed0; gState.mapDifficulty = d0; gState.chemHunt = false; return JSON.stringify({ chests: nChest, sig: nSig, n: bad.length, first: bad.slice(0, 5), miss: miss }); })()`));
+                if (r.n || r.chests < 400 || r.sig !== 120) bad.push(kind + ' 找不到路 ' + JSON.stringify(r));
+                floorOnlyMiss += r.miss;
+            }
+            if (floorOnlyMiss === 0) bad.push('限楼层的找法一次都没找不到过，这条检查可能没有抓找不到的能力');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('SG1 信号接收器蓝线：4 种图和化学寻宝队各 120 个种子，出生点到每个宝箱、到接收器生成的东西都找得到路（不限楼层）', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('K1')) {
             // K1 合成倒计时：材料凑齐后等 3 秒再合成（合出大金的 5 秒），中间显示倒计时，材料被拿走就取消、放回去重新数
             const bad = [];
