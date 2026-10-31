@@ -268,7 +268,7 @@
         }
         // 资源点：每种给几个、要什么稿子；seeds 是野生种子堆（随机一种作物）
         const IND_NODES = {
-            wood: { give: [3, 6], tool: 0 }, dirt: { give: [2, 3], tool: 0 }, stone: { give: [3, 5], tool: 1 }, sand: { give: [2, 4], tool: 0 }, clay: { give: [1, 3], tool: 0 },
+            wood: { give: [3, 6], tool: 0 }, dirt: { give: [2, 3], tool: 0 }, stone: { give: [3, 5], tool: 1 }, sand: { give: [2, 4], tool: 0 }, clay: { give: [5, 9], tool: 0 },
             salt: { give: [4, 8], tool: 0 }, coal: { give: [1, 3], tool: 1 }, ore_sn: { give: [1, 2], tool: 1 }, oil: { give: [1, 1], tool: 0 },
             sand_sn: { give: [1, 1], tool: 0, out: 'ore_sn', name: '锡砂' },   // 海边的锡砂：空手捡，每次 1 个锡矿
             ore_cu: { give: [1, 2], tool: 1 }, ore_zn: { give: [1, 2], tool: 1 }, ore_fe: { give: [1, 2], tool: 2 },
@@ -284,8 +284,8 @@
         const IND_TOOL_NAME = ['空手', '石稿', '青铜稿', '钢稿', '钻石稿'];
         // 地貌：名字、地面颜色、会刷什么资源（权重）
         const IND_BIOMES = {
-            plain: { name: '平原', col: 0x9ccc65, res: { clay: 2, stone: 2, wood: 1, seeds: 2 } },
-            forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 1, seeds: 2 } },
+            plain: { name: '平原', col: 0x9ccc65, res: { clay: 3, stone: 2, wood: 1, seeds: 2 } },
+            forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 2, seeds: 2 } },
             beach: { name: '海边', col: 0xfff59d, res: { salt: 5, sand_sn: 1, wood: 1 } },
             mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, wood: 2, ore_cu: 2, ore_zn: 2, ore_sn: 3, ore_fe: 2, coal: 2 } },
             desert: { name: '盐湖沙漠', col: 0xe6c27a, res: { salt: 5, oil: 1, cactus: 3 } },

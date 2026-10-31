@@ -361,15 +361,16 @@
         }
 
         // ── 河边刷黏土、锡砂；火山周围刷黑石头（大石头） ──
+        const WD_RIVER = { p: 0.85, sn: 0.25 };   // 河边每段刷点的概率；硬核里锡砂占的比例（其余是黏土）。任务 9：0.55 → 0.85，60:40 → 75:25
         function wdExtraNodes(M, casual) {
             let r = indRng((M.seed ^ 0x7a11) >>> 0);
             (M.rivers || []).forEach(function (rv) {
                 for (let i = 2; i < rv.pts.length; i += 2) {
-                    if (r() > 0.55) continue;
+                    if (r() > WD_RIVER.p) continue;
                     let a = rv.pts[i - 1], b = rv.pts[i], dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1, side = r() < 0.5 ? -1 : 1, off = rv.w / 2 + 1.2 + r() * 2.5;
                     let x = b[0] - dz / l * off * side, z = b[1] + dx / l * off * side, h = indHeight(M, x, z);
                     if (h < IND_WATER_Y + 0.1 || Math.hypot(x, z) < 8) continue;
-                    let key = (!casual && r() < 0.4) ? 'sand_sn' : 'clay', nd = IND_NODES[key];
+                    let key = (!casual && r() < WD_RIVER.sn) ? 'sand_sn' : 'clay', nd = IND_NODES[key];
                     ind.nodes.push({ key: key, x: x, z: z, y: h, n: nd.give[0] + Math.floor(r() * (nd.give[1] - nd.give[0] + 1)), seed: IND_SEED_KINDS[0], dead: false, river: true });
                 }
             });

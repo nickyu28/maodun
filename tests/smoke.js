@@ -5553,6 +5553,9 @@ async function enterExit(tab, key) {
                 if ((await T.eval(`ind.base.clock`)) !== c0) bad.push('没选规则时间就走了');
                 await T.eval(`${HIDE} indSetRule('hard'); indSetRule('casual'); ind.rng = function () { return 0.99; }; true;`);
                 if ((await T.eval(`ind.base.rule`)) !== 'hard') bad.push('硬核居然退回了悠闲');
+                // 硬核新号没礼包（任务 2.9）：箱子里只有石稿和烤土豆；后面要用的东西这里补进箱子
+                if ((await T.eval(`JSON.stringify(indBoxTarget().items)`)) !== JSON.stringify({ pick_stone: 1, bake_potato: 3 })) bad.push('硬核新号箱子里该只有石稿和 3 个烤土豆 ' + await T.eval(`JSON.stringify(indBoxTarget().items)`));
+                await T.eval(`Object.assign(indBoxTarget().items, JSON.parse(JSON.stringify(IND_START_BOX))); true;`);
                 // 生存值：60 秒饱食掉约 2、口渴掉约 4
                 const s0 = JSON.parse(await T.eval(`JSON.stringify(ind.base.surv)`));
                 await T.eval(`indAdvance(60); true;`);
@@ -8525,6 +8528,36 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND37 硬核砍树要工具、拔刺看手上的工具边走边拔、剪羊毛边走边剪、硬核新号没礼包、从零做出刀斧', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND38')) {
+            // IND38 黏土（任务 9）：黏土点一次给 5～9；河边刷点 0.85、硬核黏土:锡砂 75:25；平原森林权重各加一半；100 张图黏土总量改后 ≥ 改前 2.5 倍；老存档
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`${HIDE} indSetRule('hard'); ind.base.rule = 'hard'; true;`);
+                const st = await J(`(function(){ let seeds = []; for (let i = 1; i <= 100; i++) seeds.push(i * 7919);
+                    function total() { let t = 0, mn = 99, mx = 0; seeds.forEach(function (sd) { indGoTrip(sd); ind.nodes.forEach(function (n) { if (n.key === 'clay') { t += n.n; mn = Math.min(mn, n.n); mx = Math.max(mx, n.n); } }); }); return [t / seeds.length, mn, mx]; }
+                    let now = { give: IND_NODES.clay.give.slice(), pl: IND_BIOMES.plain.res.clay, fo: IND_BIOMES.forest.res.clay, rv: JSON.parse(JSON.stringify(WD_RIVER)) };
+                    let after = total();
+                    IND_NODES.clay.give = [1, 3]; IND_BIOMES.plain.res.clay = 2; IND_BIOMES.forest.res.clay = 1; WD_RIVER.p = 0.55; WD_RIVER.sn = 0.4;
+                    let before = total();
+                    IND_NODES.clay.give = now.give; IND_BIOMES.plain.res.clay = now.pl; IND_BIOMES.forest.res.clay = now.fo; WD_RIVER.p = now.rv.p; WD_RIVER.sn = now.rv.sn;
+                    indGoBase(null); return { now: now, before: before, after: after }; })()`);
+                console.log('      IND38 每张图黏土总量（100 张图平均，硬核）：改前 ' + st.before[0].toFixed(1) + '，改后 ' + st.after[0].toFixed(1) + '，约 ' + (st.after[0] / st.before[0]).toFixed(2) + ' 倍');
+                if (st.now.give.join() !== '5,9' || st.after[1] < 5 || st.after[2] > 9) bad.push('黏土点一次给 5～9 ' + JSON.stringify(st));
+                if (!(st.now.pl === 3 && st.now.fo === 2 && st.now.rv.p === 0.85 && st.now.rv.sn === 0.25)) bad.push('平原 3、森林 2、河边 0.85、锡砂 25% ' + JSON.stringify(st.now));
+                if (!(st.after[0] >= st.before[0] * 2.5)) bad.push('改后黏土总量该是改前 2.5 倍以上 ' + JSON.stringify([st.before, st.after]));
+                // 悠闲：河边只有黏土
+                const cs = await J(`(function(){ ind.base.rule = 'casual'; let sn = 0; for (let i = 1; i <= 5; i++) { indGoTrip(i * 131); ind.nodes.forEach(function (n) { if (n.key === 'sand_sn') sn++; }); } indGoBase(null); ind.base.rule = 'hard'; return sn; })()`);
+                if (cs !== 0) bad.push('悠闲没有锡砂 ' + cs);
+                if (!(await T.eval(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.ver = 5; indFixBase(b); return true; })()`))) bad.push('老存档整理报错');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND38 黏土：一次 5～9、河边 0.85 和 75:25、平原森林多一半，100 张图总量 ≥ 改前 2.5 倍', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
