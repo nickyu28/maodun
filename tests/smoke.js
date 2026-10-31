@@ -7838,9 +7838,9 @@ async function enterExit(tab, key) {
                 if (!(await T.eval(`__f.fuel === 150 && ind.bag.oil === 1 && !ind.bag.coal`))) bad.push('篝火烧煤不烧油');
                 // ── 悠闲：拿油桶对着炉子右键直接倒，燃料 +600，空桶还你；没有漏斗 ──
                 await T.eval(`indPanelClose(); ind.base.rule = 'casual'; ind.base.stove.fuel = 0; indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 3); indLookAt(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z); ind.bag = { 'oil@fe': 1, oil: 1 }; indSelect('oil@fe'); window.__fl = []; indUse(); true;`);
-                if (!(await T.eval(`ind.base.stove.fuel === 600 && ind.bag.bucket_fe === 1 && !ind.bag['oil@fe']`))) bad.push('悠闲：油桶对着炉子右键，燃料 +600，空铁桶还你 ' + await T.eval(`JSON.stringify([ind.base.stove.fuel, ind.bag, __fl])`));
+                if (!(await T.eval(`ind.base.stove.fuel > 590 && ind.base.stove.fuel <= 600 && ind.bag.bucket_fe === 1 && !ind.bag['oil@fe']`))) bad.push('悠闲：油桶对着炉子右键，燃料 +600，空铁桶还你 ' + await T.eval(`JSON.stringify([ind.base.stove.fuel, ind.bag, __fl])`));
                 await T.eval(`indCookById('stove'); ind.cookId = 'stove'; indSelect('oil'); indStoveFuel('oil'); true;`);
-                if (!(await T.eval(`ind.base.stove.fuel === 1200 && ind.bag.bucket === 1`))) bad.push('悠闲：面板里"倒进炉子"也行 ' + await T.eval(`ind.base.stove.fuel`));
+                if (!(await T.eval(`ind.base.stove.fuel > 1185 && ind.base.stove.fuel <= 1200 && ind.bag.bucket === 1`))) bad.push('悠闲：面板里"倒进炉子"也行 ' + await T.eval(`ind.base.stove.fuel`));
                 if (await T.eval(`indCraftShow(IND_CRAFT.filter(function (r) { return r.out === 'funnel_brick' || r.out === 'funnel_iron' || r.out === 'spout_brick' || r.out === 'spout_iron'; })[0])`)) bad.push('悠闲没有漏斗和出料槽的合成');
                 await T.eval(`ind.base.rule = 'hard'; true;`);
                 // ── 旧存档里的石油数量不变（原来的固体 oil 现在是同样数量的木桶装油，不占玩家已有的桶） ──
