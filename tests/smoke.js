@@ -3095,6 +3095,82 @@ async function enterExit(tab, key) {
             report('SG1 信号接收器蓝线：4 种图和化学寻宝队各 120 个种子，出生点到每个宝箱、到接收器生成的东西都找得到路（不限楼层）', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('CK1')) {
+            // CK1 拿铜线左键点电池组：接线，不收起（任务 13）。真设备：左键选中、再点用电器接上、铜线 −1、设备数量不变；右键还是收起；
+            // 原因：Q（放下）对着设备物品是把它当东西丢在地上（不是放好的设备），瞄准时地上的东西排在设备前面，拿铜线左键点它就被捡回背包（看上去像"收起"）
+            // —— 现在拿着铜线左键点地上的设备物品不捡（提示要放好得右键）；空手左键照旧能捡
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const place = (k, x, z) => T.eval(`(function(){ indBagAdd('${k}', 1); indTeleport(${x}, ${z}); indLookAt(${x}, ${z} - 5); indSelect('${k}'); indUse(); return ind.base.devs[ind.base.devs.length - 1].id; })()`);
+                const face = (id) => T.eval(`(function(){ let d = indDev(${id}); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); return true; })()`);
+                const st = () => T.eval(`JSON.stringify({ devs: ind.base.devs.length, pend: ind.wirePend, wires: ind.base.wires.length, wire: ind.bag.wire || 0, bank: ind.bag.dev_bank || 0, ground: ind.base.ground.filter(function (q) { return q.k === 'dev_bank'; }).length })`).then(JSON.parse);
+                const bank = await place('dev_bank', 0, 0), lamp = await place('dev_lamp', 6, 0);
+                await T.eval(`indBagAdd('wire', 5); indSelect('wire'); true;`);
+                let s0 = await st();
+                await face(bank); await T.eval(`indAction(); true;`);
+                let s1 = await st();
+                if (s1.devs !== s0.devs || s1.pend !== bank || s1.bank !== 0) bad.push('左键点电池组：设备还在、记下 wirePend ' + JSON.stringify([s0, s1]));
+                await face(lamp); await T.eval(`indAction(); true;`);
+                let s2 = await st();
+                if (s2.devs !== s0.devs || s2.wires !== 1 || s2.wire !== s0.wire - 1 || s2.pend !== null) bad.push('再点用电器：线接上、铜线 −1、设备数量不变 ' + JSON.stringify([s0, s2]));
+                // 右键（indUse）拿铜线对着电池组还是收起
+                await face(bank); await T.eval(`indSelect('wire'); indUse(); true;`);
+                let s3 = await st();
+                if (s3.devs !== s0.devs - 1 || s3.bank !== 1) bad.push('右键收起电池组 ' + JSON.stringify(s3));
+                // 原因的复现和修复：把电池组当东西丢在地上（Q），拿铜线左键点它
+                await T.eval(`(function(){ indTeleport(-10, 8); indLookAt(-10, 3); indSelect('dev_bank'); indDrop(); })(); true;`);
+                const g = JSON.parse(await T.eval(`JSON.stringify(ind.base.ground.filter(function (q) { return q.k === 'dev_bank'; })[0] || null)`));
+                if (!g) bad.push('没丢出来');
+                else {
+                    await T.eval(`window.__fl = []; window.__bf0 = blazeFlash; blazeFlash = function (t) { window.__fl.push(t); }; (function(){ indTeleport(${g.x}, ${g.z + 1.2}); indLookAt(${g.x}, ${g.z}); indSelect('wire'); indAction(); })(); blazeFlash = window.__bf0; true;`);
+                    const s4 = await st();
+                    if (s4.ground !== 1 || s4.bank !== 0) bad.push('拿铜线左键点地上的电池组被捡走了 ' + JSON.stringify(s4));
+                    if (!/右键/.test(await T.eval(`window.__fl.join('|')`))) bad.push('没提示怎么放好 ' + await T.eval(`window.__fl.join('|')`));
+                    await T.eval(`indBagAdd('wheat', 1); indSelect('wheat'); indAction(); true;`);   // 手上不是铜线：还是能捡
+                    const s5 = await st();
+                    if (s5.ground !== 0 || s5.bank !== 1) bad.push('空手左键应该照旧能捡 ' + JSON.stringify(s5));
+                }
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('CK1 拿铜线左键点电池组：接线不收起（设备数量不变）、右键照旧收起、铜线左键点地上的设备物品不再捡走、手上不是铜线照旧能捡', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('CK2')) {
+            // CK2 煤和焦炭也能炼钢：铁锭 + 煤、铁锭 + 焦炭 → 钢锭，火候（1550°C）、时间（40 秒）、产出（1 个烫钢锭）跟铁锭 + 木炭一样；悠闲不能炼钢；
+            // 前面配方的序号没动（正在烧的灶台存的是序号）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const recipe = JSON.parse(await T.eval(`JSON.stringify(['charcoal', 'coal', 'char'].map(function (k) { let r = IND_RECIPES.filter(function (q) { return q.in.ingot_fe === 1 && q.in[k] === 1 && Object.keys(q.in).length === 2; })[0]; return r ? [r.minT, r.time, r.cls, !!r.hard, JSON.stringify(r.out), IND_RECIPES.indexOf(r)] : null; }))`));
+                if (!recipe[0] || !recipe[1] || !recipe[2]) bad.push('缺配方 ' + JSON.stringify(recipe));
+                else if (JSON.stringify(recipe[0].slice(0, 5)) !== JSON.stringify(recipe[1].slice(0, 5)) || JSON.stringify(recipe[0].slice(0, 5)) !== JSON.stringify(recipe[2].slice(0, 5)) || recipe[0][0] !== 1550 || recipe[0][1] !== 40) bad.push('煤、焦炭的火候/时间/产出跟木炭不一样 ' + JSON.stringify(recipe));
+                for (const k of ['coal', 'char', 'charcoal']) {
+                    await T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: { ingot_fe: 1, ${k}: 1 }, fuel: 9000, fire: 4, bellows: true, temp: 1700, spout: [], spoutTy: 'brick' }); ind.cookId = 'stove'; true;`);
+                    if (!(await until(T, `(function(){ indAdvance(1); return (ind.base.stove.out.hot_steel || 0) >= 1; })()`, 60000))) bad.push('铁锭 + ' + k + ' 炼不出钢 ' + await T.eval(`JSON.stringify(ind.base.stove.out)`));
+                    else if (!(await T.eval(`ind.base.stove.out.hot_steel === 1 && !ind.base.stove.items.ingot_fe && !ind.base.stove.items.${k}`))) bad.push('铁锭 + ' + k + ' 产出/原料不对 ' + await T.eval(`JSON.stringify([ind.base.stove.out, ind.base.stove.items])`));
+                }
+                // 火候不够（1400°C < 1550）不炼
+                await T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: { ingot_fe: 1, coal: 1 }, fuel: 9000, fire: 3, temp: 1400, spout: [], spoutTy: 'brick' }); indAdvance(0.5); true;`);
+                if (await T.eval(`(ind.base.stove.out.hot_steel || 0) > 0 || (ind.base.stove.cook && IND_RECIPES[ind.base.stove.cook.i].minT <= 1400)`)) bad.push('火候不够不该炼钢');
+                // 悠闲不能炼钢
+                await T.eval(`ind.base.rule = 'casual'; ind.base.stove = Object.assign(ckNewState(), { items: { ingot_fe: 1, coal: 1 }, fuel: 9000, fire: 4, bellows: true, temp: 1700, spout: [], spoutTy: 'brick' }); indAdvance(45); true;`);
+                if (await T.eval(`(ind.base.stove.out.hot_steel || 0) > 0`)) bad.push('悠闲不该炼钢');
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('CK2 煤和焦炭也能炼钢：火候 1550°C、40 秒、产出跟木炭一样；火候不够不炼；悠闲不能炼钢', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('K1')) {
             // K1 合成倒计时：材料凑齐后等 3 秒再合成（合出大金的 5 秒），中间显示倒计时，材料被拿走就取消、放回去重新数
             const bad = [];

@@ -397,7 +397,10 @@
             { in: { sand: 2, ash: 1 }, out: { glass_plate: 1 }, minT: 1000, time: 20, cls: 'bulk' },
             { in: { sand: 3 }, out: { glass_plate: 1 }, minT: 1700, time: 30, hard: true, cls: 'bulk' },
             // 压力：木炭在氧气里烧成二氧化碳
-            { in: { charcoal: 1, b_o2: 1 }, out: { b_co2: 1 }, minT: 400, time: 10, hard: true, cls: 'bulk' }
+            { in: { charcoal: 1, b_o2: 1 }, out: { b_co2: 1 }, minT: 400, time: 10, hard: true, cls: 'bulk' },
+            // 煤、焦炭也能炼钢：火候、时间、产出和"铁锭 + 木炭"一样，没有质量区别。放在最后，不挪动前面配方的序号（正在烧的灶台存的是序号）
+            { in: { ingot_fe: 1, coal: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1550, time: 40, hard: true },
+            { in: { ingot_fe: 1, char: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1550, time: 40, hard: true }
         ];
         // 电解槽的三种用法（按顺序找第一种原料够、电压够的）
         const IND_EL_RECIPES = [
@@ -1522,6 +1525,7 @@
             if (a && a.kind === 'bomb') return nkBombAct(a.o);
             if (a && a.kind === 'node' && a.o.tree) return wdChop(a.o);
             if (a && a.kind === 'node') return indGather(a.o);
+            if (a && a.kind === 'item' && indSel() === 'wire' && IND_ITEMS[a.o.k] && IND_ITEMS[a.o.k].dev) { indFlash('这是掉在地上的' + indName(a.o.k) + '，不是放好的设备。要放好，拿着它按右键'); return false; }   // 拿铜线左键点到地上的设备物品，别当成收起来（任务 13）
             if (a && a.kind === 'item') return indPickItem(a.o);
             if (a && a.kind === 'crop' && indCropRipe(a.o)) return indHarvest(a.o);
             if (a && a.kind === 'spout') return indSpoutTake(a.o);
