@@ -187,7 +187,7 @@
             cheese: { name: '奶酪', col: 0xffe082, eat: { f: 35 } },
             ingot_cu: { name: '铜锭', col: 0xd84315 }, ingot_zn: { name: '锌锭', col: 0xb0bec5 }, ingot_fe: { name: '铁锭', col: 0x616161 }, ingot_sn: { name: '锡锭', col: 0xcfd8dc }, bronze: { name: '青铜锭', col: 0xb87333 },
             brass: { name: '黄铜锭', col: 0xfbc02d }, brick: { name: '砖', col: 0xbf5b3a }, glass_plate: { name: '玻璃板', col: 0xc5e8f2 }, bellows: { name: '风箱', col: 0x8d6e63, use: '装在炉子上' },
-            cook_furnace: { name: '小熔炉', col: 0x6d4c41, cook: 'furnace' }, cook_kiln: { name: '大窑', col: 0x8d4b3a, cook: 'kiln' }, bell: { name: '铃铛', col: 0xffd54f, use: '摇铃叫动物' }, steel: { name: '钢锭', col: 0x90a4ae },
+            cook_furnace: { name: '小熔炉', col: 0x6d4c41, cook: 'furnace' }, cook_kiln: { name: '大窑', col: 0x8d4b3a, cook: 'kiln' }, cook_stone: { name: '石炉', col: 0x9e9e9e, cook: 'stone' }, bell: { name: '铃铛', col: 0xffd54f, use: '摇铃叫动物' }, steel: { name: '钢锭', col: 0x90a4ae },
             hot_cu: { name: '铜锭（烫）', col: 0xff3d00, hot: 'ingot_cu', needTool: 'tongs' }, hot_zn: { name: '锌锭（烫）', col: 0xff6e40, hot: 'ingot_zn', needTool: 'tongs' }, hot_fe: { name: '铁锭（烫）', col: 0xff5722, hot: 'ingot_fe', needTool: 'tongs' },
             hot_sn: { name: '锡锭（烫）', col: 0xff8a65, hot: 'ingot_sn', needTool: 'tongs' }, hot_bronze: { name: '青铜锭（烫）', col: 0xff7043, hot: 'bronze', needTool: 'tongs' },
             hot_brass: { name: '黄铜锭（烫）', col: 0xffab00, hot: 'brass', needTool: 'tongs' }, hot_steel: { name: '钢锭（烫）', col: 0xff6d00, hot: 'steel', needTool: 'tongs' },
@@ -326,7 +326,7 @@
             { out: 'pick_bronze', in: { bronze: 3, wood: 2 }, hard: true },
             { out: 'bell', in: { brass: 1 }, hard: true },
             { out: 'cook_furnace', in: { brick: 8, stone: 2 }, hard: true }, { out: 'cook_kiln', in: { brick: 30, stone: 6 } },
-            { out: 'chest', in: { wood: 8 } },
+            { out: 'chest', in: { wood: 8 } }, { out: 'cook_stone', in: { stone: 8 } },
             { out: 'bucket_fe', in: { ingot_fe: 2 }, hard: true }, { out: 'bucket_cu', in: { brass: 2 }, hard: true },
             { out: 'cyl', in: { steel: 2, brass: 1 }, hard: true }, { out: 'dev_comp', in: { steel: 3, ingot_cu: 2, wire: 2, brass: 1 }, hard: true },
             { out: 'dev_press', in: { steel: 4, wire: 2 }, hard: true }, { out: 'pick_diamond', in: { diamond: 2, steel: 2, wood: 1 }, hard: true },
@@ -363,6 +363,7 @@
         const IND_COOK = {
             stove: { name: '灶台', rate: 50, burn: 1, r: 1.5, col: 0xb71c1c },
             furnace: { name: '小熔炉', rate: 50, burn: 0.5, only: 'smelt', top: 1300, batch: { smelt: 2 }, r: 1.2, size: [1.6, 1.4, 1.6], col: 0x6d4c41 },
+            stone: { name: '石炉', rate: 50, burn: 1, r: 1.5, size: [2.2, 1.0, 1.5], col: 0x9e9e9e },   // 8 块石头合成：规格跟灶台一样，什么都能做，燃料不限
             kiln: { name: '大窑', rate: 10, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 6, chem: 1 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
         };
         const IND_COOK_CAP = 6, IND_TILE_CAP = 100, IND_SPOUT_CAP = 10;   // 出料槽最多 10 块   // 灶台上最多放几种
@@ -998,7 +999,7 @@
         };
         // 家具能搬：IND_BASE_ST 里的坐标跟着存档走（base.pos），默认位置在这里
         const IND_ST_DEF = JSON.parse(JSON.stringify(IND_BASE_ST));
-        const IND_FURN_R = { stove: 1.5, bed: 2.0, bench: 1.4, pool: 2.4, chest: 1.2, furnace: 1.2, kiln: 2.1 };
+        const IND_FURN_R = { stove: 1.5, bed: 2.0, bench: 1.4, pool: 2.4, chest: 1.2, furnace: 1.2, kiln: 2.1, stone: 1.5 };
         function indApplyPos(b) { ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { let p = b.pos && b.pos[k]; IND_BASE_ST[k].x = p ? p.x : IND_ST_DEF[k].x; IND_BASE_ST[k].z = p ? p.z : IND_ST_DEF[k].z; }); }
         function indGoBase(fromTrip) {
             let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];
@@ -2448,7 +2449,7 @@
         function indCookCur() { return indCookById(ind.cookId || 'stove') || indCookById('stove'); }
         function indCookK(ty) {
             let D = IND_COOK[ty];
-            return { rate: D.rate, burn: D.burn, only: D.only || null, top: D.top || 0, batch: ty === 'stove' ? { food: ind.base.pot ? IND_BATCH_POT : IND_BATCH, smelt: 1, bulk: 1, chem: 1 } : D.batch };
+            return { rate: D.rate, burn: D.burn, only: D.only || null, top: D.top || 0, batch: ty === 'stove' || ty === 'stone' ? { food: ind.base.pot ? IND_BATCH_POT : IND_BATCH, smelt: 1, bulk: 1, chem: 1 } : D.batch };
         }
         function indFireDef(ty, lv) { let F = IND_FIRE[lv]; return ty === 'furnace' && lv === 3 ? { name: F.name, t: IND_COOK.furnace.top, burn: F.burn } : F; }
         // 找第一个原料够、这个炉子做得了的配方

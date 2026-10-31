@@ -7800,6 +7800,74 @@ async function enterExit(tab, key) {
             report('IND27 炉子进出口：选中不抢、没槽烫锭留炉膛、砖槽铁槽、踹炉子、悠闲自带槽、老档补砖槽', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND29')) {
+            // IND29 石炉（任务 8，硬核悠闲都有）：8 块石头合成，规格跟灶台一样，吃的、砖、冶炼、化学都能做，燃料不限（木头、木炭、煤、焦炭、石油桶）；能搬能存档、占炉子上限、也接出料槽和进料漏斗；老存档不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; ind.base.devs = []; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const ci = `IND_CRAFT.findIndex(function (r) { return r.out === 'cook_stone'; })`;
+                for (const rule of ['casual', 'hard']) {
+                    await T.eval(`indSetRule('${rule}'); ind.base.rule = '${rule}'; ind.bag = {}; indBagAdd('stone', 7); if (indCraft(${ci})) throw 1; indBagAdd('stone', 1); indCraft(${ci}); true;`);
+                    if (!(await T.eval(`ind.bag.cook_stone === 1 && !ind.bag.stone`))) bad.push(rule + ' 8 块石头做不出石炉 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                }
+                await T.eval(`ind.base.rule = 'hard'; ind.base.off = { stove: true, bed: true, bench: true, pool: true }; ind.base.cookers = []; ind.base.chests[0].x = 25; ind.base.chests[0].z = -15; ind.furnDirty = true; indSyncFurn(); ind.bag = { cook_stone: 1 }; indTeleport(8, 0); indLookAt(30, 0); indSelect('cook_stone'); indUse(); true;`);
+                if (!(await T.eval(`ind.base.cookers.length === 1 && ind.base.cookers[0].ty === 'stone' && !ind.bag.cook_stone`))) bad.push('石炉放不下 ' + await T.eval(`JSON.stringify([ind.base.cookers, ind.bag, __fl.slice(-2)])`));
+                const cid = await T.eval(`ind.base.cookers[0].id`);
+                const run = async (items, fuelKey, fire, secs) => {
+                    await T.eval(`(function(){ let C = ind.base.cookers[0]; C.items = ${JSON.stringify(items)}; C.out = {}; C.spout = []; C.fuel = 0; C.fire = 0; C.temp = 20; C.cook = null; C.spoutTy = 'brick'; ind.cookId = ${cid}; ind.bag = ${JSON.stringify(fuelKey ? { [fuelKey]: 3 } : {})}; ${fuelKey ? `indStoveFuel('${fuelKey}');` : 'C.fuel = 5000;'} indPanelClose(); ind.cookId = ${cid}; indStoveFire(${fire}); indPanelClose(); })(); true;`);
+                    await until(T, `(function(){ indAdvance(${secs}); return true; })()`, 20000);
+                    return J(`{ out: ind.base.cookers[0].out, spout: ind.base.cookers[0].spout.map(function (e) { return e.k; }), temp: ind.base.cookers[0].temp, fuel: ind.base.cookers[0].fuel }`);
+                };
+                // 食物、砖、玻璃板、冶炼、化学各一个配方
+                let r = await run({ potato: 1 }, 'wood', 1, 30);
+                if (r.out.bake_potato !== 1) bad.push('石炉烤土豆 ' + JSON.stringify(r));
+                r = await run({ clay: 2 }, 'coal', 3, 50);
+                if (r.out.brick !== 1) bad.push('石炉烧砖（大火 1200°C） ' + JSON.stringify(r));
+                r = await run({ ore_cu: 1 }, 'charcoal', 3, 50);
+                if (r.spout.join() !== 'hot_cu') bad.push('石炉炼铜（装了砖槽，烫锭进槽） ' + JSON.stringify(r));
+                r = await run({ sulfur: 1, b_o2: 1 }, 'char', 2, 30);
+                if (r.out.b_so2 !== 1) bad.push('石炉做化学配方（硫 + 氧气 → 二氧化硫） ' + JSON.stringify(r));
+                r = await run({ sand: 2, ash: 1 }, 'coal', 3, 50);
+                if (r.out.glass_plate !== 1) bad.push('石炉烧玻璃板 ' + JSON.stringify(r));
+                // 规格跟灶台一样：升温每秒 50、最高 1200、风箱 1600、一批 4 份
+                const spec = await J(`{ rate: indCookK('stone').rate, burn: indCookK('stone').burn, only: indCookK('stone').only, batch: indCookK('stone').batch, st: [indCookK('stove').rate, indCookK('stove').burn], fire3: indFireDef('stone', 3).t, fire4: indFireDef('stone', 4).t }`);
+                if (spec.rate !== 50 || spec.burn !== 1 || spec.only || spec.batch.food !== 4 || spec.fire3 !== 1200 || spec.fire4 !== 1600) bad.push('石炉规格跟灶台一样 ' + JSON.stringify(spec));
+                // 石油：硬核用漏斗、悠闲直接倒
+                await T.eval(`(function(){ let C = ind.base.cookers[0]; C.fuel = 0; C.funnel = { ty: 'brick', oil: 0 }; ind.bag = { oil: 1 }; })(); ckPourOil('oil', { kind: 'funnel', o: indCookById(${cid}) }); indAdvance(2); true;`);
+                if (!(await T.eval(`ind.base.cookers[0].fuel > 15 && ind.base.cookers[0].funnel.oil < 600`))) bad.push('石炉接进料漏斗烧石油');
+                await T.eval(`ind.base.rule = 'casual'; ind.base.cookers[0].fuel = 0; ind.bag = { oil: 1 }; ckPourOil('oil', { kind: 'cook', o: ind.base.cookers[0] }); true;`);
+                if (!(await T.eval(`ind.base.cookers[0].fuel === 600 && ind.bag.bucket === 1`))) bad.push('悠闲：石炉直接倒油');
+                await T.eval(`ind.base.rule = 'hard'; true;`);
+                // 搬起来再放下，东西不丢；占炉子上限；4 米内取暖
+                await T.eval(`(function(){ let C = ind.base.cookers[0]; C.items = { sand: 3 }; C.out = { ash: 2 }; C.fuel = 10; C.temp = 20; C.fire = 0; C.funnel = null; C.cook = null; C.spout = []; })(); ind.bag = {}; indPickFurn({ ty: 'stone', o: ind.base.cookers[0] }); true;`);
+                const kk = await J(`Object.keys(ind.bag).filter(function (k) { return /^inst:/.test(k); })`);
+                if (kk.length !== 1 || (await T.eval(`ind.base.cookers.length`)) !== 0) bad.push('石炉收不起来 ' + JSON.stringify(kk));
+                await T.eval(`indTeleport(8, 0); indLookAt(30, 0); indSelect('${kk[0]}'); indUse(); true;`);
+                const back = await J(`ind.base.cookers.map(function (c) { return [c.ty, c.items, c.out, c.fuel]; })`);
+                if (back.length !== 1 || back[0][0] !== 'stone' || back[0][1].sand !== 3 || back[0][2].ash !== 2 || back[0][3] !== 10) bad.push('放下后里面的东西不丢 ' + JSON.stringify(back));
+                const warm = await J(`(function(){ let C = ind.base.cookers[0]; C.temp = 600; indTeleport(C.x + 3, C.z); let a = indHeatNear(C.x + 3, C.z, 4).temp; indTeleport(C.x + 9, C.z); return [a, indHeatNear(C.x + 9, C.z, 4).temp]; })()`);
+                if (warm[0] < 600 || warm[1] !== 0) bad.push('4 米内取暖 ' + JSON.stringify(warm));
+                // 炉子上限共用 6 个
+                await T.eval(`for (let i = 0; i < 6; i++) { if (ind.base.cookers.length < 6) ind.base.cookers.push(Object.assign({ id: 900 + i, ty: 'stone', x: -10 + i * 3, z: -10 }, ckNewState())); } ind.bag = { cook_stone: 1 }; indSelect('cook_stone'); window.__fl = []; indUse(); true;`);
+                if (!(await T.eval(`ind.base.cookers.length === 6 && __fl.some(function (t) { return /炉子太多/.test(t); })`))) bad.push('石炉算进炉子上限 6 个');
+                // 存档、老存档
+                const sv = await J(`(function(){ let b = indFixBase(JSON.parse(JSON.stringify(ind.base))); return b.cookers.filter(function (c) { return c.ty === 'stone'; }).length; })()`);
+                if (sv !== 6) bad.push('石炉存档读回来 ' + sv);
+                if (!(await T.eval(`indFixBase({ ver: 11, rule: 'hard', box: { stone: 10 } }).box.stone === 10`))) bad.push('老存档读档不报错');
+                // 被炸会没
+                await T.eval(`ind.base.cookers = [{ id: 1, ty: 'stone', x: 5, z: 5, items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, spout: [] }]; indBoom(5, 5, 3, '测试'); true;`);
+                if (await T.eval(`ind.base.cookers.length !== 0`)) bad.push('石炉被炸会没');
+            
+            } catch (x) { bad.push('测试异常 ' + String(x.message).slice(0, 300)); } }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND29 石炉：8 块石头合成、跟灶台一样什么都能做、燃料不限、能搬存档、占上限、取暖、被炸会没', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
