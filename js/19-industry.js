@@ -1758,6 +1758,7 @@
             if (!ind || ind.paused) return;
             if (ind.over || ind.panel) return;
             let k = indSel(); if (!k) return;
+            if (IND_ITEMS[k].dev) return indPlaceDev(k);   // 设备类物品按 Q 等于右键放设备，不丢在地上（任务 13）
             if (IND_ITEMS[k].gas) { let f = indFace(); indReleaseGas(k, ind.p.x + f.x, ind.p.z + f.z); return; }
             if (IND_ITEMS[k].poison) { let f = indFace(); nkReleasePoison(k, ind.p.x + f.x, ind.p.z + f.z); return; }
             if (IND_ITEMS[k].cyl && indCylN(IND_ITEMS[k].cyl) > 0) { let f = indFace(); indReleaseCyl(k, ind.p.x + f.x, ind.p.z + f.z); return; }
@@ -2964,7 +2965,7 @@
             else if (sel && IND_ITEMS[sel].gas) hint = '<small>Q：打开放气</small>';
             else if (sel && IND_ITEMS[sel].cyl && indCylN(IND_ITEMS[sel].cyl)) hint = '<small>Q：放气' + (indCylLiquid(IND_ITEMS[sel].cyl) ? '（液态二氧化碳放出干冰）' : '') + '</small>';
             else if (sel === 'dry_ice') hint = '<small>拿在手上体温每秒 −0.05°C　右键：放进装水的桶</small>';
-            else if (sel && IND_ITEMS[sel].dev) hint = '<small>右键：放下' + indName(sel) + '</small>';
+            else if (sel && IND_ITEMS[sel].dev) hint = '<small>右键或 Q：放下' + indName(sel) + '</small>';
             else if (sel === 'wire' && R.wirePend) hint = '<small>再点另一个设备接线</small>';
             let wr = ['body', 'head', 'neck'].filter(function (sl) { return R.base.wear[sl]; }).map(function (sl) { return '<span onclick="indTakeOff(\'' + sl + '\')" style="cursor:pointer;margin-right:6px;border-bottom:1px dashed #999;">' + indName(R.base.wear[sl]) + '</span>'; }).join('');
             wr = '穿着：' + (wr || '<span style="color:#999">什么都没穿</span>') + (wr ? '<small style="color:#999">（点一下脱下）</small>' : '');

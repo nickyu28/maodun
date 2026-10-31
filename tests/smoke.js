@@ -3121,8 +3121,37 @@ async function enterExit(tab, key) {
                 await face(bank); await T.eval(`indSelect('wire'); indUse(); true;`);
                 let s3 = await st();
                 if (s3.devs !== s0.devs - 1 || s3.bank !== 1) bad.push('右键收起电池组 ' + JSON.stringify(s3));
-                // 原因的复现和修复：把电池组当东西丢在地上（Q），拿铜线左键点它
-                await T.eval(`(function(){ indTeleport(-10, 8); indLookAt(-10, 3); indSelect('dev_bank'); indDrop(); })(); true;`);
+                // 选着设备类物品按 Q = 右键放设备（任务 13）：设备 +1、地上没有设备物品、背包 −1
+                const qs = () => T.eval(`JSON.stringify({ devs: ind.base.devs.length, el: ind.bag.dev_el || 0, bank: ind.bag.dev_bank || 0, gdev: ind.base.ground.filter(function (q) { return IND_ITEMS[q.k] && IND_ITEMS[q.k].dev; }).length, wood: ind.bag.wood || 0, gwood: ind.base.ground.filter(function (q) { return q.k === 'wood'; }).length })`).then(JSON.parse);
+                await T.eval(`indBagAdd('dev_el', 1); indBagAdd('dev_bank', 1); true;`);
+                let q0 = await qs();
+                await T.eval(`(function(){ indTeleport(-6, -6); indLookAt(-6, -11); indSelect('dev_el'); indDrop(); })(); true;`);
+                await T.eval(`(function(){ indTeleport(-2, -6); indLookAt(-2, -11); indSelect('dev_bank'); indDrop(); })(); true;`);
+                let q1 = await qs();
+                if (q1.devs !== q0.devs + 2 || q1.gdev !== q0.gdev || q1.el !== q0.el - 1 || q1.bank !== q0.bank - 1) bad.push('Q 放电解槽、电池组：应该放成设备、不丢地上 ' + JSON.stringify([q0, q1]));
+                await T.eval(`indBagAdd('dev_el', 1); indTeleport(8, 8); indLookAt(8, 14); indSelect('dev_el'); true;`);
+                if (!(await until(T, `/右键或 Q：放下/.test((document.getElementById('ind-hint') || {}).innerHTML || '')`, 8000))) bad.push('提示没写"右键或 Q：放下" ' + await T.eval(`(document.getElementById('ind-hint') || {}).innerHTML`));
+                await T.eval(`indBagDel('dev_el', 1); true;`);
+                // Q 放的两台：拿铜线左键点电解槽、再点电池组，线接上、设备数量不变
+                const qel = await T.eval(`(ind.base.devs.filter(function (d) { return d.ty === 'el'; }).slice(-1)[0] || { id: -1 }).id`), qbank = await T.eval(`(ind.base.devs.filter(function (d) { return d.ty === 'bank'; }).slice(-1)[0] || { id: -1 }).id`);
+                let q2 = q1;
+                if (qel < 0 || qbank < 0) bad.push('Q 没放出电解槽或电池组');
+                else {
+                await T.eval(`indSelect('wire'); true;`);
+                let w0 = await T.eval(`ind.base.wires.length`);
+                await face(qel); await T.eval(`indAction(); true;`); await face(qbank); await T.eval(`indAction(); true;`);
+                q2 = await qs();
+                if (q2.devs !== q1.devs || !(await T.eval(`ind.base.wires.some(function (w) { return w[0] === ${qbank} && w[1] === ${qel}; })`)) || (await T.eval(`ind.base.wires.length`)) !== w0 + 1) bad.push('Q 放的电解槽和电池组接不上线 ' + JSON.stringify(q2));
+                }
+                // 木头按 Q 还是扔到地上
+                await T.eval(`(function(){ indBagAdd('wood', 1); indTeleport(4, -8); indLookAt(4, -13); indSelect('wood'); indDrop(); })(); true;`);
+                let q3 = await qs();
+                if (q3.gwood !== q2.gwood + 1 || q3.wood !== q2.wood || q3.devs !== q2.devs) bad.push('木头按 Q 应该还是扔在地上 ' + JSON.stringify([q2, q3]));
+                // 远征里选着电解槽按 Q：提示"设备只能放在基地里"，背包不少
+                const trip = JSON.parse(await T.eval(`(function(){ window.__fl = []; window.__bf0 = blazeFlash; blazeFlash = function (t) { window.__fl.push(t); }; indBagAdd('dev_el', 1); let n0 = ind.bag.dev_el, w0 = ind.where; ind.where = 'trip'; indSelect('dev_el'); indDrop(); let n1 = ind.bag.dev_el || 0; ind.where = w0; blazeFlash = window.__bf0; indBagDel('dev_el', 1); return JSON.stringify({ n0: n0, n1: n1, fl: window.__fl.join('|') }); })()`));
+                if (trip.n1 !== trip.n0 || !/设备只能放在基地里/.test(trip.fl)) bad.push('远征里 Q 电解槽 ' + JSON.stringify(trip));
+                // 老存档里已经丢在地上的设备物品：拿铜线左键点它不捡（提示右键放），空手照旧能捡
+                await T.eval(`indBagDel('dev_bank', ind.bag.dev_bank || 0); ind.base.ground.push({ k: 'dev_bank', x: -10, z: 3.5 }); ind.itemDirty = true; true;`);
                 const g = JSON.parse(await T.eval(`JSON.stringify(ind.base.ground.filter(function (q) { return q.k === 'dev_bank'; })[0] || null)`));
                 if (!g) bad.push('没丢出来');
                 else {
@@ -3138,7 +3167,7 @@ async function enterExit(tab, key) {
             }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('CK1 拿铜线左键点电池组：接线不收起（设备数量不变）、右键照旧收起、铜线左键点地上的设备物品不再捡走、手上不是铜线照旧能捡', bad.length === 0, bad.join(' / '));
+            report('CK1 选着设备按 Q 等于右键放设备（不丢地上，远征里提示只能放基地）、Q 放的能接线、木头 Q 照旧扔；拿铜线左键点电池组接线不收起、右键照旧收起；老档地上的设备物品铜线点不捡、空手能捡', bad.length === 0, bad.join(' / '));
         }
 
         if (want('CK2')) {
