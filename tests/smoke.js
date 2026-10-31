@@ -3200,6 +3200,66 @@ async function enterExit(tab, key) {
             report('CK2 煤和焦炭也能炼钢：火候 1550°C、40 秒、产出跟木炭一样；火候不够不炼；悠闲不能炼钢', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('CK3')) {
+            // CK3 一个用电器接多个电源（并联，任务 16）：2 个 12 V 电池组 → 电压 12、耗电平分；0 节的电池组忽略；电池组加发电机 → 电池组不掉电；
+            // 接第 5 根被拒绝；同一电源重复接被拒绝、铜线不少；24 V + 12 V 接额定 12 V 的电解槽 → 炸；提示写"接着 N 个电源"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const r = JSON.parse(await T.eval(`(function(){
+                    ind.paused = true;   // 主循环停下，只手动算电
+                    let B = ind.base, out = {};
+                    let mk = function (ty, x, z, bats) { let d = { id: ++B.dseq, ty: ty, x: x, z: z, bats: bats || 0, u: (bats || 0) * IND_BAT_U, on: true, ft: 20, st: {} }; B.devs.push(d); return d; };
+                    let reset = function () { B.devs = []; B.wires = []; ind.wirePend = null; };
+                    let wire = function (a, b) { indSelect('wire'); indDevAct(a); return indDevAct(b); };
+                    let fl = []; let bf = blazeFlash; blazeFlash = function (t) { fl.push(t); };
+                    try {
+                        indBagAdd('wire', 20);
+                        // 1) 两个 12 V 电池组接水泵：电压 12，两个各掉一半
+                        reset(); let a = mk('bank', -8, 8, 8), b = mk('bank', -6, 8, 8), p = mk('pump', -7, 6);
+                        wire(a, p); wire(b, p);
+                        let ua = a.u, ub = b.u; indElecTick(1);
+                        out.two = { wires: B.wires.length, v: p.v, pw: p.pw, da: ua - a.u, db: ub - b.u, draw: IND_DEVS.pump.draw, info: indDevInfo(p) };
+                        // 2) 一个电池组 0 节：忽略它，另一个照常（掉全部）
+                        reset(); a = mk('bank', -8, 8, 0); b = mk('bank', -6, 8, 8); p = mk('pump', -7, 6);
+                        wire(a, p); wire(b, p); ub = b.u; indElecTick(1);
+                        out.zero = { wires: B.wires.length, v: p.v, pw: p.pw, db: ub - b.u };
+                        // 3) 电池组 + 发电机（灶台中火 3 米内）：电池组不掉电
+                        reset(); let St = IND_BASE_ST.stove; B.off.stove = false; B.stove.fire = 3; B.stove.fuel = 9999; B.stove.temp = 800;
+                        let g = mk('gen', St.x + 1.5, St.z); b = mk('bank', St.x - 6, St.z + 6, 8); p = mk('pump', St.x - 4, St.z + 6);
+                        wire(g, p); wire(b, p); ub = b.u; indElecTick(1);
+                        out.gen = { genV: indSrcVolt(g), v: p.v, pw: p.pw, db: ub - b.u };
+                        // 4) 接第 5 根被拒绝、同一电源重复接被拒绝、铜线不少
+                        reset(); p = mk('pump', 0, 10); let bs = [0, 1, 2, 3, 4].map(function (i) { return mk('bank', -8 + i * 2, 14, 8); });
+                        for (let i = 0; i < 4; i++) wire(bs[i], p);
+                        let w0 = ind.bag.wire, n0 = B.wires.length; fl.length = 0;
+                        let r5 = wire(bs[4], p); out.fifth = { ok: r5, n: B.wires.length, n0: n0, wire: ind.bag.wire, w0: w0, fl: fl.join('|') };
+                        fl.length = 0; let rd = wire(bs[0], p); out.dup = { ok: rd, n: B.wires.length, wire: ind.bag.wire, w0: w0, fl: fl.join('|') };
+                        // 5) 24 V + 12 V 接额定 12 V 的电解槽：炸
+                        reset(); a = mk('bank', 10, -10, 16); b = mk('bank', 14, -10, 8); let e = mk('el', 12, -10);
+                        wire(a, e); wire(b, e); let eid = e.id; indElecTick(0.1);
+                        out.boom = { gone: !indDev(eid) };
+                    } finally { blazeFlash = bf; ind.paused = false; }
+                    return JSON.stringify(out);
+                })()`));
+                const t = r.two;
+                if (t.wires !== 2 || Math.abs(t.v - 12) > 1e-6 || !t.pw || Math.abs(t.da - t.draw / 2) > 1e-6 || Math.abs(t.db - t.draw / 2) > 1e-6) bad.push('两个 12 V 电池组：电压 12、各掉一半 ' + JSON.stringify(t));
+                if (!/接着 2 个电源：电池组 12\.0 V、电池组 12\.0 V，工作电压 12 V/.test(t.info)) bad.push('提示不对 ' + t.info);
+                if (r.zero.wires !== 2 || Math.abs(r.zero.v - 12) > 1e-6 || !r.zero.pw || Math.abs(r.zero.db - 1) > 1e-6) bad.push('0 节电池组没忽略 ' + JSON.stringify(r.zero));
+                if (!(r.gen.genV > 0) || !r.gen.pw || r.gen.db !== 0) bad.push('电池组加发电机：电池组不该掉电 ' + JSON.stringify(r.gen));
+                if (r.fifth.ok !== false || r.fifth.n !== r.fifth.n0 || r.fifth.n0 !== 4 || r.fifth.wire !== r.fifth.w0 || !/最多接 4 个电源/.test(r.fifth.fl)) bad.push('第 5 根该被拒绝 ' + JSON.stringify(r.fifth));
+                if (r.dup.ok !== false || r.dup.n !== 4 || r.dup.wire !== r.dup.w0 || !/已经接了/.test(r.dup.fl)) bad.push('同一电源重复接该被拒绝、铜线不少 ' + JSON.stringify(r.dup));
+                if (!r.boom.gone) bad.push('24 V + 12 V 接额定 12 V 的电解槽应该炸');
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('CK3 用电器接多个电源（并联）：电压取有电的最高、耗电平分给电池组、0 节忽略、有发电机电池组不掉电、最多 4 根、重复接拒绝不花铜线、超压照旧炸', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('K1')) {
             // K1 合成倒计时：材料凑齐后等 3 秒再合成（合出大金的 5 秒），中间显示倒计时，材料被拿走就取消、放回去重新数
             const bad = [];

@@ -258,6 +258,7 @@
         };
         // 新设备（第 6 阶段）在 19-industry-nuke.js 里登记：busy（有活干才耗电）、tick、html（面板）、fix（读档整理）、volt（电源的电压）
         const IND_DEV_BUSY = {}, IND_DEV_TICK = {}, IND_DEV_HTML = {}, IND_DEV_FIX = {}, IND_DEV_VOLT = {}, IND_DEV_INFO = {};
+        const IND_WIRE_MAX = 4;   // 一个用电器最多接几个电源（任务 16）
         const IND_BAT_V = 1.5, IND_BAT_U = 180, IND_BOOM_R = 3, IND_DEV_CAP = 40, IND_GEN_R = 3, IND_FURNACE_T = 1800;
         // 名字；装了东西的桶写上材质："生水（木桶）"。plain = true 不写材质（配方里用）
         function indName(k, plain) {
@@ -1788,17 +1789,21 @@
             if (ind.where !== 'base') return;
             let B = ind.base, booms = [];
             B.devs.forEach(function (d) { d.pw = false; });
+            // 一个用电器可以接好几个电源（并联，任务 16）：电压 = 还有电的电源里最高的；耗电平分给还有电的电池组；有发电机在发电时电池组不扣电
+            let seen = {};
             B.wires.forEach(function (w) {
-                let s = indDev(w[0]), d = indDev(w[1]); if (!s || !d) return;
-                let D = IND_DEVS[d.ty], V = indSrcVolt(s);
+                let d = indDev(w[1]); if (!d || seen[d.id]) return; seen[d.id] = 1;
+                let D = IND_DEVS[d.ty], live = indDevSrcs(d).filter(function (s) { return indSrcVolt(s) > 0; });
+                let V = live.reduce(function (m, s) { return Math.max(m, indSrcVolt(s)); }, 0);
                 if (V > D.rated + 1e-6) { booms.push(d); return; }
                 d.v = V;
-                if (!d.on || V < D.minV) return;
+                if (!live.length || !d.on || V < D.minV) return;
                 if (d.ty === 'el' && indElRecipe(d, V) < 0) return;   // 电解槽没活干不耗电
                 if (d.ty === 'comp' && !indCompBusy(d)) return;   // 压缩机、压力机也是有活干才耗电
                 if (d.ty === 'press' && !indPressBusy(d)) return;
                 if (IND_DEV_BUSY[d.ty] && !IND_DEV_BUSY[d.ty](d)) return;
-                if (s.ty === 'bank') { if (s.u <= 0) return; s.u = Math.max(0, s.u - D.draw * dt); }
+                let banks = live.filter(function (s) { return s.ty === 'bank'; });
+                if (banks.length === live.length) banks.forEach(function (s) { s.u = Math.max(0, s.u - D.draw * dt / banks.length); });
                 d.pw = true;
             });
             booms.forEach(function (d) { if (ind && !ind.over && ind.where === 'base' && indDev(d.id)) indBoom(d.x, d.z, 0, '电压太高，设备炸了'); });
@@ -2147,7 +2152,9 @@
                 if (!a) return false;
                 let src = D.src ? d : a, dev = D.src ? a : d;
                 if (!IND_DEVS[src.ty].src || IND_DEVS[dev.ty].src) { indFlash('一头接电源（电池组、发电机），一头接用电器'); return false; }
-                ind.base.wires = ind.base.wires.filter(function (w) { return w[1] !== dev.id; });   // 一个用电器只接一根
+                let mine = ind.base.wires.filter(function (w) { return w[1] === dev.id; });   // 一个用电器最多接 4 个电源（并联，任务 16）
+                if (mine.some(function (w) { return w[0] === src.id; })) { indFlash('已经接了'); return false; }
+                if (mine.length >= IND_WIRE_MAX) { indFlash('最多接 ' + IND_WIRE_MAX + ' 个电源'); return false; }
                 ind.base.wires.push([src.id, dev.id]); indBagDel('wire', 1);
                 ind.wireDirty = true; indSave(); indFlash('接上了：' + IND_DEVS[src.ty].name + ' → ' + IND_DEVS[dev.ty].name);
                 return true;
@@ -2170,8 +2177,9 @@
             if (IND_DEV_INFO[d.ty]) return IND_DEV_INFO[d.ty](d);
             if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' U';
             if (d.ty === 'gen') return D.name + ' ' + (indSrcVolt(d) > 0 ? '发电中 12 V' : '没在发电');
-            let w = ind.base.wires.filter(function (x) { return x[1] === d.id; })[0], s = w ? indDev(w[0]) : null;
-            return D.name + '（额定 ' + D.rated + ' V）' + (s ? '　接着' + IND_DEVS[s.ty].name + ' ' + indSrcVolt(s).toFixed(1) + ' V' : '　没接电') + (d.on ? (d.pw ? '　工作中' : '　没在工作') : '　关着');
+            let ss = indDevSrcs(d);
+            let wired = ss.length ? '　接着 ' + ss.length + ' 个电源：' + ss.map(function (s) { let v = indSrcVolt(s); return IND_DEVS[s.ty].name + ' ' + (s.ty === 'bank' ? v.toFixed(1) : String(Math.round(v * 10) / 10)) + ' V'; }).join('、') + '，工作电压 ' + (Math.round(indDevVolt(d) * 10) / 10) + ' V' : '　没接电';
+            return D.name + '（额定 ' + D.rated + ' V）' + wired + (d.on ? (d.pw ? '　工作中' : '　没在工作') : '　关着');
         }
         // 画设备（一组画完，有电的亮）和电线（一组线段）
         function indSyncDevs() {
@@ -2236,7 +2244,7 @@
             indSave(); indPanelEl(id);
         }
         function indElHtml(d) {
-            let w = ind.base.wires.filter(function (x) { return x[1] === d.id; })[0], s = w ? indDev(w[0]) : null, V = s ? indSrcVolt(s) : 0;
+            let V = indDevVolt(d);
             let i = indElRecipe(d, V);
             let st = '电压 <b>' + V.toFixed(1) + ' V</b>（额定 12 V）' + (i >= 0 && d.pw ? '　正在' + IND_EL_RECIPES[i].name + ' ' + Math.floor((d.et || 0) / IND_EL_TIME * 100) + '%' : '');
             let has = Object.keys(d.st).map(function (k) { return indName(k) + '×' + d.st[k]; }).join('、') || '空';
@@ -2281,7 +2289,9 @@
             indFlash('出了一颗钻石'); if (ind.panel === 'press') ind.panelDirty = true;
             indSave();
         }
-        function indDevVolt(d) { let w = ind.base.wires.filter(function (x) { return x[1] === d.id; })[0], s = w ? indDev(w[0]) : null; return s ? indSrcVolt(s) : 0; }
+        // 用电器接着的电源（最多 4 个，任务 16）；工作电压 = 还有电的里面最高的那个
+        function indDevSrcs(d) { return ind.base.wires.filter(function (x) { return x[1] === d.id; }).map(function (x) { return indDev(x[0]); }).filter(function (s) { return !!s; }); }
+        function indDevVolt(d) { return indDevSrcs(d).reduce(function (m, s) { return Math.max(m, indSrcVolt(s)); }, 0); }
         function indDevPut(id, k, n) {
             let d = indDev(id); if (!d || !ind.bag[k]) return;
             if (k && IND_ITEMS[k].cyl && d.ty === 'comp') {
