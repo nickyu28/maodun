@@ -8297,6 +8297,154 @@ async function enterExit(tab, key) {
             report('IND34 繁殖：配对、怀 20 秒出幼崽、幼崽半个身子没毛、600 秒长大、冷却、饱食够、满 20 只、出远征不繁殖不长大', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND35')) {
+            // IND35 面板手感（任务 14）：按完按钮、自动刷新不回顶部，换面板才回顶；一键销毁整格、5 秒内撤销、过了没了；箱子里一样；
+            // 仓库箱下面有"身上"，整格拖进去、拖回来，箱子满了拖不进、背包不变；Ctrl+Q 销毁手上那格
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`${HIDE} indSetRule('easy'); let S = ind.base.surv; S.food = 100; S.water = 100; S.hp = 100; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                // ── 14.1 工作台：滚到下面点"做"，scrollTop 不变 ──
+                await T.eval(`ind.bag = { wood: 99, stone: 99, fiber: 50 }; indPanelBench(); true;`);
+                const sc = await J(`(function(){ let p = document.getElementById('ind-panel'); p.scrollTop = 1e6; let t = p.scrollTop; let bs = Array.prototype.filter.call(p.querySelectorAll('button'), function (b) { return b.textContent === '做'; }); let r = p.getBoundingClientRect(), b = bs.filter(function (b) { let q = b.getBoundingClientRect(); return q.top > r.top && q.bottom < r.bottom; }).pop(); if (b) b.click(); return [t, document.getElementById('ind-panel').scrollTop, !!b, ind.panel]; })()`);
+                if (!(sc[0] > 50)) bad.push('工作台面板太短，滚不下去，检查不成立 ' + sc[0]);
+                else if (!(sc[2] && sc[1] === sc[0] && sc[3] === 'bench')) bad.push('工作台点了"做"之后回顶部了 ' + JSON.stringify(sc));
+                // 灶台面板每秒自动刷新也不回顶
+                await T.eval(`indPanelClose(); { let b = {}; for (let i = 0; i < 20; i++) b[Object.keys(IND_ITEMS)[i]] = 1; ind.bag = b; } ind.cookId = null; indPanelStove(); true;`);
+                const st0 = await T.eval(`(function(){ let p = document.getElementById('ind-panel'); p.scrollTop = 1e6; p.firstChild.setAttribute('data-old', '1'); return p.scrollTop; })()`);
+                if (!(st0 > 50)) bad.push('灶台面板滚不下去，检查不成立 ' + st0);
+                else if (!(await until(T, `!document.querySelector('#ind-panel [data-old]')`, 5000))) bad.push('灶台面板没自动刷新');
+                else if (!(await T.eval(`document.getElementById('ind-panel').scrollTop === ${st0}`))) bad.push('灶台面板自动刷新后回顶部了 ' + await T.eval(`document.getElementById('ind-panel').scrollTop`));
+                // 开另一个面板：回顶
+                await T.eval(`indPanelBench(); true;`);
+                if (!(await T.eval(`ind.panel === 'bench' && document.getElementById('ind-panel').scrollTop === 0`))) bad.push('换了面板该回到顶部');
+                // ── 14.2 背包销毁、撤销、过期 ──
+                await T.eval(`indPanelClose(); ind.bag = { wood: 5, stone: 7, coal: 3 }; indPanelBag(); true;`);
+                const i1 = await T.eval(`indSlots().findIndex(function (s) { return s.k === 'stone'; })`);
+                await T.eval(`document.querySelectorAll('#ind-panel .ind-slot[data-from="bag"]')[${i1}].querySelector('.ind-trash').click(); true;`);
+                if (!(await T.eval(`ind.bag.stone === undefined && ind.bag.wood === 5 && ind.bag.coal === 3`))) bad.push('销毁中间那格，石头该没了 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if (!(await T.eval(`!!document.getElementById('ind-undo-btn') && /销毁了 .*× 7/.test(document.getElementById('ind-undo').textContent)`))) bad.push('上方没出"销毁了 X × N　撤销"');
+                await T.eval(`document.getElementById('ind-undo-btn').click(); true;`);
+                if (!(await T.eval(`ind.bag.stone === 7 && !document.getElementById('ind-undo')`))) bad.push('5 秒内撤销该还原 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indTrash('bag', indSlots().findIndex(function (s) { return s.k === 'coal'; })); true;`);
+                const t0 = Date.now();
+                if (!(await until(T, `!document.getElementById('ind-undo')`, 8000)) || Date.now() - t0 < 4000) bad.push('撤销条该 5 秒后才消失 ' + (Date.now() - t0));
+                if (!(await T.eval(`indUndo() === false && ind.bag.coal === undefined`))) bad.push('过了 5 秒撤销不该还原');
+                // Ctrl+Q 销毁手上那格
+                await T.eval(`indPanelClose(); ind.bag = { wood: 5, b_water: 1 }; indSelect('b_water'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', ctrlKey: true })); true;`);
+                if (!(await T.eval(`ind.bag.b_water === undefined && ind.bag.wood === 5 && !!document.getElementById('ind-undo')`))) bad.push('Ctrl+Q 该销毁手上那格（装水的桶也能销毁） ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 背包满了撤销放不回去
+                await T.eval(`{ let b = {}; Object.keys(IND_ITEMS).filter(function (k) { return k !== 'b_water'; }).slice(0, 24).forEach(function (k) { b[k] = 1; }); ind.bag = b; } true;`);
+                if (await T.eval(`indSlots().length === 24`)) {
+                    await T.eval(`window.__fl = []; indUndo(); true;`);
+                    if (!(await T.eval(`ind.bag.b_water === undefined && __fl.some(function (t) { return /放不下了/.test(t); })`))) bad.push('背包满时撤销该提示放不下了');
+                }
+                await T.eval(`ind.undo = null; indUndoBar(); true;`);
+                // ── 箱子里销毁、撤销 ──
+                const cid = await T.eval(`(function(){ ind.base.chests.push({ id: 900, x: 3, z: 3, big: false, items: { wood: 10, iron: 4, coal: 2 } }); return 900; })()`);
+                await T.eval(`ind.bag = {}; indPanelBox(${cid}); true;`);
+                const bi = await T.eval(`indSlotsIn(indChestCur().items).findIndex(function (s) { return s.k === 'iron'; })`);
+                await T.eval(`document.querySelectorAll('#ind-panel .ind-slot[data-from="box"]')[${bi}].querySelector('.ind-trash').click(); true;`);
+                if (!(await T.eval(`indChestCur().id === 900 && indChestCur().items.iron === undefined && indChestCur().items.wood === 10`))) bad.push('箱子里销毁该没了');
+                await T.eval(`indUndo(); true;`);
+                if (!(await T.eval(`indChestCur().items.iron === 4 && Object.keys(ind.bag).length === 0`))) bad.push('箱子里撤销该回箱子');
+                // ── 14.3 身上那块、拖拽 ──
+                await T.eval(`ind.bag = { wood: 30, stone: 12, coal: 5, salt: 3, clay: 8 }; indPanelBox(${cid}); true;`);
+                if (!(await T.eval(`document.querySelectorAll('#ind-bag-zone .ind-slot').length === 5 && !!document.getElementById('ind-box-zone')`))) bad.push('仓库箱面板下面该有"身上"5 格');
+                // 真的用鼠标拖：按住"石头"那格拖到箱子区域松开
+                const drag = async (sel, zone) => {
+                    const p = await J(`(function(){ let a = document.querySelector('${sel}').getBoundingClientRect(), z = document.getElementById('${zone}').getBoundingClientRect(); return [a.left + 10, a.top + a.height / 2, z.left + z.width / 2, z.top + Math.min(z.height / 2, 15)]; })()`);
+                    await T.eval(`(function(){ let el = document.querySelector('${sel}'); function ev(t, x, y, tgt) { (tgt || window).dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, button: 0, pointerType: 'mouse', bubbles: true })); }
+                        ev('pointerdown', ${p[0]}, ${p[1]}, el); ev('pointermove', ${p[0] + 20}, ${p[1]}); ev('pointermove', ${p[2]}, ${p[3]});
+                        window.__ghost = !!document.getElementById('ind-drag-ghost'); ev('pointerup', ${p[2]}, ${p[3]}); return true; })()`);
+                };
+                const si = await T.eval(`indSlots().findIndex(function (s) { return s.k === 'stone'; })`);
+                await drag(`#ind-bag-zone .ind-slot[data-i="${si}"]`, 'ind-box-zone');
+                if (!(await T.eval(`__ghost && ind.bag.stone === undefined && indChestCur().items.stone === 12 && ind.bag.wood === 30 && !document.getElementById('ind-drag-ghost')`))) bad.push('拖一格进箱子：背包少这格、箱子多整堆 ' + await T.eval(`JSON.stringify([ind.bag, indChestCur().items, __ghost])`));
+                const bs = await T.eval(`indSlotsIn(indChestCur().items).findIndex(function (s) { return s.k === 'stone'; })`);
+                await drag(`#ind-box-zone .ind-slot[data-i="${bs}"]`, 'ind-bag-zone');
+                if (!(await T.eval(`ind.bag.stone === 12 && indChestCur().items.stone === undefined`))) bad.push('从箱子拖回背包该整堆回来 ' + await T.eval(`JSON.stringify([ind.bag, indChestCur().items])`));
+                // 拖到别处松开：取消
+                await T.eval(`(function(){ let el = document.querySelector('#ind-bag-zone .ind-slot'); let r = el.getBoundingClientRect(); function ev(t, x, y, tgt) { (tgt || window).dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, button: 0, pointerType: 'mouse', bubbles: true })); } ev('pointerdown', r.left + 5, r.top + 5, el); ev('pointermove', 2, 2); ev('pointerup', 2, 2); return true; })()`);
+                if (!(await T.eval(`ind.bag.wood === 30 && ind.bag.stone === 12 && Object.keys(ind.bag).length === 5`))) bad.push('拖到别处松开该取消');
+                // 点选再按按钮（触屏）
+                await T.eval(`(function(){ let el = document.querySelector('#ind-bag-zone .ind-slot[data-i="0"]'); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: 1, clientY: 1, button: 0, pointerType: 'touch', bubbles: true })); window.dispatchEvent(new PointerEvent('pointerup', { clientX: 1, clientY: 1, button: 0, pointerType: 'touch', bubbles: true })); return true; })()`);
+                const k0 = await T.eval(`ind.boxSel && indSlots()[ind.boxSel.i].k`);
+                if (!(await T.eval(`!!document.getElementById('ind-box-selput')`))) bad.push('点一格该选中、出"放进箱子"');
+                else { await T.eval(`document.getElementById('ind-box-selput').click(); true;`); if (!(await T.eval(`ind.bag['${k0}'] === undefined && indChestCur().items['${k0}'] > 0`))) bad.push('点选后"放进箱子"没放'); }
+                // 箱子满了：拖不进、背包不变
+                await T.eval(`(function(){ let c = indChestCur(), ks = Object.keys(IND_ITEMS).filter(function (k) { return ['wood','stone','coal','salt','clay'].indexOf(k) < 0; }).slice(0, ${30}); c.items = {}; ks.forEach(function (k) { c.items[k] = 1; }); indPanelBox(); return true; })()`);
+                const before = await J(`ind.bag`);
+                const ci = await T.eval(`indSlots().findIndex(function (s) { return s.k === 'clay'; })`);
+                await T.eval(`window.__fl = []; true;`);
+                await drag(`#ind-bag-zone .ind-slot[data-i="${ci}"]`, 'ind-box-zone');
+                if (!(await T.eval(`indSlotsOf(indChestCur().items) === 30 && JSON.stringify(ind.bag) === '${JSON.stringify(before)}' && __fl.some(function (t) { return /放不下/.test(t); })`))) bad.push('箱子满了拖进去该被拒、背包不变、有提示 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
+                // 原来的按钮还在
+                if (!(await T.eval(`!!document.getElementById('ind-box-putall') && !!document.getElementById('ind-box-putsame') && /拿 1/.test(document.getElementById('ind-panel').textContent) && /全拿/.test(document.getElementById('ind-panel').textContent)`))) bad.push('原来的拿 1／全拿／全部放进去／同类放进去该留着');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND35 面板不回顶部、一键销毁（5 秒撤销）、仓库箱下面有背包能整格拖', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND36')) {
+            // IND36 水里移速和体力（任务 12）：岸边陆地 1 倍；浅水能跑、走跑都 ×0.85、体力只在跑时掉；深水游泳 0.6 倍不能跑、动才掉体力、站着不掉、3 秒后回；
+            // 0.55／0.65 附近来回不乱跳（进深水 ≥ 0.6、出深水 ≤ 0.5）；深水 HUD 写"游泳中，不能跑"；木筏照旧 2 倍；老存档
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`${HIDE} indSetRule('hard'); indGoTrip(2024); ind.paused = true; window.__wd = indWaterDepth; true;`);
+                // 找几个点：陆地（高出水面 0.05～0.2，也就是以前误判成水的岸边）、浅水 0.2～0.4、深水 ≥ 0.9
+                const pts = await J(`(function(){ let o = {}; for (let x = -280; x < 280 && !(o.shore && o.shallow && o.deep); x += 1.3) for (let z = -280; z < 280; z += 1.3) { let h = indHeight(ind.map, x, z), d = IND_WATER_Y - h;
+                    if (!o.shore && h > IND_WATER_Y + 0.06 && h < IND_WATER_Y + 0.18) o.shore = [x, z]; else if (!o.shallow && d > 0.2 && d < 0.4) o.shallow = [x, z]; else if (!o.deep && d > 0.9) o.deep = [x, z]; } return o; })()`);
+                if (!(pts.shore && pts.shallow && pts.deep)) bad.push('图上没找到岸边／浅水／深水 ' + JSON.stringify(pts));
+                else {
+                    // 走一小步量速度（倍数 = 走的距离 ÷ (基础速度 × dt)），并看体力变化
+                    const step = (p, run, mv, stam, dt) => J(`(function(){ let R = ind; R.p.x = ${p[0]}; R.p.z = ${p[1]}; R.p.y = indGround(R.p.x, R.p.z); R.p.vy = 0; let S = R.base.surv; S.food = S.water = S.energy = 100; S.temp = 37; S.hp = 100;
+                        R.stam = ${stam}; R.k = { w: ${mv}, run: ${run} }; R.panel = null; let x0 = R.p.x, z0 = R.p.z; indMove(${dt || 0.01});
+                        let r = [Math.round(Math.hypot(R.p.x - x0, R.p.z - z0) / (IND_T.speed * ${dt || 0.01}) * 1000) / 1000, Math.round((R.stam - ${stam}) * 1000) / 1000, !!R.running]; R.p.x = x0; R.p.z = z0; return r; })()`);
+                    const RUN = await T.eval('IND_T.run'), m = {};
+                    for (const [nm, p] of [['岸边', pts.shore], ['浅水', pts.shallow], ['深水', pts.deep]]) {
+                        await T.eval(`ind.deepSt = false; ind.stillT = 0; true;`);
+                        m[nm] = { 走: await step(p, false, true, 50), 跑: await step(p, true, true, 50), 站: await step(p, false, false, 50) };
+                    }
+                    console.log('      IND36 实测（倍速, 这一步体力变化, 在跑）：' + JSON.stringify(m));
+                    const near = (a, b) => Math.abs(a - b) < 0.02;
+                    if (!(near(m['岸边'].走[0], 1) && near(m['岸边'].跑[0], RUN))) bad.push('岸边陆地该是 1 倍、能跑 ' + JSON.stringify(m['岸边']));
+                    if (!(near(m['浅水'].走[0], 0.85) && m['浅水'].跑[2] && near(m['浅水'].跑[0], 0.85 * RUN))) bad.push('浅水该 0.85 倍、能跑（跑也 ×0.85） ' + JSON.stringify(m['浅水']));
+                    if (!(m['浅水'].走[1] >= 0 && m['浅水'].跑[1] < 0)) bad.push('浅水体力只在跑的时候掉 ' + JSON.stringify(m['浅水']));
+                    if (!(near(m['深水'].走[0], 0.6) && near(m['深水'].跑[0], 0.6) && !m['深水'].跑[2])) bad.push('深水该 0.6 倍、不能跑 ' + JSON.stringify(m['深水']));
+                    if (!(m['深水'].走[1] < 0 && m['深水'].站[1] === 0)) bad.push('深水动才掉体力、站着不掉 ' + JSON.stringify(m['深水']));
+                    // 站 3 秒后开始回（每秒 8）
+                    const rec = await J(`(function(){ let R = ind; R.p.x = ${pts.deep[0]}; R.p.z = ${pts.deep[1]}; R.stam = 40; R.k = {}; R.deepSt = false; R.stillT = 0; for (let i = 0; i < 25; i++) indMove(0.1); let a = R.stam; for (let i = 0; i < 10; i++) indMove(0.1); return [a, R.stam]; })()`);
+                    if (!(rec[0] === 40 && Math.abs(rec[1] - 40 - 8 * 1) < 0.6)) bad.push('深水站着 3 秒内不变、3 秒后每秒回 8 ' + JSON.stringify(rec));
+                    // 没体力 0.3 倍
+                    const tired = await step(pts.deep, false, true, 0);
+                    if (!near(tired[0], 0.3)) bad.push('深水没体力该 0.3 倍 ' + JSON.stringify(tired));
+                    // HUD
+                    await T.eval(`ind.p.x = ${pts.deep[0]}; ind.p.z = ${pts.deep[1]}; ind.deepSt = false; ind.stam = 50; ind.k = {}; indMove(0.01); ind.hudSig = ''; indHudUpdate(); true;`);
+                    if (!(await T.eval(`/游泳中，不能跑/.test(document.getElementById('ind-status').textContent)`))) bad.push('深水 HUD 该写"游泳中，不能跑"');
+                    await T.eval(`ind.p.x = ${pts.shallow[0]}; ind.p.z = ${pts.shallow[1]}; ind.k = {}; indMove(0.01); ind.hudSig = ''; indHudUpdate(); true;`);
+                    if (!(await T.eval(`!/游泳中/.test(document.getElementById('ind-status').textContent)`))) bad.push('浅水不该写游泳中');
+                    // 滞回：0.55 → 0.65 → 0.55 → 0.45
+                    const hy = await J(`(function(){ let out = []; ind.deepSt = false; [0.55, 0.65, 0.55, 0.52, 0.65, 0.45, 0.55].forEach(function (d) { indWaterDepth = function () { return d; }; out.push(indDeep() ? 1 : 0); }); indWaterDepth = __wd; return out; })()`);
+                    if (JSON.stringify(hy) !== '[0,1,1,1,1,0,0]') bad.push('0.55／0.65 附近来回该有滞回（进 ≥ 0.6、出 ≤ 0.5） ' + JSON.stringify(hy));
+                    // 木筏
+                    const rf = await J(`(function(){ let R = ind; R.onRaft = { x: ${pts.deep[0]}, z: ${pts.deep[1]} }; let s = indWaterSpeed(); R.onRaft = null; return s; })()`);
+                    if (rf !== 2) bad.push('木筏该 2 倍 ' + rf);
+                }
+                // 老存档（没有 deepSt／stillT 这些身上的状态，本来也不存）
+                if (!(await T.eval(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); delete b.surv.stam; indFixBase(b); return true; })()`))) bad.push('老存档整理报错');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND36 水里：岸边 1 倍、浅水 0.85 能跑、深水游泳不能跑动才掉体力、滞回、HUD 写游泳中', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

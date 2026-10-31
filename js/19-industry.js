@@ -896,7 +896,7 @@
             ind.onCtx = function (e) { if (ind) e.preventDefault(); };
             document.addEventListener('mousedown', ind.onMouse); document.addEventListener('mouseup', ind.onMouseUp); document.addEventListener('contextmenu', ind.onCtx);
             if (!base.rule) indAskRule();
-            else if (gState.control !== 'pad') indFlash('左键 采集／拿／种／打开，右键 吃喝／浇水／接水，Q 放下，Shift 跑');
+            else if (gState.control !== 'pad') indFlash('左键 采集／拿／种／打开，右键 吃喝／浇水／接水，Q 放下，B 背包，Shift 跑');
             ind.last = performance.now();
             ind.raf = requestAnimationFrame(indLoop);
         }
@@ -940,7 +940,7 @@
             document.body.onmousedown = null;
             if (R.onMouse) { document.removeEventListener('mouseup', R.onMouseUp); document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); }
             if (document.pointerLockElement) document.exitPointerLock();
-            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead', 'ind-compass', 'ind-rad', 'ind-geiger', 'ind-flash'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
+            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead', 'ind-compass', 'ind-rad', 'ind-geiger', 'ind-flash', 'ind-undo'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
             indClearWorld();
             if (R.me) scene.remove(R.me);
             scene.background = R.oldBg; scene.fog = R.oldFog;
@@ -2734,29 +2734,162 @@
         // ── 面板：仓库箱、灶台 ──
         const IND_BTN = 'margin:3px;padding:7px 12px;border:none;border-radius:6px;background:#455a64;color:#fff;font-size:14px;cursor:pointer;';
         const IND_PANEL_CSS = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;background:#fff;border-radius:10px;padding:14px;width:min(92vw,440px);max-height:76vh;overflow:auto;font-family:"Microsoft YaHei",sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.3);';
-        function indPanelClose() { let p = document.getElementById('ind-panel'); if (p && p.parentNode) p.parentNode.removeChild(p); if (ind) { ind.panel = null; ind.cookId = null; ind.boxId = null; } }
+        function indPanelClose() { let p = document.getElementById('ind-panel'); if (p && p.parentNode) p.parentNode.removeChild(p); if (ind) { ind.panel = null; ind.cookId = null; ind.boxId = null; ind.panelKey = null; ind.boxSel = null; } indDragEnd(); }
+        // 面板换内容不回顶部（任务 14.1）：同一个面板刷新时记下自己和里面有滚动条的子元素的 scrollTop，换完还原；换了别的面板才回顶部
+        function indPanelKey(kind) { return kind + '|' + (ind.boxId == null ? '' : ind.boxId) + '|' + (ind.cookId == null ? '' : ind.cookId); }
+        function indPanelSet(p, html) {
+            let keep = [{ i: -1, t: p.scrollTop }], all = p.querySelectorAll('*');
+            for (let i = 0; i < all.length; i++) if (all[i].scrollTop > 0) keep.push({ i: i, t: all[i].scrollTop });
+            p.innerHTML = html;
+            all = p.querySelectorAll('*');
+            keep.forEach(function (o) { let e = o.i < 0 ? p : all[o.i]; if (e) e.scrollTop = o.t; });
+        }
         function indPanelShow(kind, html) {
+            if (!ind) return;
+            let old = document.getElementById('ind-panel'), key = indPanelKey(kind);
+            if (old && ind.panel === kind && ind.panelKey === key) { ind.panelDirty = false; indPanelSet(old, html); return; }
             indPanelClose(); if (!ind) return;
             if (document.pointerLockElement) document.exitPointerLock();
-            ind.panel = kind; ind.panelDirty = false;
+            ind.panel = kind; ind.panelDirty = false; ind.panelKey = key;
             let p = document.createElement('div'); p.id = 'ind-panel'; p.style.cssText = IND_PANEL_CSS; p.innerHTML = html;
             document.body.appendChild(p);
         }
         function indRow(left, right) { return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 0;border-bottom:1px solid #eee;"><span style="flex:1;min-width:0;">' + left + '</span><span style="white-space:nowrap;">' + right + '</span></div>'; }
         function indChestCur() { let C = ind.base.chests; return C.filter(function (c) { return c.id === ind.boxId; })[0] || indBoxTarget(); }
         function indChestCap(c) { return c.big ? 0 : IND_CHEST_SLOTS; }
+        // 格子：{ 物品: 总数 } 按 99 一格切开（和背包一样）
+        function indSlotsIn(B) { let L = []; Object.keys(B).forEach(function (k) { let c = B[k]; while (c > 0) { L.push({ k: k, n: Math.min(IND_STACK, c) }); c -= IND_STACK; } }); return L; }
+        const IND_X_BTN = 'margin-left:4px;padding:1px 6px;border:none;border-radius:8px;background:#e53935;color:#fff;font-size:12px;cursor:pointer;';
+        // 身上的格子（样子照屏幕下方的物品栏）；箱子面板和背包面板共用
+        function indBagChips(zone) {
+            let SL = indSlots(), S = ind.boxSel;
+            if (!SL.length) return '<div style="color:#999;padding:6px 0;">身上没东西</div>';
+            return SL.map(function (it, i) {
+                let on = S && S.from === 'bag' && S.i === i, hot = IND_ITEMS[it.k].hot;
+                return '<span class="ind-slot" data-from="bag" data-i="' + i + '" onpointerdown="indDragDown(event,\'bag\',' + i + ')" style="display:inline-block;margin:2px;padding:3px 6px;border-radius:10px;cursor:grab;font-size:13px;user-select:none;touch-action:manipulation;border:2px solid ' + (on ? '#5e35b1' : hot ? '#c62828' : '#cfd8dc') + ';background:' + (on ? '#ede7f6' : hot ? '#ffcdd2' : '#fff') + ';">' + indName(it.k) + '×' + it.n +
+                    '<button class="ind-trash" style="' + IND_X_BTN + '" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indTrash(\'bag\',' + i + ')">销毁</button></span>';
+            }).join('');
+        }
         function indPanelBox(id) {
             if (!ind) return;
             if (id !== undefined) ind.boxId = id;
             let cid = ind.boxId, c = indChestCur();
             if (!c) { indFlash('没有仓库箱'); return; }
-            let box = c.items, ks = Object.keys(box);
-            let rows = ks.length ? ks.map(function (k) {
-                return indRow(indName(k) + ' × ' + box[k], '<button style="' + IND_BTN + '" onclick="indBoxTake(\'' + k + '\',1)">拿 1</button><button style="' + IND_BTN + '" onclick="indBoxTake(\'' + k + '\',' + IND_STACK + ')">全拿</button>');
+            let box = c.items, SL = indSlotsIn(box), S = ind.boxSel;
+            if (S && (S.from === 'bag' ? !indSlots()[S.i] : !SL[S.i])) S = ind.boxSel = null;
+            let rows = SL.length ? SL.map(function (it, i) {
+                let on = S && S.from === 'box' && S.i === i;
+                return '<div class="ind-slot" data-from="box" data-i="' + i + '" onpointerdown="indDragDown(event,\'box\',' + i + ')" style="cursor:grab;user-select:none;touch-action:manipulation;' + (on ? 'background:#ede7f6;outline:2px solid #5e35b1;' : '') + '">' +
+                    indRow(indName(it.k) + ' × ' + it.n, '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',1)">拿 1</button><button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',' + IND_STACK + ')">全拿</button><button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
             }).join('') : '<div style="color:#999;padding:8px 0;">空的</div>';
-            indPanelShow('box', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">仓库箱' + (c.big ? '' : '　' + indSlotsOf(box) + ' / ' + IND_CHEST_SLOTS + ' 格') + '</div>' + rows +
-                '<div style="margin-top:8px;text-align:right;"><button id="ind-box-putall" style="' + IND_BTN + 'background:#2e7d32;" onclick="indBoxPutAll()">全部放进去</button><button id="ind-box-putsame" style="' + IND_BTN + 'background:#00838f;" onclick="indBoxPutSame()">同类放进去</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+            let selBtn = S ? (S.from === 'bag' ? '<button id="ind-box-selput" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveSel()">放进箱子</button>' : '<button id="ind-box-seltake" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveSel()">拿回来</button>') : '';
+            indPanelShow('box', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">仓库箱' + (c.big ? '' : '　' + indSlotsOf(box) + ' / ' + IND_CHEST_SLOTS + ' 格') + '</div>' +
+                '<div id="ind-box-zone" style="min-height:40px;border-radius:6px;">' + rows + '</div>' +
+                '<div style="margin-top:8px;font-weight:bold;">身上　<small style="color:#888;font-weight:normal;">按住一格拖进箱子；点一下选中再点按钮也行</small></div>' +
+                '<div id="ind-bag-zone" style="min-height:40px;border-radius:6px;padding:2px;">' + indBagChips() + '</div>' +
+                '<div style="margin-top:8px;text-align:right;">' + selBtn + '<button id="ind-box-putall" style="' + IND_BTN + 'background:#2e7d32;" onclick="indBoxPutAll()">全部放进去</button><button id="ind-box-putsame" style="' + IND_BTN + 'background:#00838f;" onclick="indBoxPutSame()">同类放进去</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
             ind.boxId = cid;
+        }
+        // 背包面板（B）：列出身上的格子，可以销毁
+        function indPanelBag() {
+            if (!ind) return;
+            indPanelShow('bag', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">背包　' + indSlots().length + ' / ' + IND_BAG_SLOTS + ' 格</div><div id="ind-bag-zone">' + indBagChips() + '</div>' +
+                '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+        }
+        function indPanelRefresh() { if (!ind) return; if (ind.panel === 'box') indPanelBox(); else if (ind.panel === 'bag') indPanelBag(); else if (ind.panel === 'stove') indPanelStove(); }
+
+        // ── 整格搬（任务 14.3）：背包一格 ↔ 箱子；放不下就不动 ──
+        function indBoxMove(from, i) {
+            if (!ind || ind.where !== 'base') return false;
+            let c = indChestCur(); if (!c) return false;
+            if (from === 'bag') {
+                let it = indSlots()[i]; if (!it) return false;
+                if (indFits(c.items, indChestCap(c), it.k, it.n) < it.n) { indFlash('箱子放不下了'); return false; }
+                indBagDel(it.k, it.n); c.items[it.k] = (c.items[it.k] || 0) + it.n;
+            } else {
+                let it = indSlotsIn(c.items)[i]; if (!it) return false;
+                if (indFits(ind.bag, IND_BAG_SLOTS, it.k, it.n) < it.n) { indFlash('背包放不下了'); return false; }
+                indBagAdd(it.k, it.n); c.items[it.k] -= it.n; if (c.items[it.k] <= 0) delete c.items[it.k];
+            }
+            ind.boxSel = null; indSave(); indPanelBox(); return true;
+        }
+        function indBoxMoveSel() { let S = ind && ind.boxSel; if (S) indBoxMove(S.from, S.i); }
+        // 鼠标拖：按住一格，半透明跟着走，松开在另一块里就搬过去；触屏只能点选
+        let indDrag = null;
+        function indDragDown(e, from, i) {
+            if (!ind || (e.button !== undefined && e.button !== 0)) return;
+            indDragEnd();
+            indDrag = { from: from, i: i, x: e.clientX, y: e.clientY, on: false, mouse: e.pointerType === 'mouse' || !e.pointerType, ghost: null };
+            window.addEventListener('pointermove', indDragMove); window.addEventListener('pointerup', indDragUp);
+        }
+        function indDragZoneAt(x, y) {
+            let el = document.elementFromPoint(x, y), z = el && el.closest && el.closest('#ind-box-zone,#ind-bag-zone');
+            return z ? (z.id === 'ind-box-zone' ? 'box' : 'bag') : null;
+        }
+        function indDragMove(e) {
+            let D = indDrag; if (!D) return;
+            if (!D.on) {
+                if (!D.mouse || Math.hypot(e.clientX - D.x, e.clientY - D.y) < 6) return;
+                let src = document.querySelector('#ind-panel .ind-slot[data-from="' + D.from + '"][data-i="' + D.i + '"]'); if (!src) return indDragEnd();
+                D.on = true; D.src = src; src.style.opacity = '0.4';
+                let g = src.cloneNode(true); g.id = 'ind-drag-ghost'; g.style.cssText += ';position:fixed;z-index:70;pointer-events:none;opacity:0.7;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.3);width:' + Math.min(src.offsetWidth, 300) + 'px;';
+                document.body.appendChild(g); D.ghost = g;
+            }
+            D.ghost.style.left = (e.clientX + 8) + 'px'; D.ghost.style.top = (e.clientY + 8) + 'px';
+            let z = indDragZoneAt(e.clientX, e.clientY), want = D.from === 'bag' ? 'box' : 'bag';
+            ['box', 'bag'].forEach(function (k) { let el = document.getElementById('ind-' + k + '-zone'); if (el) el.style.background = (k === want && z === want) ? '#e8f5e9' : ''; });
+        }
+        function indDragUp(e) {
+            let D = indDrag; if (!D) return;
+            let on = D.on, z = on ? indDragZoneAt(e.clientX, e.clientY) : null;
+            indDragEnd();
+            if (!on) {   // 没拖动：点选（触屏就靠这个）
+                if (ind && ind.panel === 'box') { let S = ind.boxSel; ind.boxSel = S && S.from === D.from && S.i === D.i ? null : { from: D.from, i: D.i }; indPanelBox(); }
+                return;
+            }
+            if (z && z !== D.from) indBoxMove(D.from, D.i); else if (ind && ind.panel === 'box') indPanelBox();
+        }
+        function indDragEnd() {
+            window.removeEventListener('pointermove', indDragMove); window.removeEventListener('pointerup', indDragUp);
+            let D = indDrag; indDrag = null; if (!D) return;
+            if (D.ghost && D.ghost.parentNode) D.ghost.parentNode.removeChild(D.ghost);
+            if (D.src) D.src.style.opacity = '';
+            ['box', 'bag'].forEach(function (k) { let el = document.getElementById('ind-' + k + '-zone'); if (el) el.style.background = ''; });
+        }
+
+        // ── 一键销毁（任务 14.2）：整格没了，5 秒内能撤销 ──
+        const IND_UNDO_MS = 5000;
+        function indTrash(where, i) {
+            if (!ind) return false;
+            let it, c = null;
+            if (where === 'bag') { it = indSlots()[i]; if (!it) return false; indBagDel(it.k, it.n); }
+            else { c = indChestCur(); if (!c) return false; it = indSlotsIn(c.items)[i]; if (!it) return false; c.items[it.k] -= it.n; if (c.items[it.k] <= 0) delete c.items[it.k]; }
+            if (ind.hotT && !ind.bag[it.k]) delete ind.hotT[it.k];
+            ind.undo = { where: where, cid: c ? c.id : null, k: it.k, n: it.n, until: Date.now() + IND_UNDO_MS };
+            ind.boxSel = null; ind.hudSig = ''; indSave(); indPanelRefresh(); indUndoBar();
+            return true;
+        }
+        function indTrashHand() { let SL = indSlots(), i = ind ? ind.selIdx : -1; if (!SL[i]) { indFlash('手上没东西'); return false; } return indTrash('bag', i); }
+        function indUndoBar() {
+            let U = ind && ind.undo, el = document.getElementById('ind-undo');
+            if (!U || Date.now() >= U.until) { if (el && el.parentNode) el.parentNode.removeChild(el); if (ind && U) ind.undo = null; return; }
+            if (!el) { el = document.createElement('div'); el.id = 'ind-undo'; el.style.cssText = 'position:fixed;left:50%;top:44px;transform:translateX(-50%);z-index:75;background:rgba(0,0,0,.8);color:#fff;font-family:"Microsoft YaHei",sans-serif;font-size:16px;padding:6px 10px 6px 16px;border-radius:18px;'; document.body.appendChild(el); }
+            el.innerHTML = '销毁了 ' + indName(U.k) + ' × ' + U.n + '　<button id="ind-undo-btn" style="' + IND_BTN + 'background:#ffb300;color:#000;" onclick="indUndo()">撤销</button>';
+            clearTimeout(indUndoBar.t); indUndoBar.t = setTimeout(indUndoBar, U.until - Date.now() + 20);
+        }
+        function indUndo() {
+            let U = ind && ind.undo; if (!U || Date.now() >= U.until) { indUndoBar(); return false; }
+            if (U.where === 'bag') {
+                if (indFits(ind.bag, IND_BAG_SLOTS, U.k, U.n) < U.n) { indFlash('放不下了'); return false; }
+                indBagAdd(U.k, U.n);
+            } else {
+                let c = ind.base.chests.filter(function (x) { return x.id === U.cid; })[0];
+                if (!c) { indFlash('箱子没了'); return false; }
+                if (indFits(c.items, indChestCap(c), U.k, U.n) < U.n) { indFlash('放不下了'); return false; }
+                c.items[U.k] = (c.items[U.k] || 0) + U.n;
+            }
+            ind.undo = null; ind.hudSig = ''; indSave(); indUndoBar(); indPanelRefresh(); indFlash('撤销了');
+            return true;
         }
         function indBoxTake(k, n) {
             let c = ind && indChestCur(); if (!c || !c.items[k]) return;
@@ -2859,6 +2992,8 @@
             if (k === 'escape') { if (ind.panel) indPanelClose(); return; }
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）
+            if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); indTrashHand(); return; }   // Ctrl+Q：销毁手上那一格（5 秒能撤销）
+            if (k === 'b' && (!ind.panel || ind.panel === 'bag')) { if (ind.panel) indPanelClose(); else indPanelBag(); return; }
             if (ind.panel) return;
             if (k === 'q' || k === 'g') indDrop(); else if (k === 'e' || k === 'f') indAction(); else if (k === 'r') indUse();
             else if (/^[1-9]$/.test(k)) ind.selIdx = +k - 1;
@@ -2884,7 +3019,7 @@
             d.innerHTML =
                 '<div style="position:absolute;left:8px;top:8px;"><div id="ind-status" style="background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
                 '<div id="ind-wear" style="margin-top:4px;background:rgba(255,255,255,.92);padding:4px 10px;border-radius:8px;font-size:13px;pointer-events:auto;"></div></div>' +
-                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
+                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-bag" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
                 '<div id="ind-hint" style="position:absolute;left:50%;bottom:150px;transform:translateX(-50%);color:#fff;padding:4px 12px;font-size:20px;font-weight:bold;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
@@ -2899,10 +3034,10 @@
         }
         function indHudUpdate() {
             let R = ind; if (!R || R.over) return;
-            if (R.panel === 'stove' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'); if (p) { p.innerHTML = indStoveHtml(); R.panelDirty = false; } }
-            if (R.panel === 'el' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { p.innerHTML = indElHtml(d); R.panelDirty = false; } }
-            if (IND_DEV_HTML[R.panel] && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { p.innerHTML = IND_DEV_HTML[R.panel](d); R.panelDirty = false; } }
-            if ((R.panel === 'comp' || R.panel === 'press') && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { p.innerHTML = R.panel === 'comp' ? indCompHtml(d) : indPressHtml(d); R.panelDirty = false; } }
+            if (R.panel === 'stove' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'); if (p) { indPanelSet(p, indStoveHtml()); R.panelDirty = false; } }
+            if (R.panel === 'el' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, indElHtml(d)); R.panelDirty = false; } }
+            if (IND_DEV_HTML[R.panel] && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, IND_DEV_HTML[R.panel](d)); R.panelDirty = false; } }
+            if ((R.panel === 'comp' || R.panel === 'press') && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, R.panel === 'comp' ? indCompHtml(d) : indPressHtml(d)); R.panelDirty = false; } }
             wdCompassTick(); if (R.panel === 'map') wdMapDraw();   // 指南针、地图（19-industry-world.js）
             let kb2 = document.getElementById('ind-btn-kick'); if (kb2) kb2.style.display = R.base.rule === 'hard' && R.where === 'base' ? '' : 'none';
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
