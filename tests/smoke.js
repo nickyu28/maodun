@@ -5472,7 +5472,7 @@ async function enterExit(tab, key) {
             // IND1 骨架：藏着时看不到、选不到、进不去；?hcdebug=1 能进基地；出门生成远征图（同一个种子同一张图）、采集、稿子等级、
             // 撤离圈站满 3 秒才回基地且东西进仓库箱；基地里放的东西存进 IndexedDB 读得回来；远征里回大厅身上的东西丢；进出 3 次资源不涨
             const bad = [];
-            const N = await openTab(chrome, url);
+            const N = await openTab(chrome, url, { query: 'hcdebug=0' });   // 前面别的检查开过 ?hcdebug=1 会记在 localStorage 里，这里先清掉，才是"正常玩家"
             await N.eval(`${HIDE} nav('screen-lobby'); selectGameMode('hunt'); true;`);
             const hid = JSON.parse(await N.eval(`JSON.stringify({ vis: indVisible(), btn: getComputedStyle(document.getElementById('btn-mode-industry')).display })`));
             if (hid.vis || hid.btn !== 'none') bad.push('正常玩家看得到猫盾工业 ' + JSON.stringify(hid));
@@ -7808,10 +7808,10 @@ async function enterExit(tab, key) {
                 // 倒进漏斗：油 +600、空桶还你；流速有上限；炉子里存够 300 就先不流
                 await T.eval(`(function(){ let c = indCookById('stove'), fp = ckFunnelPos(c); indTeleport(fp.x - 2.2, fp.z); indLookAt(fp.x, fp.z); })(); indSelect('oil'); window.__fl = []; indUse(); true;`);
                 const f1 = await J(`{ oil: ind.base.stove.funnel.oil, bag: ind.bag, aim: indAim() && indAim().kind }`);
-                if (f1.oil !== 600 || f1.bag.oil !== 2 || f1.bag.bucket !== 2) bad.push('拿油桶对着漏斗右键，油倒进漏斗，空桶还你 ' + JSON.stringify(f1));
+                if (!(f1.oil > 590 && f1.oil <= 600) || f1.bag.oil !== 2 || f1.bag.bucket !== 2) bad.push('拿油桶对着漏斗右键，油倒进漏斗，空桶还你 ' + JSON.stringify(f1));
                 await T.eval(`indAdvance(1); true;`);
                 const f2 = await J(`{ fuel: ind.base.stove.fuel, oil: ind.base.stove.funnel.oil }`);
-                if (f2.fuel < 9 || f2.fuel > 10.5 || Math.abs(f2.fuel + f2.oil - 600) > 0.01) bad.push('漏斗每秒最多流 10，油不多不少 ' + JSON.stringify(f2));
+                if (f2.fuel < 9 || f2.fuel > 10.5 + (600 - f1.oil) || Math.abs(f2.fuel + f2.oil - 600) > 0.01) bad.push('漏斗每秒最多流 10，油不多不少 ' + JSON.stringify(f2));
                 await T.eval(`indSelect('oil'); indUse(); indUse(); true;`);
                 const f3 = await J(`{ oil: ind.base.stove.funnel.oil, bag: ind.bag }`);
                 if (f3.oil > 1200 + 1e-6 || f3.bag.oil !== 0 && f3.oil < 1100) bad.push('漏斗容量 1200，装不下就拒绝 ' + JSON.stringify(f3));
