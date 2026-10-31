@@ -7690,12 +7690,14 @@ async function enterExit(tab, key) {
                 if (Object.keys(trees).some((k) => (/^pine@/.test(k) && !/@mountain/.test(k)) || (/^palm@/.test(k) && !/@beach/.test(k)) || (/^oak@/.test(k) && /@(mountain|beach|desert)/.test(k))) || !Object.keys(trees).some((k) => /^oak@/.test(k)) || !Object.keys(trees).some((k) => /^pine@mountain/.test(k)) || !Object.keys(trees).some((k) => /^palm@beach/.test(k))) bad.push('树分种类：森林阔叶、山地松树、海边椰子树 ' + JSON.stringify(trees));
                 const cac = await J(`(function(){ let n = 0, ok = true; for (let s = 1; s <= 30; s++) { indGoTrip(s * 977); ind.nodes.forEach(function (o) { if (o.key === 'cactus') { n++; if (indBiome(ind.map, o.x, o.z) !== 'desert') ok = false; } }); } return [n, ok]; })()`);
                 if (!cac[0] || !cac[1]) bad.push('仙人掌只刷在沙漠 ' + JSON.stringify(cac));
-                await T.eval(`indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = {}; ind.nodes.push({ key: 'wood', tree: 'oak', x: 0, z: -9, y: 0, n: 5, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indTeleport(0, -6.5); indLookAt(0, -9); ind.k = {}; true;`);
+                const rule25 = await T.eval(`ind.base.rule`);   // 硬核空手砍不动（任务 2.7，IND37 查），空手砍树这段在悠闲里比
+                await T.eval(`ind.base.rule = 'casual'; indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = {}; ind.nodes.push({ key: 'wood', tree: 'oak', x: 0, z: -9, y: 0, n: 5, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indTeleport(0, -6.5); indLookAt(0, -9); ind.k = {}; true;`);
                 if ((await J(`indAim() && indAim().kind`)) !== 'node') bad.push('应该瞄到树');
                 await T.eval(`indAction(); indAdvance(7.8); true;`);
                 if (!(await T.eval(`!ind.bag.wood && !!ind.ch`))) bad.push('空手砍树 7.8 秒还没好');
                 await T.eval(`indAdvance(0.4); true;`);
                 if (!(await T.eval(`ind.bag.wood === 5 && ind.nodes[ind.nodes.length - 1].dead && ind.stumps.length === 1`))) bad.push('砍完得到木头，留树桩 ' + await T.eval(`JSON.stringify([ind.bag, ind.stumps])`));
+                await T.eval(`ind.base.rule = '${rule25}'; true;`);
                 await T.eval(`ind.nodes.push({ key: 'wood', tree: 'pine', x: 0, z: -9, y: 0, n: 3, seed: 'seed_wheat', dead: false }); ind.bag = { pick_stone: 1 }; ind.nodeDirty = true; indAction(); indAdvance(3.2); true;`);
                 if (!(await T.eval(`ind.bag.wood === 3`))) bad.push('拿着稿子砍树 3 秒 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 // ── 大石头：要石稿，出 3～5 石头 ──
@@ -8558,6 +8560,55 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND38 黏土：一次 5～9、河边 0.85 和 75:25、平原森林多一半，100 张图总量 ≥ 改前 2.5 倍', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND39')) {
+            // IND39 远征时家里照常运转（任务 3）：出门时记下时刻，远征里家里不跑；回家按离开多久（最多 30 分钟）用现有 tick 补算：
+            // 灶台烧燃料、矿炼成；离开 2 小时只算 30 分钟；身上的饱食口渴不跟着补；补算不到 1 秒；老存档没这个字段不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`${HIDE} indSetRule('hard'); ind.base.rule = 'hard'; ind.base.off.stove = false; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const setStove = (fuel, fire, items) => T.eval(`(function(){ let S = ind.base.stove; S.items = ${JSON.stringify(items)}; S.out = {}; S.fuel = ${fuel}; S.fire = ${fire}; S.temp = 20; S.cook = null; S.spout = []; S.ashT = 0; let s = ind.base.surv; s.food = 80; s.water = 80; s.hp = 100; s.temp = 37; ind.base.crops = []; ind.base.fires = []; ind.base.away = null; return true; })()`);
+                // ── 1 放木头和锡矿，出门，远征里家里不动 ──
+                await setStove(2000, 2, { ore_sn: 3 });
+                await T.eval(`indGoTrip(2024); true;`);
+                const a0 = await J(`[ind.base.away, ind.base.clock]`);
+                if (!(typeof a0[0] === 'number' && Math.abs(a0[0] - a0[1]) < 0.5)) bad.push('出门该记下时刻 ' + JSON.stringify(a0));
+                await T.eval(`indAdvance(5); true;`);
+                if (!(await T.eval(`ind.base.stove.fuel === 2000 && ind.base.stove.temp === 20`))) bad.push('远征里家里的灶台不该在这儿跑（回家补算） ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 模拟离开 10 分钟
+                const sv0 = await J(`[ind.base.surv.food, ind.base.surv.water]`);
+                const r1 = await J(`(function(){ ind.base.away = ind.base.clock - 600; let c = ind.base.clock, t0 = performance.now(); indGoBase(true); let S = ind.base.stove; return { ms: performance.now() - t0, fuel: S.fuel, temp: S.temp, ore: S.items.ore_sn || 0, sn: (S.out.hot_sn || 0) + (S.out.ingot_sn || 0) + S.spout.length + Object.keys(S.out).filter(function (k) { return /sn/.test(k); }).length, out: S.out, sp: S.spout.length, away: ind.base.away, clock: ind.base.clock, c: c }; })()`);
+                const sv1 = await J(`[ind.base.surv.food, ind.base.surv.water]`);
+                if (!(r1.fuel < 2000 - 100 && r1.fuel > 0 && r1.ore === 0 && r1.temp > 500 && (r1.out.hot_sn || 0) + (r1.out.ingot_sn || 0) + r1.sp === 3)) bad.push('离开 10 分钟：燃料该少、锡矿炼成、炉子热着 ' + JSON.stringify(r1));
+                if (!(r1.away === null && Math.abs(r1.clock - r1.c) < 0.01)) bad.push('补完时钟回到现在、离开时刻清掉 ' + JSON.stringify(r1));
+                if (JSON.stringify(sv0) !== JSON.stringify(sv1)) bad.push('身上的饱食口渴不跟着补算 ' + JSON.stringify([sv0, sv1]));
+                if (!(r1.ms < 1000)) bad.push('补算 10 分钟太慢 ' + r1.ms + ' 毫秒');
+                // 燃料烧完火灭（不加保护）
+                await setStove(100, 2, {});
+                const r2 = await J(`(function(){ indGoTrip(2024); ind.base.away = ind.base.clock - 600; indGoBase(true); return [ind.base.stove.fuel, ind.base.stove.fire]; })()`);
+                if (!(r2[0] === 0 && r2[1] === 0)) bad.push('燃料烧完火该灭 ' + JSON.stringify(r2));
+                // ── 2 离开 2 小时只补 30 分钟（看小火烧掉的燃料） ──
+                await setStove(1e6, 1, {});
+                const r3 = await J(`(function(){ indGoTrip(2024); ind.base.away = ind.base.clock - 7200; let t0 = performance.now(); indGoBase(true); let used = 1e6 - ind.base.stove.fuel, per = indFireDef('stove', 1).burn * indCookK('stove').burn; return { used: used, want: per * 1800, ms: performance.now() - t0 }; })()`);
+                if (!(Math.abs(r3.used - r3.want) < r3.want * 0.01)) bad.push('离开 2 小时只该补 30 分钟 ' + JSON.stringify(r3));
+                if (!(r3.ms < 1000)) bad.push('补 30 分钟要在 1 秒内 ' + r3.ms + ' 毫秒');
+                // 作物也补：浇过水的小麦长了
+                const r4 = await J(`(function(){ indGoTrip(2024); ind.base.crops = [{ k: 'wheat', x: -20, z: 0, g: 0, wet: 1e9, times: 0 }]; ind.base.away = ind.base.clock - 60; indGoBase(true); return ind.base.crops[0].g; })()`);
+                if (!(r4 > 30)) bad.push('作物该补着长 ' + r4);
+                // 退出时还在远征：离开时刻存进存档，下次进来补
+                if (!(await T.eval(`(function(){ indGoTrip(2024); let b = JSON.parse(JSON.stringify(ind.base)); indFixBase(b); return typeof b.away === 'number'; })()`))) bad.push('离开时刻要存进存档');
+                await T.eval(`indGoBase(null); true;`);
+                // ── 3 老存档 ──
+                const old = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); delete b.away; b = indFixBase(b); let c = JSON.parse(JSON.stringify(ind.base)); c.away = 'x'; c = indFixBase(c); let d = JSON.parse(JSON.stringify(ind.base)); d.away = d.clock + 99; d = indFixBase(d); return [b.away, c.away, d.away]; })()`);
+                if (JSON.stringify(old) !== '[null,null,null]') bad.push('老存档没这个字段（或乱填的）当没离开过 ' + JSON.stringify(old));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND39 远征时家里照常运转：回家补算（最多 30 分钟）、燃料少矿炼成、火会灭、身上的不补、老存档', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

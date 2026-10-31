@@ -569,6 +569,7 @@
             b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); c.fert = c.fert === 2 ? 2 : !!c.fert; });
             if (typeof b.trips !== 'number') b.trips = 0;
             b.clock = indNum(b.clock, 60, 0, 1e9);
+            if (!(typeof b.away === 'number' && isFinite(b.away) && b.away >= 0 && b.away <= b.clock)) b.away = null;   // 出门的时刻（任务 3），老存档没有就当没出门
             if (!b.surv || typeof b.surv !== 'object') b.surv = n.surv;
             ['hp', 'food', 'water', 'energy'].forEach(function (k) { b.surv[k] = indNum(b.surv[k], n.surv[k], 0, 100); });
             b.surv.temp = indNum(b.surv.temp, 37, 25, 45);
@@ -1107,12 +1108,37 @@
                 indSave();
                 indFlash(got.length ? '撤离成功，带回：' + got.join('、') + '（都在背包里）' : '撤离成功，这次空手回来');
             }
+            if (indCatchUp()) indSave();
+        }
+        // 回家补算（任务 3）：出门这段时间（最多 30 分钟游戏时间）家里照常过——炉子烧燃料、升降温、做东西进出料槽，作物长、浇水过期，
+        // 篝火烧，动物饿，电池和设备耗电干活。用现有的 tick 函数每 1 秒一段快进；时钟按当时的时刻走，补完回到现在。
+        // 不算玩家身上的（饱食、口渴、体温），也不推进繁殖和长大（任务 15）。烧焦、火灭这些照常发生，没有保护
+        const IND_AWAY = { cap: 1800, step: 1 };
+        function indCatchUp() {
+            let B = ind.base; if (typeof B.away !== 'number') return 0;
+            let now = B.clock, span = Math.max(0, Math.min(IND_AWAY.cap, now - B.away)); B.away = null;
+            if (!(span > 0) || !B.rule) return 0;
+            ind.sleeping = true; ind.catching = true;
+            try {
+                for (let t = 0; t < span - 1e-9; t += IND_AWAY.step) {
+                    let h = Math.min(IND_AWAY.step, span - t);
+                    B.clock = now - span + t + h;
+                    indCropTick(h); indFireTick(h);
+                    B.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * h); });
+                    indElecTick(h); indStoveTick(h);
+                    if (!ind || ind.over) return span;
+                }
+            } finally { if (ind) { B.clock = now; ind.sleeping = false; ind.catching = false; } }
+            ind.cropDirty = true; ind.fireDirty = true; ind.devDirty = true; ind.itemDirty = true;
+            indCooks().forEach(indCookBadge);
+            return span;
         }
 
         // 远征：地形（一个网格，颜色按地貌）、水面、资源点（一个 InstancedMesh）、两个撤离点
         const IND_SEG = 240, IND_NODE_N = 1680, IND_WILD_N = 56;   // 地图 600 × 600：资源点和动物按面积（原来 300 × 300 的 4 倍）
         const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin', 'seed_cotton', 'seed_cabbage', 'seed_radish'];
         function indGoTrip(seed) {
+            if (ind.base.rule && typeof ind.base.away !== 'number') ind.base.away = ind.base.clock;   // 记下出门时刻，回家补算（任务 3）
             indClearWorld();
             ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
             let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed);
@@ -1275,7 +1301,7 @@
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); indCropTick(dt); }
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
             if (!ind || ind.over || ind.dead) return;
@@ -1286,7 +1312,7 @@
             indHurtTick(dt);
             nkTick(dt);   // 第 6 阶段（19-industry-nuke.js）：原子弹倒计时、辐射
             if (!ind || ind.over || ind.dead) return;
-            indStoveTick(dt);
+            if (ind.where === 'base') indStoveTick(dt);
             if (!ind || ind.over) return;
             indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt);
             if (!ind || ind.over) return;
@@ -2689,7 +2715,7 @@
             indCookBadge(c);
         }
         function indCookBadge(c) {
-            if (ind.where !== 'base') return;
+            if (ind.where !== 'base' || ind.catching) return;
             let S = c.C, txt = '';
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; txt = indOutTxt(r, S.cook.n || 1) + '　' + Math.min(99, Math.floor(S.cook.t / r.time * 100)) + '%'; }
             indBadge('cook' + c.id, c.x, c.ty === 'kiln' ? 3.6 : 3.1, c.z, txt);
