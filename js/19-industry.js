@@ -353,6 +353,11 @@
             cat: { name: '猫', col: 0xff8a65, size: [0.6, 0.45, 0.32], food: ['bread', 'bake_potato', 'cheese', 'milk'], tame: 1, biome: ['forest'] }
         };
         const IND_ANIMAL_CAP = 20, IND_WOOL_EVERY = 600, IND_MILK_EVERY = 300, IND_ANIMAL_HUNGER = 1 / 30;
+        // 繁殖：同种两只成年、饱食 ≥ 70、没冷却、3 米内，各被喂一次（30 秒内）→ 20 秒后中间出一只幼崽；幼崽 600 秒长大；配过种的冷却（羊牛 900、狗猫 1200 秒）；数量（幼崽也算）满 20 只不繁殖
+        const IND_BREED = { food: 70, near: 3, love: 30, birth: 20, grow: 600, cd: { sheep: 900, cow: 900, dog: 1200, cat: 1200 }, baby: 0.5 };
+        function indAnimalState(a) { return indIsBaby(a) ? '（幼崽，还有 ' + indBabyLeft(a) + ' 秒长大）' : a.brk > 0 ? '（怀着，' + Math.ceil(a.brk) + ' 秒后生）' : a.love > 0 ? '（发情 ' + Math.ceil(a.love) + ' 秒）' : a.cd > 0 ? '（冷却 ' + Math.ceil(a.cd) + ' 秒）' : '（成年）'; }
+        function indIsBaby(a) { return a.born !== undefined; }
+        function indBabyLeft(a) { return Math.max(0, Math.ceil(a.born + IND_BREED.grow - ind.base.clock)); }
         // 灶台：火候三档；燃料每秒烧掉的量；配方按顺序找第一个原料够的
         const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }, { name: '鼓风', t: 1600, burn: 3, bellows: true }];
         const IND_FERT = 1.5, IND_FERT_SP = 2;   // 硝石：这一季长成时间减半
@@ -587,6 +592,11 @@
             b.fires.forEach(function (f) { f.fuel = indNum(f.fuel, 0, 0, 1e5); f.ashT = indNum(f.ashT, 0, 0, 1e6); });
             if (!Array.isArray(b.animals)) b.animals = [];
             b.animals = b.animals.filter(function (a) { return a && IND_ANIMALS[a.k] && isFinite(a.x) && isFinite(a.z); }).slice(0, IND_ANIMAL_CAP);
+            b.animals.forEach(function (a) {   // 繁殖字段：老档没有的当成年、不发情、不冷却
+                if (a.born !== undefined) { if (isFinite(a.born)) a.born = Math.min(a.born, b.clock); else delete a.born; }
+                a.love = indNum(a.love, 0, 0, IND_BREED.love); a.cd = indNum(a.cd, 0, 0, 1200); a.brk = indNum(a.brk, 0, 0, IND_BREED.birth);
+                if (a.brk > 0) { a.bx = indNum(a.bx, a.x, -IND_BASE.x + 1, IND_BASE.x - 1); a.bz = indNum(a.bz, a.z, -IND_BASE.z + 1, IND_BASE.z - 1); } else { delete a.bx; delete a.bz; }
+            });
             b.animals.forEach(function (a) { a.food = indNum(a.food, 60, 0, 100); a.woolAt = Math.min(indNum(a.woolAt, 0, 0, 1e9), b.clock + IND_WOOL_EVERY); a.milkAt = Math.min(indNum(a.milkAt, 0, 0, 1e9), b.clock + IND_MILK_EVERY);   // 旧档里记的下次时间比新间隔晚，改成现在 + 新间隔
              a.x = indNum(a.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); a.z = indNum(a.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1); });
             if (b.surv.hp <= 0) b.surv.hp = 100;
@@ -733,8 +743,40 @@
         // ── 动物 ──
         function indAnimals() { return ind.where === 'base' ? ind.base.animals : (ind.wild || []); }
         function indFoodTxt(k) { return IND_ANIMALS[k].food.map(indName).join('、'); }
+        // 繁殖和长大：只在基地里、时间在走的时候进行；出远征的时候幼崽的长大时间停着（回来不会多出一圈动物）
+        function indBreedTick(dt) {
+            let B = ind.base.animals, clock = ind.base.clock;
+            if (ind.where !== 'base') { B.forEach(function (a) { if (indIsBaby(a)) a.born += dt; }); return; }
+            B.forEach(function (a) {
+                if (a.love > 0) a.love = Math.max(0, a.love - dt);
+                if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
+                if (indIsBaby(a)) {
+                    if (a.food <= 0) a.born += dt;   // 饿着不长
+                    else if (clock >= a.born + IND_BREED.grow) { delete a.born; a.woolAt = clock + IND_WOOL_EVERY; a.milkAt = clock + IND_MILK_EVERY; ind.animalDirty = true; indFlash(IND_ANIMALS[a.k].name + '长大了'); }
+                }
+                if (a.brk > 0) {
+                    a.brk -= dt;
+                    if (a.brk <= 0) {
+                        a.brk = 0;
+                        if (B.length < IND_ANIMAL_CAP) B.push({ k: a.k, x: a.bx, z: a.bz, food: 60, born: clock, woolAt: clock + IND_WOOL_EVERY, milkAt: clock + IND_MILK_EVERY, love: 0, cd: 0, brk: 0 }), indFlash(IND_ANIMALS[a.k].name + '生了一只幼崽');
+                        delete a.bx; delete a.bz; indSave();
+                    }
+                }
+            });
+            // 配对：两只都在发情、同种、成年、3 米内
+            for (let i = 0; i < B.length; i++) {
+                let a = B[i]; if (!(a.love > 0) || indIsBaby(a) || a.brk > 0) continue;
+                for (let j = i + 1; j < B.length; j++) {
+                    let b = B[j];
+                    if (b.k !== a.k || !(b.love > 0) || indIsBaby(b) || b.brk > 0 || Math.hypot(a.x - b.x, a.z - b.z) > IND_BREED.near) continue;
+                    a.love = b.love = 0; a.cd = b.cd = IND_BREED.cd[a.k]; a.brk = IND_BREED.birth; a.bx = (a.x + b.x) / 2; a.bz = (a.z + b.z) / 2;
+                    break;
+                }
+            }
+        }
         function indAnimalTick(dt, live) {
             let A = indAnimals(), base = ind.where === 'base';
+            if (live) indBreedTick(dt);
             A.forEach(function (a, i) {
                 if (base && live) a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * dt);
                 let sp = 1.2, tx, tz;
@@ -766,8 +808,10 @@
             let A = indAnimals(), n; if (ind.where === 'trip') { let vr = indViewR() + IND_VIEW.margin; A = A.filter(function (a) { return Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= vr; }); } n = Math.min(A.length, 120);
             for (let i = 0; i < n; i++) {
                 let a = A[i], D = IND_ANIMALS[a.k], y = indGround(a.x, a.z);
-                IND_DUMMY.position.set(a.x, y + D.size[1] / 2, a.z); IND_DUMMY.rotation.set(0, a.ry || 0, 0); IND_DUMMY.scale.set(D.size[2], D.size[1], D.size[0]); IND_DUMMY.updateMatrix();
-                ind.animalMesh.setMatrixAt(i, IND_DUMMY.matrix); ind.animalMesh.setColorAt(i, IND_COL.setHex(D.col));
+                IND_DUMMY.position.set(a.x, y + D.size[1] / 2, a.z); IND_DUMMY.rotation.set(0, a.ry || 0, 0); let sc = ind.where === 'base' && indIsBaby(a) ? IND_BREED.baby : 1;   // 幼崽半个身子
+                IND_DUMMY.position.set(a.x, y + D.size[1] * sc / 2, a.z);
+                IND_DUMMY.scale.set(D.size[2] * sc, D.size[1] * sc, D.size[0] * sc); IND_DUMMY.updateMatrix();
+                ind.animalMesh.setMatrixAt(i, IND_DUMMY.matrix); ind.animalMesh.setColorAt(i, IND_COL.setHex(a.love > 0 ? 0xff80ab : D.col));   // 发情：身上变粉色
             }
             ind.animalMesh.count = n; ind.animalMesh.instanceMatrix.needsUpdate = true;
             if (ind.animalMesh.instanceColor) ind.animalMesh.instanceColor.needsUpdate = true;
@@ -784,22 +828,29 @@
                 return true;
             }
             if (k && D.food.indexOf(k) >= 0) {
-                if (a.food >= 95) { indFlash(D.name + '吃饱了'); return false; }
-                indBagDel(k, 1); a.food = Math.min(100, a.food + 30); indSave(); indFlash('喂了' + D.name + '（饱食 ' + Math.round(a.food) + '）'); return true;
+                // 能不能喂成发情：成年、饱食 ≥ 70、没冷却、没在发情／怀着
+                let canLove = !indIsBaby(a) && a.food >= IND_BREED.food && !(a.cd > 0) && !(a.love > 0) && !(a.brk > 0);
+                if (canLove && ind.base.animals.length >= IND_ANIMAL_CAP) { indFlash('圈满了（' + IND_ANIMAL_CAP + ' 只）'); return false; }   // 吃的不扣
+                if (a.food >= 95 && !canLove) { indFlash(D.name + '吃饱了'); return false; }
+                indBagDel(k, 1); a.food = Math.min(100, a.food + 30);
+                if (canLove) { a.love = IND_BREED.love; indSave(); indFlash('喂了' + D.name + '，它发情了（' + IND_BREED.love + ' 秒内再喂旁边同种的一只）'); return true; }
+                indSave(); indFlash('喂了' + D.name + '（饱食 ' + Math.round(a.food) + '）'); return true;
             }
             if (a.k === 'cow' && indIsEmptyCont(k)) {
+                if (indIsBaby(a)) { indFlash('还小，挤不了奶'); return false; }
                 if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
                 if (clock < a.milkAt) { indFlash('牛奶还要等 ' + Math.ceil(a.milkAt - clock) + ' 秒'); return false; }
                 let mm = indContOf(k).mat; indBagDel(k, 1); indBagAdd(indFilledKey('milk', mm), 1); a.milkAt = clock + IND_MILK_EVERY; indSave(); indFlash('挤了一桶牛奶'); return true;
             }
             if (a.k === 'sheep' && k === 'shears') {
+                if (indIsBaby(a)) { indFlash('还小，没有毛'); return false; }
                 if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
                 if (clock < a.woolAt) { indFlash('羊毛还要等 ' + Math.ceil(a.woolAt - clock) + ' 秒'); return false; }
                 if (indBagAdd('wool', 2) <= 0) { indFlash('背包满了'); return false; }
                 a.woolAt = clock + IND_WOOL_EVERY; indSave(); indFlash('剪了 2 份羊毛'); return true;
             }
             // 手里的东西对它没用：只显示状态，不吃东西、不剪毛
-            indFlash(D.name + '　饱食 ' + Math.round(a.food) + (a.food < 30 ? '，饿了' : '') + (a.k === 'sheep' ? '，' + (clock >= a.woolAt ? '能剪毛了（拿剪刀）' : '毛还要 ' + Math.ceil(a.woolAt - clock) + ' 秒') : a.k === 'cow' ? '，' + (clock >= a.milkAt ? '能挤奶了（拿空桶）' : '奶还要 ' + Math.ceil(a.milkAt - clock) + ' 秒') : '') + '，爱吃：' + indFoodTxt(a.k));
+            indFlash(D.name + indAnimalState(a) + '　饱食 ' + Math.round(a.food) + (a.food < 30 ? '，饿了' : '') + (a.k === 'sheep' ? '，' + (clock >= a.woolAt ? '能剪毛了（拿剪刀）' : '毛还要 ' + Math.ceil(a.woolAt - clock) + ' 秒') : a.k === 'cow' ? '，' + (clock >= a.milkAt ? '能挤奶了（拿空桶）' : '奶还要 ' + Math.ceil(a.milkAt - clock) + ' 秒') : '') + '，爱吃：' + indFoodTxt(a.k));
             return false;
         }
 
@@ -2892,7 +2943,7 @@
             else if (a && a.kind === 'animal') {
                 let o = a.o, D = IND_ANIMALS[o.k];
                 if (R.where === 'trip') hint = (o.follow ? D.name + '（跟着你）' : '野生的' + D.name + (o.fed ? '（还要喂 ' + (D.tame - o.fed) + ' 次）' : '')) + '<br><small>爱吃：' + indFoodTxt(o.k) + '</small>';
-                else hint = D.name + '　饱食 ' + Math.round(o.food) + (o.k === 'sheep' ? '　' + (R.base.clock >= o.woolAt ? '能剪毛了' : '毛还要 ' + Math.ceil(o.woolAt - R.base.clock) + ' 秒') : o.k === 'cow' ? '　' + (R.base.clock >= o.milkAt ? '能挤奶了' : '奶还要 ' + Math.ceil(o.milkAt - R.base.clock) + ' 秒') : '') + '<br><small>左键：' + (o.k === 'sheep' ? '喂／拿剪刀剪毛' : o.k === 'cow' ? '喂／拿空桶挤奶' : '喂') + '</small>';
+                else hint = D.name + indAnimalState(o) + '　饱食 ' + Math.round(o.food) + (o.k === 'sheep' ? '　' + (R.base.clock >= o.woolAt ? '能剪毛了' : '毛还要 ' + Math.ceil(o.woolAt - R.base.clock) + ' 秒') : o.k === 'cow' ? '　' + (R.base.clock >= o.milkAt ? '能挤奶了' : '奶还要 ' + Math.ceil(o.milkAt - R.base.clock) + ' 秒') : '') + '<br><small>左键：' + (o.k === 'sheep' ? '喂／拿剪刀剪毛' : o.k === 'cow' ? '喂／拿空桶挤奶' : '喂') + '</small>';
             }
             else if (a && a.kind === 'chest') hint = '仓库箱' + (a.o.big ? '' : '（' + indSlotsOf(a.o.items) + '/' + IND_CHEST_SLOTS + ' 格）') + '<br><small>左键：打开　长按右键：收起</small>';
             else if (a && a.kind === 'stove') hint = '灶台 ' + Math.round(R.base.stove.temp) + '°C<br><small>左键：打开</small>';

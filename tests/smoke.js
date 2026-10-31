@@ -8134,6 +8134,80 @@ async function enterExit(tab, key) {
             report('IND32 背包退出不丢（基地带着存、远征丢）、暂停键（P／按钮，全停、不补算、继续／返回大厅）', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND34')) {
+            // IND34 繁殖（任务 15）：同种两只成年、饱食 ≥ 70、3 米内、各被喂一次 → 20 秒后出幼崽（半个身子、没毛没奶、不能再繁殖）；600 秒长大；冷却；满 20 只不繁殖且不扣吃的；饱食不够喂不成；出远征时不繁殖不长大；老存档
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const setup = (foodA, foodB) => T.eval(`ind.base.animals = [{ k: 'sheep', x: 0, z: 0, food: ${foodA}, woolAt: ind.base.clock, milkAt: 0 }, { k: 'sheep', x: 1.5, z: 0, food: ${foodB}, woolAt: ind.base.clock, milkAt: 0 }]; ind.bag = { wheat: 6 }; ind.selIdx = 0; window.__fl = []; true;`);
+                const feed = (i) => T.eval(`indAnimalAct(ind.base.animals[${i}]); true;`);
+                // ── 1 配对、怀、生 ──
+                await setup(80, 80);
+                await feed(0);
+                if (!(await T.eval(`ind.base.animals[0].love > 29 && ind.bag.wheat === 5`))) bad.push('喂一只该发情、吃掉 1 份 ' + await T.eval(`JSON.stringify([ind.base.animals[0], ind.bag])`));
+                await feed(1);
+                await T.eval(`indAdvance(1); true;`);
+                const pr = await J(`ind.base.animals.map(function (a) { return [a.love, a.cd, a.brk]; })`);
+                if (!(pr[0][2] > 15 && pr[0][1] > 890 && pr[1][1] > 890 && pr[0][0] === 0 && pr[1][0] === 0)) bad.push('两只都喂了该配上对、各自冷却 900 秒 ' + JSON.stringify(pr));
+                await T.eval(`indAdvance(18); true;`);
+                if (!(await T.eval(`ind.base.animals.length === 2`))) bad.push('不到 20 秒不该出生');
+                await T.eval(`indAdvance(3); true;`);
+                if (!(await T.eval(`ind.base.animals.length === 3 && ind.base.animals[2].k === 'sheep' && ind.base.animals[2].born !== undefined`))) bad.push('20 秒后该多一只幼崽 ' + await T.eval(`JSON.stringify(ind.base.animals)`));
+                // 幼崽：没有毛、不能被喂成发情、半个身子
+                await T.eval(`ind.bag = { shears: 1 }; ind.selIdx = 0; window.__fl = []; indAnimalAct(ind.base.animals[2]); true;`);
+                if (!(await T.eval(`__fl.some(function (t) { return /还小/.test(t); }) && ind.bag.wool === undefined`))) bad.push('幼崽不该有羊毛 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
+                await T.eval(`ind.bag = { wheat: 3 }; ind.base.animals[2].food = 80; indAnimalAct(ind.base.animals[2]); true;`);
+                if (!(await T.eval(`!(ind.base.animals[2].love > 0) && ind.bag.wheat === 2`))) bad.push('幼崽只加饱食、不发情 ' + await T.eval(`JSON.stringify(ind.base.animals[2])`));
+                if (!(await T.eval(`indBabyLeft(ind.base.animals[2]) > 570 && indBabyLeft(ind.base.animals[2]) <= 600 && /幼崽/.test(indAnimalState(ind.base.animals[2]))`))) bad.push('幼崽提示该写还有几秒长大');
+                const sz = await T.eval(`(function(){ indSyncAnimals(); let m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); ind.animalMesh.getMatrixAt(2, m); m.decompose(p, q, sc); let m0 = new THREE.Matrix4(); ind.animalMesh.getMatrixAt(0, m0); let sc0 = new THREE.Vector3(); m0.decompose(p, q, sc0); return sc.y / sc0.y; })()`);
+                if (!(sz > 0.45 && sz < 0.55)) bad.push('幼崽体型该是成年的一半 ' + sz);
+                // ── 2 冷却：爸妈还在冷却，喂不成发情 ──
+                await T.eval(`ind.base.animals[0].food = 90; ind.bag = { wheat: 3 }; ind.selIdx = 0; indAnimalAct(ind.base.animals[0]); true;`);
+                if (!(await T.eval(`!(ind.base.animals[0].love > 0) && ind.base.animals[0].cd > 0`))) bad.push('冷却中该喂不成发情 ' + await T.eval(`JSON.stringify(ind.base.animals[0])`));
+                // ── 3 长大 ──
+                await T.eval(`ind.base.animals[2].food = 100; ind.base.animals[0].food = ind.base.animals[1].food = 100; indAdvance(280, 0.5); true;`);
+                if (!(await T.eval(`ind.base.animals[2].born !== undefined`))) bad.push('280 秒还不该长大');
+                await T.eval(`ind.base.animals.forEach(function (a) { a.food = 100; }); indAdvance(330, 0.5); true;`);
+                if (!(await T.eval(`ind.base.animals[2].born === undefined && ind.base.animals[2].woolAt > ind.base.clock && ind.base.animals.length === 3`))) bad.push('600 秒后该长大、开始计毛 ' + await T.eval(`JSON.stringify(ind.base.animals[2])`));
+                // ── 4 饱食不够喂不成 ──
+                await setup(60, 80);
+                await feed(0);
+                if (!(await T.eval(`!(ind.base.animals[0].love > 0) && ind.bag.wheat === 5 && ind.base.animals[0].food > 85`))) bad.push('饱食 < 70 喂不成发情（只加饱食） ' + await T.eval(`JSON.stringify(ind.base.animals[0])`));
+                // 只喂一只，30 秒后爱心没了、没配上
+                await setup(80, 80);
+                await feed(0); await T.eval(`indAdvance(31); true;`);
+                if (!(await T.eval(`ind.base.animals[0].love === 0 && ind.base.animals.length === 2 && !(ind.base.animals[0].brk > 0)`))) bad.push('只喂一只，30 秒后爱心没了、不繁殖');
+                // 隔太远：两只都发情但超过 3 米，不配
+                await setup(80, 80);
+                await T.eval(`ind.base.animals[1].x = 8; ind.base.animals[0].tx = ind.base.animals[0].x; ind.base.animals[1].tx = 8; true;`);
+                await feed(0); await feed(1); await T.eval(`indAdvance(0.2); true;`);
+                if (!(await T.eval(`!(ind.base.animals[0].brk > 0) && ind.base.animals[0].love > 0`))) bad.push('隔得远（> 3 米）不配对');
+                // ── 5 满了 ──
+                await setup(80, 80);
+                await T.eval(`for (let i = 0; i < 18; i++) ind.base.animals.push({ k: 'cow', x: -5 - i * 0.2, z: 5, food: 60, woolAt: 0, milkAt: 0 }); window.__fl = []; true;`);
+                await feed(0);
+                if (!(await T.eval(`ind.base.animals.length === 20 && !(ind.base.animals[0].love > 0) && ind.bag.wheat === 6 && __fl.some(function (t) { return /圈满了（20 只）/.test(t); })`))) bad.push('满 20 只该提示圈满了、不扣吃的 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
+                // ── 6 出远征：不繁殖不长大 ──
+                await setup(80, 80);
+                await T.eval(`ind.base.animals.push({ k: 'sheep', x: 3, z: 3, food: 80, born: ind.base.clock - 100, woolAt: 0, milkAt: 0, love: 0, cd: 0, brk: 0 }); ind.base.animals[0].brk = 10; ind.base.animals[0].bx = 0; ind.base.animals[0].bz = 0; true;`);
+                const left0 = await T.eval(`indBabyLeft(ind.base.animals[2])`);
+                await T.eval(`indGoTrip(2024); indAdvance(40); true;`);
+                const tr = await J(`[ind.base.animals[0].brk, ind.base.animals[2].born, ind.base.clock]`);
+                await T.eval(`indGoBase(null); true;`);
+                const left1 = await T.eval(`indBabyLeft(ind.base.animals[2])`);
+                if (!(Math.abs(left1 - left0) <= 2 && tr[0] === 10 && (await T.eval(`ind.base.animals.length === 3`)))) bad.push('出远征这段时间不该繁殖、不该长大 ' + JSON.stringify([left0, left1, tr]));
+                // ── 7 存档整理 ──
+                if (!(await T.eval(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.animals = [{ k: 'cow', x: 1, z: 1, food: 50, woolAt: 0, milkAt: 0 }, { k: 'sheep', x: 2, z: 2, food: 50, woolAt: 0, milkAt: 0, born: 'x', love: 'a', cd: -5, brk: 99 }, { k: 'dog', x: 3, z: 3, food: 50, born: 10, love: 5, cd: 100, brk: 3, bx: 3, bz: 3 }]; b.clock = 1000; indFixBase(b);
+                    let A = b.animals; return A[0].born === undefined && A[0].love === 0 && A[0].cd === 0 && A[0].brk === 0 && A[1].born === undefined && A[1].cd === 0 && A[1].brk === 20 && A[2].born === 10 && A[2].brk === 3 && A[2].love === 5; })()`))) bad.push('存档整理：老存档当成年，字段过白名单');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND34 繁殖：配对、怀 20 秒出幼崽、幼崽半个身子没毛、600 秒长大、冷却、饱食够、满 20 只、出远征不繁殖不长大', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
