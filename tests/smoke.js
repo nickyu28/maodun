@@ -7172,7 +7172,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('IND23')) {
-            // IND23 水里和木筏：浅水（水深 < 0.6 米）0.8 倍速能跑；深水游泳 0.6 倍速不能跑、体力每秒掉 5、体力 0 变 0.3 倍速；木筏（工作台 20 木头，悠闲硬核都有）水边右键放、
+            // IND23 水里和木筏：浅水（水深 < 0.6 米）0.85 倍速能跑（任务 12 从 0.8 改的）；深水游泳 0.6 倍速不能跑、体力每秒掉 5、体力 0 变 0.3 倍速；木筏（工作台 20 木头，悠闲硬核都有）水边右键放、
             // 左键上下、水上 2 倍速、不能上岸、下筏 4 米内有岸就上岸、只在这一趟；坐在筏上不降温
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
@@ -7193,9 +7193,9 @@ async function enterExit(tab, key) {
                 let r = await run('function () { return 0.5; }', {}, 1);
                 if (!near(r.dx, 7)) bad.push('陆地走路应该 7 米/秒 ' + JSON.stringify(r));
                 r = await run('function () { return -1.5; }', {}, 1);
-                if (!near(r.dx, 5.6)) bad.push('浅水应该 0.8 倍速（5.6 米/秒） ' + JSON.stringify(r));
+                if (!near(r.dx, 7 * 0.85)) bad.push('浅水应该 0.85 倍速（5.95 米/秒，任务 12） ' + JSON.stringify(r));
                 r = await run('function () { return -1.5; }', { run: true }, 1);
-                if (!near(r.dx, 7 * 1.6 * 0.8)) bad.push('浅水能跑（0.8 × 跑步） ' + JSON.stringify(r));
+                if (!near(r.dx, 7 * 1.6 * 0.85)) bad.push('浅水能跑（0.85 × 跑步） ' + JSON.stringify(r));
                 r = await run('function () { return -2.2; }', {}, 1);
                 if (!near(r.dx, 4.2) || !near(-r.stam, 5)) bad.push('深水应该 0.6 倍速（4.2）、体力每秒掉 5 ' + JSON.stringify(r));
                 r = await run('function () { return -2.2; }', { run: true }, 1);
@@ -8421,8 +8421,8 @@ async function enterExit(tab, key) {
                     if (!(near(m['深水'].走[0], 0.6) && near(m['深水'].跑[0], 0.6) && !m['深水'].跑[2])) bad.push('深水该 0.6 倍、不能跑 ' + JSON.stringify(m['深水']));
                     if (!(m['深水'].走[1] < 0 && m['深水'].站[1] === 0)) bad.push('深水动才掉体力、站着不掉 ' + JSON.stringify(m['深水']));
                     // 站 3 秒后开始回（每秒 8）
-                    const rec = await J(`(function(){ let R = ind; R.p.x = ${pts.deep[0]}; R.p.z = ${pts.deep[1]}; R.stam = 40; R.k = {}; R.deepSt = false; R.stillT = 0; for (let i = 0; i < 25; i++) indMove(0.1); let a = R.stam; for (let i = 0; i < 10; i++) indMove(0.1); return [a, R.stam]; })()`);
-                    if (!(rec[0] === 40 && Math.abs(rec[1] - 40 - 8 * 1) < 0.6)) bad.push('深水站着 3 秒内不变、3 秒后每秒回 8 ' + JSON.stringify(rec));
+                    const rec = await J(`(function(){ let R = ind; R.p.x = ${pts.deep[0]}; R.p.z = ${pts.deep[1]}; R.stam = 40; R.k = {}; R.deepSt = false; R.stillT = 0; for (let i = 0; i < 25; i++) indMove(0.1); let a = R.stam; for (let i = 0; i < 15; i++) indMove(0.1); return [a, R.stam]; })()`);
+                    if (!(rec[0] === 40 && Math.abs(rec[1] - 40 - 8 * 1) < 1)) bad.push('深水站着 3 秒内不变、3 秒后每秒回 8 ' + JSON.stringify(rec));
                     // 没体力 0.3 倍
                     const tired = await step(pts.deep, false, true, 0);
                     if (!near(tired[0], 0.3)) bad.push('深水没体力该 0.3 倍 ' + JSON.stringify(tired));

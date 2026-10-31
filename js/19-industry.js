@@ -1211,16 +1211,24 @@
             if (ind && !ind.over) { indRender(); ind.raf = requestAnimationFrame(indLoop); }
         }
         function indGround(x, z) { return ind.where === 'trip' ? Math.max(IND_WATER_Y, indHeight(ind.map, x, z)) : 0; }
-        function indInWater() { return ind.where === 'trip' && indHeight(ind.map, ind.p.x, ind.p.z) < IND_WATER_Y + 0.2; }
-        // 水深：水面比脚下地面高多少（陆地 0）。浅水 < 0.6 米能跑、0.8 倍速；深水游泳 0.6 倍速不能跑，体力每秒掉 5，没体力 0.3 倍速；木筏上 2 倍速
-        const IND_WATER = { shallow: 0.6, shallowSp: 0.8, deepSp: 0.6, tiredSp: 0.3, stamDrain: 5, raftSp: 2 };
+        // 在水里：水深 > 0.05 米（岸边湿地不算，任务 12）。接水、喝水、泡水放凉还用"站在水边"（indAtWater，岸上 0.2 米内也行）
+        function indInWater() { return ind.where === 'trip' && indWaterDepth(ind.p.x, ind.p.z) > IND_WATER.wet; }
+        function indAtWater() { return indInWater() || (ind.where === 'trip' && indHeight(ind.map, ind.p.x, ind.p.z) < IND_WATER_Y + 0.2); }
+        // 水深：水面比脚下地面高多少（陆地 0）。浅水 < 0.6 米能跑、走跑都 ×0.85、体力照常（跑才掉）；
+        // 深水游泳 0.6 倍速不能跑，动的时候体力每秒掉 5，站着不掉、停 3 秒后每秒回 8，没体力 0.3 倍速；进深水 ≥ 0.6、出深水 ≤ 0.5（滞回，不来回抖）；木筏上 2 倍速
+        const IND_WATER = { wet: 0.05, shallow: 0.6, deepOut: 0.5, shallowSp: 0.85, deepSp: 0.6, tiredSp: 0.3, stamDrain: 5, stamRegen: 8, stillT: 3, raftSp: 2 };
         function indWaterDepth(x, z) { return ind.where === 'trip' ? Math.max(0, IND_WATER_Y - indHeight(ind.map, x, z)) : 0; }
-        function indDeep() { return !ind.onRaft && ind.where === 'trip' && indWaterDepth(ind.p.x, ind.p.z) >= IND_WATER.shallow; }
+        function indDeep() {
+            if (ind.onRaft || ind.where !== 'trip') { ind.deepSt = false; return false; }
+            let d = indWaterDepth(ind.p.x, ind.p.z);
+            if (ind.deepSt) { if (d <= IND_WATER.deepOut) ind.deepSt = false; } else if (d >= IND_WATER.shallow) ind.deepSt = true;
+            return !!ind.deepSt;
+        }
         function indWaterSpeed() {
             if (ind.onRaft) return IND_WATER.raftSp;
+            if (indDeep()) return ind.stam > 0 ? IND_WATER.deepSp : IND_WATER.tiredSp;
             if (!indInWater()) return 1;
-            if (!indDeep()) return IND_WATER.shallowSp;
-            return ind.stam > 0 ? IND_WATER.deepSp : IND_WATER.tiredSp;
+            return IND_WATER.shallowSp;
         }
         // 木筏：水边右键放下（远征的只在这一趟），左键上去／下来；水上不能上岸
         function indPlaceRaft(k) {
@@ -1392,7 +1400,10 @@
             let mx = cd.x * fwd - cd.z * strafe, mz = cd.z * fwd + cd.x * strafe, moving = !!(mx || mz);
             let S = R.base.surv, deep = R.where === 'trip' && indDeep(), canRun = k.run && moving && R.stam > 0 && S.energy > 0 && !deep && !R.onRaft;
             R.running = canRun;
-            R.stam = deep ? Math.max(0, R.stam - IND_WATER.stamDrain * dt) : canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt);
+            if (deep) {   // 游泳：动才掉体力；站着不掉，停 3 秒后开始回
+                if (moving) { R.stillT = 0; R.stam = Math.max(0, R.stam - IND_WATER.stamDrain * dt); }
+                else { R.stillT = (R.stillT || 0) + dt; if (R.stillT >= IND_WATER.stillT) R.stam = Math.min(100, R.stam + IND_WATER.stamRegen * dt); }
+            } else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }
             let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1);
             if (moving) {
                 let n = Math.hypot(mx, mz), run = Math.min(1, n); mx /= n; mz /= n;
@@ -1635,8 +1646,8 @@
                 let m = indContOf(k).mat;
                 if (a && a.kind === 'node' && a.o.key === 'oil') return ckFillOil(k, a.o);
                 if (a && a.kind === 'pool') { let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶生水'); return true; }
-                if (indInWater() && wdRiverNear(ind.map, ind.p.x, ind.p.z, 1)) { let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶河水（生水）'); return true; }
-                if (indInWater()) { let w = indFilledKey('water_sea', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶海水'); return true; }
+                if (indAtWater() && wdRiverNear(ind.map, ind.p.x, ind.p.z, 1)) { let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶河水（生水）'); return true; }
+                if (indAtWater()) { let w = indFilledKey('water_sea', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶海水'); return true; }
                 indFlash('到水池、河里或海边才能接水'); return false;
             }
             if ((k === 'ash' || k === 'saltpeter') && a && a.kind === 'crop') return indFertilize(a.o, k);
@@ -1659,12 +1670,12 @@
                 let sick = indRand() < 0.3; if (sick) ind.sickT = IND_SURV.sick;
                 indFlash('喝了一口生水' + (sick ? '，肚子不舒服' : '')); return true;
             }
-            if (indInWater() && wdRiverNear(ind.map, ind.p.x, ind.p.z, 1)) {   // 河水算生水
+            if (indAtWater() && wdRiverNear(ind.map, ind.p.x, ind.p.z, 1)) {   // 河水算生水
                 S.water = Math.min(100, S.water + 10);
                 let sick = indRand() < 0.3; if (sick) ind.sickT = IND_SURV.sick;
                 indFlash('喝了一口河水' + (sick ? '，肚子不舒服' : '')); return true;
             }
-            if (indInWater()) { S.water = Math.max(0, S.water - 10); indFlash('喝了一口海水，越喝越渴'); return true; }
+            if (indAtWater()) { S.water = Math.max(0, S.water - 10); indFlash('喝了一口海水，越喝越渴'); return true; }
             return false;
         }
         function indEat(k) {
@@ -2446,7 +2457,7 @@
         }
         function indQuench(k) {
             let a = indAim();
-            if (!((a && a.kind === 'pool') || indInWater())) { indFlash(indName(k) + '：放凉要泡水，或者放地上等一会儿'); return false; }
+            if (!((a && a.kind === 'pool') || indAtWater())) { indFlash(indName(k) + '：放凉要泡水，或者放地上等一会儿'); return false; }
             let c = IND_ITEMS[k].hot, n = ind.bag[k]; delete ind.bag[k]; if (ind.hotT) delete ind.hotT[k]; indBagAdd(c, n);
             indFlash('滋——' + indName(c) + '凉了'); return true;
         }
@@ -3043,7 +3054,7 @@
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
             let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + indSeasonTxt() + '　' + rule + '<br>';
-            st += (indHard() ? (S.hp < 30 ? '<span class="ind-low">' + indBar('血', S.hp, '#e53935') + '</span>' : indBar('血', S.hp, '#e53935')) : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047');
+            st += (indHard() ? (S.hp < 30 ? '<span class="ind-low">' + indBar('血', S.hp, '#e53935') + '</span>' : indBar('血', S.hp, '#e53935')) : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047') + (R.where === 'trip' && R.deepSt && !R.onRaft ? '<b style="color:#0277bd">游泳中，不能跑</b>' : '');
             let tc = S.temp < IND_BODY.chill ? '#1565c0' : S.temp > IND_BODY.sweat ? '#c62828' : '#2e7d32';
             st += '<br>体温 <b style="color:' + tc + '">' + S.temp.toFixed(1) + '°C</b>　气温 ' + Math.round(indAirTemp()) + '°C　保暖 ' + indWarmth();
             if (S.temp < IND_BODY.chill) st += '　<b style="color:#1565c0">冷得发抖</b>'; else if (S.temp > IND_BODY.sweat) st += '　<b style="color:#c62828">热得冒汗</b>';
