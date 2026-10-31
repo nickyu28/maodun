@@ -67,11 +67,11 @@
 
         // ── 物品：仙人掌、小刀 ──
         Object.assign(IND_ITEMS_RAW, {
-            cactus: { name: '仙人掌', col: 0x2e7d32, eat: { w: 5 }, use: '有刺：选中按住右键拔刺，点一下右键是吃' },
+            cactus: { name: '仙人掌', col: 0x2e7d32, eat: { w: 5 }, use: '有刺：选中点一下右键开始拔刺，再换上斧子、小刀、剪刀或钳子，边走边拔；R 是生吃' },
             cactus_peeled: { name: '去刺仙人掌', col: 0x66bb6a, eat: { w: 8, f: 3 } },
             cactus_roast: { name: '烤仙人掌', col: 0x8bc34a, eat: { w: 8, f: 5 } },
-            knife: { name: '小刀', col: 0x90a4ae, use: '拔仙人掌的刺，也能砍树（砍树比斧子慢、木头少）' },
-            axe: { name: '斧子', col: 0x8d6e63, use: '砍树快一倍（1.5 秒），每棵树的木头 ×1.5；采仙人掌不扎手' },
+            knife: { name: '小刀', col: 0x90a4ae, use: '拔仙人掌的刺（拿在手上 10 秒），也能砍树（比斧子慢、木头少）' },
+            axe: { name: '斧子', col: 0x8d6e63, use: '砍树快（1.5 秒），每棵树的木头 ×1.5；拔刺最快（拿在手上 5 秒）；采仙人掌不扎手' },
             sharp_flint: { name: '尖石片', col: 0xcfd8dc }, twig: { name: '树枝', col: 0x8d6e63 }, grass: { name: '草', col: 0x9ccc65 }, rope: { name: '草绳', col: 0xa1887f }
         });
         // 悠闲保持简单：石头加木头；硬核更难：要尖石片、树枝、草绳（地上捡、自己敲、自己搓），普通石头做不了硬核的刀和斧
@@ -101,7 +101,10 @@
             if (ind.bag.knife && best.need > 5) best = { need: 5, mult: 1.25 };
             return best;
         }
-        function wdChop(o) { return wdChStart({ kind: 'chop', o: o, need: wdChopTool().need, label: '砍树', done: function () { indGather(o); } }); }
+        function wdChop(o) {
+            if (indHard() && !ind.bag.axe && !ind.bag.knife && indTool() < 1) { indFlash('空手砍不动，得有斧子或小刀'); return false; }   // 硬核砍树要工具（任务 2.7）
+            return wdChStart({ kind: 'chop', o: o, need: wdChopTool().need, label: '砍树', done: function () { indGather(o); } });
+        }
         // 要花几秒的合成（敲尖石片）：站着别动，材料到时间才扣，动了中断不丢
         function wdCraftWait(i, r) {
             indPanelClose();
@@ -154,19 +157,43 @@
             if (!indHard()) { indFlash('扎手了'); return false; }
             return indHurt(60, 'thorn', '空手摘了仙人掌');
         }
-        // 拔刺：选中仙人掌按住右键站着不动，背包里最快的工具：小刀 15 秒、剪刀 30 秒、钳子 40 秒、空手 60 秒
-        function wdPeelTime() { return ind.bag.knife ? 15 : ind.bag.shears ? 30 : ind.bag.tongs ? 40 : 60; }
+        // 拔刺（任务 2.4、2.5）：选中仙人掌点一下右键开始（再点排队下一个）；进度看手上拿的：斧子 5 秒、小刀 10 秒、剪刀 30 秒、钳子 40 秒、拿着仙人掌（空手）60 秒；
+        // 拿着别的就暂停（进度留着），边走边拔；仙人掌没了、用着的工具没了就中断
+        const WD_PEEL = { axe: 5, knife: 10, shears: 30, tongs: 40, cactus: 60 };
+        function wdPeelTime() { return WD_PEEL[indSel()] || 0; }
         function wdPeelStart() {
-            return wdChStart({ kind: 'peel', right: true, need: wdPeelTime(), label: '拔刺', done: function () {
-                if (!(ind.bag.cactus > 0)) return;
-                indBagDel('cactus', 1); indBagAdd('cactus_peeled', 1); indFlash('拔好了刺：去刺仙人掌');
-            } });
+            if (!(ind.bag.cactus > 0)) return false;
+            let P = ind.peel;
+            if (P) {
+                if (P.q + 1 < ind.bag.cactus) { P.q++; indFlash('排上了，拔完这个接着拔（还排着 ' + P.q + ' 个）'); return true; }
+                indFlash('仙人掌都排上了'); return false;
+            }
+            ind.peel = { p: 0, q: 0, tool: null };
+            indFlash('开始拔刺：换上斧子、小刀、剪刀或钳子更快，边走边拔');
+            return true;
+        }
+        function wdPeelTick(dt) {
+            let P = ind.peel; if (!P) return;
+            if (!(ind.bag.cactus > 0)) { ind.peel = null; indFlash('仙人掌没了，不拔了'); return; }
+            if (P.tool && !ind.bag[P.tool]) { ind.peel = null; indFlash(indName(P.tool) + '没了，不拔了'); return; }
+            let need = wdPeelTime(); if (!need) return;   // 手上拿着别的：暂停
+            P.tool = indSel() === 'cactus' ? null : indSel();
+            P.p += dt / need;
+            if (P.p < 1) return;
+            indBagDel('cactus', 1); indBagAdd('cactus_peeled', 1);
+            if (P.q > 0 && ind.bag.cactus > 0) { P.q--; P.p = 0; indFlash('拔好一个，接着拔下一个'); }
+            else { ind.peel = null; indFlash('拔好了刺：去刺仙人掌'); }
+        }
+        function wdPeelTxt() {
+            let P = ind.peel; if (!P) return '';
+            let need = wdPeelTime();
+            return '拔刺 ' + Math.min(99, Math.floor(P.p * 100)) + '%' + (P.q ? '（还排着 ' + P.q + ' 个）' : '') + (need ? '　拿着' + indName(indSel()) + '，' + Math.ceil((1 - P.p) * need) + ' 秒' : '　<b style="color:#c62828">停着：换上斧子、小刀、剪刀、钳子或仙人掌</b>');
         }
         const WD_TREE_NAME = { oak: '阔叶树', pine: '松树', palm: '椰子树' };
         function wdNodeHint(o) {
             let nd = IND_NODES[o.key];
             if (o.key === 'oil') return ckOilHint(o);
-            if (o.tree) return WD_TREE_NAME[o.tree] + '（' + o.n + ' 木头）<br><small>左键：砍（' + (indTool() >= 1 ? 3 : 8) + ' 秒，站着别动）</small>';
+            if (o.tree) return WD_TREE_NAME[o.tree] + '（' + o.n + ' 木头）<br><small>' + (indHard() && !ind.bag.axe && !ind.bag.knife && indTool() < 1 ? '空手砍不动，得有斧子或小刀' : '左键：砍（' + wdChopTool().need + ' 秒，站着别动）') + '</small>';
             if (o.key === 'cactus') return '仙人掌：有刺<br><small>左键：采集（拿剪刀或稿子不扎手）</small>';
             if (o.rock) return (o.black ? '黑石头' : '大石头') + ' ×' + o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：敲' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
             if (o.out) return indName(o.key) + '矿脉　剩 ' + o.n + ' 份<br><small>' + (indTool() >= nd.tool ? '左键：挖（一次 1 份）' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
@@ -176,9 +203,10 @@
         function wdBookLines() {
             return [
                 { ins: [], outs: ['dirt', 'sand', 'stone', 'sulfur'], name: '挖地', txt: '对着地面左键，站着别动：空手 3 秒、稿子 1 秒，每次 1 份。平原森林出泥土，海边沙漠出沙子，山地古老岩层出石头（要石稿），火山出石头（偶尔 1 份硫）', where: '远征' },
-                { ins: [], outs: ['wood'], name: '砍树', txt: '树：左键砍，空手 8 秒、稿子 3 秒，出 3～6 木头，倒下留树桩', where: '远征' },
+                { ins: ['axe', 'knife'], outs: ['wood'], name: '砍树', txt: '树：左键砍，站着别动。斧子 1.5 秒（木头 ×1.5）、稿子 3 秒、小刀 5 秒（木头 ×1.25）、空手 8 秒（硬核空手砍不动，得有斧子或小刀），出 3～6 木头，倒下留树桩', where: '远征' },
                 { ins: ['cactus'], outs: ['cactus'], name: '仙人掌', txt: '仙人掌：空手采会扎手（硬核扣 60 血），拿剪刀或稿子采不扎；生吃口渴 +5（硬核扣 60 血）', where: '盐湖沙漠' },
-                { ins: ['cactus', 'knife', 'shears', 'tongs'], outs: ['cactus_peeled'], name: '拔刺', txt: '仙人掌 → 去刺仙人掌（口渴 +8、饱食 +3）：选中仙人掌按住右键站着不动，小刀 15 秒、剪刀 30 秒、钳子 40 秒、空手 60 秒', where: '手上' }
+                { ins: ['cactus', 'axe', 'knife', 'shears', 'tongs'], outs: ['cactus_peeled'], name: '拔刺', txt: '仙人掌 → 去刺仙人掌（口渴 +8、饱食 +3）：选中仙人掌点一下右键开始，再点排下一个；看手上拿的：斧子 5 秒、小刀 10 秒、剪刀 30 秒、钳子 40 秒、拿着仙人掌 60 秒；能边走边拔，拿着别的就停着', where: '手上' },
+                { ins: ['shears'], outs: ['wool'], name: '剪羊毛', txt: '拿着剪刀对着羊左键：' + IND_SHEAR_T + ' 秒剪完出 2 份羊毛；能边走边剪，换走剪刀就停着，离羊超过 3 米就断了', where: '羊' }
             ];
         }
 

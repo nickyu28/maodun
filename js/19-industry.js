@@ -482,6 +482,7 @@
             } catch (e) { cb(null); }
         }
         function indKey() { return 'p_' + (gState.id || 'guest'); }
+        const IND_START_BOX_HARD = { pick_stone: 1, bake_potato: 3 };   // 硬核新号不送礼包（任务 2.9），只留石稿（没有配方，不给会卡死）和 3 个烤土豆
         const IND_START_BOX = { pick_stone: 1, shears: 1, compass: 1, bucket: 2, seed_wheat: 6, seed_potato: 4, seed_cotton: 4, seed_cabbage: 3, wood: 8, salt: 2, bake_potato: 3 };
         const IND_V3_GIFT = { seed_cotton: 4, seed_cabbage: 3 };
         const IND_V12_GIFT = { compass: 1 };   // 存档版本 12：新号送一个指南针，老档读档时补一个
@@ -847,8 +848,9 @@
                 if (indIsBaby(a)) { indFlash('还小，没有毛'); return false; }
                 if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
                 if (clock < a.woolAt) { indFlash('羊毛还要等 ' + Math.ceil(a.woolAt - clock) + ' 秒'); return false; }
-                if (indBagAdd('wool', 2) <= 0) { indFlash('背包满了'); return false; }
-                a.woolAt = clock + IND_WOOL_EVERY; indSave(); indFlash('剪了 2 份羊毛'); return true;
+                if (indFits(ind.bag, IND_BAG_SLOTS, 'wool', 2) <= 0) { indFlash('背包满了'); return false; }
+                if (ind.shear && ind.shear.a === a) { indFlash('正在剪 ' + Math.floor(ind.shear.t / IND_SHEAR_T * 100) + '%'); return false; }
+                ind.shear = { a: a, t: 0 }; indFlash('开始剪毛：拿着剪刀，别离羊太远（3 米）'); return true;   // 边走边剪（任务 2.6）
             }
             // 手里的东西对它没用：只显示状态，不吃东西、不剪毛
             indFlash(D.name + indAnimalState(a) + '　饱食 ' + Math.round(a.food) + (a.food < 30 ? '，饿了' : '') + (a.k === 'sheep' ? '，' + (clock >= a.woolAt ? '能剪毛了（拿剪刀）' : '毛还要 ' + Math.ceil(a.woolAt - clock) + ' 秒') : a.k === 'cow' ? '，' + (clock >= a.milkAt ? '能挤奶了（拿空桶）' : '奶还要 ' + Math.ceil(a.milkAt - clock) + ' 秒') : '') + '，爱吃：' + indFoodTxt(a.k));
@@ -911,8 +913,18 @@
             if (!ind || !ind.base) return;
             if (ind.base.rule === 'hard') return;            // 硬核不能退回
             if (ind.base.rule === 'casual' && r !== 'hard') return;
-            let from = ind.base.rule; ind.base.rule = r; ckRuleChanged(from, r); indSave();
+            let from = ind.base.rule; ind.base.rule = r; ckRuleChanged(from, r);
+            if (from === null && r === 'hard') indHardStartBox();
+            indSave();
             indFlash(r === 'hard' ? '硬核世界：小心别饿死' : '悠闲世界：慢慢种地吧');
+        }
+        // 新号第一次选硬核：箱子里没动过的起步礼包换成硬核的（老存档、升级成硬核的不动）
+        function indHardStartBox() {
+            let B = ind.base, c = (B.chests || []).filter(function (x) { return x.big; })[0], it = c ? c.items : B.box;
+            if (!it || B.trips || JSON.stringify(Object.keys(it).sort().map(function (k) { return [k, it[k]]; })) !== JSON.stringify(Object.keys(IND_START_BOX).sort().map(function (k) { return [k, IND_START_BOX[k]]; }))) return false;
+            Object.keys(it).forEach(function (k) { delete it[k]; });
+            Object.keys(IND_START_BOX_HARD).forEach(function (k) { it[k] = IND_START_BOX_HARD[k]; });
+            return true;
         }
         function indHard() { return ind.base.rule === 'hard'; }
         // 悠闲升级成硬核：弹确认窗，确认才升，升了不能退回
@@ -1276,7 +1288,7 @@
             if (!ind || ind.over || ind.dead) return;
             indStoveTick(dt);
             if (!ind || ind.over) return;
-            indRightHoldTick(dt); wdChTick(dt);
+            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt);
             if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
@@ -1569,6 +1581,21 @@
             indFlash(n ? '叮铃——' + n + ' 只动物走过来了' : '叮铃——附近没有动物');
             return true;
         }
+        // 剪羊毛（任务 2.6）：拿着剪刀、离羊 3 米内进度就走；换走剪刀就停着（进度留着），羊跑远了才断、进度清零
+        const IND_SHEAR_T = 4, IND_SHEAR_R = 3;
+        function indShearTick(dt) {
+            let S = ind.shear; if (!S) return;
+            let a = S.a, L = ind.where === 'trip' ? ind.wild : ind.base.animals;
+            if (!L || L.indexOf(a) < 0 || Math.hypot(ind.p.x - a.x, ind.p.z - a.z) > IND_SHEAR_R) { ind.shear = null; indFlash('羊跑远了，没剪成'); return; }
+            if (!ind.bag.shears) { ind.shear = null; indFlash('剪刀没了'); return; }
+            if (indSel() !== 'shears') return;
+            a.tx = a.x; a.tz = a.z; a.wt = Math.max(a.wt || 0, 1);   // 剪着的时候羊站着不乱走
+            S.t += dt; if (S.t < IND_SHEAR_T) return;
+            ind.shear = null;
+            if (ind.base.clock < a.woolAt) return;
+            if (indBagAdd('wool', 2) <= 0) { indFlash('背包满了'); return; }
+            a.woolAt = ind.base.clock + IND_WOOL_EVERY; indSave(); indFlash('剪了 2 份羊毛');
+        }
         // 手里的东西是不是工具（稿子、铜线、钳子、剪刀）：工具永远当工具用，不拿去喂动物
         function indToolish(k) { return !!k && (!!IND_ITEMS[k].tool || k === 'wire' || k === 'tongs' || k === 'shears'); }
         // 左键：采集、拿、收菜、打开；对着空的农田格子、手里拿着种子：种下
@@ -1611,7 +1638,7 @@
             if (!ind || ind.over || ind.dead || ind.panel) return;
             let f = indFurnOf(indAim());
             if (f) { ind.rh = { f: f, t: 0, done: false }; return; }
-            if (indSel() === 'cactus') { wdPeelStart(); return; }   // 选中仙人掌按住右键拔刺，点一下是吃
+            if (indSel() === 'cactus') { wdPeelStart(); return; }   // 选中仙人掌点一下右键开始拔刺（R 键是生吃）
             indUse();
         }
         function indRightUp() {
@@ -3071,6 +3098,8 @@
                 let near = R.exits.reduce(function (a, e) { let dd = Math.hypot(R.p.x - e.x, R.p.z - e.z); return dd < a ? dd : a; }, 1e9);
                 st += '<br>远征　' + bm + '　最近的撤离点 ' + Math.round(near) + ' 米' + (R.exitT > 0 ? '　<b style="color:#2e7d32">撤离中 ' + Math.ceil(IND_T.extract - R.exitT) + '</b>' : '');
             }
+            if (R.peel) st += '<br>' + wdPeelTxt();
+            if (R.shear) st += '<br>剪羊毛 ' + Math.min(99, Math.floor(R.shear.t / IND_SHEAR_T * 100)) + '%' + (indSel() === 'shears' ? '' : '　<b style="color:#c62828">停着：拿上剪刀</b>');
             let SL = indSlots(), sel = indSel(), bag = '';
             for (let i = 0; i < IND_BAG_SLOTS; i++) {
                 let it = SL[i];

@@ -5372,7 +5372,8 @@ async function enterExit(tab, key) {
                 Object.keys(RAW).forEach(function (k) { if (RAW[k].later) { later[k] = RAW[k].later; out.later.push(k + '（' + RAW[k].later + '）'); } if (RAW[k].useLater) { useLater[k] = RAW[k].useLater; out.later.push(k + '（' + RAW[k].useLater + '，已能拿到）'); } });
                 function reach(rule) {
                     const hard = rule === 'hard', have = {}, why = {};
-                    Object.keys(IND_START_BOX).forEach(function (k) { have[k] = 1; });
+                    const box0 = hard && typeof IND_START_BOX_HARD !== 'undefined' ? IND_START_BOX_HARD : IND_START_BOX;   // 硬核新号没有礼包（任务 2.9）
+                    Object.keys(box0).forEach(function (k) { have[k] = 1; });
                     Object.keys(RAW).forEach(function (k) { if (RAW[k].furn && !RAW[k].inst) have[k] = 1; });   // 基地里本来就有的床、工作台、水池：搬起来就是物品
                     const add = function (k) { if (!have[k]) { have[k] = 1; ch = true; } };
                     let ch = true, guard = 0;
@@ -5385,10 +5386,11 @@ async function enterExit(tab, key) {
                         const spawn = {}; Object.keys(IND_BIOMES).forEach(function (b) { Object.keys(IND_BIOMES[b].res).forEach(function (k) { if (!hard && !IND_CASUAL_RES[k]) return; spawn[k] = 1; }); });
                         Object.keys(IND_NODES).forEach(function (k) {
                             if (!spawn[k] || IND_NODES[k].tool > tl) return;
+                            if (k === 'wood' && hard && !have.axe && !have.knife && tl < 1) return;   // 硬核空手砍不动树
                             if (k === 'seeds') IND_SEED_KINDS.forEach(add); else add(IND_NODES[k].out || k);
                         });
                         // 对着地面挖：泥土、沙子，拿着稿子挖石头；仙人掌拔刺
-                        add('dirt'); add('sand'); if (tl >= 1) add('stone'); if (have.cactus) add('cactus_peeled'); add('twig'); add('grass');   // 出生点附近地上撒的树枝和草
+                        add('dirt'); add('sand'); if (tl >= 1) add('stone'); if (have.cactus) add('cactus_peeled'); add('twig'); if (hard) { add('grass'); add('sharp_flint'); } add('stone');   // 出生点附近地上撒的树枝、石头（硬核还有草和尖石片）
                         // 水
                         if (have.bucket) { add('water_raw'); add('water_sea'); }
                         // 灶台：燃料 + 温度
@@ -5711,7 +5713,7 @@ async function enterExit(tab, key) {
                 if (await T.eval(`!!ind.bag.wool`)) bad.push('刚回家就能剪毛');
                 await T.eval(`(function(){ let a = ind.base.animals[${sheepIdx}]; a.woolAt = 0; a.food = 10; indAnimalAct(a); })(); true;`);
                 if (await T.eval(`!!ind.bag.wool`)) bad.push('饿着的羊也给剪毛');
-                await T.eval(`(function(){ let a = ind.base.animals[${sheepIdx}]; indSelect('wheat'); indAnimalAct(a); indBagAdd('shears', 1); indSelect('shears'); a.woolAt = 0; indAnimalAct(a); a.woolAt = 0; indAnimalAct(a); })(); true;`);
+                await T.eval(`(function(){ let a = ind.base.animals[${sheepIdx}]; indSelect('wheat'); indAnimalAct(a); indBagAdd('shears', 1); indSelect('shears'); a.woolAt = 0; indAnimalAct(a); (ind.shear && (ind.p.x = ind.shear.a.x, ind.p.z = ind.shear.a.z, ind.shear.t = IND_SHEAR_T, indShearTick(0))); a.woolAt = 0; indAnimalAct(a); (ind.shear && (ind.p.x = ind.shear.a.x, ind.p.z = ind.shear.a.z, ind.shear.t = IND_SHEAR_T, indShearTick(0))); })(); true;`);   // 剪毛要拿着剪刀剪 4 秒（任务 2.6），这里直接剪完
                 if ((await T.eval(`ind.bag.wool || 0`)) !== 4) bad.push('剪羊毛不对 ' + await T.eval(`ind.bag.wool`));
                 // 毛线 → 毛衣（保暖 8）
                 await T.eval(`(function(){ indBagAdd('wool', 2); for (let i = 0; i < 3; i++) indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'yarn'; })); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'sweater'; })); indSelect('sweater'); indUse(); })(); true;`);
@@ -6081,7 +6083,7 @@ async function enterExit(tab, key) {
                 if (lg[0][0] !== 400 || lg[1][1] !== 700 || lg[2][0] !== 150 || lg[3][1] !== 400) bad.push('老档的下次时间不对 ' + JSON.stringify(lg));
                 // 挤奶、剪毛之后的下次时间
                 await T.eval(`(function(){ ind.bag = {}; indBagAdd('bucket', 1); ind.base.animals = [{ k: 'cow', x: 5, z: 5, food: 100, milkAt: 0, woolAt: 0 }, { k: 'sheep', x: 7, z: 5, food: 100, milkAt: 0, woolAt: 0 }]; })(); true;`);
-                const ac = JSON.parse(await T.eval(`(function(){ let c = ind.base.clock, r1 = indAnimalAct(ind.base.animals[0]), r2 = (indBagAdd('shears', 1), indSelect('shears'), indAnimalAct(ind.base.animals[1])); return JSON.stringify({ r1: r1, r2: r2, m: ind.base.animals[0].milkAt - c, w: ind.base.animals[1].woolAt - c }); })()`));
+                const ac = JSON.parse(await T.eval(`(function(){ let c = ind.base.clock, r1 = indAnimalAct(ind.base.animals[0]), r2 = (indBagAdd('shears', 1), indSelect('shears'), indAnimalAct(ind.base.animals[1])); (ind.shear && (ind.p.x = ind.shear.a.x, ind.p.z = ind.shear.a.z, ind.shear.t = IND_SHEAR_T, indShearTick(0))); return JSON.stringify({ r1: r1, r2: r2, m: ind.base.animals[0].milkAt - c, w: ind.base.animals[1].woolAt - c }); })()`));
                 if (ac.r1 !== true || ac.r2 !== true || ac.m !== 300 || ac.w !== 600) bad.push('挤奶剪毛后的间隔不对 ' + JSON.stringify(ac));
                 // 南瓜、甘蔗：浇了水在暖棚里，899 秒没熟、901 秒熟
                 await T.eval(`(function(){ ind.base.crops = [{ k: 'pumpkin', x: -25, z: 0, g: 0, wet: 1e9, times: 0 }, { k: 'cane', x: -25, z: 2, g: 0, wet: 1e9, times: 0 }]; ind.base.surv.food = 100; ind.base.surv.water = 100; indAdvance(590, 1); })(); true;`);
@@ -7730,20 +7732,20 @@ async function enterExit(tab, key) {
                 if (!(await T.eval(`ind.bag.cactus === 1 && ind.base.surv.hp === 100`))) bad.push('拿剪刀采仙人掌不扎 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
                 await T.eval(`ind.base.rule = 'casual'; ind.bag = {}; window.__fl = []; ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 1, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
                 if (!(await T.eval(`ind.bag.cactus === 1 && ind.base.surv.hp === 100 && __fl.indexOf('扎手了') >= 0`))) bad.push('悠闲空手采只提示扎手了 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp, __fl])`));
-                await T.eval(`ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.base.surv.water = 50; ind.bag = { cactus: 1 }; indSelect('cactus'); indRightDown(); indRightUp(); true;`);
+                await T.eval(`ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.base.surv.water = 50; ind.bag = { cactus: 1 }; indSelect('cactus'); indUse(); true;`);
                 if (!(await T.eval(`!ind.bag.cactus && Math.abs(ind.base.surv.hp - 40) < 1 && Math.abs(ind.base.surv.water - 55) < 1`))) bad.push('生吃仙人掌口渴 +5、扣 60 血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv])`));
                 await T.eval(`ind.base.surv.hp = 50; ind.bag = {}; ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 1, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
                 if (!(await T.eval(`!!ind.dead && ind.dead.cause === '仙人掌扎的'`))) bad.push('被仙人掌扎死，死因写仙人掌扎的 ' + await T.eval(`JSON.stringify(ind.dead)`));
                 await T.eval(`indRespawn(); true;`);
-                const pt = await J(`(function(){ let t = function (b) { ind.bag = b; return wdPeelTime(); }; return [t({ knife: 1, shears: 1, tongs: 1 }), t({ shears: 1, tongs: 1 }), t({ tongs: 1 }), t({})]; })()`);
-                if (pt.join() !== '15,30,40,60') bad.push('拔刺时间：小刀 15、剪刀 30、钳子 40、空手 60 ' + pt.join());
-                await T.eval(`if (ind.dead) { ind.dead = null; } if (ind.where !== 'trip') indGoTrip(2024); indTeleport(0, -6.5); ind.k = {}; ind.base.surv.hp = 100; ind.bag = { cactus: 2, knife: 1 }; indSelect('cactus'); indRightDown(); indAdvance(14.5); true;`);
-                if (!(await T.eval(`ind.bag.cactus === 2 && !!ind.ch`))) bad.push('小刀拔刺 14.5 秒还没好 ' + await T.eval(`JSON.stringify([ind.bag, ind.ch && ind.ch.t])`));
-                await T.eval(`indAdvance(0.8); indRightUp(); true;`);
+                const pt = await J(`(function(){ let t = function (s) { ind.bag = { cactus: 1, axe: 1, knife: 1, shears: 1, tongs: 1 }; indSelect(s); return wdPeelTime(); }; return [t('axe'), t('knife'), t('shears'), t('tongs'), t('cactus')]; })()`);
+                if (pt.join() !== '5,10,30,40,60') bad.push('拔刺时间看手上拿的：斧子 5、小刀 10、剪刀 30、钳子 40、空手 60（任务 2） ' + pt.join());
+                await T.eval(`if (ind.dead) { ind.dead = null; } if (ind.where !== 'trip') indGoTrip(2024); indTeleport(0, -6.5); ind.k = {}; ind.base.surv.hp = 100; ind.bag = { cactus: 2, knife: 1 }; ind.peel = null; indSelect('cactus'); indRightDown(); indRightUp(); indSelect('knife'); indAdvance(9.5); true;`);
+                if (!(await T.eval(`ind.bag.cactus === 2 && !!ind.peel`))) bad.push('小刀拔刺 9.5 秒还没好 ' + await T.eval(`JSON.stringify([ind.bag, ind.peel])`));
+                await T.eval(`indAdvance(0.8); true;`);
                 if (!(await T.eval(`ind.bag.cactus === 1 && ind.bag.cactus_peeled === 1 && ind.base.surv.hp === 100`))) bad.push('拔完 1 个变去刺仙人掌、不扣血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
-                await T.eval(`indSelect('cactus'); indRightDown(); indAdvance(5); indTeleport(2, -6.5); indAdvance(0.2); indRightUp(); true;`);
-                if (!(await T.eval(`ind.bag.cactus === 1 && !ind.ch`))) bad.push('拔刺时动了要中断 ' + await T.eval(`JSON.stringify([ind.bag, ind.ch])`));
-                const ce = await J(`(function(){ let S = ind.base.surv; S.water = 50; S.food = 50; ind.bag = { cactus_peeled: 1, cactus_roast: 1 }; indEat('cactus_peeled'); let a = [S.water, S.food]; indEat('cactus_roast'); let r = IND_RECIPES.filter(function (x) { return x.in.cactus_peeled && x.out.cactus_roast; })[0]; return { a: a, b: [S.water, S.food], hp: S.hp, r: r && [r.minT, r.time], kn: (IND_CRAFT.filter(function (x) { return x.out === 'knife' && x.casual; })[0] || {}).in, hint: wdNodeHint({ key: 'cactus', n: 1 }).replace(/<[^>]+>.*$/, ''), book: wdBookLines().some(function (l) { return /小刀 15 秒/.test(l.txt); }) }; })()`);
+                await T.eval(`true;`);
+                if (!(await T.eval(`!ind.peel`))) bad.push('拔完该停 ' + await T.eval(`JSON.stringify(ind.peel)`));
+                const ce = await J(`(function(){ let S = ind.base.surv; S.water = 50; S.food = 50; ind.bag = { cactus_peeled: 1, cactus_roast: 1 }; indEat('cactus_peeled'); let a = [S.water, S.food]; indEat('cactus_roast'); let r = IND_RECIPES.filter(function (x) { return x.in.cactus_peeled && x.out.cactus_roast; })[0]; return { a: a, b: [S.water, S.food], hp: S.hp, r: r && [r.minT, r.time], kn: (IND_CRAFT.filter(function (x) { return x.out === 'knife' && x.casual; })[0] || {}).in, hint: wdNodeHint({ key: 'cactus', n: 1 }).replace(/<[^>]+>.*$/, ''), book: wdBookLines().some(function (l) { return /小刀 10 秒/.test(l.txt); }) }; })()`);
                 if (ce.a.join() !== '58,53' || ce.b.join() !== '66,58' || ce.hp !== 100) bad.push('去刺仙人掌口渴 +8 饱食 +3、烤仙人掌口渴 +8 饱食 +5 ' + JSON.stringify(ce));
                 if (!ce.r || ce.r.join() !== '180,5') bad.push('烤仙人掌 ≥180°C 5 秒 ' + JSON.stringify(ce.r));
                 if (JSON.stringify(ce.kn) !== '{"stone":2,"wood":1}') bad.push('小刀：2 石头 + 1 木头 ' + JSON.stringify(ce.kn));
@@ -8073,7 +8075,7 @@ async function enterExit(tab, key) {
                 if (!(await T.eval(`!ind.ch && !ind.bag.sharp_flint && ind.bag.stone === 2`))) bad.push('敲石头时动了要中断、石头不丢 ' + await T.eval(`JSON.stringify([ind.ch, ind.bag])`));
                 // ── 砍树：斧子 ≪ 小刀 ≪ 空手；斧子给得多 ──
                 const chop = async (bag) => {
-                    await T.eval(`indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodeDirty = true; ind.k = {}; ind.ch = null; ind.dead = null; ind.bag = ${JSON.stringify(bag)}; ind.nodes.push({ key: 'wood', tree: 'oak', x: 0, z: -9, y: 0, n: 4, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indTeleport(0, -6.5); indLookAt(0, -9); indAction(); true;`);
+                    await T.eval(`ind.base.rule = 'casual'; indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodeDirty = true; ind.k = {}; ind.ch = null; ind.dead = null; ind.bag = ${JSON.stringify(bag)}; ind.nodes.push({ key: 'wood', tree: 'oak', x: 0, z: -9, y: 0, n: 4, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indTeleport(0, -6.5); indLookAt(0, -9); indAction(); true;`);
                     return J(`ind.ch && ind.ch.need`);
                 };
                 const need = [await chop({}), await chop({ knife: 1 }), await chop({ axe: 1 }), await chop({ pick_stone: 1 }), await chop({ axe: 1, knife: 1 })];
@@ -8445,6 +8447,86 @@ async function enterExit(tab, key) {
             report('IND36 水里：岸边 1 倍、浅水 0.85 能跑、深水游泳不能跑动才掉体力、滞回、HUD 写游泳中', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND37')) {
+            // IND37 任务 2 剩下的：硬核空手砍不动、小刀斧子能砍（斧子快、给得多）；拔刺看手上拿的（小刀 10 秒、斧子 5 秒），边走边拔，拿着别的就停、换回来接着走，
+            // 仙人掌没了就断；剪羊毛拿着剪刀边走边剪，换走剪刀停、羊跑远断；硬核新号没礼包、悠闲有；硬核只靠地上的东西做出草绳、小刀、斧子；老存档
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`${HIDE} indSetRule('hard'); ind.base.rule = 'hard'; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const fresh = `(function(){ let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; })(); ind.dead = null; ind.k = {}; ind.ch = null; ind.peel = null; ind.shear = null; window.__fl = [];`;
+                // ── 砍树 ──
+                const chop = async (bag) => {
+                    await T.eval(`${fresh} ind.base.rule = 'hard'; indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = ${JSON.stringify(bag)}; ind.nodes.push({ key: 'wood', tree: 'oak', x: 0, z: -9, y: 0, n: 4, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indTeleport(0, -6.5); indLookAt(0, -9); indAction(); true;`);
+                    const need = await J(`ind.ch ? ind.ch.need : null`);
+                    await T.eval(`indAdvance(8.5); true;`);
+                    return { need: need, wood: await T.eval(`ind.bag.wood || 0`), fl: await J(`__fl`) };
+                };
+                const c0 = await chop({}), c1 = await chop({ knife: 1 }), c2 = await chop({ axe: 1 });
+                if (!(c0.need === null && c0.wood === 0 && c0.fl.some(function (t) { return /斧子或小刀/.test(t); }))) bad.push('硬核空手砍树拿不到木头、要提示得有斧子或小刀 ' + JSON.stringify(c0));
+                if (!(c1.wood > 0 && c2.wood > 0)) bad.push('硬核有小刀、斧子能砍 ' + JSON.stringify([c1, c2]));
+                if (!(c2.need < c1.need && c2.wood > c1.wood)) bad.push('斧子比小刀快、给得多 ' + JSON.stringify([c1, c2]));
+                await T.eval(`indGoBase(null); true;`);
+                // ── 拔刺：小刀 10 秒、斧子 5 秒，边走边拔 ──
+                const peel = async (tool, secs, walk) => J(`(function(){ ${fresh} ind.bag = { cactus: 2, ${tool}: 1, wood: 1 }; indSelect('cactus'); indRightDown(); indRightUp(); indSelect('${tool}'); let x0 = ind.p.x, z0 = ind.p.z;
+                    ${walk ? `ind.k = { w: true, run: true };` : ''} indAdvance(${secs}); ind.k = {}; return { c: ind.bag.cactus, p: ind.bag.cactus_peeled || 0, moved: Math.hypot(ind.p.x - x0, ind.p.z - z0), job: !!ind.peel }; })()`);
+                let r = await peel('knife', 9.5, true);
+                if (!(r.c === 2 && r.job && r.moved > 5)) bad.push('小刀 9.5 秒还没拔完、人跑着也在拔 ' + JSON.stringify(r));
+                r = await J(`(function(){ indAdvance(0.7); return { c: ind.bag.cactus, p: ind.bag.cactus_peeled || 0, job: !!ind.peel }; })()`);
+                if (!(r.c === 1 && r.p === 1 && !r.job)) bad.push('小刀 10 秒拔完一个 ' + JSON.stringify(r));
+                r = await peel('axe', 4.7, true);
+                if (!(r.c === 2 && r.job)) bad.push('斧子 4.7 秒还没好 ' + JSON.stringify(r));
+                r = await J(`(function(){ indAdvance(0.5); return { c: ind.bag.cactus, p: ind.bag.cactus_peeled || 0 }; })()`);
+                if (!(r.c === 1 && r.p === 1)) bad.push('斧子 5 秒拔完 ' + JSON.stringify(r));
+                // 换手上的东西就停（进度留着），换回来接着走
+                r = await J(`(function(){ ${fresh} ind.bag = { cactus: 1, knife: 1, wood: 1 }; indSelect('cactus'); indRightDown(); indRightUp(); indSelect('knife'); indAdvance(5); let a = ind.peel.p; indSelect('wood'); indAdvance(20); let b = ind.peel && ind.peel.p; let hud = (ind.hudSig = '', indHudUpdate(), document.getElementById('ind-status').textContent); indSelect('knife'); indAdvance(5.3); return { a: a, b: b, hud: /停着/.test(hud), c: ind.bag.cactus || 0, p: ind.bag.cactus_peeled || 0 }; })()`);
+                if (!(Math.abs(r.a - 0.5) < 0.03 && r.b === r.a && r.hud && r.c === 0 && r.p === 1)) bad.push('工具不在手上不走进度、换回来接着走 ' + JSON.stringify(r));
+                // 排队：再点一下右键排下一个
+                r = await J(`(function(){ ${fresh} ind.bag = { cactus: 3, axe: 1 }; indSelect('cactus'); indRightDown(); indRightUp(); indRightDown(); indRightUp(); indSelect('axe'); indAdvance(10.3); return { c: ind.bag.cactus, p: ind.bag.cactus_peeled || 0, job: !!ind.peel }; })()`);
+                if (!(r.c === 1 && r.p === 2 && !r.job)) bad.push('再点右键排下一个，拔完两个停 ' + JSON.stringify(r));
+                // 仙人掌没了就断
+                r = await J(`(function(){ ${fresh} ind.bag = { cactus: 1, knife: 1 }; indSelect('cactus'); indRightDown(); indRightUp(); indSelect('knife'); indAdvance(3); delete ind.bag.cactus; indAdvance(0.2); return { job: !!ind.peel, fl: __fl.slice(-1)[0] }; })()`);
+                if (r.job) bad.push('仙人掌没了该中断 ' + JSON.stringify(r));
+                // ── 剪羊毛 ──
+                const shSet = `if (ind.where !== 'base') indGoBase(null); ${fresh} ind.base.animals = [{ k: 'sheep', x: 0, z: 5, tx: 0, tz: 5, wt: 1e9, food: 90, woolAt: 0, milkAt: 0 }]; ind.bag = { shears: 1, wood: 1 }; indTeleport(0, 7); indSelect('shears'); indAnimalAct(ind.base.animals[0]);`;
+                r = await J(`(function(){ ${shSet} let job = !!ind.shear, x0 = ind.p.x; ind.k = { a: true }; indAdvance(0.2, 0.05); ind.k = {}; let moved = Math.abs(ind.p.x - x0); indAdvance(IND_SHEAR_T - 0.7, 0.05); let mid = ind.bag.wool || 0; ind.base.animals[0].x = ind.p.x; ind.base.animals[0].z = ind.p.z + 1; indAdvance(0.8); return { job: job, mid: mid, moved: moved, w: ind.bag.wool || 0 }; })()`);
+                if (!(r.job && r.mid === 0 && r.w === 2 && r.moved > 1)) bad.push('拿着剪刀边走边剪，' + 'IND_SHEAR_T 秒出 2 份羊毛 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${shSet} indAdvance(1); indSelect('wood'); indAdvance(10); let paused = !!ind.shear && (ind.bag.wool || 0) === 0; indSelect('shears'); indAdvance(IND_SHEAR_T); return { paused: paused, w: ind.bag.wool || 0, fl: __fl, a: ind.base.animals[0], p: [ind.p.x, ind.p.z] }; })()`);
+                if (!(r.paused && r.w === 2)) bad.push('换走剪刀停着、换回来接着剪 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${shSet} indAdvance(1); ind.base.animals[0].x = 10; ind.base.animals[0].tx = 10; indAdvance(0.1); return { job: !!ind.shear, w: ind.bag.wool || 0, fl: __fl.slice(-1)[0] }; })()`);
+                if (!(r.job === false && r.w === 0 && /跑远/.test(r.fl))) bad.push('羊跑远了（> 3 米）中断 ' + JSON.stringify(r));
+                // ── 新号礼包 ──
+                const box = (rule) => J(`(function(){ let b = indNewBase(); indFixBase(b); ind.base = b; indSetRule('${rule}'); let c = b.chests.filter(function (x) { return x.big; })[0]; return c.items; })()`);
+                const bh = await box('hard'), bc = await box('casual');
+                if (JSON.stringify(bh) !== JSON.stringify({ pick_stone: 1, bake_potato: 3 })) bad.push('硬核新号箱子里只该有石稿和 3 个烤土豆 ' + JSON.stringify(bh));
+                if (!(bc.compass === 1 && bc.shears === 1 && bc.seed_wheat === 6 && bc.wood === 8)) bad.push('悠闲新号礼包照旧 ' + JSON.stringify(bc));
+                // 悠闲升级成硬核：礼包不收回
+                const up = await J(`(function(){ indSetRule('hard'); return ind.base.chests.filter(function (x) { return x.big; })[0].items; })()`);
+                if (up.compass !== 1) bad.push('悠闲升级成硬核不收回礼包 ' + JSON.stringify(up));
+                // ── 硬核从零开局：只靠地上的东西做出草绳、小刀、斧子 ──
+                r = await J(`(function(){ let b = indNewBase(); indFixBase(b); ind.base = b; indSetRule('hard'); ${fresh} ind.bag = {}; indGoTrip(4321); let n = 0;
+                    ind.tripGround.slice().forEach(function (g) { if (Math.hypot(ind.p.x - g.x, ind.p.z - g.z) > 15.5 + 4) return; indTeleport(g.x, g.z + 1); indLookAt(g.x, g.z); indAction(); n++; });
+                    let got = JSON.parse(JSON.stringify(ind.bag));
+                    let cr = function (o) { let i = IND_CRAFT.findIndex(function (q) { return q.out === o && indCraftShow(q); }); return i >= 0 && indCraft(i); };
+                    cr('rope'); cr('rope'); cr('rope'); cr('knife'); let kn = ind.bag.knife || 0;
+                    let s0 = ind.bag.stone || 0, f0 = ind.bag.sharp_flint || 0; let fi = IND_CRAFT.findIndex(function (q) { return q.out === 'sharp_flint' && indCraftShow(q); }); ind.craftNow = true; indCraft(fi); ind.craftNow = false;
+                    let flint = [s0 - (ind.bag.stone || 0), (ind.bag.sharp_flint || 0) - f0];
+                    ind.bag.wood = (ind.bag.wood || 0) + 1; cr('axe');
+                    return { got: got, kn: kn, ax: ind.bag.axe || 0, flint: flint }; })()`);
+                if (!(r.got.sharp_flint >= 3 && r.got.twig >= 1 && r.got.grass >= 6 && r.got.stone >= 2)) bad.push('硬核出生点地上捡得到尖石片、树枝、草、石头 ' + JSON.stringify(r.got));
+                if (!(r.kn === 1 && r.ax === 1)) bad.push('硬核只靠地上的东西能做出草绳、小刀、斧子 ' + JSON.stringify(r));
+                if (r.flint.join() !== '2,1') bad.push('2 块石头敲出 1 个尖石片 ' + JSON.stringify(r.flint));
+                await T.eval(`indGoBase(null); true;`);
+                // ── 老存档 ──
+                if (!(await T.eval(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.ver = 5; b.rule = 'hard'; indFixBase(b); return !!b.chests.length; })()`))) bad.push('老存档整理报错');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND37 硬核砍树要工具、拔刺看手上的工具边走边拔、剪羊毛边走边剪、硬核新号没礼包、从零做出刀斧', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
@@ -8514,7 +8596,7 @@ async function enterExit(tab, key) {
                 await T.eval(`indGoBase(false); true;`);
                 await T.eval(`(function(){ ind.bag = { pick_stone: 1, shears: 1 }; ind.base.animals = [{ k: 'sheep', x: 0, z: 5, food: 80, woolAt: 0, milkAt: 0 }]; indTeleport(0, 8); indLookAt(0, 5); indSelect('pick_stone'); indAction(); })(); true;`);
                 if (await T.eval(`!!ind.bag.wool`)) bad.push('拿稿子对着羊也剪毛了');
-                await T.eval(`indSelect('shears'); indAction(); true;`);
+                await T.eval(`indSelect('shears'); indAction(); (ind.shear && (ind.p.x = ind.shear.a.x, ind.p.z = ind.shear.a.z, ind.shear.t = IND_SHEAR_T, indShearTick(0))); true;`);
                 if ((await T.eval(`ind.bag.wool || 0`)) !== 2 || (await T.eval(`ind.bag.shears`)) !== 1) bad.push('拿剪刀没剪到毛 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 // 面包：4 小麦 + 1 盐 + 1 桶水（生水开水都行）→ 3 面包，40 秒，桶还回来，生水和面不拉肚子；灶台一炉多份
                 await T.eval(`window.__fl = []; window.__oldFlash = indFlash; indFlash = function (t) { __fl.push(t); }; true;`);
