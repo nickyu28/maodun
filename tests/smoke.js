@@ -7991,6 +7991,73 @@ async function enterExit(tab, key) {
             report('IND31 盐和硝石：盐点 4～8 且更多、煮海水出盐（只硬核）、硝石当肥料长得快一倍', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND32')) {
+            // IND32 回大厅再回来背包丢了（任务 10.1）和暂停键（10.2）：基地里退出背包带着存、远征里没撤离的丢；
+            // P／按钮暂停：生存值、炉温燃料、作物、时间全停，WASD 人不动，卡片有继续和返回大厅，P／Esc 继续，继续不把暂停补算成一大帧
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const wait = (ms) => T.eval(`new Promise(function (r) { setTimeout(function () { r(true); }, ${ms}); })`);
+                const reenter = async () => { await until(T, `IND_SAVING === 0`, 8000); await T.eval(`indEnter(); true;`); return await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000); };
+                // ── 10.1 背包 ──
+                await T.eval(`${HIDE} indSetRule('hard'); ind.bag = { wood: 3, stone: 2, salt: 1 }; indSave(); true;`);
+                await T.eval(`indExit(); true;`);
+                if (!(await reenter())) bad.push('退出后进不去');
+                else if (!(await T.eval(`ind.where === 'base' && ind.bag.wood === 3 && ind.bag.stone === 2 && ind.bag.salt === 1`))) bad.push('基地里退出再进来，背包没了 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 再来一次（连着退出两次也不丢）
+                await T.eval(`indExit(); true;`);
+                if (!(await reenter()) || !(await T.eval(`ind.bag.wood === 3 && ind.bag.salt === 1`))) bad.push('第二次退出再进来，背包没了');
+                // 远征里没撤离回大厅：背包丢，存的是空背包
+                await T.eval(`indGoTrip(2024); ind.bag = { wood: 5, coal: 2 }; true;`);
+                await T.eval(`indExit(true); true;`);
+                if (!(await reenter())) bad.push('远征退出后进不去');
+                else if (!(await T.eval(`ind.where === 'base' && Object.keys(ind.bag).length === 0`))) bad.push('远征里没撤离回大厅，背包该空 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // ── 10.2 暂停 ──
+                await T.eval(`ind.base.rule = 'hard'; let S = ind.base.surv; S.food = 80; S.water = 80; S.energy = 80; S.temp = 37; S.hp = 100;
+                    ind.base.stove = { items: { wheat: 1 }, out: {}, fuel: 500, fire: 2, temp: 300, cook: null }; ind.base.crops = [{ k: 'wheat', x: -20, z: 0, g: 5, wet: 1e9, times: 0 }]; ind.cropDirty = true; ind.panel = null; true;`);
+                const snap = `(function(){ let S = ind.base.surv, st = ind.base.stove; return [S.food, S.water, S.energy, S.temp, st.fuel, st.temp, ind.base.crops[0].g, ind.base.clock, ind.p.x, ind.p.z]; })()`;
+                const live0 = await J(snap);
+                if (!(await until(T, `JSON.stringify(${snap}) !== '${JSON.stringify(live0)}'`, 8000))) bad.push('没暂停时数值也不动，这条检查不成立');
+                if (!(await T.eval(`!!document.getElementById('ind-btn-pause')`))) bad.push('右上角没有暂停按钮');
+                await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' })); window.dispatchEvent(new KeyboardEvent('keyup', { key: 'p' })); true;`);
+                if (!(await T.eval(`ind.paused === true && !!document.getElementById('ind-pause') && !!document.getElementById('ind-pause-go') && !!document.getElementById('ind-pause-exit')`))) bad.push('按 P 没出暂停卡片');
+                const p0 = await J(snap);
+                await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' })); true;`);
+                await wait(1500);
+                const p1 = await J(snap);
+                await T.eval(`window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w' })); true;`);
+                if (JSON.stringify(p0) !== JSON.stringify(p1)) bad.push('暂停时数值或位置在变 ' + JSON.stringify([p0, p1]));
+                await T.eval(`indUse(); indAction(); indDrop(); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' })); true;`);
+                if (!(await T.eval(`!ind.panel`))) bad.push('暂停时开了面板');
+                // 暂停一会儿再继续：不补算
+                await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' })); true;`);
+                if (!(await T.eval(`ind.paused === false && !document.getElementById('ind-pause') && performance.now() - ind.last < 200`))) bad.push('按 P 没继续、或 ind.last 没重置');
+                await wait(500);
+                const r1 = await J(snap);
+                if (!(r1[7] > p1[7] && r1[7] - p1[7] < 3)) bad.push('继续后时间该正常走（不是一下补一大截） ' + (r1[7] - p1[7]));
+                if (!(await T.eval(`!ind.dead && ind.base.surv.hp > 90`))) bad.push('暂停继续后人受伤了');
+                // Esc 也能继续；卡片上的"返回大厅"
+                await T.eval(`indPause(); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true;`);
+                if (!(await T.eval(`ind.paused === false`))) bad.push('Esc 没继续');
+                await T.eval(`document.getElementById('ind-btn-pause').click(); true;`);
+                if (!(await T.eval(`ind.paused === true`))) bad.push('点暂停按钮没暂停');
+                await T.eval(`document.getElementById('ind-pause-exit').click(); true;`);
+                if (!(await T.eval(`ind === null && !document.getElementById('ind-pause')`))) bad.push('卡片上返回大厅没退出、卡片没清');
+                // 远征里也能暂停
+                await until(T, `IND_SAVING === 0`, 8000);
+                await T.eval(`indEnter(); true;`); await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000);
+                await T.eval(`indGoTrip(2024); ind.base.rule = 'hard'; true;`);
+                await T.eval(`indPause(); true;`);
+                const q0 = await J(`[ind.base.surv.food, ind.base.surv.water, ind.base.clock]`); await wait(1200); const q1 = await J(`[ind.base.surv.food, ind.base.surv.water, ind.base.clock]`);
+                if (JSON.stringify(q0) !== JSON.stringify(q1)) bad.push('远征里暂停也该停 ' + JSON.stringify([q0, q1]));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND32 背包退出不丢（基地带着存、远征丢）、暂停键（P／按钮，全停、不补算、继续／返回大厅）', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

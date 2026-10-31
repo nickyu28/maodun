@@ -802,6 +802,7 @@
 
         // ── 进出 ──
         let ind = null;
+        document.addEventListener('visibilitychange', function () { if (document.hidden && ind && !ind.over && !ind.loading) indSave(); });   // 切走或关页面前存一次
         function indFlash(t) { try { blazeFlash(t); } catch (e) { } }
         function indEnter() {
             if (!indVisible() || ind) return;
@@ -826,13 +827,13 @@
             indBuildHud(); indBindKeys();
             camera.rotation.set(-0.3, 0, 0, 'YXZ');
             document.body.onmousedown = function (e) {
-                if (!ind || ind.over) return;
+                if (!ind || ind.over || ind.paused) return;
                 if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal') || e.target.closest('#ind-panel'))) return;
                 if (ind.panel) return;
                 if (!document.pointerLockElement) safeLockPointer();
             };
             ind.onMouse = function (e) {
-                if (!ind || ind.over || !document.pointerLockElement) return;
+                if (!ind || ind.over || ind.paused || !document.pointerLockElement) return;
                 if (e.target && e.target.closest && e.target.closest('button, #ind-panel, #sys-modal')) return;
                 if (e.button === 0) indAction(); else if (e.button === 2) indRightDown();
             };
@@ -876,10 +877,10 @@
                 showSysModal('猫盾工业', '还没撤离，现在回大厅身上的东西会丢。', [{ label: '丢了也回', color: '#d84315', onClick: function () { indExit(true); } }, { label: '再想想' }]);
                 return;
             }
-            let R = ind; R.over = true;
+            let R = ind; R.over = true; R.paused = false;
+            { let pe = document.getElementById('ind-pause'); if (pe && pe.parentNode) pe.parentNode.removeChild(pe); }
             if (R.raf) cancelAnimationFrame(R.raf);
-            indSave();   // 基地里退出：背包带着存下来；远征里没撤离的丢掉（存的是空背包）
-            R.bag = {};
+            indSave();   // 基地里退出：背包带着存下来；远征里没撤离的丢掉（indSave 里远征不存背包）。只存这一次，存之前别清 R.bag（以前第二次存把空背包盖上去了）
             indUnbindKeys(); indPanelClose();
             document.body.onmousedown = null;
             if (R.onMouse) { document.removeEventListener('mouseup', R.onMouseUp); document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); }
@@ -888,8 +889,7 @@
             indClearWorld();
             if (R.me) scene.remove(R.me);
             scene.background = R.oldBg; scene.fog = R.oldFog;
-            indSave(function () { });
-            ind = null;
+            R.bag = {}; ind = null;
             nav('screen-lobby'); selectGameMode('industry');
         }
 
@@ -1129,12 +1129,30 @@
         function indSyncNodes() { wdSyncNodes(); }   // 19-industry-world.js：视野内的树、石头、露头、坑、树桩
 
         // ── 主循环 ──
+        // 暂停（P）：生存值、火、作物、动物、昼夜、毒气、辐射、反应堆、倒计时全停；继续时 ind.last 重置，不把暂停的时间补成一帧
+        function indPause() {
+            if (!ind || ind.over || ind.loading || ind.dead || ind.paused) return;
+            if (ind.panel) indPanelClose();
+            ind.paused = true; ind.k = {};
+            if (document.pointerLockElement) document.exitPointerLock();
+            let d = document.createElement('div'); d.id = 'ind-pause';
+            d.style.cssText = 'position:fixed;inset:0;z-index:130;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;';
+            d.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 40px;text-align:center;"><div style="font-size:30px;font-weight:bold;color:#222;">已暂停</div>' +
+                '<div style="margin-top:20px;"><button id="ind-pause-go" style="' + IND_BTN + 'background:#2e7d32;font-size:20px;padding:12px 26px;" onclick="indResume()">继续</button>' +
+                '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button></div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续</div></div>';
+            document.body.appendChild(d);
+        }
+        function indResume() {
+            if (!ind || !ind.paused) return;
+            ind.paused = false; ind.last = performance.now();
+            let e = document.getElementById('ind-pause'); if (e && e.parentNode) e.parentNode.removeChild(e);
+        }
         function indLoop() {
             if (!ind || ind.over) return;
             if (introFrozen()) { ind.raf = requestAnimationFrame(indLoop); return; }   // R1：提示卡片开着时静止
             let now = performance.now(), dt = Math.min(0.05, (now - ind.last) / 1000);
             ind.last = now;
-            indTick(dt);
+            if (!ind.paused) indTick(dt);   // 暂停：世界静止，只画画面
             if (ind && !ind.over) { indRender(); ind.raf = requestAnimationFrame(indLoop); }
         }
         function indGround(x, z) { return ind.where === 'trip' ? Math.max(IND_WATER_Y, indHeight(ind.map, x, z)) : 0; }
@@ -1178,6 +1196,7 @@
             return true;
         }
         function indTick(dt) {
+            if (ind.paused) return;
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
@@ -1488,7 +1507,8 @@
         function indToolish(k) { return !!k && (!!IND_ITEMS[k].tool || k === 'wire' || k === 'tongs' || k === 'shears'); }
         // 左键：采集、拿、收菜、打开；对着空的农田格子、手里拿着种子：种下
         function indAction() {
-            if (!ind || ind.over || ind.dead || ind.panel) return;
+            if (!ind || ind.paused) return;
+            if (ind.over || ind.dead || ind.panel) return;
             if (ind.ch) { ind.ch = null; indFlash('停了'); return false; }
             if (ind.onRaft) return indRaftToggle(ind.onRaft);
             if (indSel() === 'bell') return indRing();
@@ -1542,7 +1562,8 @@
         }
         // 右键：吃喝、浇水、接水
         function indUse() {
-            if (!ind || ind.over || ind.dead || ind.panel) return;
+            if (!ind || ind.paused) return;
+            if (ind.over || ind.dead || ind.panel) return;
             let k = indSel(), a = indAim();
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
@@ -1679,7 +1700,8 @@
         }
         // Q：在基地里把选中的东西放在脚边（永久保存）；远征里放下就是扔掉
         function indDrop() {
-            if (!ind || ind.over || ind.panel) return;
+            if (!ind || ind.paused) return;
+            if (ind.over || ind.panel) return;
             let k = indSel(); if (!k) return;
             if (IND_ITEMS[k].gas) { let f = indFace(); indReleaseGas(k, ind.p.x + f.x, ind.p.z + f.z); return; }
             if (IND_ITEMS[k].poison) { let f = indFace(); nkReleasePoison(k, ind.p.x + f.x, ind.p.z + f.z); return; }
@@ -2762,6 +2784,8 @@
             if (!ind || ind.over || ind.dead) return;
             let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
             let k = (e.key || '').toLowerCase();
+            if (ind.paused) { if (!e.repeat && (k === 'p' || k === 'escape')) indResume(); e.preventDefault(); return; }
+            if (k === 'p' && !e.repeat && !ind.panel) { indPause(); return; }
             if (IND_KEYMAP[k]) { ind.k[IND_KEYMAP[k]] = true; e.preventDefault(); return; }
             if (k === ' ') { ind.k.jump = true; e.preventDefault(); return; }
             if (k === 'shift') { ind.k.run = true; return; }
@@ -2794,7 +2818,7 @@
             d.innerHTML =
                 '<div style="position:absolute;left:8px;top:8px;"><div id="ind-status" style="background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
                 '<div id="ind-wear" style="margin-top:4px;background:rgba(255,255,255,.92);padding:4px 10px;border-radius:8px;font-size:13px;pointer-events:auto;"></div></div>' +
-                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
+                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
                 '<div id="ind-hint" style="position:absolute;left:50%;bottom:150px;transform:translateX(-50%);color:#fff;padding:4px 12px;font-size:20px;font-weight:bold;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
