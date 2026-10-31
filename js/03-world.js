@@ -393,7 +393,7 @@
             };
             for (let fl = 0; fl < FLOORS - 1; fl++) {
                 let cand = allLeaves.filter(function (l) {
-                    return l.f === fl && maze[fl][l.z][l.x].type === 0 && maze[fl + 1][l.z][l.x].type === 0 && !(fl === 0 && l.x <= 2 && l.z <= 2);
+                    return l.f === fl && maze[fl][l.z][l.x].type === 0 && maze[fl + 1][l.z][l.x].type === 0 && !(fl === 0 && l.x <= 2 && l.z <= 2) && !(fl === 0 && l.x === potionLoc.x && l.z === potionLoc.z);   // 药剂房（地图 4）那一格不放楼梯，不然药水放在楼梯上、走不到
                 });
                 let placed = 0;
                 for (let s = 0, fb = false; (s < STAIRS_PER_FLOOR && cand.length > 0) || (placed === 0 && !fb); s++) {
@@ -405,7 +405,7 @@
                         let pick = function (allowTable) {
                             let list = [];
                             for (let z = 1; z < mSize - 1; z++) for (let x = 1; x < mSize - 1; x++) {
-                                if (fl === 0 && ((x <= 2 && z <= 2) || (x === goldShopLoc.x && z === goldShopLoc.z))) continue;
+                                if (fl === 0 && ((x <= 2 && z <= 2) || (x === goldShopLoc.x && z === goldShopLoc.z) || (x === potionLoc.x && z === potionLoc.z))) continue;
                                 let lo = maze[fl][z][x], up = maze[fl + 1][z][x], ok = function (c) { return c.type === 0 || (allowTable && c.type === 2); };
                                 if (ok(lo) && ok(up) && stairOpen(fl, { x: x, z: z })) list.push({ x: x, z: z });
                             }
@@ -1473,6 +1473,11 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026.10.31-1', date: '10 月 31 日', title: '最近更新', items: [
+                    '地图 4 的药剂房有时走不到，修好了'
+                ]
+            },
+            {
                 id: '2026.10.29-14', date: '10 月 29 日', title: '最近更新', items: [
                     '监狱救援、躲避球、合作密室、推推乐、爬塔先藏起来了',
                     '每个模式第一次点开会弹一次规则，之后在“规则”里看',
@@ -1487,14 +1492,6 @@
                     '拿着腰包时，快捷栏上方多出 3 格，点一下就拿到手上',
                     '猫神护身符不再扣血量上限，还能从仓库带进图',
                     '一局最多生效一个护身符'
-                ]
-            },
-            {
-                id: '2026.10.24-2', date: '10 月 24 日', title: '最近更新', items: [
-                    '丰饶圣餐又能正常合成了',
-                    '合成出来的大金每张图最多 4 个',
-                    '小地图的“全览”挪到框外，不挡地图了',
-                    '用了地窖徽章，路线不会消失了'
                 ]
             }
         ];

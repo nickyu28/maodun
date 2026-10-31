@@ -1732,7 +1732,9 @@ async function enterExit(tab, key) {
             // CR1 合成：丰饶圣餐在正常开局（箱子里的大金不占合成名额）能合；多个合成同时成立时先合产物价值高的、一样高选消耗原料总价值少的，每次结果一样；所有配方都合得出来
             const bad = [];
             const T = await openTab(chrome, url);
-            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`); await W(3000); await T.eval(`${HIDE} true;`);
+            await T.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+            if (!(await until(T, `chatActiveModeKey() === 'hunt' && isPlaying`, 30000))) bad.push('寻宝队没开起来');
+            await frames(T, 5); await T.eval(`${HIDE} true;`);
             await T.eval(`window.__mk = function (u, x) { let m = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), new THREE.MeshBasicMaterial()); m.userData = Object.assign({ isItem: true, feeds: 0 }, u); m.position.set(500 + (x || 0), 1, 500); scene.add(m); groundItems.push(m); return m; };
                 window.__has = function (n) { return groundItems.some(function (g) { return g.userData.n === n; }); };
                 window.__cnt = function (n) { return groundItems.filter(function (g) { return g.userData.n === n; }).length; };
@@ -1742,7 +1744,8 @@ async function enterExit(tab, key) {
             if (open0.craft !== 4) bad.push('正常开局合成名额应该是 4 ' + JSON.stringify(open0));
             for (const left of [null]) {
                 await T.eval(`window.__clear(); gState.inv[0] = Object.assign({}, itemPool.gold.filter(function (i) { return i.n === '金苹果'; })[0]); gState.inv[1] = Object.assign({}, itemPool.gold.filter(function (i) { return i.n === '黄金圣杯'; })[0]); executeThrow(0); executeThrow(1); true;`);
-                if (!(await until(T, `window.__has('丰饶圣餐')`, 20000))) bad.push('正常开局扔金苹果 + 黄金圣杯合不出丰饶圣餐 ' + JSON.stringify(open0));
+                // 合大金要等 5 秒（游戏时间；一帧最多算 0.08 秒，机器慢时真实时间会长很多，所以最多等 3 分钟）
+                if (!(await until(T, `window.__has('丰饶圣餐')`, 180000))) bad.push('正常开局扔金苹果 + 黄金圣杯合不出丰饶圣餐 ' + JSON.stringify(open0) + ' ' + await T.eval(`JSON.stringify({ pend: huntMergePend.size, items: groundItems.map(function (g) { return g.userData.n; }), left: huntCraftBigLeft })`));
                 else if (await T.eval(`window.__has('金苹果') || window.__has('黄金圣杯')`)) bad.push('合成后原料还在');
             }
             // 2) 优先级：造三个互相竞争的配方（都要"甲"）
@@ -2748,13 +2751,23 @@ async function enterExit(tab, key) {
                 const r = JSON.parse(await T.eval(`(function(){ let room = null; for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) if (maze[0][z][x] && maze[0][z][x].isPotionRoom) room = { x: x, z: z };
                     let o = { room: room, pool: huntPool, diff: gState.mapDifficulty, chests: chests.filter(function (q) { return !q.userData.hidden && q.userData.type === 'wood'; }).length };
                     if (room) { o.potion = groundItems.filter(function (g) { return g.userData.type === 'potion' && Math.abs(g.position.x - room.x * TILE) < 1 && Math.abs(g.position.z - room.z * TILE) < 1; }).length;
-                        o.reach = !!huntRouteFind({ f: 0, x: 1, z: 1 }, { f: 0, x: room.x, z: room.z }, 0); }
+                        o.reach = true; }
                     if (huntPool) { camera.position.set(huntPool.x * TILE, 9, huntPool.z * TILE); o.inPool = huntInPool(); camera.position.set(TILE, 9, TILE); o.outPool = huntInPool(); }
                     return JSON.stringify(o); })()`));
                 if (!r.room || r.potion !== 1 || !r.reach) bad.push('药剂房/药水/走得到 ' + JSON.stringify(r));
                 if (!r.pool || !r.inPool || r.outPool) bad.push('水池 ' + JSON.stringify(r));
                 if (r.chests !== 2) bad.push('木箱该是 2 个 ' + r.chests);
             }
+            // 多换种子：从出生点用游戏自己的走路图（huntRouteNbrs，含楼梯）一路走，药剂房和水池每次都走得到；药剂房那一格不是楼梯
+            const sd = JSON.parse(await T.eval(`(function(){ let bad = [], seed0 = gameSeed, key = function (n) { return (n.f * 64 + n.z) * 64 + n.x; };
+                for (let s = 1; s <= 120; s++) { gameSeed = s * 104729 % 233280 || 1; buildProceduralMaze();
+                    let room = null; for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) if (maze[0][z][x] && maze[0][z][x].isPotionRoom) room = { x: x, z: z };
+                    let seen = {}, q = [{ f: 0, x: 1, z: 1 }]; seen[key(q[0])] = 1;
+                    for (let h = 0; h < q.length; h++) huntRouteNbrs(q[h]).forEach(function (m) { let k = key(m); if (!seen[k]) { seen[k] = 1; q.push(m); } });
+                    let potion = room && groundItems.some(function (g) { return g.userData.type === 'potion' && Math.abs(g.position.x - room.x * TILE) < 1 && Math.abs(g.position.z - room.z * TILE) < 1; });
+                    if (!room || maze[0][room.z][room.x].type !== 0 || !seen[key({ f: 0, x: room.x, z: room.z })] || !potion || !huntPool || !seen[key({ f: 0, x: huntPool.x, z: huntPool.z })]) bad.push(gameSeed); }
+                gameSeed = seed0; return JSON.stringify({ n: bad.length, first: bad.slice(0, 5) }); })()`));
+            if (sd.n) bad.push('120 个种子里药剂房/水池走不到的 ' + JSON.stringify(sd));
             // 水池里慢、体力恢复快：用游戏自己的函数算
             const m = JSON.parse(await T.eval(`(function(){ camera.position.set(huntPool.x * TILE, 9, huntPool.z * TILE); let a = huntInPool(); stamina = 50; return JSON.stringify({ in: a }); })()`));
             if (!m.in) bad.push('站进水池里 huntInPool 是假');
