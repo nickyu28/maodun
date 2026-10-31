@@ -141,7 +141,7 @@
             clay: { name: '黏土', col: 0xbcaaa4 }, dirt: { name: '泥土', col: 0x6d4c41, use: '开农田' },
             salt: { name: '盐', col: 0xf5f5f5 },
             coal: { name: '煤', col: 0x263238, fuel: 150 },
-            oil: { name: '石油', col: 0x212121, useLater: '后面的阶段' },
+            oil: { name: '石油', col: 0x212121, fuel: 180, use: '能烧，也是后面的原料' },
             ore_cu: { name: '铜矿', col: 0xd84315 },
             ore_zn: { name: '锌矿', col: 0x90a4ae },
             ore_fe: { name: '铁矿', col: 0x795548 },
@@ -2369,7 +2369,7 @@
             return true;
         }
         function indFeedFire(f) {
-            let k = ['wood', 'charcoal', 'coal'].filter(function (x) { return ind.bag[x]; })[0];
+            let k = ['wood', 'charcoal', 'coal', 'oil'].filter(function (x) { return ind.bag[x]; })[0];
             if (!k) { indFlash('篝火还能烧 ' + Math.ceil(f.fuel) + ' 秒（拿木头来加柴）'); return false; }
             indBagDel(k, 1); f.fuel += IND_ITEMS[k].fuel; ind.fireDirty = true; indSave();
             indFlash('加了 1 个' + indName(k) + '，还能烧 ' + Math.ceil(f.fuel) + ' 秒');

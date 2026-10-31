@@ -7558,6 +7558,46 @@ async function enterExit(tab, key) {
             report('IND25 世界（L）', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND26')) {
+            // IND26 石油能当燃料（180，比煤的 150 高一点）：灶台、小熔炉、大窑里"当柴烧"一个石油，燃料 +180，点火后温度上升、燃料慢慢烧；篝火加一个石油也 +180；
+            // 烧石油不冒毒气不扣血；石油还是沙漠的资源点；实验室的物品表里也有石油（名字、颜色跟工业里一致）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; ind.bag = {}; indFlash = function () {}; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const d = await J(`{ fuel: IND_ITEMS.oil.fuel, coal: IND_ITEMS.coal.fuel, later: IND_ITEMS_RAW.oil.useLater || null, node: !!IND_NODES.oil, desert: IND_BIOMES.desert.res.oil, lab: [LAB_FIXED.oil.name, LAB_FIXED.oil.col === IND_ITEMS_RAW.oil.col] }`);
+                if (d.fuel !== 180 || d.coal !== 150 || d.later || !d.node || !d.desert || d.lab[0] !== '石油' || !d.lab[1]) bad.push('石油的数据不对（燃料 180、不再标后面的阶段、还是沙漠资源点、实验室里有） ' + JSON.stringify(d));
+                // 灶台、小熔炉、大窑：面板里石油有"当柴烧"，点一下燃料 +180；点火后温度上升、燃料慢慢烧
+                await T.eval(`ind.base.cookers = [{ id: 11, ty: 'furnace', x: 5, z: 5, items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, spout: [] }, { id: 12, ty: 'kiln', x: 5, z: -3, items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, spout: [] }]; ind.furnDirty = true; true;`);
+                for (const id of ['stove', 11, 12]) {
+                    await T.eval(`ind.bag = { oil: 2 }; ind.base.stove = { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, spout: [] }; ind.base.cookers.forEach(function (c) { c.fuel = 0; c.fire = 0; c.temp = 20; }); ind.clouds = []; ind.cookId = ${JSON.stringify(id)}; indPanelStove(${JSON.stringify(id)}); true;`);
+                    if (!/石油[^当]*当柴烧/.test(await T.eval(`document.getElementById('ind-panel').innerHTML.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, '')`)) && !(await T.eval(`document.getElementById('ind-panel').innerHTML.indexOf("indStoveFuel('oil')") >= 0`))) bad.push(id + ' 面板里石油没有"当柴烧"');
+                    await T.eval(`indStoveFuel('oil'); true;`);
+                    const f0 = await J(`{ fuel: indCookById(ind.cookId).C.fuel, oil: ind.bag.oil, fire: indCookById(ind.cookId).C.fire }`);
+                    if (f0.fuel !== 180 || f0.oil !== 1 || f0.fire !== 0) bad.push(id + ' 当柴烧一个石油燃料应该 +180、少一个石油 ' + JSON.stringify(f0));
+                    await T.eval(`indStoveFire(1); true;`);
+                    const ok = await until(T, `(function(){ indAdvance(1); let C = indCookById(ind.cookId).C; return C.temp >= 100; })()`, 20000);
+                    const f1 = await J(`{ fuel: indCookById(ind.cookId).C.fuel, temp: indCookById(ind.cookId).C.temp, fire: indCookById(ind.cookId).C.fire }`);
+                    if (!ok || f1.temp < 100 || !(f1.fuel < 180 && f1.fuel > 0) || f1.fire !== 1) bad.push(id + ' 点火后温度要上升、燃料慢慢烧 ' + JSON.stringify(f1));
+                    await T.eval(`indStoveFuel('oil'); true;`);
+                    if ((await J(`indCookById(ind.cookId).C.fuel`)) < 180) bad.push(id + ' 再烧一个石油要接着加');
+                }
+                // 篝火：拿着石油左键加柴 +180（有木头先用木头）
+                await T.eval(`ind.bag = { oil: 1 }; window.__f = { x: 1, z: 1, fuel: 0 }; indFeedFire(window.__f); true;`);
+                if (!(await T.eval(`__f.fuel === 180 && !ind.bag.oil`))) bad.push('篝火加一个石油应该 +180 ' + await T.eval(`JSON.stringify([__f, ind.bag])`));
+                await T.eval(`ind.bag = { oil: 1, wood: 1 }; window.__f = { x: 1, z: 1, fuel: 0 }; indFeedFire(window.__f); true;`);
+                if (!(await T.eval(`__f.fuel === 60 && ind.bag.oil === 1`))) bad.push('有木头先烧木头 ' + await T.eval(`JSON.stringify([__f, ind.bag])`));
+                // 烧石油不冒毒气、不扣血
+                if (!(await T.eval(`(!ind.clouds || ind.clouds.length === 0) && ind.base.surv.hp === 100`))) bad.push('烧石油不该冒毒气或扣血');
+            }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND26 石油能当燃料：燃料 180、灶台小熔炉大窑篝火都收、点火温度上升、不冒毒气', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
