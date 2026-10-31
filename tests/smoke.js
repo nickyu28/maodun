@@ -3137,6 +3137,7 @@ async function enterExit(tab, key) {
                 await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
             }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.eval(`try { localStorage.removeItem('TH_hcdebug'); } catch (e) { } true;`);   // 带 ?hcdebug=1 会记在本机，别留给后面"正常玩家"的检查
             await T.close();
             report('CK1 拿铜线左键点电池组：接线不收起（设备数量不变）、右键照旧收起、铜线左键点地上的设备物品不再捡走、手上不是铜线照旧能捡', bad.length === 0, bad.join(' / '));
         }
@@ -3167,6 +3168,7 @@ async function enterExit(tab, key) {
                 await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
             }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.eval(`try { localStorage.removeItem('TH_hcdebug'); } catch (e) { } true;`);   // 带 ?hcdebug=1 会记在本机，别留给后面"正常玩家"的检查
             await T.close();
             report('CK2 煤和焦炭也能炼钢：火候 1550°C、40 秒、产出跟木炭一样；火候不够不炼；悠闲不能炼钢', bad.length === 0, bad.join(' / '));
         }
