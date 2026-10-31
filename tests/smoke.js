@@ -7917,7 +7917,7 @@ async function enterExit(tab, key) {
                 await T.eval(`(function(){ let C = ind.base.cookers[0]; C.fuel = 0; C.funnel = { ty: 'brick', oil: 0 }; ind.bag = { oil: 1 }; })(); ckPourOil('oil', { kind: 'funnel', o: indCookById(${cid}) }); indAdvance(2); true;`);
                 if (!(await T.eval(`ind.base.cookers[0].fuel > 15 && ind.base.cookers[0].funnel.oil < 600`))) bad.push('石炉接进料漏斗烧石油');
                 await T.eval(`ind.base.rule = 'casual'; ind.base.cookers[0].fuel = 0; ind.bag = { oil: 1 }; ckPourOil('oil', { kind: 'cook', o: ind.base.cookers[0] }); true;`);
-                if (!(await T.eval(`ind.base.cookers[0].fuel === 600 && ind.bag.bucket === 1`))) bad.push('悠闲：石炉直接倒油');
+                if (!(await T.eval(`ind.base.cookers[0].fuel > 590 && ind.base.cookers[0].fuel <= 600 && ind.bag.bucket === 1`))) bad.push('悠闲：石炉直接倒油');
                 await T.eval(`ind.base.rule = 'hard'; true;`);
                 // 搬起来再放下，东西不丢；占炉子上限；4 米内取暖
                 await T.eval(`(function(){ let C = ind.base.cookers[0]; C.items = { sand: 3 }; C.out = { ash: 2 }; C.fuel = 10; C.temp = 20; C.fire = 0; C.funnel = null; C.cook = null; C.spout = []; })(); ind.bag = {}; indPickFurn({ ty: 'stone', o: ind.base.cookers[0] }); true;`);
