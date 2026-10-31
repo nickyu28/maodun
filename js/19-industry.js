@@ -832,9 +832,9 @@
             ind.onMouse = function (e) {
                 if (!ind || ind.over || !document.pointerLockElement) return;
                 if (e.target && e.target.closest && e.target.closest('button, #ind-panel, #sys-modal')) return;
-                if (e.button === 0) indAction(); else if (e.button === 2) indRightDown();
+                if (e.button === 0) indFrom('左键', indAction); else if (e.button === 2) indFrom('右键', indRightDown);
             };
-            ind.onMouseUp = function (e) { if (ind && !ind.over && e.button === 2) indRightUp(); };
+            ind.onMouseUp = function (e) { if (ind && !ind.over && e.button === 2) indFrom('右键', indRightUp); };
             ind.onCtx = function (e) { if (ind) e.preventDefault(); };
             document.addEventListener('mousedown', ind.onMouse); document.addEventListener('mouseup', ind.onMouseUp); document.addEventListener('contextmenu', ind.onCtx);
             if (!base.rule) indAskRule();
@@ -2044,7 +2044,10 @@
             });
             Object.keys(want).forEach(function (key) { if (!ind.furnMesh[key]) ind.furnMesh[key] = { x: want[key].x, z: want[key].z, sig: want[key].sig, m: indFurnBuild(want[key]) }; });
         }
+        // 记下这一下操作是从哪个键来的（左键、右键、键盘 E／F、R 键）：收起设备只有右键和 R 键能做，左键（鼠标左键、E、F）绝不收起设备（任务 13）
+        function indFrom(src, fn) { let old = ind && ind.src; if (ind) ind.src = src; try { return fn(); } finally { if (ind) ind.src = old; } }
         function indPickDev(d) {
+            if (ind.src === '左键' || /^键盘/.test(ind.src || '')) return false;   // 左键只接线、装电池、开关，不收起设备
             let k = 'dev_' + d.ty; if (indBagAdd(k, 1) <= 0) { indFlash('背包满了'); return false; }
             if (d.ty === 'bank') { let b = Math.ceil(d.u / IND_BAT_U - 1e-9); if (b > 0) indBagAdd('battery', b); }
             if (d.st) Object.keys(d.st).forEach(function (k) { indBoxAdd(k, d.st[k]); });   // 电解槽里的东西放回仓库箱
@@ -2053,7 +2056,7 @@
             ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
             ind.base.wires = ind.base.wires.filter(function (w) { return w[0] !== d.id && w[1] !== d.id; });
             if (ind.wirePend === d.id) ind.wirePend = null;
-            ind.devDirty = ind.wireDirty = true; indSave(); indFlash('收起了' + IND_DEVS[d.ty].name);
+            ind.devDirty = ind.wireDirty = true; indSave(); indFlash('收起了' + IND_DEVS[d.ty].name + (ind.src ? '（' + ind.src + '）' : ''));
             return true;
         }
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
@@ -2766,7 +2769,7 @@
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）
             if (ind.panel) return;
-            if (k === 'q' || k === 'g') indDrop(); else if (k === 'e' || k === 'f') indAction(); else if (k === 'r') indUse();
+            if (k === 'q' || k === 'g') indDrop(); else if (k === 'e' || k === 'f') indFrom('键盘 ' + k.toUpperCase(), indAction); else if (k === 'r') indFrom('R 键', indUse);
             else if (/^[1-9]$/.test(k)) ind.selIdx = +k - 1;
         }
         function indKeyUp(e) {
@@ -2856,7 +2859,7 @@
             else if (a && a.kind === 'funnel') hint = CK_FUNNEL[a.o.C.funnel.ty].name + '　油 ' + Math.round(a.o.C.funnel.oil) + ' / ' + CK.funnelCap + '<br><small>拿装了油的桶右键：倒进去　长按右键：收起（空的才行）</small>';
             else if (a && a.kind === 'spout') hint = ckSpoutDef(a.o.C).name + ' ' + (a.o.C.spout.length ? indSpoutTxt(a.o) : '空') + '<br><small>左键：取出（烫的要钳子）　拿水桶右键：浇凉</small>';
             else if (a && a.kind === 'cook') hint = IND_COOK[a.o.ty].name + ' ' + Math.round(a.o.temp) + '°C<br><small>左键：打开</small>';
-            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : a.o.ty === 'bank' ? '拿电池左键：装电池　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
+            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? (D.nowire ? '' : '左键：接线　') : a.o.ty === 'bank' ? '拿电池左键：装电池　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
             else if (a && a.kind === 'animal') {
                 let o = a.o, D = IND_ANIMALS[o.k];
                 if (R.where === 'trip') hint = (o.follow ? D.name + '（跟着你）' : '野生的' + D.name + (o.fed ? '（还要喂 ' + (D.tame - o.fed) + ' 次）' : '')) + '<br><small>爱吃：' + indFoodTxt(o.k) + '</small>';

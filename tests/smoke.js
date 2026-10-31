@@ -7800,6 +7800,64 @@ async function enterExit(tab, key) {
             report('IND27 炉子进出口：选中不抢、没槽烫锭留炉膛、砖槽铁槽、踹炉子、悠闲自带槽、老档补砖槽', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND28')) {
+            // IND28（任务 13）拿着铜线左键点设备：只接线（选第一个、再点第二个），不会把设备收起来；鼠标左键、键盘 E 都一样；右键和 R 键照旧收起；提示写"左键：接线　右键：收起"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; Object.defineProperty(document, 'pointerLockElement', { get: function () { return document.body; }, configurable: true }); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const setup = () => T.eval(`ind.base.devs = [{ id: 1, ty: 'bank', x: -20, z: 10, bats: 4, u: 500, on: true, ft: 20, st: {} }, { id: 2, ty: 'lamp', x: -14, z: 10, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 3, ty: 'el', x: -8, z: 10, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 4, ty: 'gen', x: -2, z: 10, bats: 0, u: 0, on: true, ft: 20, st: {} }]; ind.base.dseq = 4; ind.base.wires = []; ind.wirePend = null; ind.devDirty = true; ind.bag = { wire: 5, battery: 2 }; indSelect('wire'); window.__fl = []; true;`);
+                const face = (id) => T.eval(`(function(){ let d = indDev(${id}); indTeleport(d.x, d.z + 2.2); indLookAt(d.x, d.z); })(); true;`);
+                const mouse = (btn) => T.eval(`document.body.dispatchEvent(new MouseEvent('mousedown', { button: ${btn}, bubbles: true })); document.body.dispatchEvent(new MouseEvent('mouseup', { button: ${btn}, bubbles: true })); true;`);
+                const st = () => J(`{ devs: ind.base.devs.length, pend: ind.wirePend, wires: ind.base.wires.length, wire: ind.bag.wire || 0 }`);
+                // 鼠标左键：先点电池组，再点电灯 → 接上（铜线 −1），设备一个不少
+                await setup(); await face(1); await mouse(0);
+                let s = await st();
+                if (s.devs !== 4 || s.pend !== 1 || s.wires !== 0 || s.wire !== 5) bad.push('左键点电池组：设备还在、wirePend 记下了 ' + JSON.stringify(s));
+                await face(2); await mouse(0);
+                s = await st();
+                if (s.devs !== 4 || s.pend !== null || s.wires !== 1 || s.wire !== 4 || !(await T.eval(`ind.base.wires[0][0] === 1 && ind.base.wires[0][1] === 2`))) bad.push('再左键点电灯：线接上、铜线 −1、设备不少 ' + JSON.stringify(s));
+                // 从别的设备开头也一样（电解槽、发电机、用电器在前电源在后）
+                for (const id of [3, 4, 2]) {
+                    await setup(); await face(id); await mouse(0); s = await st();
+                    if (s.devs !== 4 || s.pend !== id || s.wire !== 5) bad.push('左键点设备 ' + id + ' 不该收起 ' + JSON.stringify(s));
+                }
+                await setup(); await face(2); await mouse(0); await face(1); await mouse(0); s = await st();
+                if (s.devs !== 4 || s.wires !== 1 || s.wire !== 4) bad.push('先点电灯再点电池组也能接 ' + JSON.stringify(s));
+                // 键盘 E／F 一样
+                for (const key of ['e', 'f']) {
+                    await setup(); await face(1);
+                    await T.eval(`indKeyDown({ key: '${key}', target: document.body, preventDefault: function () {}, repeat: false }); true;`);
+                    s = await st();
+                    if (s.devs !== 4 || s.pend !== 1 || s.wire !== 5) bad.push('键盘 ' + key.toUpperCase() + ' 点电池组不该收起 ' + JSON.stringify(s));
+                }
+                // 就算有人从左键这条路调用收起，也收不起来
+                await setup(); await face(1);
+                const forced = await J(`{ r: indFrom('左键', function () { return indPickDev(indDev(1)); }), devs: ind.base.devs.length }`);
+                if (forced.r !== false || forced.devs !== 4) bad.push('左键来源的收起要被拒绝 ' + JSON.stringify(forced));
+                // 右键：照旧收起（拿着铜线也收），提示里写了来源
+                await setup(); await face(1); await mouse(2); s = await st();
+                if (s.devs !== 3 || !(await T.eval(`__fl.some(function (t) { return /收起了电池组（右键）/.test(t); })`))) bad.push('拿着铜线右键点电池组应该收起 ' + JSON.stringify(s) + await T.eval(`JSON.stringify(__fl)`));
+                await setup(); await face(4); await T.eval(`indKeyDown({ key: 'r', target: document.body, preventDefault: function () {}, repeat: false }); true;`); s = await st();
+                if (s.devs !== 3) bad.push('R 键还是收起设备 ' + JSON.stringify(s));
+                // 提示：拿着铜线对着设备写"左键：接线　右键：收起"
+                await setup(); await face(1); await T.eval(`indHudUpdate(); true;`);
+                const hint = await T.eval(`document.getElementById('ind-hint').innerText`);
+                if (!/左键：接线/.test(hint) || !/右键：收起/.test(hint)) bad.push('提示要写"左键：接线　右键：收起" ' + hint);
+                // 装电池、开关（左键）规矩没变
+                await setup(); await T.eval(`indSelect('battery'); true;`); await face(1); await mouse(0);
+                if (!(await T.eval(`indDev(1).bats === 5 && ind.bag.battery === 1`))) bad.push('拿电池左键点电池组还是装电池');
+                await T.eval(`ind.bag = {}; true;`); await face(2); await mouse(0);
+                if (!(await T.eval(`indDev(2).on === false`))) bad.push('空手左键点电灯还是开关');
+            }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND28 拿着铜线左键点设备只接线：鼠标左键和键盘 E／F 都不收起，右键和 R 键照旧收起，提示写清楚', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
