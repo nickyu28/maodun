@@ -268,7 +268,7 @@
         // 资源点：每种给几个、要什么稿子；seeds 是野生种子堆（随机一种作物）
         const IND_NODES = {
             wood: { give: [3, 6], tool: 0 }, dirt: { give: [2, 3], tool: 0 }, stone: { give: [3, 5], tool: 1 }, sand: { give: [2, 4], tool: 0 }, clay: { give: [1, 3], tool: 0 },
-            salt: { give: [1, 3], tool: 0 }, coal: { give: [1, 3], tool: 1 }, ore_sn: { give: [1, 2], tool: 1 }, oil: { give: [1, 1], tool: 0 },
+            salt: { give: [4, 8], tool: 0 }, coal: { give: [1, 3], tool: 1 }, ore_sn: { give: [1, 2], tool: 1 }, oil: { give: [1, 1], tool: 0 },
             sand_sn: { give: [1, 1], tool: 0, out: 'ore_sn', name: '锡砂' },   // 海边的锡砂：空手捡，每次 1 个锡矿
             ore_cu: { give: [1, 2], tool: 1 }, ore_zn: { give: [1, 2], tool: 1 }, ore_fe: { give: [1, 2], tool: 2 },
             sulfur: { give: [1, 3], tool: 1 }, ore_u: { give: [1, 1], tool: 3 }, seeds: { give: [2, 3], tool: 0 }
@@ -285,9 +285,9 @@
         const IND_BIOMES = {
             plain: { name: '平原', col: 0x9ccc65, res: { clay: 2, stone: 2, wood: 1, seeds: 2 } },
             forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 1, seeds: 2 } },
-            beach: { name: '海边', col: 0xfff59d, res: { salt: 3, sand_sn: 1, wood: 1 } },
+            beach: { name: '海边', col: 0xfff59d, res: { salt: 5, sand_sn: 1, wood: 1 } },
             mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, wood: 2, ore_cu: 2, ore_zn: 2, ore_sn: 3, ore_fe: 2, coal: 2 } },
-            desert: { name: '盐湖沙漠', col: 0xe6c27a, res: { salt: 3, oil: 1, cactus: 3 } },
+            desert: { name: '盐湖沙漠', col: 0xe6c27a, res: { salt: 5, oil: 1, cactus: 3 } },
             volcano: { name: '火山', col: 0x5d4037, res: { sulfur: 5, stone: 1 } },
             ancient: { name: '古老岩层', col: 0x546e7a, res: { ore_u: 2, stone: 2, ore_fe: 1 } }
         };
@@ -355,7 +355,8 @@
         const IND_ANIMAL_CAP = 20, IND_WOOL_EVERY = 600, IND_MILK_EVERY = 300, IND_ANIMAL_HUNGER = 1 / 30;
         // 灶台：火候三档；燃料每秒烧掉的量；配方按顺序找第一个原料够的
         const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }, { name: '鼓风', t: 1600, burn: 3, bellows: true }];
-        const IND_FERT = 1.5;   // 草木灰肥料：长得快 50%
+        const IND_FERT = 1.5, IND_FERT_SP = 2;   // 硝石：这一季长成时间减半
+        function indFertMul(c) { return c.fert === 2 ? IND_FERT_SP : c.fert ? IND_FERT : 1; }   // 草木灰肥料：长得快 50%
         const IND_BATCH = 4, IND_BATCH_POT = 8;   // 灶台做吃的：一炉最多几份（装了黄铜大锅 8 份）
         const IND_STOVE_CAP = 8;
         // 灶台、小熔炉、大窑都是"炉子"：rate 温度每秒变几度，burn 燃料烧得多快（1 = 灶台），batch 一炉每类配方最多几份，only 只做哪类配方，top 大火的温度
@@ -372,7 +373,7 @@
             { in: { wheat: 4, salt: 1, water_boiled: 1 }, out: { bread: 3, bucket: 1 }, minT: 180, time: 40, burnT: 300 },
             { in: { wheat: 4, salt: 1, water_raw: 1 }, out: { bread: 3, bucket: 1 }, minT: 180, time: 40, burnT: 300 },   // 生水和面不拉肚子
             { in: { water_raw: 1 }, out: { water_boiled: 1 }, minT: 100, time: 10 },
-            { in: { water_sea: 1 }, out: { salt: 1, bucket: 1 }, minT: 100, time: 20 },
+            { in: { water_sea: 1 }, out: { salt: 2, bucket: 1 }, minT: 100, time: 15, hard: true },   // 煮海水出盐（只硬核）
             { in: { pumpkin: 1, wheat: 2, sugar: 1 }, out: { pumpkin_pie: 1 }, minT: 180, time: 40, burnT: 300 },
             { in: { tomato: 1, water_boiled: 1, salt: 1 }, out: { tomato_soup: 1 }, minT: 100, time: 20, burnT: 400 },
             { in: { radish: 1, water_boiled: 1, salt: 1 }, out: { radish_soup: 1 }, minT: 100, time: 20, burnT: 400 },
@@ -389,8 +390,8 @@
             { in: { ingot_cu: 1, ingot_zn: 1 }, out: { hot_brass: 2 }, cls: 'smelt', minT: 950, time: 20, hard: true },
             { in: { ore_fe: 1 }, out: { hot_fe: 1 }, cls: 'smelt', minT: 1538, time: 30, hard: true },
             { in: { ore_cu: 1 }, out: { hot_cu: 1 }, cls: 'smelt', minT: 1085, time: 20, hard: true },
-            { in: { ore_zn: 1 }, out: { hot_zn: 1 }, cls: 'smelt', minT: 420, time: 15, hard: true },
-            { in: { ore_sn: 1 }, out: { hot_sn: 1 }, cls: 'smelt', minT: 232, time: 15, hard: true },
+            { in: { ore_zn: 1 }, out: { hot_zn: 1 }, cls: 'smelt', minT: 420, time: 15 },
+            { in: { ore_sn: 1 }, out: { hot_sn: 1 }, cls: 'smelt', minT: 232, time: 15 },
             { in: { ingot_cu: 3, ingot_sn: 1 }, out: { hot_bronze: 4 }, cls: 'smelt', minT: 950, time: 30, hard: true },
             // 玻璃：草木灰当助熔剂（钾碱），1000°C（悠闲也能做，腌萝卜要用瓶子）；只有沙子要 1700°C（电炉）
             { in: { sand: 2, ash: 1 }, out: { glass_plate: 1 }, minT: 1000, time: 20, cls: 'bulk' },
@@ -555,7 +556,7 @@
             b.ground.forEach(function (g) { g.x = indNum(g.x, 0, -IND_BASE.x + 0.5, IND_BASE.x - 0.5); g.z = indNum(g.z, 0, -IND_BASE.z + 0.5, IND_BASE.z - 0.5); });
             if (!Array.isArray(b.crops)) b.crops = [];
             b.crops = b.crops.filter(function (c) { return c && IND_CROPS[c.k] && isFinite(c.x) && isFinite(c.z); });
-            b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); c.fert = !!c.fert; });
+            b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); c.fert = c.fert === 2 ? 2 : !!c.fert; });
             if (typeof b.trips !== 'number') b.trips = 0;
             b.clock = indNum(b.clock, 60, 0, 1e9);
             if (!b.surv || typeof b.surv !== 'object') b.surv = n.surv;
@@ -1303,7 +1304,7 @@
             let clock = ind.base.clock, ch = false;
             ind.base.crops.forEach(function (c) {
                 let C = IND_CROPS[c.k]; if (c.g >= C.grow || !indCropSeasonOK(c)) return;
-                let was = c.g; c.g = Math.min(C.grow, c.g + dt * (c.wet > clock ? 1 : 0.5) * (c.fert ? IND_FERT : 1));   // 草木灰肥料：这一季长得快 50%，和浇水叠加
+                let was = c.g; c.g = Math.min(C.grow, c.g + dt * (c.wet > clock ? 1 : 0.5) * indFertMul(c));   // 草木灰肥料：这一季长得快 50%，和浇水叠加
                 if (Math.floor(was / C.grow * 4) !== Math.floor(c.g / C.grow * 4)) ch = true;
             });
             if (ch) ind.cropDirty = true;
@@ -1561,7 +1562,7 @@
                 if (indInWater()) { let w = indFilledKey('water_sea', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶海水'); return true; }
                 indFlash('到水池、河里或海边才能接水'); return false;
             }
-            if (k === 'ash' && a && a.kind === 'crop') return indFertilize(a.o);
+            if ((k === 'ash' || k === 'saltpeter') && a && a.kind === 'crop') return indFertilize(a.o, k);
             let kc = indContOf(k), kb = kc && kc.base;
             if (kb === 'oil') return ckPourOil(k, a);   // 装了油的桶：硬核对着漏斗倒，悠闲对着炉子倒
             if ((kb === 'water_raw' || kb === 'water_boiled' || kb === 'water_sea') && a && a.kind === 'spout') return indQuenchSpout(a.o, k);
@@ -1635,10 +1636,10 @@
         }
         // 一桶水浇 2.5 米内的作物，管到当天结束
         // 草木灰当肥料（右键对着有作物的农田用 1 份）：这一格这一季长得快 50%，收获后失效，不能重复施
-        function indFertilize(c) {
+        function indFertilize(c, k) {
             if (c.fert) { indFlash('已经施过肥了'); return false; }
             if (indCropRipe(c)) { indFlash('已经熟了，不用施肥'); return false; }
-            indBagDel('ash', 1); c.fert = true; ind.cropDirty = true; indSave(); indFlash('施了肥，这一季长得快 50%');
+            k = k || 'ash'; indBagDel(k, 1); c.fert = k === 'saltpeter' ? 2 : true; ind.cropDirty = true; indSave(); indFlash(k === 'saltpeter' ? '撒了硝石，这一季长得快一倍' : '施了肥，这一季长得快 50%');
             return true;
         }
         function indWater(c, k) {
@@ -1668,7 +1669,7 @@
             ind.base.clock += skip;
             S.food = Math.max(0, S.food - IND_SURV.food * 0.3 * skip); S.water = Math.max(0, S.water - IND_SURV.water * 0.3 * skip);
             S.energy = 100;
-            ind.base.crops.forEach(function (c) { let C = IND_CROPS[c.k]; if (indCropSeasonOK(c)) c.g = Math.min(C.grow, c.g + skip * (c.wet > ind.base.clock - skip ? 0.75 : 0.5) * (c.fert ? IND_FERT : 1)); });
+            ind.base.crops.forEach(function (c) { let C = IND_CROPS[c.k]; if (indCropSeasonOK(c)) c.g = Math.min(C.grow, c.g + skip * (c.wet > ind.base.clock - skip ? 0.75 : 0.5) * indFertMul(c)); });
             S.temp = 37; ind.sleeping = true; ind.base.fires.forEach(function (f) { indFireBurn(f, skip); }); ind.sleeping = false; ind.fireDirty = true;
             ind.base.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * skip * 0.5); });
             ind.sleeping = true; for (let t = 0; t < skip; t += 1) indStoveTick(1); ind.sleeping = false;
@@ -2850,7 +2851,7 @@
             else if (a && a.kind === 'raft') hint = '木筏<br><small>左键：上去</small>';
             else if (a && a.kind === 'bomb') hint = a.o.t >= 0 ? '原子弹：' + Math.ceil(a.o.t) + ' 秒后爆炸，半径 40 米<br><small>左键：拆掉</small>' : '原子弹<br><small>左键：启动（30 秒后爆炸，半径 40 米）　长按右键：收起</small>';
             else if (a && a.kind === 'item') hint = indName(a.o.k) + '<br><small>左键：拿</small>';
-            else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水') + (a.o.fert ? '　施过肥了' : '')) + '<br><small>' + (ripe ? '左键：收' : '拿着水右键：浇水　拿草木灰右键：施肥') + '</small>'; }
+            else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水') + (a.o.fert ? '　施过肥了' : '')) + '<br><small>' + (ripe ? '左键：收' : '拿着水右键：浇水　拿草木灰或硝石右键：施肥') + '</small>'; }
             else if (a && a.kind === 'fire') hint = '篝火' + (a.o.fuel > 0 ? ' 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒' : '（灭了）') + '<br><small>拿着木头，左键：加柴</small>';
             else if (a && a.kind === 'door') hint = IND_HOUSE[a.o.ty].name + '的门（' + (a.o.open ? '开着' : '关着') + '）<br><small>左键：' + (a.o.open ? '关门' : '开门') + '　长按右键：收起房子</small>';
             else if (a && a.kind === 'house') hint = IND_HOUSE[a.o.ty].name + '<br><small>' + (indHouseHas(a.o) ? '里面有东西，先搬出来才能收' : '长按右键：收起') + '</small>';

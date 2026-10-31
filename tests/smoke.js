@@ -7936,6 +7936,61 @@ async function enterExit(tab, key) {
             report('IND30 斧子：两种模式的配方、尖石片和草绳、砍树斧子 > 小刀 > 空手、地上撒的东西、拿斧子采仙人掌不扎手', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND31')) {
+            // IND31 盐和硝石（任务 11）：盐点一次给 4～8、海边和盐湖沙漠的盐点多一半；海水（不能喝）煮 15 秒出 2 盐并还桶（只硬核）；
+            // 硝石撒在农田上，这一季长得快一倍、收获后失效；老存档（fert 为 true）照常
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                // 盐点数量：改前（给 1～3、权重 3）改后（给 4～8、权重 5）各数 12 张图
+                const st = await J(`(function(){ let seeds = []; for (let i = 1; i <= 12; i++) seeds.push(i * 7919);
+                    function total() { let t = 0; seeds.forEach(function (sd) { indGoTrip(sd); ind.nodes.forEach(function (n) { if (n.key === 'salt') t += n.n; }); }); return t / seeds.length; }
+                    let g = IND_NODES.salt.give.slice(), wb = IND_BIOMES.beach.res.salt, wd = IND_BIOMES.desert.res.salt;
+                    let after = total();
+                    IND_NODES.salt.give = [1, 3]; IND_BIOMES.beach.res.salt = 3; IND_BIOMES.desert.res.salt = 3;
+                    let before = total();
+                    IND_NODES.salt.give = g; IND_BIOMES.beach.res.salt = wb; IND_BIOMES.desert.res.salt = wd;
+                    let mx = 0, mn = 99; indGoTrip(777); ind.nodes.forEach(function (n) { if (n.key === 'salt') { mx = Math.max(mx, n.n); mn = Math.min(mn, n.n); } });
+                    return { give: g, wb: wb, wd: wd, before: before, after: after, mn: mn, mx: mx }; })()`);
+                console.log('IND31 每张图盐点总量（12 张图平均）：改前 ' + st.before.toFixed(1) + '，改后 ' + st.after.toFixed(1) + '，约 ' + (st.after / st.before).toFixed(2) + ' 倍');
+                if (st.give.join() !== '4,8' || st.wb !== 5 || st.wd !== 5) bad.push('盐点给 4～8、海边沙漠权重 3→5 ' + JSON.stringify(st));
+                if (st.mn < 4 || st.mx > 8) bad.push('地上盐点 4～8 个 ' + st.mn + '～' + st.mx);
+                if (!(st.after > st.before * 2)) bad.push('改后盐总量该有改前两倍以上 ' + JSON.stringify(st));
+                await T.eval(`indGoBase(null); true;`);
+                // 海水：不能喝、接得到、煮出盐
+                if (!(await T.eval(`IND_ITEMS.water_sea.eat && IND_ITEMS.water_sea.eat.w < 0`))) bad.push('海水喝了该掉水');
+                await T.eval(`ind.base.rule = 'hard'; ind.bag = { bucket: 1 }; window.__iw = indInWater; window.__rn = wdRiverNear; indInWater = function () { return true; }; wdRiverNear = function () { return false; }; indSelect('bucket'); indUse(); indInWater = __iw; wdRiverNear = __rn; true;`);
+                if (!(await T.eval(`Object.keys(ind.bag).length === 1 && indContOf(Object.keys(ind.bag)[0]).base === 'water_sea'`))) bad.push('海里空桶接海水 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                const cook = (items, secs) => T.eval(`(function(){ ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 500, fire: 1, temp: 200, cook: null }; indAdvance(${secs}); return JSON.stringify(ind.base.stove); })()`);
+                await cook({ water_sea: 1 }, 12);
+                if (await T.eval(`!!ind.base.stove.out.salt`)) bad.push('海水 12 秒就出盐了');
+                await cook({ water_sea: 1 }, 17);
+                if (!(await T.eval(`ind.base.stove.out.salt === 2 && ind.base.stove.out.bucket === 1`))) bad.push('煮海水 15 秒出 2 盐还桶 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                await T.eval(`ind.base.rule = 'casual'; true;`);
+                await cook({ water_sea: 1 }, 40);
+                if (await T.eval(`!!ind.base.stove.out.salt`)) bad.push('悠闲不该有煮海水出盐 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                // 硝石肥料（悠闲硬核都有）
+                for (const rule of ['hard', 'casual']) {
+                    await T.eval(`ind.base.rule = '${rule}'; indPanelClose(); ind.bag = { saltpeter: 2 }; ind.base.crops = [{ k: 'wheat', x: -20, z: 0, g: 0, wet: 1e9, times: 0 }, { k: 'wheat', x: -20, z: 4, g: 0, wet: 1e9, times: 0 }]; ind.cropDirty = true; indTeleport(-18.2, 0); indLookAt(-20, 0); indSelect('saltpeter'); indUse(); true;`);
+                    if (!(await T.eval(`ind.base.crops[0].fert === 2 && ind.bag.saltpeter === 1`))) bad.push(rule + '：硝石撒在农田上 ' + await T.eval(`JSON.stringify([ind.base.crops, ind.bag])`));
+                    await T.eval(`indPanelClose(); indUse(); true;`);
+                    if (!(await T.eval(`ind.bag.saltpeter === 1`))) bad.push(rule + '：同一块地不能撒两次');
+                    const g = await J(`(function(){ ind.base.crops.forEach(function (c) { c.g = 0; c.wet = 1e9; }); indAdvance(10); return [ind.base.crops[0].g, ind.base.crops[1].g]; })()`);
+                    if (!(g[1] > 0 && g[0] / g[1] > 1.9 && g[0] / g[1] < 2.1)) bad.push(rule + '：撒了硝石长得快一倍 ' + JSON.stringify(g));
+                }
+                await T.eval(`ind.base.crops = [{ k: 'tomato', x: -20, z: 0, g: 0, wet: 1e9, times: 0, fert: 2 }]; ind.base.crops[0].g = IND_CROPS.tomato.grow; indHarvest(ind.base.crops[0]); true;`);
+                if (!(await T.eval(`ind.base.crops[0].fert === false`))) bad.push('收获后硝石肥料失效 ' + await T.eval(`JSON.stringify(ind.base.crops)`));
+                // 存档：fert 2 存得住，老档 true 照常
+                if (!(await T.eval(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.crops = [{ k: 'wheat', x: -20, z: 0, g: 0, wet: 0, times: 0, fert: 2 }, { k: 'wheat', x: -20, z: 4, g: 0, wet: 0, times: 0, fert: true }, { k: 'wheat', x: -20, z: 8, g: 0, wet: 0, times: 0, fert: 'x' }]; indFixBase(b); return b.crops[0].fert === 2 && b.crops[1].fert === true && b.crops[2].fert === true; })()`))) bad.push('存档整理：硝石 2、老档 true 都保住');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND31 盐和硝石：盐点 4～8 且更多、煮海水出盐（只硬核）、硝石当肥料长得快一倍', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

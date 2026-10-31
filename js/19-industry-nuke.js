@@ -32,7 +32,7 @@
             rod_spent: { name: '乏燃料棒', col: 0x33691e, rad: 'strong', use: '后处理出钚（放在铅箱里）' },
             plutonium: { name: '钚', col: 0x7b1fa2, rad: 'strong', use: '做原子弹（放在铅箱里）' },
             nuclear_waste: { name: '核废料', col: 0x2e7d32, rad: 'strong', useLater: '后面的阶段' },
-            saltpeter: { name: '硝石', col: 0xeceff1 }, gunpowder: { name: '火药', col: 0x424242, explosive: true, use: '碰到爆炸或放进炉子就炸' },
+            saltpeter: { name: '硝石', col: 0xeceff1, use: '撒在农田上，作物长得快一倍；也能做火药' }, gunpowder: { name: '火药', col: 0x424242, explosive: true, use: '碰到爆炸或放进炉子就炸' },
             nuke: { name: '原子弹', col: 0x455a64, nuke: true, use: '右键放下，左键启动，30 秒后爆炸' },
             geiger: { name: '盖格计数器', col: 0xfdd835, use: '拿在手上显示辐射强度' },
             lead_apron: { name: '铅围裙', col: 0x607d8b, wear: 'body', warm: 0, radcut: NK.apron, heavy: 0.8, use: '辐射伤害少一半，走路 ×0.8' },
