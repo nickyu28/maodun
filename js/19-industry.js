@@ -390,8 +390,8 @@
             { in: { ingot_cu: 1, ingot_zn: 1 }, out: { hot_brass: 2 }, cls: 'smelt', minT: 950, time: 20, hard: true },
             { in: { ore_fe: 1 }, out: { hot_fe: 1 }, cls: 'smelt', minT: 1538, time: 30, hard: true },
             { in: { ore_cu: 1 }, out: { hot_cu: 1 }, cls: 'smelt', minT: 1085, time: 20, hard: true },
-            { in: { ore_zn: 1 }, out: { hot_zn: 1 }, cls: 'smelt', minT: 420, time: 15 },
-            { in: { ore_sn: 1 }, out: { hot_sn: 1 }, cls: 'smelt', minT: 232, time: 15 },
+            { in: { ore_zn: 1 }, out: { hot_zn: 1 }, cls: 'smelt', minT: 420, time: 15, hard: true },
+            { in: { ore_sn: 1 }, out: { hot_sn: 1 }, cls: 'smelt', minT: 232, time: 15, hard: true },
             { in: { ingot_cu: 3, ingot_sn: 1 }, out: { hot_bronze: 4 }, cls: 'smelt', minT: 950, time: 30, hard: true },
             // 玻璃：草木灰当助熔剂（钾碱），1000°C（悠闲也能做，腌萝卜要用瓶子）；只有沙子要 1700°C（电炉）
             { in: { sand: 2, ash: 1 }, out: { glass_plate: 1 }, minT: 1000, time: 20, cls: 'bulk' },
