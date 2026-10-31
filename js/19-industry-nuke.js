@@ -344,7 +344,7 @@
                 // 远征：40 米内的资源点全部炸开，东西 ×2 掉在地上；树全倒成木头；地上留一个大坑；之后这一趟 40 米内是强辐射区
                 ind.tripGround = ind.tripGround || [];
                 ind.nodes.forEach(function (o) {
-                    if (o.dead || !inR(o)) return;
+                    if (o.dead || !inR(o) || o.key === 'oil') return;   // 油点是泉，不炸开
                     let nd = IND_NODES[o.key], k = o.key === 'seeds' ? o.seed : (nd.out || o.key);
                     for (let i = 0; i < o.n * 2 && ind.tripGround.length < 400; i++) { let a = i * 2.399; ind.tripGround.push({ k: k, x: o.x + Math.cos(a) * 0.6, z: o.z + Math.sin(a) * 0.6 }); }
                     o.dead = true;

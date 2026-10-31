@@ -129,6 +129,7 @@
         const WD_TREE_NAME = { oak: '阔叶树', pine: '松树', palm: '椰子树' };
         function wdNodeHint(o) {
             let nd = IND_NODES[o.key];
+            if (o.key === 'oil') return ckOilHint(o);
             if (o.tree) return WD_TREE_NAME[o.tree] + '（' + o.n + ' 木头）<br><small>左键：砍（' + (indTool() >= 1 ? 3 : 8) + ' 秒，站着别动）</small>';
             if (o.key === 'cactus') return '仙人掌：有刺<br><small>左键：采集（拿剪刀或稿子不扎手）</small>';
             if (o.rock) return (o.black ? '黑石头' : '大石头') + ' ×' + o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：敲' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
