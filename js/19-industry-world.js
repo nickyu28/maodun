@@ -70,9 +70,16 @@
             cactus: { name: '仙人掌', col: 0x2e7d32, eat: { w: 5 }, use: '有刺：选中按住右键拔刺，点一下右键是吃' },
             cactus_peeled: { name: '去刺仙人掌', col: 0x66bb6a, eat: { w: 8, f: 3 } },
             cactus_roast: { name: '烤仙人掌', col: 0x8bc34a, eat: { w: 8, f: 5 } },
-            knife: { name: '小刀', col: 0x90a4ae, useLater: '现在只用来拔刺', use: '拔仙人掌的刺（15 秒）' }
+            knife: { name: '小刀', col: 0x90a4ae, use: '拔仙人掌的刺，也能砍树（砍树比斧子慢、木头少）' },
+            axe: { name: '斧子', col: 0x8d6e63, use: '砍树快一倍（1.5 秒），每棵树的木头 ×1.5；采仙人掌不扎手' },
+            sharp_flint: { name: '尖石片', col: 0xcfd8dc }, twig: { name: '树枝', col: 0x8d6e63 }, grass: { name: '草', col: 0x9ccc65 }, rope: { name: '草绳', col: 0xa1887f }
         });
-        IND_CRAFT.push({ out: 'knife', in: { stone: 2, wood: 1 } });
+        // 悠闲保持简单：石头加木头；硬核更难：要尖石片、树枝、草绳（地上捡、自己敲、自己搓），普通石头做不了硬核的刀和斧
+        IND_CRAFT.push(
+            { out: 'knife', in: { stone: 2, wood: 1 }, casual: true }, { out: 'axe', in: { stone: 3, wood: 2 }, casual: true },
+            { out: 'knife', in: { sharp_flint: 1, twig: 1, rope: 1 }, hard: true }, { out: 'axe', in: { sharp_flint: 2, wood: 1, rope: 2 }, hard: true },
+            { out: 'rope', in: { grass: 2 }, hard: true }, { out: 'sharp_flint', in: { stone: 2 }, hard: true, time: 3, label: '敲尖石片' }
+        );
         IND_RECIPES.push({ in: { cactus_peeled: 1 }, out: { cactus_roast: 1 }, minT: 180, time: 5, burnT: 400 });
 
         // ── 通道：站着不动做一会儿的动作（砍树、挖地、拔刺）；动了、瞄走了、再点一下就中断 ──
@@ -86,7 +93,36 @@
             if (c.t >= c.need) { ind.ch = null; c.done(); }
         }
         // 砍树：空手 8 秒、拿着稿子 3 秒，出 3～6 木头，倒下留树桩
-        function wdChop(o) { return wdChStart({ kind: 'chop', o: o, need: indTool() >= 1 ? 3 : 8, label: '砍树', done: function () { indGather(o); } }); }
+        // 砍树的家伙：斧子 1.5 秒（木头 ×1.5）、稿子 3 秒、小刀 5 秒（木头 ×1.25）、空手 8 秒；背包里有几样就用最快的
+        function wdChopTool() {
+            if (ind.bag.axe) return { need: 1.5, mult: 1.5 };
+            let best = { need: 8, mult: 1 };
+            if (indTool() >= 1) best = { need: 3, mult: 1 };
+            if (ind.bag.knife && best.need > 5) best = { need: 5, mult: 1.25 };
+            return best;
+        }
+        function wdChop(o) { return wdChStart({ kind: 'chop', o: o, need: wdChopTool().need, label: '砍树', done: function () { indGather(o); } }); }
+        // 要花几秒的合成（敲尖石片）：站着别动，材料到时间才扣，动了中断不丢
+        function wdCraftWait(i, r) {
+            indPanelClose();
+            return wdChStart({ kind: 'craft', need: r.time, label: r.label || '做', done: function () { ind.craftNow = true; try { indCraft(i); } finally { ind.craftNow = false; } } });
+        }
+        // 出生点 15 米内撒着捡得到的东西（每趟重新撒，捡完就没了）：悠闲 石头树枝各 6～8；硬核 尖石片 4、石头 6～8、树枝 6～8、草 8～10
+        function wdScatter(M) {
+            let r = indRng(M.seed ^ 0x51ed270b), hard = indHard(), list = [];
+            let add = function (k, n) { for (let i = 0; i < n; i++) list.push(k); };
+            if (hard) add('sharp_flint', 4);
+            add('stone', 6 + Math.floor(r() * 3)); add('twig', 6 + Math.floor(r() * 3));
+            if (hard) add('grass', 8 + Math.floor(r() * 3));
+            list.forEach(function (k) {
+                for (let t = 0; t < 30; t++) {
+                    let a = r() * Math.PI * 2, d = 3 + r() * 11, x = Math.cos(a) * d, z = -4 + Math.sin(a) * d;
+                    if (indHeight(M, x, z) < 0.2) continue;
+                    ind.tripGround.push({ k: k, x: x, z: z }); break;
+                }
+            });
+            nkTripItemsSync();
+        }
         // 对着地面挖：空手 3 秒、稿子 1 秒，每次 1 份；平原森林泥土、海边沙漠沙子、山地古老岩层火山石头（要石稿，火山偶尔 1 份硫），地上留一个小坑
         const WD_DIG = { plain: 'dirt', forest: 'dirt', beach: 'sand', desert: 'sand', mountain: 'stone', ancient: 'stone', volcano: 'stone' };
         function wdDig() {
@@ -113,7 +149,7 @@
         }
         // 仙人掌：空手采（选中的不是剪刀或稿子）硬核固定扣 60 血，悠闲只提示；返回 true 表示人死了
         function wdThorn() {
-            let sel = indSel(), safe = sel === 'shears' || (sel && IND_ITEMS[sel] && IND_ITEMS[sel].tool > 0);
+            let sel = indSel(), safe = sel === 'shears' || sel === 'axe' || (sel && IND_ITEMS[sel] && IND_ITEMS[sel].tool > 0);
             if (safe) return false;
             if (!indHard()) { indFlash('扎手了'); return false; }
             return indHurt(60, 'thorn', '空手摘了仙人掌');

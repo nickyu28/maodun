@@ -5223,7 +5223,7 @@ async function enterExit(tab, key) {
                             if (k === 'seeds') IND_SEED_KINDS.forEach(add); else add(IND_NODES[k].out || k);
                         });
                         // 对着地面挖：泥土、沙子，拿着稿子挖石头；仙人掌拔刺
-                        add('dirt'); add('sand'); if (tl >= 1) add('stone'); if (have.cactus) add('cactus_peeled');
+                        add('dirt'); add('sand'); if (tl >= 1) add('stone'); if (have.cactus) add('cactus_peeled'); add('twig'); add('grass');   // 出生点附近地上撒的树枝和草
                         // 水
                         if (have.bucket) { add('water_raw'); add('water_sea'); }
                         // 灶台：燃料 + 温度
@@ -5242,6 +5242,7 @@ async function enterExit(tab, key) {
                         // 工作台
                         IND_CRAFT.forEach(function (r) {
                             if (r.hard && !hard) return;
+                            if (r.casual && hard) return;
                             if (!Object.keys(r.in).every(function (k) { return have[k]; })) return;
                             if (r.out) add(r.out);
                         });
@@ -7577,7 +7578,7 @@ async function enterExit(tab, key) {
                 if (!(await T.eval(`ind.bag.cactus === 1 && ind.bag.cactus_peeled === 1 && ind.base.surv.hp === 100`))) bad.push('拔完 1 个变去刺仙人掌、不扣血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
                 await T.eval(`indSelect('cactus'); indRightDown(); indAdvance(5); indTeleport(2, -6.5); indAdvance(0.2); indRightUp(); true;`);
                 if (!(await T.eval(`ind.bag.cactus === 1 && !ind.ch`))) bad.push('拔刺时动了要中断 ' + await T.eval(`JSON.stringify([ind.bag, ind.ch])`));
-                const ce = await J(`(function(){ let S = ind.base.surv; S.water = 50; S.food = 50; ind.bag = { cactus_peeled: 1, cactus_roast: 1 }; indEat('cactus_peeled'); let a = [S.water, S.food]; indEat('cactus_roast'); let r = IND_RECIPES.filter(function (x) { return x.in.cactus_peeled && x.out.cactus_roast; })[0]; return { a: a, b: [S.water, S.food], hp: S.hp, r: r && [r.minT, r.time], kn: (IND_CRAFT.filter(function (x) { return x.out === 'knife'; })[0] || {}).in, hint: wdNodeHint({ key: 'cactus', n: 1 }).replace(/<[^>]+>.*$/, ''), book: wdBookLines().some(function (l) { return /小刀 15 秒/.test(l.txt); }) }; })()`);
+                const ce = await J(`(function(){ let S = ind.base.surv; S.water = 50; S.food = 50; ind.bag = { cactus_peeled: 1, cactus_roast: 1 }; indEat('cactus_peeled'); let a = [S.water, S.food]; indEat('cactus_roast'); let r = IND_RECIPES.filter(function (x) { return x.in.cactus_peeled && x.out.cactus_roast; })[0]; return { a: a, b: [S.water, S.food], hp: S.hp, r: r && [r.minT, r.time], kn: (IND_CRAFT.filter(function (x) { return x.out === 'knife' && x.casual; })[0] || {}).in, hint: wdNodeHint({ key: 'cactus', n: 1 }).replace(/<[^>]+>.*$/, ''), book: wdBookLines().some(function (l) { return /小刀 15 秒/.test(l.txt); }) }; })()`);
                 if (ce.a.join() !== '58,53' || ce.b.join() !== '66,58' || ce.hp !== 100) bad.push('去刺仙人掌口渴 +8 饱食 +3、烤仙人掌口渴 +8 饱食 +5 ' + JSON.stringify(ce));
                 if (!ce.r || ce.r.join() !== '180,5') bad.push('烤仙人掌 ≥180°C 5 秒 ' + JSON.stringify(ce.r));
                 if (JSON.stringify(ce.kn) !== '{"stone":2,"wood":1}') bad.push('小刀：2 石头 + 1 木头 ' + JSON.stringify(ce.kn));
@@ -7866,6 +7867,73 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
             await T.close();
             report('IND29 石炉：8 块石头合成、跟灶台一样什么都能做、燃料不限、能搬存档、占上限、取暖、被炸会没', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND30')) {
+            // IND30 斧子（任务 2 的斧子部分）：斧子、小刀都能砍树，斧子比小刀快、给得多；配方分模式——悠闲 小刀 2 石头 + 1 木头、斧子 3 石头 + 2 木头；
+            // 硬核 小刀 尖石片 + 树枝 + 草绳、斧子 2 尖石片 + 木头 + 2 草绳（普通石头做不了）；2 块石头对砸 3 秒得 1 个尖石片、2 把草合 1 根草绳；
+            // 出生点 15 米内撒着捡得到的东西（悠闲 石头树枝各 6～8；硬核 尖石片 4、石头 6～8、树枝 6～8、草 8～10）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const craft = (o, inn) => T.eval(`(function(){ let i = IND_CRAFT.findIndex(function (r) { return r.out === '${o}' && indCraftShow(r) && JSON.stringify(Object.keys(r.in).sort()) === '${JSON.stringify(Object.keys(inn).sort())}'; }); if (i < 0) return -1; ind.bag = ${JSON.stringify(inn)}; return indCraft(i) ? i : -2; })()`);
+                // ── 配方：悠闲 ──
+                await T.eval(`ind.base.rule = 'casual'; true;`);
+                await craft('knife', { stone: 2, wood: 1 });
+                if (!(await T.eval(`ind.bag.knife === 1 && !ind.bag.stone && !ind.bag.wood`))) bad.push('悠闲：小刀 2 石头 + 1 木头 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await craft('axe', { stone: 3, wood: 2 });
+                if (!(await T.eval(`ind.bag.axe === 1 && !ind.bag.stone && !ind.bag.wood`))) bad.push('悠闲：斧子 3 石头 + 2 木头 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if ((await craft('knife', { sharp_flint: 1, twig: 1, rope: 1 })) !== -1) bad.push('悠闲看不到硬核的刀配方');
+                // ── 配方：硬核（普通石头做不了刀和斧；要尖石片、树枝、草绳）──
+                await T.eval(`ind.base.rule = 'hard'; true;`);
+                if ((await craft('knife', { stone: 2, wood: 1 })) !== -1 || (await craft('axe', { stone: 3, wood: 2 })) !== -1) bad.push('硬核：普通石头做不了刀和斧');
+                await craft('knife', { sharp_flint: 1, twig: 1, rope: 1 });
+                if (!(await T.eval(`ind.bag.knife === 1 && Object.keys(ind.bag).length === 1`))) bad.push('硬核：小刀 尖石片 + 树枝 + 草绳 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await craft('axe', { sharp_flint: 2, wood: 1, rope: 2 });
+                if (!(await T.eval(`ind.bag.axe === 1 && Object.keys(ind.bag).length === 1`))) bad.push('硬核：斧子 2 尖石片 + 木头 + 2 草绳 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                // 草绳：2 把草 → 1 根；尖石片：2 块石头对砸几秒 → 1 个（站着别动，动了中断）
+                await craft('rope', { grass: 2 });
+                if (!(await T.eval(`ind.bag.rope === 1 && !ind.bag.grass`))) bad.push('2 把草合 1 根草绳 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`ind.bag = { stone: 2 }; indPanelClose(); (function(){ let i = IND_CRAFT.findIndex(function (r) { return r.out === 'sharp_flint'; }); indCraft(i); })(); true;`);
+                if (!(await T.eval(`!!ind.ch && ind.ch.kind === 'craft' && !ind.bag.sharp_flint`))) bad.push('敲尖石片要花几秒（站着别动） ' + await T.eval(`JSON.stringify([ind.ch && ind.ch.kind, ind.bag])`));
+                await T.eval(`indAdvance(2.8); true;`);
+                if (await T.eval(`!!ind.bag.sharp_flint`)) bad.push('敲尖石片 2.8 秒还没好');
+                await T.eval(`indAdvance(0.5); true;`);
+                if (!(await T.eval(`ind.bag.sharp_flint === 1 && !ind.bag.stone && !ind.ch`))) bad.push('2 块石头对砸 3 秒得 1 个尖石片 ' + await T.eval(`JSON.stringify([ind.bag, ind.ch])`));
+                await T.eval(`ind.bag = { stone: 2 }; (function(){ indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'sharp_flint'; })); indAdvance(1); indTeleport(ind.p.x + 3, ind.p.z); indAdvance(0.2); })(); true;`);
+                if (!(await T.eval(`!ind.ch && !ind.bag.sharp_flint && ind.bag.stone === 2`))) bad.push('敲石头时动了要中断、石头不丢 ' + await T.eval(`JSON.stringify([ind.ch, ind.bag])`));
+                // ── 砍树：斧子 ≪ 小刀 ≪ 空手；斧子给得多 ──
+                const chop = async (bag) => {
+                    await T.eval(`indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodeDirty = true; ind.k = {}; ind.ch = null; ind.dead = null; ind.bag = ${JSON.stringify(bag)}; ind.nodes.push({ key: 'wood', tree: 'oak', x: 0, z: -9, y: 0, n: 4, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indTeleport(0, -6.5); indLookAt(0, -9); indAction(); true;`);
+                    return J(`ind.ch && ind.ch.need`);
+                };
+                const need = [await chop({}), await chop({ knife: 1 }), await chop({ axe: 1 }), await chop({ pick_stone: 1 }), await chop({ axe: 1, knife: 1 })];
+                if (need.join() !== '8,5,1.5,3,1.5') bad.push('砍树时间：空手 8、小刀 5、斧子 1.5、稿子 3（有斧子用斧子） ' + need.join());
+                const got = [];
+                for (const bag of [{}, { knife: 1 }, { axe: 1 }]) { await chop(bag); await T.eval(`indAdvance(8.5); true;`); got.push(await T.eval(`ind.bag.wood || 0`)); }
+                if (got.join() !== '4,5,6') bad.push('一棵 4 木头的树：空手 4、小刀 ×1.25 → 5、斧子 ×1.5 → 6 ' + got.join());
+                // ── 出生点 15 米内撒着东西（空手捡） ──
+                const scat = async (rule) => {
+                    await T.eval(`ind.base.rule = '${rule}'; indGoTrip(4321); true;`);
+                    return J(`(function(){ let c = {}, far = 0; ind.tripGround.forEach(function (g) { c[g.k] = (c[g.k] || 0) + 1; if (Math.hypot(g.x, g.z + 4) > 15) far++; }); return { c: c, far: far }; })()`);
+                };
+                const sh = await scat('hard'), sc = await scat('casual');
+                const inR = (v, a, b) => v >= a && v <= b;
+                if (sh.far || sh.c.sharp_flint !== 4 || !inR(sh.c.stone, 6, 8) || !inR(sh.c.twig, 6, 8) || !inR(sh.c.grass, 8, 10)) bad.push('硬核地上撒的东西：尖石片 4、石头 6～8、树枝 6～8、草 8～10，15 米内 ' + JSON.stringify(sh));
+                if (sc.far || sc.c.sharp_flint || sc.c.grass || !inR(sc.c.stone, 6, 8) || !inR(sc.c.twig, 6, 8)) bad.push('悠闲地上撒的东西：石头、树枝各 6～8 ' + JSON.stringify(sc));
+                await T.eval(`ind.base.rule = 'hard'; indGoTrip(4321); (function(){ let g = ind.tripGround.filter(function (q) { return q.k === 'twig'; })[0]; indTeleport(g.x, g.z + 1); indLookAt(g.x, g.z); window.__g = g; })(); ind.bag = {}; indAction(); true;`);
+                if (!(await T.eval(`ind.bag.twig === 1 && ind.tripGround.indexOf(__g) < 0`))) bad.push('空手能捡地上的树枝 ' + await T.eval(`JSON.stringify([ind.bag, indAim() && indAim().kind])`));
+                // 拿斧子采仙人掌不扎手
+                await T.eval(`ind.nodes.push({ key: 'cactus', x: 0, z: -9, y: 0, n: 1, seed: 'seed_wheat', dead: false }); ind.bag = { axe: 1 }; indSelect('axe'); ind.base.surv.hp = 100; indTeleport(0, -6.5); indLookAt(0, -9); indAction(); true;`);
+                if (!(await T.eval(`ind.base.surv.hp === 100`))) bad.push('拿斧子采仙人掌不扎手');
+            } catch (x) { bad.push('测试异常 ' + String(x.message).slice(0, 300)); } }
+            if (T.errors.length) bad.push('页面报错 ' + T.errors.slice(0, 3).join(' | '));
+            await T.close();
+            report('IND30 斧子：两种模式的配方、尖石片和草绳、砍树斧子 > 小刀 > 空手、地上撒的东西、拿斧子采仙人掌不扎手', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

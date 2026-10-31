@@ -1093,7 +1093,7 @@
                 ind.nodes.push(node);
             }
             wdExtraNodes(M, casual);   // 河边的黏土和锡砂、火山周围的黑石头
-            ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true; wdMakeMeshes();
+            ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true; wdMakeMeshes(); wdScatter(M);
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             // 野生动物：平原有羊和牛，森林有狗和猫
             ind.wild = [];
@@ -1609,7 +1609,7 @@
             if (tool < nd.tool) { indFlash(indName(o.key) + '要' + IND_TOOL_NAME[nd.tool] + '才挖得动'); return false; }
             let key = o.key === 'seeds' ? o.seed : (nd.out || o.key);
             if (nd.thorn && wdThorn()) return true;   // 空手摘仙人掌被扎
-            let amt = o.out ? Math.min(o.n, 1 + indToolBonus(nd.tool)) : o.n + indToolBonus(nd.tool);   // 铁稿 +1、钻石稿 +2：采一次多拿几个；露头一次只出 1 份
+            let amt = o.out ? Math.min(o.n, 1 + indToolBonus(nd.tool)) : (o.tree ? Math.round(o.n * wdChopTool().mult) : o.n) + indToolBonus(nd.tool);   // 铁稿 +1、钻石稿 +2：采一次多拿几个；露头一次只出 1 份
             let got = indBagAdd(key, amt);
             if (got <= 0) { indFlash('背包满了'); return false; }
             o.n -= got; ind.nodeDirty = true; if (o.n <= 0) { o.dead = true; wdNodeGone(o); }
@@ -2391,11 +2391,12 @@
             indFlash('加了 1 个' + indName(k) + '，还能烧 ' + Math.ceil(f.fuel) + ' 秒');
             return true;
         }
-        function indCraftShow(r) { return !r.hard || indHard(); }
+        function indCraftShow(r) { return (!r.hard || indHard()) && !(r.casual && indHard()); }   // casual：只在悠闲出现的简单配方
         function indCraftCan(r) { return indCraftShow(r) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.glass && (!ind.base.gh || ind.base.glass)) && !(r.pot && ind.base.pot); }
         function indCraft(i) {
             if (!ind) return false;
             let r = IND_CRAFT[i]; if (!r || !indCraftCan(r)) { indFlash('原料不够'); return false; }
+            if (r.time && !ind.craftNow) return wdCraftWait(i, r);   // 要花几秒的合成（敲尖石片）：先站着别动
             if (!r.gh && !r.glass && !r.pot) {   // 先把材料扣掉再看放不放得下成品
                 let B = Object.assign({}, ind.bag);
                 Object.keys(r.in).forEach(function (k) { B[k] -= r.in[k]; if (B[k] <= 0) delete B[k]; });
@@ -2414,6 +2415,7 @@
             if (!ind) return;
             let r = IND_CRAFT[i], n = 0;
             if (!r || r.gh || r.glass || r.pot) return;
+            if (r.time) { indCraft(i); return; }
             while (n < 500 && indCraftCan(r)) {
                 let before = JSON.stringify(ind.bag);
                 if (!indCraft(i)) break;
