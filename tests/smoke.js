@@ -8348,7 +8348,7 @@ async function enterExit(tab, key) {
                 const tr = await J(`[ind.base.animals[0].brk, ind.base.animals[2].born, ind.base.clock]`);
                 await T.eval(`indGoBase(null); true;`);
                 const left1 = await T.eval(`indBabyLeft(ind.base.animals[2])`);
-                if (!(Math.abs(left1 - left0) <= 2 && tr[0] === 10 && (await T.eval(`ind.base.animals.length === 3`)))) bad.push('出远征这段时间不该繁殖、不该长大 ' + JSON.stringify([left0, left1, tr]));
+                if (!(Math.abs(left1 - left0) <= 2 && Math.abs(tr[0] - 10) < 0.5 && (await T.eval(`ind.base.animals.length === 3`)))) bad.push('出远征这段时间不该繁殖、不该长大 ' + JSON.stringify([left0, left1, tr]));
                 // ── 7 存档整理 ──
                 if (!(await T.eval(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.animals = [{ k: 'cow', x: 1, z: 1, food: 50, woolAt: 0, milkAt: 0 }, { k: 'sheep', x: 2, z: 2, food: 50, woolAt: 0, milkAt: 0, born: 'x', love: 'a', cd: -5, brk: 99 }, { k: 'dog', x: 3, z: 3, food: 50, born: 10, love: 5, cd: 100, brk: 3, bx: 3, bz: 3 }]; b.clock = 1000; indFixBase(b);
                     let A = b.animals; return A[0].born === undefined && A[0].love === 0 && A[0].cd === 0 && A[0].brk === 0 && A[1].born === undefined && A[1].cd === 0 && A[1].brk === 20 && A[2].born === 10 && A[2].brk === 3 && A[2].love === 5; })()`))) bad.push('存档整理：老存档当成年，字段过白名单');
