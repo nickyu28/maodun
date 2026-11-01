@@ -1337,7 +1337,7 @@
             if (!ind || ind.over || ind.dead) return;
             if (ind.where === 'base') indStoveTick(dt);
             if (!ind || ind.over) return;
-            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt);
+            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt);
             if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
@@ -1687,10 +1687,12 @@
             if (!ind || ind.over || ind.dead || ind.panel) return;
             let f = indFurnOf(indAim());
             if (f) { ind.rh = { f: f, t: 0, done: false }; return; }
+            if (pwCrankDown(indAim())) return;   // 手摇发电机：按住右键摇（19-industry-power.js）
             if (indSel() === 'cactus') { wdPeelStart(); return; }   // 选中仙人掌点一下右键开始拔刺（R 键是生吃）
             indUse();
         }
         function indRightUp() {
+            if (pwCrankUp()) return;
             if (ind && ind.ch && ind.ch.right) { let quick = ind.ch.t < 0.25; ind.ch = null; if (quick) indUse(); return; }
             if (!ind || !ind.rh) return;
             let rh = ind.rh; ind.rh = null;

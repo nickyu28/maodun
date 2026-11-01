@@ -8987,6 +8987,37 @@ async function enterExit(tab, key) {
             report('IND49 设备和炉子被炸，里面的东西掉在爆炸点附近的地上、提示写数量', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND50')) {
+            // IND50 电磁线圈和手摇发电机（任务 32）：配方出线圈；摇着时水泵 pw 为真，松手为假；接离心机不工作；短按右键还是收起；摇要花体力
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const cr = await J(`(function(){ ind.base.rule = 'hard'; ind.bag = { magnet: 2, wire: 10, ingot_pb: 1 }; let i = IND_CRAFT.findIndex(function (r) { return r.out === 'coil'; }); let ok = i >= 0 && indCraft(i); let a = { coil: ind.bag.coil, left: Object.keys(ind.bag).length };
+                    ind.bag = { coil: 2, steel: 2, wood: 4 }; let j = IND_CRAFT.findIndex(function (r) { return r.out === 'dev_crank'; }); let ok2 = j >= 0 && indCraft(j); return { ok: ok, a: a, ok2: ok2, crank: ind.bag.dev_crank, use: IND_ITEMS.coil.use }; })()`);
+                if (!(cr.ok && cr.a.coil === 1 && cr.a.left === 1 && cr.ok2 && cr.crank === 1)) bad.push('线圈和手摇发电机配方 ' + JSON.stringify(cr));
+                if (!/变压器/.test(cr.use)) bad.push('线圈说明写出用途');
+                // 摇着 pump 通电，松手断电；离心机不工作
+                const run = (secs, hold) => J(`(function(){ ind.base.rule = 'hard'; ind.bag = {}; ind.stam = 100; ind.base.chests = [{ id: 1, x: 12, z: 12, big: true, items: {} }];
+                    ind.base.devs = [{ id: 1, ty: 'crank', x: 30, z: 20, bats: 0, u: 0, on: true, ft: 20, st: {}, cr: 0 }, { id: 2, ty: 'pump', x: 32, z: 20, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 3, ty: 'centrifuge', x: 32, z: 22, bats: 0, u: 0, on: true, ft: 20, st: { 'uf6:0': 1 } }]; ind.base.wires = [[1, 2], [1, 3]];
+                    indTeleport(28.5, 20); indLookAt(30, 20); ${hold ? 'indRightDown(); indAdvance(' + secs + ');' : 'indAdvance(' + secs + ');'} let r = { pump: indDev(2).pw, cen: indDev(3).pw, stam: ind.stam, v: indDev(2).v }; ${hold ? 'indRightUp();' : ''} return r; })()`);
+                let r = await run(1, true);
+                if (!(r.pump === true && r.cen === false && r.v === 6)) bad.push('摇着：水泵通电、离心机不工作、6 V ' + JSON.stringify(r));
+                r = await run(1, false);
+                if (r.pump) bad.push('不摇就没电 ' + JSON.stringify(r));
+                const rel = await J(`(function(){ indRightUp(); indAdvance(1); return { pump: indDev(2).pw }; })()`);
+                if (rel.pump) bad.push('松手后断电');
+                // 短按右键 = 收起
+                const pk = await J(`(function(){ ind.base.devs = [{ id: 1, ty: 'crank', x: 30, z: 20, bats: 0, u: 0, on: true, ft: 20, st: {} }]; ind.bag = {}; indTeleport(28.5, 20); indLookAt(30, 20); indRightDown(); indRightUp(); return { devs: ind.base.devs.length, got: ind.bag.dev_crank || 0 }; })()`);
+                if (!(pk.devs === 0 && pk.got === 1)) bad.push('短按右键还是收起 ' + JSON.stringify(pk));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND50 电磁线圈和手摇发电机：配方、摇着 6 V（水泵通电、离心机不行）、松手断电、短按收起', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
