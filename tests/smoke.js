@@ -7605,8 +7605,8 @@ async function enterExit(tab, key) {
                 }
                 await T.eval(`indPanelClose(); true;`);
                 // ── 存档：反应堆的棒和控制棒、辐射区、原子弹、铅箱 ──
-                await T.eval(`ind.base.devs = [{ id: 5, ty: 'reactor', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0.25 }, { spent: true }, { i: 99, b: 0 }], ctl: 0.37, T: 280.5, melt: 3 }]; ind.base.rad = [{ x: 1, z: 2, r: 40, until: ind.base.clock + 500 }, { x: 'a' }]; ind.base.bombs = [{ id: 1, x: 3, z: 4, t: 12 }, { x: 'a' }]; true;`);
-                const sv = await J(`(function(){ let b = indFixBase(JSON.parse(JSON.stringify(ind.base))), d = b.devs[0]; return { rods: d.rods, ctl: d.ctl, T: d.T, melt: d.melt, rad: b.rad.length, bombs: b.bombs.map(function (o) { return [o.x, o.z, o.t]; }), ver: b.ver }; })()`);
+                await T.eval(`ind.base.devs = [{ id: 5, ty: 'reactor', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0.25 }, { spent: true }, { i: 99, b: 0 }], ctl: 0.37, T: 280.5, melt: 3 }]; ind.base.rad = [{ x: 1, z: 2, r: 40, until: ind.base.clock + 500 }, { x: 'a' }]; ind.base.bombs = [{ id: 1, x: 3, z: 4, t: 12 }, { x: 'a' }]; window.__b6 = JSON.parse(JSON.stringify(ind.base)); true;`);   // 先拷一份再整理：两次读数之间游戏会多走几帧，反应堆温度和炸弹倒计时会变
+                const sv = await J(`(function(){ let b = indFixBase(window.__b6), d = b.devs[0]; return { rods: d.rods, ctl: d.ctl, T: d.T, melt: d.melt, rad: b.rad.length, bombs: b.bombs.map(function (o) { return [o.x, o.z, o.t]; }), ver: b.ver }; })()`);
                 if (JSON.stringify(sv.rods) !== JSON.stringify([{ i: 4, b: 0.25 }, { spent: true }]) || sv.ctl !== 0.37 || sv.T !== 280.5 || sv.melt !== 3 || sv.rad !== 1 || JSON.stringify(sv.bombs) !== '[[3,4,12]]' || sv.ver !== (await T.eval(`IND_SAVE_VER`))) bad.push('第 6 阶段存档读回来不对 ' + JSON.stringify(sv));
                 if (!(await T.eval(`indFixBase({ ver: 10, rule: 'hard', box: {} }).rad.length === 0 && indFixBase({ ver: 10, rule: 'hard', box: {} }).bombs.length === 0`))) bad.push('老档没有辐射区和原子弹要补成空');
                 // 动态物品存档：背包、箱子里的 uf6/pellet/rod 认得出来，乱写的丢掉
