@@ -558,6 +558,7 @@
                 h.side = indNum(h.side, 0, 0, 3) | 0; h.open = !!h.open;
                 h.id = indNum(h.id, 0, 0, 1e9) | 0; while (!h.id || seen[h.id]) h.id = ++b.cid; seen[h.id] = 1; b.cid = Math.max(b.cid, h.id);
             });
+            pwFixBase(b);
             nkFixBase(b);   // 辐射区、原子弹（19-industry-nuke.js）
             if (!b.bag || typeof b.bag !== 'object') b.bag = {};
             Object.keys(b.bag).forEach(function (k) { if (!IND_ITEMS[k] || !(b.bag[k] > 0)) delete b.bag[k]; else b.bag[k] = Math.floor(b.bag[k]); });
@@ -1345,7 +1346,7 @@
             if (!ind || ind.over || ind.dead) return;
             if (ind.where === 'base') indStoveTick(dt);
             if (!ind || ind.over) return;
-            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); rkTick(dt);
+            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); rkTick(dt); pwFxTick(dt);
             if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
@@ -1473,7 +1474,7 @@
                 if (moving) { R.stillT = 0; R.stam = Math.max(0, R.stam - IND_WATER.stamDrain * dt); }
                 else { R.stillT = (R.stillT || 0) + dt; if (R.stillT >= IND_WATER.stillT) R.stam = Math.min(100, R.stam + IND_WATER.stamRegen * dt); }
             } else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }
-            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1);
+            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1) * pwSpeedMul();   // 药的跑速加成（19-industry-power.js）
             if (moving) {
                 let n = Math.hypot(mx, mz), run = Math.min(1, n); mx /= n; mz /= n;
                 let len = sp * run * dt, hs = R.where === 'base' && R.base.houses.length, steps = hs ? Math.max(1, Math.ceil(len / 0.2)) : 1;   // 有房子时一小步一小步走，不穿墙
@@ -1718,6 +1719,7 @@
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             let k = indSel(), a = indAim();
+            if (k && IND_ITEMS[k].potion) return pwDrink(k);   // 右键喝药
             if (k === 'gunpowder' && a && a.kind === 'node' && a.o.hard) return rkFuse(a.o);   // 火药对着硬岩：点引线
             if (k === 'cyl' && a && a.kind === 'node' && a.o.key === 'vent_ng') return rkFillVent(a.o);   // 空钢瓶对着喷口：装天然气
             if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个

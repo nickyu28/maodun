@@ -134,3 +134,48 @@
             return ind.base.devs.some(function (a) { return a.ty === 'accel' && a.pwPrev && Math.hypot(a.x - x, a.z - z) <= PW_ACCEL.r; }) ? PW_ACCEL.mul : 1;
         }
         function pwAccelMultDev(d) { return PW_ACCEL.types[d.ty] ? pwAccelMult(d.x, d.z) : 1; }
+
+// ── 炼药：速度药、回血药（任务 40）──
+// 用大窑（或灶台，一次 1 份）的化学批次做，右键服用，空瓶还回背包。
+//  速度药：糖 2 + 番茄 1 + 开水 1 + 玻璃瓶 1，150°C 30 秒（桶还）。跑速 ×1.5 持续 3 分钟，喝完虚弱 30 秒（跑速 ×0.8）；
+//    加速期间采集、砍树、挖地这类要站着做一会儿的动作时间 ×0.8。
+//  回血药：卷心菜 2 + 萝卜 1 + 开水 1 + 玻璃瓶 1，150°C 30 秒（桶还）。服用后 20 秒内回 60 点血（一次性，同时喝只刷新）；也能治拉肚子。
+// 总跑速加成（药 + 以后的鞋）不超过 ×2.0。联机：猫盾工业是单人，不用同步，NET_PROTO 不动。药的状态存在存档里（base.fx）。
+        Object.assign(IND_ITEMS_RAW, {
+            potion_speed: { name: '速度药', col: 0xffca28, potion: 'speed', use: '右键喝：跑速 ×1.5 持续 3 分钟，采集砍树挖地动作快 20%；喝完虚弱 30 秒（跑速 ×0.8）；空瓶还你' },
+            potion_heal: { name: '回血药', col: 0xef5350, potion: 'heal', use: '右键喝：20 秒内回 60 点血（一次性，同时喝只刷新），也能治拉肚子；空瓶还你' }
+        });
+        IND_RECIPES.push(
+            { in: { sugar: 2, tomato: 1, water_boiled: 1, bottle: 1 }, out: { potion_speed: 1, bucket: 1 }, cls: 'chem', pri: true, minT: 150, time: 30, hard: true },
+            { in: { cabbage: 2, radish: 1, water_boiled: 1, bottle: 1 }, out: { potion_heal: 1, bucket: 1 }, cls: 'chem', pri: true, minT: 150, time: 30, hard: true }
+        );
+        const PX = { speedT: 180, speedMul: 1.5, weakT: 30, weakMul: 0.8, healT: 20, healAmt: 60, work: 0.8, cap: 2.0 };
+        function pwFx() { let B = ind.base; if (!B.fx) B.fx = {}; return B.fx; }
+        function pwDrink(k) {
+            let fx = pwFx(), kind = IND_ITEMS[k].potion;
+            indBagDel(k, 1); indBagAdd('bottle', 1);
+            if (kind === 'speed') { fx.speed = PX.speedT; fx.weak = 0; indFlash('喝了速度药：跑得快一半，采集也快，3 分钟'); }
+            else {
+                fx.heal = PX.healT; fx.healLeft = PX.healAmt; ind.sickT = 0;
+                indFlash('喝了回血药：20 秒回 60 点血');
+            }
+            indSave(); return true;
+        }
+        // 每帧：药效倒数、回血；速度药过了转虚弱
+        function pwFxTick(dt) {
+            let B = ind.base, fx = B.fx; if (!fx) return;
+            if (fx.speed > 0) { fx.speed -= dt; if (fx.speed <= 0) { fx.speed = 0; fx.weak = PX.weakT; indFlash('药效过了，虚弱 30 秒'); } }
+            else if (fx.weak > 0) fx.weak = Math.max(0, fx.weak - dt);
+            if (fx.heal > 0) {
+                let h = Math.min(fx.healLeft, PX.healAmt / PX.healT * dt);
+                B.surv.hp = Math.min(100, B.surv.hp + h); fx.healLeft -= h; fx.heal -= dt;
+                if (fx.heal <= 0 || fx.healLeft <= 0) { fx.heal = 0; fx.healLeft = 0; }
+            }
+        }
+        // 跑速乘数：速度药 ×1.5、虚弱 ×0.8；药加鞋等加成的总上限 ×2.0
+        function pwSpeedMul() { let fx = ind.base.fx; if (!fx) return 1; let m = fx.speed > 0 ? PX.speedMul : fx.weak > 0 ? PX.weakMul : 1; return Math.min(PX.cap, m); }
+        function pwWorkMul() { let fx = ind.base && ind.base.fx; return fx && fx.speed > 0 ? PX.work : 1; }
+        function pwFixBase(b) {
+            let f = b.fx; if (!f || typeof f !== 'object') { delete b.fx; return; }
+            b.fx = { speed: indNum(f.speed, 0, 0, PX.speedT), weak: indNum(f.weak, 0, 0, PX.weakT), heal: indNum(f.heal, 0, 0, PX.healT), healLeft: indNum(f.healLeft, 0, 0, PX.healAmt) };
+        }

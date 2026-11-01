@@ -9299,6 +9299,40 @@ async function enterExit(tab, key) {
             report('IND58 时间加速器：6 米内 ×3（做东西、燃料）、8 米外不加速、反应堆不加速、重叠不叠乘、没电不加速', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND59')) {
+            // IND59 炼药（任务 40）：大窑做出速度药／回血药（空桶还）；喝速度药跑速 ×1.5、3 分钟后恢复再虚弱 30 秒 ×0.8；回血药 20 秒回 60 点；总速度不超过 ×2.0；药效存进存档；采集动作 ×0.8
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const brew = (items) => J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: ${JSON.stringify(items)}, out: {}, fuel: 900, fire: 3, temp: 400, cook: null, spout: [] }]; indAdvance(32); return ind.base.cookers[0].out; })()`);
+                let o = await brew({ sugar: 4, tomato: 2, water_boiled: 2, bottle: 2 });
+                if (!(o.potion_speed === 2 && o.bucket === 2)) bad.push('窑做 2 份速度药（空桶还） ' + JSON.stringify(o));
+                o = await brew({ cabbage: 2, radish: 1, water_boiled: 1, bottle: 1 });
+                if (!(o.potion_heal === 1 && o.bucket === 1)) bad.push('窑做回血药 ' + JSON.stringify(o));
+                // 速度药
+                const sp = await J(`(function(){ let B = ind.base; B.rule = 'hard'; B.fx = undefined; ind.bag = { potion_speed: 1 }; indSelect('potion_speed'); let a0 = pwSpeedMul(); indUse(); let a1 = pwSpeedMul(), w1 = pwWorkMul(), b = ind.bag.bottle;
+                    for (let i = 0; i < 179; i++) pwFxTick(1); let a2 = pwSpeedMul(); for (let i = 0; i < 2; i++) pwFxTick(1); let a3 = pwSpeedMul(), w3 = pwWorkMul(); for (let i = 0; i < 28; i++) pwFxTick(1); let a4 = pwSpeedMul(); pwFxTick(2); let a5 = pwSpeedMul(); return [a0, a1, w1, b, a2, a3, w3, a4, a5]; })()`);
+                if (sp.join() !== '1,1.5,0.8,1,1.5,0.8,1,0.8,1') bad.push('速度药：×1.5 持续 3 分钟，之后虚弱 30 秒 ×0.8，再恢复；采集 ×0.8；还空瓶 ' + sp.join());
+                const cap = await J(`(function(){ ind.base.fx = { speed: 100, weak: 0 }; return pwSpeedMul(); })()`);
+                if (cap > 2.0) bad.push('总跑速不超过 ×2.0');
+                // 回血药
+                const hl = await J(`(function(){ let B = ind.base; B.fx = undefined; B.surv.hp = 30; ind.bag = { potion_heal: 2 }; indSelect('potion_heal'); indUse(); let h0 = B.surv.hp; for (let i = 0; i < 10; i++) pwFxTick(1); let h1 = B.surv.hp; for (let i = 0; i < 12; i++) pwFxTick(1); let h2 = B.surv.hp; indUse(); for (let i = 0; i < 25; i++) pwFxTick(1); return [h0, h1, h2, B.surv.hp, ind.bag.bottle]; })()`);
+                if (!(hl[0] === 30 && Math.abs(hl[1] - 60) < 0.5 && Math.abs(hl[2] - 90) < 0.5 && Math.abs(hl[3] - 100) < 0.5 && hl[4] === 2)) bad.push('回血药 20 秒回 60 点（10 秒 +30），再喝一瓶封顶 100 ' + hl.join());
+                // 存档
+                const sv = await J(`(function(){ ind.base.fx = { speed: 120, weak: 0, heal: 5, healLeft: 15 }; let b = indFixBase(JSON.parse(JSON.stringify(ind.base))); let b2 = JSON.parse(JSON.stringify(ind.base)); b2.fx = { speed: 'x', heal: 999 }; indFixBase(b2); return [b.fx, b2.fx]; })()`);
+                if (!(sv[0].speed === 120 && sv[0].heal === 5 && sv[0].healLeft === 15 && sv[1].speed === 0 && sv[1].heal <= 20)) bad.push('药效存档整理 ' + JSON.stringify(sv));
+                // 采集动作 ×0.8
+                const wk = await J(`(function(){ ind.base.fx = { speed: 50 }; ind.p.x = 0; ind.p.z = 0; wdChStart({ kind: 'dig', need: 10, label: '挖', done: function () { } }); let a = ind.ch.need; ind.ch = null; ind.base.fx = {}; wdChStart({ kind: 'dig', need: 10, label: '挖', done: function () { } }); let b = ind.ch.need; ind.ch = null; return [a, b]; })()`);
+                if (wk[0] !== 8 || wk[1] !== 10) bad.push('速度药期间采集动作 ×0.8 ' + wk.join());
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND59 炼药：窑里做出速度药和回血药、速度 ×1.5 三分钟再虚弱、回血 20 秒 60 点、速度封顶 ×2、药效存档、采集快 20%', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

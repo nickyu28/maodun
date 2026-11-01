@@ -83,7 +83,7 @@
         IND_RECIPES.push({ in: { cactus_peeled: 1 }, out: { cactus_roast: 1 }, minT: 180, time: 5, burnT: 400 });
 
         // ── 通道：站着不动做一会儿的动作（砍树、挖地、拔刺）；动了、瞄走了、再点一下就中断 ──
-        function wdChStart(ch) { ind.ch = Object.assign({ t: 0, px: ind.p.x, pz: ind.p.z }, ch); return true; }
+        function wdChStart(ch) { if (typeof ch.need === 'number') ch.need *= pwWorkMul(); ind.ch = Object.assign({ t: 0, px: ind.p.x, pz: ind.p.z }, ch); return true; }
         function wdChTick(dt) {
             let c = ind.ch; if (!c) return;
             if (Math.hypot(ind.p.x - c.px, ind.p.z - c.pz) > 0.35) { ind.ch = null; indFlash('动了，中断了'); return; }
