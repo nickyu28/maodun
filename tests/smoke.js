@@ -5808,7 +5808,7 @@ async function enterExit(tab, key) {
             else {
                 await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; true;`);
                 // 大火炼铜矿
-                await T.eval(`(function(){ indBagAdd('wood', 20); indBagAdd('ore_cu', 2); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStovePut('ore_cu', 1); indStoveFire(3); indPanelClose(); })(); true;`);
+                await T.eval(`(function(){ indBagAdd('wood', 20); indBagAdd('ore_cu', 2); indBagAdd('charcoal', 2); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStovePut('ore_cu', 1); indStovePut('charcoal', 1); indStoveFire(3); indPanelClose(); })(); true;`);
                 await T.eval(`indAdvance(45); true;`);
                 if (!(await T.eval(`indOutCount(ind.base.stove, 'hot_cu') === 1`))) bad.push('大火炼不出铜锭 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 // 拿着烫铜锭，没钳子：每秒扣 15
@@ -5826,7 +5826,7 @@ async function enterExit(tab, key) {
                 await T.eval(`indBagAdd('ingot_cu', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'tongs'; })); indBagAdd('hot_fe', 1); ind.base.surv.hp = 100; indAdvance(2); true;`);
                 if (!(await T.eval(`ind.bag.tongs === 1 && ind.base.surv.hp > 99`))) bad.push('有钳子还扣血 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.surv.hp])`));
                 // 大火炼不动铁矿；风箱装上后鼓风 1600°C 才行
-                await T.eval(`(function(){ indStoveTakeAll(); indPanelClose(); indBagAdd('ore_fe', 1); indStovePut('ore_fe', 1); indStoveFire(3); indPanelClose(); indAdvance(40); })(); true;`);
+                await T.eval(`(function(){ indStoveTakeAll(); indPanelClose(); indBagAdd('ore_fe', 1); indStovePut('ore_fe', 1); indBagAdd('charcoal', 1); indStovePut('charcoal', 1); indStoveFire(3); indPanelClose(); indAdvance(40); })(); true;`);
                 if (await T.eval(`indOutCount(ind.base.stove, 'hot_fe') > 0`)) bad.push('大火就炼出了铁（铁的熔点 1538°C）');
                 await T.eval(`(function(){ indStoveFire(4); })(); true;`);
                 if ((await T.eval(`ind.base.stove.fire`)) === 4) bad.push('没风箱就能鼓风');
@@ -5839,17 +5839,17 @@ async function enterExit(tab, key) {
                 // 配方查询：搜"铁"能看到铁矿→铁锭和铁稿
                 await T.eval(`indPanelBook('铁'); true;`);
                 const bk = await T.eval(`document.getElementById('ind-book-list').innerText`);
-                if (!/铁矿×1 → 铁锭（烫）×1/.test(bk) || !/铁稿/.test(bk) || /小麦种子/.test(bk)) bad.push('配方查询搜"铁"不对 ' + bk.slice(0, 200));
+                if (!/铁矿×1 \+ 木炭×1 → 铁锭（烫）×1/.test(bk) || !/铁稿/.test(bk) || /小麦种子/.test(bk)) bad.push('配方查询搜"铁"不对 ' + bk.slice(0, 200));
                 await T.eval(`indPanelClose(); true;`);
                 // 锡和青铜（A：铁矿要青铜稿，不再卡死）：锡只刷在山地、石稿挖；锡矿 232°C 15 秒出烫锡锭；3 铜锭 + 1 锡锭 950°C 30 秒出 4 青铜锭；青铜稿等级 2 挖铁矿；铁稿多拿 1 个
                 const tin = JSON.parse(await T.eval(`JSON.stringify({ where: Object.keys(IND_BIOMES).filter(function (b) { return IND_BIOMES[b].res.ore_sn; }), tool: IND_NODES.ore_sn.tool, give: IND_NODES.ore_sn.give, names: IND_TOOL_NAME.slice(0, 4), fe: IND_NODES.ore_fe.tool })`));
                 if (tin.where.join() !== 'mountain' || tin.tool !== 1 || tin.give.join() !== '1,2' || tin.names.join() !== '空手,石稿,青铜稿,钢稿' || tin.fe !== 2) bad.push('锡矿资源点不对 ' + JSON.stringify(tin));
-                await T.eval(`ind.base.stove = { items: { ore_sn: 1 }, out: {}, fuel: 3000, fire: 1, temp: 200, cook: null }; indAdvance(30); true;`);
-                if (await T.eval(`indOutCount(ind.base.stove, 'hot_sn') > 0`)) bad.push('小火 200°C（不到 232°C）也炼出锡锭');
-                await T.eval(`ind.base.stove = { items: { ore_sn: 1 }, out: {}, fuel: 3000, fire: 2, temp: 600, cook: null }; indAdvance(14); true;`);
+                await T.eval(`ind.base.stove = { items: { ore_sn: 1, charcoal: 1 }, out: {}, fuel: 3000, fire: 2, temp: 600, cook: null }; indAdvance(30); true;`);
+                if (await T.eval(`indOutCount(ind.base.stove, 'hot_sn') > 0`)) bad.push('中火 600°C（不到 1200°C）也炼出锡锭');
+                await T.eval(`ind.base.stove = { items: { ore_sn: 1, charcoal: 1 }, out: {}, fuel: 3000, fire: 3, temp: 1200, cook: null }; indAdvance(14); true;`);
                 if (await T.eval(`indOutCount(ind.base.stove, 'hot_sn') > 0`)) bad.push('锡矿 14 秒就炼好了');
                 await T.eval(`indAdvance(2); true;`);
-                if ((await T.eval(`indOutCount(ind.base.stove, 'hot_sn')`)) !== 1) bad.push('中火炼不出锡锭 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
+                if ((await T.eval(`indOutCount(ind.base.stove, 'hot_sn')`)) !== 1) bad.push('大火炼不出锡锭 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 await T.eval(`ind.base.stove = { items: { ingot_cu: 3, ingot_sn: 1 }, out: {}, fuel: 3000, fire: 3, temp: 1200, cook: null }; indAdvance(29); true;`);
                 if (await T.eval(`indOutCount(ind.base.stove, 'hot_bronze') > 0`)) bad.push('青铜 29 秒就好了');
                 await T.eval(`indAdvance(3); true;`);
@@ -5917,6 +5917,7 @@ async function enterExit(tab, key) {
                 await T.eval(`(function(){ ind.base.crops.push({ k: 'wheat', x: -17, z: 3, g: 0, wet: 0, times: 0 }); indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(2); indPanelClose(); })(); true;`);
                 const gen = await place('dev_gen', 8, -15), pump = await place('dev_pump', 12, -10);
                 await click(gen, 'wire'); await click(pump, 'wire');
+                await T.eval(`indBagAdd('water_raw', 1); true;`); await click(gen, 'water_raw');   // 蒸汽发电机要水（任务 55）
                 await T.eval(`indTeleport(-8, 5); indAdvance(0.5); true;`);
                 const pp = JSON.parse(await T.eval(`JSON.stringify({ v: indSrcVolt(indDev(${gen})), pw: indDev(${pump}).pw, wet: ind.base.crops[0].wet > ind.base.clock })`));
                 if (pp.v !== 12 || !pp.pw || !pp.wet) bad.push('发电机带水泵不对 ' + JSON.stringify(pp));
@@ -6005,7 +6006,7 @@ async function enterExit(tab, key) {
                 if (!(hp < 85 && hp > 83)) bad.push('氯气没按每秒 8 扣血 ' + hp);
                 // 元素表
                 await T.eval(`indPanelElems(); true;`);
-                if (!(await T.eval(`/元素表　\\d+ \\/ 118/.test(document.getElementById('ind-panel').innerText) && Object.keys(ind.base.elems).length >= 4`))) bad.push('元素表不对 ' + await T.eval(`JSON.stringify(ind.base.elems)`));
+                if (!(await T.eval(`/元素表　\\d+ \\/ 36/.test(document.getElementById('ind-panel').innerText) && Object.keys(ind.base.elems).length >= 4`))) bad.push('元素表不对 ' + await T.eval(`JSON.stringify(ind.base.elems)`));
                 await T.eval(`indPanelClose(); indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
                 const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ e: Object.keys(b.elems).length, ver: b.ver, el: (b.devs.filter(function (d) { return d.ty === 'el'; })[0] || {}).st })); }); })`));
                 if (sv.e < 4 || sv.ver < 7 || sv.el) bad.push('存档读回来不对 ' + JSON.stringify(sv));
@@ -6213,13 +6214,13 @@ async function enterExit(tab, key) {
                 // 小熔炉：只做冶炼，一次 2 份，大火 1300°C
                 await setC(F, { wheat: 4, salt: 1, water_boiled: 1 }, 1, 200); await T.eval(`indAdvance(45); true;`);
                 if (Object.keys((await getC(F)).out).length) bad.push('小熔炉也做吃的');
-                await setC(F, { ore_cu: 3 }, 3, 1290); await T.eval(`indAdvance(21); true;`);
+                await setC(F, { ore_cu: 3, charcoal: 3 }, 3, 1290); await T.eval(`indAdvance(21); true;`);
                 let f = await getC(F);
                 if (Math.abs(f.temp - 1300) > 1) bad.push('小熔炉大火应该 1300°C ' + f.temp);
                 if (hn(f, 'hot_cu') !== 2 || f.items.ore_cu !== 1) bad.push('小熔炉一次炼 2 份不对 ' + JSON.stringify(f));
-                await setC(F, { ore_fe: 1 }, 3, 1300); await T.eval(`indAdvance(40); true;`);
+                await setC(F, { ore_fe: 1, charcoal: 1 }, 3, 1300); await T.eval(`indAdvance(40); true;`);
                 if (hn(await getC(F), 'hot_fe')) bad.push('小熔炉没风箱炼出了铁');
-                await T.eval(`ind.bag = { bellows: 2 }; indInstallBellows(indCookById(${F})); true;`); await setC(F, { ore_fe: 1 }, 4, 1600); await T.eval(`indAdvance(32); true;`);
+                await T.eval(`ind.bag = { bellows: 2 }; indInstallBellows(indCookById(${F})); true;`); await setC(F, { ore_fe: 1, charcoal: 1 }, 4, 1600); await T.eval(`indAdvance(32); true;`);
                 if (hn(await getC(F), 'hot_fe') !== 1) bad.push('小熔炉装了风箱炼不出铁 ' + JSON.stringify(await getC(F)));
                 if (await T.eval(`!ind.base.cookers[0].bellows || ind.bag.bellows !== 1 || !!indCookById(${K}).C.bellows`)) bad.push('风箱要每个炉子单独装（装在小熔炉上，大窑没有） ' + await T.eval(`JSON.stringify([ind.base.cookers.map(function (c) { return c.bellows; }), ind.bag])`));
                 await T.eval(`indInstallBellows(indCookById(${F})); true;`);
@@ -6258,11 +6259,11 @@ async function enterExit(tab, key) {
                 if ((await getC(K)).out.brick !== 10) bad.push('大窑砖应该一次 10 块 ' + JSON.stringify((await getC(K)).out));
                 await setC(K, { wood: 24 }, 3, 1200); await T.eval(`indAdvance(31); true;`);
                 if ((await getC(K)).out.charcoal !== 10) bad.push('大窑木炭应该一次 10 份');
-                await setC(K, { ore_cu: 8 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
+                await setC(K, { ore_cu: 8, charcoal: 8 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
                 f = await getC(K);
                 if (hn(f, 'hot_cu') !== 6 || f.items.ore_cu !== 2) bad.push('大窑冶炼应该一次 6 份 ' + JSON.stringify(f));
                 // "灶台 3 米内"的判定：发电机在小熔炉旁边、熔炉中火以上才发电；熔融盐电解旁边的大窑够热
-                await T.eval(`(function(){ let c = ind.base.cookers[0]; ind.base.devs = [{ id: 701, ty: 'gen', x: c.x + 2, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {} }]; c.fire = 0; c.fuel = 0; })(); true;`);
+                await T.eval(`(function(){ let c = ind.base.cookers[0]; ind.base.devs = [{ id: 701, ty: 'gen', x: c.x + 2, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 120 }]; c.fire = 0; c.fuel = 0; })(); true;`);
                 if (await T.eval(`indSrcVolt(indDev(701))`) !== 0) bad.push('熔炉没点着发电机也发电');
                 await T.eval(`(function(){ let c = ind.base.cookers[0]; c.fire = 2; c.fuel = 3000; })(); true;`);
                 if (await T.eval(`indSrcVolt(indDev(701))`) !== 12) bad.push('小熔炉旁边的发电机不发电');
@@ -6678,7 +6679,7 @@ async function enterExit(tab, key) {
                 const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
                 const stoveSet = (items, fire, temp, spout) => T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null, spout: ${JSON.stringify(spout || [])} }; true;`);
                 // 冶炼的烫锭进出料槽
-                await stoveSet({ ore_cu: 2 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
+                await stoveSet({ ore_cu: 2, charcoal: 2 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
                 let st = await J(`{ out: ind.base.stove.out, spout: ind.base.stove.spout, bag: ind.bag, cook: !!ind.base.stove.cook }`);
                 if (st.spout.length !== 1 || st.spout[0].k !== 'hot_cu' || st.spout[0].t < 28 || Object.keys(st.out).some((k) => /^hot_/.test(k)) || Object.keys(st.bag).length) bad.push('烫锭应该进出料槽 ' + JSON.stringify(st));
                 if (!st.cook) bad.push('炉子出完料应该接着做下一份 ' + JSON.stringify(st));
@@ -6714,7 +6715,7 @@ async function enterExit(tab, key) {
                 if (!(await T.eval(`ind.bag.water_boiled === 1`))) bad.push('槽里没有烫的也浇水');
                 // 满了：10 块，炉子暂停出料，面板写出料槽满了；取走以后接着出
                 const ten = JSON.stringify(Array.from({ length: 10 }, () => ({ k: 'hot_cu', t: 30 })));
-                await stoveSet({ ore_cu: 1 }, 3, 1200, JSON.parse(ten)); await T.eval(`indAdvance(25); true;`);
+                await stoveSet({ ore_cu: 1, charcoal: 1 }, 3, 1200, JSON.parse(ten)); await T.eval(`indAdvance(25); true;`);
                 st = await J(`{ n: ind.base.stove.spout.length, full: ind.base.stove.cook && ind.base.stove.cook.full, items: ind.base.stove.items }`);
                 if (st.n !== 10 || !st.full || st.items.ore_cu !== 1) bad.push('出料槽满了应该暂停出料 ' + JSON.stringify(st));
                 await T.eval(`indPanelStove('stove'); true;`);
@@ -6737,7 +6738,7 @@ async function enterExit(tab, key) {
                 const old = await J(`(function(){ let b = indFixBase({ ver: 10, rule: 'hard', stove: { items: {}, out: { hot_cu: 2, ash: 1 }, fuel: 0, fire: 0, temp: 20 } }); return { out: b.stove.out, spout: b.stove.spout.map(function (e) { return e.k; }) }; })()`);
                 if (old.out.hot_cu || old.out.ash !== 1 || old.spout.join() !== 'hot_cu,hot_cu') bad.push('老档炉子里的烫锭要挪进出料槽 ' + JSON.stringify(old));
                 // 小熔炉、大窑也有出料槽；模型画出来了（炉子外面）
-                await T.eval(`ind.base.cookers = [{ id: 81, ty: 'furnace', x: 4, z: 6, items: { ore_cu: 3 }, out: {}, fuel: 3000, fire: 3, temp: 1300, cook: null, ashT: 0 }, { id: 82, ty: 'kiln', x: -4, z: 4, items: { ore_cu: 8 }, out: {}, fuel: 3000, fire: 3, temp: 1200, cook: null, ashT: 0 }]; ind.base.cseq = 82; ind.furnDirty = true; indSyncFurn(); indAdvance(21); true;`);
+                await T.eval(`ind.base.cookers = [{ id: 81, ty: 'furnace', x: 4, z: 6, items: { ore_cu: 3, charcoal: 3 }, out: {}, fuel: 3000, fire: 3, temp: 1300, cook: null, ashT: 0 }, { id: 82, ty: 'kiln', x: -4, z: 4, items: { ore_cu: 8, charcoal: 8 }, out: {}, fuel: 3000, fire: 3, temp: 1200, cook: null, ashT: 0 }]; ind.base.cseq = 82; ind.furnDirty = true; indSyncFurn(); indAdvance(21); true;`);
                 const fk = await J(`ind.base.cookers.map(function (c) { return [c.ty, c.spout.length, Math.round(c.temp)]; })`);
                 if (fk[0][1] !== 2 || fk[1][1] !== 6) bad.push('小熔炉一次 2 块、大窑一次 6 块都该进各自的出料槽 ' + JSON.stringify(fk));
                 if (await T.eval(`Object.keys(ind.furnMesh).length < 3 || ind.furnMesh.stove.m.length < 6`)) bad.push('出料槽没画出来（炉子外面）');
@@ -6885,10 +6886,10 @@ async function enterExit(tab, key) {
                 await stoveSet({}); await T.eval(`ind.bag = { wheat: 20, salt: 5, water_boiled: 3 }; window.__fl = []; indStoveFill(); indPanelClose(); true;`);
                 if (!(await T.eval(`Object.keys(ind.base.stove.items).length === 0 && __fl.some(function (t) { return /凑不出/.test(t); })`))) bad.push('木桶的水不该被放进去 ' + await T.eval(`JSON.stringify([ind.base.stove.items, __fl])`));
                 // 冶炼一次 1 份（灶台）
-                await stoveSet({}); await T.eval(`ind.bag = { ore_cu: 5 }; indStoveFill(); indPanelClose(); true;`);
+                await stoveSet({}); await T.eval(`ind.bag = { ore_cu: 5, charcoal: 5 }; indStoveFill(); indPanelClose(); true;`);
                 if ((await T.eval(`ind.base.stove.items.ore_cu`)) !== 1) bad.push('灶台冶炼一次 1 份');
                 // 小熔炉一次 2 份
-                await T.eval(`ind.base.cookers = [{ id: 61, ty: 'furnace', x: 4, z: 6, items: {}, out: {}, fuel: 100, fire: 0, temp: 20, cook: null, ashT: 0, spout: [] }]; ind.bag = { ore_cu: 5 }; ind.cookId = 61; indStoveFill(); ind.cookId = null; indPanelClose(); true;`);
+                await T.eval(`ind.base.cookers = [{ id: 61, ty: 'furnace', x: 4, z: 6, items: {}, out: {}, fuel: 100, fire: 0, temp: 20, cook: null, ashT: 0, spout: [] }]; ind.bag = { ore_cu: 5, charcoal: 5 }; ind.cookId = 61; indStoveFill(); ind.cookId = null; indPanelClose(); true;`);
                 if ((await T.eval(`ind.base.cookers[0].items.ore_cu`)) !== 2) bad.push('小熔炉一次 2 份 ' + await T.eval(`JSON.stringify(ind.base.cookers[0].items)`));
                 // 工作台：做最多
                 await T.eval(`ind.bag = { wood: 80 }; indPanelBench(); true;`);
@@ -7390,10 +7391,10 @@ async function enterExit(tab, key) {
                     await T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 5000, fire: ${fire || 2}, temp: ${temp || 600}, cook: null, spout: [] }; indAdvance(${secs}); true;`);
                     return J(`{ out: ind.base.stove.out, items: ind.base.stove.items, spout: ind.base.stove.spout.map(function (e) { return e.k; }) }`);
                 };
-                let c = await cook({ ore_pb: 2 }, 16);
+                let c = await cook({ ore_pb: 2, charcoal: 1 }, 16, 800, 3);
                 if (c.spout.join() !== 'hot_pb,hot_pb' || c.out.sulfur !== 1) bad.push('2 方铅矿应该出 2 铅锭（烫）+ 1 硫 ' + JSON.stringify(c));
-                c = await cook({ ore_pb: 2 }, 16, 300, 1);
-                if (c.spout.length) bad.push('327°C 以下不该炼铅 ' + JSON.stringify(c));
+                c = await cook({ ore_pb: 2, charcoal: 1 }, 16, 700, 2);
+                if (c.spout.length) bad.push('800°C 以下不该炼铅 ' + JSON.stringify(c));
                 c = await cook({ sulfur: 1, b_o2: 1 }, 11);
                 if (c.out.b_so2 !== 1) bad.push('硫 + 氧气瓶应该出二氧化硫瓶 ' + JSON.stringify(c));
                 c = await cook({ b_so2: 1, b_o2: 1, water_raw: 1 }, 16);
@@ -7414,8 +7415,8 @@ async function enterExit(tab, key) {
                 if (c.out['pellet:4'] !== 1 || c.out.bottle !== 2) bad.push('丰度 3.5% 的罐 + 2 氢气应该出芯块 ' + JSON.stringify(c));
                 c = await cook({ 'uf6:5': 1, b_h2: 2 }, 21);
                 if (c.out['pellet:5'] !== 1) bad.push('丰度 5% 的罐也能做芯块 ' + JSON.stringify(c));
-                c = await cook({ rod_spent: 1, b_h2so4: 2 }, 41, 400);
-                if (c.out.plutonium !== 1 || c.out.nuclear_waste !== 1 || c.out.bottle !== 2) bad.push('乏燃料棒 + 2 硫酸应该出钚 + 核废料 + 2 空瓶 ' + JSON.stringify(c));
+                c = await cook({ rod_spent: 1, b_hno3: 2 }, 41, 400);
+                if (c.out.plutonium !== 1 || c.out.nuclear_waste !== 1 || c.out.bottle !== 2) bad.push('乏燃料棒 + 2 硝酸应该出钚 + 核废料 + 2 空瓶 ' + JSON.stringify(c));
                 await T.eval(`indStoveTakeAll(); indPanelClose(); true;`);
                 if (!(await T.eval(`!!ind.base.elems[94]`))) bad.push('钚要点亮元素表');
                 // 工作台：燃料棒 2 芯块 + 2 钢锭
@@ -7938,7 +7939,7 @@ async function enterExit(tab, key) {
                 }
                 await T.eval(`ind.base.rule = 'hard'; true;`);
                 // ── 硬核：没装出料槽，烫锭留在炉膛；凉了直接取，烫的要钳子 ──
-                const smelt = (ore) => T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: { ${ore}: 1 }, fuel: 5000, fire: 3, temp: 1200, spout: [] }); ind.cookId = 'stove'; true;`);
+                const smelt = (ore) => T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: { ${ore}: 1, charcoal: 1 }, fuel: 5000, fire: 3, temp: 1200, spout: [] }); ind.cookId = 'stove'; true;`);
                 await smelt('ore_cu');
                 if (!(await until(T, `(function(){ indAdvance(1); return (ind.base.stove.out.hot_cu || 0) >= 1; })()`, 20000))) bad.push('没装槽也要能炼出铜锭');
                 let h = await J(`{ out: ind.base.stove.out, spout: ind.base.stove.spout.length, ty: ind.base.stove.spoutTy }`);
@@ -7969,7 +7970,7 @@ async function enterExit(tab, key) {
                 const tk = await J(`{ brick: [ckSpoutTakes({ spoutTy: 'brick' }, 'hot_cu'), ckSpoutTakes({ spoutTy: 'brick' }, 'hot_bronze'), ckSpoutTakes({ spoutTy: 'brick' }, 'hot_brass'), ckSpoutTakes({ spoutTy: 'brick' }, 'hot_zn'), ckSpoutTakes({ spoutTy: 'brick' }, 'hot_sn'), ckSpoutTakes({ spoutTy: 'brick' }, 'hot_pb'), ckSpoutTakes({ spoutTy: 'brick' }, 'hot_fe'), ckSpoutTakes({ spoutTy: 'brick' }, 'hot_steel')], iron: [ckSpoutTakes({ spoutTy: 'iron' }, 'hot_cu'), ckSpoutTakes({ spoutTy: 'iron' }, 'hot_pb'), ckSpoutTakes({ spoutTy: 'iron' }, 'hot_fe'), ckSpoutTakes({ spoutTy: 'iron' }, 'hot_steel')], auto: [ckSpoutTakes({ spoutTy: 'auto' }, 'hot_steel'), ckSpoutTakes({}, 'hot_fe')], none: ckSpoutTakes({ spoutTy: null }, 'hot_cu'), t: [CK_SPOUT.brick.maxT, CK_SPOUT.iron.maxT, CK_SPOUT.brick.cool, CK_SPOUT.iron.cool] }`);
                 if (tk.brick.join() !== 'true,true,true,true,true,true,false,false' || tk.iron.join() !== 'true,true,false,false' || tk.auto.join() !== 'true,true' || tk.none || tk.t.join() !== '1200,1400,60,20') bad.push('砖槽接铜青铜黄铜锌锡铅、接不住铁钢；铁槽同样接不住铁钢；悠闲自带槽什么都接 ' + JSON.stringify(tk));
                 // 炼铁（1538°C）：砖槽、铁槽都接不住，烫的铁锭留在炉膛
-                await T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: { ore_fe: 1 }, fuel: 9000, fire: 4, bellows: true, temp: 1700, spout: [], spoutTy: 'iron' }); ind.cookId = 'stove'; true;`);
+                await T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: { ore_fe: 1, charcoal: 1 }, fuel: 9000, fire: 4, bellows: true, temp: 1700, spout: [], spoutTy: 'iron' }); ind.cookId = 'stove'; true;`);
                 if (!(await until(T, `(function(){ indAdvance(1); return (ind.base.stove.out.hot_fe || 0) >= 1 || ind.base.stove.spout.length >= 1; })()`, 40000))) bad.push('炼铁没出锭');
                 if (!(await T.eval(`ind.base.stove.out.hot_fe === 1 && ind.base.stove.spout.length === 0`))) bad.push('铁槽接不住铁，烫铁锭留在炉膛 ' + await T.eval(`JSON.stringify([ind.base.stove.out, ind.base.stove.spout])`));
                 // 炼钢仍然能玩：钢锭留在炉膛，踹炉子、钳子都能取
@@ -8055,7 +8056,7 @@ async function enterExit(tab, key) {
                 if (r.out.bake_potato !== 1) bad.push('石炉烤土豆 ' + JSON.stringify(r));
                 r = await run({ clay: 2 }, 'coal', 3, 50);
                 if (r.out.brick !== 1) bad.push('石炉烧砖（大火 1200°C） ' + JSON.stringify(r));
-                r = await run({ ore_cu: 1 }, 'charcoal', 3, 50);
+                r = await run({ ore_cu: 1, charcoal: 1 }, 'charcoal', 3, 50);
                 if (r.spout.join() !== 'hot_cu') bad.push('石炉炼铜（装了砖槽，烫锭进槽） ' + JSON.stringify(r));
                 r = await run({ sulfur: 1, b_o2: 1 }, 'char', 2, 30);
                 if (r.out.b_so2 !== 1) bad.push('石炉做化学配方（硫 + 氧气 → 二氧化硫） ' + JSON.stringify(r));
@@ -8629,7 +8630,7 @@ async function enterExit(tab, key) {
                 await T.eval(`${HIDE} indSetRule('hard'); ind.base.rule = 'hard'; ind.base.off.stove = false; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
                 const setStove = (fuel, fire, items) => T.eval(`(function(){ let S = ind.base.stove; S.items = ${JSON.stringify(items)}; S.out = {}; S.fuel = ${fuel}; S.fire = ${fire}; S.temp = 20; S.cook = null; S.spout = []; S.ashT = 0; let s = ind.base.surv; s.food = 80; s.water = 80; s.hp = 100; s.temp = 37; ind.base.crops = []; ind.base.fires = []; ind.base.away = null; return true; })()`);
                 // ── 1 放木头和锡矿，出门，远征里家里不动 ──
-                await setStove(2000, 2, { ore_sn: 3 });
+                await setStove(2000, 3, { ore_sn: 3, charcoal: 3 });
                 const st0 = await J(`(function(){ indGoTrip(2024); let S = ind.base.stove; return [S.fuel, S.temp]; })()`);   // 放好到出门之间基地里会走几帧，按出门那一刻的数比
                 const a0 = await J(`[ind.base.away, ind.base.clock]`);
                 if (!(typeof a0[0] === 'number' && Math.abs(a0[0] - a0[1]) < 0.5)) bad.push('出门该记下时刻 ' + JSON.stringify(a0));
@@ -9107,7 +9108,7 @@ async function enterExit(tab, key) {
                 const mt = await J(`(function(){ let al = 0, ni = 0, maps = 0; for (let s = 1; s <= 6; s++) { indGoTrip(s * 7717); maps++; ind.nodes.forEach(function (n) { if (n.key === 'ore_al') al++; if (n.key === 'ore_ni') ni++; }); } indGoBase(null); return { al: al, ni: ni }; })()`);
                 if (!(mt.al > 0 && mt.ni > 0)) bad.push('山地要有铝土矿和镍矿（6 张图） ' + JSON.stringify(mt));
                 // 镍矿进大窑
-                const k = await J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: { ore_ni: 1 }, out: {}, fuel: 900, fire: 4, temp: 1600, cook: null, spout: [], spoutTy: 'iron', bellows: true }]; indAdvance(31); let c = ind.base.cookers[0]; return { out: c.out, spout: c.spout.map(function (e) { return e.k; }) }; })()`);
+                const k = await J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: { ore_ni: 1, charcoal: 1 }, out: {}, fuel: 900, fire: 4, temp: 1600, cook: null, spout: [], spoutTy: 'iron', bellows: true }]; indAdvance(31); let c = ind.base.cookers[0]; return { out: c.out, spout: c.spout.map(function (e) { return e.k; }) }; })()`);
                 if (!((k.out.hot_ni || 0) + k.spout.filter(function (x) { return x === 'hot_ni'; }).length === 1)) bad.push('镍矿进大窑出（烫的）镍锭 ' + JSON.stringify(k));
                 // 铝土矿进电解槽
                 const al = await J(`(function(){ ind.base.devs = [{ id: 1, ty: 'el', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: { ore_al: 2, salt: 1 }, pw: true, v: 12 }]; ind.base.wires = []; ind.base.elems = {}; ind.bag = {}; indElTick(indDev(1), IND_EL_TIME + 1); let st = indDev(1).st; indBagAdd('ingot_al', 1); indBagAdd('ingot_ni', 1); return { st: st, al: !!ind.base.elems[13], ni: !!ind.base.elems[28] }; })()`);
@@ -9271,13 +9272,13 @@ async function enterExit(tab, key) {
             else { try {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
-                const kiln = (id, x, z) => `{ id: ${id}, ty: 'kiln', x: ${x}, z: ${z}, items: { ore_sn: 1 }, out: {}, fuel: 900, fire: 3, temp: 700, cook: null, spout: [], spoutTy: 'iron' }`;
+                const kiln = (id, x, z) => `{ id: ${id}, ty: 'kiln', x: ${x}, z: ${z}, items: { ore_sn: 1, charcoal: 1 }, out: {}, fuel: 900, fire: 3, temp: 1200, cook: null, spout: [], spoutTy: 'iron' }`;
                 const dev = (id, ty, x, z, o) => JSON.stringify(Object.assign({ id: id, ty: ty, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}));
                 const run = (accels, secs, u) => J(`(function(){ ind.base.rule = 'hard'; ind.base.off.pool = true; ind.base.fires = [];
                     ind.base.devs = [${dev(1, 'bank', -30, 0, { bats: 16, u: u === undefined ? 2880 : u })}${accels.map(function (a, i) { return ',' + dev(10 + i, 'accel', a[0], a[1]); }).join('')}, { id: 20, ty: 'reactor', x: 0, z: 15, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }], ctl: 0.5, T: 20, melt: 0 }];
                     ind.base.wires = [${accels.map(function (a, i) { return '[1,' + (10 + i) + ']'; }).join(',')}];
                     ind.base.cookers = [${kiln(5, 20, 10)}, ${kiln(6, 20, 40)}]; ind.base.stove = Object.assign(ind.base.stove, { fire: 0, fuel: 0, temp: 20, items: {}, out: {}, cook: null });
-                    indAdvance(0.2); ind.base.cookers.forEach(function (c) { c.fuel = 900; c.temp = 700; c.cook = null; c.out = {}; c.spout = []; c.items = { ore_sn: 1 }; }); ind.base.devs.forEach(function (d) { if (d.ty === 'reactor') { d.T = 20; } });
+                    indAdvance(0.2); ind.base.cookers.forEach(function (c) { c.fuel = 900; c.temp = 1200; c.cook = null; c.out = {}; c.spout = []; c.items = { ore_sn: 1, charcoal: 1 }; }); ind.base.devs.forEach(function (d) { if (d.ty === 'reactor') { d.T = 20; } });
                     indAdvance(${secs}); let near = ind.base.cookers[0], far = ind.base.cookers[1];
                     return { nearDone: (near.out.hot_sn || 0) + near.spout.length, farDone: (far.out.hot_sn || 0) + far.spout.length, nearFuel: 900 - near.fuel, farFuel: 900 - far.fuel, rx: indDev(20).T, bank: indDev(1).u }; })()`);
                 let r = await run([[20, 13]], 6);
@@ -9333,6 +9334,239 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND59 炼药：窑里做出速度药和回血药、速度 ×1.5 三分钟再虚弱、回血 20 秒 60 点、速度封顶 ×2、药效存档、采集快 20%', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND60')) {
+            // IND60 开场一句话（任务 60）：新档第一次进基地（选完玩法）屏幕中间"去外太空"，4 秒后没了；退出再进不弹；老档（没有 sawGoal）不弹
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                if (await T.eval(`!!document.getElementById('ind-goal')`)) bad.push('选玩法之前就弹了');
+                await T.eval(`${HIDE} window.__g0 = performance.now(); indSetRule('hard'); true;`);
+                const txt = await T.eval(`(function(){ let g = document.getElementById('ind-goal'); return g ? g.textContent : null; })()`);
+                if (txt !== '去外太空') bad.push('新档没弹"去外太空" ' + txt);
+                if (!(await until(T, `!document.getElementById('ind-goal')`, 12000))) bad.push('4 秒后还在');
+                else { const dt = await T.eval(`(performance.now() - window.__g0) / 1000`); if (!(dt >= 3.8)) bad.push('停得太短 ' + dt.toFixed(2) + ' 秒'); }
+                if (await T.eval(`ind.base.sawGoal !== true`)) bad.push('没记"已弹过"');
+                // 退出再进（从存档读）：不弹
+                await T.eval(`indExit(); true;`);
+                await until(T, `!ind && typeof IND_SAVING !== 'undefined' && IND_SAVING === 0`, 10000);
+                await T.eval(`${HIDE} indEnter(); true;`);
+                if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('再进进不去');
+                else {
+                    const again = await T.eval(`JSON.stringify({ g: !!document.getElementById('ind-goal'), s: ind.base.sawGoal, rule: ind.base.rule })`);
+                    if (again !== JSON.stringify({ g: false, s: true, rule: 'hard' })) bad.push('再进又弹了／没存住 ' + again);
+                    // 再选一次玩法（硬核不能退）也不弹；老档不弹；新档是 false
+                    await T.eval(`indGoalShow(); true;`);
+                    if (await T.eval(`!!document.getElementById('ind-goal')`)) bad.push('弹过了还弹');
+                    const fx = await T.eval(`(function(){ let o = JSON.parse(JSON.stringify(ind.base)); delete o.sawGoal; return JSON.stringify([indFixBase(o).sawGoal, indFixBase(undefined).sawGoal, indNewBase().sawGoal]); })()`);
+                    if (fx !== '[true,false,false]') bad.push('老档当弹过、新档没弹 ' + fx);
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND60 开场一句话：新档选完玩法弹"去外太空"、4 秒没了、再进不弹、老档不弹', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND61')) {
+            // IND61 矿要还原剂（任务 53）：铁矿 + 木炭／煤／焦炭出铁；只有铁矿不烧并提示；锌 950 出、900 不出；锡 1200、铅 800、镍 + 还原剂；原位置序号不变；老档正在烧的矿停下不丢东西
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                // 炉子：大窑，给定火候和温度，过 secs 秒，数出来的烫锭（出料槽 + 炉膛）
+                const cook = (items, fire, temp, secs, cookSt) => J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: ${JSON.stringify(items)}, out: {}, fuel: 9000, fire: ${fire}, bellows: true, temp: ${temp}, cook: ${cookSt ? JSON.stringify(cookSt) : 'null'}, spout: [], spoutTy: 'iron' }]; indAdvance(${secs}); let c = ind.base.cookers[0], h = {}; c.spout.forEach(function (e) { h[e.k] = (h[e.k] || 0) + 1; }); Object.keys(c.out).forEach(function (k) { h[k] = (h[k] || 0) + c.out[k]; }); return { hot: h, items: c.items, cook: c.cook, need: rlNeedReducer(c) }; })()`);
+                for (const red of ['charcoal', 'coal', 'char']) {
+                    const r = await cook({ ore_fe: 1, [red]: 1 }, 4, 1600, 32);
+                    if (r.hot.hot_fe !== 1 || Object.keys(r.items).length) bad.push('铁矿 + ' + red + ' 应该出 1 块铁 ' + JSON.stringify(r));
+                }
+                let r = await cook({ ore_fe: 2 }, 4, 1600, 32);
+                if (r.hot.hot_fe || r.items.ore_fe !== 2 || !r.need) bad.push('只有铁矿不该出铁，要提示 ' + JSON.stringify(r));
+                const pan = await T.eval(`(function(){ ind.cookId = 5; let h = indStoveHtml(); ind.cookId = null; return h; })()`);
+                if (!/炼矿要加木炭、煤或焦炭/.test(pan)) bad.push('面板没写要还原剂');
+                r = await cook({ ore_zn: 1, charcoal: 1 }, 3, 950, 16);
+                if (r.hot.hot_zn !== 1) bad.push('锌矿 + 木炭 950°C 应该出锌 ' + JSON.stringify(r));
+                r = await cook({ ore_zn: 1, charcoal: 1 }, 2, 900, 16);
+                if (r.hot.hot_zn) bad.push('900°C 不该出锌 ' + JSON.stringify(r));
+                r = await cook({ ore_sn: 1, coal: 1 }, 3, 1200, 16);
+                if (r.hot.hot_sn !== 1) bad.push('锡矿 + 煤 1200°C 出锡 ' + JSON.stringify(r));
+                r = await cook({ ore_sn: 1, charcoal: 1 }, 2, 1100, 16);
+                if (r.hot.hot_sn) bad.push('1100°C 不该出锡 ' + JSON.stringify(r));
+                r = await cook({ ore_pb: 2, char: 1 }, 3, 800, 16);
+                if (r.hot.hot_pb !== 2 || r.hot.sulfur !== 1) bad.push('方铅矿 2 + 焦炭 800°C 出 2 铅 1 硫 ' + JSON.stringify(r));
+                r = await cook({ ore_ni: 1 }, 4, 1600, 32);
+                if (r.hot.hot_ni) bad.push('镍矿没还原剂不该出 ' + JSON.stringify(r));
+                r = await cook({ ore_ni: 1, coal: 1 }, 4, 1600, 32);
+                if (r.hot.hot_ni !== 1) bad.push('镍矿 + 煤出镍 ' + JSON.stringify(r));
+                // 序号：木炭那条在原位置（铁矿紧跟在铜 + 锌出黄铜后面），煤和焦炭的在最后
+                const ord = await J(`(function(){ let i = IND_RECIPES.findIndex(function (x) { return x.out.hot_fe && x.in.ore_fe; }), j = IND_RECIPES.findIndex(function (x) { return x.out.hot_brass; }); let tail = IND_RECIPES.filter(function (x) { return x.cls === 'smelt' && (x.in.coal || x.in.char) && Object.keys(x.in).some(function (k) { return /^ore_/.test(k); }); }).length; return { i: i, j: j, ch: IND_RECIPES[i].in.charcoal, tail: tail, last: IND_RECIPES.slice(-12).every(function (x) { return x.in.coal || x.in.char; }) }; })()`);
+                if (!(ord.i === ord.j + 1 && ord.ch === 1 && ord.tail === 12)) bad.push('配方位置不对 ' + JSON.stringify(ord));
+                // 老档：炉子正在烧只有矿的（存的序号是铁矿那条）→ 停下，矿还在
+                const fi = await T.eval(`IND_RECIPES.findIndex(function (x) { return x.out.hot_fe && x.in.ore_fe && x.in.charcoal; })`);
+                r = await cook({ ore_fe: 1 }, 4, 1600, 2, { i: fi, t: 20, burn: 0, n: 1 });
+                if (r.cook || r.items.ore_fe !== 1 || r.hot.hot_fe) bad.push('老档里正在烧的矿应该停、不丢 ' + JSON.stringify(r));
+                const use = await J(`[IND_ITEMS.ore_fe.use, IND_ITEMS.ore_zn.use, IND_ITEMS.ore_ni.use, IND_ITEMS.ore_pb.use]`);
+                if (!use.every(function (u) { return /木炭／煤／焦炭/.test(u || ''); })) bad.push('矿的说明没写要木炭／煤／焦炭 ' + JSON.stringify(use));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND61 矿要还原剂：铁矿 + 木炭／煤／焦炭出铁、只有矿不出并提示、锌 950、锡 1200、铅 800、镍、序号不动、老档停下不丢', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND62')) {
+            // IND62 硅（任务 59）：电炉旁（1800°C）沙子 2 + 木炭／煤／焦炭 1 → 烫硅，40 秒；1600°C 不出；沙子多不被玻璃抢；元素表点亮硅、标题"/ 36"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const cook = (items, fire, temp, secs, boost) => J(`(function(){ ind.base.rule = 'hard'; window.__ob = window.__ob || indElecBoost; indElecBoost = ${boost ? 'function () { return true; }' : 'window.__ob'}; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: ${JSON.stringify(items)}, out: {}, fuel: 9000, fire: ${fire}, bellows: true, temp: ${temp}, cook: null, spout: [], spoutTy: 'iron' }]; indAdvance(${secs}); let c = ind.base.cookers[0], h = {}; c.spout.forEach(function (e) { h[e.k] = (h[e.k] || 0) + 1; }); Object.keys(c.out).forEach(function (k) { h[k] = (h[k] || 0) + c.out[k]; }); indElecBoost = window.__ob; return { hot: h, items: c.items, temp: c.temp }; })()`);
+                for (const red of ['charcoal', 'coal', 'char']) {
+                    const r = await cook({ sand: 2, [red]: 1 }, 3, 1800, 41, true);
+                    if (r.hot.hot_si !== 1 || Object.keys(r.items).length) bad.push('电炉旁沙子 2 + ' + red + ' 应该出 1 块硅 ' + JSON.stringify(r));
+                }
+                let r = await cook({ sand: 2, charcoal: 1 }, 3, 1800, 39, true);
+                if (r.hot.hot_si) bad.push('39 秒就出了');
+                r = await cook({ sand: 2, charcoal: 1 }, 4, 1600, 45, false);
+                if (r.hot.hot_si) bad.push('1600°C（鼓风）不该出硅 ' + JSON.stringify(r));
+                r = await cook({ sand: 6, charcoal: 3 }, 3, 1800, 41, true);
+                if (r.hot.hot_si !== 3 || r.hot.glass_plate) bad.push('沙子多的时候先做硅（大窑一次 3 份） ' + JSON.stringify(r));
+                const el = await J(`(function(){ ind.bag = {}; delete ind.base.elems[14]; indBagAdd('ingot_si', 1); indPanelElems(); let t = document.getElementById('ind-panel').innerText; indPanelClose(); return { lit: !!ind.base.elems[14], title: /元素表　\\d+ \\/ 36/.test(t), cool: IND_ITEMS_RAW.hot_si.hot, use: IND_ITEMS.ingot_si.use }; })()`);
+                if (!(el.lit && el.title && el.cool === 'ingot_si' && /太阳能板/.test(el.use) && /芯片/.test(el.use))) bad.push('元素表硅、标题 / 36、凉了是硅锭、说明写用途 ' + JSON.stringify(el));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND62 硅：电炉旁沙子 2 + 木炭／煤／焦炭出硅、1600°C 不出、沙子多不被玻璃抢、元素表硅、标题 / 36', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND63')) {
+            // IND63 硝酸（任务 54）：硝石 2 + 硫酸 + 空瓶 → 硝酸 2 + 硫酸钾；乏燃料棒 + 硝酸 2 出钚，硫酸做不出；元素表点亮氮；硫酸钾撒地长得快 75%（比硝石弱）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const cook = (items, temp, secs) => J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: ${JSON.stringify(items)}, out: {}, fuel: 9000, fire: ${temp >= 120 ? 2 : 0}, temp: ${temp}, cook: null, spout: [] }]; indAdvance(${secs}); let c = ind.base.cookers[0]; return { out: c.out, items: c.items }; })()`);
+                let r = await cook({ saltpeter: 2, b_h2so4: 1, bottle: 1 }, 400, 21);
+                if (!(r.out.b_hno3 === 2 && r.out.k2so4 === 1 && !Object.keys(r.items).length)) bad.push('硝石 2 + 硫酸 + 空瓶应该出硝酸 2 + 硫酸钾 1 ' + JSON.stringify(r));
+                r = await cook({ saltpeter: 12, b_h2so4: 6, bottle: 6 }, 400, 21);
+                if (!(r.out.b_hno3 === 12 && r.out.k2so4 === 6)) bad.push('大窑一次 6 批 ' + JSON.stringify(r));
+                r = await cook({ saltpeter: 2, b_h2so4: 1, bottle: 1 }, 100, 25);
+                if (r.out.b_hno3) bad.push('100°C 熄火（不到 120）不该出 ' + JSON.stringify(r));
+                r = await cook({ rod_spent: 1, b_hno3: 2 }, 400, 41);
+                if (!(r.out.plutonium === 1 && r.out.nuclear_waste === 1 && r.out.bottle === 2)) bad.push('乏燃料棒 + 硝酸 2 出钚 ' + JSON.stringify(r));
+                r = await cook({ rod_spent: 1, b_h2so4: 2 }, 400, 41);
+                if (r.out.plutonium) bad.push('硫酸做不出钚了 ' + JSON.stringify(r));
+                const el = await J(`(function(){ ind.bag = {}; delete ind.base.elems[7]; indBagAdd('b_hno3', 1); return [!!ind.base.elems[7], IND_ITEMS.b_hno3.use, IND_ITEMS.k2so4.use]; })()`);
+                if (!(el[0] && /以后/.test(el[1]) && /芯片/.test(el[1]) && /农田/.test(el[2]))) bad.push('元素表点亮氮、说明写用途 ' + JSON.stringify(el));
+                // 硫酸钾撒地：长得快 75%，比硝石（一倍）弱、比草木灰（50%）强
+                const fz = await J(`(function(){ let c = { k: 'wheat', x: -20, z: 0, g: 0, wet: 1e9, times: 0 }; ind.base.crops = [c]; ind.bag = { k2so4: 1 }; let ok = indFertilize(c, 'k2so4'); let m = indFertMul(c), m2 = indFertMul({ fert: 2 }), m1 = indFertMul({ fert: true }); let b = JSON.parse(JSON.stringify(ind.base)); b = indFixBase(b); return [ok, c.fert, m, m2, m1, ind.bag.k2so4 || 0, b.crops[0].fert]; })()`);
+                if (!(fz[0] && fz[2] === 1.75 && fz[3] === 2 && fz[4] === 1.5 && fz[5] === 0 && fz[6] === 3)) bad.push('硫酸钾 ×1.75、读档不丢 ' + JSON.stringify(fz));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND63 硝酸：硝石 + 硫酸 + 空瓶出硝酸 2 + 硫酸钾、钚改用硝酸、硫酸做不出钚、元素表氮、硫酸钾长得快 75%', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND64')) {
+            // IND64 蒸汽发电机（任务 55）：炉子 + 发电机没水不发电；装一桶生水（还空桶）发电 120 秒后停；没炉子不费水；拿起时没用完的水还回成一桶；老档水箱空、提示装水
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`(function(){ let B = ind.base; B.rule = 'hard'; B.off.stove = true; B.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: {}, out: {}, fuel: 99999, fire: 2, temp: 600, cook: null, spout: [] }]; B.devs = [{ id: 9, ty: 'gen', x: 23.5, z: 10, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 10, ty: 'pump', x: 26, z: 10, bats: 0, u: 0, on: true, ft: 20, st: {} }]; B.wires = [[9, 10]]; B.dseq = 10; ind.furnDirty = true; indSyncFurn(); })(); true;`);
+                let r = await J(`(function(){ indAdvance(1); return { v: indSrcVolt(indDev(9)), pw: indDev(10).pw, info: indDevInfo(indDev(9)) }; })()`);
+                if (r.v !== 0 || r.pw || !/装点水/.test(r.info)) bad.push('没水不该发电、要提示装水 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.bag = { 'water_raw@fe': 1 }; let d = indDev(9); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); indSelect('water_raw@fe'); indAction(); indAdvance(1); return { bag: ind.bag, v: indSrcVolt(d), pw: indDev(10).pw, wt: d.wt, info: indDevInfo(d) }; })()`);
+                if (!(r.bag.bucket_fe === 1 && !r.bag['water_raw@fe'] && r.v === 12 && r.pw && r.wt > 118 && r.wt < 120 && /水箱剩 1(19|20) 秒/.test(r.info))) bad.push('装一桶水发电、还铁桶、面板写剩几秒 ' + JSON.stringify(r));
+                r = await J(`(function(){ indAdvance(100); let d = indDev(9); return { v: indSrcVolt(d), wt: d.wt, fire: ind.base.cookers[0].C ? 0 : ind.base.cookers[0].temp }; })()`);
+                if (!(r.v === 12 && r.wt > 17 && r.wt < 20)) bad.push('100 秒后还在发电 ' + JSON.stringify(r));
+                r = await J(`(function(){ indAdvance(20); let d = indDev(9); return { v: indSrcVolt(d), pw: indDev(10).pw, wt: d.wt, temp: ind.base.cookers[0].temp }; })()`);
+                if (!(r.v === 0 && !r.pw && r.wt === 0)) bad.push('120 秒后停 ' + JSON.stringify(r));
+                if (!(Math.abs(r.temp - 600) < 1)) bad.push('炉子不因为发电降温 ' + r.temp);
+                // 没炉子：有水也不发电、不费水
+                r = await J(`(function(){ let d = indDev(9); d.wt = 120; ind.base.cookers[0].fire = 0; ind.base.cookers[0].temp = 20; indAdvance(10); return { v: indSrcVolt(d), wt: d.wt, info: indDevInfo(d) }; })()`);
+                if (!(r.v === 0 && r.wt === 120 && /炉子/.test(r.info))) bad.push('没炉子不发电不费水 ' + JSON.stringify(r));
+                // 拿起：剩的水还回一桶（铁桶装的还铁桶装的）
+                r = await J(`(function(){ let d = indDev(9); d.wm = 'fe'; ind.bag = {}; ind.base.chests[0].items = {}; indPickDev(d); return { bag: ind.bag, box: ind.base.chests[0].items }; })()`);
+                if (!(r.bag['water_raw@fe'] === 1 || r.box['water_raw@fe'] === 1)) bad.push('拿起时剩的水还回成一桶 ' + JSON.stringify(r));
+                // 老档：水箱空
+                r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.devs = [{ id: 3, ty: 'gen', x: 1, z: 1, bats: 0, u: 0, on: true, ft: 20, st: {} }]; b.wires = []; b = indFixBase(b); return [b.devs[0].wt, IND_ITEMS.dev_gen.name, /要水/.test(IND_ITEMS.dev_gen.use) && /炉子/.test(IND_ITEMS.dev_gen.use)]; })()`);
+                if (!(r[0] === 0 && r[1] === '蒸汽发电机' && r[2])) bad.push('老档水箱空、改名、说明写要水要炉子 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND64 蒸汽发电机：没水不发电、装一桶发 120 秒、还空桶、没炉子不费水、拿起还水、老档空水箱', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND65')) {
+            // IND65 管道第 1 期（任务 57）：水塔装满水，管道接到蒸汽发电机，不用电就取水发电；水池 → 水泵 → 水塔，没电不流、有电流；水泵不通电时水塔 → 发电机照样流；
+            // 段数 = 距离 ÷ 2 向上取整；拿起水塔退段数；炸掉的管道不退；存档整理
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const P = await J(`IND_BASE_ST.pool`);
+                // 水泵在水池边；水塔离水泵 7 米；发电机在炉子旁，离水塔 9 米
+                await T.eval(`(function(){ let B = ind.base; B.rule = 'hard'; B.off.stove = true; B.off.pool = false; B.pipes = []; B.chests[0].items = {};
+                    B.cookers = [{ id: 5, ty: 'kiln', x: ${P.x} - 18, z: ${P.z}, items: {}, out: {}, fuel: 99999, fire: 2, temp: 600, cook: null, spout: [] }];
+                    B.devs = [{ id: 1, ty: 'bank', x: ${P.x} + 3, z: ${P.z} + 4, bats: 8, u: 8 * 180, on: true, ft: 20, st: {} }, { id: 2, ty: 'pump', x: ${P.x} + 3.5, z: ${P.z}, bats: 0, u: 0, on: true, ft: 20, st: {} },
+                              { id: 3, ty: 'tower', x: ${P.x} - 3.5, z: ${P.z} - 6, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 4, ty: 'gen', x: ${P.x} - 15.5, z: ${P.z}, bats: 0, u: 0, on: true, ft: 20, st: {} }];
+                    B.wires = []; B.dseq = 10; ind.furnDirty = true; indSyncFurn(); ind.devDirty = ind.wireDirty = true; })(); true;`);
+                const link = (a, b, n) => J(`(function(){ ind.bag = { pipe: ${n} }; indSelect('pipe'); let r1 = rlDevAct(indDev(${a}), 'pipe'), r2 = rlDevAct(indDev(${b}), 'pipe'); return { r: r1 && r2, left: ind.bag.pipe || 0, pipes: ind.base.pipes.length, fl: __fl.slice(-1)[0] }; })()`);
+                // 水塔 → 发电机：13.4 米，要 7 段；给 4 段接不上
+                let r = await link(3, 4, 4);
+                if (r.r || r.pipes !== 0) bad.push('段数不够不该接上 ' + JSON.stringify(r));
+                r = await link(3, 4, 10);
+                const seg = await J(`Math.ceil(Math.hypot(indDev(3).x - indDev(4).x, indDev(3).z - indDev(4).z) / 2)`);
+                if (!(r.r && r.pipes === 1 && r.left === 10 - seg && seg === 7 && /不要电/.test(r.fl))) bad.push('水塔 → 发电机 段数 = 距离 ÷ 2 向上取整（' + seg + '） ' + JSON.stringify(r));
+                // 不用电：水塔有水，发电机取水发电
+                r = await J(`(function(){ indDev(3).wu = 20; indAdvance(2); let g = indDev(4); return { v: indSrcVolt(g), wt: g.wt, wu: indDev(3).wu }; })()`);
+                if (!(r.v === 12 && r.wt > 110 && r.wu < 20 && r.wu > 18)) bad.push('水塔 → 发电机不用电取水发电 ' + JSON.stringify(r));
+                // 水泵 → 水塔：接上；水泵没电不流
+                r = await link(2, 3, 10);
+                if (!(r.r && r.pipes === 2)) bad.push('水泵 → 水塔接不上 ' + JSON.stringify(r));
+                r = await J(`(function(){ indDev(3).wu = 5; indDev(4).wt = 120; indAdvance(3); return { wu: indDev(3).wu, pw: indDev(2).pw }; })()`);
+                if (!(r.wu <= 5 && !r.pw)) bad.push('水泵没电不该往水塔抽 ' + JSON.stringify(r));
+                // 接上电：每秒 5 桶
+                r = await J(`(function(){ ind.base.wires = [[1, 2]]; indDev(3).wu = 5; indDev(4).wt = 120; ind.base.cookers[0].fire = 0; ind.base.cookers[0].temp = 20; indAdvance(2); return { wu: indDev(3).wu, pw: indDev(2).pw }; })()`);
+                if (!(r.pw && r.wu > 13 && r.wu <= 15.01)) bad.push('水泵通电从水池往水塔抽，每秒 5 桶 ' + JSON.stringify(r));
+                // 水泵不通电，水塔 → 发电机照样流
+                r = await J(`(function(){ ind.base.wires = []; ind.base.cookers[0].fire = 2; ind.base.cookers[0].temp = 600; indDev(4).wt = 0; indDev(3).wu = 3; indAdvance(1); return { wt: indDev(4).wt, wu: indDev(3).wu, pw: indDev(2).pw }; })()`);
+                if (!(!r.pw && r.wt > 100 && r.wu < 2.1)) bad.push('水泵没电时水塔 → 发电机还是流 ' + JSON.stringify(r));
+                // 不合规矩的接法
+                r = await J(`(function(){ ind.base.devs.push({ id: 6, ty: 'tower', x: indDev(3).x + 3, z: indDev(3).z, bats: 0, u: 0, on: true, ft: 20, st: {} }); ind.bag = { pipe: 20 }; rlDevAct(indDev(3), 'pipe'); rlDevAct(indDev(6), 'pipe'); let a = __fl.slice(-1)[0]; rlDevAct(indDev(4), 'pipe'); let b = __fl.slice(-1)[0]; ind.pipePend = null; return { a: a, b: b, n: ind.base.pipes.length, left: ind.bag.pipe }; })()`);
+                if (!(/水泵/.test(r.a) && /水源/.test(r.b) && r.n === 2 && r.left === 20)) bad.push('水塔接水塔、从发电机起头都不行，不花管道 ' + JSON.stringify(r));
+                // 存档整理
+                r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.pipes.push([3, 999, 2], [4, 3, 2], 'x', [3, 4, 99]); b = indFixBase(b); return { p: b.pipes, wu: b.devs.filter(function (d) { return d.ty === 'tower'; })[0].wu }; })()`);
+                if (!(r.p.length === 2 && r.p.every(function (p) { return p.length === 3 && p[2] >= 1 && p[2] <= 20; }))) bad.push('存档整理管道 ' + JSON.stringify(r));
+                // 拿起水塔：相连的管道退段数
+                r = await J(`(function(){ ind.bag = {}; ind.base.chests[0].items = {}; let n = ind.base.pipes.filter(function (p) { return p[0] === 3 || p[1] === 3; }).reduce(function (m, p) { return m + p[2]; }, 0); indPickDev(indDev(3)); return { n: n, back: (ind.bag.pipe || 0) + (ind.base.chests[0].items.pipe || 0), pipes: ind.base.pipes.length, tower: ind.bag.dev_tower || 0 }; })()`);
+                if (!(r.n > 0 && r.back === r.n && r.pipes === 0 && r.tower === 1)) bad.push('拿起水塔退管道段数 ' + JSON.stringify(r));
+                // 爆炸：炸到的管道没了，不退
+                r = await J(`(function(){ let B = ind.base; B.devs.push({ id: 7, ty: 'tower', x: indDev(2).x - 8, z: indDev(2).z - 2, bats: 0, u: 0, on: true, ft: 20, st: {} }); B.pipes = [[2, 7, 4], [7, 4, 6]]; ind.bag = {}; let mid = { x: (indDev(7).x + indDev(4).x) / 2, z: (indDev(7).z + indDev(4).z) / 2 }; indBoom(mid.x, mid.z, 1.5, '测试'); return { pipes: B.pipes, bag: ind.bag.pipe || 0 }; })()`);
+                if (!(r.pipes.length === 1 && r.pipes[0][1] === 7 && !r.bag)) bad.push('炸到的那条管道没了、不退 ' + JSON.stringify(r));
+                const rc = await J(`[IND_CRAFT.find(function (x) { return x.out === 'pipe'; }), IND_CRAFT.find(function (x) { return x.out === 'dev_tower'; }), IND_DEVS.tower.size[1]]`);
+                if (!(rc[0] && rc[0].n === 4 && rc[0].in.steel === 1 && rc[1] && rc[1].in.steel === 8 && rc[1].in.brick === 10 && rc[1].in.wood === 4 && rc[2] >= 5)) bad.push('配方（钢 1 → 4 段、水塔钢 8 砖 10 木 4）、水塔画得高 ' + JSON.stringify(rc));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND65 管道：水塔 → 发电机不要电、水泵没电不抽有电每秒 5 桶、水泵停了水塔照样流、段数按距离、乱接拒绝、存档、拿起退段数、炸了不退', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
@@ -9433,7 +9667,7 @@ async function enterExit(tab, key) {
                 const b8 = JSON.parse(await T.eval(`JSON.stringify(ind.base.stove.out)`));
                 if (b8.bread !== 24 || b8.bucket !== 8) bad.push('黄铜大锅一炉应该 8 份 ' + JSON.stringify(b8));
                 // 冶炼、木炭一次 1 份
-                await stoveSet({ ore_cu: 3 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
+                await stoveSet({ ore_cu: 3, charcoal: 3 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
                 if ((await T.eval(`indOutCount(ind.base.stove, 'hot_cu')`)) !== 1) bad.push('冶炼一炉不该多份 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 await stoveSet({ wood: 8 }, 3, 1200); await T.eval(`indAdvance(31); true;`);
                 if ((await T.eval(`ind.base.stove.out.charcoal || 0`)) !== 1) bad.push('木炭一炉不该多份');

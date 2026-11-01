@@ -142,11 +142,11 @@
             salt: { name: '盐', col: 0xf5f5f5 },
             coal: { name: '煤', col: 0x263238, fuel: 150 },
             oil: { name: '石油', col: 0x212121, fuel: 600, use: '装在桶里，能烧（硬核要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒），也是后面的原料' },   // 桶装液体：key 'oil' = 木桶装的石油，其它材质 oil@jar／@fe／@cu；一桶烧 600（煤 150）
-            ore_cu: { name: '铜矿', col: 0xd84315 },
-            ore_zn: { name: '锌矿', col: 0x90a4ae },
-            ore_fe: { name: '铁矿', col: 0x795548 },
+            ore_cu: { name: '铜矿', col: 0xd84315 , use: '加 1 份木炭／煤／焦炭一起进炉子，1085°C 炼成铜锭' },
+            ore_zn: { name: '锌矿', col: 0x90a4ae , use: '加 1 份木炭／煤／焦炭一起进炉子，950°C 炼成锌锭' },
+            ore_fe: { name: '铁矿', col: 0x795548 , use: '加 1 份木炭／煤／焦炭一起进炉子，1538°C 炼成铁锭' },
             sulfur: { name: '硫', col: 0xfdd835, useLater: '后面的阶段' },
-            ore_sn: { name: '锡矿', col: 0xb0bec5 },
+            ore_sn: { name: '锡矿', col: 0xb0bec5 , use: '加 1 份木炭／煤／焦炭一起进炉子，1200°C 炼成锡锭' },
             ore_u: { name: '铀矿', col: 0x7cb342, useLater: '核和火箭' },
             pick_stone: { name: '石稿', col: 0x757575, tool: 1 },
             charcoal: { name: '木炭', col: 0x37474f, fuel: 120 },
@@ -194,7 +194,7 @@
             tongs: { name: '钳子', col: 0x795548, use: '拿烫锭' },
             pick_bronze: { name: '青铜稿', col: 0xb87333, tool: 2 }, pick_iron: { name: '铁稿', col: 0x616161, tool: 2, bonus: 1 }, pick_steel: { name: '钢稿', col: 0x90a4ae, tool: 3 },
             battery: { name: '电池', col: 0x43a047, use: '装进电池组' }, wire: { name: '铜线', col: 0xff7043, use: '接线' },
-            dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '发电机', col: 0x546e7a, dev: 'gen' },
+            dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '蒸汽发电机', col: 0x546e7a, dev: 'gen', use: '要水、要炉子：放在点着的炉子（中火以上）3 米内，拿一桶生水左键装进水箱，一桶发 12 V 两分钟' },
             dev_el: { name: '电解槽', col: 0x00838f, dev: 'el' },
             ash: { name: '草木灰', col: 0x9e9e9e, use: '当肥料' }, bottle: { name: '玻璃瓶', col: 0xb3e5fc },
             b_h2: { name: '氢气瓶', col: 0xf8bbd0, gas: 'h2', use: '压进钢瓶' }, b_o2: { name: '氧气瓶', col: 0x90caf9, gas: 'o2' }, b_cl2: { name: '氯气瓶', col: 0xc6ff00, gas: 'cl2', use: '压进钢瓶' },
@@ -248,7 +248,7 @@
         // 电：rated 额定电压（超过就炸），minV 低于它不工作，draw 每秒耗电；电源：bank 电池组（节数 × 1.5 V），gen 发电机（灶台中火以上 3 米内 12 V）
         const IND_DEVS = {
             bank: { name: '电池组', col: 0x2e7d32, src: true, size: [1, 0.8, 0.8] },
-            gen: { name: '发电机', col: 0x546e7a, src: true, volt: 12, size: [1.2, 1, 1] },
+            gen: { name: '蒸汽发电机', col: 0x546e7a, src: true, volt: 12, size: [1.2, 1, 1] },
             el: { name: '电解槽', col: 0x00838f, rated: 12, minV: 2, draw: 2, size: [1.2, 0.8, 0.9] },
             lamp: { name: '电灯', col: 0xfff176, rated: 6, minV: 1.5, draw: 0.2, size: [0.5, 1.6, 0.5] },
             pump: { name: '水泵', col: 0x0288d1, rated: 12, minV: 6, draw: 1, size: [0.9, 0.9, 0.9] },
@@ -361,8 +361,10 @@
         function indBabyLeft(a) { return Math.max(0, Math.ceil(a.born + IND_BREED.grow - ind.base.clock)); }
         // 灶台：火候三档；燃料每秒烧掉的量；配方按顺序找第一个原料够的
         const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }, { name: '鼓风', t: 1600, burn: 3, bellows: true }];
-        const IND_FERT = 1.5, IND_FERT_SP = 2;   // 硝石：这一季长成时间减半
-        function indFertMul(c) { return c.fert === 2 ? IND_FERT_SP : c.fert ? IND_FERT : 1; }   // 草木灰肥料：长得快 50%
+        const IND_FERT = 1.5, IND_FERT_SP = 2, IND_FERT_K = 1.75;   // 硫酸钾（任务 54）：比硝石弱、比草木灰强
+        const IND_FERTS = { ash: true, saltpeter: 2, k2so4: 3 };   // 能撒在农田上的东西 → c.fert 的值
+          // 硝石：这一季长成时间减半
+        function indFertMul(c) { return c.fert === 2 ? IND_FERT_SP : c.fert === 3 ? IND_FERT_K : c.fert ? IND_FERT : 1; }   // 草木灰肥料：长得快 50%
         const IND_BATCH = 4, IND_BATCH_POT = 8;   // 灶台做吃的：一炉最多几份（装了黄铜大锅 8 份）
         const IND_STOVE_CAP = 8;
         // 灶台、小熔炉、大窑都是"炉子"：rate 温度每秒变几度，burn 燃料烧得多快（1 = 灶台），batch 一炉每类配方最多几份，only 只做哪类配方，top 大火的温度
@@ -394,10 +396,11 @@
             // 冶炼（只给硬核）：温度用真实熔点；出来的锭是烫的
             { in: { ingot_fe: 1, charcoal: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1550, time: 40, hard: true },
             { in: { ingot_cu: 1, ingot_zn: 1 }, out: { hot_brass: 2 }, cls: 'smelt', minT: 950, time: 20, hard: true },
-            { in: { ore_fe: 1 }, out: { hot_fe: 1 }, cls: 'smelt', minT: 1538, time: 30, hard: true },
-            { in: { ore_cu: 1 }, out: { hot_cu: 1 }, cls: 'smelt', minT: 1085, time: 20, hard: true },
-            { in: { ore_zn: 1 }, out: { hot_zn: 1 }, cls: 'smelt', minT: 420, time: 15, hard: true },
-            { in: { ore_sn: 1 }, out: { hot_sn: 1 }, cls: 'smelt', minT: 232, time: 15, hard: true },
+            // 矿要还原剂（任务 53）：每份矿 + 1 份木炭；煤、焦炭的两条在配方表最后（19-industry-real.js），别挪这里的序号
+            { in: { ore_fe: 1, charcoal: 1 }, out: { hot_fe: 1 }, cls: 'smelt', minT: 1538, time: 30, hard: true },
+            { in: { ore_cu: 1, charcoal: 1 }, out: { hot_cu: 1 }, cls: 'smelt', minT: 1085, time: 20, hard: true },
+            { in: { ore_zn: 1, charcoal: 1 }, out: { hot_zn: 1 }, cls: 'smelt', minT: 950, time: 15, hard: true },   // 锌 907°C 沸腾，950 是折中
+            { in: { ore_sn: 1, charcoal: 1 }, out: { hot_sn: 1 }, cls: 'smelt', minT: 1200, time: 15, hard: true },
             { in: { ingot_cu: 3, ingot_sn: 1 }, out: { hot_bronze: 4 }, cls: 'smelt', minT: 950, time: 30, hard: true },
             // 玻璃：草木灰当助熔剂（钾碱），1000°C（悠闲也能做，腌萝卜要用瓶子）；只有沙子要 1700°C（电炉）
             { in: { sand: 2, ash: 1 }, out: { glass_plate: 1 }, minT: 1000, time: 20, cls: 'bulk' },
@@ -490,7 +493,7 @@
         const IND_V9_GIFT = { shears: 1 };   // 存档版本 9：新号送一把剪刀，老档读档时补一把
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
-                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], houses: [], rad: [], bombs: [], fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
+                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], houses: [], rad: [], bombs: [], fires: [], animals: [], devs: [], wires: [], pipes: [], dseq: 0, elems: {}, sawGoal: false, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
         }
         function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
         // 炉子的状态（灶台和小熔炉、大窑通用）整理一遍
@@ -568,7 +571,7 @@
             b.ground.forEach(function (g) { g.x = indNum(g.x, 0, -IND_BASE.x + 0.5, IND_BASE.x - 0.5); g.z = indNum(g.z, 0, -IND_BASE.z + 0.5, IND_BASE.z - 0.5); });
             if (!Array.isArray(b.crops)) b.crops = [];
             b.crops = b.crops.filter(function (c) { return c && IND_CROPS[c.k] && isFinite(c.x) && isFinite(c.z); });
-            b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); c.fert = c.fert === 2 ? 2 : !!c.fert; });
+            b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); c.fert = c.fert === 2 || c.fert === 3 ? c.fert : !!c.fert; });
             if (typeof b.trips !== 'number') b.trips = 0;
             b.clock = indNum(b.clock, 60, 0, 1e9);
             if (!(typeof b.away === 'number' && isFinite(b.away) && b.away >= 0 && b.away <= b.clock)) b.away = null;   // 出门的时刻（任务 3），老存档没有就当没出门
@@ -609,6 +612,8 @@
             if (b.bellows) b.stove.bellows = true;   // 老档：基地装过风箱，算装在原来的灶台上
             b.bellows = false;
             indFixCook(b.stove, b);
+            rlFixBase(b);   // 管道（任务 57）
+            b.sawGoal = b.sawGoal !== false;   // 开场那句话（任务 60）：只有新档是 false，老档没有这个字段就当弹过了
             b.ver = IND_SAVE_VER;
             return b;
         }
@@ -923,6 +928,7 @@
             ind.onCtx = function (e) { if (ind) e.preventDefault(); };
             document.addEventListener('mousedown', ind.onMouse); document.addEventListener('mouseup', ind.onMouseUp); document.addEventListener('contextmenu', ind.onCtx);
             if (!base.rule) indAskRule();
+            else if (base.sawGoal === false) indGoalShow();
             else if (gState.control !== 'pad') indFlash('左键 采集／拿／种／打开，右键 吃喝／浇水／接水，Q 放下，B 背包，Shift 跑');
             ind.last = performance.now();
             ind.raf = requestAnimationFrame(indLoop);
@@ -940,8 +946,20 @@
             if (ind.base.rule === 'casual' && r !== 'hard') return;
             let from = ind.base.rule; ind.base.rule = r; ckRuleChanged(from, r);
             if (from === null && r === 'hard') indHardStartBox();
+            if (from === null) indGoalShow();
             indSave();
             indFlash(r === 'hard' ? '硬核世界：小心别饿死' : '悠闲世界：慢慢种地吧');
+        }
+        // 开场一句话（任务 60）：新档第一次进基地，屏幕中间一行大字，4 秒淡出，以后再也不弹
+        function indGoalShow() {
+            if (!ind || !ind.base || ind.base.sawGoal !== false) return;
+            ind.base.sawGoal = true; indSave();
+            let o = document.getElementById('ind-goal'); if (o && o.parentNode) o.parentNode.removeChild(o);
+            let g = document.createElement('div'); g.id = 'ind-goal'; g.textContent = '去外太空';
+            g.style.cssText = 'position:fixed;left:0;right:0;top:38%;text-align:center;z-index:45;pointer-events:none;color:#fff;font-size:64px;font-weight:bold;letter-spacing:12px;text-shadow:0 0 12px #000,0 2px 4px #000;opacity:1;transition:opacity 0.8s;';
+            document.body.appendChild(g);
+            setTimeout(function () { g.style.opacity = '0'; }, 3200);
+            setTimeout(function () { if (g.parentNode) g.parentNode.removeChild(g); }, 4000);
         }
         // 新号第一次选硬核：箱子里没动过的起步礼包换成硬核的（老存档、升级成硬核的不动）
         function indHardStartBox() {
@@ -977,7 +995,7 @@
             document.body.onmousedown = null;
             if (R.onMouse) { document.removeEventListener('mouseup', R.onMouseUp); document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); }
             if (document.pointerLockElement) document.exitPointerLock();
-            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead', 'ind-compass', 'ind-rad', 'ind-geiger', 'ind-flash', 'ind-undo'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
+            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead', 'ind-compass', 'ind-rad', 'ind-geiger', 'ind-flash', 'ind-undo', 'ind-goal'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
             indClearWorld();
             if (R.me) scene.remove(R.me);
             scene.background = R.oldBg; scene.fog = R.oldFog;
@@ -993,7 +1011,7 @@
             ind.objs.forEach(function (o) { scene.remove(o); });
             ind.geos.forEach(function (g) { g.dispose(); });
             ind.mats.forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); });
-            ind.badges = {}; ind.furnMesh = {}; ind.furnDirty = true; ind.objs = []; ind.geos = []; ind.mats = []; ind.fertMesh = null; ind.tileMesh = null; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.animalMesh = null; ind.devMesh = null; ind.wireLine = null; ind.booms = []; ind.clouds = []; ind.nodes = []; ind.exits = [];
+            ind.badges = {}; ind.furnMesh = {}; ind.furnDirty = true; ind.objs = []; ind.geos = []; ind.mats = []; ind.fertMesh = null; ind.tileMesh = null; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.animalMesh = null; ind.devMesh = null; ind.wireLine = null; ind.pipeLine = null; ind.booms = []; ind.clouds = []; ind.nodes = []; ind.exits = [];
         }
         function indBox(w, h, d, col, x, y, z) {
             let m = new THREE.Mesh(indGeo(new THREE.BoxGeometry(w, h, d)), indMat(new THREE.MeshLambertMaterial({ color: col })));
@@ -1120,6 +1138,7 @@
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             ind.devMesh = indInst(new THREE.BoxGeometry(1, 1, 1), IND_DEV_CAP); ind.devDirty = true;
             ind.wireLine = new THREE.LineSegments(indGeo(new THREE.BufferGeometry()), indMat(new THREE.LineBasicMaterial({ color: 0xff7043 }))); ind.wireLine.frustumCulled = false; indAdd(ind.wireLine); ind.wireDirty = true;
+            ind.pipeLine = new THREE.LineSegments(indGeo(new THREE.BufferGeometry()), indMat(new THREE.LineBasicMaterial({ color: 0x29b6f6 }))); ind.pipeLine.frustumCulled = false; indAdd(ind.pipeLine);   // 管道（任务 57），跟电线一起重画
             ind.p.x = 0; ind.p.z = fromTrip ? -IND_BASE.z + 4 : 4; ind.p.y = 0; ind.p.vy = 0;
             if (fromTrip) {
                 let got = Object.keys(ind.bag).map(function (k) { return indName(k) + '×' + ind.bag[k]; });
@@ -1741,7 +1760,7 @@
                 if (indAtWater()) { let w = indFilledKey('water_sea', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶海水'); return true; }
                 indFlash('到水池、河里或海边才能接水'); return false;
             }
-            if ((k === 'ash' || k === 'saltpeter') && a && a.kind === 'crop') return indFertilize(a.o, k);
+            if (IND_FERTS[k] && a && a.kind === 'crop') return indFertilize(a.o, k);
             let kc = indContOf(k), kb = kc && kc.base;
             if (kb === 'oil') return ckPourOil(k, a);   // 装了油的桶：硬核对着漏斗倒，悠闲对着炉子倒
             if ((kb === 'water_raw' || kb === 'water_boiled' || kb === 'water_sea') && a && a.kind === 'spout') return indQuenchSpout(a.o, k);
@@ -1820,7 +1839,7 @@
         function indFertilize(c, k) {
             if (c.fert) { indFlash('已经施过肥了'); return false; }
             if (indCropRipe(c)) { indFlash('已经熟了，不用施肥'); return false; }
-            k = k || 'ash'; indBagDel(k, 1); c.fert = k === 'saltpeter' ? 2 : true; ind.cropDirty = true; indSave(); indFlash(k === 'saltpeter' ? '撒了硝石，这一季长得快一倍' : '施了肥，这一季长得快 50%');
+            k = k || 'ash'; indBagDel(k, 1); c.fert = IND_FERTS[k] || true; ind.cropDirty = true; indSave(); indFlash(k === 'k2so4' ? '撒了硫酸钾，这一季长得快 75%' : k === 'saltpeter' ? '撒了硝石，这一季长得快一倍' : '施了肥，这一季长得快 50%');
             return true;
         }
         function indWater(c, k) {
@@ -1885,7 +1904,7 @@
         function indHeatNear(x, z, r) { let t = 0, f = 0; indCooks().forEach(function (c) { if (Math.hypot(x - c.x, z - c.z) <= r + (c.ty === 'kiln' ? 1 : 0)) { t = Math.max(t, c.C.temp); f = Math.max(f, c.C.fire); } }); return { temp: t, fire: f }; }
         function indSrcVolt(d) {
             if (d.ty === 'bank') return d.u > 0 ? indBankV(d) : 0;
-            if (d.ty === 'gen') return indHeatNear(d.x, d.z, IND_GEN_R).fire >= 2 ? IND_DEVS.gen.volt : 0;
+            if (d.ty === 'gen') return rlGenOn(d) ? IND_DEVS.gen.volt : 0;   // 蒸汽发电机（任务 55）：旁边有点着的炉子而且水箱里有水
             if (IND_DEV_VOLT[d.ty]) return IND_DEV_VOLT[d.ty](d);
             return 0;
         }
@@ -1956,6 +1975,7 @@
             });
             B.devs = B.devs.filter(function (d) { if (Math.hypot(d.x - x, d.z - z) <= R) { gone[d.id] = 1; return false; } return true; });
             B.wires = B.wires.filter(function (w) { return !gone[w[0]] && !gone[w[1]]; });
+            rlBoomPipes(x, z, R, gone);   // 炸到的管道没了，不退（任务 57）
             let powder = nkPowderNear(x, z, R);   // 地上的火药碰到爆炸也炸
             B.ground = B.ground.filter(function (g) { return Math.hypot(g.x - x, g.z - z) > R; });
             B.fires = B.fires.filter(function (f) { return Math.hypot(f.x - x, f.z - z) > R; });
@@ -2277,16 +2297,18 @@
             if (d.st) Object.keys(d.st).forEach(function (k) { put(k, d.st[k]); });   // 电解槽里的东西放回仓库箱（放不下进背包，再放不下掉在地上，不会没）
             if (d.rods) d.rods.forEach(function (r) { put(r.spent ? 'rod_spent' : nkRodKey(r), 1); });   // 反应堆里的燃料棒
             if (d.cy) put(d.cy, 1);
+            if (d.ty === 'gen' && d.wt > 0) put(indFilledKey('water_raw', d.wm || 'wood'), 1);   // 蒸汽发电机水箱里没用完的水还回成一桶
             let N = tot.box + tot.bag + tot.ground;
             ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
             let nw = ind.base.wires.length;
             ind.base.wires = ind.base.wires.filter(function (w) { return w[0] !== d.id && w[1] !== d.id; });
             nw -= ind.base.wires.length;
-            if (nw > 0) indBoxAdd('wire', nw);   // 每根线退 1 根铜线（背包 → 仓库箱 → 地上，跟里面的东西一样；同一根线只在收起它的这个设备时退一次，因为收起后线就没了）
+            if (nw > 0) indBoxAdd('wire', nw);
+            let np = rlPickPipes(d);   // 相连的管道退段数（任务 57）   // 每根线退 1 根铜线（背包 → 仓库箱 → 地上，跟里面的东西一样；同一根线只在收起它的这个设备时退一次，因为收起后线就没了）
             if (ind.wirePend === d.id) ind.wirePend = null;
             ind.devDirty = ind.wireDirty = true; indSave();
             let where = [tot.box ? '放进了仓库箱' + (tot.bag || tot.ground ? ' ' + tot.box + ' 个' : '') : '', tot.bag ? '放进了背包' + (tot.box || tot.ground ? ' ' + tot.bag + ' 个' : '') : '', tot.ground ? '掉在了地上' + (tot.box || tot.bag ? ' ' + tot.ground + ' 个' : '') : ''].filter(Boolean);
-            indFlash('收起了' + IND_DEVS[d.ty].name + (nw > 0 ? '，还回了 ' + nw + ' 根铜线' : '') + (N > 0 ? '，里面的 ' + N + ' 个东西' + where.join('、') : ''));
+            indFlash('收起了' + IND_DEVS[d.ty].name + (nw > 0 ? '，还回了 ' + nw + ' 根铜线' : '') + (np > 0 ? '，还回了 ' + np + ' 段管道' : '') + (N > 0 ? '，里面的 ' + N + ' 个东西' + where.join('、') : ''));
             return true;
         }
         // 电池组装电池：先补电再加节。有用完的（电量 < 节数 × 180）就是替换，节数、电压不变；满电了才加一节（上限 64）；
@@ -2341,6 +2363,7 @@
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
         function indDevAct(d) {
             let k = indSel(), D = IND_DEVS[d.ty];
+            { let r = rlDevAct(d, k); if (r !== undefined) return r; }   // 管道、水塔（19-industry-real.js）
             if (k === 'wire') {
                 if (D.nowire) { indFlash(D.name + '不用接线'); return false; }
                 if (!ind.wirePend) { ind.wirePend = d.id; ind.devDirty = true; indFlash('选了' + D.name + '，再点另一个'); return true; }
@@ -2359,6 +2382,7 @@
                 return true;
             }
             if (d.ty === 'xfmr') { if (k !== 'wire') return pwXfmrCycle(d); }
+            if (d.ty === 'gen') return rlGenAct(d, k);
             if (d.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { return indBankPut(d, 1, k) > 0; }
             if (d.ty === 'el') { indPanelEl(d.id); return true; }
             if (d.ty === 'comp') { indPanelComp(d.id); return true; }
@@ -2372,7 +2396,7 @@
             let D = IND_DEVS[d.ty];
             if (IND_DEV_INFO[d.ty]) return IND_DEV_INFO[d.ty](d);
             if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + indBankV(d).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d);
-            if (d.ty === 'gen') return D.name + ' ' + (indSrcVolt(d) > 0 ? '发电中 12 V' : '没在发电');
+            if (d.ty === 'gen') return rlGenInfo(d);
             let ss = indDevSrcs(d);
             let wired = ss.length ? '　接着 ' + ss.length + ' 个电源：' + ss.map(function (s) { let v = indSrcVolt(s); return IND_DEVS[s.ty].name + ' ' + (s.ty === 'bank' ? v.toFixed(1) : String(Math.round(v * 10) / 10)) + ' V'; }).join('、') + '，工作电压 ' + (Math.round(indDevVolt(d) * 10) / 10) + ' V' : '　没接电';
             return D.name + '（额定 ' + D.rated + ' V）' + wired + (d.on ? (d.pw ? '　工作中' : '　没在工作') : '　关着');
@@ -2386,7 +2410,7 @@
                 let d = A[i], D = IND_DEVS[d.ty];
                 IND_DUMMY.position.set(d.x, D.size[1] / 2, d.z); IND_DUMMY.rotation.set(0, 0, 0); IND_DUMMY.scale.set(D.size[0], D.size[1], D.size[2]); IND_DUMMY.updateMatrix();
                 ind.devMesh.setMatrixAt(i, IND_DUMMY.matrix);
-                let c = D.col; if (!D.src && !d.pw && !D.always) c = 0x757575; if (ind.wirePend === d.id) c = 0xe040fb;
+                let c = D.col; if (!D.src && !d.pw && !D.always) c = 0x757575; if (ind.wirePend === d.id || ind.pipePend === d.id) c = 0xe040fb;
                 ind.devMesh.setColorAt(i, IND_COL.setHex(c));
             }
             ind.devMesh.count = n; ind.devMesh.instanceMatrix.needsUpdate = true;
@@ -2397,6 +2421,7 @@
                 W.forEach(function (w) { let a = indDev(w[0]), b = indDev(w[1]); if (!a || !b) return; arr.set([a.x, 0.15, a.z, b.x, 0.15, b.z], k); k += 6; });
                 ind.wireLine.geometry.setAttribute('position', new THREE.BufferAttribute(arr, 3));
                 ind.wireLine.geometry.setDrawRange(0, k / 3);
+                rlSyncPipes();
                 ind.wireDirty = false;
             }
         }
@@ -2618,9 +2643,9 @@
         }
         function indPanelElems() {
             if (!ind) return;
-            let E = ind.base.elems, n = Object.keys(E).length, cells = '';
+            let E = ind.base.elems, N = IND_ELEM_NAME.length - 1, n = Object.keys(E).filter(function (z) { return +z <= N; }).length, cells = '';   // 表里只有 1～36 号
             for (let z = 1; z < IND_ELEM_NAME.length; z++) cells += '<span style="display:inline-block;width:36px;margin:2px;padding:3px 0;text-align:center;border-radius:5px;font-size:12px;' + (E[z] ? 'background:#ffca28;color:#222;font-weight:bold;' : 'background:#eee;color:#bbb;') + '">' + z + '<br>' + IND_ELEM_NAME[z] + '</span>';
-            indPanelShow('elems', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">元素表　' + n + ' / 118</div><div>' + cells + '</div><div style="margin-top:6px;color:#888;font-size:13px;">拿到一种元素的纯东西就点亮一格（比如铁锭、氢气瓶）</div>' +
+            indPanelShow('elems', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">元素表　' + n + ' / ' + N + '</div><div>' + cells + '</div><div style="margin-top:6px;color:#888;font-size:13px;">拿到一种元素的纯东西就点亮一格（比如铁锭、氢气瓶）</div>' +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
 
@@ -2854,7 +2879,7 @@
                 return;
             }
             let r = IND_RECIPES[S.cook.i], n = S.cook.n || 1;
-            { let pool = ckPool(S); if (Object.keys(r.in).some(function (k) { return indHave(pool, k) < r.in[k] * n; })) { S.cook = null; indCookBadge(c); return; } }   // 原料被拿走了
+            { let pool = ckPool(S); if (Object.keys(r.in).some(function (k) { return indHave(pool, k) < r.in[k] * n; })) { S.cook = null; if (rlNeedReducer(S) && !ind.sleeping) indFlash('炼矿要加木炭、煤或焦炭'); indCookBadge(c); return; } }   // 原料被拿走了（老档里只放了矿的：停下提示，东西不丢）
             if (S.temp >= r.minT) S.cook.t += dt;
             if (r.burnT && S.temp > r.burnT) S.cook.burn += dt;
             if (S.cook.t >= r.time || S.cook.burn >= IND_BURN_S) {
@@ -2880,6 +2905,7 @@
             if (ind.where !== 'base' || ind.catching) return;
             let S = c.C, txt = '';
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; txt = indOutTxt(r, S.cook.n || 1) + '　' + Math.min(99, Math.floor(S.cook.t / r.time * 100)) + '%'; }
+            else if (indHard() && rlNeedReducer(S)) txt = '要加木炭／煤／焦炭';
             indBadge('cook' + c.id, c.x, c.ty === 'kiln' ? 3.6 : 3.1, c.z, txt);
             let sp = indSpoutPos(c), t2 = S.spout.length ? indSpoutTxt(c) : (S.cook && S.cook.full ? '出料槽满了' : '');
             indBadge('spout' + c.id, sp.x, 1.5, sp.z, t2);
@@ -3146,6 +3172,7 @@
             let st = '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + '<br>';
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; st += '正在做：' + indOutTxt(r, S.cook.n || 1) + (S.cook.n > 1 ? '（' + S.cook.n + ' 份）' : '') + ' ' + Math.floor(S.cook.t / r.time * 100) + '%'; }
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做' + (D.only ? '（只做冶炼）' : '') + '</span>';
+            if (!S.cook && indHard() && rlNeedReducer(S)) st += '<br><b style="color:#c62828">炼矿要加木炭、煤或焦炭（每份矿 1 份）</b>';
             let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !S.bellows) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
             fire += '<button id="ind-stove-off" style="' + IND_BTN + 'background:#455a64;" onclick="indStoveFire(0)">熄火并降温</button>' + (S.temp > 60 ? '<div style="font-size:13px;color:#888;">降到 60°C 还要约 ' + indFurnCoolSecs(c.ty, S) + ' 秒（收起要 60°C 以下）</div>' : '');
             let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
@@ -3318,7 +3345,7 @@
             else if (a && a.kind === 'funnel') hint = CK_FUNNEL[a.o.C.funnel.ty].name + '　油 ' + Math.round(a.o.C.funnel.oil) + ' / ' + CK.funnelCap + '<br><small>拿装了油的桶右键：倒进去　长按右键：收起（空的才行）</small>';
             else if (a && a.kind === 'spout') hint = ckSpoutDef(a.o.C).name + ' ' + (a.o.C.spout.length ? indSpoutTxt(a.o) : '空') + '<br><small>左键：取出（烫的要钳子）　拿水桶右键：浇凉</small>';
             else if (a && a.kind === 'cook') hint = IND_COOK[a.o.ty].name + ' ' + Math.round(a.o.temp) + '°C' + (a.o.temp > 60 && !a.o.fire ? '　降到 60°C 还要约 ' + indFurnCoolSecs(a.o.ty, a.o) + ' 秒' : '') + '<br><small>左键：打开</small>';
-            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : a.o.ty === 'bank' ? '拿电池左键：装一节　右键：选放几个　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
+            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : sel === 'pipe' ? '左键：接管道（先水源再目的地）　' : a.o.ty === 'bank' ? '拿电池左键：装一节　右键：选放几个　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
             else if (a && a.kind === 'animal') {
                 let o = a.o, D = IND_ANIMALS[o.k];
                 if (R.where === 'trip') hint = (o.follow ? D.name + '（跟着你）' : '野生的' + D.name + (o.fed ? '（还要喂 ' + (D.tame - o.fed) + ' 次）' : '')) + '<br><small>爱吃：' + indFoodTxt(o.k) + '</small>';
