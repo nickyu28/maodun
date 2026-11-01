@@ -412,6 +412,7 @@
         const IND_EL_RECIPES = [
             { name: '电解盐水', in: { salt: 1, water_raw: 1, bottle: 2 }, out: { naoh: 1, b_h2: 1, b_cl2: 1, bucket: 1 }, minV: 3 },
             { name: '电解水', in: { water_raw: 1, bottle: 3 }, out: { b_h2: 2, b_o2: 1, bucket: 1 }, minV: 2 },
+            { name: '电解海水', in: { water_sea: 2, bottle: 2 }, out: { naoh: 1, b_h2: 1, b_cl2: 1, bucket: 2 }, minV: 3, hard: true },   // 贵的那条：2 桶海水 + 2 瓶，不要盐；只硬核
             { name: '电解熔融盐', in: { salt: 2, bottle: 1 }, out: { sodium: 1, b_cl2: 1 }, minV: 4, molten: 801 }
         ];
         const IND_COMP_TIME = 2, IND_PRESS_TIME = 20, IND_PRESS_T = 1200, IND_PRESS_MAXP = 50000, IND_CARBON = ['charcoal', 'coal', 'char'];
@@ -2303,7 +2304,7 @@
         function indElRecipe(d, V) {
             for (let i = 0; i < IND_EL_RECIPES.length; i++) {
                 let r = IND_EL_RECIPES[i];
-                if (V < r.minV) continue;
+                if (V < r.minV || (r.hard && !indHard())) continue;
                 if (!Object.keys(r.in).every(function (k) { return indHave(d.st, k) >= r.in[k]; })) continue;
                 if (r.in.salt && !r.in.water_raw && indHave(d.st, 'water_raw') > 0) continue;   // 有水的时候不算熔融盐
                 if (r.molten && !(indHeatNear(d.x, d.z, IND_GEN_R).temp >= r.molten)) continue;
@@ -2319,7 +2320,11 @@
             d.et = 0;
             let r = IND_EL_RECIPES[i];
             let mats = indConsume(d.st, r, 1);
-            Object.keys(r.out).forEach(function (k) { let key = k; if (k === 'bucket' && mats[0]) key = indEmptyKey(mats[0]); d.st[key] = (d.st[key] || 0) + r.out[k]; });   // 电解槽里不上火：桶原样还回来
+            let bi = 0;
+            Object.keys(r.out).forEach(function (k) {
+                if (k === 'bucket') { for (let j = 0; j < r.out[k]; j++) { let key = mats[bi] ? indEmptyKey(mats[bi]) : k; bi++; d.st[key] = (d.st[key] || 0) + 1; } return; }
+                d.st[k] = (d.st[k] || 0) + r.out[k];
+            });   // 电解槽里不上火：桶原样还回来
             Object.keys(r.out).forEach(function (k) { if (IND_ELEM_OF[k] && !ind.base.elems[IND_ELEM_OF[k]]) { ind.base.elems[IND_ELEM_OF[k]] = 1; indFlash('元素表点亮了：' + IND_ELEM_NAME[IND_ELEM_OF[k]]); } });
             if (ind.panel === 'el') ind.panelDirty = true;
             indSave();
@@ -2342,7 +2347,7 @@
             let st = '电压 <b>' + V.toFixed(1) + ' V</b>（额定 12 V）' + (i >= 0 && d.pw ? '　正在' + IND_EL_RECIPES[i].name + ' ' + Math.floor((d.et || 0) / IND_EL_TIME * 100) + '%' : '');
             let has = Object.keys(d.st).map(function (k) { return indName(k) + '×' + d.st[k]; }).join('、') || '空';
             let put = Object.keys(ind.bag).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indElPut(' + d.id + ',\'' + k + '\')">放 1</button>'); }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
-            let how = IND_EL_RECIPES.map(function (r) { return r.name + '：' + Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + '，' + r.minV + ' V 以上' + (r.molten ? '，灶台 ' + r.molten + '°C 以上 3 米内' : ''); }).join('<br>');
+            let how = IND_EL_RECIPES.filter(function (r) { return !r.hard || indHard(); }).map(function (r) { return r.name + '：' + Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + '，' + r.minV + ' V 以上' + (r.molten ? '，灶台 ' + r.molten + '°C 以上 3 米内' : ''); }).join('<br>');
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">电解槽</div><div style="line-height:1.7;">' + st + '</div><div style="margin-top:4px;">里面：' + has + '</div>' +
                 '<div style="margin-top:6px;color:#888;font-size:13px;line-height:1.6;">' + how + '</div>' +
                 '<div style="margin-top:6px;font-weight:bold;">身上的东西</div>' + put +
@@ -3061,6 +3066,7 @@
                 L.push({ ins: Object.keys(r.in), outs: r.out ? [r.out] : [], name: out, txt: Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + ' → ' + out, where: '工作台' });
             });
             if (indHard()) {   // 压力：不在 IND_RECIPES / IND_CRAFT 里的做法
+                IND_EL_RECIPES.forEach(function (r) { L.push({ ins: Object.keys(r.in), outs: Object.keys(r.out), name: r.name, txt: r.name + '：' + Object.keys(r.in).map(function (k) { return indName(k, true) + ' ×' + r.in[k]; }).join(' + ') + ' → ' + Object.keys(r.out).map(function (k) { return indName(k, true) + ' ×' + r.out[k]; }).join(' + '), where: '电解槽，' + r.minV + ' V 以上' + (r.molten ? '，旁边 3 米内 ' + r.molten + '°C 以上' : '') }); });
                 L.push({ ins: ['b_h2', 'b_o2', 'b_cl2', 'b_co2', 'cyl'], outs: ['cyl'], txt: '气瓶 + 钢瓶 → 装了气的钢瓶（每 ' + IND_COMP_TIME + ' 秒压 1 瓶，最多 ' + IND_CYL_CAP + ' 份，压力 = 份数 × (温度 + 273) ÷ 293）', where: '压缩机，12 V，有活干时每秒 3 U' });
                 L.push({ ins: ['cyl', 'b_co2'], outs: ['dry_ice'], txt: '液态二氧化碳钢瓶（20°C 超过 ' + IND_CYL_LIQ + ' 个大气压）→ 干冰（每 10 份一块）', where: '拿着按 Q' });
                 L.push({ ins: IND_CARBON.concat(['diamond']), outs: ['diamond'], txt: '碳×5（木炭、煤、焦炭）→ 钻石×1', where: '压力机，24 V，旁边 3 米内 ' + IND_PRESS_T + '°C 以上的灶台，通电 ' + IND_PRESS_TIME + ' 秒，有活干时每秒 6 U' });

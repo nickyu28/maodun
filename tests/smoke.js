@@ -8742,6 +8742,36 @@ async function enterExit(tab, key) {
             report('IND41 灶里没拿出来的草木灰也算原料：2 沙 + 出料里的 1 灰烧玻璃板', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND42')) {
+            // IND42 电解海水（任务 21，只硬核）：2 桶海水 + 2 瓶，≥ 3 V，20 秒 → 1 氢氧化钠 + 1 氢气瓶 + 1 氯气瓶 + 2 空桶（桶按放进去的材质还）；1 桶海水不开始；悠闲没有；配方手册里有
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (st, rule, v) => J(`(function(){ ind.base.rule = '${rule}'; let d = { id: 77, ty: 'el', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: ${JSON.stringify(st)}, pw: true, v: ${v} }; ind.base.devs = [d]; indElTick(d, IND_EL_TIME + 1); return { st: d.st, i: indElRecipe(d, ${v}) }; })()`);
+                let r = await run({ 'water_sea': 2, bottle: 2 }, 'hard', 12);
+                if (!(r.st.naoh === 1 && r.st.b_h2 === 1 && r.st.b_cl2 === 1 && r.st.bucket === 2 && !r.st.water_sea && !r.st.bottle)) bad.push('2 桶海水 + 2 瓶电解后该得 1 氢氧化钠 1 氢气 1 氯气 2 空桶 ' + JSON.stringify(r.st));
+                r = await run({ water_sea: 1, bottle: 2 }, 'hard', 12);
+                if (r.i >= 0 || r.st.naoh) bad.push('只有 1 桶海水不该开始 ' + JSON.stringify(r));
+                r = await run({ water_sea: 2, bottle: 2 }, 'hard', 2.9);
+                if (r.i >= 0 || r.st.naoh) bad.push('电压不够 3 V 不该开始 ' + JSON.stringify(r));
+                r = await run({ water_sea: 2, bottle: 2 }, 'casual', 12);
+                if (r.i >= 0 || r.st.naoh) bad.push('悠闲没有电解海水 ' + JSON.stringify(r));
+                const fe = await J(`(function(){ ind.base.rule = 'hard'; let k = indFilledKey('water_sea', 'fe'), d = { id: 77, ty: 'el', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, pw: true, v: 12 }; d.st[k] = 2; d.st.bottle = 2; ind.base.devs = [d]; indElTick(d, IND_EL_TIME + 1); return d.st; })()`);
+                if (!(fe[await T.eval(`indEmptyKey('fe')`)] === 2)) bad.push('铁桶进去铁桶出来 ' + JSON.stringify(fe));
+                // 配方手册里有
+                await T.eval(`ind.base.rule = 'hard'; indPanelBook('电解海水'); true;`);
+                if (!(await T.eval(`/电解海水/.test(document.getElementById('ind-panel').innerText)`))) bad.push('配方手册搜不到电解海水');
+                await T.eval(`indPanelClose(); ind.base.rule = 'casual'; indPanelBook('电解海水'); true;`);
+                if (await T.eval(`/电解海水/.test(document.getElementById('ind-panel').innerText.slice(40))`)) bad.push('悠闲手册不该有电解海水');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND42 电解海水：2 桶海水 + 2 瓶 → 氢氧化钠 + 氢气 + 氯气 + 2 空桶（只硬核，桶原样还）', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
