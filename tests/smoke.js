@@ -9679,6 +9679,35 @@ async function enterExit(tab, key) {
             report('IND67 肉皮骨：宰成年羊（按住 1 秒 + 确认）得 2 肉 1 皮、幼崽怀着狗猫宰不了、野鹿 3 下、烤肉肉汤、狗吃生肉、骨粉、生肉肚子疼', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND68')) {
+            // IND68 塑料和人造革（任务 42）：窑里石油桶 + 氯气瓶出 4 塑料、还空桶空瓶；天然气 + 氯气出 6；塑料 2 + 毛线 2 出 2 人造革；用皮的配方都有人造革备选；塑料出 6 段管道
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const cook = (items) => J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: ${JSON.stringify(items)}, out: {}, fuel: 9000, fire: 2, temp: 400, cook: null, spout: [] }]; indAdvance(31); return ind.base.cookers[0].out; })()`);
+                let o = await cook({ 'oil@fe': 1, b_cl2: 1 });
+                if (!(o.plastic === 4 && o.bucket_fe === 1 && o.bottle === 1)) bad.push('石油桶 + 氯气瓶 → 4 塑料 + 空桶 + 空瓶 ' + JSON.stringify(o));
+                o = await cook({ oil: 6, b_cl2: 6 });
+                if (!(o.plastic === 24 && o.bucket === 6)) bad.push('大窑一次 6 批 ' + JSON.stringify(o));
+                o = await cook({ gas_ng: 1, b_cl2: 1 });
+                if (!(o.plastic === 6 && o.cyl === 1 && o.bottle === 1)) bad.push('天然气 + 氯气 → 6 塑料 ' + JSON.stringify(o));
+                const cr = await J(`(function(){ ind.bag = { plastic: 3, yarn: 2 }; indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pleather'; })); let a = JSON.parse(JSON.stringify(ind.bag)); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pipe' && r.in.plastic; })); return [a, ind.bag]; })()`);
+                if (!(cr[0].pleather === 2 && cr[0].plastic === 1 && !cr[0].yarn && cr[1].pipe === 6 && !cr[1].plastic)) bad.push('人造革、塑料管 ' + JSON.stringify(cr));
+                // 用皮的配方都有一条人造革的（数量一样）；拿一个假的用皮配方试 fmPleatherAlts
+                const alt = await J(`(function(){ let miss = IND_CRAFT.filter(function (r) { return r.in.hide; }).filter(function (r) { return !IND_CRAFT.some(function (q) { return q.out === r.out && q.in.pleather === r.in.hide && Object.keys(r.in).every(function (k) { return k === 'hide' || q.in[k] === r.in[k]; }); }); }).map(function (r) { return r.out; }); IND_CRAFT.push({ out: 'rope', in: { hide: 3, wood: 1 }, hard: true }); fmPleatherAlts(); let q = IND_CRAFT.filter(function (r) { return r.out === 'rope' && r.in.pleather === 3 && r.in.wood === 1; }).length; IND_CRAFT.splice(IND_CRAFT.length - 2, 2); return { miss: miss, q: q }; })()`);
+                if (!(alt.miss.length === 0 && alt.q === 1)) bad.push('用皮的配方要有人造革备选 ' + JSON.stringify(alt));
+                const use = await J(`IND_ITEMS.plastic.use`);
+                if (!(/人造革/.test(use) && /轮胎/.test(use))) bad.push('塑料说明写用途 ' + use);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND68 塑料和人造革：石油 + 氯气出 4 塑料还桶瓶、天然气出 6、塑料 + 毛线出人造革、用皮配方有人造革备选、塑料出 6 段管道', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

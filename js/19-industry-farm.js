@@ -91,3 +91,28 @@
             indFlash(IND_ANIMALS[a.k].name + '没了，掉了 ' + fmDropTxt(a.k));
             return true;
         }
+
+        // ══ 任务 42：塑料和人造革 ══
+        // 塑料：大窑化学批次，石油桶 1 + 氯气瓶 1 → 塑料 4（还空桶、空瓶）；天然气 1 + 氯气瓶 1 → 塑料 6（还空钢瓶、空瓶）。150°C、30 秒
+        // 人造革：工作台 塑料 2 + 毛线 2 → 2（布上涂一层塑料）。凡是用"皮"的工作台配方，都自动多一条用人造革的（数量一样）
+        Object.assign(IND_ITEMS_RAW, {
+            plastic: { name: '塑料', col: 0xe0f7fa, use: '做人造革、管道（1 个出 6 段）；以后做自行车和车的轮胎' },
+            pleather: { name: '人造革', col: 0x6d4c41, use: '能代替皮：用皮的配方都能用它做' }
+        });
+        IND_ITEMS_RAW.pipe.name = '管道';
+        IND_RECIPES.push(
+            { in: { oil: 1, b_cl2: 1 }, out: { plastic: 4, bucket: 1, bottle: 1 }, cls: 'chem', pri: true, minT: 150, time: 30, hard: true },
+            { in: { gas_ng: 1, b_cl2: 1 }, out: { plastic: 6, cyl: 1, bottle: 1 }, cls: 'chem', pri: true, minT: 150, time: 30, hard: true }
+        );
+        IND_CRAFT.push({ out: 'pleather', n: 2, in: { plastic: 2, yarn: 2 }, hard: true }, { out: 'pipe', n: 6, in: { plastic: 1 }, hard: true });
+        // 用皮的配方各加一条人造革的备选（放在文件最后统一加，以后新加的用皮配方也写在这句前面）
+        function fmPleatherAlts() {
+            IND_CRAFT.slice().forEach(function (r) {
+                if (!r.in.hide || r.leather) return;
+                let alt = Object.assign({}, r, { in: {}, leather: true }); Object.keys(r.in).forEach(function (k) { alt.in[k === 'hide' ? 'pleather' : k] = r.in[k]; });
+                IND_CRAFT.splice(IND_CRAFT.indexOf(r) + 1, 0, alt);
+            });
+        }
+
+        // ↓↓ 这一行要留在文件最后（任务 42）：给所有用皮的配方加人造革备选
+        fmPleatherAlts();
