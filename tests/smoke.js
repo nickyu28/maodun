@@ -8772,6 +8772,28 @@ async function enterExit(tab, key) {
             report('IND42 电解海水：2 桶海水 + 2 瓶 → 氢氧化钠 + 氢气 + 氯气 + 2 空桶（只硬核，桶原样还）', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND43')) {
+            // IND43 设备上限 200、过压炸了说清谁炸的（任务 22）：造 60 个设备能放下、存档整理后还是 60 个；离心机接 17 节电池组（25.5 V，额定 24 V）炸时提示里有设备名、25.5、24 和电源
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const cap = await J(`(function(){ ind.base.devs = []; ind.base.wires = []; ind.bag = {}; let n = 0; for (let i = 0; i < 60; i++) { ind.base.devs.push({ id: 100 + i, ty: 'lamp', x: -25 + (i % 10) * 2, z: -8 + Math.floor(i / 10) * 2, bats: 0, u: 0, on: true, ft: 20, st: {} }); }
+                    indBagAdd('dev_lamp', 1); indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_lamp'); indUse();
+                    let b = indFixBase(JSON.parse(JSON.stringify(ind.base))); return { cap: IND_DEV_CAP, n: ind.base.devs.length, saved: b.devs.length }; })()`);
+                if (cap.cap !== 200 || cap.n !== 61 || cap.saved !== 61) bad.push('60 个设备外再放 1 个、存档整理后不丢 ' + JSON.stringify(cap));
+                const boom = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.base.chests = [{ id: 1, x: 12, z: 12, big: true, items: {} }];
+                    ind.base.devs = [{ id: 1, ty: 'bank', x: 30, z: 20, bats: 17, u: 3060, on: true, ft: 20, st: {} }, { id: 2, ty: 'centrifuge', x: 32, z: 20, bats: 0, u: 0, on: true, ft: 20, st: {} }]; ind.base.wires = [[1, 2]];
+                    try { indElecTick(0.1); } finally { blazeFlash = bf; } return { fl: fl.join('|'), left: ind.base.devs.map(function (d) { return d.id; }) }; })()`);
+                if (!(/离心机/.test(boom.fl) && /25\.5/.test(boom.fl) && /24/.test(boom.fl) && /电池组 17 节/.test(boom.fl) && boom.left.indexOf(2) < 0)) bad.push('过压提示要有设备名、25.5、24 和电源 ' + JSON.stringify(boom));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND43 设备上限 200（60 个放得下、存档不丢）、过压炸了说清是谁（名字、电压、额定、电源）', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

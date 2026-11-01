@@ -259,7 +259,7 @@
         // 新设备（第 6 阶段）在 19-industry-nuke.js 里登记：busy（有活干才耗电）、tick、html（面板）、fix（读档整理）、volt（电源的电压）
         const IND_DEV_BUSY = {}, IND_DEV_TICK = {}, IND_DEV_HTML = {}, IND_DEV_FIX = {}, IND_DEV_VOLT = {}, IND_DEV_INFO = {};
         const IND_WIRE_MAX = 4;   // 一个用电器最多接几个电源（任务 16）
-        const IND_BAT_V = 1.5, IND_BAT_U = 180, IND_BOOM_R = 3, IND_DEV_CAP = 40, IND_GEN_R = 3, IND_FURNACE_T = 1800;
+        const IND_BAT_V = 1.5, IND_BAT_U = 180, IND_BOOM_R = 3, IND_DEV_CAP = 200, IND_GEN_R = 3, IND_FURNACE_T = 1800;
         // 名字；装了东西的桶写上材质："生水（木桶）"。plain = true 不写材质（配方里用）
         function indName(k, plain) {
             let d = IND_ITEMS[k]; if (!d) return k;
@@ -1882,7 +1882,7 @@
                 let d = indDev(w[1]); if (!d || seen[d.id]) return; seen[d.id] = 1;
                 let D = IND_DEVS[d.ty], live = indDevSrcs(d).filter(function (s) { return indSrcVolt(s) > 0; });
                 let V = live.reduce(function (m, s) { return Math.max(m, indSrcVolt(s)); }, 0);
-                if (V > D.rated + 1e-6) { booms.push(d); return; }
+                if (V > D.rated + 1e-6) { booms.push({ d: d, V: V, live: live }); return; }
                 d.v = V;
                 if (!live.length || !d.on || V < D.minV) return;
                 if (d.ty === 'el' && indElRecipe(d, V) < 0) return;   // 电解槽没活干不耗电
@@ -1893,7 +1893,13 @@
                 if (banks.length === live.length) banks.forEach(function (s) { s.u = Math.max(0, s.u - D.draw * dt / banks.length); });
                 d.pw = true;
             });
-            booms.forEach(function (d) { if (ind && !ind.over && ind.where === 'base' && indDev(d.id)) indBoom(d.x, d.z, 0, '电压太高，设备炸了'); });
+            booms.forEach(function (b) {
+                let d = b.d; if (!(ind && !ind.over && ind.where === 'base' && indDev(d.id))) return;
+                // 说清楚是谁炸的：设备名、电压、额定，以及电压最高的电源
+                let srcs = b.live.slice().sort(function (p, q) { return indSrcVolt(q) - indSrcVolt(p); }).map(function (s) { return IND_DEVS[s.ty].name + (s.ty === 'bank' ? ' ' + s.bats + ' 节' : '') + ' ' + indSrcVolt(s).toFixed(1) + ' V'; });
+                let msg = IND_DEVS[d.ty].name + ' ' + b.V.toFixed(1) + ' V，额定 ' + IND_DEVS[d.ty].rated + ' V，炸了' + (srcs.length ? '（电源：' + srcs.slice(0, 4).join('、') + (srcs.length > 4 ? ' 等' : '') + '）' : '');
+                indBoom(d.x, d.z, 0, msg); if (ind && !ind.over) indFlash(msg);
+            });
             if (!ind || ind.over || ind.where !== 'base') return;
             B.devs.forEach(function (d) { if (d.ty === 'el') indElTick(d, dt); else if (d.ty === 'comp') indCompTick(d, dt); else if (d.ty === 'press') indPressTick(d, dt); else if (IND_DEV_TICK[d.ty]) IND_DEV_TICK[d.ty](d, dt); });
             if (!ind || ind.over || ind.where !== 'base') return;
