@@ -361,8 +361,10 @@
         function indBabyLeft(a) { return Math.max(0, Math.ceil(a.born + IND_BREED.grow - ind.base.clock)); }
         // 灶台：火候三档；燃料每秒烧掉的量；配方按顺序找第一个原料够的
         const IND_FIRE = [{ name: '关', t: 20, burn: 0 }, { name: '小火', t: 200, burn: 0.5 }, { name: '中火', t: 600, burn: 1 }, { name: '大火', t: 1200, burn: 2 }, { name: '鼓风', t: 1600, burn: 3, bellows: true }];
-        const IND_FERT = 1.5, IND_FERT_SP = 2;   // 硝石：这一季长成时间减半
-        function indFertMul(c) { return c.fert === 2 ? IND_FERT_SP : c.fert ? IND_FERT : 1; }   // 草木灰肥料：长得快 50%
+        const IND_FERT = 1.5, IND_FERT_SP = 2, IND_FERT_K = 1.75;   // 硫酸钾（任务 54）：比硝石弱、比草木灰强
+        const IND_FERTS = { ash: true, saltpeter: 2, k2so4: 3 };   // 能撒在农田上的东西 → c.fert 的值
+          // 硝石：这一季长成时间减半
+        function indFertMul(c) { return c.fert === 2 ? IND_FERT_SP : c.fert === 3 ? IND_FERT_K : c.fert ? IND_FERT : 1; }   // 草木灰肥料：长得快 50%
         const IND_BATCH = 4, IND_BATCH_POT = 8;   // 灶台做吃的：一炉最多几份（装了黄铜大锅 8 份）
         const IND_STOVE_CAP = 8;
         // 灶台、小熔炉、大窑都是"炉子"：rate 温度每秒变几度，burn 燃料烧得多快（1 = 灶台），batch 一炉每类配方最多几份，only 只做哪类配方，top 大火的温度
@@ -569,7 +571,7 @@
             b.ground.forEach(function (g) { g.x = indNum(g.x, 0, -IND_BASE.x + 0.5, IND_BASE.x - 0.5); g.z = indNum(g.z, 0, -IND_BASE.z + 0.5, IND_BASE.z - 0.5); });
             if (!Array.isArray(b.crops)) b.crops = [];
             b.crops = b.crops.filter(function (c) { return c && IND_CROPS[c.k] && isFinite(c.x) && isFinite(c.z); });
-            b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); c.fert = c.fert === 2 ? 2 : !!c.fert; });
+            b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); c.fert = c.fert === 2 || c.fert === 3 ? c.fert : !!c.fert; });
             if (typeof b.trips !== 'number') b.trips = 0;
             b.clock = indNum(b.clock, 60, 0, 1e9);
             if (!(typeof b.away === 'number' && isFinite(b.away) && b.away >= 0 && b.away <= b.clock)) b.away = null;   // 出门的时刻（任务 3），老存档没有就当没出门
@@ -1756,7 +1758,7 @@
                 if (indAtWater()) { let w = indFilledKey('water_sea', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶海水'); return true; }
                 indFlash('到水池、河里或海边才能接水'); return false;
             }
-            if ((k === 'ash' || k === 'saltpeter') && a && a.kind === 'crop') return indFertilize(a.o, k);
+            if (IND_FERTS[k] && a && a.kind === 'crop') return indFertilize(a.o, k);
             let kc = indContOf(k), kb = kc && kc.base;
             if (kb === 'oil') return ckPourOil(k, a);   // 装了油的桶：硬核对着漏斗倒，悠闲对着炉子倒
             if ((kb === 'water_raw' || kb === 'water_boiled' || kb === 'water_sea') && a && a.kind === 'spout') return indQuenchSpout(a.o, k);
@@ -1835,7 +1837,7 @@
         function indFertilize(c, k) {
             if (c.fert) { indFlash('已经施过肥了'); return false; }
             if (indCropRipe(c)) { indFlash('已经熟了，不用施肥'); return false; }
-            k = k || 'ash'; indBagDel(k, 1); c.fert = k === 'saltpeter' ? 2 : true; ind.cropDirty = true; indSave(); indFlash(k === 'saltpeter' ? '撒了硝石，这一季长得快一倍' : '施了肥，这一季长得快 50%');
+            k = k || 'ash'; indBagDel(k, 1); c.fert = IND_FERTS[k] || true; ind.cropDirty = true; indSave(); indFlash(k === 'k2so4' ? '撒了硫酸钾，这一季长得快 75%' : k === 'saltpeter' ? '撒了硝石，这一季长得快一倍' : '施了肥，这一季长得快 50%');
             return true;
         }
         function indWater(c, k) {

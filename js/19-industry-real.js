@@ -30,3 +30,11 @@
             let inp = { sand: 2 }; inp[c] = 1;
             IND_RECIPES.push({ in: inp, out: { hot_si: 1 }, cls: 'smelt', minT: 1700, time: 40, hard: true, pri: true });
         });
+
+        // 任务 54：硝酸。大窑化学批次：硝石 2 + 硫酸 1 + 空瓶 1 → 硝酸 2 + 硫酸钾 1（120°C、20 秒）。钚改用硝酸提取（PUREX，在 19-industry-nuke.js 原位置改的）
+        Object.assign(IND_ITEMS_RAW, {
+            b_hno3: { name: '硝酸瓶', col: 0xffcc80, corrosive: true, use: '后处理乏燃料出钚（乏燃料棒 + 2 瓶）；以后做芯片蚀刻也要用' },
+            k2so4: { name: '硫酸钾', col: 0xf5f5f5, use: '右键撒在有作物的农田上，这一季长得快 75%（比硝石弱）' }
+        });
+        IND_ELEM_OF.b_hno3 = 7;
+        IND_RECIPES.push({ in: { saltpeter: 2, b_h2so4: 1, bottle: 1 }, out: { b_hno3: 2, k2so4: 1 }, cls: 'chem', pri: true, minT: 120, time: 20, hard: true });

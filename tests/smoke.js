@@ -7414,8 +7414,8 @@ async function enterExit(tab, key) {
                 if (c.out['pellet:4'] !== 1 || c.out.bottle !== 2) bad.push('丰度 3.5% 的罐 + 2 氢气应该出芯块 ' + JSON.stringify(c));
                 c = await cook({ 'uf6:5': 1, b_h2: 2 }, 21);
                 if (c.out['pellet:5'] !== 1) bad.push('丰度 5% 的罐也能做芯块 ' + JSON.stringify(c));
-                c = await cook({ rod_spent: 1, b_h2so4: 2 }, 41, 400);
-                if (c.out.plutonium !== 1 || c.out.nuclear_waste !== 1 || c.out.bottle !== 2) bad.push('乏燃料棒 + 2 硫酸应该出钚 + 核废料 + 2 空瓶 ' + JSON.stringify(c));
+                c = await cook({ rod_spent: 1, b_hno3: 2 }, 41, 400);
+                if (c.out.plutonium !== 1 || c.out.nuclear_waste !== 1 || c.out.bottle !== 2) bad.push('乏燃料棒 + 2 硝酸应该出钚 + 核废料 + 2 空瓶 ' + JSON.stringify(c));
                 await T.eval(`indStoveTakeAll(); indPanelClose(); true;`);
                 if (!(await T.eval(`!!ind.base.elems[94]`))) bad.push('钚要点亮元素表');
                 // 工作台：燃料棒 2 芯块 + 2 钢锭
@@ -9443,6 +9443,37 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND62 硅：电炉旁沙子 2 + 木炭／煤／焦炭出硅、1600°C 不出、沙子多不被玻璃抢、元素表硅、标题 / 36', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND63')) {
+            // IND63 硝酸（任务 54）：硝石 2 + 硫酸 + 空瓶 → 硝酸 2 + 硫酸钾；乏燃料棒 + 硝酸 2 出钚，硫酸做不出；元素表点亮氮；硫酸钾撒地长得快 75%（比硝石弱）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const cook = (items, temp, secs) => J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: ${JSON.stringify(items)}, out: {}, fuel: 9000, fire: ${temp >= 120 ? 2 : 0}, temp: ${temp}, cook: null, spout: [] }]; indAdvance(${secs}); let c = ind.base.cookers[0]; return { out: c.out, items: c.items }; })()`);
+                let r = await cook({ saltpeter: 2, b_h2so4: 1, bottle: 1 }, 400, 21);
+                if (!(r.out.b_hno3 === 2 && r.out.k2so4 === 1 && !Object.keys(r.items).length)) bad.push('硝石 2 + 硫酸 + 空瓶应该出硝酸 2 + 硫酸钾 1 ' + JSON.stringify(r));
+                r = await cook({ saltpeter: 12, b_h2so4: 6, bottle: 6 }, 400, 21);
+                if (!(r.out.b_hno3 === 12 && r.out.k2so4 === 6)) bad.push('大窑一次 6 批 ' + JSON.stringify(r));
+                r = await cook({ saltpeter: 2, b_h2so4: 1, bottle: 1 }, 100, 25);
+                if (r.out.b_hno3) bad.push('100°C 熄火（不到 120）不该出 ' + JSON.stringify(r));
+                r = await cook({ rod_spent: 1, b_hno3: 2 }, 400, 41);
+                if (!(r.out.plutonium === 1 && r.out.nuclear_waste === 1 && r.out.bottle === 2)) bad.push('乏燃料棒 + 硝酸 2 出钚 ' + JSON.stringify(r));
+                r = await cook({ rod_spent: 1, b_h2so4: 2 }, 400, 41);
+                if (r.out.plutonium) bad.push('硫酸做不出钚了 ' + JSON.stringify(r));
+                const el = await J(`(function(){ ind.bag = {}; delete ind.base.elems[7]; indBagAdd('b_hno3', 1); return [!!ind.base.elems[7], IND_ITEMS.b_hno3.use, IND_ITEMS.k2so4.use]; })()`);
+                if (!(el[0] && /以后/.test(el[1]) && /芯片/.test(el[1]) && /农田/.test(el[2]))) bad.push('元素表点亮氮、说明写用途 ' + JSON.stringify(el));
+                // 硫酸钾撒地：长得快 75%，比硝石（一倍）弱、比草木灰（50%）强
+                const fz = await J(`(function(){ let c = { k: 'wheat', x: -20, z: 0, g: 0, wet: 1e9, times: 0 }; ind.base.crops = [c]; ind.bag = { k2so4: 1 }; let ok = indFertilize(c, 'k2so4'); let m = indFertMul(c), m2 = indFertMul({ fert: 2 }), m1 = indFertMul({ fert: true }); let b = JSON.parse(JSON.stringify(ind.base)); b = indFixBase(b); return [ok, c.fert, m, m2, m1, ind.bag.k2so4 || 0, b.crops[0].fert]; })()`);
+                if (!(fz[0] && fz[2] === 1.75 && fz[3] === 2 && fz[4] === 1.5 && fz[5] === 0 && fz[6] === 3)) bad.push('硫酸钾 ×1.75、读档不丢 ' + JSON.stringify(fz));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND63 硝酸：硝石 + 硫酸 + 空瓶出硝酸 2 + 硫酸钾、钚改用硝酸、硫酸做不出钚、元素表氮、硫酸钾长得快 75%', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

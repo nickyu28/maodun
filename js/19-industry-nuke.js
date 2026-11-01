@@ -59,7 +59,7 @@
             { in: { yellowcake: 1, b_hf: 3 }, out: { 'uf6:0': 1, bottle: 3 }, cls: 'chem', pri: true, minT: 400, time: 30, hard: true },
             { in: { 'uf6:4': 1, b_h2: 2 }, out: { 'pellet:4': 1, bottle: 2 }, cls: 'chem', pri: true, minT: 600, time: 20, hard: true },
             { in: { 'uf6:5': 1, b_h2: 2 }, out: { 'pellet:5': 1, bottle: 2 }, cls: 'chem', pri: true, minT: 600, time: 20, hard: true },
-            { in: { rod_spent: 1, b_h2so4: 2 }, out: { plutonium: 1, nuclear_waste: 1, bottle: 2 }, cls: 'chem', pri: true, minT: 300, time: 40, hard: true }
+            { in: { rod_spent: 1, b_hno3: 2 }, out: { plutonium: 1, nuclear_waste: 1, bottle: 2 }, cls: 'chem', pri: true, minT: 300, time: 40, hard: true }   // 任务 54：硝酸提取（PUREX），原来是硫酸
         );
         // ── 配方（工作台；硬核） ──
         IND_CRAFT.push(
