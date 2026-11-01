@@ -17,3 +17,16 @@
             let p = ckPool(S);
             return Object.keys(p).some(function (k) { return /^ore_(fe|cu|zn|sn|pb|ni)$/.test(k) && p[k] > 0; }) && !RL_REDUCERS.some(function (k) { return p[k] > 0; });
         }
+
+        // 任务 59：硅。电炉（3 米内的炉子顶到 1800°C）里沙子 2 + 木炭／煤／焦炭 1 → 烫硅，凉了是硅锭。现实：二氧化硅被碳还原
+        // pri：沙子多的时候不被"3 沙 → 玻璃板（1700°C）"抢走
+        Object.assign(IND_ITEMS_RAW, {
+            hot_si: { name: '硅（烫）', col: 0xff7043, hot: 'ingot_si', needTool: 'tongs' },
+            ingot_si: { name: '硅', col: 0x607d8b, useLater: '太阳能板、芯片', use: '以后做太阳能板的电池片、芯片的基片要用' }
+        });
+        IND_ELEM_OF.ingot_si = 14;
+        CK_MELT.hot_si = 1414;
+        RL_REDUCERS.forEach(function (c) {
+            let inp = { sand: 2 }; inp[c] = 1;
+            IND_RECIPES.push({ in: inp, out: { hot_si: 1 }, cls: 'smelt', minT: 1700, time: 40, hard: true, pri: true });
+        });

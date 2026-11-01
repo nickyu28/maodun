@@ -6005,7 +6005,7 @@ async function enterExit(tab, key) {
                 if (!(hp < 85 && hp > 83)) bad.push('氯气没按每秒 8 扣血 ' + hp);
                 // 元素表
                 await T.eval(`indPanelElems(); true;`);
-                if (!(await T.eval(`/元素表　\\d+ \\/ 118/.test(document.getElementById('ind-panel').innerText) && Object.keys(ind.base.elems).length >= 4`))) bad.push('元素表不对 ' + await T.eval(`JSON.stringify(ind.base.elems)`));
+                if (!(await T.eval(`/元素表　\\d+ \\/ 36/.test(document.getElementById('ind-panel').innerText) && Object.keys(ind.base.elems).length >= 4`))) bad.push('元素表不对 ' + await T.eval(`JSON.stringify(ind.base.elems)`));
                 await T.eval(`indPanelClose(); indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
                 const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ e: Object.keys(b.elems).length, ver: b.ver, el: (b.devs.filter(function (d) { return d.ty === 'el'; })[0] || {}).st })); }); })`));
                 if (sv.e < 4 || sv.ver < 7 || sv.el) bad.push('存档读回来不对 ' + JSON.stringify(sv));
@@ -9415,6 +9415,34 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND61 矿要还原剂：铁矿 + 木炭／煤／焦炭出铁、只有矿不出并提示、锌 950、锡 1200、铅 800、镍、序号不动、老档停下不丢', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND62')) {
+            // IND62 硅（任务 59）：电炉旁（1800°C）沙子 2 + 木炭／煤／焦炭 1 → 烫硅，40 秒；1600°C 不出；沙子多不被玻璃抢；元素表点亮硅、标题"/ 36"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const cook = (items, fire, temp, secs, boost) => J(`(function(){ ind.base.rule = 'hard'; window.__ob = window.__ob || indElecBoost; indElecBoost = ${boost ? 'function () { return true; }' : 'window.__ob'}; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: ${JSON.stringify(items)}, out: {}, fuel: 9000, fire: ${fire}, bellows: true, temp: ${temp}, cook: null, spout: [], spoutTy: 'iron' }]; indAdvance(${secs}); let c = ind.base.cookers[0], h = {}; c.spout.forEach(function (e) { h[e.k] = (h[e.k] || 0) + 1; }); Object.keys(c.out).forEach(function (k) { h[k] = (h[k] || 0) + c.out[k]; }); indElecBoost = window.__ob; return { hot: h, items: c.items, temp: c.temp }; })()`);
+                for (const red of ['charcoal', 'coal', 'char']) {
+                    const r = await cook({ sand: 2, [red]: 1 }, 3, 1800, 41, true);
+                    if (r.hot.hot_si !== 1 || Object.keys(r.items).length) bad.push('电炉旁沙子 2 + ' + red + ' 应该出 1 块硅 ' + JSON.stringify(r));
+                }
+                let r = await cook({ sand: 2, charcoal: 1 }, 3, 1800, 39, true);
+                if (r.hot.hot_si) bad.push('39 秒就出了');
+                r = await cook({ sand: 2, charcoal: 1 }, 4, 1600, 45, false);
+                if (r.hot.hot_si) bad.push('1600°C（鼓风）不该出硅 ' + JSON.stringify(r));
+                r = await cook({ sand: 6, charcoal: 3 }, 3, 1800, 41, true);
+                if (r.hot.hot_si !== 3 || r.hot.glass_plate) bad.push('沙子多的时候先做硅（大窑一次 3 份） ' + JSON.stringify(r));
+                const el = await J(`(function(){ ind.bag = {}; delete ind.base.elems[14]; indBagAdd('ingot_si', 1); indPanelElems(); let t = document.getElementById('ind-panel').innerText; indPanelClose(); return { lit: !!ind.base.elems[14], title: /元素表　\\d+ \\/ 36/.test(t), cool: IND_ITEMS_RAW.hot_si.hot, use: IND_ITEMS.ingot_si.use }; })()`);
+                if (!(el.lit && el.title && el.cool === 'ingot_si' && /太阳能板/.test(el.use) && /芯片/.test(el.use))) bad.push('元素表硅、标题 / 36、凉了是硅锭、说明写用途 ' + JSON.stringify(el));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND62 硅：电炉旁沙子 2 + 木炭／煤／焦炭出硅、1600°C 不出、沙子多不被玻璃抢、元素表硅、标题 / 36', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
