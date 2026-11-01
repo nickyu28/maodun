@@ -9511,6 +9511,64 @@ async function enterExit(tab, key) {
             report('IND64 蒸汽发电机：没水不发电、装一桶发 120 秒、还空桶、没炉子不费水、拿起还水、老档空水箱', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND65')) {
+            // IND65 管道第 1 期（任务 57）：水塔装满水，管道接到蒸汽发电机，不用电就取水发电；水池 → 水泵 → 水塔，没电不流、有电流；水泵不通电时水塔 → 发电机照样流；
+            // 段数 = 距离 ÷ 2 向上取整；拿起水塔退段数；炸掉的管道不退；存档整理
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const P = await J(`IND_BASE_ST.pool`);
+                // 水泵在水池边；水塔离水泵 7 米；发电机在炉子旁，离水塔 9 米
+                await T.eval(`(function(){ let B = ind.base; B.rule = 'hard'; B.off.stove = true; B.off.pool = false; B.pipes = []; B.chests[0].items = {};
+                    B.cookers = [{ id: 5, ty: 'kiln', x: ${P.x} - 18, z: ${P.z}, items: {}, out: {}, fuel: 99999, fire: 2, temp: 600, cook: null, spout: [] }];
+                    B.devs = [{ id: 1, ty: 'bank', x: ${P.x} + 3, z: ${P.z} + 4, bats: 8, u: 8 * 180, on: true, ft: 20, st: {} }, { id: 2, ty: 'pump', x: ${P.x} + 3.5, z: ${P.z}, bats: 0, u: 0, on: true, ft: 20, st: {} },
+                              { id: 3, ty: 'tower', x: ${P.x} - 3.5, z: ${P.z} - 6, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 4, ty: 'gen', x: ${P.x} - 15.5, z: ${P.z}, bats: 0, u: 0, on: true, ft: 20, st: {} }];
+                    B.wires = []; B.dseq = 10; ind.furnDirty = true; indSyncFurn(); ind.devDirty = ind.wireDirty = true; })(); true;`);
+                const link = (a, b, n) => J(`(function(){ ind.bag = { pipe: ${n} }; indSelect('pipe'); let r1 = rlDevAct(indDev(${a}), 'pipe'), r2 = rlDevAct(indDev(${b}), 'pipe'); return { r: r1 && r2, left: ind.bag.pipe || 0, pipes: ind.base.pipes.length, fl: __fl.slice(-1)[0] }; })()`);
+                // 水塔 → 发电机：13.4 米，要 7 段；给 4 段接不上
+                let r = await link(3, 4, 4);
+                if (r.r || r.pipes !== 0) bad.push('段数不够不该接上 ' + JSON.stringify(r));
+                r = await link(3, 4, 10);
+                const seg = await J(`Math.ceil(Math.hypot(indDev(3).x - indDev(4).x, indDev(3).z - indDev(4).z) / 2)`);
+                if (!(r.r && r.pipes === 1 && r.left === 10 - seg && seg === 7 && /不要电/.test(r.fl))) bad.push('水塔 → 发电机 段数 = 距离 ÷ 2 向上取整（' + seg + '） ' + JSON.stringify(r));
+                // 不用电：水塔有水，发电机取水发电
+                r = await J(`(function(){ indDev(3).wu = 20; indAdvance(2); let g = indDev(4); return { v: indSrcVolt(g), wt: g.wt, wu: indDev(3).wu }; })()`);
+                if (!(r.v === 12 && r.wt > 110 && r.wu < 20 && r.wu > 18)) bad.push('水塔 → 发电机不用电取水发电 ' + JSON.stringify(r));
+                // 水泵 → 水塔：接上；水泵没电不流
+                r = await link(2, 3, 10);
+                if (!(r.r && r.pipes === 2)) bad.push('水泵 → 水塔接不上 ' + JSON.stringify(r));
+                r = await J(`(function(){ indDev(3).wu = 5; indDev(4).wt = 120; indAdvance(3); return { wu: indDev(3).wu, pw: indDev(2).pw }; })()`);
+                if (!(r.wu <= 5 && !r.pw)) bad.push('水泵没电不该往水塔抽 ' + JSON.stringify(r));
+                // 接上电：每秒 5 桶
+                r = await J(`(function(){ ind.base.wires = [[1, 2]]; indDev(3).wu = 5; indDev(4).wt = 120; ind.base.cookers[0].fire = 0; ind.base.cookers[0].temp = 20; indAdvance(2); return { wu: indDev(3).wu, pw: indDev(2).pw }; })()`);
+                if (!(r.pw && r.wu > 13 && r.wu <= 15.01)) bad.push('水泵通电从水池往水塔抽，每秒 5 桶 ' + JSON.stringify(r));
+                // 水泵不通电，水塔 → 发电机照样流
+                r = await J(`(function(){ ind.base.wires = []; ind.base.cookers[0].fire = 2; ind.base.cookers[0].temp = 600; indDev(4).wt = 0; indDev(3).wu = 3; indAdvance(1); return { wt: indDev(4).wt, wu: indDev(3).wu, pw: indDev(2).pw }; })()`);
+                if (!(!r.pw && r.wt > 100 && r.wu < 2.1)) bad.push('水泵没电时水塔 → 发电机还是流 ' + JSON.stringify(r));
+                // 不合规矩的接法
+                r = await J(`(function(){ ind.base.devs.push({ id: 6, ty: 'tower', x: indDev(3).x + 3, z: indDev(3).z, bats: 0, u: 0, on: true, ft: 20, st: {} }); ind.bag = { pipe: 20 }; rlDevAct(indDev(3), 'pipe'); rlDevAct(indDev(6), 'pipe'); let a = __fl.slice(-1)[0]; rlDevAct(indDev(4), 'pipe'); let b = __fl.slice(-1)[0]; ind.pipePend = null; return { a: a, b: b, n: ind.base.pipes.length, left: ind.bag.pipe }; })()`);
+                if (!(/水泵/.test(r.a) && /水源/.test(r.b) && r.n === 2 && r.left === 20)) bad.push('水塔接水塔、从发电机起头都不行，不花管道 ' + JSON.stringify(r));
+                // 存档整理
+                r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.pipes.push([3, 999, 2], [4, 3, 2], 'x', [3, 4, 99]); b = indFixBase(b); return { p: b.pipes, wu: b.devs.filter(function (d) { return d.ty === 'tower'; })[0].wu }; })()`);
+                if (!(r.p.length === 2 && r.p.every(function (p) { return p.length === 3 && p[2] >= 1 && p[2] <= 20; }))) bad.push('存档整理管道 ' + JSON.stringify(r));
+                // 拿起水塔：相连的管道退段数
+                r = await J(`(function(){ ind.bag = {}; ind.base.chests[0].items = {}; let n = ind.base.pipes.filter(function (p) { return p[0] === 3 || p[1] === 3; }).reduce(function (m, p) { return m + p[2]; }, 0); indPickDev(indDev(3)); return { n: n, back: (ind.bag.pipe || 0) + (ind.base.chests[0].items.pipe || 0), pipes: ind.base.pipes.length, tower: ind.bag.dev_tower || 0 }; })()`);
+                if (!(r.n > 0 && r.back === r.n && r.pipes === 0 && r.tower === 1)) bad.push('拿起水塔退管道段数 ' + JSON.stringify(r));
+                // 爆炸：炸到的管道没了，不退
+                r = await J(`(function(){ let B = ind.base; B.devs.push({ id: 7, ty: 'tower', x: indDev(2).x - 8, z: indDev(2).z - 2, bats: 0, u: 0, on: true, ft: 20, st: {} }); B.pipes = [[2, 7, 4], [7, 4, 6]]; ind.bag = {}; let mid = { x: (indDev(7).x + indDev(4).x) / 2, z: (indDev(7).z + indDev(4).z) / 2 }; indBoom(mid.x, mid.z, 1.5, '测试'); return { pipes: B.pipes, bag: ind.bag.pipe || 0 }; })()`);
+                if (!(r.pipes.length === 1 && r.pipes[0][1] === 7 && !r.bag)) bad.push('炸到的那条管道没了、不退 ' + JSON.stringify(r));
+                const rc = await J(`[IND_CRAFT.find(function (x) { return x.out === 'pipe'; }), IND_CRAFT.find(function (x) { return x.out === 'dev_tower'; }), IND_DEVS.tower.size[1]]`);
+                if (!(rc[0] && rc[0].n === 4 && rc[0].in.steel === 1 && rc[1] && rc[1].in.steel === 8 && rc[1].in.brick === 10 && rc[1].in.wood === 4 && rc[2] >= 5)) bad.push('配方（钢 1 → 4 段、水塔钢 8 砖 10 木 4）、水塔画得高 ' + JSON.stringify(rc));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND65 管道：水塔 → 发电机不要电、水泵没电不抽有电每秒 5 桶、水泵停了水塔照样流、段数按距离、乱接拒绝、存档、拿起退段数、炸了不退', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

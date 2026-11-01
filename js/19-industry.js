@@ -493,7 +493,7 @@
         const IND_V9_GIFT = { shears: 1 };   // 存档版本 9：新号送一把剪刀，老档读档时补一把
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
-                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], houses: [], rad: [], bombs: [], fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, sawGoal: false, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
+                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], houses: [], rad: [], bombs: [], fires: [], animals: [], devs: [], wires: [], pipes: [], dseq: 0, elems: {}, sawGoal: false, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
         }
         function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
         // 炉子的状态（灶台和小熔炉、大窑通用）整理一遍
@@ -612,6 +612,7 @@
             if (b.bellows) b.stove.bellows = true;   // 老档：基地装过风箱，算装在原来的灶台上
             b.bellows = false;
             indFixCook(b.stove, b);
+            rlFixBase(b);   // 管道（任务 57）
             b.sawGoal = b.sawGoal !== false;   // 开场那句话（任务 60）：只有新档是 false，老档没有这个字段就当弹过了
             b.ver = IND_SAVE_VER;
             return b;
@@ -1010,7 +1011,7 @@
             ind.objs.forEach(function (o) { scene.remove(o); });
             ind.geos.forEach(function (g) { g.dispose(); });
             ind.mats.forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); });
-            ind.badges = {}; ind.furnMesh = {}; ind.furnDirty = true; ind.objs = []; ind.geos = []; ind.mats = []; ind.fertMesh = null; ind.tileMesh = null; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.animalMesh = null; ind.devMesh = null; ind.wireLine = null; ind.booms = []; ind.clouds = []; ind.nodes = []; ind.exits = [];
+            ind.badges = {}; ind.furnMesh = {}; ind.furnDirty = true; ind.objs = []; ind.geos = []; ind.mats = []; ind.fertMesh = null; ind.tileMesh = null; ind.itemMesh = null; ind.nodeMesh = null; ind.cropMesh = null; ind.fireMesh = null; ind.ghMesh = null; ind.grass = null; ind.animalMesh = null; ind.devMesh = null; ind.wireLine = null; ind.pipeLine = null; ind.booms = []; ind.clouds = []; ind.nodes = []; ind.exits = [];
         }
         function indBox(w, h, d, col, x, y, z) {
             let m = new THREE.Mesh(indGeo(new THREE.BoxGeometry(w, h, d)), indMat(new THREE.MeshLambertMaterial({ color: col })));
@@ -1137,6 +1138,7 @@
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             ind.devMesh = indInst(new THREE.BoxGeometry(1, 1, 1), IND_DEV_CAP); ind.devDirty = true;
             ind.wireLine = new THREE.LineSegments(indGeo(new THREE.BufferGeometry()), indMat(new THREE.LineBasicMaterial({ color: 0xff7043 }))); ind.wireLine.frustumCulled = false; indAdd(ind.wireLine); ind.wireDirty = true;
+            ind.pipeLine = new THREE.LineSegments(indGeo(new THREE.BufferGeometry()), indMat(new THREE.LineBasicMaterial({ color: 0x29b6f6 }))); ind.pipeLine.frustumCulled = false; indAdd(ind.pipeLine);   // 管道（任务 57），跟电线一起重画
             ind.p.x = 0; ind.p.z = fromTrip ? -IND_BASE.z + 4 : 4; ind.p.y = 0; ind.p.vy = 0;
             if (fromTrip) {
                 let got = Object.keys(ind.bag).map(function (k) { return indName(k) + '×' + ind.bag[k]; });
@@ -1973,6 +1975,7 @@
             });
             B.devs = B.devs.filter(function (d) { if (Math.hypot(d.x - x, d.z - z) <= R) { gone[d.id] = 1; return false; } return true; });
             B.wires = B.wires.filter(function (w) { return !gone[w[0]] && !gone[w[1]]; });
+            rlBoomPipes(x, z, R, gone);   // 炸到的管道没了，不退（任务 57）
             let powder = nkPowderNear(x, z, R);   // 地上的火药碰到爆炸也炸
             B.ground = B.ground.filter(function (g) { return Math.hypot(g.x - x, g.z - z) > R; });
             B.fires = B.fires.filter(function (f) { return Math.hypot(f.x - x, f.z - z) > R; });
@@ -2300,11 +2303,12 @@
             let nw = ind.base.wires.length;
             ind.base.wires = ind.base.wires.filter(function (w) { return w[0] !== d.id && w[1] !== d.id; });
             nw -= ind.base.wires.length;
-            if (nw > 0) indBoxAdd('wire', nw);   // 每根线退 1 根铜线（背包 → 仓库箱 → 地上，跟里面的东西一样；同一根线只在收起它的这个设备时退一次，因为收起后线就没了）
+            if (nw > 0) indBoxAdd('wire', nw);
+            let np = rlPickPipes(d);   // 相连的管道退段数（任务 57）   // 每根线退 1 根铜线（背包 → 仓库箱 → 地上，跟里面的东西一样；同一根线只在收起它的这个设备时退一次，因为收起后线就没了）
             if (ind.wirePend === d.id) ind.wirePend = null;
             ind.devDirty = ind.wireDirty = true; indSave();
             let where = [tot.box ? '放进了仓库箱' + (tot.bag || tot.ground ? ' ' + tot.box + ' 个' : '') : '', tot.bag ? '放进了背包' + (tot.box || tot.ground ? ' ' + tot.bag + ' 个' : '') : '', tot.ground ? '掉在了地上' + (tot.box || tot.bag ? ' ' + tot.ground + ' 个' : '') : ''].filter(Boolean);
-            indFlash('收起了' + IND_DEVS[d.ty].name + (nw > 0 ? '，还回了 ' + nw + ' 根铜线' : '') + (N > 0 ? '，里面的 ' + N + ' 个东西' + where.join('、') : ''));
+            indFlash('收起了' + IND_DEVS[d.ty].name + (nw > 0 ? '，还回了 ' + nw + ' 根铜线' : '') + (np > 0 ? '，还回了 ' + np + ' 段管道' : '') + (N > 0 ? '，里面的 ' + N + ' 个东西' + where.join('、') : ''));
             return true;
         }
         // 电池组装电池：先补电再加节。有用完的（电量 < 节数 × 180）就是替换，节数、电压不变；满电了才加一节（上限 64）；
@@ -2359,6 +2363,7 @@
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
         function indDevAct(d) {
             let k = indSel(), D = IND_DEVS[d.ty];
+            { let r = rlDevAct(d, k); if (r !== undefined) return r; }   // 管道、水塔（19-industry-real.js）
             if (k === 'wire') {
                 if (D.nowire) { indFlash(D.name + '不用接线'); return false; }
                 if (!ind.wirePend) { ind.wirePend = d.id; ind.devDirty = true; indFlash('选了' + D.name + '，再点另一个'); return true; }
@@ -2405,7 +2410,7 @@
                 let d = A[i], D = IND_DEVS[d.ty];
                 IND_DUMMY.position.set(d.x, D.size[1] / 2, d.z); IND_DUMMY.rotation.set(0, 0, 0); IND_DUMMY.scale.set(D.size[0], D.size[1], D.size[2]); IND_DUMMY.updateMatrix();
                 ind.devMesh.setMatrixAt(i, IND_DUMMY.matrix);
-                let c = D.col; if (!D.src && !d.pw && !D.always) c = 0x757575; if (ind.wirePend === d.id) c = 0xe040fb;
+                let c = D.col; if (!D.src && !d.pw && !D.always) c = 0x757575; if (ind.wirePend === d.id || ind.pipePend === d.id) c = 0xe040fb;
                 ind.devMesh.setColorAt(i, IND_COL.setHex(c));
             }
             ind.devMesh.count = n; ind.devMesh.instanceMatrix.needsUpdate = true;
@@ -2416,6 +2421,7 @@
                 W.forEach(function (w) { let a = indDev(w[0]), b = indDev(w[1]); if (!a || !b) return; arr.set([a.x, 0.15, a.z, b.x, 0.15, b.z], k); k += 6; });
                 ind.wireLine.geometry.setAttribute('position', new THREE.BufferAttribute(arr, 3));
                 ind.wireLine.geometry.setDrawRange(0, k / 3);
+                rlSyncPipes();
                 ind.wireDirty = false;
             }
         }
@@ -3339,7 +3345,7 @@
             else if (a && a.kind === 'funnel') hint = CK_FUNNEL[a.o.C.funnel.ty].name + '　油 ' + Math.round(a.o.C.funnel.oil) + ' / ' + CK.funnelCap + '<br><small>拿装了油的桶右键：倒进去　长按右键：收起（空的才行）</small>';
             else if (a && a.kind === 'spout') hint = ckSpoutDef(a.o.C).name + ' ' + (a.o.C.spout.length ? indSpoutTxt(a.o) : '空') + '<br><small>左键：取出（烫的要钳子）　拿水桶右键：浇凉</small>';
             else if (a && a.kind === 'cook') hint = IND_COOK[a.o.ty].name + ' ' + Math.round(a.o.temp) + '°C' + (a.o.temp > 60 && !a.o.fire ? '　降到 60°C 还要约 ' + indFurnCoolSecs(a.o.ty, a.o) + ' 秒' : '') + '<br><small>左键：打开</small>';
-            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : a.o.ty === 'bank' ? '拿电池左键：装一节　右键：选放几个　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
+            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : sel === 'pipe' ? '左键：接管道（先水源再目的地）　' : a.o.ty === 'bank' ? '拿电池左键：装一节　右键：选放几个　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
             else if (a && a.kind === 'animal') {
                 let o = a.o, D = IND_ANIMALS[o.k];
                 if (R.where === 'trip') hint = (o.follow ? D.name + '（跟着你）' : '野生的' + D.name + (o.fed ? '（还要喂 ' + (D.tame - o.fed) + ' 次）' : '')) + '<br><small>爱吃：' + indFoodTxt(o.k) + '</small>';
