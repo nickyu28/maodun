@@ -114,3 +114,9 @@
             { out: 'pack_al', in: { ingot_al: 6, yarn: 4, wire: 4 }, hard: true },
             { out: 'wire', n: 3, in: { ingot_al: 1 }, hard: true }
         );
+
+// ── 锂电池（任务 38）：每节 3 V、720 U（普通 1.5 V／180 U，镍 360 U）。一个电池组只能装一种；锂电池组上限 128 节，电压按节数 × 3 V ──
+        Object.assign(IND_ITEMS_RAW, {
+            battery_li: { name: '锂电池', col: 0xab47bc, cellU: 720, use: '装进电池组，一节 3 V、720 U；一个电池组只能装一种电池，锂电池组最多 128 节（8 节就是 24 V，小心超过用电器额定）' }
+        });
+        IND_CRAFT.push({ out: 'battery_li', in: { ingot_li: 2, wire: 2, ingot_al: 1 }, hard: true });

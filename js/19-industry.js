@@ -579,12 +579,12 @@
             b.gh = !!b.gh; b.glass = b.gh && !!b.glass; b.pot = !!b.pot;   // 旧档没有 glass，默认木暖棚
             if (!Array.isArray(b.devs)) b.devs = [];
             b.devs = b.devs.filter(function (d) { return d && IND_DEVS[d.ty] && isFinite(d.x) && isFinite(d.z) && d.id; }).slice(0, IND_DEV_CAP);
-            b.devs.forEach(function (d) { if (!d.st || typeof d.st !== 'object') d.st = {}; Object.keys(d.st).forEach(function (k) { if (!IND_ITEMS[k] || !(d.st[k] > 0)) delete d.st[k]; }); d.et = indNum(d.et, 0, 0, 1e3); d.bats = indNum(d.bats, 0, 0, 64) | 0; d.u = indNum(d.u, 0, 0, 64 * IND_BAT_U); d.on = d.on !== false; d.ft = indNum(d.ft, 20, 20, 2000); });
+            b.devs.forEach(function (d) { if (!d.st || typeof d.st !== 'object') d.st = {}; Object.keys(d.st).forEach(function (k) { if (!IND_ITEMS[k] || !(d.st[k] > 0)) delete d.st[k]; }); d.et = indNum(d.et, 0, 0, 1e3); d.bats = indNum(d.bats, 0, 0, 128) | 0; d.u = indNum(d.u, 0, 0, 64 * IND_BAT_U); d.on = d.on !== false; d.ft = indNum(d.ft, 20, 20, 2000); });
             if (!Array.isArray(b.cookers)) b.cookers = [];
             b.cookers = b.cookers.filter(function (c) { return c && IND_COOK[c.ty] && c.ty !== 'stove' && isFinite(c.x) && isFinite(c.z) && c.id; }).slice(0, IND_COOK_CAP);
             b.cookers.forEach(function (c) { indFixCook(c, b); });
             b.cseq = indNum(b.cseq, 0, 0, 1e9) | 0; b.cookers.forEach(function (c) { b.cseq = Math.max(b.cseq, c.id); });
-            b.devs.forEach(function (d) { if (d.ty === 'bank') { d.ni = indNum(d.ni, 0, 0, 64); if (d.um !== undefined) d.um = indNum(d.um, 0, 0, 64 * 360); } d.cy = typeof d.cy === 'string' && indCylParse(d.cy) ? d.cy : null; d.ct = indNum(d.ct, 0, 0, 100); d.pt = indNum(d.pt, 0, 0, 100); if (IND_DEV_FIX[d.ty]) IND_DEV_FIX[d.ty](d); });
+            b.devs.forEach(function (d) { if (d.ty === 'bank') { d.li = !!d.li; if (d.bats > (d.li ? 128 : 64)) d.bats = d.li ? 128 : 64; d.ni = indNum(d.ni, 0, 0, 64); if (d.um !== undefined) d.um = indNum(d.um, 0, 0, 128 * 720); } d.cy = typeof d.cy === 'string' && indCylParse(d.cy) ? d.cy : null; d.ct = indNum(d.ct, 0, 0, 100); d.pt = indNum(d.pt, 0, 0, 100); if (IND_DEV_FIX[d.ty]) IND_DEV_FIX[d.ty](d); });
             let ids = {}; b.devs.forEach(function (d) { ids[d.id] = d; });
             if (!Array.isArray(b.wires)) b.wires = [];
             b.wires = b.wires.filter(function (w) { return Array.isArray(w) && ids[w[0]] && ids[w[1]] && IND_DEVS[ids[w[0]].ty].src && !IND_DEVS[ids[w[1]].ty].src; });
@@ -1720,7 +1720,7 @@
             let k = indSel(), a = indAim();
             if (k === 'gunpowder' && a && a.kind === 'node' && a.o.hard) return rkFuse(a.o);   // 火药对着硬岩：点引线
             if (k === 'cyl' && a && a.kind === 'node' && a.o.key === 'vent_ng') return rkFillVent(a.o);   // 空钢瓶对着喷口：装天然气
-            if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
+            if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
             if (IND_ITEMS[k].dev) return indPlaceDev(k);
@@ -1882,7 +1882,7 @@
         function indNearStove(x, z, r) { return indCooks().some(function (c) { return Math.hypot(x - c.x, z - c.z) <= r + (c.ty === 'kiln' ? 1 : 0); }); }
         function indHeatNear(x, z, r) { let t = 0, f = 0; indCooks().forEach(function (c) { if (Math.hypot(x - c.x, z - c.z) <= r + (c.ty === 'kiln' ? 1 : 0)) { t = Math.max(t, c.C.temp); f = Math.max(f, c.C.fire); } }); return { temp: t, fire: f }; }
         function indSrcVolt(d) {
-            if (d.ty === 'bank') return d.u > 0 ? d.bats * IND_BAT_V : 0;
+            if (d.ty === 'bank') return d.u > 0 ? indBankV(d) : 0;
             if (d.ty === 'gen') return indHeatNear(d.x, d.z, IND_GEN_R).fire >= 2 ? IND_DEVS.gen.volt : 0;
             if (IND_DEV_VOLT[d.ty]) return IND_DEV_VOLT[d.ty](d);
             return 0;
@@ -2290,31 +2290,36 @@
         // 电池组装电池：先补电再加节。有用完的（电量 < 节数 × 180）就是替换，节数、电压不变；满电了才加一节（上限 64）；
         // 加一节之前看接着的用电器：电压会超过哪个的额定就不装。一次放 n 个，到上限或会超压就停；返回放了几个
         // 电池组容量：普通电池一节 180 U，镍电池一节 360 U（d.um 记总容量，没有就按 180 × 节数；d.ni 记镍电池几节）
+        // 锂电池组（任务 38）：每节 3 V、720 U，上限 128 节，一个电池组只能装一种（锂的或普通／镍的）；电压 = 节数 × 每节电压
+        function indBankV(d, extra) { return (d.bats + (extra || 0)) * (d.li ? 3 : IND_BAT_V); }
+        function indBankCap(d) { return d.li ? 128 : 64; }
         function indBankMax(d) { return d.um !== undefined ? d.um : d.bats * IND_BAT_U; }
         // 收起时还回哪些电池：先还镍电池（按电量），剩下的电量按普通电池算
         function indBankCells(d) {
+            if (d.li) { let b = Math.ceil(d.u / 720 - 1e-9); return b > 0 ? [['battery_li', b]] : []; }
             let u = d.u, out = [], n = Math.min(d.ni || 0, Math.ceil(u / 360 - 1e-9));
             if (n > 0) { out.push(['battery_ni', n]); u = Math.max(0, u - 360 * n); }
             let b = Math.ceil(u / IND_BAT_U - 1e-9); if (b > 0) out.push(['battery', b]);
             return out;
         }
-        function indBankOver(d) {   // 再加一节会超过哪个用电器的额定？返回 { dev, V } 或 null
-            let V = (d.bats + 1) * IND_BAT_V, hit = null;
+        function indBankOver(d, isLi) {   // 再加一节会超过哪个用电器的额定？返回 { dev, V } 或 null
+            let V = (d.bats + 1) * (isLi ? 3 : IND_BAT_V), hit = null;
             ind.base.wires.forEach(function (w) { if (w[0] !== d.id || hit) return; let x = indDev(w[1]); if (x && V > IND_DEVS[x.ty].rated + 1e-6) hit = { dev: x, V: V }; });
             return hit;
         }
         function indBankPut(d, n, key) {
-            key = key || 'battery'; let cellU = IND_ITEMS[key].cellU || IND_BAT_U;
+            key = key || 'battery'; let cellU = IND_ITEMS[key].cellU || IND_BAT_U, isLi = key === 'battery_li';
+            if (d.bats > 0 && !!d.li !== isLi) { indFlash('一个电池组只能装一种电池（' + (d.li ? '这个是锂电池组' : '这个装的是普通／镍电池') + '）'); return 0; }
             let done = 0, why = '', repl = 0, add = 0;
             while (done < n && ind.bag[key] > 0) {
                 if (d.u < indBankMax(d) - 1e-6) { d.u = Math.min(indBankMax(d), d.u + cellU); indBagDel(key, 1); done++; repl++; continue; }
-                if (d.bats >= 64) { why = '装满了（64 节）'; break; }
-                let o = indBankOver(d);
+                if (d.bats >= indBankCap(d)) { why = '装满了（' + indBankCap(d) + ' 节）'; break; }
+                let o = indBankOver(d, isLi);
                 if (o) { why = '再装一节就 ' + o.V.toFixed(1) + ' V，会超过' + IND_DEVS[o.dev.ty].name + '的额定 ' + IND_DEVS[o.dev.ty].rated + ' V，装不进去'; break; }
-                indBagDel(key, 1); d.um = indBankMax(d) + cellU; d.bats++; d.u += cellU; if (key === 'battery_ni') d.ni = (d.ni || 0) + 1; done++; add++;
+                indBagDel(key, 1); if (isLi) d.li = true; d.um = indBankMax(d) + cellU; d.bats++; d.u += cellU; if (key === 'battery_ni') d.ni = (d.ni || 0) + 1; done++; add++;
             }
             if (done > 0) indSave();
-            let st = d.bats + ' 节 ' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d);
+            let st = d.bats + ' 节 ' + indBankV(d).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d);
             if (done === 0) indFlash(why || '背包里没有电池');
             else indFlash((repl ? '换了 ' + repl + ' 节用完的' : '') + (repl && add ? '，' : '') + (add ? '加了 ' + add + ' 节' : '') + '（' + st + '）' + (done < n && why ? '。' + why : ''));
             if (ind.panel === 'bank') indPanelBank(d.id);
@@ -2324,13 +2329,13 @@
             let d = indDev(id); if (!d || d.ty !== 'bank') return;
             ind.panelEl = id;
             indPanelShow('bank', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">电池组</div>' +
-                '<div style="line-height:1.7;">' + d.bats + ' 节　' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d) + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节' + (ind.bag.battery_ni ? '，镍电池 ' + ind.bag.battery_ni + ' 节' : '') + '</div>' +
+                '<div style="line-height:1.7;">' + d.bats + ' 节　' + indBankV(d).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d) + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节' + (ind.bag.battery_ni ? '，镍电池 ' + ind.bag.battery_ni + ' 节' : '') + (ind.bag.battery_li ? '，锂电池 ' + ind.bag.battery_li + ' 节' : '') + (d.li ? '　（锂电池组，只能装锂电池，最多 128 节）' : '') + '</div>' +
                 '<div style="margin-top:8px;"><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',1)">放 1</button><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',999)">放全部</button>' +
                 '<input id="ind-bank-n" type="number" min="1" value="5" style="width:64px;padding:6px;font-size:15px;margin:3px;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indBankPutBtn(' + id + ',+document.getElementById(\'ind-bank-n\').value)">放这么多</button></div>' +
                 '<div style="margin-top:6px;font-size:12px;color:#888;">先替换用完的电池，满电了才加节；加节会超过接着的用电器额定就不装</div>' +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
-        function indBankPutBtn(id, n) { let d = indDev(id); if (!d) return; n = Math.max(0, Math.floor(+n || 0)); if (n > 0) indBankPut(d, n, indSel() === 'battery_ni' || (!ind.bag.battery && ind.bag.battery_ni) ? 'battery_ni' : 'battery'); }
+        function indBankPutBtn(id, n) { let d = indDev(id); if (!d) return; n = Math.max(0, Math.floor(+n || 0)); if (n > 0) indBankPut(d, n, indSel() === 'battery_ni' || indSel() === 'battery_li' ? indSel() : ind.bag.battery ? 'battery' : ind.bag.battery_ni ? 'battery_ni' : ind.bag.battery_li ? 'battery_li' : 'battery'); }
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
         function indDevAct(d) {
             let k = indSel(), D = IND_DEVS[d.ty];
@@ -2352,7 +2357,7 @@
                 return true;
             }
             if (d.ty === 'xfmr') { if (k !== 'wire') return pwXfmrCycle(d); }
-            if (d.ty === 'bank' && (k === 'battery' || k === 'battery_ni')) { return indBankPut(d, 1, k) > 0; }
+            if (d.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { return indBankPut(d, 1, k) > 0; }
             if (d.ty === 'el') { indPanelEl(d.id); return true; }
             if (d.ty === 'comp') { indPanelComp(d.id); return true; }
             if (d.ty === 'press') { indPanelPress(d.id); return true; }
@@ -2364,7 +2369,7 @@
         function indDevInfo(d) {
             let D = IND_DEVS[d.ty];
             if (IND_DEV_INFO[d.ty]) return IND_DEV_INFO[d.ty](d);
-            if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d);
+            if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + indBankV(d).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d);
             if (d.ty === 'gen') return D.name + ' ' + (indSrcVolt(d) > 0 ? '发电中 12 V' : '没在发电');
             let ss = indDevSrcs(d);
             let wired = ss.length ? '　接着 ' + ss.length + ' 个电源：' + ss.map(function (s) { let v = indSrcVolt(s); return IND_DEVS[s.ty].name + ' ' + (s.ty === 'bank' ? v.toFixed(1) : String(Math.round(v * 10) / 10)) + ' V'; }).join('、') + '，工作电压 ' + (Math.round(indDevVolt(d) * 10) / 10) + ' V' : '　没接电';

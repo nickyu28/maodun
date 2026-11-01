@@ -9223,6 +9223,43 @@ async function enterExit(tab, key) {
             report('IND56 硬岩和火药爆破、天然气喷口、锂锗镓：随机硬岩、太硬提示、2 份火药炸出 3～6 个矿、喷口装气和爆炸、元素表、冶炼、天然气当燃料／制氢', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND57')) {
+            // IND57 锂电池（任务 38）：锂电池组 8 节 = 24 V 接离心机能转，9 节 27 V 被拒绝（提示写额定）；锂电池组放到 128 节、普通电池组第 65 个满了；混装被拒；锂电池 720 U；收起还锂电池
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const put = (setup, key, n, load, have) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.rule = 'hard'; ind.base.off.pool = true;
+                    let d = Object.assign({ id: 1, ty: 'bank', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }, ${JSON.stringify(setup)}); ind.base.devs = [d]; ind.base.wires = [];
+                    ${load ? "ind.base.devs.push({ id: 2, ty: '" + load + "', x: -18, z: 0, bats: 0, u: 0, on: true, ft: 20, st: { 'uf6:0': 2 } }); ind.base.wires.push([1, 2]);" : ''}
+                    ind.bag = {}; ind.bag['${key}'] = ${have || 200}; let done; try { done = indBankPut(d, ${n}, '${key}'); } finally { blazeFlash = bf; }
+                    return { done: done, bats: d.bats, u: Math.round(d.u), li: !!d.li, v: indSrcVolt(d), fl: fl.join('|'), left: ind.bag['${key}'] || 0 }; })()`);
+                let r = await put({}, 'battery_li', 8, 'centrifuge');
+                if (!(r.done === 8 && r.bats === 8 && r.li && r.v === 24 && r.u === 8 * 720)) bad.push('锂电池组 8 节 = 24 V、每节 720 U ' + JSON.stringify(r));
+                const run = await J(`(function(){ indAdvance(0.3); let c = indDev(2); return { cen: !!c, pw: c && c.pw }; })()`);
+                if (!(run.cen && run.pw === true)) bad.push('24 V 锂电池组接离心机能转 ' + JSON.stringify(run));
+                r = await put({ bats: 8, u: 5760, li: true, um: 5760 }, 'battery_li', 1, 'centrifuge');
+                if (!(r.done === 0 && r.bats === 8 && /27/.test(r.fl) && /24/.test(r.fl))) bad.push('第 9 节 27 V 超过离心机额定 24，被拒绝并说清 ' + JSON.stringify(r));
+                r = await put({ bats: 100, u: 72000, li: true, um: 72000 }, 'battery_li', 40);
+                if (!(r.done === 28 && r.bats === 128 && /128/.test(r.fl))) bad.push('锂电池组放到 128 节 ' + JSON.stringify(r));
+                r = await put({ bats: 64, u: 64 * 180 }, 'battery', 1);
+                if (!(r.done === 0 && /64/.test(r.fl))) bad.push('普通电池组第 65 个提示满 ' + JSON.stringify(r));
+                r = await put({ bats: 4, u: 720 }, 'battery_li', 1);
+                if (!(r.done === 0 && /只能装一种/.test(r.fl))) bad.push('普通电池组不能混装锂电池 ' + JSON.stringify(r));
+                r = await put({ bats: 4, u: 2880, li: true, um: 2880 }, 'battery', 1);
+                if (!(r.done === 0 && /只能装一种/.test(r.fl))) bad.push('锂电池组不能混装普通电池 ' + JSON.stringify(r));
+                const pk = await J(`(function(){ ind.bag = {}; ind.base.chests = [{ id: 1, x: 12, z: 12, big: true, items: {} }]; ind.base.devs = [{ id: 1, ty: 'bank', x: -20, z: 0, bats: 3, u: 2160, li: true, um: 2160, on: true, ft: 20, st: {} }]; indPickDev(indDev(1)); return { li: ind.bag.battery_li || 0, b: ind.bag.battery || 0 }; })()`);
+                if (!(pk.li === 3 && pk.b === 0)) bad.push('收起锂电池组还锂电池 ' + JSON.stringify(pk));
+                const rc = await J(`(function(){ ind.base.rule = 'hard'; ind.bag = { ingot_li: 2, wire: 2, ingot_al: 1 }; let i = IND_CRAFT.findIndex(function (r) { return r.out === 'battery_li'; }); return { ok: i >= 0 && indCraft(i), n: ind.bag.battery_li }; })()`);
+                if (!(rc.ok && rc.n === 1)) bad.push('锂电池配方：锂锭 2 + 铜线 2 + 铝锭 1 ' + JSON.stringify(rc));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND57 锂电池：3 V／720 U、8 节 24 V 能转、9 节被拒、128 节上限、不能混装、收起还锂电池', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
