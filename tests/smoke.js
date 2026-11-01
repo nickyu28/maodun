@@ -9181,6 +9181,48 @@ async function enterExit(tab, key) {
             report('IND55 配方写出产量：工作台火药 ×4、炉子面板"这次出"和实际一致（含空瓶）', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND56')) {
+            // IND56 硬岩、火药爆破、天然气、锂锗镓（任务 37，硬核）：远征图有硬岩（种子相同位置相同、换种子不同）；挖提示太硬；2 份火药炸开掉 3～6 个矿；15% 出喷口，空钢瓶能装；喷口旁篝火爆炸；元素 Li Ge Ga 亮；矿进窑出烫锭；天然气当燃料、做氢
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const pos = (seed) => J(`(function(){ ind.base.rule = 'hard'; indGoTrip(${seed}); return ind.nodes.filter(function (n) { return n.key === 'rock_hard'; }).map(function (n) { return [Math.round(n.x * 10), Math.round(n.z * 10)]; }); })()`);
+                const a1 = await pos(4242), a2 = await pos(4242), b = await pos(9191);
+                if (!(a1.length >= 2 && a1.length <= 4 && JSON.stringify(a1) === JSON.stringify(a2) && JSON.stringify(a1) !== JSON.stringify(b))) bad.push('硬岩 2～4 块、同种子位置一样、换种子不同 ' + JSON.stringify([a1, b]));
+                // 挖提示太硬；火药爆破
+                const bl = await J(`(function(){ indGoTrip(4242); ind.base.rule = 'hard'; let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.surv.hp = 100; ind.rng = function () { return 0.1; };
+                    let o = ind.nodes.filter(function (n) { return n.key === 'rock_hard'; })[0]; indTeleport(o.x - 12, o.z); ind.bag = {}; let g = indGather(o); let msg1 = fl[fl.length - 1];
+                    ind.bag = { gunpowder: 1 }; let f1 = rkFuse(o); ind.bag = { gunpowder: 2 }; let f2 = rkFuse(o); let left = ind.bag.gunpowder || 0; indAdvance(3.5); blazeFlash = bf;
+                    let ores = ind.tripGround.filter(function (x) { return /^ore_(li|ge|ga)$/.test(x.k); }).length, vent = ind.nodes.filter(function (n) { return n.key === 'vent_ng' && !n.dead; }).length;
+                    return { g: g, msg1: msg1, f1: f1, f2: f2, left: left, dead: o.dead, ores: ores, vent: vent, hp: ind.base.surv.hp }; })()`);
+                if (!(bl.g === false && /太硬/.test(bl.msg1))) bad.push('直接挖该提示太硬 ' + JSON.stringify(bl));
+                if (!(bl.f1 === false && bl.f2 === true && bl.left === 0)) bad.push('1 份火药不够、2 份才炸 ' + JSON.stringify(bl));
+                if (!(bl.dead && bl.ores >= 3 && bl.ores <= 6)) bad.push('炸开后掉 3～6 个矿 ' + JSON.stringify(bl));
+                if (bl.vent !== 1) bad.push('强制 15% 命中时出现喷口 ' + JSON.stringify(bl));
+                if (bl.hp !== 100) bad.push('退得远不该掉血');
+                // 喷口：空钢瓶装一瓶；旁边点篝火爆炸
+                const vt = await J(`(function(){ ind.bag = { cyl: 1 }; let v = ind.nodes.filter(function (n) { return n.key === 'vent_ng' && !n.dead; })[0]; indTeleport(v.x - 2, v.z); indLookAt(v.x, v.z); indSelect('cyl'); indUse(); let a = { gas: ind.bag.gas_ng || 0, cyl: ind.bag.cyl || 0 };
+                    ind.tripFires.push({ x: v.x + 1, z: v.z, fuel: 100 }); ind.base.surv.hp = 100; indAdvance(0.3); return { a: a, dead: v.dead, hp: ind.base.surv.hp }; })()`);
+                if (!(vt.a.gas === 1 && vt.a.cyl === 0)) bad.push('空钢瓶右键喷口得一瓶天然气 ' + JSON.stringify(vt));
+                if (!(vt.dead && vt.hp < 100)) bad.push('喷口旁点着的篝火让它炸 ' + JSON.stringify(vt));
+                // 元素、冶炼、燃料、制氢
+                const el = await J(`(function(){ ind.base.elems = {}; ind.bag = {}; indBagAdd('ore_li', 1); indBagAdd('ore_ge', 1); indBagAdd('ore_ga', 1); indBagAdd('gas_ng', 1); return [3, 32, 31, 6].map(function (e) { return !!ind.base.elems[e]; }); })()`);
+                if (el.join() !== 'true,true,true,true') bad.push('元素表 Li、Ge、Ga、C 亮 ' + el.join());
+                const sm = await J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: { ore_li: 1 }, out: {}, fuel: 900, fire: 3, temp: 500, cook: null, spout: [], spoutTy: 'iron' }]; indAdvance(17); let c = ind.base.cookers[0]; let a = (c.out.hot_li || 0) + c.spout.filter(function (e) { return e.k === 'hot_li'; }).length;
+                    ind.base.cookers = [{ id: 6, ty: 'kiln', x: 20, z: 10, items: { gas_ng: 1, water_raw: 1, bottle: 3 }, out: {}, fuel: 900, fire: 3, temp: 800, cook: null, spout: [] }]; indAdvance(21); let d = ind.base.cookers[0];
+                    ind.base.stove = Object.assign(ind.base.stove, { fuel: 0, fire: 0, temp: 20, items: {}, out: {}, cook: null }); ind.bag = { gas_ng: 1 }; ind.cookId = 'stove'; indStoveFuel('gas_ng'); return { li: a, h2: d.out.b_h2, cyl: d.out.cyl, fuel: ind.base.stove.fuel, back: ind.bag.cyl || 0 }; })()`);
+                if (sm.li !== 1) bad.push('锂辉石进窑出烫锂锭 ' + JSON.stringify(sm)); 
+                if (!(sm.h2 === 3 && sm.cyl === 1)) bad.push('天然气 + 水 + 3 瓶 → 3 瓶氢气，钢瓶还回 ' + JSON.stringify(sm));
+                if (!(sm.fuel === 1500 && sm.back === 1)) bad.push('天然气当燃料 +1500、钢瓶还你 ' + JSON.stringify(sm));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND56 硬岩和火药爆破、天然气喷口、锂锗镓：随机硬岩、太硬提示、2 份火药炸出 3～6 个矿、喷口装气和爆炸、元素表、冶炼、天然气当燃料／制氢', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

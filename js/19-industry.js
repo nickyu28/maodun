@@ -1217,7 +1217,7 @@
                 else if (key === 'stone') node.rock = true;   // 大石头
                 ind.nodes.push(node);
             }
-            wdExtraNodes(M, casual);   // 河边的黏土和锡砂、火山周围的黑石头
+            wdExtraNodes(M, casual); if (!casual) rkGen(M);   // 硬岩（19-industry-rock.js）   // 河边的黏土和锡砂、火山周围的黑石头
             ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true; wdMakeMeshes(); wdScatter(M);
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             // 野生动物：平原有羊和牛，森林有狗和猫
@@ -1345,7 +1345,7 @@
             if (!ind || ind.over || ind.dead) return;
             if (ind.where === 'base') indStoveTick(dt);
             if (!ind || ind.over) return;
-            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt);
+            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); rkTick(dt);
             if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
@@ -1718,6 +1718,8 @@
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             let k = indSel(), a = indAim();
+            if (k === 'gunpowder' && a && a.kind === 'node' && a.o.hard) return rkFuse(a.o);   // 火药对着硬岩：点引线
+            if (k === 'cyl' && a && a.kind === 'node' && a.o.key === 'vent_ng') return rkFillVent(a.o);   // 空钢瓶对着喷口：装天然气
             if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
@@ -1781,6 +1783,8 @@
         }
         function indGather(o) {
             if (o.key === 'oil') { indFlash('得拿桶来装：拿空桶对着油点右键'); return false; }
+            if (o.hard) { indFlash('太硬，得炸（2 份火药，右键放下）'); return false; }
+            if (o.key === 'vent_ng') { indFlash('拿空钢瓶对着喷口右键装天然气，别点火'); return false; }
             let nd = IND_NODES[o.key], tool = indTool();
             if (tool < nd.tool) { indFlash(indName(o.key) + '要' + IND_TOOL_NAME[nd.tool] + '才挖得动'); return false; }
             let key = o.key === 'seeds' ? o.seed : (nd.out || o.key);
@@ -2923,7 +2927,7 @@
                 indBagDel(k, 1); indBagAdd(indEmptyKey(cc.mat), 1); indCookCur().C.fuel += IND_ITEMS[k].fuel;
                 indSave(); indPanelStove(); return;
             }
-            indBagDel(k, 1); indCookCur().C.fuel += IND_ITEMS[k].fuel;
+            indBagDel(k, 1); indCookCur().C.fuel += IND_ITEMS[k].fuel; if (IND_ITEMS[k].back) indBagAdd(IND_ITEMS[k].back, 1);   // 天然气烧完钢瓶还你
             indSave(); indPanelStove();
         }
         function indStoveFire(lv) {
