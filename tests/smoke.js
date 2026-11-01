@@ -9153,6 +9153,34 @@ async function enterExit(tab, key) {
             report('IND54 睡觉设备继续运转：离心机出产物、电池组耗电、没水冷的反应堆熔毁、醒来一条汇总、和补算共用快进', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND55')) {
+            // IND55 配方写出产量（任务 36）：工作台火药那条含"×4"；窑里放 3 批原料，面板写的"这次出"等于实际做完拿到的（含空瓶）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`indPanelBench(); true;`);
+                const gp = await T.eval(`(function(){ let t = document.getElementById('ind-panel').innerText.split('\\n'); let i = t.findIndex(function (l) { return /火药/.test(l); }); return t.slice(i, i + 4).join(' '); })()`);
+                if (!/×4/.test(gp)) bad.push('工作台火药那条该写 ×4 ' + gp);
+                await T.eval(`indPanelClose(); true;`);
+                const k = await J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: { yellowcake: 3, b_hf: 9 }, out: {}, fuel: 900, fire: 3, temp: 500, cook: null, spout: [] }]; ind.cookId = 5; indPanelStove(5);
+                    let txt = document.getElementById('ind-panel').innerText; let m = txt.match(/这次出：([^\\n]*)/); let c = ind.base.cookers[0]; indAdvance(32); return { shown: m ? m[1] : null, out: c.out }; })()`);
+                if (!k.shown) bad.push('窑面板该写"这次出：" ' + JSON.stringify(k));
+                else {
+                    // 面板写的每样东西 ×N 要等于实际拿到的
+                    const items = k.shown.replace(/（\d+ 份）/, '').split('、').map(function (x) { let m = x.trim().match(/^(.*) ×(\d+)$/); return m ? [m[1], +m[2]] : null; });
+                    const real = await J(`(function(){ let c = ind.base.cookers[0], o = {}; Object.keys(c.out).forEach(function (k) { o[indName(k, true)] = c.out[k]; }); return o; })()`);
+                    const diff = items.filter(function (it) { return !it || real[it[0]] !== it[1]; });
+                    if (diff.length || items.length !== Object.keys(real).length || !/3 份/.test(k.shown)) bad.push('面板写的产量要等于实际拿到的 ' + k.shown + ' / ' + JSON.stringify(real));
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND55 配方写出产量：工作台火药 ×4、炉子面板"这次出"和实际一致（含空瓶）', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

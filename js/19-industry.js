@@ -2714,7 +2714,7 @@
             let rows = IND_CRAFT.map(function (r, i) {
                 if (!indCraftShow(r)) return '';
                 let nm = r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.glass ? r.name + (ind.base.glass ? '（已经盖了）' : '') : r.pot ? r.name + (ind.base.pot ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : '');
-                let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ');
+                let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + (r.out && IND_ITEMS[r.out] ? '　→ ' + indName(r.out) + ' ×' + (r.n || 1) : '');
                 let can = indCraftCan(r), once = r.gh || r.glass || r.pot;   // 盖暖棚、装大锅只能一次
                 return indRow(nm + '<br><small style="color:#888">' + need + '</small>', '<span style="white-space:nowrap;"><button style="' + IND_BTN + (can ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>' + (once ? '' : '<button style="' + IND_BTN + (can ? 'background:#1b5e20;' : 'background:#bbb;') + '" onclick="indCraftMax(' + i + ')">做最多</button>') + '</span>');
             }).join('');
@@ -2781,6 +2781,8 @@
             if (hotPer) n = Math.min(n, Math.floor(IND_SPOUT_CAP / hotPer));   // 一炉烫锭要放得进出料槽
             return Math.max(0, n);
         }
+        // 做之前就写清楚出多少（连还回的空瓶、空桶）：任务 36
+        function indOutAll(r, n) { return Object.keys(r.out).map(function (k) { return indName(k, true) + ' ×' + r.out[k] * n; }).join('、'); }
         function indOutTxt(r, n) { return Object.keys(r.out).filter(function (k) { return k !== 'bucket'; }).map(function (k) { return indName(k, true) + (r.out[k] * n > 1 ? ' ×' + r.out[k] * n : ''); }).join('、'); }
         // 头顶飘的字（进度这类）：同一个 key 只画一张，字变了才重画
         function indBadge(key, x, y, z, text) {
@@ -3141,6 +3143,8 @@
             if (indHard() && !S.funnel) spt += '<br><span style="color:#888">石油要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒</span>';
             if (S.funnel) spt += '<br>进料漏斗：油 ' + Math.round(S.funnel.oil) + ' / ' + CK.funnelCap + '（每秒流 ' + CK.funnelRate + '）';
             if (S.cook && S.cook.full) st += '<br><b style="color:#c62828">出料槽满了</b>';
+            { let pool = ckPool(S), K0 = indCookK(c.ty), ri = S.cook ? S.cook.i : indCookFind(pool, K0, undefined, S.items);   // 这次出多少（任务 36）：现在放进去的东西能做几份，连空瓶空桶一起写
+              if (ri >= 0) { let r0 = IND_RECIPES[ri], n0 = S.cook ? (S.cook.n || 1) : indBatchN(r0, pool, K0); st += '<br>这次出：<b>' + indOutAll(r0, n0) + '</b>' + (n0 > 1 ? '（' + n0 + ' 份）' : ''); } }
             let put = Object.keys(ind.bag).map(function (k) {
                 let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button><button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',' + ind.bag[k] + ')">全放</button>';
                 if (IND_ITEMS[k].fuel && !(indHard() && indContOf(k) && indContOf(k).base === 'oil')) b += '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="indStoveFuel(\'' + k + '\')">' + (indContOf(k) ? '倒进炉子' : '当柴烧') + '</button>';
