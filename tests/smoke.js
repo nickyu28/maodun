@@ -5586,7 +5586,7 @@ async function enterExit(tab, key) {
                 for (let i = 0; i < 3; i++) { if (!(await IENTER())) { bad.push('第 ' + (i + 1) + ' 次进不去'); break; } during.push(await mem()); await IEXIT(); }
                 // 刚进去就量和等几帧再量要一样（家具不能等第一帧才画，机器慢的时候数会对不上）
                 if (await IENTER()) { const m0 = await mem(); await frames(T, 6); const m1 = await mem(); if (m0 !== m1) bad.push('刚进基地和等几帧以后物体数不一样（有东西等第一帧才画） ' + m0 + ' → ' + m1); await IEXIT(); }
-                if (during.length === 3) { const a1 = JSON.parse(during[1]), a2 = JSON.parse(during[2]); if (a2[0] > a1[0] || a2[1] > a1[1] || a2[2] !== a1[2]) bad.push('进出 3 次资源数在涨 ' + during.join(' → ')); }
+                if (during.length === 3) { const a0 = JSON.parse(during[0]), a1 = JSON.parse(during[1]), a2 = JSON.parse(during[2]); if (a2[0] > Math.max(a0[0], a1[0]) || a2[1] > Math.max(a0[1], a1[1]) || a2[2] !== a1[2])   /* 基地里有些东西（动物、作物）每次不一定一样多，差一个来回跳不算涨：只看第 3 次有没有超过前两次的最大值 */ bad.push('进出 3 次资源数在涨 ' + during.join(' → ')); }
             }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
