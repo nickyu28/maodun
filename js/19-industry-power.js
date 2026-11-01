@@ -87,3 +87,30 @@
             { out: 'pack_cloth', in: { yarn: 6, rope: 2, wire: 2 }, hard: true },
             { out: 'pack_steel', in: { steel: 4, yarn: 4, wire: 4 }, hard: true }
         );
+
+// ── 新矿石：铝和镍（任务 33）──
+// 铝土矿（山地露头，要铁稿）→ 电解槽出铝锭（铝要电解才出得来）。铝锭用途：铝架背包 +24 格、铝线（1 锭出 3 根铜线，比铜便宜）。
+// 镍矿（山地露头，跟锡一个密度）→ 大窑炼成镍锭（1455°C）。镍锭用途：镍电池（360 U，两倍电量）、镍稿（采矿多拿 1 个，跟铁稿一样）。
+        Object.assign(IND_ITEMS_RAW, {
+            ore_al: { name: '铝土矿', col: 0xd7a38b, use: '放进电解槽（加盐当助熔剂）出铝锭' },
+            ore_ni: { name: '镍矿', col: 0x78909c, use: '放进大窑炼镍锭（1455°C）' },
+            ingot_al: { name: '铝锭', col: 0xcfd8dc, use: '做铝架背包（+24 格）、铝线（1 锭出 3 根铜线）' },
+            hot_ni: { name: '镍锭（烫）', col: 0xff7043, hot: 'ingot_ni', needTool: 'tongs' },
+            ingot_ni: { name: '镍锭', col: 0xb0bec5, use: '做镍电池（电量两倍）、镍稿（采矿多拿 1 个）' },
+            battery_ni: { name: '镍电池', col: 0x26a69a, cellU: 360, use: '装进电池组，一节 360 U（普通电池的两倍），电压还是 1.5 V' },
+            pick_ni: { name: '镍稿', col: 0x78909c, tool: 2, bonus: 1, use: '跟铁稿一样：采矿一次多拿 1 个' },
+            pack_al: { name: '铝架背包', col: 0xb0bec5, wear: 'back', slots: 24, warm: 0, use: '戴在背上，背包 +24 格（共 48 格）；脱下前多出来的格子要先清空' }
+        });
+        IND_ELEM_OF.ingot_al = 13; IND_ELEM_OF.ingot_ni = 28;
+        Object.assign(IND_NODES, { ore_al: { give: [1, 2], tool: 2 }, ore_ni: { give: [1, 2], tool: 1 } });
+        IND_OUTCROP.ore_al = 1; IND_OUTCROP.ore_ni = 1;
+        IND_BIOMES.mountain.res.ore_al = 2; IND_BIOMES.mountain.res.ore_ni = 3;
+        CK_MELT.hot_ni = 1455;
+        IND_RECIPES.push({ in: { ore_ni: 1 }, out: { hot_ni: 1 }, cls: 'smelt', minT: 1455, time: 30, hard: true });
+        IND_EL_RECIPES.push({ name: '电解铝土矿', in: { ore_al: 2, salt: 1 }, out: { ingot_al: 1 }, minV: 6, hard: true });
+        IND_CRAFT.push(
+            { out: 'battery_ni', in: { wire: 2, ingot_ni: 2, ingot_zn: 1 }, hard: true },
+            { out: 'pick_ni', in: { ingot_ni: 3, wood: 2 }, hard: true },
+            { out: 'pack_al', in: { ingot_al: 6, yarn: 4, wire: 4 }, hard: true },
+            { out: 'wire', n: 3, in: { ingot_al: 1 }, hard: true }
+        );

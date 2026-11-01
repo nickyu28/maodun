@@ -584,7 +584,7 @@
             b.cookers = b.cookers.filter(function (c) { return c && IND_COOK[c.ty] && c.ty !== 'stove' && isFinite(c.x) && isFinite(c.z) && c.id; }).slice(0, IND_COOK_CAP);
             b.cookers.forEach(function (c) { indFixCook(c, b); });
             b.cseq = indNum(b.cseq, 0, 0, 1e9) | 0; b.cookers.forEach(function (c) { b.cseq = Math.max(b.cseq, c.id); });
-            b.devs.forEach(function (d) { d.cy = typeof d.cy === 'string' && indCylParse(d.cy) ? d.cy : null; d.ct = indNum(d.ct, 0, 0, 100); d.pt = indNum(d.pt, 0, 0, 100); if (IND_DEV_FIX[d.ty]) IND_DEV_FIX[d.ty](d); });
+            b.devs.forEach(function (d) { if (d.ty === 'bank') { d.ni = indNum(d.ni, 0, 0, 64); if (d.um !== undefined) d.um = indNum(d.um, 0, 0, 64 * 360); } d.cy = typeof d.cy === 'string' && indCylParse(d.cy) ? d.cy : null; d.ct = indNum(d.ct, 0, 0, 100); d.pt = indNum(d.pt, 0, 0, 100); if (IND_DEV_FIX[d.ty]) IND_DEV_FIX[d.ty](d); });
             let ids = {}; b.devs.forEach(function (d) { ids[d.id] = d; });
             if (!Array.isArray(b.wires)) b.wires = [];
             b.wires = b.wires.filter(function (w) { return Array.isArray(w) && ids[w[0]] && ids[w[1]] && IND_DEVS[ids[w[0]].ty].src && !IND_DEVS[ids[w[1]].ty].src; });
@@ -1710,7 +1710,7 @@
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             let k = indSel(), a = indAim();
-            if (a && a.kind === 'dev' && a.o.ty === 'bank' && k === 'battery') { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
+            if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
             if (IND_ITEMS[k].dev) return indPlaceDev(k);
@@ -1930,7 +1930,7 @@
             B.devs.forEach(function (d) {
                 if (Math.hypot(d.x - x, d.z - z) > R) return;
                 if (d.st) Object.keys(d.st).forEach(function (k) { add(k, d.st[k]); });
-                if (d.ty === 'bank') add('battery', Math.ceil(d.u / IND_BAT_U - 1e-9));
+                if (d.ty === 'bank') indBankCells(d).forEach(function (c) { add(c[0], c[1]); });
                 if (d.rods) d.rods.forEach(function (r) { add(r.spent ? 'rod_spent' : nkRodKey(r), 1); });
                 if (d.cy) add(d.cy, 1);
             });
@@ -2258,7 +2258,7 @@
         function indPickDev(d) {
             let k = 'dev_' + d.ty; if (indBagAdd(k, 1) <= 0) { indFlash('背包满了'); return false; }
             let tot = { box: 0, bag: 0, ground: 0 }, put = function (key, n) { let r = indBoxAdd(key, n); tot.box += r.box; tot.bag += r.bag; tot.ground += r.ground; };
-            if (d.ty === 'bank') { let b = Math.ceil(d.u / IND_BAT_U - 1e-9); if (b > 0) { let t = indBagAdd('battery', b); if (t < b) put('battery', b - t); if (t > 0) tot.bag += t; } }   // 电池先还背包，放不下的走仓库箱／地上
+            if (d.ty === 'bank') indBankCells(d).forEach(function (c) { put(c[0], c[1]); })   ;   // 电池先还背包，放不下的走仓库箱／地上
             if (d.st) Object.keys(d.st).forEach(function (k) { put(k, d.st[k]); });   // 电解槽里的东西放回仓库箱（放不下进背包，再放不下掉在地上，不会没）
             if (d.rods) d.rods.forEach(function (r) { put(r.spent ? 'rod_spent' : nkRodKey(r), 1); });   // 反应堆里的燃料棒
             if (d.cy) put(d.cy, 1);
@@ -2276,20 +2276,29 @@
         }
         // 电池组装电池：先补电再加节。有用完的（电量 < 节数 × 180）就是替换，节数、电压不变；满电了才加一节（上限 64）；
         // 加一节之前看接着的用电器：电压会超过哪个的额定就不装。一次放 n 个，到上限或会超压就停；返回放了几个
-        function indBankMax(d) { return d.bats * IND_BAT_U; }
+        // 电池组容量：普通电池一节 180 U，镍电池一节 360 U（d.um 记总容量，没有就按 180 × 节数；d.ni 记镍电池几节）
+        function indBankMax(d) { return d.um !== undefined ? d.um : d.bats * IND_BAT_U; }
+        // 收起时还回哪些电池：先还镍电池（按电量），剩下的电量按普通电池算
+        function indBankCells(d) {
+            let u = d.u, out = [], n = Math.min(d.ni || 0, Math.ceil(u / 360 - 1e-9));
+            if (n > 0) { out.push(['battery_ni', n]); u = Math.max(0, u - 360 * n); }
+            let b = Math.ceil(u / IND_BAT_U - 1e-9); if (b > 0) out.push(['battery', b]);
+            return out;
+        }
         function indBankOver(d) {   // 再加一节会超过哪个用电器的额定？返回 { dev, V } 或 null
             let V = (d.bats + 1) * IND_BAT_V, hit = null;
             ind.base.wires.forEach(function (w) { if (w[0] !== d.id || hit) return; let x = indDev(w[1]); if (x && V > IND_DEVS[x.ty].rated + 1e-6) hit = { dev: x, V: V }; });
             return hit;
         }
-        function indBankPut(d, n) {
+        function indBankPut(d, n, key) {
+            key = key || 'battery'; let cellU = IND_ITEMS[key].cellU || IND_BAT_U;
             let done = 0, why = '', repl = 0, add = 0;
-            while (done < n && ind.bag.battery > 0) {
-                if (d.u < indBankMax(d) - 1e-6) { d.u = Math.min(indBankMax(d), d.u + IND_BAT_U); indBagDel('battery', 1); done++; repl++; continue; }
+            while (done < n && ind.bag[key] > 0) {
+                if (d.u < indBankMax(d) - 1e-6) { d.u = Math.min(indBankMax(d), d.u + cellU); indBagDel(key, 1); done++; repl++; continue; }
                 if (d.bats >= 64) { why = '装满了（64 节）'; break; }
                 let o = indBankOver(d);
                 if (o) { why = '再装一节就 ' + o.V.toFixed(1) + ' V，会超过' + IND_DEVS[o.dev.ty].name + '的额定 ' + IND_DEVS[o.dev.ty].rated + ' V，装不进去'; break; }
-                indBagDel('battery', 1); d.bats++; d.u += IND_BAT_U; done++; add++;
+                indBagDel(key, 1); d.um = indBankMax(d) + cellU; d.bats++; d.u += cellU; if (key === 'battery_ni') d.ni = (d.ni || 0) + 1; done++; add++;
             }
             if (done > 0) indSave();
             let st = d.bats + ' 节 ' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d);
@@ -2302,13 +2311,13 @@
             let d = indDev(id); if (!d || d.ty !== 'bank') return;
             ind.panelEl = id;
             indPanelShow('bank', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">电池组</div>' +
-                '<div style="line-height:1.7;">' + d.bats + ' 节　' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d) + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节</div>' +
+                '<div style="line-height:1.7;">' + d.bats + ' 节　' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d) + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节' + (ind.bag.battery_ni ? '，镍电池 ' + ind.bag.battery_ni + ' 节' : '') + '</div>' +
                 '<div style="margin-top:8px;"><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',1)">放 1</button><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',999)">放全部</button>' +
                 '<input id="ind-bank-n" type="number" min="1" value="5" style="width:64px;padding:6px;font-size:15px;margin:3px;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indBankPutBtn(' + id + ',+document.getElementById(\'ind-bank-n\').value)">放这么多</button></div>' +
                 '<div style="margin-top:6px;font-size:12px;color:#888;">先替换用完的电池，满电了才加节；加节会超过接着的用电器额定就不装</div>' +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
-        function indBankPutBtn(id, n) { let d = indDev(id); if (!d) return; n = Math.max(0, Math.floor(+n || 0)); if (n > 0) indBankPut(d, n); }
+        function indBankPutBtn(id, n) { let d = indDev(id); if (!d) return; n = Math.max(0, Math.floor(+n || 0)); if (n > 0) indBankPut(d, n, indSel() === 'battery_ni' || (!ind.bag.battery && ind.bag.battery_ni) ? 'battery_ni' : 'battery'); }
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
         function indDevAct(d) {
             let k = indSel(), D = IND_DEVS[d.ty];
@@ -2330,7 +2339,7 @@
                 return true;
             }
             if (d.ty === 'xfmr') { if (k !== 'wire') return pwXfmrCycle(d); }
-            if (d.ty === 'bank' && k === 'battery') { return indBankPut(d, 1) > 0; }
+            if (d.ty === 'bank' && (k === 'battery' || k === 'battery_ni')) { return indBankPut(d, 1, k) > 0; }
             if (d.ty === 'el') { indPanelEl(d.id); return true; }
             if (d.ty === 'comp') { indPanelComp(d.id); return true; }
             if (d.ty === 'press') { indPanelPress(d.id); return true; }

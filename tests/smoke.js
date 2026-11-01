@@ -9093,6 +9093,38 @@ async function enterExit(tab, key) {
             report('IND52 背包扩张：草／布／钢架三档 +6／+12／+18 格、多出来的格子有东西脱不下来、换大行换小不行、存档不丢', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND53')) {
+            // IND53 铝和镍（任务 33，硬核）：山地有铝土矿、镍矿；镍矿进大窑出镍锭；铝土矿进电解槽出铝锭；镍电池放进电池组加 360 U；元素表 Al、Ni 点亮；铝架背包 +24 格；铝线、镍稿
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const mt = await J(`(function(){ let al = 0, ni = 0, maps = 0; for (let s = 1; s <= 6; s++) { indGoTrip(s * 7717); maps++; ind.nodes.forEach(function (n) { if (n.key === 'ore_al') al++; if (n.key === 'ore_ni') ni++; }); } indGoBase(null); return { al: al, ni: ni }; })()`);
+                if (!(mt.al > 0 && mt.ni > 0)) bad.push('山地要有铝土矿和镍矿（6 张图） ' + JSON.stringify(mt));
+                // 镍矿进大窑
+                const k = await J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: { ore_ni: 1 }, out: {}, fuel: 900, fire: 4, temp: 1600, cook: null, spout: [], spoutTy: 'iron', bellows: true }]; indAdvance(31); let c = ind.base.cookers[0]; return { out: c.out, spout: c.spout.map(function (e) { return e.k; }) }; })()`);
+                if (!((k.out.hot_ni || 0) + k.spout.filter(function (x) { return x === 'hot_ni'; }).length === 1)) bad.push('镍矿进大窑出（烫的）镍锭 ' + JSON.stringify(k));
+                // 铝土矿进电解槽
+                const al = await J(`(function(){ ind.base.devs = [{ id: 1, ty: 'el', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: { ore_al: 2, salt: 1 }, pw: true, v: 12 }]; ind.base.wires = []; ind.base.elems = {}; ind.bag = {}; indElTick(indDev(1), IND_EL_TIME + 1); let st = indDev(1).st; indBagAdd('ingot_al', 1); indBagAdd('ingot_ni', 1); return { st: st, al: !!ind.base.elems[13], ni: !!ind.base.elems[28] }; })()`);
+                if (!(al.st.ingot_al === 1 && !al.st.ore_al)) bad.push('电解槽 2 铝土矿 + 1 盐出 1 铝锭 ' + JSON.stringify(al));
+                if (!(al.al && al.ni)) bad.push('元素表 Al、Ni 第一次拿到就点亮 ' + JSON.stringify(al));
+                // 镍电池
+                const bt = await J(`(function(){ ind.base.devs = [{ id: 1, ty: 'bank', x: -20, z: 0, bats: 2, u: 360, on: true, ft: 20, st: {} }]; ind.base.wires = []; ind.bag = { battery_ni: 2 }; indSelect('battery_ni'); let d = indDev(1); let n = indBankPut(d, 1, 'battery_ni'); let a = [d.bats, d.u, indBankMax(d)]; indBankPut(d, 1, 'battery_ni'); return { n: n, a: a, bats: d.bats, u: d.u, max: indBankMax(d), ni: d.ni, v: indSrcVolt(d) }; })()`);
+                if (!(bt.n === 1 && bt.a[0] === 3 && bt.a[1] === 720 && bt.bats === 4 && bt.u === 1080 && bt.max === 1080 && bt.ni === 2 && Math.abs(bt.v - 6) < 0.01)) bad.push('镍电池一节 +360 U、电压照旧 1.5 V/节 ' + JSON.stringify(bt));
+                // 收起电池组：镍电池还镍电池
+                const pk = await J(`(function(){ ind.bag = {}; ind.base.chests = [{ id: 1, x: 12, z: 12, big: true, items: {} }]; indPickDev(indDev(1)); return { ni: ind.bag.battery_ni || 0, b: ind.bag.battery || 0 }; })()`);
+                if (!(pk.ni === 2 && pk.b === 2)) bad.push('收起带镍电池的电池组，镍电池还回来（原来的 2 节普通电池也还 2 节） ' + JSON.stringify(pk));
+                // 铝架背包 +24、铝线、镍稿配方
+                const rc = await J(`(function(){ ind.base.rule = 'hard'; ind.base.wear = {}; ind.bag = { pack_al: 1 }; indWear('pack_al'); let s = indBagSlots(); ind.bag = { ingot_al: 1 }; let i = IND_CRAFT.findIndex(function (r) { return r.out === 'wire' && r.in.ingot_al; }); let ok = indCraft(i); let w = ind.bag.wire; ind.bag = { ingot_ni: 3, wood: 2 }; let j = IND_CRAFT.findIndex(function (r) { return r.out === 'pick_ni'; }); indCraft(j); return { s: s, w: w, pick: ind.bag.pick_ni }; })()`);
+                if (!(rc.s === 48 && rc.w === 3 && rc.pick === 1)) bad.push('铝架背包 48 格、1 铝锭出 3 根铜线、镍稿 ' + JSON.stringify(rc));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND53 铝和镍：山地有矿、镍矿进窑出镍锭、铝土矿进电解槽出铝锭、镍电池 360 U、元素表点亮、铝架背包、铝线、镍稿', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
