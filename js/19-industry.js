@@ -3364,10 +3364,11 @@
         }
         function indHudUpdate() {
             let R = ind; if (!R || R.over) return;
-            if (R.panel === 'stove' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'); if (p) { indPanelSet(p, indStoveHtml()); R.panelDirty = false; } }
-            if (R.panel === 'el' && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, indElHtml(d)); R.panelDirty = false; } }
-            if (IND_DEV_HTML[R.panel] && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, IND_DEV_HTML[R.panel](d)); R.panelDirty = false; } }
-            if ((R.panel === 'comp' || R.panel === 'press') && (R.panelDirty || R.t % 1 < 0.21)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, R.panel === 'comp' ? indCompHtml(d) : indPressHtml(d)); R.panelDirty = false; } }
+            let sec = Math.floor(R.t), tick = sec !== R.panelSec; if (tick) R.panelSec = sec;   // 面板每秒刷新一次：按整秒变没变算，帧率低也不会漏（原来是 t % 1 < 0.21，一帧超过 0.2 秒会一直跳过）
+            if (R.panel === 'stove' && (R.panelDirty || tick)) { let p = document.getElementById('ind-panel'); if (p) { indPanelSet(p, indStoveHtml()); R.panelDirty = false; } }
+            if (R.panel === 'el' && (R.panelDirty || tick)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, indElHtml(d)); R.panelDirty = false; } }
+            if (IND_DEV_HTML[R.panel] && (R.panelDirty || tick)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, IND_DEV_HTML[R.panel](d)); R.panelDirty = false; } }
+            if ((R.panel === 'comp' || R.panel === 'press') && (R.panelDirty || tick)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, R.panel === 'comp' ? indCompHtml(d) : indPressHtml(d)); R.panelDirty = false; } }
             wdCompassTick(); if (R.panel === 'map') wdMapDraw();   // 指南针、地图（19-industry-world.js）
             let kb2 = document.getElementById('ind-btn-kick'); if (kb2) kb2.style.display = R.base.rule === 'hard' && R.where === 'base' ? '' : 'none';
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
