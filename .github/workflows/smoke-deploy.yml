@@ -15,6 +15,7 @@ name: Smoke test and deploy
 on:
   push:
     branches: [main]
+    paths-ignore: ['docs/**']   # 只改文档的提交不跑冒烟也不部署，免得排队占着 CI（改了别的文件照跑）
   pull_request:
     branches: [main]
   workflow_dispatch:
