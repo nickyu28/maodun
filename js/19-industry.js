@@ -2491,7 +2491,7 @@
             let i = indElRecipe(d, V);
             let st = '电压 <b>' + V.toFixed(1) + ' V</b>（额定 12 V）' + (i >= 0 && d.pw ? '　正在' + IND_EL_RECIPES[i].name + ' ' + Math.floor((d.et || 0) / IND_EL_TIME * 100) + '%' : '');
             let has = Object.keys(d.st).map(function (k) { return indName(k) + '×' + d.st[k]; }).join('、') || '空';
-            let put = Object.keys(ind.bag).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indElPut(' + d.id + ',\'' + k + '\')">放 1</button>'); }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
+            let put = Object.keys(ind.bag).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indElPut(' + d.id + ',\'' + k + '\')">放 1</button>' + indNumBox('el', d.id, k, '放')); }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
             let how = IND_EL_RECIPES.filter(function (r) { return !r.hard || indHard(); }).map(function (r) { return r.name + '：' + Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + '，' + r.minV + ' V 以上' + (r.molten ? '，灶台 ' + r.molten + '°C 以上 3 米内' : ''); }).join('<br>');
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">电解槽</div><div style="line-height:1.7;">' + st + '</div><div style="margin-top:4px;">里面：' + has + '</div>' +
                 '<div style="margin-top:6px;color:#888;font-size:13px;line-height:1.6;">' + how + '</div>' +
@@ -2558,7 +2558,7 @@
             let st = '电压 <b>' + V.toFixed(1) + ' V</b>（额定 12 V）' + (d.pw ? '　正在压 ' + Math.floor((d.ct || 0) / IND_COMP_TIME * 100) + '%' : '');
             let has = Object.keys(d.st).map(function (k) { return indName(k) + '×' + d.st[k]; }).join('、') || '空';
             let put = Object.keys(ind.bag).filter(function (k) { return IND_ITEMS[k].gas || IND_ITEMS[k].cyl; }).map(function (k) {
-                return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',1)">放 1</button>');
+                return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',1)">放 1</button>' + indNumBox('dev', d.id, k, '放'));
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没有气瓶和钢瓶</div>';
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">压缩机</div><div style="line-height:1.7;">' + st + '</div>' +
                 '<div style="margin-top:4px;">钢瓶：' + (g ? indCylName(g) : '没放') + '<br>气瓶：' + has + '</div>' +
@@ -2572,7 +2572,7 @@
             let st = '电压 <b>' + V.toFixed(1) + ' V</b>（额定 24 V）　旁边灶台 ' + (near ? Math.round(H.temp) + '°C' : '没有（3 米内）') + '<br>压力 <b>' + P + '</b> / ' + IND_PRESS_MAXP + ' 个大气压' + (d.pw ? '　' + Math.floor((d.pt || 0) / IND_PRESS_TIME * 100) + '%' : '');
             let has = Object.keys(d.st).map(function (k) { return indName(k) + '×' + d.st[k]; }).join('、') || '空';
             let put = Object.keys(ind.bag).filter(function (k) { return IND_CARBON.indexOf(k) >= 0; }).map(function (k) {
-                return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',1)">放 1</button><button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',5)">放 5</button>');
+                return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',1)">放 1</button>' + indNumBox('dev', d.id, k, '放') + '<button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',5)">放 5</button>');
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没有碳（木炭、煤、焦炭）</div>';
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">压力机</div><div style="line-height:1.7;">' + st + '</div>' +
                 '<div style="margin-top:4px;">里面：' + has + '</div>' +
@@ -3010,9 +3010,39 @@
         function indPanelSet(p, html) {
             let keep = [{ i: -1, t: p.scrollTop }], all = p.querySelectorAll('*');
             for (let i = 0; i < all.length; i++) if (all[i].scrollTop > 0) keep.push({ i: i, t: all[i].scrollTop });
+            // 填数字的框（任务 18）：刷新时打了一半的数字、光标都留着
+            let vals = {}, act = document.activeElement, focus = act && act.id && p.contains(act) && act.tagName === 'INPUT' ? { id: act.id, a: act.selectionStart, b: act.selectionEnd } : null;
+            p.querySelectorAll('input[id]').forEach(function (e) { vals[e.id] = e.value; });
             p.innerHTML = html;
             all = p.querySelectorAll('*');
             keep.forEach(function (o) { let e = o.i < 0 ? p : all[o.i]; if (e) e.scrollTop = o.t; });
+            Object.keys(vals).forEach(function (id) { let e = document.getElementById(id); if (e && p.contains(e)) e.value = vals[id]; });
+            if (focus) { let e = document.getElementById(focus.id); if (e) { e.focus(); try { e.setSelectionRange(focus.a, focus.b); } catch (x) { } } }
+        }
+        // 放东西、拿东西的"填数字"（任务 18）：每行"放 1"和"放全部"中间一个框 + 按钮，回车也行
+        function indNumId(kind, id, k) { return 'ind-n-' + kind + '-' + id + '-' + k; }
+        function indNumBox(kind, id, k, verb) {
+            let nid = indNumId(kind, id, k), go = 'indNumGo(\'' + kind + '\',' + JSON.stringify(id).replace(/"/g, '&quot;') + ',\'' + k + '\')';
+            return '<input id="' + nid + '" class="ind-num" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="几个" style="width:46px;padding:5px 4px;margin:3px 1px 3px 3px;font-size:14px;border:1px solid #bbb;border-radius:6px;" onpointerdown="event.stopPropagation()" onkeydown="if (event.key === \'Enter\') { event.preventDefault(); ' + go + '; }">' +
+                '<button style="' + IND_BTN + 'margin-left:1px;" onpointerdown="event.stopPropagation()" onclick="' + go + '">' + verb + '</button>';
+        }
+        function indNumGo(kind, id, k) {
+            if (!ind) return false;
+            let el = document.getElementById(indNumId(kind, id, k)), raw = el ? String(el.value).trim() : '', n = /^\d+$/.test(raw) ? parseInt(raw, 10) : 0;
+            if (!(n > 0)) { indFlash('填个数字'); return false; }
+            if (el) el.value = '';
+            if (kind === 'box') {
+                let c = indChestCur(); if (!c || !c.items[k]) return false;
+                let want = Math.min(n, c.items[k]), t = indBagAdd(k, want);
+                if (t < want) indFlash(t > 0 ? '背包满了，只拿了 ' + t + ' 个' : '背包满了');
+                c.items[k] -= t; if (c.items[k] <= 0) delete c.items[k];
+                indSave(); if (ind.panel === 'box') indPanelBox(); return t > 0;
+            }
+            let have = ind.bag[k] || 0; if (!have) return false; n = Math.min(n, have);
+            if (kind === 'stove') { indStovePut(k, n); return true; }
+            if (kind === 'el') { for (let i = 0; i < n && ind.bag[k]; i++) indElPut(id, k); return true; }
+            if (kind === 'dev') { indDevPut(id, k, n); return true; }
+            return false;
         }
         function indPanelShow(kind, html) {
             if (!ind) return;
@@ -3051,7 +3081,7 @@
             let rows = SL.length ? SL.map(function (it, i) {
                 let on = S && S.from === 'box' && S.i === i;
                 return '<div class="ind-slot" data-from="box" data-i="' + i + '" onpointerdown="indDragDown(event,\'box\',' + i + ')" style="cursor:grab;user-select:none;touch-action:manipulation;' + (on ? 'background:#ede7f6;outline:2px solid #5e35b1;' : '') + '">' +
-                    indRow(indName(it.k) + ' × ' + it.n, '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',1)">拿 1</button><button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',' + IND_STACK + ')">全拿</button><button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
+                    indRow(indName(it.k) + ' × ' + it.n, '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',1)">拿 1</button>' + indNumBox('box', 0, it.k, '拿') + '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',' + IND_STACK + ')">全拿</button><button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
             }).join('') : '<div style="color:#999;padding:8px 0;">空的</div>';
             let selBtn = S ? (S.from === 'bag' ? '<button id="ind-box-selput" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveSel()">放进箱子</button>' : '<button id="ind-box-seltake" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveSel()">拿回来</button>') : '';
             indPanelShow('box', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">仓库箱' + (c.big ? '' : '　' + indSlotsOf(box) + ' / ' + IND_CHEST_SLOTS + ' 格') + '</div>' +
@@ -3224,7 +3254,7 @@
             { let pool = ckPool(S), K0 = indCookK(c.ty), ri = S.cook ? S.cook.i : indCookFind(pool, K0, undefined, S.items);   // 这次出多少（任务 36）：现在放进去的东西能做几份，连空瓶空桶一起写
               if (ri >= 0) { let r0 = IND_RECIPES[ri], n0 = S.cook ? (S.cook.n || 1) : indBatchN(r0, pool, K0); st += '<br>这次出：<b>' + indOutAll(r0, n0) + '</b>' + (n0 > 1 ? '（' + n0 + ' 份）' : ''); } }
             let put = Object.keys(ind.bag).map(function (k) {
-                let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button><button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',' + ind.bag[k] + ')">全放</button>';
+                let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button>' + indNumBox('stove', 0, k, '放') + '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',' + ind.bag[k] + ')">全放</button>';
                 if (IND_ITEMS[k].fuel && !(indHard() && indContOf(k) && indContOf(k).base === 'oil')) b += '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="indStoveFuel(\'' + k + '\')">' + (indContOf(k) ? '倒进炉子' : '当柴烧') + '</button>';
                 return indRow(indName(k) + ' × ' + ind.bag[k], b);
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';

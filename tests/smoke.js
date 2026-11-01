@@ -9935,6 +9935,42 @@ async function enterExit(tab, key) {
             report('IND75 快捷栏 1～10：0 选第 10 格、滚轮只转 10 格、E／B 同一面板、点格子换到手上、E 不采 F 采、老存档', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND76')) {
+            // IND76 放东西填数字（任务 18）：灶台填 17 放 17、填 999 全放、填 0 提示"填个数字"、回车也行；面板自动刷新后框里的数字和光标还在；仓库箱"拿"同样；"放 1"、"全放"不变
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`(function(){ ind.base.off.stove = false; ind.base.stove = Object.assign(ckNewState(), { spout: [] }); ind.bag = { sand: 50, stone: 5 }; ind.cookId = 'stove'; indPanelStove(); })(); true;`);
+                const box = (k) => `document.getElementById(indNumId('stove', 0, '${k}'))`;
+                let r = await J(`(function(){ let e = ${box('sand')}; if (!e) return null; e.value = '17'; e.nextElementSibling.click(); return [ind.bag.sand, ind.base.stove.items.sand, e.getAttribute('inputmode')]; })()`);
+                if (!(r && r[0] === 33 && r[1] === 17 && r[2] === 'numeric')) bad.push('填 17 点放：背包少 17、灶台多 17 ' + JSON.stringify(r));
+                r = await J(`(function(){ let e = ${box('sand')}; e.value = '999'; e.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return [ind.bag.sand || 0, ind.base.stove.items.sand]; })()`);
+                if (!(r[0] === 0 && r[1] === 50)) bad.push('填 999 回车：有多少放多少 ' + JSON.stringify(r));
+                r = await J(`(function(){ let out = []; ['0', '', '-3', 'ab'].forEach(function (v) { __fl.length = 0; let e = ${box('stone')}; e.value = v; e.nextElementSibling.click(); out.push(__fl.slice(-1)[0] + '|' + ind.bag.stone); }); return out; })()`);
+                if (!r.every(function (x) { return x === '填个数字|5'; })) bad.push('填 0／空／负数／字母：提示填个数字、不放 ' + JSON.stringify(r));
+                // 自动刷新：打了一半的数字和光标还在
+                r = await J(`(function(){ let e = ${box('stone')}; e.focus(); e.value = '123'; e.setSelectionRange(1, 1); indPanelStove(); let e2 = ${box('stone')}; return [e2 === e, e2.value, document.activeElement === e2, e2.selectionStart]; })()`);
+                if (!(r[1] === '123' && r[2] === true && r[3] === 1)) bad.push('刷新后框里的数字和光标要在 ' + JSON.stringify(r));
+                // "放 1"、"全放"不变
+                r = await J(`(function(){ ind.bag.stone = 5; indStovePut('stone', 1); let a = ind.bag.stone; indStovePut('stone', ind.bag.stone); return [a, ind.bag.stone || 0, ind.base.stove.items.stone]; })()`);
+                if (r.join() !== '4,0,5') bad.push('放 1、全放照旧 ' + r.join());
+                await T.eval(`indPanelClose(); true;`);
+                // 仓库箱："拿"同样；背包满了能拿几个拿几个
+                r = await J(`(function(){ let c = ind.base.chests[0]; c.items = { sand: 40 }; ind.boxId = c.id; ind.bag = {}; indPanelBox(c.id); let e = document.getElementById(indNumId('box', 0, 'sand')); if (!e) return null; e.value = '17'; e.nextElementSibling.click(); let a = [ind.bag.sand, c.items.sand]; let e2 = document.getElementById(indNumId('box', 0, 'sand')); e2.value = '999'; e2.nextElementSibling.click(); return a.concat([ind.bag.sand, c.items.sand || 0]); })()`);
+                if (!(r && r.join() === '17,23,40,0')) bad.push('仓库箱填数字拿 ' + JSON.stringify(r));
+                r = await J(`(function(){ let c = ind.base.chests[0]; c.items = { sand: 500 }; ind.bag = {}; for (let i = 0; i < indBagSlots() - 1; i++) ind.bag['seed_' + ['wheat','potato','tomato','corn','cane','pumpkin','cotton','cabbage','radish'][i % 9] + (i < 9 ? '' : '')] = 1; let fill = 0; ['wood','stone','clay','salt','coal','charcoal','brick','wheat','potato','tomato','cotton','wool','yarn','dirt','sugar'].forEach(function (k) { if (indSlotsOf(ind.bag) < indBagSlots() - 1) ind.bag[k] = 1; }); indPanelBox(c.id); __fl.length = 0; let e = document.getElementById(indNumId('box', 0, 'sand')); e.value = '300'; e.nextElementSibling.click(); return [ind.bag.sand, c.items.sand, __fl.slice(-1)[0], indSlotsOf(ind.bag), indBagSlots()]; })()`);
+                if (!(r[0] === 99 && r[1] === 401 && /背包满了/.test(r[2]))) bad.push('背包只剩一格：拿 99 个、提示背包满了、剩下的留在箱子里 ' + JSON.stringify(r));
+                await T.eval(`indPanelClose(); true;`);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND76 填数字：放 17、填 999 全放、回车、0 和乱填提示、刷新不丢数字和光标、箱子拿同样、背包满了能拿几个拿几个', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
