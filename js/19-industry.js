@@ -662,6 +662,7 @@
             return take;
         }
         function indBagDel(k, n) { let B = ind.bag; if (!B[k]) return 0; let t = Math.min(n, B[k]); B[k] -= t; if (B[k] <= 0) delete B[k]; return t; }
+        const IND_HOTBAR = 10;   // 快捷栏 = 背包前 10 格（任务 17）
         function indSel() { let L = indSlots(); if (!L.length) return null; ind.selIdx = Math.max(0, Math.min(ind.selIdx, L.length - 1)); return L[ind.selIdx].k; }
         function indSelect(k) { let L = indSlots(), i = L.findIndex(function (x) { return x.k === k; }); if (i >= 0) ind.selIdx = i; }
         function indToolBonus(need) { let b = 0; Object.keys(ind.bag).forEach(function (k) { let d = IND_ITEMS[k]; if (d.tool && d.tool >= need && d.bonus) b = Math.max(b, d.bonus); }); return b; }
@@ -932,7 +933,7 @@
             document.addEventListener('mousedown', ind.onMouse); document.addEventListener('mouseup', ind.onMouseUp); document.addEventListener('contextmenu', ind.onCtx);
             if (!base.rule) indAskRule();
             else if (base.sawGoal === false) indGoalShow();
-            else if (gState.control !== 'pad') indFlash('左键 采集／拿／种／打开，右键 吃喝／浇水／接水，Q 放下，B 背包，Shift 跑');
+            else if (gState.control !== 'pad') indFlash('左键（或 F）采集／拿／种／打开，右键 吃喝／浇水／接水，Q 放下，1～0 选快捷栏，E 背包，Shift 跑');
             ind.last = performance.now();
             ind.raf = requestAnimationFrame(indLoop);
         }
@@ -3035,7 +3036,8 @@
             if (!SL.length) return '<div style="color:#999;padding:6px 0;">身上没东西</div>';
             return SL.map(function (it, i) {
                 let on = S && S.from === 'bag' && S.i === i, hot = IND_ITEMS[it.k].hot;
-                return '<span class="ind-slot" data-from="bag" data-i="' + i + '" onpointerdown="indDragDown(event,\'bag\',' + i + ')" style="display:inline-block;margin:2px;padding:3px 6px;border-radius:10px;cursor:grab;font-size:13px;user-select:none;touch-action:manipulation;border:2px solid ' + (on ? '#5e35b1' : hot ? '#c62828' : '#cfd8dc') + ';background:' + (on ? '#ede7f6' : hot ? '#ffcdd2' : '#fff') + ';">' + indName(it.k) + '×' + it.n +
+                let pre = i === 0 ? '<div style="font-size:12px;color:#5e35b1;margin:2px 0;">快捷栏（1～9、0）' + (ind.panel === 'bag' ? '　点一格：换到手上那格' : '') + '</div>' : i === IND_HOTBAR ? '<div style="font-size:12px;color:#888;margin:6px 0 2px;">其余</div>' : '';
+                return pre + '<span class="ind-slot" data-from="bag" data-i="' + i + '" onpointerdown="indDragDown(event,\'bag\',' + i + ')" style="display:inline-block;margin:2px;padding:3px 6px;border-radius:10px;cursor:grab;font-size:13px;user-select:none;touch-action:manipulation;border:2px solid ' + (on ? '#5e35b1' : hot ? '#c62828' : '#cfd8dc') + ';background:' + (on ? '#ede7f6' : hot ? '#ffcdd2' : '#fff') + ';">' + (i < IND_HOTBAR ? '<b style="color:#5e35b1;margin-right:3px;">' + (i === 9 ? 0 : i + 1) + '</b>' : '') + indName(it.k) + '×' + it.n +
                     '<button class="ind-trash" style="' + IND_X_BTN + '" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indTrash(\'bag\',' + i + ')">销毁</button></span>';
             }).join('');
         }
@@ -3064,6 +3066,21 @@
             if (!ind) return;
             indPanelShow('bag', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">背包　' + indSlots().length + ' / ' + indBagSlots() + ' 格</div><div id="ind-bag-zone">' + indBagChips() + '</div>' +
                 '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+        }
+        // 背包格子换位置（任务 17）：背包存的是"种类 → 数量"，格子按种类放进来的先后排，所以换两格 = 换两种东西在里面的先后（存档格式不变）
+        function indBagSwap(i, j) {
+            let SL = indSlots(), a = SL[i], b = SL[j]; if (!a || !b || a.k === b.k) return false;
+            let ks = Object.keys(ind.bag), ia = ks.indexOf(a.k), ib = ks.indexOf(b.k); ks[ia] = b.k; ks[ib] = a.k;
+            let cp = Object.assign({}, ind.bag); ks.forEach(function (k) { delete ind.bag[k]; }); ks.forEach(function (k) { ind.bag[k] = cp[k]; });
+            return true;
+        }
+        // 背包面板里点一格：跟手上那格（快捷栏选中的）互换，手上就是它了
+        function indBagToHand(i) {
+            let h = Math.min(ind.selIdx, IND_HOTBAR - 1), SL = indSlots();
+            if (!SL[i]) return false;
+            if (i !== h && SL[h]) { let k = SL[i].k; indBagSwap(i, h); let L2 = indSlots(), ni = L2.findIndex(function (x) { return x.k === k; }); ind.selIdx = ni >= 0 && ni < IND_HOTBAR ? ni : h; }
+            else ind.selIdx = Math.min(i, IND_HOTBAR - 1);
+            indSave(); if (ind.panel === 'bag') indPanelBag(); return true;
         }
         function indPanelRefresh() { if (!ind) return; if (ind.panel === 'box') indPanelBox(); else if (ind.panel === 'bag') indPanelBag(); else if (ind.panel === 'stove') indPanelStove(); }
 
@@ -3113,8 +3130,14 @@
             let on = D.on, z = on ? indDragZoneAt(e.clientX, e.clientY) : null;
             indDragEnd();
             if (!on) {   // 没拖动：点选（触屏就靠这个）
+                if (ind && ind.panel === 'bag' && D.from === 'bag') { indBagToHand(D.i); return; }   // 背包面板：点一格换到手上那格（任务 17）
                 if (ind && ind.panel === 'box') { let S = ind.boxSel; ind.boxSel = S && S.from === D.from && S.i === D.i ? null : { from: D.from, i: D.i }; indPanelBox(); }
                 return;
+            }
+            if (ind && ind.panel === 'bag' && D.from === 'bag') {   // 背包面板里拖到另一格：两格互换（任务 17）
+                let el = document.elementFromPoint(e.clientX, e.clientY), t = el && el.closest && el.closest('.ind-slot[data-from="bag"]');
+                if (t && +t.getAttribute('data-i') !== D.i) indBagSwap(D.i, +t.getAttribute('data-i'));
+                indPanelBag(); return;
             }
             if (z && z !== D.from) indBoxMove(D.from, D.i); else if (ind && ind.panel === 'box') indPanelBox();
         }
@@ -3268,18 +3291,20 @@
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）
             if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); indTrashHand(); return; }   // Ctrl+Q：销毁手上那一格（5 秒能撤销）
-            if (k === 'b' && (!ind.panel || ind.panel === 'bag')) { if (ind.panel) indPanelClose(); else indPanelBag(); return; }
+            if ((k === 'b' || k === 'e') && (!ind.panel || ind.panel === 'bag')) { if (ind.panel) indPanelClose(); else indPanelBag(); return; }   // E 和 B 开同一个背包面板（任务 17）
             if (ind.panel) return;
-            if (k === 'q' || k === 'g') indDrop(); else if (k === 'e' || k === 'f') indAction(); else if (k === 'r') indUse();
-            else if (/^[1-9]$/.test(k)) ind.selIdx = +k - 1;
+            if (k === 'q' || k === 'g') indDrop(); else if (k === 'f') indAction(); else if (k === 'r') indUse();   // E 不再是左键动作（任务 17）
+            else if (/^[0-9]$/.test(k)) ind.selIdx = k === '0' ? 9 : +k - 1;   // 快捷栏 1～9、0 是第 10 格
         }
         function indKeyUp(e) {
             if (!ind) return;
             let k = (e.key || '').toLowerCase();
             if (IND_KEYMAP[k]) ind.k[IND_KEYMAP[k]] = false; else if (k === ' ') ind.k.jump = false; else if (k === 'shift') ind.k.run = false;
         }
-        function indBindKeys() { window.addEventListener('keydown', indKeyDown); window.addEventListener('keyup', indKeyUp); }
-        function indUnbindKeys() { window.removeEventListener('keydown', indKeyDown); window.removeEventListener('keyup', indKeyUp); }
+        function indBindKeys() { window.addEventListener('keydown', indKeyDown); window.addEventListener('keyup', indKeyUp); window.addEventListener('wheel', indWheel, { passive: true }); }
+        function indUnbindKeys() { window.removeEventListener('keydown', indKeyDown); window.removeEventListener('keyup', indKeyUp); window.removeEventListener('wheel', indWheel); }
+        // 鼠标滚轮：只在快捷栏 10 格里转（任务 17）；开着面板不转
+        function indWheel(e) { if (!ind || ind.over || ind.paused || ind.panel || !e.deltaY) return; let n = Math.max(1, Math.min(IND_HOTBAR, indSlots().length)); ind.selIdx = ((Math.min(ind.selIdx, n - 1) + (e.deltaY > 0 ? 1 : -1)) % n + n) % n; }
         function indHold(dir, on) { if (ind) ind.k[dir] = !!on; }
         function indBuildHud() {
             let n = document.createElement('div'); n.id = 'ind-night';
@@ -3338,12 +3363,14 @@
             if (R.peel) st += '<br>' + wdPeelTxt();
             if (R.shear) st += '<br>剪羊毛 ' + Math.min(99, Math.floor(R.shear.t / IND_SHEAR_T * 100)) + '%' + (indSel() === 'shears' ? '' : '　<b style="color:#c62828">停着：拿上剪刀</b>');
             let SL = indSlots(), sel = indSel(), bag = '';
-            for (let i = 0; i < indBagSlots(); i++) {
-                let it = SL[i];
-                if (!it) { bag += '<span style="display:inline-block;margin:1px;padding:2px 6px;border-radius:10px;border:2px dashed #e0e0e0;color:#ccc;font-size:12px;">' + (i + 1) + '</span>'; continue; }
+            for (let i = 0; i < IND_HOTBAR; i++) {   // 快捷栏：背包前 10 格（任务 17），方格上写 1～9、0
+                let it = SL[i], lab = '<b style="position:absolute;left:3px;top:1px;font-size:11px;color:#777;">' + (i === 9 ? 0 : i + 1) + '</b>';
+                let box = 'position:relative;display:inline-block;vertical-align:top;width:66px;height:46px;margin:1px;padding:14px 2px 0;box-sizing:border-box;border-radius:6px;font-size:11px;line-height:1.2;text-align:center;overflow:hidden;';
+                if (!it) { bag += '<span class="ind-hot" style="' + box + 'border:2px dashed #e0e0e0;color:#ccc;">' + lab + '</span>'; continue; }
                 let on = i === ind.selIdx, hotS = IND_ITEMS[it.k].hot ? Math.ceil(ind.hotT && ind.hotT[it.k] !== undefined ? ind.hotT[it.k] : IND_HOT_COOL) : 0;
-                bag += '<span onclick="ind.selIdx=' + i + '" style="display:inline-block;margin:1px;padding:2px 6px;border-radius:10px;cursor:pointer;font-size:12px;border:2px solid ' + (on ? '#5e35b1' : hotS ? '#c62828' : '#cfd8dc') + ';background:' + (hotS ? '#ffcdd2;color:#b71c1c' : on ? '#ede7f6' : '#fff') + ';">' + (i + 1) + ' ' + indName(it.k) + '×' + it.n + (hotS ? ' 烫 ' + hotS + ' 秒' : '') + '</span>';
+                bag += '<span class="ind-hot" onclick="ind.selIdx=' + i + '" style="' + box + 'cursor:pointer;border:2px solid ' + (on ? '#5e35b1' : hotS ? '#c62828' : '#cfd8dc') + ';background:' + (hotS ? '#ffcdd2;color:#b71c1c' : on ? '#ede7f6' : '#fff') + ';">' + lab + indName(it.k) + '<br>×' + it.n + (hotS ? ' 烫' + hotS : '') + '</span>';
             }
+            if (SL.length > IND_HOTBAR) bag += '<span style="display:inline-block;vertical-align:top;margin:1px 4px;font-size:12px;color:#888;line-height:46px;">还有 ' + (SL.length - IND_HOTBAR) + ' 格（E）</span>';
             let a = indAim(), hint = '';
             let rh = R.rh && !R.rh.done ? R.rh : null;
             if (R.ch) hint = R.ch.label + ' ' + Math.min(99, Math.floor(R.ch.t / R.ch.need * 100)) + '%<br><small>站着别动</small>';

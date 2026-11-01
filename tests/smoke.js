@@ -6345,10 +6345,10 @@ async function enterExit(tab, key) {
                 await T.eval(`indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'shears'; })); true;`);
                 if (await T.eval(`!!ind.bag.shears || __fl.indexOf('背包满了') < 0`)) bad.push('背包满了还做得出东西 ' + await T.eval(`JSON.stringify([ind.bag.shears, __fl])`));
                 await T.eval(`indFlash = window.__oldFlash; ind.bag = {}; true;`);
-                // 快捷栏照格子显示：24 格；选第 2 个格子
+                // 快捷栏照格子显示：10 格（任务 17）；选第 2 个格子
                 await T.eval(`ind.bag = { wood: 150, stone: 1 }; ind.hudSig = ''; indHudUpdate(); true;`);
                 const cells = await T.eval(`document.getElementById('ind-bag').children.length`);
-                if (cells !== 24) bad.push('快捷栏应该有 24 个格子 ' + cells);
+                if (cells !== 10) bad.push('快捷栏应该有 10 个格子（任务 17） ' + cells);
                 await T.eval(`ind.selIdx = 1; true;`);
                 if ((await T.eval(`indSel()`)) !== 'wood') bad.push('第 2 格应该是木头（同一种占 2 格）');
                 await T.eval(`ind.selIdx = 2; true;`);
@@ -9900,6 +9900,39 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND74 现实对不上的四处：面粉和面包、奶酪 40°C 90 秒、石油 250 天然气 500、油点 20 桶干井', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND75')) {
+            // IND75 快捷栏 1～10（任务 17）：15 种东西，按 0 选第 10 格、按 1 选第 1 格；E 面板里点第 11 格的东西和手上那格互换；E 不再是左键动作（F 还行）；
+            // B 和 E 开同一个面板；滚轮转一圈只经过 10 格；快捷栏显示 10 个方格；老存档（种类 → 数量）读档不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const key = (k) => `indKeyDown({ key: '${k}', target: document.body, preventDefault: function () {} });`;
+                const K15 = ['wood', 'stone', 'sand', 'clay', 'salt', 'coal', 'charcoal', 'brick', 'wheat', 'potato', 'tomato', 'cotton', 'wool', 'yarn', 'dirt'];
+                await T.eval(`(function(){ ind.bag = {}; ${JSON.stringify(K15)}.forEach(function (k) { ind.bag[k] = 2; }); ind.selIdx = 0; ind.hudSig = ''; indHudUpdate(); })(); true;`);
+                let r = await J(`(function(){ ${key('0')} let a = [ind.selIdx, indSel()]; ${key('1')} let b = [ind.selIdx, indSel()]; ${key('5')} return [a, b, [ind.selIdx, indSel()], document.querySelectorAll('#ind-bag .ind-hot').length]; })()`);
+                if (JSON.stringify(r) !== JSON.stringify([[9, 'potato'], [0, 'wood'], [4, 'salt'], 10])) bad.push('按 0 选第 10 格、按 1 选第 1 格、快捷栏 10 格 ' + JSON.stringify(r));
+                // 滚轮：只在 10 格里转
+                r = await J(`(function(){ ind.selIdx = 0; let seen = []; for (let i = 0; i < 12; i++) { indWheel({ deltaY: 100 }); seen.push(ind.selIdx); } return seen; })()`);
+                if (r.join() !== '1,2,3,4,5,6,7,8,9,0,1,2') bad.push('滚轮只在 10 格里转 ' + r.join());
+                // E 和 B 开同一个面板；面板里点第 11 格（tomato）和手上那格（第 3 格 sand）互换
+                r = await J(`(function(){ ind.selIdx = 2; ${key('e')} let p1 = ind.panel; ${key('e')} let p2 = ind.panel; ${key('b')} let p3 = ind.panel; indBagToHand(10); let L = indSlots().map(function (x) { return x.k; }); let p4 = ind.panel, txt = document.getElementById('ind-panel').innerText; indPanelClose(); return { p: [p1, p2, p3, p4], sel: [ind.selIdx, indSel()], k2: L[2], k10: L[10], hot: /快捷栏/.test(txt) }; })()`);
+                if (!(r.p.join() === 'bag,,bag,bag' && r.sel[0] === 2 && r.sel[1] === 'tomato' && r.k2 === 'tomato' && r.k10 === 'sand' && r.hot)) bad.push('E／B 开同一个面板、点第 11 格换到手上 ' + JSON.stringify(r));
+                // E 不再触发左键动作，F 还能采
+                r = await J(`(function(){ indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = {}; ind.nodes.push({ key: 'stone', x: 0, z: -4, y: 0, n: 3, dead: false }); ind.nodeDirty = true; indTeleport(0, -2); indLookAt(0, -4); ${key('e')} let a = ind.bag.sand || 0, pa = ind.panel; indPanelClose(); ind.bag = { pick_stone: 1 }; ${key('e')} indPanelClose(); let b = ind.bag.stone || 0; ${key('f')} let c = ind.bag.stone || 0; indGoBase(null); return [b, c, pa]; })()`);
+                if (!(r[0] === 0 && r[1] >= 1)) bad.push('E 不采、F 还能采 ' + JSON.stringify(r));
+                // 老存档：背包是"种类 → 数量"，照样读
+                r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.bag = { wood: 120, stone: 5, sand: 3 }; b = indFixBase(b); return b.bag; })()`);
+                if (JSON.stringify(r) !== JSON.stringify({ wood: 120, stone: 5, sand: 3 })) bad.push('老存档背包照样读 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND75 快捷栏 1～10：0 选第 10 格、滚轮只转 10 格、E／B 同一面板、点格子换到手上、E 不采 F 采、老存档', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
