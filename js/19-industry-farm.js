@@ -183,5 +183,39 @@
             return ind.base.devs.some(function (d) { return d.ty === 'blower' && d.pw && !fmBlowerCook(d) && Math.hypot(d.x - cl.x, d.z - cl.z) <= FM_BLOW.gasR; }) ? FM_BLOW.gasMul : 1;
         }
 
+        // ══ 任务 45：地图 ══
+        // 地图（物品）：工作台 指南针 1 + 纸 2；纸：草 4 → 2（硬核）、甘蔗 2 → 2（悠闲硬核都行）。带在背包里，远征时按 M（或右上角"地图"按钮）看。
+        // 迷雾：走过的地方（30 米内）才显示；画出家（出生点）、撤离点、发现过的资源点（资源的颜色）、自己；点地图做记号（最多 8 个，再点去掉），记号存档
+        const FM_MAP = { marks: 8, hit: 12 };
+        Object.assign(IND_ITEMS_RAW, {
+            paper: { name: '纸', col: 0xfafafa, use: '做地图；以后写东西也要用' },
+            map: { name: '地图', col: 0xffe0b2, use: '带在背包里，远征时按 M 看：走过的地方、撤离点、发现的资源点；点地图做记号（最多 8 个）' }
+        });
+        IND_CRAFT.push({ out: 'paper', n: 2, in: { grass: 4 }, hard: true }, { out: 'paper', n: 2, in: { cane: 2 } }, { out: 'map', in: { compass: 1, paper: 2 } });
+        function fmMapSeeNodes(r) {
+            (ind.nodes || []).forEach(function (n) { if (!n.seen && !n.dead && Math.hypot(n.x - ind.p.x, n.z - ind.p.z) <= r) n.seen = true; });
+        }
+        function fmNodeCol(n) { let k = (IND_NODES[n.key] && IND_NODES[n.key].out) || n.key, it = IND_ITEMS_RAW[k]; return it && it.col !== undefined ? it.col : 0x795548; }
+        function fmMapDrawMore(g, px) {
+            (ind.nodes || []).forEach(function (n) {
+                if (!n.seen || n.dead || n.tree) return;
+                g.fillStyle = '#' + ('000000' + fmNodeCol(n).toString(16)).slice(-6); g.fillRect((n.x + IND_MAP) * px - 1.5, (n.z + IND_MAP) * px - 1.5, 3, 3);
+            });
+            g.fillStyle = '#5d4037'; g.fillRect(IND_MAP * px - 5, IND_MAP * px - 5, 10, 10);   // 家：出生点
+            g.strokeStyle = '#ffd600'; g.lineWidth = 2;
+            (ind.base.marks || []).forEach(function (m) { let x = (m.x + IND_MAP) * px, z = (m.z + IND_MAP) * px; g.beginPath(); g.moveTo(x - 5, z - 5); g.lineTo(x + 5, z + 5); g.moveTo(x + 5, z - 5); g.lineTo(x - 5, z + 5); g.stroke(); });
+            let cv = g.canvas; if (cv && !cv.fmClick) { cv.fmClick = true; cv.addEventListener('click', function (e) { let r = cv.getBoundingClientRect(); fmMapClick((e.clientX - r.left) / r.width * IND_MAP * 2 - IND_MAP, (e.clientY - r.top) / r.height * IND_MAP * 2 - IND_MAP); }); }
+        }
+        // 点地图：点在记号旁边就去掉，不然加一个（最多 8 个）
+        function fmMapClick(x, z) {
+            let M = ind.base.marks = ind.base.marks || [];
+            let i = M.findIndex(function (m) { return Math.hypot(m.x - x, m.z - z) <= FM_MAP.hit; });
+            if (i >= 0) { M.splice(i, 1); indFlash('去掉了一个记号'); }
+            else if (M.length >= FM_MAP.marks) { indFlash('记号最多 ' + FM_MAP.marks + ' 个，点一个旧的去掉'); return false; }
+            else { M.push({ x: Math.round(x), z: Math.round(z) }); indFlash('做了个记号（' + M.length + ' / ' + FM_MAP.marks + '）'); }
+            indSave(); if (ind.panel === 'map') wdMapDraw();
+            return true;
+        }
+
         // ↓↓ 这一行要留在文件最后（任务 42）：给所有用皮的配方加人造革备选
         fmPleatherAlts();

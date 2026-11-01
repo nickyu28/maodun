@@ -7697,7 +7697,7 @@ async function enterExit(tab, key) {
                 if (sn[1]) bad.push('没走到 80 米内的撤离点不该标在地图上');
                 await T.eval(`indTeleport(250, 190); indAdvance(0.2); true;`);
                 if (!(await J(`!!ind.exits[1].seen`))) bad.push('走到 80 米内看见了撤离点，地图上要标');
-                await T.eval(`indKeyDown({ key: 'm', target: document.body, preventDefault: function () {} }); true;`);
+                await T.eval(`indBagAdd('map', 1); indKeyDown({ key: 'm', target: document.body, preventDefault: function () {} }); true;`);
                 if (!(await T.eval(`ind.panel === 'map' && !!document.getElementById('ind-map')`))) bad.push('按 M 没开地图');
                 const px = await J(`(function(){ let cv = document.getElementById('ind-map'), g = cv.getContext('2d'), s = cv.width / (IND_MAP * 2), at = function (x, z) { let d = g.getImageData(Math.floor((x + IND_MAP) * s), Math.floor((z + IND_MAP) * s), 1, 1).data; return [d[0], d[1], d[2]]; }; return { far: at(-250, -250), near: at(255, 195), me: at(ind.p.x, ind.p.z) }; })()`);
                 if (px.far.join() !== '158,158,158' || px.near.join() === '158,158,158' || px.me.join() !== '229,57,53') bad.push('地图：没走过的灰、走过的有颜色、自己是红点 ' + JSON.stringify(px));
@@ -9777,6 +9777,36 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND70 电动鼓风机：接 6 V 自己鼓风到 1600、断电掉回大火有提示、风箱和鼓风机只装一个、地上的吹散毒云', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND71')) {
+            // IND71 地图（任务 45）：没地图按 M 提示；有地图看得到；走一段路迷雾打开；发现的资源点画出来；记号最多 8 个、再点去掉、读档还在；配方；右上角有按钮
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const M = `indKeyDown({ key: 'm', target: document.body, preventDefault: function () {} });`;
+                let r = await J(`(function(){ indGoTrip(2024); ind.bag = {}; ${M} return { p: ind.panel, fl: __fl.slice(-1)[0], btn: !!document.getElementById('ind-btn-map') }; })()`);
+                if (!(r.p !== 'map' && /要带着地图/.test(r.fl) && r.btn)) bad.push('没地图按 M 要提示、右上角有地图按钮 ' + JSON.stringify(r));
+                const cnt = `(function(){ let n = 0; for (let i = 0; i < ind.seen.length; i++) n += ind.seen[i]; return n; })()`;
+                r = await J(`(function(){ ind.bag = { map: 1 }; indTeleport(0, 0); indAdvance(0.2); let a = ${cnt}; ind.nodes.push({ key: 'ore_cu', x: 60, z: 0, y: 0, n: 3, dead: false }); let nd = ind.nodes[ind.nodes.length - 1], s0 = !!nd.seen; for (let x = 0; x <= 60; x += 2) { indTeleport(x, 0); indAdvance(0.05); } let b = ${cnt}; ${M} return { a: a, b: b, s0: s0, s1: !!nd.seen, p: ind.panel }; })()`);
+                if (!(r.b > r.a + 10)) bad.push('走一段路迷雾要打开 ' + JSON.stringify(r));
+                if (!(r.s0 === false && r.s1 === true && r.p === 'map')) bad.push('走近的资源点要标上、有地图能开 ' + JSON.stringify(r));
+                // 没走过的地方是灰的（迷雾）
+                r = await J(`(function(){ let cv = document.getElementById('ind-map'), g = cv.getContext('2d'), s = cv.width / (IND_MAP * 2); let d = g.getImageData(Math.floor((-250 + IND_MAP) * s), Math.floor((-250 + IND_MAP) * s), 1, 1).data; let n = g.getImageData(Math.floor((60 + IND_MAP) * s), Math.floor((0 + IND_MAP) * s), 1, 1).data; return { far: [d[0], d[1], d[2]], node: [n[0], n[1], n[2]] }; })()`);
+                if (r.far.join() !== '158,158,158') bad.push('没走过的地方要灰（迷雾） ' + JSON.stringify(r));
+                // 记号：8 个满了不让加、点旧的去掉、读档还在
+                r = await J(`(function(){ ind.base.marks = []; for (let i = 0; i < 9; i++) fmMapClick(-200 + i * 40, 100); let n9 = ind.base.marks.length; fmMapClick(-200, 100); let n8 = ind.base.marks.length; let b = indFixBase(JSON.parse(JSON.stringify(ind.base))); return [n9, n8, b.marks.length, b.marks[0]]; })()`);
+                if (!(r[0] === 8 && r[1] === 7 && r[2] === 7 && r[3].x === -160)) bad.push('记号最多 8 个、再点去掉、读档还在 ' + JSON.stringify(r));
+                const rc = await J(`[IND_CRAFT.find(function (x) { return x.out === 'map'; }).in, IND_CRAFT.filter(function (x) { return x.out === 'paper'; }).map(function (x) { return x.in; })]`);
+                if (!(rc[0].compass === 1 && rc[0].paper === 2 && rc[1].length === 2)) bad.push('配方：指南针 + 2 纸；纸两种做法 ' + JSON.stringify(rc));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND71 地图：要带着地图、迷雾、发现的资源点、记号 8 个能去掉读档还在、配方、按钮', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

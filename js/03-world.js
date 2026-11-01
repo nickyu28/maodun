@@ -1473,7 +1473,7 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026.11.1-14', date: '10 月 31 日', title: '最近更新', items: [
+                id: '2026.11.1-15', date: '10 月 31 日', title: '最近更新', items: [
                     '地图 4 的药剂房有时走不到，修好了'
                 ]
             },

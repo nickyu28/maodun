@@ -24,7 +24,7 @@
                 if (d <= IND_VIEW.day) e.seen = true;
             });
             if (!ind.seen) wdTripInit();
-            if (!ind.seenAt || Math.hypot(ind.p.x - ind.seenAt.x, ind.p.z - ind.seenAt.z) >= 3) { ind.seenAt = { x: ind.p.x, z: ind.p.z }; wdMark(30); }
+            if (!ind.seenAt || Math.hypot(ind.p.x - ind.seenAt.x, ind.p.z - ind.seenAt.z) >= 3) { ind.seenAt = { x: ind.p.x, z: ind.p.z }; wdMark(30); fmMapSeeNodes(30); }
         }
         // 指南针：背包里有就在屏幕上方显示指向最近撤离点的箭头和距离
         function wdNearestExit() {
@@ -47,8 +47,9 @@
         // ── 地图（按 M）：走过的地方的地貌颜色，没走过的灰；看见过的撤离点；自己的位置 ──
         function wdMapToggle() {
             if (ind.panel === 'map') { indPanelClose(); return; }
+            if (!(ind.bag.map > 0)) { indFlash('要带着地图（工作台：指南针 + 2 张纸）'); return; }   // 任务 45：拿着才能看
             if (ind.where !== 'trip') { indFlash('远征里按 M 看地图'); return; }
-            indPanelShow('map', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">地图　<small style="color:#888;font-weight:normal;">走过的地方有颜色，绿圈是看见过的撤离点，红点是你</small></div><canvas id="ind-map" width="300" height="300" style="width:min(80vw,300px);height:min(80vw,300px);display:block;margin:0 auto;border:1px solid #999;"></canvas><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+            indPanelShow('map', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">地图　<small style="color:#888;font-weight:normal;">走过的地方有颜色，绿圈是撤离点，方块是家（出生点），小点是发现的资源，黄叉是记号（点地图加、再点去掉，最多 8 个）</small></div><canvas id="ind-map" width="300" height="300" style="width:min(80vw,300px);height:min(80vw,300px);display:block;margin:0 auto;border:1px solid #999;"></canvas><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
             wdMapDraw();
         }
         function wdMapDraw() {
@@ -62,6 +63,7 @@
             }
             g.lineWidth = 2; g.strokeStyle = '#00c853';
             ind.exits.forEach(function (e) { if (!e.seen) return; g.beginPath(); g.arc((e.x + IND_MAP) * px, (e.z + IND_MAP) * px, 6, 0, 7); g.stroke(); });
+            fmMapDrawMore(g, px);
             g.fillStyle = '#e53935'; g.beginPath(); g.arc((ind.p.x + IND_MAP) * px, (ind.p.z + IND_MAP) * px, 4, 0, 7); g.fill();
         }
 

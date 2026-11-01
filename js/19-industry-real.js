@@ -279,6 +279,7 @@
                 if (seen[key] || !RL_SRC[a] || !RL_DST[c] || RL_DST[c].indexOf(p[3]) < 0) return false;
                 seen[key] = 1; p[2] = indNum(p[2], 1, 1, RL_PIPE.maxSeg) | 0; p.length = 4; return true;
             }).slice(0, 400);
+            b.marks = Array.isArray(b.marks) ? b.marks.filter(function (m) { return m && isFinite(m.x) && isFinite(m.z); }).slice(0, 8).map(function (m) { return { x: indNum(m.x, 0, -IND_MAP, IND_MAP), z: indNum(m.z, 0, -IND_MAP, IND_MAP) }; }) : [];   // 地图记号（任务 45）
             (b.cookers || []).concat(b.stove ? [b.stove] : []).forEach(function (S) { S.wb = indNum(S.wb, 0, 0, RL_PIPE.cookBuf); });
             (b.devs || []).forEach(function (d) { if (d.ty === 'el' || d.ty === 'reactor') d.wb = indNum(d.wb, 0, 0, d.ty === 'el' ? RL_PIPE.elBuf : RL_PIPE.rxBuf); });
         }
