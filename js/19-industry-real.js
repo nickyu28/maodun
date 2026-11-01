@@ -38,3 +38,30 @@
         });
         IND_ELEM_OF.b_hno3 = 7;
         IND_RECIPES.push({ in: { saltpeter: 2, b_h2so4: 1, bottle: 1 }, out: { b_hno3: 2, k2so4: 1 }, cls: 'chem', pri: true, minT: 120, time: 20, hard: true });
+
+        // 任务 55：蒸汽发电机（原来的 dev_gen）。水箱装一桶生水（空桶还你）；3 米内有点着的炉子（中火以上）而且水箱有水才发 12 V，一桶撑 120 秒。
+        // 用的是炉子多出来的热，炉子不降温。没水或没炉子就停。拿起时没用完的水还回成一桶（indPickDev）。老档的发电机水箱是空的
+        const RL_GEN = { tank: 120 };
+        IND_DEV_FIX.gen = function (d) { d.wt = indNum(d.wt, 0, 0, RL_GEN.tank); d.wm = IND_MATS[d.wm] ? d.wm : 'wood'; };
+        function rlGenHot(d) { return indHeatNear(d.x, d.z, IND_GEN_R).fire >= 2; }
+        function rlGenOn(d) { return d.wt > 0 && rlGenHot(d); }
+        IND_DEV_TICK.gen = function (d, dt) {
+            if (!rlGenOn(d)) return;
+            d.wt = Math.max(0, d.wt - dt / pwAccelMultDev(d));   // 时间加速器不加速发电机（不多发电，也不多费水）
+            if (d.wt <= 0 && !ind.sleeping) indFlash('蒸汽发电机没水了');
+        };
+        function rlGenInfo(d) {
+            let D = IND_DEVS.gen, w = d.wt > 0 ? '水箱剩 ' + Math.ceil(d.wt) + ' 秒' : '水箱空了，拿一桶生水左键装点水';
+            if (rlGenOn(d)) return D.name + ' 发电中 12 V　' + w;
+            return D.name + ' 没在发电　' + w + (rlGenHot(d) ? '' : '　3 米内要有点着的炉子（中火以上）');
+        }
+        function rlGenAct(d, k) {
+            let c = indContOf(k);
+            if (c && !c.empty && c.base === 'water_raw') {
+                if (d.wt > 0) { indFlash('水箱还有水（剩 ' + Math.ceil(d.wt) + ' 秒），用完再装'); return false; }
+                indBagDel(k, 1); indBagAdd(indEmptyKey(c.mat), 1); d.wt = RL_GEN.tank; d.wm = c.mat; indSave();
+                indFlash('水箱装满了（能发 ' + RL_GEN.tank + ' 秒电）'); return true;
+            }
+            if (c && !c.empty) { indFlash('水箱只装生水'); return false; }
+            indFlash(rlGenInfo(d)); return false;
+        }

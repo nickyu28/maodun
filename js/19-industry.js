@@ -194,7 +194,7 @@
             tongs: { name: '钳子', col: 0x795548, use: '拿烫锭' },
             pick_bronze: { name: '青铜稿', col: 0xb87333, tool: 2 }, pick_iron: { name: '铁稿', col: 0x616161, tool: 2, bonus: 1 }, pick_steel: { name: '钢稿', col: 0x90a4ae, tool: 3 },
             battery: { name: '电池', col: 0x43a047, use: '装进电池组' }, wire: { name: '铜线', col: 0xff7043, use: '接线' },
-            dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '发电机', col: 0x546e7a, dev: 'gen' },
+            dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '蒸汽发电机', col: 0x546e7a, dev: 'gen', use: '要水、要炉子：放在点着的炉子（中火以上）3 米内，拿一桶生水左键装进水箱，一桶发 12 V 两分钟' },
             dev_el: { name: '电解槽', col: 0x00838f, dev: 'el' },
             ash: { name: '草木灰', col: 0x9e9e9e, use: '当肥料' }, bottle: { name: '玻璃瓶', col: 0xb3e5fc },
             b_h2: { name: '氢气瓶', col: 0xf8bbd0, gas: 'h2', use: '压进钢瓶' }, b_o2: { name: '氧气瓶', col: 0x90caf9, gas: 'o2' }, b_cl2: { name: '氯气瓶', col: 0xc6ff00, gas: 'cl2', use: '压进钢瓶' },
@@ -248,7 +248,7 @@
         // 电：rated 额定电压（超过就炸），minV 低于它不工作，draw 每秒耗电；电源：bank 电池组（节数 × 1.5 V），gen 发电机（灶台中火以上 3 米内 12 V）
         const IND_DEVS = {
             bank: { name: '电池组', col: 0x2e7d32, src: true, size: [1, 0.8, 0.8] },
-            gen: { name: '发电机', col: 0x546e7a, src: true, volt: 12, size: [1.2, 1, 1] },
+            gen: { name: '蒸汽发电机', col: 0x546e7a, src: true, volt: 12, size: [1.2, 1, 1] },
             el: { name: '电解槽', col: 0x00838f, rated: 12, minV: 2, draw: 2, size: [1.2, 0.8, 0.9] },
             lamp: { name: '电灯', col: 0xfff176, rated: 6, minV: 1.5, draw: 0.2, size: [0.5, 1.6, 0.5] },
             pump: { name: '水泵', col: 0x0288d1, rated: 12, minV: 6, draw: 1, size: [0.9, 0.9, 0.9] },
@@ -1902,7 +1902,7 @@
         function indHeatNear(x, z, r) { let t = 0, f = 0; indCooks().forEach(function (c) { if (Math.hypot(x - c.x, z - c.z) <= r + (c.ty === 'kiln' ? 1 : 0)) { t = Math.max(t, c.C.temp); f = Math.max(f, c.C.fire); } }); return { temp: t, fire: f }; }
         function indSrcVolt(d) {
             if (d.ty === 'bank') return d.u > 0 ? indBankV(d) : 0;
-            if (d.ty === 'gen') return indHeatNear(d.x, d.z, IND_GEN_R).fire >= 2 ? IND_DEVS.gen.volt : 0;
+            if (d.ty === 'gen') return rlGenOn(d) ? IND_DEVS.gen.volt : 0;   // 蒸汽发电机（任务 55）：旁边有点着的炉子而且水箱里有水
             if (IND_DEV_VOLT[d.ty]) return IND_DEV_VOLT[d.ty](d);
             return 0;
         }
@@ -2294,6 +2294,7 @@
             if (d.st) Object.keys(d.st).forEach(function (k) { put(k, d.st[k]); });   // 电解槽里的东西放回仓库箱（放不下进背包，再放不下掉在地上，不会没）
             if (d.rods) d.rods.forEach(function (r) { put(r.spent ? 'rod_spent' : nkRodKey(r), 1); });   // 反应堆里的燃料棒
             if (d.cy) put(d.cy, 1);
+            if (d.ty === 'gen' && d.wt > 0) put(indFilledKey('water_raw', d.wm || 'wood'), 1);   // 蒸汽发电机水箱里没用完的水还回成一桶
             let N = tot.box + tot.bag + tot.ground;
             ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
             let nw = ind.base.wires.length;
@@ -2376,6 +2377,7 @@
                 return true;
             }
             if (d.ty === 'xfmr') { if (k !== 'wire') return pwXfmrCycle(d); }
+            if (d.ty === 'gen') return rlGenAct(d, k);
             if (d.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { return indBankPut(d, 1, k) > 0; }
             if (d.ty === 'el') { indPanelEl(d.id); return true; }
             if (d.ty === 'comp') { indPanelComp(d.id); return true; }
@@ -2389,7 +2391,7 @@
             let D = IND_DEVS[d.ty];
             if (IND_DEV_INFO[d.ty]) return IND_DEV_INFO[d.ty](d);
             if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + indBankV(d).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d);
-            if (d.ty === 'gen') return D.name + ' ' + (indSrcVolt(d) > 0 ? '发电中 12 V' : '没在发电');
+            if (d.ty === 'gen') return rlGenInfo(d);
             let ss = indDevSrcs(d);
             let wired = ss.length ? '　接着 ' + ss.length + ' 个电源：' + ss.map(function (s) { let v = indSrcVolt(s); return IND_DEVS[s.ty].name + ' ' + (s.ty === 'bank' ? v.toFixed(1) : String(Math.round(v * 10) / 10)) + ' V'; }).join('、') + '，工作电压 ' + (Math.round(indDevVolt(d) * 10) / 10) + ' V' : '　没接电';
             return D.name + '（额定 ' + D.rated + ' V）' + wired + (d.on ? (d.pw ? '　工作中' : '　没在工作') : '　关着');

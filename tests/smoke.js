@@ -5917,6 +5917,7 @@ async function enterExit(tab, key) {
                 await T.eval(`(function(){ ind.base.crops.push({ k: 'wheat', x: -17, z: 3, g: 0, wet: 0, times: 0 }); indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(2); indPanelClose(); })(); true;`);
                 const gen = await place('dev_gen', 8, -15), pump = await place('dev_pump', 12, -10);
                 await click(gen, 'wire'); await click(pump, 'wire');
+                await T.eval(`indBagAdd('water_raw', 1); true;`); await click(gen, 'water_raw');   // 蒸汽发电机要水（任务 55）
                 await T.eval(`indTeleport(-8, 5); indAdvance(0.5); true;`);
                 const pp = JSON.parse(await T.eval(`JSON.stringify({ v: indSrcVolt(indDev(${gen})), pw: indDev(${pump}).pw, wet: ind.base.crops[0].wet > ind.base.clock })`));
                 if (pp.v !== 12 || !pp.pw || !pp.wet) bad.push('发电机带水泵不对 ' + JSON.stringify(pp));
@@ -6262,7 +6263,7 @@ async function enterExit(tab, key) {
                 f = await getC(K);
                 if (hn(f, 'hot_cu') !== 6 || f.items.ore_cu !== 2) bad.push('大窑冶炼应该一次 6 份 ' + JSON.stringify(f));
                 // "灶台 3 米内"的判定：发电机在小熔炉旁边、熔炉中火以上才发电；熔融盐电解旁边的大窑够热
-                await T.eval(`(function(){ let c = ind.base.cookers[0]; ind.base.devs = [{ id: 701, ty: 'gen', x: c.x + 2, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {} }]; c.fire = 0; c.fuel = 0; })(); true;`);
+                await T.eval(`(function(){ let c = ind.base.cookers[0]; ind.base.devs = [{ id: 701, ty: 'gen', x: c.x + 2, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 120 }]; c.fire = 0; c.fuel = 0; })(); true;`);
                 if (await T.eval(`indSrcVolt(indDev(701))`) !== 0) bad.push('熔炉没点着发电机也发电');
                 await T.eval(`(function(){ let c = ind.base.cookers[0]; c.fire = 2; c.fuel = 3000; })(); true;`);
                 if (await T.eval(`indSrcVolt(indDev(701))`) !== 12) bad.push('小熔炉旁边的发电机不发电');
@@ -9474,6 +9475,40 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND63 硝酸：硝石 + 硫酸 + 空瓶出硝酸 2 + 硫酸钾、钚改用硝酸、硫酸做不出钚、元素表氮、硫酸钾长得快 75%', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND64')) {
+            // IND64 蒸汽发电机（任务 55）：炉子 + 发电机没水不发电；装一桶生水（还空桶）发电 120 秒后停；没炉子不费水；拿起时没用完的水还回成一桶；老档水箱空、提示装水
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`(function(){ let B = ind.base; B.rule = 'hard'; B.off.stove = true; B.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: {}, out: {}, fuel: 99999, fire: 2, temp: 600, cook: null, spout: [] }]; B.devs = [{ id: 9, ty: 'gen', x: 23.5, z: 10, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 10, ty: 'pump', x: 26, z: 10, bats: 0, u: 0, on: true, ft: 20, st: {} }]; B.wires = [[9, 10]]; B.dseq = 10; ind.furnDirty = true; indSyncFurn(); })(); true;`);
+                let r = await J(`(function(){ indAdvance(1); return { v: indSrcVolt(indDev(9)), pw: indDev(10).pw, info: indDevInfo(indDev(9)) }; })()`);
+                if (r.v !== 0 || r.pw || !/装点水/.test(r.info)) bad.push('没水不该发电、要提示装水 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.bag = { 'water_raw@fe': 1 }; let d = indDev(9); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); indSelect('water_raw@fe'); indAction(); indAdvance(1); return { bag: ind.bag, v: indSrcVolt(d), pw: indDev(10).pw, wt: d.wt, info: indDevInfo(d) }; })()`);
+                if (!(r.bag.bucket_fe === 1 && !r.bag['water_raw@fe'] && r.v === 12 && r.pw && r.wt > 118 && r.wt < 120 && /水箱剩 1(19|20) 秒/.test(r.info))) bad.push('装一桶水发电、还铁桶、面板写剩几秒 ' + JSON.stringify(r));
+                r = await J(`(function(){ indAdvance(100); let d = indDev(9); return { v: indSrcVolt(d), wt: d.wt, fire: ind.base.cookers[0].C ? 0 : ind.base.cookers[0].temp }; })()`);
+                if (!(r.v === 12 && r.wt > 17 && r.wt < 20)) bad.push('100 秒后还在发电 ' + JSON.stringify(r));
+                r = await J(`(function(){ indAdvance(20); let d = indDev(9); return { v: indSrcVolt(d), pw: indDev(10).pw, wt: d.wt, temp: ind.base.cookers[0].temp }; })()`);
+                if (!(r.v === 0 && !r.pw && r.wt === 0)) bad.push('120 秒后停 ' + JSON.stringify(r));
+                if (!(Math.abs(r.temp - 600) < 1)) bad.push('炉子不因为发电降温 ' + r.temp);
+                // 没炉子：有水也不发电、不费水
+                r = await J(`(function(){ let d = indDev(9); d.wt = 120; ind.base.cookers[0].fire = 0; ind.base.cookers[0].temp = 20; indAdvance(10); return { v: indSrcVolt(d), wt: d.wt, info: indDevInfo(d) }; })()`);
+                if (!(r.v === 0 && r.wt === 120 && /炉子/.test(r.info))) bad.push('没炉子不发电不费水 ' + JSON.stringify(r));
+                // 拿起：剩的水还回一桶（铁桶装的还铁桶装的）
+                r = await J(`(function(){ let d = indDev(9); d.wm = 'fe'; ind.bag = {}; ind.base.chests[0].items = {}; indPickDev(d); return { bag: ind.bag, box: ind.base.chests[0].items }; })()`);
+                if (!(r.bag['water_raw@fe'] === 1 || r.box['water_raw@fe'] === 1)) bad.push('拿起时剩的水还回成一桶 ' + JSON.stringify(r));
+                // 老档：水箱空
+                r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.devs = [{ id: 3, ty: 'gen', x: 1, z: 1, bats: 0, u: 0, on: true, ft: 20, st: {} }]; b.wires = []; b = indFixBase(b); return [b.devs[0].wt, IND_ITEMS.dev_gen.name, /要水/.test(IND_ITEMS.dev_gen.use) && /炉子/.test(IND_ITEMS.dev_gen.use)]; })()`);
+                if (!(r[0] === 0 && r[1] === '蒸汽发电机' && r[2])) bad.push('老档水箱空、改名、说明写要水要炉子 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND64 蒸汽发电机：没水不发电、装一桶发 120 秒、还空桶、没炉子不费水、拿起还水、老档空水箱', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
