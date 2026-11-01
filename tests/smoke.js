@@ -9335,6 +9335,40 @@ async function enterExit(tab, key) {
             report('IND59 炼药：窑里做出速度药和回血药、速度 ×1.5 三分钟再虚弱、回血 20 秒 60 点、速度封顶 ×2、药效存档、采集快 20%', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND60')) {
+            // IND60 开场一句话（任务 60）：新档第一次进基地（选完玩法）屏幕中间"去外太空"，4 秒后没了；退出再进不弹；老档（没有 sawGoal）不弹
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                if (await T.eval(`!!document.getElementById('ind-goal')`)) bad.push('选玩法之前就弹了');
+                await T.eval(`${HIDE} window.__g0 = performance.now(); indSetRule('hard'); true;`);
+                const txt = await T.eval(`(function(){ let g = document.getElementById('ind-goal'); return g ? g.textContent : null; })()`);
+                if (txt !== '去外太空') bad.push('新档没弹"去外太空" ' + txt);
+                if (!(await until(T, `!document.getElementById('ind-goal')`, 12000))) bad.push('4 秒后还在');
+                else { const dt = await T.eval(`(performance.now() - window.__g0) / 1000`); if (!(dt >= 3.8)) bad.push('停得太短 ' + dt.toFixed(2) + ' 秒'); }
+                if (await T.eval(`ind.base.sawGoal !== true`)) bad.push('没记"已弹过"');
+                // 退出再进（从存档读）：不弹
+                await T.eval(`indExit(); true;`);
+                await until(T, `!ind && typeof IND_SAVING !== 'undefined' && IND_SAVING === 0`, 10000);
+                await T.eval(`${HIDE} indEnter(); true;`);
+                if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('再进进不去');
+                else {
+                    const again = await T.eval(`JSON.stringify({ g: !!document.getElementById('ind-goal'), s: ind.base.sawGoal, rule: ind.base.rule })`);
+                    if (again !== JSON.stringify({ g: false, s: true, rule: 'hard' })) bad.push('再进又弹了／没存住 ' + again);
+                    // 再选一次玩法（硬核不能退）也不弹；老档不弹；新档是 false
+                    await T.eval(`indGoalShow(); true;`);
+                    if (await T.eval(`!!document.getElementById('ind-goal')`)) bad.push('弹过了还弹');
+                    const fx = await T.eval(`(function(){ let o = JSON.parse(JSON.stringify(ind.base)); delete o.sawGoal; return JSON.stringify([indFixBase(o).sawGoal, indFixBase(undefined).sawGoal, indNewBase().sawGoal]); })()`);
+                    if (fx !== '[true,false,false]') bad.push('老档当弹过、新档没弹 ' + fx);
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND60 开场一句话：新档选完玩法弹"去外太空"、4 秒没了、再进不弹、老档不弹', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

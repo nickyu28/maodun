@@ -490,7 +490,7 @@
         const IND_V9_GIFT = { shears: 1 };   // 存档版本 9：新号送一把剪刀，老档读档时补一把
         function indNewBase() {
             return { ver: IND_SAVE_VER, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
-                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], houses: [], rad: [], bombs: [], fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
+                surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], houses: [], rad: [], bombs: [], fires: [], animals: [], devs: [], wires: [], dseq: 0, elems: {}, sawGoal: false, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
         }
         function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
         // 炉子的状态（灶台和小熔炉、大窑通用）整理一遍
@@ -609,6 +609,7 @@
             if (b.bellows) b.stove.bellows = true;   // 老档：基地装过风箱，算装在原来的灶台上
             b.bellows = false;
             indFixCook(b.stove, b);
+            b.sawGoal = b.sawGoal !== false;   // 开场那句话（任务 60）：只有新档是 false，老档没有这个字段就当弹过了
             b.ver = IND_SAVE_VER;
             return b;
         }
@@ -923,6 +924,7 @@
             ind.onCtx = function (e) { if (ind) e.preventDefault(); };
             document.addEventListener('mousedown', ind.onMouse); document.addEventListener('mouseup', ind.onMouseUp); document.addEventListener('contextmenu', ind.onCtx);
             if (!base.rule) indAskRule();
+            else if (base.sawGoal === false) indGoalShow();
             else if (gState.control !== 'pad') indFlash('左键 采集／拿／种／打开，右键 吃喝／浇水／接水，Q 放下，B 背包，Shift 跑');
             ind.last = performance.now();
             ind.raf = requestAnimationFrame(indLoop);
@@ -940,8 +942,20 @@
             if (ind.base.rule === 'casual' && r !== 'hard') return;
             let from = ind.base.rule; ind.base.rule = r; ckRuleChanged(from, r);
             if (from === null && r === 'hard') indHardStartBox();
+            if (from === null) indGoalShow();
             indSave();
             indFlash(r === 'hard' ? '硬核世界：小心别饿死' : '悠闲世界：慢慢种地吧');
+        }
+        // 开场一句话（任务 60）：新档第一次进基地，屏幕中间一行大字，4 秒淡出，以后再也不弹
+        function indGoalShow() {
+            if (!ind || !ind.base || ind.base.sawGoal !== false) return;
+            ind.base.sawGoal = true; indSave();
+            let o = document.getElementById('ind-goal'); if (o && o.parentNode) o.parentNode.removeChild(o);
+            let g = document.createElement('div'); g.id = 'ind-goal'; g.textContent = '去外太空';
+            g.style.cssText = 'position:fixed;left:0;right:0;top:38%;text-align:center;z-index:45;pointer-events:none;color:#fff;font-size:64px;font-weight:bold;letter-spacing:12px;text-shadow:0 0 12px #000,0 2px 4px #000;opacity:1;transition:opacity 0.8s;';
+            document.body.appendChild(g);
+            setTimeout(function () { g.style.opacity = '0'; }, 3200);
+            setTimeout(function () { if (g.parentNode) g.parentNode.removeChild(g); }, 4000);
         }
         // 新号第一次选硬核：箱子里没动过的起步礼包换成硬核的（老存档、升级成硬核的不动）
         function indHardStartBox() {
@@ -977,7 +991,7 @@
             document.body.onmousedown = null;
             if (R.onMouse) { document.removeEventListener('mouseup', R.onMouseUp); document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); }
             if (document.pointerLockElement) document.exitPointerLock();
-            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead', 'ind-compass', 'ind-rad', 'ind-geiger', 'ind-flash', 'ind-undo'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
+            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead', 'ind-compass', 'ind-rad', 'ind-geiger', 'ind-flash', 'ind-undo', 'ind-goal'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
             indClearWorld();
             if (R.me) scene.remove(R.me);
             scene.background = R.oldBg; scene.fog = R.oldFog;
