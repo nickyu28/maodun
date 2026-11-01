@@ -2224,11 +2224,14 @@
             if (d.cy) put(d.cy, 1);
             let N = tot.box + tot.bag + tot.ground;
             ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
+            let nw = ind.base.wires.length;
             ind.base.wires = ind.base.wires.filter(function (w) { return w[0] !== d.id && w[1] !== d.id; });
+            nw -= ind.base.wires.length;
+            if (nw > 0) indBoxAdd('wire', nw);   // 每根线退 1 根铜线（背包 → 仓库箱 → 地上，跟里面的东西一样；同一根线只在收起它的这个设备时退一次，因为收起后线就没了）
             if (ind.wirePend === d.id) ind.wirePend = null;
             ind.devDirty = ind.wireDirty = true; indSave();
             let where = [tot.box ? '放进了仓库箱' + (tot.bag || tot.ground ? ' ' + tot.box + ' 个' : '') : '', tot.bag ? '放进了背包' + (tot.box || tot.ground ? ' ' + tot.bag + ' 个' : '') : '', tot.ground ? '掉在了地上' + (tot.box || tot.bag ? ' ' + tot.ground + ' 个' : '') : ''].filter(Boolean);
-            indFlash('收起了' + IND_DEVS[d.ty].name + (N > 0 ? '，里面的 ' + N + ' 个东西' + where.join('、') : ''));
+            indFlash('收起了' + IND_DEVS[d.ty].name + (nw > 0 ? '，还回了 ' + nw + ' 根铜线' : '') + (N > 0 ? '，里面的 ' + N + ' 个东西' + where.join('、') : ''));
             return true;
         }
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关

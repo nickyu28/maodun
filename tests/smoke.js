@@ -8664,6 +8664,56 @@ async function enterExit(tab, key) {
             report('IND39 远征时家里照常运转：回家补算（最多 30 分钟）、燃料少矿炼成、火会灭、身上的不补、老存档', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND40')) {
+            // IND40 收起设备要把铜线和里面的东西全还回来（任务 23，紧急）：每根线退 1 根铜线（背包 → 仓库箱 → 地上）、提示写"还回了 N 根铜线"；
+            // 电解槽、离心机、粉碎机、压缩机、反应堆、电池组收起后里面的东西一个不少；炸掉的不退（不在这里测）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                // 一次调用里做完：摆设备、收起、数东西（背包 + 所有箱子 + 地上），免得游戏帧在两次读数之间改东西
+                const run = (devs, wires, pickId, extra) => J(`(function(){ ind.bag = {}; ind.base.ground = []; ind.base.chests = [{ id: 1, x: 12, z: 12, big: true, items: {} }]; ind.base.devs = ${JSON.stringify(devs)}; ind.base.wires = ${JSON.stringify(wires)}; ${extra || ''}
+                    function cnt(k) { let n = ind.bag[k] || 0; ind.base.chests.forEach(function (c) { n += c.items[k] || 0; }); ind.base.ground.forEach(function (g) { if (g.k === k) n += g.n || 1; }); return n; }
+                    let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); };
+                    let ok; try { ok = indPickDev(indDev(${pickId})); } finally { blazeFlash = bf; }
+                    let all = {}; Object.keys(ind.bag).forEach(function (k) { all[k] = cnt(k); }); ind.base.chests.forEach(function (c) { Object.keys(c.items).forEach(function (k) { all[k] = cnt(k); }); }); ind.base.ground.forEach(function (g) { all[g.k] = cnt(g.k); });
+                    return { ok: ok, all: all, left: ind.base.devs.map(function (d) { return d.id; }), wires: ind.base.wires, fl: fl.join('|') }; })()`);
+                const D = (id, ty, o) => Object.assign({ id: id, ty: ty, x: -20 + id, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {});
+                // ── 线：电池组连 3 个用电器，收起电池组 → 铜线回来 3 根；另一根不相干的线留着 ──
+                let r = await run([D(1, 'bank', { bats: 2, u: 360 }), D(3, 'bank', { bats: 1, u: 180 }), D(4, 'lamp'), D(5, 'comp'), D(6, 'el')], [[3, 4], [3, 5], [3, 6], [1, 4]], 3);
+                if (!r.ok || r.all.wire !== 3 || r.wires.length !== 1 || !/还回了 3 根铜线/.test(r.fl)) bad.push('收起接了 3 根线的电池组，铜线该回来 3 根 ' + JSON.stringify(r));
+                // 同一根线连两个设备：收其中一个退 1 根，另一个再收就没有了（不退双份）
+                r = await run([D(3, 'bank'), D(4, 'lamp')], [[3, 4]], 4);
+                if (!(r.all.wire === 1)) bad.push('收用电器那头，线退 1 根 ' + JSON.stringify(r.all));
+                const r2 = await J(`(function(){ let d = indDev(3); indPickDev(d); return { wire: (ind.bag.wire || 0) + ind.base.chests.reduce(function (n, c) { return n + (c.items.wire || 0); }, 0), w: ind.base.wires.length }; })()`);
+                if (!(r2.wire === 1 && r2.w === 0)) bad.push('另一头再收不该再退线 ' + JSON.stringify(r2));
+                // 没有箱子、背包满：线掉在地上，不能没
+                r = await run([D(3, 'bank'), D(4, 'lamp'), D(5, 'lamp')], [[3, 4], [3, 5]], 3, "ind.base.chests = []; for (let i = 0; i < 23; i++) ind.bag['pad' + i] = 99;");
+                if (!(r.all.wire === 2)) bad.push('没箱子背包满，线该掉地上 ' + JSON.stringify(r.all));
+                // ── 里面的东西：每种设备收起后一个不少 ──
+                const cases = [
+                    ['el', { st: { bucket_fe: 7, salt: 3 } }, { bucket_fe: 7, salt: 3 }],
+                    ['centrifuge', { st: { ore_u: 4, salt: 2 } }, { ore_u: 4, salt: 2 }],
+                    ['crusher', { st: { ore_u: 5 } }, { ore_u: 5 }],
+                    ['comp', { st: { salt: 6 }, cy: 'cyl' }, { salt: 6, cyl: 1 }],
+                    ['reactor', { rods: [{ i: 4, b: 0.25 }, { spent: true }], st: {} }, { 'rod_spent': 1 }],
+                    ['bank', { bats: 4, u: 720 }, { battery: 4 }]
+                ];
+                for (const [ty, o, want] of cases) {
+                    r = await run([D(9, ty, o), D(8, 'lamp')], [[9, 8]], 9);
+                    const all = r.all, bad2 = [];
+                    Object.keys(want).forEach(function (k) { if (all[k] !== want[k]) bad2.push(k + ' 该 ' + want[k] + ' 实际 ' + all[k]); });
+                    if (ty === 'reactor' && !Object.keys(all).some(function (k) { return /^rod:4/.test(k); })) bad2.push('反应堆里的燃料棒没回来');
+                    if (!r.ok || bad2.length) bad.push('收起' + ty + '里面的东西没全回来：' + bad2.join('、') + ' ' + JSON.stringify(r.all));
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND40 收起设备退铜线（每根 1 根）、里面的东西一个不少（电解槽、离心机、粉碎机、压缩机、反应堆、电池组）', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
