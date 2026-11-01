@@ -9809,6 +9809,35 @@ async function enterExit(tab, key) {
             report('IND71 地图：要带着地图、迷雾、发现的资源点、记号 8 个能去掉读档还在、配方、按钮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND72')) {
+            // IND72 太阳能板（任务 48）：正午 12 V、早上低、夜里 0；接电解槽白天能转、夜里停；睡觉快进按当时的时刻；配方用硅
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`(function(){ let B = ind.base; B.devs = [{ id: 1, ty: 'solar', x: -20, z: 4, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 2, ty: 'el', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: { water_raw: 3, bottle: 9 } }]; B.wires = [[1, 2]]; B.dseq = 5; })(); true;`);
+                const at = (tod) => J(`(function(){ let B = ind.base; B.clock = Math.floor(B.clock / IND_DAY) * IND_DAY + IND_DAY + ${tod}; indAdvance(0.1); return { v: indSrcVolt(indDev(1)), pw: indDev(2).pw, info: indDevInfo(indDev(1)) }; })()`);
+                let noon = await at(450), morn = await at(60), night = await at(1000);
+                if (!(noon.v === 12 && noon.pw)) bad.push('正午 12 V，电解槽转 ' + JSON.stringify(noon));
+                if (!(morn.v > 0 && morn.v < 6)) bad.push('早上电压低 ' + JSON.stringify(morn));
+                if (!(night.v === 0 && !night.pw && /夜里/.test(night.info))) bad.push('夜里不出电、电解槽停 ' + JSON.stringify(night));
+                // 白天电解出东西
+                let r = await J(`(function(){ let B = ind.base; B.clock = Math.floor(B.clock / IND_DAY) * IND_DAY + IND_DAY + 300; indAdvance(21); return indDev(2).st; })()`);
+                if (!(r.b_h2 >= 2)) bad.push('白天接电解槽能出氢气 ' + JSON.stringify(r));
+                // 快进（回家补算）：补 800～1100 这 300 秒，天黑（900）前出、后面不出
+                r = await J(`(function(){ let B = ind.base, d = indDev(2); d.st = { water_raw: 5, bottle: 15 }; d.et = 0; B.clock = Math.floor(B.clock / IND_DAY) * IND_DAY + IND_DAY + 1100; indFastForward(300, B.clock, { quiet: true }); return d.st; })()`);
+                if (!(r.b_h2 >= 2 && r.b_h2 <= 8)) bad.push('补算按当时的时刻：天黑前出、天黑后停 ' + JSON.stringify(r));
+                const rc = await J(`IND_CRAFT.find(function (x) { return x.out === 'dev_solar'; }).in`);
+                if (!(rc.ingot_si === 2 && rc.glass_plate === 2 && rc.wire === 10)) bad.push('配方 ' + JSON.stringify(rc));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND72 太阳能板：正午 12 V、早上低、夜里 0、白天带电解槽、补算按时刻、配方用硅', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

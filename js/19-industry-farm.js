@@ -217,5 +217,15 @@
             return true;
         }
 
+        // ══ 任务 48：太阳能板（基地里当固定电源；车顶那半等车做了再接）══
+        // 玻璃板 2 + 铜线 10 + 硅 2（电池片用硅）。白天出电，电压跟着太阳：日出 0 → 正午 12 V → 傍晚 0，夜里 0。睡觉和回家补算按当时的时刻算
+        Object.assign(IND_ITEMS_RAW, { dev_solar: { name: '太阳能板', col: 0x1a237e, dev: 'solar', use: '白天出电（正午 12 V，早晚低，夜里没有），接电线当电源；以后能装在车顶' } });
+        Object.assign(IND_DEVS, { solar: { name: '太阳能板', col: 0x1a237e, src: true, volt: 12, size: [1.6, 0.2, 1.2] } });
+        IND_CRAFT.push({ out: 'dev_solar', in: { glass_plate: 2, wire: 10, ingot_si: 2 }, hard: true });
+        IND_ITEMS_RAW.ingot_si.use = '做太阳能板的电池片；以后做芯片的基片也要用'; delete IND_ITEMS_RAW.ingot_si.useLater;
+        function fmSun() { let t = indTod(); return t >= IND_DUSK ? 0 : Math.sin(Math.PI * t / IND_DUSK); }
+        IND_DEV_VOLT.solar = function (d) { return Math.round(IND_DEVS.solar.volt * fmSun() * 10) / 10; };
+        IND_DEV_INFO.solar = function (d) { let v = IND_DEV_VOLT.solar(d); return '太阳能板　' + (v > 0 ? '出电 ' + v.toFixed(1) + ' V（正午最高 12 V）' : '夜里不出电'); };
+
         // ↓↓ 这一行要留在文件最后（任务 42）：给所有用皮的配方加人造革备选
         fmPleatherAlts();
