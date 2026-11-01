@@ -1892,8 +1892,8 @@
                 if (d.ty === 'comp' && !indCompBusy(d)) return;   // 压缩机、压力机也是有活干才耗电
                 if (d.ty === 'press' && !indPressBusy(d)) return;
                 if (IND_DEV_BUSY[d.ty] && !IND_DEV_BUSY[d.ty](d)) return;
-                let banks = live.filter(function (s) { return s.ty === 'bank'; });
-                if (banks.length === live.length) banks.forEach(function (s) { s.u = Math.max(0, s.u - D.draw * dt / banks.length); });
+                let up = pwUpstream(live), banks = up.filter(function (s) { return s.ty === 'bank'; });   // 变压器后面的用电器，耗电算回变压器输入端的电池组
+                if (banks.length === up.length) banks.forEach(function (s) { s.u = Math.max(0, s.u - D.draw * dt / banks.length); });
                 d.pw = true;
             });
             booms.forEach(function (b) {
@@ -2319,7 +2319,9 @@
                 let a = indDev(ind.wirePend); ind.wirePend = null; ind.devDirty = true;
                 if (!a) return false;
                 let src = D.src ? d : a, dev = D.src ? a : d;
-                if (!IND_DEVS[src.ty].src || IND_DEVS[dev.ty].src) { indFlash('一头接电源（电池组、发电机），一头接用电器'); return false; }
+                let xr = pwWireRoles(a, d);   // 变压器两头都能接（19-industry-power.js）
+                if (xr) { src = xr.src; dev = xr.dev; }
+                else if (!IND_DEVS[src.ty].src || IND_DEVS[dev.ty].src) { indFlash('一头接电源（电池组、发电机），一头接用电器'); return false; }
                 let mine = ind.base.wires.filter(function (w) { return w[1] === dev.id; });   // 一个用电器最多接 4 个电源（并联，任务 16）
                 if (mine.some(function (w) { return w[0] === src.id; })) { indFlash('已经接了'); return false; }
                 if (mine.length >= IND_WIRE_MAX) { indFlash('最多接 ' + IND_WIRE_MAX + ' 个电源'); return false; }
@@ -2327,6 +2329,7 @@
                 ind.wireDirty = true; indSave(); indFlash('接上了：' + IND_DEVS[src.ty].name + ' → ' + IND_DEVS[dev.ty].name);
                 return true;
             }
+            if (d.ty === 'xfmr') { if (k !== 'wire') return pwXfmrCycle(d); }
             if (d.ty === 'bank' && k === 'battery') { return indBankPut(d, 1) > 0; }
             if (d.ty === 'el') { indPanelEl(d.id); return true; }
             if (d.ty === 'comp') { indPanelComp(d.id); return true; }

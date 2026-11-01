@@ -9018,6 +9018,44 @@ async function enterExit(tab, key) {
             report('IND50 电磁线圈和手摇发电机：配方、摇着 6 V（水泵通电、离心机不行）、松手断电、短按收起', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND51')) {
+            // IND51 变压器（任务 30）：汽轮发电机（反应堆 ≥ 250°C）→ 变压器 24 V → 离心机：离心机通电不炸；不用变压器直接连会炸；输出 12 V 接离心机不工作；输出不高于输入；耗电折回电池组；点一下切换 6／12／24
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const D = (id, ty, x, o) => JSON.stringify(Object.assign({ id: id, ty: ty, x: x, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}));
+                const run = (wires, out, extra) => J(`(function(){ ind.base.rule = 'hard'; ind.base.rad = []; ind.base.off.pool = true; ind.bag = {};
+                    ind.base.devs = [{ id: 1, ty: 'reactor', x: 20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }], ctl: 1, T: 300, melt: 0 }, ${D(2, 'turbine', 21)}, ${D(3, 'xfmr', 24, { out: 'OUT' })}, ${D(4, 'centrifuge', 27, { st: { 'uf6:0': 2 } })}${extra || ''}]; ind.base.wires = ${JSON.stringify(wires)};
+                    indAdvance(0.3); return { cen: !!indDev(4), pw: indDev(4) ? indDev(4).pw : null, xf: !!indDev(3), v: indDev(4) ? indDev(4).v : 0 }; })()`.replace('OUT', out));
+                let r = await run([[2, 3], [3, 4]], 24);
+                if (!(r.cen && r.pw === true && r.xf)) bad.push('汽轮发电机 → 变压器 24 V → 离心机该通电不炸 ' + JSON.stringify(r));
+                r = await run([[2, 4]], 24);
+                if (r.cen) bad.push('不用变压器直接连 48 V 该炸 ' + JSON.stringify(r));
+                r = await run([[2, 3], [3, 4]], 12);
+                if (!(r.cen && r.pw === false && Math.abs(r.v - 12) < 0.01)) bad.push('输出 12 V 接离心机（minV 18）不工作也不炸 ' + JSON.stringify(r));
+                // 输出不高于输入：电池组 4 节 6 V → 变压器 24 V → 电灯：只有 6 V（灯额定 6，不炸）
+                const lo = await J(`(function(){ ind.base.rule = 'hard'; ind.base.off.pool = true; ind.base.devs = [${D(1, 'bank', 10, { bats: 4, u: 720 })}, ${D(2, 'xfmr', 12, { out: 24 })}, ${D(3, 'lamp', 14)}]; ind.base.wires = [[1, 2], [2, 3]]; indAdvance(1); let l = indDev(3); return { lamp: !!l, pw: l && l.pw, v: l && l.v, u: indDev(1).u }; })()`);
+                if (!(lo.lamp && lo.pw && Math.abs(lo.v - 6) < 0.01)) bad.push('输出不高于输入（4 节 6 V → 24 V 档只有 6 V） ' + JSON.stringify(lo));
+                if (!(lo.u < 720 - 0.1 && lo.u > 719)) bad.push('变压器后面的电灯耗电该扣电池组（1 秒约 0.2） ' + lo.u);
+                // 输出 24 V 接电灯（额定 6）该炸（玩家自己选的）
+                const bm = await J(`(function(){ ind.base.devs = [${D(1, 'bank', 10, { bats: 20, u: 3600 })}, ${D(2, 'xfmr', 12, { out: 24 })}, ${D(3, 'lamp', 14)}]; ind.base.wires = [[1, 2], [2, 3]]; indAdvance(0.2); return { lamp: !!indDev(3), xf: !!indDev(2) }; })()`);
+                if (bm.lamp) bad.push('输出 24 V 接电灯该炸灯');
+                // 点一下切换 6 → 12 → 24 → 6
+                const cy = await J(`(function(){ ind.base.devs = [${D(2, 'xfmr', 12, { out: 6 })}]; ind.base.wires = []; let d = indDev(2), a = []; for (let i = 0; i < 4; i++) { pwXfmrCycle(d); a.push(d.out); } return a; })()`);
+                if (cy.join() !== '12,24,6,12') bad.push('点一下切换输出电压 ' + cy.join());
+                // 接线规则：电池组 → 变压器、变压器 → 用电器、都能接
+                const wr = await J(`(function(){ ind.bag = { wire: 5 }; ind.base.devs = [${D(1, 'bank', 10, { bats: 4, u: 720 })}, ${D(2, 'xfmr', 12)}, ${D(3, 'lamp', 14)}]; ind.base.wires = []; ind.wirePend = null; indSelect('wire');
+                    indDevAct(indDev(2)); indDevAct(indDev(1)); indDevAct(indDev(3)); indDevAct(indDev(2)); return ind.base.wires; })()`);
+                if (JSON.stringify(wr) !== '[[1,2],[2,3]]') bad.push('接线：电池组→变压器、变压器→电灯 ' + JSON.stringify(wr));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND51 变压器：48 V 降到 24 V 接离心机、直接连会炸、12 V 不工作、输出不高于输入、耗电折回电池组、点一下切换、两头都能接线', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
