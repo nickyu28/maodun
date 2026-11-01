@@ -8839,6 +8839,45 @@ async function enterExit(tab, key) {
             report('IND44 电池组装电池：先替换用完的再加节、超压拒绝、一次放 N 个、面板显示节数电压电量', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND45')) {
+            // IND45 收不起来要说清原因（任务 25）：窑 600°C 收 → 提示含"现在 600°C"；火没关／正在烧配方／出料槽没凉各有各的话；熄火降到 60°C 以下再收 → 成功，里面的东西跟着；背包满了提示背包满；面板有"熄火并降温"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                // 一次调用里摆窑、收、读提示
+                const pick = (kiln, bagFull) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.bag = {}; ${bagFull ? "for (let i = 0; i < 24; i++) ind.bag['pad' + i] = 99;" : ''}
+                    ind.base.cookers = [Object.assign({ id: 5, ty: 'kiln', x: 20, z: 10, items: { sand: 2 }, out: {}, fuel: 100, fire: 0, temp: 20, cook: null, spout: [] }, ${JSON.stringify(kiln)})];
+                    let ok; try { ok = indPickFurn({ ty: 'kiln', o: ind.base.cookers[0] }); } finally { blazeFlash = bf; } return { ok: ok, fl: fl.join('|'), left: ind.base.cookers.length, carried: Object.keys(ind.base.carried || {}).length }; })()`);
+                let r = await pick({ temp: 600, fire: 0 });
+                if (r.ok || !/还烫着：现在 600°C/.test(r.fl) || !/约 \d+ 秒/.test(r.fl)) bad.push('600°C 收窑，提示要写现在 600°C 和还要几秒 ' + JSON.stringify(r));
+                r = await pick({ temp: 600, fire: 2 });
+                if (r.ok || !/火没关/.test(r.fl)) bad.push('火没关要说火没关 ' + JSON.stringify(r));
+                r = await pick({ temp: 20, fire: 0, cook: { i: 0, t: 1, burn: 0, n: 1 } });
+                if (r.ok || !/正在烧配方/.test(r.fl)) bad.push('正在烧配方要这么说 ' + JSON.stringify(r));
+                r = await pick({ temp: 20, fire: 0, spout: [{ k: 'hot_cu', t: 30 }] });
+                if (r.ok || !/出料槽里还有没凉的锭/.test(r.fl)) bad.push('出料槽有烫锭要这么说 ' + JSON.stringify(r));
+                r = await pick({ temp: 50, fire: 0 }, true);
+                if (r.ok || !/背包满了/.test(r.fl)) bad.push('背包满了要说背包满了 ' + JSON.stringify(r));
+                r = await pick({ temp: 50, fire: 0 });
+                if (!r.ok || r.left !== 0) bad.push('凉了 + 背包有空格要能收 ' + JSON.stringify(r));
+                // 关火后降温：600°C 熄火，推进时间到 ≤ 60°C 再收，里面的东西跟着
+                const cool = await J(`(function(){ ind.bag = {}; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: { sand: 2 }, out: {}, fuel: 100, fire: 2, temp: 600, cook: null, spout: [] }]; ind.base.cookers[0].fire = 0; indAdvance(70); let c = ind.base.cookers[0]; let t = c.temp; let ok = indPickFurn({ ty: 'kiln', o: c }); let id = Object.keys(ind.base.carried).filter(function (k) { return ind.base.carried[k].ty === 'kiln'; })[0]; return { t: t, ok: ok, items: id ? ind.base.carried[id].st.items : null }; })()`);
+                if (!(cool.t <= 60 && cool.ok && cool.items && cool.items.sand === 2)) bad.push('熄火降温后该能收、里面的东西跟着 ' + JSON.stringify(cool));
+                // 面板有熄火按钮
+                await T.eval(`ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: {}, out: {}, fuel: 100, fire: 2, temp: 300, cook: null, spout: [] }]; ind.cookId = 5; indPanelStove(5); true;`);
+                if (!(await T.eval(`!!document.getElementById('ind-stove-off') && /降到 60°C 还要约/.test(document.getElementById('ind-panel').innerText)`))) bad.push('窑面板该有"熄火并降温"和还要几秒');
+                await T.eval(`document.getElementById('ind-stove-off').click(); true;`);
+                if (!(await T.eval(`ind.base.cookers[0].fire === 0`))) bad.push('点熄火火候该变成关');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND45 收炉子说清原因（火没关／烧配方／现在多少度还要几秒／没凉的锭／背包满）、面板熄火并降温', bad.length === 0, bad.join(' / '));
+        }
+
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

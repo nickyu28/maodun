@@ -2089,6 +2089,17 @@
         }
         function indFurnName(ty, o) { return ty === 'spoutblk' ? '出料槽' : ty === 'funnelblk' ? '进料漏斗' : ty === 'bomb' ? '原子弹' : ty === 'house' ? (o ? IND_HOUSE[o.ty].name : '房子') : ty === 'tile' ? '农田' : ty === 'chest' ? '仓库箱' : ty === 'bed' ? '床' : ty === 'bench' ? '工作台' : ty === 'pool' ? '水池' : IND_COOK[ty].name; }
         function indFurnHot(ty, o) { let S = ty === 'stove' ? ind.base.stove : o; if (S && !Array.isArray(S.spout)) S.spout = []; return !!S && (S.fire > 0 || !!S.cook || S.temp > 60 || S.spout.some(function (e) { return e.t > 0; })); }   // 出料槽里还有烫的也算
+        // 收不起来的原因（空串＝能收）：火没关、正在烧配方、还没凉到 60°C 以下（写出现在多少度、大约还要几秒）、出料槽里还有没凉的锭
+        function indFurnCoolSecs(ty, S) { let K = IND_COOK[ty], rate = Math.min(K ? K.rate : 10, 10); return Math.max(0, Math.ceil((S.temp - 60) / rate)); }
+        function indFurnHotWhy(ty, o) {
+            let S = ty === 'stove' ? ind.base.stove : o; if (!S) return '';
+            if (!Array.isArray(S.spout)) S.spout = [];
+            if (S.fire > 0) return '火没关（面板里点"熄火并降温"）';
+            if (S.cook) return '正在烧配方';
+            if (S.temp > 60) return '现在 ' + Math.round(S.temp) + '°C，要降到 60°C 以下（约 ' + indFurnCoolSecs(ty, S) + ' 秒）';
+            if (S.spout.some(function (e) { return e.t > 0; })) return '出料槽里还有没凉的锭';
+            return '';
+        }
         function indPickFurn(f) {
             let B = ind.base, ty = f.ty, key, id;
             if (ty === 'house') return indPickHouse(f.o);
@@ -2100,7 +2111,7 @@
                 B.tiles = B.tiles.filter(function (t) { return t !== f.o; }); indBagAdd('dirt', 1); ind.tileDirty = true; indSave(); indFlash('收回了一格农田');
                 return true;
             }
-            if (indFurnHot(ty, f.o) && (ty === 'stove' || IND_COOK[ty])) { indFlash('还烫着'); return false; }
+            if ((ty === 'stove' || IND_COOK[ty]) && indFurnHotWhy(ty, f.o)) { indFlash('还烫着：' + indFurnHotWhy(ty, f.o)); return false; }
             if (ty === 'chest' || ty === 'stove' || IND_COOK[ty]) {
                 id = ++B.cid; key = 'inst:' + id;
                 if (indFits(ind.bag, IND_BAG_SLOTS, key, 1) < 1) { indFlash('背包满了'); return false; }
@@ -3073,6 +3084,7 @@
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; st += '正在做：' + indOutTxt(r, S.cook.n || 1) + (S.cook.n > 1 ? '（' + S.cook.n + ' 份）' : '') + ' ' + Math.floor(S.cook.t / r.time * 100) + '%'; }
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做' + (D.only ? '（只做冶炼）' : '') + '</span>';
             let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !S.bellows) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
+            fire += '<button id="ind-stove-off" style="' + IND_BTN + 'background:#455a64;" onclick="indStoveFire(0)">熄火并降温</button>' + (S.temp > 60 ? '<div style="font-size:13px;color:#888;">降到 60°C 还要约 ' + indFurnCoolSecs(c.ty, S) + ' 秒（收起要 60°C 以下）</div>' : '');
             let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
             let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';
             let spt = !ckSpoutOn(S) ? '没装出料槽（冶炼出的锭留在炉膛里，凉了直接取，烫的要钳子）' : S.spout.length ? ckSpoutDef(S).name + ' ' + indSpoutTxt(c) + '（左键点炉子旁边的出料槽取出）' : ckSpoutDef(S).name + ' 空';
@@ -3239,7 +3251,7 @@
             else if (a && a.kind === 'tile') hint = '空农田<br><small>拿种子，左键：种　长按右键：收回</small>';
             else if (a && a.kind === 'funnel') hint = CK_FUNNEL[a.o.C.funnel.ty].name + '　油 ' + Math.round(a.o.C.funnel.oil) + ' / ' + CK.funnelCap + '<br><small>拿装了油的桶右键：倒进去　长按右键：收起（空的才行）</small>';
             else if (a && a.kind === 'spout') hint = ckSpoutDef(a.o.C).name + ' ' + (a.o.C.spout.length ? indSpoutTxt(a.o) : '空') + '<br><small>左键：取出（烫的要钳子）　拿水桶右键：浇凉</small>';
-            else if (a && a.kind === 'cook') hint = IND_COOK[a.o.ty].name + ' ' + Math.round(a.o.temp) + '°C<br><small>左键：打开</small>';
+            else if (a && a.kind === 'cook') hint = IND_COOK[a.o.ty].name + ' ' + Math.round(a.o.temp) + '°C' + (a.o.temp > 60 && !a.o.fire ? '　降到 60°C 还要约 ' + indFurnCoolSecs(a.o.ty, a.o) + ' 秒' : '') + '<br><small>左键：打开</small>';
             else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : a.o.ty === 'bank' ? '拿电池左键：装一节　右键：选放几个　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
             else if (a && a.kind === 'animal') {
                 let o = a.o, D = IND_ANIMALS[o.k];
