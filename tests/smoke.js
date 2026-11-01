@@ -5445,6 +5445,8 @@ async function enterExit(tab, key) {
                         });
                         // 对着地面挖：泥土、沙子，拿着稿子挖石头；仙人掌拔刺
                         add('dirt'); add('sand'); if (tl >= 1) add('stone'); if (have.cactus) add('cactus_peeled'); add('twig'); if (hard) { add('grass'); add('sharp_flint'); } add('stone');   // 出生点附近地上撒的树枝、石头（硬核还有草和尖石片）
+                        // 硬岩（任务 37）：每张远征图都有，要火药炸开；炸出锂辉石、锗矿、镓矿，15% 冒出天然气喷口，空钢瓶装天然气
+                        if (hard) { add('rock_hard'); if (have.gunpowder) { add('ore_li'); add('ore_ge'); add('ore_ga'); add('vent_ng'); } if (have.vent_ng && have.cyl) add('gas_ng'); }
                         // 水
                         if (have.bucket) { add('water_raw'); add('water_sea'); }
                         // 灶台：燃料 + 温度
