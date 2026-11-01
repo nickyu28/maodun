@@ -5901,8 +5901,7 @@ async function enterExit(tab, key) {
                 const on = JSON.parse(await T.eval(`JSON.stringify({ pw: indDev(${lamp}).pw, u: indDev(${bank}).u, v: indSrcVolt(indDev(${bank})) })`));
                 if (!on.pw || on.v !== 6 || Math.abs(on.u - (720 - 1)) > 0.05) bad.push('6 V 灯不亮或耗电不对 ' + JSON.stringify(on));
                 // 再装一节：7.5 V > 6 V，灯炸了，3 米外的电池组还在，人在远处不扣血
-                await T.eval(`(function(){ indBagAdd('wheat', 1); ind.base.ground.push({ k: 'wheat', x: 6.5, z: -1.6 }); })(); true;`);
-                await click(bank, 'battery');
+                await T.eval(`(function(){ indBagAdd('wheat', 1); ind.base.ground.push({ k: 'wheat', x: 6.5, z: -1.6 }); indDev(${bank}).bats++; indDev(${bank}).u += IND_BAT_U; })(); true;`);   // 任务 24 以后装电池会拒绝超压，所以这里直接把电池组改成 5 节（7.5 V > 灯 6 V）来测过压爆炸
                 await T.eval(`indTeleport(-8, 5); indAdvance(0.2); true;`);
                 const bm = JSON.parse(await T.eval(`JSON.stringify({ lamp: !!indDev(${lamp}), bank: !!indDev(${bank}), wires: ind.base.wires.length, ground: ind.base.ground.filter(function (g) { return g.x > 6; }).length, hp: ind.base.surv.hp })`));
                 if (bm.lamp || !bm.bank || bm.wires !== 0 || bm.ground !== 0 || bm.hp !== 100) bad.push('过压爆炸不对 ' + JSON.stringify(bm));
