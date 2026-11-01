@@ -114,5 +114,46 @@
             });
         }
 
+        // ══ 任务 44：风箱要人拉 + 扇子 ══
+        // 风箱（不用电）：炉子开着"鼓风"档、人站在旁边按住右键拉，目标温度才是 1600°C；松手掉回大火（1200）。拉的时候每秒吃 6 体力（扇炉子 4、扇自己 2）。
+        // 扇子：手里拿着按住右键。对着点着的炉子（3 米内）扇，目标 1400°C；不对着炉子是扇自己，体温往 37°C 拉（每秒 0.3°C）。没体力就停
+        const FM_PULL = { near: 3, grace: 0.3, bellows: 6, fanCook: 4, fanSelf: 2, fanT: 1400, selfRate: 0.3 };
+        Object.assign(IND_ITEMS_RAW, { fan: { name: '扇子', col: 0xdce775, use: '按住右键扇：对着点着的炉子扇到 1400°C；不对着炉子是扇自己，热了凉快、冷了也往舒服拉（吃体力）' } });
+        IND_ITEMS_RAW.bellows.use = '装在炉子上多一档「鼓风」，要人站在旁边按住右键拉才到 1600°C，松手掉回大火（吃体力）';
+        IND_CRAFT.push({ out: 'fan', in: { grass: 6, rope: 2, wood: 1 }, hard: true });
+        function fmBlowerOn(c) { return typeof fmBlowerPw === 'function' && fmBlowerPw(c); }   // 电动鼓风机（任务 51）
+        // 这一帧炉子实际按哪档烧：鼓风档没人拉、也没电动鼓风机，就按大火；扇子扇着的炉子目标 1400
+        function fmFireEff(c, dt) {
+            let S = c.C, F = indFireDef(c.ty, S.fire);
+            if (S.blow > 0) S.blow = Math.max(0, S.blow - dt);
+            if (S.fan > 0) S.fan = Math.max(0, S.fan - dt);
+            if (S.fire === 4 && !(S.blow > 0) && !fmBlowerOn(c)) F = indFireDef(c.ty, 3);
+            if (S.fan > 0 && S.fire > 0 && F.t < FM_PULL.fanT) F = { name: F.name, t: FM_PULL.fanT, burn: F.burn };
+            return F;
+        }
+        function fmCookOfAim(a) { return a && a.kind === 'stove' ? indCookById('stove') : a && a.kind === 'cook' ? indCookById(a.o.id) : null; }
+        function fmPullDown(a) {
+            let k = indSel(), c = fmCookOfAim(a);
+            if (k === 'fan') { ind.pull = { c: c && c.C.fire > 0 ? c.id : null, fan: true, t: 0 }; return true; }
+            if (c && c.C.bellows && c.C.fire === 4) { ind.pull = { c: c.id, fan: false, t: 0 }; return true; }
+            return false;
+        }
+        function fmPullUp() { if (!ind || !ind.pull) return false; ind.pull = null; ind.effort = 0; return true; }
+        function fmPullTick(dt) {
+            ind.effort = 0;
+            let P = ind.pull; if (!P) return;
+            if (ind.stam <= 0) { ind.pull = null; indFlash('没力气了'); return; }
+            if (P.fan && indSel() !== 'fan') { ind.pull = null; return; }
+            P.t += dt;
+            if (P.c === null) {   // 扇自己
+                let S = ind.base.surv; S.temp += Math.max(-FM_PULL.selfRate * dt, Math.min(FM_PULL.selfRate * dt, 37 - S.temp));
+                ind.effort = FM_PULL.fanSelf; return;
+            }
+            let c = indCookById(P.c), a = fmCookOfAim(indAim());
+            if (!c || ind.where !== 'base' || !a || a.id !== c.id || Math.hypot(ind.p.x - c.x, ind.p.z - c.z) > FM_PULL.near + (IND_COOK[c.ty].r || 1)) { ind.pull = null; return; }
+            if (P.fan) { c.C.fan = FM_PULL.grace; ind.effort = FM_PULL.fanCook; }
+            else { c.C.blow = FM_PULL.grace; ind.effort = FM_PULL.bellows; }
+        }
+
         // ↓↓ 这一行要留在文件最后（任务 42）：给所有用皮的配方加人造革备选
         fmPleatherAlts();

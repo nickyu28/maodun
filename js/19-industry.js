@@ -316,7 +316,7 @@
             { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } }, { glass: true, name: '玻璃暖棚（先要有木暖棚）', in: { glass_plate: 6, wood: 6 } },
             { out: 'pickle', in: { radish: 2, salt: 1, bottle: 1 } },
             { out: 'yarn', in: { wool: 2 } }, { out: 'sweater', in: { yarn: 3 } }, { out: 'wool_hat', in: { yarn: 1 } }, { out: 'wool_scarf', in: { yarn: 1 } },
-            { out: 'bellows', in: { wood: 6, clay: 4 }, hard: true },
+            { out: 'bellows', in: { wood: 6, clay: 4, ingot_cu: 2, rope: 10, hide: 2 }, hard: true },   // 任务 44：风箱要人拉，造价贵一点（钢要风箱才炼得出，用铜锭代替；皮或人造革）
             { pot: true, name: '黄铜大锅（装在灶台上）', in: { brass: 3 }, hard: true },
             { out: 'tongs', in: { ingot_cu: 2 }, hard: true },
             { out: 'battery', in: { ingot_cu: 1, ingot_zn: 1, salt: 1 }, hard: true }, { out: 'wire', n: 4, in: { ingot_cu: 1 }, hard: true },
@@ -1369,7 +1369,7 @@
             if (!ind || ind.over || ind.dead) return;
             if (ind.where === 'base') indStoveTick(dt);
             if (!ind || ind.over) return;
-            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); rkTick(dt); pwFxTick(dt);
+            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); fmPullTick(dt); rkTick(dt); pwFxTick(dt);
             if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
@@ -1496,7 +1496,8 @@
             if (deep) {   // 游泳：动才掉体力；站着不掉，停 3 秒后开始回
                 if (moving) { R.stillT = 0; R.stam = Math.max(0, R.stam - IND_WATER.stamDrain * dt); }
                 else { R.stillT = (R.stillT || 0) + dt; if (R.stillT >= IND_WATER.stillT) R.stam = Math.min(100, R.stam + IND_WATER.stamRegen * dt); }
-            } else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }
+            } else if (R.effort > 0) { R.stillT = 0; R.stam = Math.max(0, R.stam - R.effort * dt); }   // 拉风箱、扇扇子吃体力（任务 44）
+            else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }
             let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1) * pwSpeedMul();   // 药的跑速加成（19-industry-power.js）
             if (moving) {
                 let n = Math.hypot(mx, mz), run = Math.min(1, n); mx /= n; mz /= n;
@@ -1648,7 +1649,7 @@
             if (!c) { indFlash('风箱要装在炉子上：对着灶台、小熔炉或大窑左键'); return false; }
             if (c.C.bellows) { indFlash(IND_COOK[c.ty].name + '已经装了风箱'); return false; }
             indBagDel('bellows', 1); c.C.bellows = true; indSave();
-            indFlash('风箱装好了，' + IND_COOK[c.ty].name + '多了一档「鼓风」');
+            indFlash('风箱装好了，' + IND_COOK[c.ty].name + '多了一档「鼓风」：开着鼓风，站在旁边按住右键拉');
             return true;
         }
         // 铃铛：拿着左键摇，30 米内跟着你的动物、基地里的动物都走到你身边
@@ -1718,6 +1719,7 @@
         // 右键：对着能搬的东西，按住 1 秒收起来，没按够就松开是原来的右键（吃喝、浇水、接水）；别的东西按下就是右键
         function indRightDown() {
             if (!ind || ind.over || ind.dead || ind.panel) return;
+            if (fmPullDown(indAim())) return;   // 拉风箱、扇扇子（任务 44）：要在"按住收起炉子"前面
             let f = indFurnOf(indAim());
             if (f) { ind.rh = { f: f, t: 0, done: false }; return; }
             if (pwCrankDown(indAim())) return;   // 手摇发电机：按住右键摇（19-industry-power.js）
@@ -1727,6 +1729,7 @@
         }
         function indRightUp() {
             if (pwCrankUp()) return;
+            if (fmPullUp()) return;
             if (ind && ind.ch && ind.ch.right) { let quick = ind.ch.t < 0.25; ind.ch = null; if (quick) indUse(); return; }
             if (!ind || !ind.rh) return;
             let rh = ind.rh; ind.rh = null;
@@ -2866,7 +2869,7 @@
         }
         function indCookTick(c, dt) {
             indSpoutTick(c, dt); ckTick(c, dt); rlCookWaterTick(c);   // 接了水管：空桶自动装生水（任务 58）
-            let S = c.C, K = indCookK(c.ty), F = indFireDef(c.ty, S.fire);
+            let S = c.C, K = indCookK(c.ty), F = fmFireEff(c, dt);   // 鼓风要有人拉风箱（任务 44），扇子扇到 1400
             if (S.fire > 0) {
                 let burn = F.burn * K.burn * dt;
                 S.fuel -= burn;
@@ -2874,7 +2877,7 @@
                 if (S.ashT >= IND_ASH_PER * 60) { S.ashT -= IND_ASH_PER * 60; S.out.ash = (S.out.ash || 0) + 1; }
                 if (S.fuel <= 0) { S.fuel = 0; S.fire = 0; if (ind.panel === 'stove') ind.panelDirty = true; }
             }
-            let target = Math.max(indFireDef(c.ty, S.fire).t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20);
+            let target = Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20);
             if (S.temp < target) S.temp = Math.min(target, S.temp + K.rate * dt); else S.temp = Math.max(target, S.temp - (S.fire > 0 ? K.rate : Math.min(K.rate, 10)) * dt);
             if (ind.where === 'base') {   // 钢瓶放在炉子上就是炉子的温度：压力超过 100 个大气压，或者氢气氧气混装超过 500°C，就炸
                 let boomR = 0;
