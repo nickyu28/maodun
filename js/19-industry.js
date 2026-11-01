@@ -2638,7 +2638,21 @@
         function indFireDef(ty, lv) { let F = IND_FIRE[lv]; return ty === 'furnace' && lv === 3 ? { name: F.name, t: IND_COOK.furnace.top, burn: F.burn } : F; }
         // 找第一个原料够、这个炉子做得了的配方
         // targetT：火候定下的温度。原料一样的配方（2 黏土：烧砖要 900°C、烧陶罐 600°C）按火候挑，大火出砖、中火出陶罐；火候不够哪个都挑不到就先等着第一个
-        function indCookFind(items, K, targetT) {
+        // 灶里还没拿出来的、不烫的出料（草木灰一类）也算原料：先用放进去的，不够再用出料里的。装了东西的桶不算
+        function ckPool(S) {
+            let p = Object.assign({}, S.items);
+            Object.keys(S.out || {}).forEach(function (k) { if (S.out[k] > 0 && !ckHotOf(k) && !indContOf(k)) p[k] = (p[k] || 0) + S.out[k]; });
+            return p;
+        }
+        // 开烧前把不够的那部分从出料挪进原料栏，再照常扣
+        function ckPullOut(S, r, n) {
+            Object.keys(r.in).forEach(function (k) {
+                if (IND_CONT_BASES.indexOf(k) >= 0) return;
+                let short = r.in[k] * n - (S.items[k] || 0), t = Math.min(short, S.out[k] || 0);
+                if (short > 0 && t > 0) { S.out[k] -= t; if (S.out[k] <= 0) delete S.out[k]; S.items[k] = (S.items[k] || 0) + t; }
+            });
+        }
+        function indCookFind(items, K, targetT, must) {
             let first = -1;
             for (let j = 0; j < IND_RECIPES.length * 2; j++) {   // 先看带 pri 的配方（第 6 阶段的化学配方，原料里有水也不被"烧水"抢走），再看别的
                 let i = j % IND_RECIPES.length, r = IND_RECIPES[i];
@@ -2647,6 +2661,7 @@
                 if (K && K.only && (r.cls || 'food') !== K.only) continue;
                 if (K && !indBatchCap(K, r)) continue;
                 if (!Object.keys(r.in).every(function (k) { return indHave(items, k) >= r.in[k]; })) continue;
+                if (must && !Object.keys(r.in).some(function (k) { return indHave(must, k) > 0; })) continue;   // 光靠出料里的东西不开烧（免得产物又被当原料，转圈）
                 if (targetT === undefined || targetT >= r.minT) return i;
                 if (first < 0) first = i;
             }
@@ -2717,13 +2732,13 @@
                 if (boomR) { if (ind.panel === 'stove') ind.panelDirty = true; indBoom(c.x, c.z, boomR, '钢瓶炸了'); return; }
             }
             if (!S.cook) {
-                let i = indCookFind(S.items, K, Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20));
-                if (i >= 0 && S.temp >= IND_RECIPES[i].minT) S.cook = { i: i, t: 0, burn: 0, n: indBatchN(IND_RECIPES[i], S.items, K) };
+                let pool = ckPool(S), i = indCookFind(pool, K, Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20), S.items);
+                if (i >= 0 && S.temp >= IND_RECIPES[i].minT) S.cook = { i: i, t: 0, burn: 0, n: indBatchN(IND_RECIPES[i], pool, K) };
                 indCookBadge(c);
                 return;
             }
             let r = IND_RECIPES[S.cook.i], n = S.cook.n || 1;
-            if (Object.keys(r.in).some(function (k) { return indHave(S.items, k) < r.in[k] * n; })) { S.cook = null; indCookBadge(c); return; }   // 原料被拿走了
+            { let pool = ckPool(S); if (Object.keys(r.in).some(function (k) { return indHave(pool, k) < r.in[k] * n; })) { S.cook = null; indCookBadge(c); return; } }   // 原料被拿走了
             if (S.temp >= r.minT) S.cook.t += dt;
             if (r.burnT && S.temp > r.burnT) S.cook.burn += dt;
             if (S.cook.t >= r.time || S.cook.burn >= IND_BURN_S) {
@@ -2731,6 +2746,7 @@
                 let hotN = 0; if (!burnt) Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot && ckSpoutTakes(S, k)) hotN += r.out[k] * n; });   // 只算进得了出料槽的（没装槽、槽耐温不够的留在炉膛）
                 if (hotN && S.spout.length + hotN > IND_SPOUT_CAP) { S.cook.full = true; if (ind.panel === 'stove') ind.panelDirty = true; indCookBadge(c); return; }   // 出料槽满了，先停着不出料
                 S.cook.full = false;
+                ckPullOut(S, r, n);
                 let mats = indConsume(S.items, r, n), res = indCookResult(r, n, mats, burnt), out = res.out;   // 桶按用的材质还回去，陶罐有 1/10 碎掉
                 Object.keys(out).forEach(function (k) {
                     if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) { for (let i = 0; i < out[k]; i++) { if (ckSpoutTakes(S, k)) S.spout.push({ k: k, t: ckSpoutDef(S).cool }); else S.out[k] = (S.out[k] || 0) + 1; } }   // 烫锭进出料槽；没槽或槽耐温不够就留在炉膛里
@@ -2769,23 +2785,23 @@
         }
         function indStoveFill() {
             if (!ind) return;
-            let c = indCookCur(), S = c.C, K = indCookK(c.ty), ri = S.cook ? S.cook.i : indCookFind(S.items, K);
+            let c = indCookCur(), S = c.C, K = indCookK(c.ty), ri = S.cook ? S.cook.i : indCookFind(ckPool(S), K, undefined, S.items), pool = ckPool(S);
             if (ri < 0 || (!S.cook && Object.keys(S.items).length === 0)) {
                 ri = -1;
                 for (let i = 0; i < IND_RECIPES.length && ri < 0; i++) {
                     let r = IND_RECIPES[i];
                     if ((r.hard && !indHard()) || (K.only && (r.cls || 'food') !== K.only) || !indBatchCap(K, r)) continue;
-                    if (Object.keys(r.in).every(function (k) { return indBagFire(k) + indHave(S.items, k) >= r.in[k]; })) ri = i;
+                    if (Object.keys(r.in).every(function (k) { return indBagFire(k) + indHave(pool, k) >= r.in[k]; })) ri = i;
                 }
             }
             if (ri < 0) { indFlash('背包里的原料凑不出配方'); return; }
             let r = IND_RECIPES[ri], N = indBatchCap(K, r), hotPer = 0;
             Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) hotPer += r.out[k]; });
             if (hotPer) N = Math.min(N, Math.floor(IND_SPOUT_CAP / hotPer));
-            Object.keys(r.in).forEach(function (k) { N = Math.min(N, Math.floor((indBagFire(k) + indHave(S.items, k)) / r.in[k])); });
+            Object.keys(r.in).forEach(function (k) { N = Math.min(N, Math.floor((indBagFire(k) + indHave(pool, k)) / r.in[k])); });
             if (N <= 0) { indFlash('原料不够一份'); return; }
             Object.keys(r.in).forEach(function (k) {
-                let need = r.in[k] * N - indHave(S.items, k);
+                let need = r.in[k] * N - indHave(pool, k);
                 if (need <= 0) return;
                 let keys = IND_CONT_BASES.indexOf(k) < 0 ? [k] : IND_TAKE_ORDER.filter(function (m) { return IND_MATS[m].fire; }).map(function (m) { return indFilledKey(k, m); });
                 keys.forEach(function (key) { let t = Math.min(need, ind.bag[key] || 0); if (t > 0) { indStovePut(key, t); need -= t; } });

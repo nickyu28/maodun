@@ -8714,6 +8714,34 @@ async function enterExit(tab, key) {
             report('IND40 收起设备退铜线（每根 1 根）、里面的东西一个不少（电解槽、离心机、粉碎机、压缩机、反应堆、电池组）', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND41')) {
+            // IND41 灶里还没拿出来的草木灰也算原料（任务 20）：出料里有灰、放 2 沙 → 能烧玻璃板（2 沙 + 1 灰）；没有灰不能；光有灰不开烧；烫锭不算原料
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const cook = (items, out, secs) => J(`(function(){ ind.base.stove = { items: ${JSON.stringify(items)}, out: ${JSON.stringify(out)}, fuel: 900, fire: 3, temp: 1100, cook: null }; indAdvance(${secs}); let S = ind.base.stove; return { items: S.items, out: S.out, cook: !!S.cook }; })()`);
+                let r = await cook({ sand: 2 }, { ash: 1 }, 25);
+                if (!(r.out.glass_plate === 1 && !r.out.ash && !r.items.sand)) bad.push('出料里有灰、放 2 沙，该烧出 1 玻璃板并用掉灰 ' + JSON.stringify(r));
+                r = await cook({ sand: 2 }, {}, 25);
+                if (r.out.glass_plate || r.items.sand !== 2) bad.push('没有灰不该烧玻璃板 ' + JSON.stringify(r));
+                r = await cook({}, { ash: 3 }, 5);
+                if (r.cook || r.out.ash !== 3) bad.push('光有灰不开烧 ' + JSON.stringify(r));
+                r = await cook({ sand: 2, ash: 1 }, { ash: 2 }, 25);
+                if (!(r.out.glass_plate === 1 && r.out.ash === 2)) bad.push('放进去的灰先用，出料里的不动 ' + JSON.stringify(r));
+                r = await cook({ sand: 2 }, { hot_cu: 1, ash: 0 }, 25);
+                if (r.out.glass_plate) bad.push('烫的东西和 0 个灰不算原料 ' + JSON.stringify(r));
+                // 一键放原料也把出料里的灰算上（面板提示）
+                await T.eval(`ind.base.stove = { items: {}, out: { ash: 1 }, fuel: 900, fire: 0, temp: 20, cook: null }; ind.bag = { sand: 2 }; indPanelStove(); indStoveFill(); true;`);
+                if (!(await T.eval(`ind.base.stove.items.sand === 2`))) bad.push('一键放原料：灰在出料里也算，放 2 沙 ' + await T.eval(`JSON.stringify([ind.base.stove, ind.bag])`));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND41 灶里没拿出来的草木灰也算原料：2 沙 + 出料里的 1 灰烧玻璃板', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
