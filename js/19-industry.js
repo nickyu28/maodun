@@ -3398,7 +3398,7 @@
                 let box = 'position:relative;display:inline-block;vertical-align:top;width:66px;height:46px;margin:1px;padding:14px 2px 0;box-sizing:border-box;border-radius:6px;font-size:11px;line-height:1.2;text-align:center;overflow:hidden;';
                 if (!it) { bag += '<span class="ind-hot" style="' + box + 'border:2px dashed #e0e0e0;color:#ccc;">' + lab + '</span>'; continue; }
                 let on = i === ind.selIdx, hotS = IND_ITEMS[it.k].hot ? Math.ceil(ind.hotT && ind.hotT[it.k] !== undefined ? ind.hotT[it.k] : IND_HOT_COOL) : 0;
-                bag += '<span class="ind-hot" onclick="ind.selIdx=' + i + '" style="' + box + 'cursor:pointer;border:2px solid ' + (on ? '#5e35b1' : hotS ? '#c62828' : '#cfd8dc') + ';background:' + (hotS ? '#ffcdd2;color:#b71c1c' : on ? '#ede7f6' : '#fff') + ';">' + lab + indName(it.k) + '<br>×' + it.n + (hotS ? ' 烫' + hotS : '') + '</span>';
+                bag += '<span class="ind-hot" onclick="ind.selIdx=' + i + '" style="' + box + 'cursor:pointer;border:2px solid ' + (on ? '#5e35b1' : hotS ? '#c62828' : '#cfd8dc') + ';background:' + (hotS ? '#ffcdd2;color:#b71c1c' : on ? '#ede7f6' : '#fff') + ';">' + lab + indName(it.k) + '<br>×' + it.n + (hotS ? ' 烫 ' + hotS + ' 秒' : '') + '</span>';
             }
             if (SL.length > IND_HOTBAR) bag += '<span style="display:inline-block;vertical-align:top;margin:1px 4px;font-size:12px;color:#888;line-height:46px;">还有 ' + (SL.length - IND_HOTBAR) + ' 格（E）</span>';
             let a = indAim(), hint = '';
