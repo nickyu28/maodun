@@ -1923,6 +1923,20 @@
         function indBoom(x, z, rad, why) {
             let B = ind.base, R = rad || IND_BOOM_R, gone = {};
             ind.lastBoom = { x: x, z: z, R: R };
+            // 被炸掉的设备、炉子里的东西先记下来，炸完（范围内的地上东西清掉以后）撒在爆炸点附近（任务 29）
+            let loot = {}, add = function (k, n) { if (n > 0) loot[indCool(k)] = (loot[indCool(k)] || 0) + n; };
+            B.devs.forEach(function (d) {
+                if (Math.hypot(d.x - x, d.z - z) > R) return;
+                if (d.st) Object.keys(d.st).forEach(function (k) { add(k, d.st[k]); });
+                if (d.ty === 'bank') add('battery', Math.ceil(d.u / IND_BAT_U - 1e-9));
+                if (d.rods) d.rods.forEach(function (r) { add(r.spent ? 'rod_spent' : nkRodKey(r), 1); });
+                if (d.cy) add(d.cy, 1);
+            });
+            B.cookers.forEach(function (c) {
+                if (Math.hypot(c.x - x, c.z - z) > R) return;
+                [c.items, c.out].forEach(function (m) { if (m) Object.keys(m).forEach(function (k) { add(k, m[k]); }); });
+                (c.spout || []).forEach(function (e) { add(e.k, 1); });
+            });
             B.devs = B.devs.filter(function (d) { if (Math.hypot(d.x - x, d.z - z) <= R) { gone[d.id] = 1; return false; } return true; });
             B.wires = B.wires.filter(function (w) { return !gone[w[0]] && !gone[w[1]]; });
             let powder = nkPowderNear(x, z, R);   // 地上的火药碰到爆炸也炸
@@ -1932,6 +1946,11 @@
             B.cookers = B.cookers.filter(function (c) { return Math.hypot(c.x - x, c.z - z) > R; }); ind.furnDirty = true;   // 小熔炉、大窑也会被炸掉（连里面的东西）
             B.houses = B.houses.filter(function (h) { let b = indHouseBox(h); return !(x > b.x0 - 1 && x < b.x1 + 1 && z > b.z0 - 1 && z < b.z1 + 1); }); ind.furnDirty = true;   // 炸在房子里或贴着墙，房子也塌了
             if (ind.wirePend && gone[ind.wirePend]) ind.wirePend = null;
+            let nLoot = 0, li = 0;
+            Object.keys(loot).forEach(function (k) {
+                for (let i = 0; i < loot[k]; i++, li++) { let a = li * 2.399, rr = Math.min(R, 0.5 + 0.35 * Math.sqrt(li)); B.ground.push({ k: k, x: x + Math.cos(a) * rr, z: z + Math.sin(a) * rr }); nLoot++; }
+            });
+            ind.lastBoomLoot = nLoot;
             ind.itemDirty = ind.cropDirty = ind.fireDirty = ind.devDirty = ind.wireDirty = true;
             indBoomFx(x, z);
             indSave();
@@ -1939,7 +1958,7 @@
                 if (indBoomHurt(x, z, R, why)) return;
             }
             if (powder.length) nkChain(powder);
-            indFlash('轰！');
+            indFlash('轰！' + (nLoot > 0 ? '设备炸了，里面的 ' + nLoot + ' 个东西掉在了地上' : ''));
         }
         function indBoomFx(x, z) {
             let m = new THREE.Mesh(indGeo(new THREE.SphereGeometry(1, 12, 8)), indMat(new THREE.MeshBasicMaterial({ color: 0xff6d00, transparent: true, opacity: 0.7 })));

@@ -8961,6 +8961,32 @@ async function enterExit(tab, key) {
             report('IND48 大窑化学配方一次 6 批（6 罐 + 18 空瓶，30 秒）、灶台还是 1 批', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND49')) {
+            // IND49 设备炸了里面的东西掉地上（任务 29）：离心机里 10 个罐炸掉后 10 个罐在爆炸点附近地上；炉子被炸里面的东西也在；原来范围内的地上东西照旧清掉；范围外的设备不动；提示写数量
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.bag = {}; ind.base.wires = []; ind.base.ground = [{ k: 'stone', x: 31, z: 20 }, { k: 'wood', x: 5, z: 5 }];
+                    ind.base.devs = [{ id: 1, ty: 'centrifuge', x: 30, z: 20, bats: 0, u: 0, on: true, ft: 20, st: { 'uf6:0': 10 } }, { id: 2, ty: 'bank', x: 31, z: 21, bats: 3, u: 540, on: true, ft: 20, st: {} }, { id: 3, ty: 'lamp', x: -20, z: -10, bats: 0, u: 0, on: true, ft: 20, st: { salt: 2 } }];
+                    ind.base.cookers = [{ id: 9, ty: 'furnace', x: 29, z: 19, items: { sand: 2 }, out: { ash: 3 }, fuel: 10, fire: 0, temp: 20, cook: null, spout: [] }];
+                    ind.base.pos = ind.base.pos || {}; ind.p.x = -10; ind.p.z = 10;
+                    try { indBoom(30, 20, 3, '测试'); } finally { blazeFlash = bf; }
+                    let cnt = {}; ind.base.ground.forEach(function (g) { cnt[g.k] = (cnt[g.k] || 0) + 1; }); let near = ind.base.ground.every(function (g) { return g.k === 'wood' || Math.hypot(g.x - 30, g.z - 20) <= 3.01; });
+                    return { cnt: cnt, near: near, devs: ind.base.devs.map(function (d) { return d.id; }), cookers: ind.base.cookers.length, fl: fl.join('|') }; })()`);
+                if (!(r.cnt['uf6:0'] === 10 && r.cnt.battery === 3 && r.cnt.sand === 2 && r.cnt.ash === 3)) bad.push('炸掉的设备和炉子里的东西该全在地上 ' + JSON.stringify(r.cnt));
+                if (r.cnt.stone) bad.push('原来范围内的地上东西照旧清掉 ' + JSON.stringify(r.cnt));
+                if (!(r.cnt.wood === 1 && r.devs.join() === '3' && r.cookers === 0)) bad.push('范围外的不动、范围内的设备炉子没了 ' + JSON.stringify(r));
+                if (!r.near) bad.push('东西撒在爆炸点附近');
+                if (!/里面的 18 个东西掉在了地上/.test(r.fl)) bad.push('提示写数量（10 + 3 + 2 + 3 = 18） ' + r.fl);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND49 设备和炉子被炸，里面的东西掉在爆炸点附近的地上、提示写数量', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
