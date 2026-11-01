@@ -121,7 +121,7 @@
             if (!c) { indFlash(indHard() ? '对着炉子旁边的进料漏斗倒' : '对着灶台、小熔炉或大窑右键，把油倒进去'); return false; }
             let S = c.C;
             if (indHard()) {
-                if (a.kind !== 'funnel') { indFlash(S.funnel ? '得用进料漏斗：对着漏斗倒' : '得用进料漏斗：先做一个装在炉子旁'); return false; }
+                if (a.kind !== 'funnel') { indFlash(S.funnel ? '得用进料漏斗：对着炉子旁的漏斗倒' : '这个炉子旁边没有进料漏斗：工作台做一个（3 块砖或 2 个铁锭）装在炉子旁，再对着漏斗倒'); return false; }
                 if (!S.funnel) return false;
                 if (S.funnel.oil + CK.oilFuel > CK.funnelCap + 1e-6) { indFlash('漏斗装不下了，等它流一会儿'); return false; }
                 indBagDel(k, 1); indBagAdd(indEmptyKey(cc.mat), 1); S.funnel.oil += CK.oilFuel;
@@ -139,12 +139,22 @@
             if (o.n < o.max) { let g = Math.floor((ind.t - o.t0) / CK.oilRegen); if (g > 0) { o.n = Math.min(o.max, o.n + g); o.t0 += g * CK.oilRegen; } }
             return o.n;
         }
+        // 硬核第一次装到油：弹一次大点的提示，说清石油怎么烧
+        const CK_OIL_TIP = '石油要用进料漏斗：先在工作台做一个（3 块砖，或 2 个铁锭），装在炉子旁边，再拿装了油的桶对着漏斗右键倒。倒进去的油会慢慢流进炉子，空桶还你。';
+        function ckOilFirst() {
+            if (!indHard()) return;
+            let told = false; try { told = !!localStorage.getItem('maodun_oil_told'); } catch (e) { }
+            if (told || ind.oilTold) return; ind.oilTold = true;
+            try { localStorage.setItem('maodun_oil_told', '1'); } catch (e) { }
+            showSysModal('石油怎么烧', CK_OIL_TIP, [{ label: '知道了' }]);
+        }
         function ckFillOil(k, o) {
             if (ckOilStock(o) < 1) { indFlash('油点空了，过一会儿会冒出来'); return false; }
             let m = indContOf(k).mat;
             if (o.n >= o.max) o.t0 = ind.t;
             o.n--; indBagDel(k, 1); indBagAdd(indFilledKey('oil', m), 1);
             ind.nodeDirty = true; indFlash('装了一桶石油（油点还剩 ' + o.n + ' 桶）');
+            ckOilFirst();
             return true;
         }
         function ckOilHint(o) {

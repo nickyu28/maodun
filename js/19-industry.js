@@ -141,7 +141,7 @@
             clay: { name: '黏土', col: 0xbcaaa4 }, dirt: { name: '泥土', col: 0x6d4c41, use: '开农田' },
             salt: { name: '盐', col: 0xf5f5f5 },
             coal: { name: '煤', col: 0x263238, fuel: 150 },
-            oil: { name: '石油', col: 0x212121, fuel: 600, use: '装在桶里，能烧，也是后面的原料' },   // 桶装液体：key 'oil' = 木桶装的石油，其它材质 oil@jar／@fe／@cu；一桶烧 600（煤 150）
+            oil: { name: '石油', col: 0x212121, fuel: 600, use: '装在桶里，能烧（硬核要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒），也是后面的原料' },   // 桶装液体：key 'oil' = 木桶装的石油，其它材质 oil@jar／@fe／@cu；一桶烧 600（煤 150）
             ore_cu: { name: '铜矿', col: 0xd84315 },
             ore_zn: { name: '锌矿', col: 0x90a4ae },
             ore_fe: { name: '铁矿', col: 0x795548 },
@@ -2825,7 +2825,7 @@
             if (!ind || !ind.bag[k]) return;
             if (k === 'gunpowder') { nkPowderInCooker(indCookCur()); return; }   // 火药放进炉子就炸
             let S = indCookCur().C, kc = indContOf(k);
-            if (indHard() && kc && kc.base === 'oil') { indFlash('得用进料漏斗'); return; }   // 硬核：油桶不能直接放进炉子
+            if (indHard() && kc && kc.base === 'oil') { indFlash('油桶得用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒'); return; }   // 硬核：油桶不能直接放进炉子
             if (kc && kc.mat === 'wood') { indFlash('木桶不能上火'); return; }
             if (indHard() && kc && kc.empty) { indFlash('空桶不用放进炉子'); return; }   // 装水、牛奶、汤的桶做菜还要放，不拦   // 硬核：油桶和空桶不能直接放进炉子（装水、牛奶、汤的桶做菜还要放，不拦）
             if (!S.items[k] && Object.keys(S.items).length >= IND_STOVE_CAP) { indFlash('放不下了'); return; }
@@ -2867,7 +2867,7 @@
             if (!ind || !ind.bag[k] || !IND_ITEMS[k].fuel) return;
             let cc = indContOf(k);
             if (cc && cc.base === 'oil') {   // 桶装的油：硬核得用进料漏斗；悠闲直接倒，空桶还你
-                if (indHard()) { indFlash('得用进料漏斗'); return; }
+                if (indHard()) { indFlash('油桶得用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒'); return; }
                 indBagDel(k, 1); indBagAdd(indEmptyKey(cc.mat), 1); indCookCur().C.fuel += IND_ITEMS[k].fuel;
                 indSave(); indPanelStove(); return;
             }
@@ -3088,6 +3088,7 @@
             let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
             let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';
             let spt = !ckSpoutOn(S) ? '没装出料槽（冶炼出的锭留在炉膛里，凉了直接取，烫的要钳子）' : S.spout.length ? ckSpoutDef(S).name + ' ' + indSpoutTxt(c) + '（左键点炉子旁边的出料槽取出）' : ckSpoutDef(S).name + ' 空';
+            if (indHard() && !S.funnel) spt += '<br><span style="color:#888">石油要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒</span>';
             if (S.funnel) spt += '<br>进料漏斗：油 ' + Math.round(S.funnel.oil) + ' / ' + CK.funnelCap + '（每秒流 ' + CK.funnelRate + '）';
             if (S.cook && S.cook.full) st += '<br><b style="color:#c62828">出料槽满了</b>';
             let put = Object.keys(ind.bag).map(function (k) {

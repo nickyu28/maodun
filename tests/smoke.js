@@ -7844,9 +7844,9 @@ async function enterExit(tab, key) {
                 await T.eval(`indGoBase(false); true;`);
                 // ── 硬核：油桶不能直接放进炉子，要用进料漏斗 ──
                 await T.eval(`ind.base.off = { stove: false, bed: true, bench: true, pool: true }; ind.base.cookers = []; ind.base.chests[0].x = 25; ind.base.chests[0].z = -15; ind.base.fires = []; ind.base.ground = []; ind.base.stove = Object.assign(ckNewState(), { spout: [] }); ind.furnDirty = true; indSyncFurn(); ind.cookId = 'stove'; window.__fl = []; ind.bag = { oil: 3, bucket: 1 }; indStovePut('oil', 1); indStovePut('bucket', 1); true;`);
-                if (!(await T.eval(`Object.keys(ind.base.stove.items).length === 0 && __fl.indexOf('得用进料漏斗') >= 0`))) bad.push('硬核：油桶不能直接放进炉子，提示得用进料漏斗 ' + await T.eval(`JSON.stringify([ind.base.stove.items, __fl])`));
+                if (!(await T.eval(`Object.keys(ind.base.stove.items).length === 0 && __fl.some(function (t) { return /进料漏斗/.test(t); })`))) bad.push('硬核：油桶不能直接放进炉子，提示得用进料漏斗 ' + await T.eval(`JSON.stringify([ind.base.stove.items, __fl])`));
                 await T.eval(`window.__fl = []; indStoveFuel('oil'); true;`);
-                if (!(await T.eval(`ind.base.stove.fuel === 0 && ind.bag.oil === 3 && __fl.indexOf('得用进料漏斗') >= 0`))) bad.push('硬核：面板的"当柴烧"也不能倒油桶');
+                if (!(await T.eval(`ind.base.stove.fuel === 0 && ind.bag.oil === 3 && __fl.some(function (t) { return /进料漏斗/.test(t); })`))) bad.push('硬核：面板的"当柴烧"也不能倒油桶');
                 await T.eval(`window.__fl = []; indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 3); indLookAt(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z); indSelect('oil'); indUse(); true;`);
                 if (!(await T.eval(`ind.base.stove.fuel === 0 && ind.bag.oil === 3 && __fl.some(function (t) { return /进料漏斗/.test(t); })`))) bad.push('硬核：拿油桶对着炉子右键，提示得用进料漏斗 ' + await T.eval(`JSON.stringify([ind.base.stove.fuel, ind.bag, __fl])`));
                 // 漏斗：砖漏斗 3 砖、铁漏斗 2 铁锭（硬核才有），贴着炉子装
@@ -8878,6 +8878,36 @@ async function enterExit(tab, key) {
             report('IND45 收炉子说清原因（火没关／烧配方／现在多少度还要几秒／没凉的锭／背包满）、面板熄火并降温', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND46')) {
+            // IND46 石油入口（任务 34）：硬核下有漏斗倒一桶油，炉子燃料增加、空桶还给玩家；没漏斗拿油桶对着炉子右键，提示里含"进料漏斗"；炉子面板没漏斗时写一行；油桶说明写出入口；第一次装油弹一次大提示
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} try { localStorage.removeItem('maodun_oil_told'); } catch (e) { } true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.rule = 'hard'; ind.bag = {}; ind.base.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'furnace', x: 20, z: 10 })]; let c = ind.base.cookers[0], oilk = indFilledKey('oil', 'wood');
+                    ind.bag[oilk] = 1; let a = { kind: 'cook', o: { id: 5, ty: 'furnace', x: 20, z: 10, C: c } };
+                    let r1 = ckPourOil(oilk, a), noFunnel = fl[fl.length - 1];
+                    c.funnel = { ty: 'brick', oil: 0 }; a = { kind: 'funnel', o: { id: 5, ty: 'furnace', x: 20, z: 10, C: c } };
+                    let r2 = ckPourOil(oilk, a); blazeFlash = bf;
+                    return { r1: r1, noFunnel: noFunnel, r2: r2, oil: c.funnel.oil, bag: ind.bag, use: IND_ITEMS.oil.use }; })()`);
+                if (r.r1 || !/进料漏斗/.test(r.noFunnel || '')) bad.push('没漏斗对着炉子倒，提示要含进料漏斗 ' + JSON.stringify(r));
+                if (!(r.r2 && r.oil === 600 && r.bag.bucket === 1 && !r.bag.oil)) bad.push('有漏斗倒一桶：漏斗里 +600、空桶还给 ' + JSON.stringify(r));
+                if (!/进料漏斗/.test(r.use)) bad.push('油桶说明要写出入口 ' + r.use);
+                // 面板
+                await T.eval(`ind.base.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'furnace', x: 20, z: 10 })]; ind.cookId = 5; indPanelStove(5); true;`);
+                if (!(await T.eval(`/石油要用进料漏斗/.test(document.getElementById('ind-panel').innerText)`))) bad.push('硬核炉子面板没漏斗时要写一行石油入口');
+                await T.eval(`ind.base.cookers[0].funnel = { ty: 'brick', oil: 0 }; indPanelStove(5); true;`);
+                if (await T.eval(`/石油要用进料漏斗/.test(document.getElementById('ind-panel').innerText)`)) bad.push('有漏斗就不用再写');
+                // 第一次装油弹一次大提示
+                await T.eval(`indPanelClose(); ind.oilTold = false; try { localStorage.removeItem('maodun_oil_told'); } catch (e) { } ind.bag = { bucket: 1 }; ckFillOil('bucket', { key: 'oil', n: 4, max: 4, t0: 0 }); true;`);
+                if (!(await T.eval(`!!document.getElementById('sys-modal') && /进料漏斗/.test(document.getElementById('sys-modal').innerText)`))) bad.push('第一次装油该弹一次提示');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND46 石油入口：有漏斗倒一桶、没漏斗提示进料漏斗、面板和物品说明写出入口、第一次装油弹提示', bad.length === 0, bad.join(' / '));
+        }
 
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
