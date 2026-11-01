@@ -5555,7 +5555,7 @@ async function enterExit(tab, key) {
                 const bms = await T.eval(`(function(){ let s = {}; for (let x = -140; x <= 140; x += 7) for (let z = -140; z <= 140; z += 7) s[indBiome(ind.map, x, z)] = 1; return Object.keys(s).length; })()`);
                 if (bms < 4) bad.push('一张图里地貌太少 ' + bms);
                 // 采集：石稿能挖的点
-                const g = JSON.parse(await T.eval(`(function(){ let o = ind.nodes.filter(function (n) { return !n.dead && n.key !== 'seeds' && n.key !== 'oil' && IND_NODES[n.key].tool <= 1; })[0]; indTeleport(o.x, o.z + 1); let before = ind.bag[o.key] || 0, ok = indGather(o); return JSON.stringify({ k: o.key, ok: ok, got: (ind.bag[o.key] || 0) - before }); })()`));
+                const g = JSON.parse(await T.eval(`(function(){ let o = ind.nodes.filter(function (n) { return !n.dead && n.key !== 'seeds' && n.key !== 'oil' && IND_NODES[n.key].tool <= 1; })[0]; indTeleport(o.x, o.z + 1); let gk = IND_NODES[o.key].out || o.key, before = ind.bag[gk] || 0, ok = indGather(o); return JSON.stringify({ k: o.key, ok: ok, got: (ind.bag[gk] || 0) - before }); })()`));
                 if (!g.ok || g.got < 1) bad.push('采集失败 ' + JSON.stringify(g));
                 // 铁矿要铁稿：石稿挖不动
                 const fe = await T.eval(`(function(){ let o = { key: 'ore_fe', n: 2, dead: false }; return indGather(o) ? 'dug' : 'refused'; })()`);
