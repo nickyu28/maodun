@@ -8936,6 +8936,31 @@ async function enterExit(tab, key) {
             report('IND47 核电冷却跟温度成正比：有水 4 根全开稳在约 320°C、没水熔毁、插控制棒温度降、面板写稳定值', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND48')) {
+            // IND48 大窑一次做多批化学配方（任务 28）：6 份黄饼 + 18 氟化氢 → 6 个六氟化铀罐 + 18 个空瓶，30 秒；放 7 份只做 6；灶台还是 1 批
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const kiln = (ty, items, secs) => J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = ${ty === 'kiln' ? "[{ id: 5, ty: 'kiln', x: 20, z: 10, items: " + JSON.stringify(items) + ", out: {}, fuel: 900, fire: 3, temp: 500, cook: null, spout: [] }]" : '[]'};
+                    ${ty === 'kiln' ? '' : "ind.base.stove = { items: " + JSON.stringify(items) + ", out: {}, fuel: 900, fire: 3, temp: 500, cook: null, spout: [] };"}
+                    indAdvance(${secs}); let S = ${ty === 'kiln' ? 'ind.base.cookers[0]' : 'ind.base.stove'}; return { out: S.out, items: S.items, cook: S.cook ? S.cook.n : 0 }; })()`);
+                let r = await kiln('kiln', { yellowcake: 6, b_hf: 18 }, 29);
+                if (r.out['uf6:0']) bad.push('29 秒不该好（还是 30 秒） ' + JSON.stringify(r));
+                r = await kiln('kiln', { yellowcake: 6, b_hf: 18 }, 32);
+                if (!(r.out['uf6:0'] === 6 && r.out.bottle === 18)) bad.push('6 份一次出 6 个罐 + 18 个空瓶 ' + JSON.stringify(r));
+                r = await kiln('kiln', { yellowcake: 7, b_hf: 21 }, 32);
+                if (!(r.out['uf6:0'] === 6 && r.items.yellowcake === 1 && r.items.b_hf === 3)) bad.push('放 7 份只做 6 份 ' + JSON.stringify(r));
+                r = await kiln('stove', { yellowcake: 3, b_hf: 9 }, 32);
+                if (!(r.out['uf6:0'] === 1 && r.items.yellowcake === 2)) bad.push('灶台化学还是一次 1 份 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND48 大窑化学配方一次 6 批（6 罐 + 18 空瓶，30 秒）、灶台还是 1 批', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
