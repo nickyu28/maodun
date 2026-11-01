@@ -9056,6 +9056,43 @@ async function enterExit(tab, key) {
             report('IND51 变压器：48 V 降到 24 V 接离心机、直接连会炸、12 V 不工作、输出不高于输入、耗电折回电池组、点一下切换、两头都能接线', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND52')) {
+            // IND52 背包扩张（任务 31）：戴草背包能放到第 25～30 格；有第 28 格的东西时脱不下来、换不了小的；换更大的行；存档里戴着的背包读档不丢东西；去掉格数加成检查要挂
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.rule = 'hard'; ind.base.wear = {}; ind.bag = {};
+                    for (let i = 0; i < 24; i++) ind.bag['pad' + i] = 1; ind.bag.pack_grass = 0; delete ind.bag.pack_grass;
+                    let full0 = indFits(ind.bag, indBagSlots(), 'wood', 1);   // 24 格满了放不进
+                    ind.bag = {}; for (let i = 0; i < 23; i++) ind.bag['pad' + i] = 1; ind.bag.pack_grass = 1; indWear('pack_grass');   // 23 + 草背包（穿上腾出 1 格）
+                    let slots = indBagSlots(); for (let i = 0; i < 7; i++) ind.bag['pad' + (30 + i)] = 1;   // 23 + 7 = 30 格
+                    let used = indSlotsOf(ind.bag), putIn = indBagAdd('wood', 1);   // 第 31 个放不进
+                    let off1 = (indTakeOff('back'), ind.base.wear.back), msg = fl[fl.length - 1];
+                    for (let i = 0; i < 7; i++) delete ind.bag['pad' + (30 + i)]; delete ind.bag.pad22; // 23 → 22 个，脱得下来
+                    indTakeOff('back'); blazeFlash = bf;
+                    return { full0: full0, slots: slots, used: used, putIn: putIn, off1: off1, msg: msg, off2: ind.base.wear.back || null, pack: ind.bag.pack_grass || 0, slots2: indBagSlots() }; })()`);
+                if (r.full0 !== 0) bad.push('没戴背包 24 格满了放不进');
+                if (!(r.slots === 30 && r.used === 30 && r.putIn === 0)) bad.push('戴草背包 30 格，能放到第 30 格、第 31 个放不进 ' + JSON.stringify(r));
+                if (!(r.off1 === 'pack_grass' && /先把多出来的格子清空/.test(r.msg || ''))) bad.push('第 25～30 格有东西时脱不下来并提示 ' + JSON.stringify(r));
+                if (!(r.off2 === null && r.pack === 1 && r.slots2 === 24)) bad.push('清空后脱得下来 ' + JSON.stringify(r));
+                // 换更大的：草 → 布 +12；换小的有东西不让
+                const sw = await J(`(function(){ ind.base.wear = {}; ind.bag = { pack_grass: 1, pack_cloth: 1, pack_steel: 1 }; indWear('pack_grass'); indWear('pack_steel'); let a = [ind.base.wear.back, indBagSlots()]; for (let i = 0; i < 30; i++) ind.bag['pad' + i] = 1; let ok = indWear('pack_grass'); return { a: a, ok: ok, now: ind.base.wear.back, slots: indBagSlots() }; })()`);
+                if (!(sw.a[0] === 'pack_steel' && sw.a[1] === 42 && sw.ok === false && sw.now === 'pack_steel')) bad.push('换更大的行、装满了换小的不行 ' + JSON.stringify(sw));
+                // 存档整理：戴着钢架背包、背包 40 格东西，读档不被清掉
+                const sv = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.wear = { back: 'pack_steel' }; b.bag = {}; for (let i = 0; i < 40; i++) b.bag['pad' + i] = 1; IND_ITEMS_RAW.pad0 = IND_ITEMS_RAW.pad0 || { name: 'x' }; for (let i = 0; i < 40; i++) IND_ITEMS_RAW['pad' + i] = { name: 'p' }; indFixBase(b); return { n: Object.keys(b.bag).length, back: b.wear.back }; })()`);
+                if (!(sv.n === 40 && sv.back === 'pack_steel')) bad.push('存档里戴着钢架背包，40 格东西读档不能丢 ' + JSON.stringify(sv));
+                // 配方：草背包悠闲／硬核各一种
+                const rc = await J(`(function(){ let o = {}; ['hard', 'casual'].forEach(function (m) { ind.base.rule = m; o[m] = IND_CRAFT.filter(function (r) { return r.out === 'pack_grass' && indCraftShow(r); }).length; }); o.cloth = IND_CRAFT.filter(function (r) { return r.out === 'pack_cloth'; }).length; return o; })()`);
+                if (!(rc.hard === 1 && rc.casual === 1 && rc.cloth === 1)) bad.push('配方 ' + JSON.stringify(rc));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND52 背包扩张：草／布／钢架三档 +6／+12／+18 格、多出来的格子有东西脱不下来、换大行换小不行、存档不丢', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

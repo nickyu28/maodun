@@ -74,3 +74,16 @@
             });
             return out;
         }
+
+// ── 背包（背部装备栏，任务 31）：一次戴一个，加格数。脱下或换小的之前，多出来的格子里必须是空的 ──
+        Object.assign(IND_ITEMS_RAW, {
+            pack_grass: { name: '草背包', col: 0x9ccc65, wear: 'back', slots: 6, warm: 0, use: '戴在背上，背包 +6 格（共 30 格）；脱下前多出来的格子要先清空' },
+            pack_cloth: { name: '布背包', col: 0x8e6bbf, wear: 'back', slots: 12, warm: 0, use: '戴在背上，背包 +12 格（共 36 格）；脱下前多出来的格子要先清空' },
+            pack_steel: { name: '钢架背包', col: 0x607d8b, wear: 'back', slots: 18, warm: 0, use: '戴在背上，背包 +18 格（共 42 格）；脱下前多出来的格子要先清空' }
+        });
+        IND_CRAFT.push(
+            { out: 'pack_grass', in: { rope: 6, wood: 2 }, hard: true },
+            { out: 'pack_grass', in: { yarn: 3, wood: 2 }, casual: true },
+            { out: 'pack_cloth', in: { yarn: 6, rope: 2, wire: 2 }, hard: true },
+            { out: 'pack_steel', in: { steel: 4, yarn: 4, wire: 4 }, hard: true }
+        );

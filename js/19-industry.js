@@ -561,7 +561,7 @@
             nkFixBase(b);   // 辐射区、原子弹（19-industry-nuke.js）
             if (!b.bag || typeof b.bag !== 'object') b.bag = {};
             Object.keys(b.bag).forEach(function (k) { if (!IND_ITEMS[k] || !(b.bag[k] > 0)) delete b.bag[k]; else b.bag[k] = Math.floor(b.bag[k]); });
-            if (indSlotsOf(b.bag) > IND_BAG_SLOTS) b.bag = {};   // 超过 24 格的（乱写的）不要
+            if (indSlotsOf(b.bag) > IND_BAG_SLOTS + (b.wear && IND_ITEMS[b.wear.back] ? IND_ITEMS[b.wear.back].slots || 0 : 0)) b.bag = {};   // 超过 24 格的（乱写的）不要
             if (!Array.isArray(b.ground)) b.ground = [];
             b.ground = b.ground.filter(function (g) { return g && IND_ITEMS[g.k] && isFinite(g.x) && isFinite(g.z); });
             b.ground.forEach(function (g) { g.x = indNum(g.x, 0, -IND_BASE.x + 0.5, IND_BASE.x - 0.5); g.z = indNum(g.z, 0, -IND_BASE.z + 0.5, IND_BASE.z - 0.5); });
@@ -651,7 +651,7 @@
         function indSlots() { let L = []; Object.keys(ind.bag).forEach(function (k) { let c = ind.bag[k]; while (c > 0) { L.push({ k: k, n: Math.min(IND_STACK, c) }); c -= IND_STACK; } }); return L; }
         function indBagAdd(k, n) {
             if (IND_ELEM_OF[k] && ind.base && !ind.base.elems[IND_ELEM_OF[k]]) { ind.base.elems[IND_ELEM_OF[k]] = 1; indFlash('元素表点亮了：' + IND_ELEM_NAME[IND_ELEM_OF[k]]); }
-            let B = ind.bag, take = indFits(B, IND_BAG_SLOTS, k, n);
+            let B = ind.bag, take = indFits(B, indBagSlots(), k, n);
             if (take > 0) B[k] = (B[k] || 0) + take;
             return take;
         }
@@ -872,7 +872,7 @@
                 if (indIsBaby(a)) { indFlash('还小，没有毛'); return false; }
                 if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
                 if (clock < a.woolAt) { indFlash('羊毛还要等 ' + Math.ceil(a.woolAt - clock) + ' 秒'); return false; }
-                if (indFits(ind.bag, IND_BAG_SLOTS, 'wool', 2) <= 0) { indFlash('背包满了'); return false; }
+                if (indFits(ind.bag, indBagSlots(), 'wool', 2) <= 0) { indFlash('背包满了'); return false; }
                 if (ind.shear && ind.shear.a === a) { indFlash('正在剪 ' + Math.floor(ind.shear.t / IND_SHEAR_T * 100) + '%'); return false; }
                 ind.shear = { a: a, t: 0 }; indFlash('开始剪毛：拿着剪刀，别离羊太远（3 米）'); return true;   // 边走边剪（任务 2.6）
             }
@@ -2078,7 +2078,7 @@
         function indPickHouse(h) {
             let k = 'house_' + h.ty;
             if (indHouseHas(h) > 0) { indFlash('先把里面的东西搬出来'); return false; }
-            if (indFits(ind.bag, IND_BAG_SLOTS, k, 1) < 1) { indFlash('背包满了'); return false; }
+            if (indFits(ind.bag, indBagSlots(), k, 1) < 1) { indFlash('背包满了'); return false; }
             ind.base.houses = ind.base.houses.filter(function (x) { return x !== h; });
             indBagAdd(k, 1); ind.furnDirty = true; indSave(); indFlash('收起了' + IND_HOUSE[h.ty].name);
             return true;
@@ -2128,20 +2128,20 @@
             if (ty === 'spoutblk' || ty === 'funnelblk') return ckPickPart(f);
             if (ty === 'tile') {   // 空农田收回：还 1 份泥土
                 if (indCropAt(f.o.x, f.o.z)) { indFlash('上面种着东西'); return false; }
-                if (indFits(ind.bag, IND_BAG_SLOTS, 'dirt', 1) < 1) { indFlash('背包满了'); return false; }
+                if (indFits(ind.bag, indBagSlots(), 'dirt', 1) < 1) { indFlash('背包满了'); return false; }
                 B.tiles = B.tiles.filter(function (t) { return t !== f.o; }); indBagAdd('dirt', 1); ind.tileDirty = true; indSave(); indFlash('收回了一格农田');
                 return true;
             }
             if ((ty === 'stove' || IND_COOK[ty]) && indFurnHotWhy(ty, f.o)) { indFlash('还烫着：' + indFurnHotWhy(ty, f.o)); return false; }
             if (ty === 'chest' || ty === 'stove' || IND_COOK[ty]) {
                 id = ++B.cid; key = 'inst:' + id;
-                if (indFits(ind.bag, IND_BAG_SLOTS, key, 1) < 1) { indFlash('背包满了'); return false; }
+                if (indFits(ind.bag, indBagSlots(), key, 1) < 1) { indFlash('背包满了'); return false; }
                 if (ty === 'chest') { B.carried[id] = { ty: 'chest', big: f.o.big, lead: !!f.o.lead, items: f.o.items }; B.chests = B.chests.filter(function (c) { return c !== f.o; }); }
                 else if (ty === 'stove') { B.carried[id] = { ty: 'stove', st: B.stove }; B.stove = ckNewState(); B.off.stove = true; }
                 else { let c = f.o, st = {}; ['items', 'out', 'fuel', 'fire', 'temp', 'cook', 'ashT', 'bellows', 'spout', 'spoutTy', 'funnel'].forEach(function (k) { st[k] = c[k]; }); B.carried[id] = { ty: ty, st: st }; B.cookers = B.cookers.filter(function (x) { return x !== c; }); }
             } else {
                 key = 'furn_' + ty;
-                if (indFits(ind.bag, IND_BAG_SLOTS, key, 1) < 1) { indFlash('背包满了'); return false; }
+                if (indFits(ind.bag, indBagSlots(), key, 1) < 1) { indFlash('背包满了'); return false; }
                 B.off[ty] = true;
             }
             let big = ty === 'chest' && f.o.big; B.box = (B.chests.filter(function (c) { return c.big; })[0] || { items: {} }).items;
@@ -2623,8 +2623,14 @@
         }
 
         // ── 衣服、篝火、工作台 ──
+        // 背包格数：24 + 戴着的背包（背部）加的格数（任务 31）。脱下或换小的之前，多出来的格子必须是空的
+        function indBagSlots() { let k = ind.base && ind.base.wear && ind.base.wear.back; return IND_BAG_SLOTS + (k && IND_ITEMS[k] && IND_ITEMS[k].slots || 0); }
         function indWear(k) {
             let sl = IND_ITEMS[k].wear, old = ind.base.wear[sl];
+            if (sl === 'back') {   // 换背包：新的格数不够装现在的东西就不让换
+                let cap = IND_BAG_SLOTS + (IND_ITEMS[k].slots || 0), after = indSlotsOf(ind.bag) - 1 + (old ? 1 : 0);
+                if (after > cap) { indFlash('先把多出来的格子清空'); return false; }
+            }
             indBagDel(k, 1); ind.base.wear[sl] = k;
             if (old) indBagAdd(old, 1);
             indSave(); indFlash('穿上了' + indName(k) + (IND_ITEMS[k].blast ? '：' + IND_ITEMS[k].use : ''));
@@ -2633,6 +2639,7 @@
         function indTakeOff(sl) {
             if (!ind) return;
             let k = ind.base.wear[sl]; if (!k) return;
+            if (sl === 'back' && indSlotsOf(ind.bag) + 1 > IND_BAG_SLOTS) { indFlash('先把多出来的格子清空'); return; }
             if (indBagAdd(k, 1) <= 0) { indFlash('背包满了'); return; }
             delete ind.base.wear[sl]; indSave(); indFlash('脱下了' + indName(k));
         }
@@ -2660,7 +2667,7 @@
             if (!r.gh && !r.glass && !r.pot) {   // 先把材料扣掉再看放不放得下成品
                 let B = Object.assign({}, ind.bag);
                 Object.keys(r.in).forEach(function (k) { B[k] -= r.in[k]; if (B[k] <= 0) delete B[k]; });
-                if (indFits(B, IND_BAG_SLOTS, r.out, r.n || 1) < (r.n || 1)) { indFlash('背包满了'); return false; }
+                if (indFits(B, indBagSlots(), r.out, r.n || 1) < (r.n || 1)) { indFlash('背包满了'); return false; }
             }
             Object.keys(r.in).forEach(function (k) { indBagDel(k, r.in[k]); });
             if (r.gh) { ind.base.gh = true; if (ind.where === 'base') indBuildGh(); indFlash('暖棚盖好了，棚里的作物不管季节都长'); }
@@ -2980,7 +2987,7 @@
         // 背包面板（B）：列出身上的格子，可以销毁
         function indPanelBag() {
             if (!ind) return;
-            indPanelShow('bag', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">背包　' + indSlots().length + ' / ' + IND_BAG_SLOTS + ' 格</div><div id="ind-bag-zone">' + indBagChips() + '</div>' +
+            indPanelShow('bag', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">背包　' + indSlots().length + ' / ' + indBagSlots() + ' 格</div><div id="ind-bag-zone">' + indBagChips() + '</div>' +
                 '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
         function indPanelRefresh() { if (!ind) return; if (ind.panel === 'box') indPanelBox(); else if (ind.panel === 'bag') indPanelBag(); else if (ind.panel === 'stove') indPanelStove(); }
@@ -2995,7 +3002,7 @@
                 indBagDel(it.k, it.n); c.items[it.k] = (c.items[it.k] || 0) + it.n;
             } else {
                 let it = indSlotsIn(c.items)[i]; if (!it) return false;
-                if (indFits(ind.bag, IND_BAG_SLOTS, it.k, it.n) < it.n) { indFlash('背包放不下了'); return false; }
+                if (indFits(ind.bag, indBagSlots(), it.k, it.n) < it.n) { indFlash('背包放不下了'); return false; }
                 indBagAdd(it.k, it.n); c.items[it.k] -= it.n; if (c.items[it.k] <= 0) delete c.items[it.k];
             }
             ind.boxSel = null; indSave(); indPanelBox(); return true;
@@ -3067,7 +3074,7 @@
         function indUndo() {
             let U = ind && ind.undo; if (!U || Date.now() >= U.until) { indUndoBar(); return false; }
             if (U.where === 'bag') {
-                if (indFits(ind.bag, IND_BAG_SLOTS, U.k, U.n) < U.n) { indFlash('放不下了'); return false; }
+                if (indFits(ind.bag, indBagSlots(), U.k, U.n) < U.n) { indFlash('放不下了'); return false; }
                 indBagAdd(U.k, U.n);
             } else {
                 let c = ind.base.chests.filter(function (x) { return x.id === U.cid; })[0];
@@ -3253,7 +3260,7 @@
             if (R.peel) st += '<br>' + wdPeelTxt();
             if (R.shear) st += '<br>剪羊毛 ' + Math.min(99, Math.floor(R.shear.t / IND_SHEAR_T * 100)) + '%' + (indSel() === 'shears' ? '' : '　<b style="color:#c62828">停着：拿上剪刀</b>');
             let SL = indSlots(), sel = indSel(), bag = '';
-            for (let i = 0; i < IND_BAG_SLOTS; i++) {
+            for (let i = 0; i < indBagSlots(); i++) {
                 let it = SL[i];
                 if (!it) { bag += '<span style="display:inline-block;margin:1px;padding:2px 6px;border-radius:10px;border:2px dashed #e0e0e0;color:#ccc;font-size:12px;">' + (i + 1) + '</span>'; continue; }
                 let on = i === ind.selIdx, hotS = IND_ITEMS[it.k].hot ? Math.ceil(ind.hotT && ind.hotT[it.k] !== undefined ? ind.hotT[it.k] : IND_HOT_COOL) : 0;
@@ -3304,7 +3311,7 @@
             else if (sel === 'dry_ice') hint = '<small>拿在手上体温每秒 −0.05°C　右键：放进装水的桶</small>';
             else if (sel && IND_ITEMS[sel].dev) hint = '<small>右键或 Q：放下' + indName(sel) + '</small>';
             else if (sel === 'wire' && R.wirePend) hint = '<small>再点另一个设备接线</small>';
-            let wr = ['body', 'head', 'neck'].filter(function (sl) { return R.base.wear[sl]; }).map(function (sl) { return '<span onclick="indTakeOff(\'' + sl + '\')" style="cursor:pointer;margin-right:6px;border-bottom:1px dashed #999;">' + indName(R.base.wear[sl]) + '</span>'; }).join('');
+            let wr = ['body', 'head', 'neck', 'back'].filter(function (sl) { return R.base.wear[sl]; }).map(function (sl) { return '<span onclick="indTakeOff(\'' + sl + '\')" style="cursor:pointer;margin-right:6px;border-bottom:1px dashed #999;">' + indName(R.base.wear[sl]) + '</span>'; }).join('');
             wr = '穿着：' + (wr || '<span style="color:#999">什么都没穿</span>') + (wr ? '<small style="color:#999">（点一下脱下）</small>' : '');
             let sig = st + '|' + bag + '|' + hint + '|' + wr;
             if (sig === R.hudSig) return; R.hudSig = sig;
