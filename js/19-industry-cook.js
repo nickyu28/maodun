@@ -8,7 +8,7 @@
         };
         const CK_FUNNEL = { brick: { name: '砖漏斗' }, iron: { name: '铁漏斗' } };
         const CK_MELT = { hot_cu: 1085, hot_zn: 420, hot_sn: 232, hot_bronze: 950, hot_brass: 950, hot_pb: 327, hot_fe: 1538, hot_steel: 1550 };   // 烫锭的熔点：超过槽耐温的进不了槽，留在炉膛里
-        const CK = { oilFuel: 600, funnelCap: 1200, funnelRate: 10, funnelKeep: 300, hearthCool: 150, kickR: 1.8, scatter: 1.5, kickCool: 60, oilMax: 4, oilRegen: 120 };
+        const CK = { oilFuel: 250, oilTotal: 20, funnelCap: 1200, funnelRate: 10, funnelKeep: 300, hearthCool: 150, kickR: 1.8, scatter: 1.5, kickCool: 60, oilMax: 4, oilRegen: 120 };
 
         Object.assign(IND_ITEMS_RAW, {
             spout_brick: { name: '砖槽', col: 0xbf5b3a, attach: 'spout', spoutTy: 'brick', use: '装在炉子旁，接铜、青铜、黄铜、锌、锡、铅，耐 1200°C，锭 60 秒凉' },
@@ -136,7 +136,9 @@
         // 油点（沙漠）：拿空桶右键装一桶，一次一桶；油点有存量（最多 4 桶），装走一桶过 2 分钟补回一桶
         function ckOilStock(o) {
             if (o.max === undefined) { o.max = CK.oilMax; o.n = Math.min(o.n === undefined ? CK.oilMax : o.n, CK.oilMax); o.t0 = ind.t; }
-            if (o.n < o.max) { let g = Math.floor((ind.t - o.t0) / CK.oilRegen); if (g > 0) { o.n = Math.min(o.max, o.n + g); o.t0 += g * CK.oilRegen; } }
+            if (o.dry) { o.n = 0; return 0; }   // 任务 56：一个油点一共只出 20 桶，采完是干井
+            o.n = Math.min(o.n, CK.oilTotal - (o.got || 0));
+            if (o.n < o.max && o.n < CK.oilTotal - (o.got || 0)) { let g = Math.floor((ind.t - o.t0) / CK.oilRegen); if (g > 0) { o.n = Math.min(o.max, o.n + g); o.t0 += g * CK.oilRegen; } }
             return o.n;
         }
         // 硬核第一次装到油：弹一次大点的提示，说清石油怎么烧
@@ -149,15 +151,17 @@
             showSysModal('石油怎么烧', CK_OIL_TIP, [{ label: '知道了' }]);
         }
         function ckFillOil(k, o) {
-            if (ckOilStock(o) < 1) { indFlash('油点空了，过一会儿会冒出来'); return false; }
+            if (ckOilStock(o) < 1) { indFlash(o.dry ? '干井：这个油点采完了，去别处找' : '油点空了，过一会儿会冒出来'); return false; }
             let m = indContOf(k).mat;
             if (o.n >= o.max) o.t0 = ind.t;
-            o.n--; indBagDel(k, 1); indBagAdd(indFilledKey('oil', m), 1);
-            ind.nodeDirty = true; indFlash('装了一桶石油（油点还剩 ' + o.n + ' 桶）');
+            o.n--; o.got = (o.got || 0) + 1; indBagDel(k, 1); indBagAdd(indFilledKey('oil', m), 1);
+            if (o.got >= CK.oilTotal) { o.dry = true; o.n = 0; }
+            ind.nodeDirty = true; indFlash(o.dry ? '装了一桶石油，这个油点采完了（干井）' : '装了一桶石油（油点还剩 ' + o.n + ' 桶，一共还能出 ' + (CK.oilTotal - o.got) + ' 桶）');
             ckOilFirst();
             return true;
         }
         function ckOilHint(o) {
+            if (ckOilStock(o) < 1 && o.dry) return '干井　这个油点采完了（一个油点一共 ' + CK.oilTotal + ' 桶），去别处找';
             let n = ckOilStock(o), left = n < o.max ? '　下一桶还要 ' + Math.max(1, Math.ceil(CK.oilRegen - (ind.t - o.t0))) + ' 秒' : '';
             return '油点　剩 ' + n + ' 桶' + left + '<br><small>' + (n > 0 ? '拿空桶右键：装一桶' : '空了，过一会儿会冒出来') + '（空手装不了）</small>';
         }

@@ -198,7 +198,7 @@
         function fmNodeCol(n) { let k = (IND_NODES[n.key] && IND_NODES[n.key].out) || n.key, it = IND_ITEMS_RAW[k]; return it && it.col !== undefined ? it.col : 0x795548; }
         function fmMapDrawMore(g, px) {
             (ind.nodes || []).forEach(function (n) {
-                if (!n.seen || n.dead || n.tree) return;
+                if (!n.seen || n.dead || n.tree || n.dry) return;   // 采完的油点（干井）不再标
                 g.fillStyle = '#' + ('000000' + fmNodeCol(n).toString(16)).slice(-6); g.fillRect((n.x + IND_MAP) * px - 1.5, (n.z + IND_MAP) * px - 1.5, 3, 3);
             });
             g.fillStyle = '#5d4037'; g.fillRect(IND_MAP * px - 5, IND_MAP * px - 5, 10, 10);   // 家：出生点
@@ -254,6 +254,11 @@
             if (d.rods && d.rods.length) { indFlash('已经装了一根'); return false; }
             indBagDel(k, 1); d.rods = [{ i: r.i, b: r.b }]; indSave(); indFlash('装上燃料棒了，出 12 V'); return true;
         }
+
+        // ══ 任务 56：面粉（面包先磨面）══
+        // 硬核：粉碎机里 2 小麦 → 2 面粉；悠闲没有电，工作台手磨 2 小麦 → 2 面粉。面包 = 面粉 3 + 盐 1 + 水 1 → 3（200°C 40 秒，在 19-industry.js 原位置改的）
+        Object.assign(IND_ITEMS_RAW, { flour: { name: '面粉', col: 0xfff8e1, use: '做面包（面粉 3 + 盐 1 + 水 1 → 3 个）' } });
+        IND_CRAFT.push({ out: 'flour', n: 2, in: { wheat: 2 }, casual: true });
 
         // ↓↓ 这一行要留在文件最后（任务 42）：给所有用皮的配方加人造革备选
         fmPleatherAlts();

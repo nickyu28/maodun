@@ -186,7 +186,7 @@
             if (n.ty === 'cook') {
                 if (f === 'w') return RL_PIPE.cookBuf - (C.wb || 0);
                 if (f === 'o') return C.funnel ? (CK.funnelCap - C.funnel.oil) / CK.oilFuel : 0;
-                if (f === 'g') return (RL_PIPE.gasLow + IND_ITEMS_RAW.gas_ng.fuel - C.fuel) / IND_ITEMS_RAW.gas_ng.fuel;   // 炉子燃料补到 1800 为止，不一下全灌进去
+                if (f === 'g') return (RL_PIPE.gasLow + IND_ITEMS_RAW.gas_ng.fuel - C.fuel) / IND_ITEMS_RAW.gas_ng.fuel;   // 炉子燃料补到 300 + 一瓶（现在 800）为止，不一下全灌进去
             }
             return 0;
         }

@@ -141,7 +141,7 @@
             clay: { name: '黏土', col: 0xbcaaa4 }, dirt: { name: '泥土', col: 0x6d4c41, use: '开农田' },
             salt: { name: '盐', col: 0xf5f5f5 },
             coal: { name: '煤', col: 0x263238, fuel: 150 },
-            oil: { name: '石油', col: 0x212121, fuel: 600, use: '装在桶里，能烧（硬核要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒），也是后面的原料' },   // 桶装液体：key 'oil' = 木桶装的石油，其它材质 oil@jar／@fe／@cu；一桶烧 600（煤 150）
+            oil: { name: '石油', col: 0x212121, fuel: 250, use: '装在桶里，能烧（硬核要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒），也是后面的原料' },   // 桶装液体：key 'oil' = 木桶装的石油，其它材质 oil@jar／@fe／@cu；一桶烧 600（煤 150）
             ore_cu: { name: '铜矿', col: 0xd84315 , use: '加 1 份木炭／煤／焦炭一起进炉子，1085°C 炼成铜锭' },
             ore_zn: { name: '锌矿', col: 0x90a4ae , use: '加 1 份木炭／煤／焦炭一起进炉子，950°C 炼成锌锭' },
             ore_fe: { name: '铁矿', col: 0x795548 , use: '加 1 份木炭／煤／焦炭一起进炉子，1538°C 炼成铁锭' },
@@ -378,8 +378,8 @@
         const IND_COOK_CAP = 6, IND_TILE_CAP = 100, IND_SPOUT_CAP = 10;   // 出料槽最多 10 块   // 灶台上最多放几种
         const IND_RECIPES = [
             // 面包排在烧水前面：有小麦和盐的时候，生水也是和面用的
-            { in: { wheat: 4, salt: 1, water_boiled: 1 }, out: { bread: 3, bucket: 1 }, minT: 180, time: 40, burnT: 300 },
-            { in: { wheat: 4, salt: 1, water_raw: 1 }, out: { bread: 3, bucket: 1 }, minT: 180, time: 40, burnT: 300 },   // 生水和面不拉肚子
+            { in: { flour: 3, salt: 1, water_boiled: 1 }, out: { bread: 3, bucket: 1 }, minT: 200, time: 40, burnT: 300 },   // 任务 56：面包用面粉（原来是小麦 4），原位置改的
+            { in: { flour: 3, salt: 1, water_raw: 1 }, out: { bread: 3, bucket: 1 }, minT: 200, time: 40, burnT: 300 },   // 生水和面不拉肚子
             { in: { water_raw: 1 }, out: { water_boiled: 1 }, minT: 100, time: 10 },
             { in: { water_sea: 1 }, out: { salt: 2, bucket: 1 }, minT: 100, time: 15, hard: true },   // 煮海水出盐（只硬核）
             { in: { pumpkin: 1, wheat: 2, sugar: 1 }, out: { pumpkin_pie: 1 }, minT: 180, time: 40, burnT: 300 },
@@ -392,7 +392,7 @@
             { in: { wood: 2 }, out: { charcoal: 1 }, minT: 400, time: 30, cls: 'bulk' },
             { in: { clay: 2 }, out: { brick: 1 }, minT: 900, time: 20, cls: 'bulk' },
             { in: { clay: 2 }, out: { jar: 1 }, minT: 600, time: 20, cls: 'bulk' },
-            { in: { milk: 1 }, out: { cheese: 1, bucket: 1 }, minT: 100, time: 30, burnT: 300 },
+            { in: { milk: 1 }, out: { cheese: 1, bucket: 1 }, minT: 40, time: 90, burnT: 300 },   // 任务 56：奶酪是温热发酵，40°C、90 秒
             // 冶炼（只给硬核）：温度用真实熔点；出来的锭是烫的
             { in: { ingot_fe: 1, charcoal: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1550, time: 40, hard: true },
             { in: { ingot_cu: 1, ingot_zn: 1 }, out: { hot_brass: 2 }, cls: 'smelt', minT: 950, time: 20, hard: true },
