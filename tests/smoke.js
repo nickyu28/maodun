@@ -9260,6 +9260,45 @@ async function enterExit(tab, key) {
             report('IND57 锂电池：3 V／720 U、8 节 24 V 能转、9 节被拒、128 节上限、不能混装、收起还锂电池', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND58')) {
+            // IND58 时间加速器（任务 39）：6 米内做东西快 3 倍、燃料多耗 3 倍；7 米外不加速；反应堆不加速；两台重叠不叠乘；没电不加速
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const kiln = (id, x, z) => `{ id: ${id}, ty: 'kiln', x: ${x}, z: ${z}, items: { ore_sn: 1 }, out: {}, fuel: 900, fire: 3, temp: 700, cook: null, spout: [], spoutTy: 'iron' }`;
+                const dev = (id, ty, x, z, o) => JSON.stringify(Object.assign({ id: id, ty: ty, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}));
+                const run = (accels, secs, u) => J(`(function(){ ind.base.rule = 'hard'; ind.base.off.pool = true; ind.base.fires = [];
+                    ind.base.devs = [${dev(1, 'bank', -30, 0, { bats: 16, u: u === undefined ? 2880 : u })}${accels.map(function (a, i) { return ',' + dev(10 + i, 'accel', a[0], a[1]); }).join('')}, { id: 20, ty: 'reactor', x: 0, z: 15, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }], ctl: 0.5, T: 20, melt: 0 }];
+                    ind.base.wires = [${accels.map(function (a, i) { return '[1,' + (10 + i) + ']'; }).join(',')}];
+                    ind.base.cookers = [${kiln(5, 20, 10)}, ${kiln(6, 20, 40)}]; ind.base.stove = Object.assign(ind.base.stove, { fire: 0, fuel: 0, temp: 20, items: {}, out: {}, cook: null });
+                    indAdvance(0.2); ind.base.cookers.forEach(function (c) { c.fuel = 900; c.temp = 700; c.cook = null; c.out = {}; c.spout = []; c.items = { ore_sn: 1 }; }); ind.base.devs.forEach(function (d) { if (d.ty === 'reactor') { d.T = 20; } });
+                    indAdvance(${secs}); let near = ind.base.cookers[0], far = ind.base.cookers[1];
+                    return { nearDone: (near.out.hot_sn || 0) + near.spout.length, farDone: (far.out.hot_sn || 0) + far.spout.length, nearFuel: 900 - near.fuel, farFuel: 900 - far.fuel, rx: indDev(20).T, bank: indDev(1).u }; })()`);
+                let r = await run([[20, 13]], 6);
+                if (!(r.nearDone === 1 && r.farDone === 0)) bad.push('加速器 3 米内 6 秒就炼好（15÷3 = 5 秒），远的还没 ' + JSON.stringify(r));
+                if (!(r.farFuel > 0 && Math.abs(r.nearFuel / r.farFuel - 3) < 0.4)) bad.push('燃料多耗约 3 倍 ' + JSON.stringify(r));
+                const noAcc = await run([], 6);
+                if (Math.abs(r.rx - noAcc.rx) > 0.5) bad.push('反应堆不加速（有无加速器温度一样） ' + r.rx + ' vs ' + noAcc.rx);
+                const far7 = await run([[20, 18]], 6);   // 离 (20,10) 8 米
+                if (far7.nearDone !== 0) bad.push('8 米外不加速 ' + JSON.stringify(far7));
+                const two = await run([[20, 13], [21, 13]], 4);
+                if (two.nearDone !== 0) bad.push('两台重叠不叠乘（4 秒还炼不好） ' + JSON.stringify(two));
+                const two6 = await run([[20, 13], [21, 13]], 6);
+                if (two6.nearDone !== 1) bad.push('两台重叠还是 ×3（6 秒炼好） ' + JSON.stringify(two6));
+                const nop = await run([[20, 13]], 6, 0);
+                if (nop.nearDone !== 0) bad.push('没电不加速 ' + JSON.stringify(nop));
+                // 配方和用途
+                const rc = await J(`(function(){ let r = IND_CRAFT.find(function (x) { return x.out === 'dev_accel'; }); return { has: !!r, use: IND_ITEMS.dev_accel.use }; })()`);
+                if (!(rc.has && /6 米/.test(rc.use) && /载具/.test(rc.use))) bad.push('配方和物品说明 ' + JSON.stringify(rc));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND58 时间加速器：6 米内 ×3（做东西、燃料）、8 米外不加速、反应堆不加速、重叠不叠乘、没电不加速', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

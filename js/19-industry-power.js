@@ -120,3 +120,17 @@
             battery_li: { name: '锂电池', col: 0xab47bc, cellU: 720, use: '装进电池组，一节 3 V、720 U；一个电池组只能装一种电池，锂电池组最多 128 节（8 节就是 24 V，小心超过用电器额定）' }
         });
         IND_CRAFT.push({ out: 'battery_li', in: { ingot_li: 2, wire: 2, ingot_al: 1 }, hard: true });
+
+// ── 时间加速器（任务 39）：6 米内的炉子和设备的计时 ×3（做东西、进出料、烧燃料、耗电都 ×3），两台重叠只算一次；反应堆、汽轮发电机、作物、动物不加速 ──
+        Object.assign(IND_ITEMS_RAW, {
+            dev_accel: { name: '时间加速器', col: 0x00acc1, dev: 'accel', use: '放下接 24 V：6 米内的炉子、粉碎机、压力机、离心机、电解槽、水泵、压缩机的时间 ×3（燃料和电也多耗 3 倍）；睡觉、出门回家也算；以后做载具还要用' }
+        });
+        Object.assign(IND_DEVS, { accel: { name: '时间加速器', col: 0x00acc1, rated: 24, minV: 18, draw: 16, size: [1.4, 1.5, 1.4] } });
+        IND_CRAFT.push({ out: 'dev_accel', in: { steel: 16, brass: 8, wire: 80, glass_plate: 8, coil: 4, diamond: 2, 'uf6:0': 2, ingot_ge: 4, battery_li: 16 }, hard: true });
+        const PW_ACCEL = { r: 6, mul: 3, types: { crusher: 1, press: 1, centrifuge: 1, el: 1, pump: 1, comp: 1 } };
+        // 某个位置的加速倍数（用上一帧的通电状态，差一帧没关系）
+        function pwAccelMult(x, z) {
+            if (!ind || ind.where !== 'base') return 1;
+            return ind.base.devs.some(function (a) { return a.ty === 'accel' && a.pwPrev && Math.hypot(a.x - x, a.z - z) <= PW_ACCEL.r; }) ? PW_ACCEL.mul : 1;
+        }
+        function pwAccelMultDev(d) { return PW_ACCEL.types[d.ty] ? pwAccelMult(d.x, d.z) : 1; }

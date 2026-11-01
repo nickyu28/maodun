@@ -1891,7 +1891,7 @@
         function indElecTick(dt) {
             if (ind.where !== 'base') return;
             let B = ind.base, booms = [];
-            B.devs.forEach(function (d) { d.pw = false; });
+            B.devs.forEach(function (d) { d.pwPrev = d.pw; d.pw = false; });
             // 一个用电器可以接好几个电源（并联，任务 16）：电压 = 还有电的电源里最高的；耗电平分给还有电的电池组；有发电机在发电时电池组不扣电
             let seen = {};
             B.wires.forEach(function (w) {
@@ -1906,7 +1906,7 @@
                 if (d.ty === 'press' && !indPressBusy(d)) return;
                 if (IND_DEV_BUSY[d.ty] && !IND_DEV_BUSY[d.ty](d)) return;
                 let up = pwUpstream(live), banks = up.filter(function (s) { return s.ty === 'bank'; });   // 变压器后面的用电器，耗电算回变压器输入端的电池组
-                if (banks.length === up.length) banks.forEach(function (s) { s.u = Math.max(0, s.u - D.draw * dt / banks.length); });
+                if (banks.length === up.length) banks.forEach(function (s) { s.u = Math.max(0, s.u - D.draw * dt * pwAccelMultDev(d) / banks.length); });
                 d.pw = true;
             });
             booms.forEach(function (b) {
@@ -1917,7 +1917,7 @@
                 indBoom(d.x, d.z, 0, msg); if (ind && !ind.over) indFlash(msg + (ind.lastBoomLoot ? '；里面的 ' + ind.lastBoomLoot + ' 个东西掉在了地上' : ''));
             });
             if (!ind || ind.over || ind.where !== 'base') return;
-            B.devs.forEach(function (d) { if (d.ty === 'el') indElTick(d, dt); else if (d.ty === 'comp') indCompTick(d, dt); else if (d.ty === 'press') indPressTick(d, dt); else if (IND_DEV_TICK[d.ty]) IND_DEV_TICK[d.ty](d, dt); });
+            B.devs.forEach(function (d) { let h = dt * pwAccelMultDev(d); if (d.ty === 'el') indElTick(d, h); else if (d.ty === 'comp') indCompTick(d, h); else if (d.ty === 'press') indPressTick(d, h); else if (IND_DEV_TICK[d.ty]) IND_DEV_TICK[d.ty](d, h); });
             if (!ind || ind.over || ind.where !== 'base') return;
             if (B.devs.some(function (d) { return d.ty === 'pump' && d.pw; })) {
                 let end = (Math.floor(B.clock / IND_DAY) + 1) * IND_DAY;
@@ -2811,7 +2811,7 @@
             b.tex.needsUpdate = true;
         }
         function indStoveTick(dt) {
-            indCooks().forEach(function (c) { if (ind && !ind.over) indCookTick(c, dt); });
+            indCooks().forEach(function (c) { if (ind && !ind.over) indCookTick(c, dt * pwAccelMult(c.x, c.z)); });   // 时间加速器 6 米内 ×3（19-industry-power.js）
         }
         // 电炉（电器）放在炉子 3 米内：这个炉子的温度顶到 1800°C
         function indElecBoost(x, z) { return ind.where === 'base' && ind.base.devs.some(function (d) { return d.ty === 'furnace' && d.pw && Math.hypot(d.x - x, d.z - z) <= IND_GEN_R; }); }
