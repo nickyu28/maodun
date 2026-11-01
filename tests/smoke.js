@@ -3287,7 +3287,8 @@ async function enterExit(tab, key) {
                     return w;
                 };
                 for (const k of ['bucket_fe', 'water_raw@fe']) {
-                    await run(k, '', '有不限格的箱子', { where: 'box', flash: /收起了电解槽，里面的 30 个东西放进了仓库箱/ });
+                    await run(k, '', '背包有空格（任务 26：先背包）', { where: 'bag', flash: /收起了电解槽，里面的 30 个东西放进了背包/ });
+                    await run(k, 'for (let i = 0; i < 23; i++) ind.bag["pad" + i] = 99', '背包满了才进不限格的箱子', { where: 'box', flash: /放进了仓库箱/ });
                     await run(k, 'ind.base.chests = []', '没有箱子', { where: 'bag', flash: /放进了背包/ });
                     await run(k, 'ind.base.chests = []; for (let i = 0; i < 23; i++) ind.bag["pad" + i] = 99', '没有箱子、背包只剩放设备那一格', { where: 'ground', flash: /掉在了地上/ });
                     await run(k, 'ind.base.chests[0].big = false; for (let i = 0; i < 30; i++) ind.base.chests[0].items["x" + i] = 1', '只有一个满了的 30 格箱子', { where: 'bag', flash: /放进了背包/ });
@@ -3310,7 +3311,7 @@ async function enterExit(tab, key) {
             await T.eval(`try { localStorage.removeItem('TH_hcdebug'); } catch (e) { } true;`);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('CK4 任务 19：电解槽收起后里面的东西总数守恒（仓库箱 → 30 格箱子 → 背包 → 掉地上）、提示写去了哪、电池组收起电池不少、电解槽用桶还桶', bad.length === 0, bad.join(' / '));
+            report('CK4 任务 19：电解槽收起后里面的东西总数守恒（背包 → 仓库箱 → 掉地上，任务 26 改的顺序）、提示写去了哪、电池组收起电池不少、电解槽用桶还桶', bad.length === 0, bad.join(' / '));
         }
 
         if (want('K1')) {

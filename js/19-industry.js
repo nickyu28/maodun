@@ -663,17 +663,17 @@
         function indCool(k) { return (IND_ITEMS[k] && IND_ITEMS[k].hot) || k; }
         // 把东西放回仓库箱（设备里的东西这类）：优先不限格数的那个，没有就任意一个箱子，都没有放进背包
         function indBoxTarget() { let C = ind.base.chests; return C.filter(function (c) { return c.big; })[0] || C[0] || null; }
-        // 返回 { box, bag, ground }：放进仓库箱几个、背包几个、掉在地上几个，总数守恒（以前没有箱子时背包放不下的直接丢了）。
-        // 顺序：不限格的箱子 → 还有空格的 30 格箱子 → 背包 → 掉在脚边地上
+        // 返回 { box, bag, ground }：放进仓库箱几个、背包几个、掉在地上几个，总数守恒。
+        // 东西"收进来"的统一顺序（任务 26）：背包 → 仓库箱（不限格的先，再有空格的 30 格箱子）→ 脚边地上。玩家自己点"放进箱子"的另算
         function indBoxAdd(k, n) {
             k = indCool(k);   // 仓库箱里的烫锭当它凉了
             let r = { box: 0, bag: 0, ground: 0 }; if (!(n > 0)) return r;
+            { let t = indBagAdd(k, n); r.bag = t; n -= t; }
             let C = ind.base.chests, order = C.filter(function (c) { return c.big; }).concat(C.filter(function (c) { return !c.big; }));
             for (let i = 0; i < order.length && n > 0; i++) {
                 let c = order[i], t = c.big ? n : indFits(c.items, IND_CHEST_SLOTS, k, n);
                 if (t > 0) { c.items[k] = (c.items[k] || 0) + t; r.box += t; n -= t; }
             }
-            if (n > 0) { let t = indBagAdd(k, n); r.bag = t; n -= t; }
             if (n > 0) { indDropAtFeet(k, n); r.ground = n; }
             return r;
         }
