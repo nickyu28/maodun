@@ -1137,21 +1137,29 @@
         // 篝火烧，动物饿，电池和设备耗电干活。用现有的 tick 函数每 1 秒一段快进；时钟按当时的时刻走，补完回到现在。
         // 不算玩家身上的（饱食、口渴、体温），也不推进繁殖和长大（任务 15）。烧焦、火灭这些照常发生，没有保护
         const IND_AWAY = { cap: 1800, step: 1 };
+        // 一秒一秒快进家里（回家补算和睡觉共用，任务 35）：时钟按当时的时刻走，补完回到 end；作物、篝火、动物饿、电和设备（反应堆、离心机、电解槽、汽轮发电机）、灶台一起走。
+        // o.animal：动物饿的倍数；o.bombs：原子弹倒计时也走（睡觉时走，出门不算）；o.quiet：快进期间不弹一条条提示。辐射伤害不算（人在床上／在外面）
+        function indFastForward(span, end, o) {
+            let B = ind.base, oldFlash = indFlash;
+            ind.sleeping = true; ind.catching = true;
+            if (o.quiet) indFlash = function () { };
+            try {
+                for (let t = 0; t < span - 1e-9; t += IND_AWAY.step) {
+                    let h = Math.min(IND_AWAY.step, span - t);
+                    B.clock = end - span + t + h;
+                    indCropTick(h); indFireTick(h);
+                    B.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * (o.animal === undefined ? 1 : o.animal) * h); });
+                    indElecTick(h); indStoveTick(h);
+                    if (o.bombs) nkBombTick(h);
+                    if (!ind || ind.over) return;
+                }
+            } finally { if (o.quiet) indFlash = oldFlash; if (ind) { B.clock = end; ind.sleeping = false; ind.catching = false; } }
+        }
         function indCatchUp() {
             let B = ind.base; if (typeof B.away !== 'number') return 0;
             let now = B.clock, span = Math.max(0, Math.min(IND_AWAY.cap, now - B.away)); B.away = null;
             if (!(span > 0) || !B.rule) return 0;
-            ind.sleeping = true; ind.catching = true;
-            try {
-                for (let t = 0; t < span - 1e-9; t += IND_AWAY.step) {
-                    let h = Math.min(IND_AWAY.step, span - t);
-                    B.clock = now - span + t + h;
-                    indCropTick(h); indFireTick(h);
-                    B.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * h); });
-                    indElecTick(h); indStoveTick(h);
-                    if (!ind || ind.over) return span;
-                }
-            } finally { if (ind) { B.clock = now; ind.sleeping = false; ind.catching = false; } }
+            indFastForward(span, now, { animal: 1 });
             ind.cropDirty = true; ind.fireDirty = true; ind.devDirty = true; ind.itemDirty = true;
             indCooks().forEach(indCookBadge);
             return span;
@@ -1832,16 +1840,17 @@
         function indSleep() {
             let S = ind.base.surv;
             if (!indIsNight() && S.energy > 70) { indFlash('还不困（夜里或者累了才能睡）'); return false; }
-            let skip = (Math.floor(ind.base.clock / IND_DAY) + 1) * IND_DAY - ind.base.clock;
-            ind.base.clock += skip;
+            let B = ind.base, skip = (Math.floor(B.clock / IND_DAY) + 1) * IND_DAY - B.clock, end = B.clock + skip;
             S.food = Math.max(0, S.food - IND_SURV.food * 0.3 * skip); S.water = Math.max(0, S.water - IND_SURV.water * 0.3 * skip);
-            S.energy = 100;
-            ind.base.crops.forEach(function (c) { let C = IND_CROPS[c.k]; if (indCropSeasonOK(c)) c.g = Math.min(C.grow, c.g + skip * (c.wet > ind.base.clock - skip ? 0.75 : 0.5) * indFertMul(c)); });
-            S.temp = 37; ind.sleeping = true; ind.base.fires.forEach(function (f) { indFireBurn(f, skip); }); ind.sleeping = false; ind.fireDirty = true;
-            ind.base.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * skip * 0.5); });
-            ind.sleeping = true; for (let t = 0; t < skip; t += 1) indStoveTick(1); ind.sleeping = false;
-            ind.cropDirty = true; indSave();
-            indFlash('一觉睡到' + indClockTxt());
+            S.energy = 100; S.temp = 37;
+            let devs0 = B.devs.length, rad0 = B.rad.length, cooks0 = ind.doneCount || 0;
+            // 睡着这段时间家里照常运转（作物、篝火、动物、灶台、设备、反应堆、原子弹倒计时），不弹一条条的提示
+            indFastForward(skip, end, { animal: 0.5, bombs: true, quiet: true });
+            ind.fireDirty = ind.cropDirty = ind.devDirty = ind.itemDirty = true; indCooks().forEach(indCookBadge);
+            if (!ind || ind.over) return true;
+            indSave();
+            let done = (ind.doneCount || 0) - cooks0, boomed = Math.max(0, devs0 - B.devs.length), melt = B.rad.length > rad0;
+            indFlash('一觉睡到' + indClockTxt() + (done ? '，做好了 ' + done + ' 样' : '') + (boomed ? '，炸了 ' + boomed + ' 个设备' : '') + (melt ? '，反应堆熔毁了！' : ''));
             return true;
         }
         // Q：在基地里把选中的东西放在脚边（永久保存）；远征里放下就是扔掉
@@ -2849,6 +2858,7 @@
                 if (res.broke && !ind.sleeping) indFlash('陶罐碎了' + (res.broke > 1 ? '（' + res.broke + ' 个）' : ''));
                 S.cook = null;
                 if (ind.panel === 'stove') ind.panelDirty = true;
+                if (ind.sleeping) ind.doneCount = (ind.doneCount || 0) + 1;
                 if (!ind.sleeping) indFlash(burnt ? '烧焦了！' + (n > 1 ? '整炉 ' + n + ' 份都焦了' : '') : '做好了：' + indOutTxt(r, n));
             }
             indCookBadge(c);

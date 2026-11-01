@@ -9125,6 +9125,34 @@ async function enterExit(tab, key) {
             report('IND53 铝和镍：山地有矿、镍矿进窑出镍锭、铝土矿进电解槽出铝锭、镍电池 360 U、元素表点亮、铝架背包、铝线、镍稿', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND54')) {
+            // IND54 睡觉时设备继续运转（任务 35）：离心机接满电池组、里面放料，睡一觉醒来料变成产物、电池组电量下降；反应堆没水冷睡一觉熔毁；睡觉和补算共用 indFastForward；醒来一条汇总
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const D = (id, ty, x, o) => JSON.stringify(Object.assign({ id: id, ty: ty, x: x, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}));
+                const sleep = (devs, wires, extra) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let B = ind.base; B.rule = 'hard'; B.rad = []; B.bombs = []; B.off.pool = true; B.stove = Object.assign(B.stove, { fire: 0, temp: 20, items: {}, out: {}, cook: null });
+                    B.devs = ${devs}; B.wires = ${JSON.stringify(wires)}; ${extra || ''} B.clock = Math.floor(B.clock / IND_DAY) * IND_DAY + IND_DAY - 200; B.surv.energy = 40; B.surv.hp = 100; B.surv.food = 100; B.surv.water = 100;
+                    let r; try { r = indSleep(); } finally { blazeFlash = bf; } return { ok: r, fl: fl[fl.length - 1], devs: B.devs.map(function (d) { return d.id; }), cen: B.devs.filter(function (d) { return d.ty === 'centrifuge'; }).map(function (d) { return d.st; })[0], bank: B.devs.filter(function (d) { return d.ty === 'bank'; }).map(function (d) { return d.u; })[0], rad: B.rad.length }; })()`);
+                let r = await sleep('[' + D(1, 'bank', -20, { bats: 16, u: 2880 }) + ',' + D(2, 'centrifuge', -18, { st: { 'uf6:0': 2 } }) + ']', [[1, 2]]);
+                if (!(r.ok && r.cen && r.cen['uf6:1'] === 1 && r.cen.uf6_dep === 1)) bad.push('睡一觉离心机该把料做成产物 ' + JSON.stringify(r));
+                if (!(r.bank < 2880 - 100)) bad.push('睡一觉电池组该耗电 ' + r.bank);
+                r = await sleep('[' + JSON.stringify({ id: 1, ty: 'reactor', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }], ctl: 0, T: 20, melt: 0 }) + ']', []);
+                if (!(r.devs.length === 0 && r.rad === 1 && /熔毁/.test(r.fl || ''))) bad.push('没水冷的反应堆睡一觉该熔毁，醒来汇总写熔毁 ' + JSON.stringify(r));
+                // 睡觉限制不变
+                const no = await J(`(function(){ let B = ind.base; B.clock = Math.floor(B.clock / IND_DAY) * IND_DAY + 100; B.surv.energy = 100; return indSleep(); })()`);
+                if (no !== false) bad.push('白天精力足不能睡');
+                // 共用一个函数
+                if (!(await T.eval(`typeof indFastForward === 'function' && /indFastForward/.test(indCatchUp.toString()) && /indFastForward/.test(indSleep.toString())`))) bad.push('睡觉和补算要共用 indFastForward');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND54 睡觉设备继续运转：离心机出产物、电池组耗电、没水冷的反应堆熔毁、醒来一条汇总、和补算共用快进', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
