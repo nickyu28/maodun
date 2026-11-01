@@ -171,6 +171,7 @@
                 }
                 indFlash(IND_DEV_INFO.gastank(d) + '（拿天然气钢瓶左键灌进去，拿空钢瓶装出来）'); return false;
             }
+            if (d.ty === 'snuke' && k !== 'wire') return fmSnukeAct(d, k);   // 小型核电（19-industry-farm.js，任务 49）
             return undefined;
         }
         // 往目的地送，返回送进去多少（水 1 单位 = 1 桶；油 1 桶；气 1 瓶）

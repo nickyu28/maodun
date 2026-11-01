@@ -9838,6 +9838,31 @@ async function enterExit(tab, key) {
             report('IND72 太阳能板：正午 12 V、早上低、夜里 0、白天带电解槽、补算按时刻、配方用硅', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND73')) {
+            // IND73 小型核电（任务 49，基地这半）：装一根 3.5% 燃料棒出 12 V；3 个游戏日后烧完停电；收起还回乏燃料棒；燃料棒带在背包里掉血、放铅箱里不掉
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`(function(){ let B = ind.base; B.devs = [{ id: 1, ty: 'snuke', x: -20, z: 4, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [] }, { id: 2, ty: 'pump', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }]; B.wires = [[1, 2]]; B.dseq = 5; })(); true;`);
+                let r = await J(`(function(){ ind.bag = { 'rod:2': 1, 'rod:4': 1 }; let d = indDev(1); let a = fmSnukeAct(d, 'rod:2'), b = fmSnukeAct(d, 'rod:4'); indAdvance(0.2); return { a: a, b: b, v: indSrcVolt(d), pw: indDev(2).pw, bag: ind.bag }; })()`);
+                if (!(r.a === false && r.b === true && r.v === 12 && r.pw && !r.bag['rod:4'])) bad.push('装 3.5% 的棒出 12 V（2.4% 的不行） ' + JSON.stringify(r));
+                r = await J(`(function(){ let d = indDev(1); for (let i = 0; i < 3 * IND_DAY / 60 - 1; i++) IND_DEV_TICK.snuke(d, 60); let v1 = indSrcVolt(d); IND_DEV_TICK.snuke(d, 61); return { v1: v1, v2: indSrcVolt(d), info: indDevInfo(d) }; })()`);
+                if (!(r.v1 === 12 && r.v2 === 0 && /烧完/.test(r.info))) bad.push('3 个游戏日后烧完停电 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.bag = {}; ind.base.chests[0].items = {}; indPickDev(indDev(1)); return [ind.bag.rod_spent || ind.base.chests[0].items.rod_spent || 0, ind.bag.dev_snuke || 0]; })()`);
+                if (!(r[0] === 1 && r[1] === 1)) bad.push('收起还回乏燃料棒 ' + JSON.stringify(r));
+                // 辐射：燃料棒在背包里掉血，放铅箱里不掉（沿用燃料棒的规则）
+                r = await J(`(function(){ let S = ind.base.surv; ind.base.wear = {}; ind.base.chests = ind.base.chests.slice(0, 1); ind.base.ground = []; ind.bag = { 'rod:4': 1 }; S.hp = 100; indAdvance(3); let h1 = S.hp; ind.bag = {}; ind.base.chests.push({ id: 91, x: ind.p.x + 1, z: ind.p.z, big: false, lead: true, items: { 'rod:4': 1 } }); S.hp = 100; indAdvance(3); return [h1, S.hp]; })()`);
+                if (!(r[0] < 99.8 && r[1] > 99.95)) bad.push('燃料棒背包里掉血、铅箱里不掉 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND73 小型核电：装 3.5% 燃料棒出 12 V、3 天烧完停电、收起还乏燃料棒、棒子背包里辐射铅箱里不辐射', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

@@ -227,5 +227,33 @@
         IND_DEV_VOLT.solar = function (d) { return Math.round(IND_DEVS.solar.volt * fmSun() * 10) / 10; };
         IND_DEV_INFO.solar = function (d) { let v = IND_DEV_VOLT.solar(d); return '太阳能板　' + (v > 0 ? '出电 ' + v.toFixed(1) + ' V（正午最高 12 V）' : '夜里不出电'); };
 
+        // ══ 任务 49：小型核电（先做成基地里的设备；车的铅仓等车做了再接）══
+        // 钢 6 + 铅锭 6 + 电磁线圈 2 + 铜线 6。拿燃料棒（3.5% 或 5%）左键装一根，出 12 V，撑 3 个游戏日，烧完变乏燃料棒、停电。
+        // 收起、被炸时棒子跟反应堆一样还回来（带烧了多少）；燃料棒在背包里照旧有弱辐射，要铅围裙或铅箱
+        const FM_SNK = { days: 3, volt: 12 };
+        Object.assign(IND_ITEMS_RAW, { dev_snuke: { name: '小型核电', col: 0x558b2f, dev: 'snuke', use: '装一根燃料棒出 12 V，撑 3 天；燃料棒带在身上有辐射。以后能装在车上（要铅仓）' } });
+        Object.assign(IND_DEVS, { snuke: { name: '小型核电', col: 0x558b2f, src: true, volt: FM_SNK.volt, size: [1, 1.1, 1] } });
+        IND_CRAFT.push({ out: 'dev_snuke', in: { steel: 6, ingot_pb: 6, coil: 2, wire: 6 }, hard: true });
+        IND_DEV_FIX.snuke = function (d) { IND_DEV_FIX.reactor(d); d.rods = d.rods.slice(0, 1); };
+        IND_DEV_VOLT.snuke = function (d) { return d.rods && d.rods[0] && !d.rods[0].spent ? FM_SNK.volt : 0; };
+        IND_DEV_TICK.snuke = function (d, dt) {
+            let r = d.rods && d.rods[0]; if (!r || r.spent) return;
+            r.b += dt / (FM_SNK.days * IND_DAY);
+            if (r.b >= 1) { d.rods[0] = { spent: true }; if (!ind.sleeping) indFlash('小型核电的燃料棒烧完了'); }
+        };
+        IND_DEV_INFO.snuke = function (d) {
+            let r = d.rods && d.rods[0];
+            if (!r) return '小型核电　没装燃料棒（拿燃料棒左键装）';
+            if (r.spent) return '小型核电　燃料棒烧完了（右键收起拿出乏燃料棒）';
+            return '小型核电　出电 12 V　还能用 ' + ((1 - r.b) * FM_SNK.days).toFixed(1) + ' 天';
+        };
+        function fmSnukeAct(d, k) {
+            let r = typeof k === 'string' ? nkRod(k) : null;
+            if (!r) { indFlash(IND_DEV_INFO.snuke(d)); return false; }
+            if (r.i < 4) { indFlash('要丰度 3.5% 以上的燃料棒'); return false; }
+            if (d.rods && d.rods.length) { indFlash('已经装了一根'); return false; }
+            indBagDel(k, 1); d.rods = [{ i: r.i, b: r.b }]; indSave(); indFlash('装上燃料棒了，出 12 V'); return true;
+        }
+
         // ↓↓ 这一行要留在文件最后（任务 42）：给所有用皮的配方加人造革备选
         fmPleatherAlts();
