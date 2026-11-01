@@ -7463,15 +7463,15 @@ async function enterExit(tab, key) {
                 const rx = (extra) => T.eval(`ind.base.devs = []; ind.base.wires = []; ind.base.rad = []; ind.base.off.pool = true; (function(){ ind.base.devs.push(Object.assign({ id: 5, ty: 'reactor', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }], ctl: 1, T: 20, melt: 0 }, ${JSON.stringify(extra || {})})); ind.devDirty = true; indTeleport(10, 10); })(); true;`);
                 await rx(); await T.eval(`indAdvance(60); true;`);
                 if ((await J(`indDev(5).T`)) > 20.01) bad.push('控制棒全插不该发热 ' + await T.eval(`indDev(5).T`));
-                await T.eval(`indDev(5).ctl = 0.5; indAdvance(20); true;`);   // 2 根满功率 = 200，空气冷却 20：每秒 +10 封顶
-                if (Math.abs((await J(`indDev(5).T`)) - 220) > 1) bad.push('拔出一半温度每秒最多升 10°C：20 秒 +200 ' + await T.eval(`indDev(5).T`));
-                // 有水（水池 6 米内）：4 根 ctl 0.4 → 发热 240 < 冷却 250，温度降回去不熔
-                await rx({ ctl: 0.4, T: 300, x: 15, z: 10 }); await T.eval(`ind.base.off.pool = false; indAdvance(80); true;`);
-                if (!(await T.eval(`!!indDev(5)`)) || Math.abs((await J(`indDev(5).T`)) - 220) > 1) bad.push('有水冷却 + 控制棒插一部分（发热 240 < 冷却 250）温度每秒降 1°C：80 秒 300 → 220 ' + await T.eval(`indDev(5) && indDev(5).T`));
+                await T.eval(`indDev(5).ctl = 0.5; indAdvance(10); true;`);   // 4 根拔一半 = 发热 200，空气冷却 0.5 × (T − 20)：刚开始每秒 +10 封顶（任务 27 改成跟温度成正比）
+                if (Math.abs((await J(`indDev(5).T`)) - 120) > 3) bad.push('拔出一半温度每秒最多升 10°C：10 秒 +100 ' + await T.eval(`indDev(5).T`));
+                // 有水（水池 6 米内）：4 根 ctl 0.4 → 发热 240，水冷 1.33 × (T − 20)，温度从 300 降回稳定值 20 + 240 ÷ 1.33 ≈ 200，不熔
+                await rx({ ctl: 0.4, T: 300, x: 15, z: 10 }); await T.eval(`ind.base.off.pool = false; indAdvance(200); true;`);
+                if (!(await T.eval(`!!indDev(5)`)) || Math.abs((await J(`indDev(5).T`)) - 200.5) > 2) bad.push('有水冷却 + 控制棒插一部分（发热 240）温度自己降到稳定值约 200°C ' + await T.eval(`indDev(5) && indDev(5).T`));
                 // 水泵也算水（开着的水泵 6 米内）
                 await rx({ ctl: 0.4, T: 300 }); await T.eval(`ind.base.off.pool = true; ind.base.devs.push({ id: 6, ty: 'pump', x: -22, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, pw: true }); true;`);
                 const pc = await J(`(function(){ ind.base.devs.find(function (d) { return d.id === 6; }).pw = true; let c = nkReactorCool(indDev(5)); ind.base.devs.find(function (d) { return d.id === 6; }).pw = false; return [c, nkReactorCool(indDev(5))]; })()`);
-                if (pc[0] !== 250 || pc[1] !== 20) bad.push('开着的水泵 6 米内算水（没开不算） ' + JSON.stringify(pc));
+                if (pc[0] !== true || pc[1] !== false) bad.push('开着的水泵 6 米内算水（没开不算） ' + JSON.stringify(pc));
                 // 没水全拔：过热 > 400°C 持续 20 秒熔毁
                 await rx({ ctl: 0 }); await T.eval(`ind.base.fires = []; ind.base.devs.push({ id: 7, ty: 'lamp', x: -26, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }); indAdvance(37); true;`);
                 if (!(await T.eval(`!!indDev(5) && indDev(5).T >= 389`))) bad.push('没水全拔 37 秒应该快到 400°C ' + await T.eval(`indDev(5) && indDev(5).T`));
@@ -8907,6 +8907,33 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND46 石油入口：有漏斗倒一桶、没漏斗提示进料漏斗、面板和物品说明写出入口、第一次装油弹提示', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND47')) {
+            // IND47 核电冷却跟温度成正比（任务 27）：有水冷 + 4 根全开稳在 300～340°C 不熔毁、汽轮发电机有电；没水冷熔毁；控制棒插到 50% 稳定温度降下来；面板写"稳定在约 X°C"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                // 一次调用里摆堆、推进、读数（water：true 放在水池边；false 把水池收了）
+                const run = (water, ctl, secs) => J(`(function(){ ind.base.rule = 'hard'; ind.base.rad = []; ind.base.wires = []; ind.base.off.pool = ${water ? 'false' : 'true'}; ind.base.devs = [{ id: 5, ty: 'reactor', x: ${water ? 15 : -20}, z: ${water ? 10 : 0}, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }], ctl: ${ctl}, T: 20, melt: 0 }];
+                    let d = ind.base.devs[0]; indAdvance(${secs}); d = indDev(5); return d ? { T: d.T, melt: d.melt, steady: nkSteadyT(d), cool: nkCoolNow(d), heat: nkReactorHeat(d) } : null; })()`);
+                let r = await run(true, 0, 150);
+                if (!r || !(r.T >= 300 && r.T <= 340) || r.melt > 0) bad.push('有水冷 + 4 根全开该稳在 300～340°C 不熔毁 ' + JSON.stringify(r));
+                else if (!(r.T >= 250)) bad.push('稳定温度要够汽轮发电机 ≥ 250°C');
+                r = await run(true, 0.5, 150);
+                if (!r || !(r.T > 100 && r.T < 200)) bad.push('控制棒插 50% 稳定温度该降下来（约 170°C） ' + JSON.stringify(r));
+                r = await run(false, 0, 120);
+                if (r) bad.push('没水冷 4 根全开该熔毁 ' + JSON.stringify(r));
+                // 面板
+                await T.eval(`ind.base.off.pool = false; ind.base.devs = [{ id: 5, ty: 'reactor', x: 15, z: 10, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }], ctl: 0, T: 100, melt: 0 }]; indPanelNk(5); true;`);
+                if (!(await T.eval(`/稳定在约 3\\d\\d°C/.test(document.getElementById('ind-panel').innerText)`))) bad.push('面板该写稳定在约 3xx°C ' + await T.eval(`document.getElementById('ind-panel').innerText.slice(0, 200)`));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND47 核电冷却跟温度成正比：有水 4 根全开稳在约 320°C、没水熔毁、插控制棒温度降、面板写稳定值', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

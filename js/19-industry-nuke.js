@@ -5,7 +5,7 @@
         const NK_LV = [0.7, 1.05, 1.6, 2.4, 3.5, 5], NK_LV_MIN = 4, NK_LV_MAX = NK_LV.length - 1;
         // 辐射：strong 强（每秒 2 血）、weak 弱（每秒 0.2 血）、vweak 很弱（不扣血，盖格计数器能读到）
         const NK_RAD = { strong: 2, weak: 0.2, vweak: 0 }, NK_RAD_READ = { strong: 2, weak: 0.2, vweak: 0.02 };
-        const NK = { crushT: 10, centriT: 60, rodDays: 2, rodHeat: 100, coolWater: 250, coolAir: 20, rate: 0.1, maxRate: 10, amb: 20, turbineT: 250, turbineR: 3, waterR: 6, meltT: 400, meltS: 20, zoneDays: 3, apron: 0.5, bombT: 30, bombR: 40, bombNear: 1000, bombClose: 10, powderR: 2 };
+        const NK = { crushT: 10, centriT: 60, rodDays: 2, rodHeat: 100, coolWaterK: 1.33, coolAirK: 0.5, rate: 0.1, maxRate: 10, amb: 20, turbineT: 250, turbineR: 3, waterR: 6, meltT: 400, meltS: 20, zoneDays: 3, apron: 0.5, bombT: 30, bombR: 40, bombNear: 1000, bombClose: 10, powderR: 2 };
 
         // ── 动态物品：六氟化铀罐 uf6:台阶、二氧化铀芯块 pellet:台阶、燃料棒 rod:台阶 或 rod:台阶:已烧百分比 ──
         function nkLvTxt(i) { return NK_LV[i] + '%'; }
@@ -118,11 +118,15 @@
         function nkReactorHeat(d) { let n = 0; d.rods.forEach(function (r) { if (!r.spent) n++; }); return n * (1 - d.ctl) * NK.rodHeat; }
         function nkReactorCool(d) {
             let P = IND_BASE_ST.pool, water = (!ind.base.off.pool && Math.hypot(P.x - d.x, P.z - d.z) <= NK.waterR + P.r) || ind.base.devs.some(function (p) { return p.ty === 'pump' && p.pw && Math.hypot(p.x - d.x, p.z - d.z) <= NK.waterR; });
-            return water ? NK.coolWater : NK.coolAir;
+            return water;
         }
+        // 冷却跟温度成正比（任务 27）：每秒带走 k × (T − 环境温度)，水冷 k = 1.33、空气 k = 0.5，所以温度会自己稳在 20 + 发热 ÷ k
+        function nkCoolK(d) { return nkReactorCool(d) ? NK.coolWaterK : NK.coolAirK; }
+        function nkCoolNow(d) { return nkCoolK(d) * Math.max(0, d.T - NK.amb); }
+        function nkSteadyT(d) { return NK.amb + nkReactorHeat(d) / nkCoolK(d); }
         IND_DEV_TICK.reactor = function (d, dt) {
             if (d.T === undefined) IND_DEV_FIX.reactor(d);
-            let heat = nkReactorHeat(d), cool = nkReactorCool(d), net = Math.max(-NK.maxRate, Math.min(NK.maxRate, (heat - cool) * NK.rate));
+            let heat = nkReactorHeat(d), cool = nkCoolNow(d), net = Math.max(-NK.maxRate, Math.min(NK.maxRate, (heat - cool) * NK.rate));
             d.T = Math.max(NK.amb, d.T + net * dt);
             d.rods.forEach(function (r) { if (!r.spent) { r.b += (1 - d.ctl) * dt / (NK.rodDays * IND_DAY); if (r.b >= 1) { r.spent = true; delete r.i; delete r.b; if (ind.panel === 'reactor') ind.panelDirty = true; } } });
             d.melt = d.T > NK.meltT ? d.melt + dt : 0;
@@ -158,12 +162,12 @@
                 '<div style="margin-top:6px;font-weight:bold;">身上的东西</div>' + (nkPutRows(d, function (k) { return k.indexOf('uf6:') === 0; }) || '<div style="color:#999;padding:6px 0;">身上没有六氟化铀罐</div>') + NK_FOOT(d);
         };
         IND_DEV_HTML.reactor = function (d) {
-            let heat = nkReactorHeat(d), cool = nkReactorCool(d);
+            let heat = nkReactorHeat(d), cool = nkCoolNow(d), water = nkReactorCool(d);
             let rods = d.rods.map(function (r, i) { return indRow(r.spent ? '乏燃料棒' : indName(nkRodKey(r)), '<button style="' + IND_BTN + '" onclick="nkRodOut(' + d.id + ',' + i + ')">取出</button>'); }).join('') || '<div style="color:#999;padding:6px 0;">一根燃料棒都没放</div>';
             let put = Object.keys(ind.bag).filter(function (k) { return nkRod(k); }).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="nkRodIn(' + d.id + ',\'' + k + '\')">放 1 根</button>'); }).join('');
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">反应堆</div>' +
                 '<div style="line-height:1.7;">温度 <b style="color:' + nkTempCol(d.T) + '">' + Math.round(d.T) + '°C</b>　<span style="display:inline-block;width:120px;height:10px;background:#ddd;vertical-align:middle;border-radius:5px;overflow:hidden;"><span style="display:block;height:100%;width:' + Math.min(100, d.T / 5) + '%;background:' + nkTempCol(d.T) + ';"></span></span><br>' +
-                '功率 <b>' + Math.round(heat) + '</b>　冷却 <b>' + cool + '</b>（' + (cool > NK.coolAir ? '6 米内有水' : '没有水，只靠空气') + '）' + (d.T >= NK.turbineT ? '　≥ ' + NK.turbineT + '°C，汽轮发电机有电' : '') + (d.melt > 0 ? '<br><b style="color:#c62828">温度超过 ' + NK.meltT + '°C 已经 ' + Math.floor(d.melt) + ' 秒</b>' : '') + '</div>' +
+                '功率 <b>' + Math.round(heat) + '</b>　冷却 <b>' + Math.round(cool) + '</b>（' + (water ? '6 米内有水' : '没有水，只靠空气') + '）　稳定在约 <b>' + Math.round(nkSteadyT(d)) + '°C</b>' + (d.T >= NK.turbineT ? '　≥ ' + NK.turbineT + '°C，汽轮发电机有电' : '') + (d.melt > 0 ? '<br><b style="color:#c62828">温度超过 ' + NK.meltT + '°C 已经 ' + Math.floor(d.melt) + ' 秒</b>' : '') + '</div>' +
                 '<div style="margin-top:6px;">控制棒插入 <b>' + Math.round(d.ctl * 100) + '%</b>（100% 停堆）　<button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',-0.1)">拔 10%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',-0.01)">拔 1%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',0.01)">插 1%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',0.1)">插 10%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',1)">全插</button></div>' +
                 '<div style="margin-top:6px;font-weight:bold;">燃料棒（最多 4 根）</div>' + rods +
                 '<div style="margin-top:6px;font-weight:bold;">身上的燃料棒</div>' + (put || '<div style="color:#999;padding:6px 0;">身上没有燃料棒</div>') +
