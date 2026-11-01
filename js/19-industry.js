@@ -1901,7 +1901,7 @@
                 // 说清楚是谁炸的：设备名、电压、额定，以及电压最高的电源
                 let srcs = b.live.slice().sort(function (p, q) { return indSrcVolt(q) - indSrcVolt(p); }).map(function (s) { return IND_DEVS[s.ty].name + (s.ty === 'bank' ? ' ' + s.bats + ' 节' : '') + ' ' + indSrcVolt(s).toFixed(1) + ' V'; });
                 let msg = IND_DEVS[d.ty].name + ' ' + b.V.toFixed(1) + ' V，额定 ' + IND_DEVS[d.ty].rated + ' V，炸了' + (srcs.length ? '（电源：' + srcs.slice(0, 4).join('、') + (srcs.length > 4 ? ' 等' : '') + '）' : '');
-                indBoom(d.x, d.z, 0, msg); if (ind && !ind.over) indFlash(msg);
+                indBoom(d.x, d.z, 0, msg); if (ind && !ind.over) indFlash(msg + (ind.lastBoomLoot ? '；里面的 ' + ind.lastBoomLoot + ' 个东西掉在了地上' : ''));
             });
             if (!ind || ind.over || ind.where !== 'base') return;
             B.devs.forEach(function (d) { if (d.ty === 'el') indElTick(d, dt); else if (d.ty === 'comp') indCompTick(d, dt); else if (d.ty === 'press') indPressTick(d, dt); else if (IND_DEV_TICK[d.ty]) IND_DEV_TICK[d.ty](d, dt); });
