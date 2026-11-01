@@ -93,7 +93,7 @@
 // 镍矿（山地露头，跟锡一个密度）→ 大窑炼成镍锭（1455°C）。镍锭用途：镍电池（360 U，两倍电量）、镍稿（采矿多拿 1 个，跟铁稿一样）。
         Object.assign(IND_ITEMS_RAW, {
             ore_al: { name: '铝土矿', col: 0xd7a38b, use: '放进电解槽（加盐当助熔剂）出铝锭' },
-            ore_ni: { name: '镍矿', col: 0x78909c, use: '放进大窑炼镍锭（1455°C）' },
+            ore_ni: { name: '镍矿', col: 0x78909c, use: '加 1 份木炭／煤／焦炭，放进大窑炼镍锭（1455°C）' },
             ingot_al: { name: '铝锭', col: 0xcfd8dc, use: '做铝架背包（+24 格）、铝线（1 锭出 3 根铜线）' },
             hot_ni: { name: '镍锭（烫）', col: 0xff7043, hot: 'ingot_ni', needTool: 'tongs' },
             ingot_ni: { name: '镍锭', col: 0xb0bec5, use: '做镍电池（电量两倍）、镍稿（采矿多拿 1 个）' },
@@ -106,7 +106,7 @@
         IND_OUTCROP.ore_al = 1; IND_OUTCROP.ore_ni = 1;
         IND_BIOMES.mountain.res.ore_al = 2; IND_BIOMES.mountain.res.ore_ni = 3;
         CK_MELT.hot_ni = 1455;
-        IND_RECIPES.push({ in: { ore_ni: 1 }, out: { hot_ni: 1 }, cls: 'smelt', minT: 1455, time: 30, hard: true });
+        IND_RECIPES.push({ in: { ore_ni: 1, charcoal: 1 }, out: { hot_ni: 1 }, cls: 'smelt', minT: 1455, time: 30, hard: true });   // 任务 53：要还原剂
         IND_EL_RECIPES.push({ name: '电解铝土矿', in: { ore_al: 2, salt: 1 }, out: { ingot_al: 1 }, minV: 6, hard: true });
         IND_CRAFT.push(
             { out: 'battery_ni', in: { wire: 2, ingot_ni: 2, ingot_zn: 1 }, hard: true },

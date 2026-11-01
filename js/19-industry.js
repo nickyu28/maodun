@@ -142,11 +142,11 @@
             salt: { name: '盐', col: 0xf5f5f5 },
             coal: { name: '煤', col: 0x263238, fuel: 150 },
             oil: { name: '石油', col: 0x212121, fuel: 600, use: '装在桶里，能烧（硬核要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒），也是后面的原料' },   // 桶装液体：key 'oil' = 木桶装的石油，其它材质 oil@jar／@fe／@cu；一桶烧 600（煤 150）
-            ore_cu: { name: '铜矿', col: 0xd84315 },
-            ore_zn: { name: '锌矿', col: 0x90a4ae },
-            ore_fe: { name: '铁矿', col: 0x795548 },
+            ore_cu: { name: '铜矿', col: 0xd84315 , use: '加 1 份木炭／煤／焦炭一起进炉子，1085°C 炼成铜锭' },
+            ore_zn: { name: '锌矿', col: 0x90a4ae , use: '加 1 份木炭／煤／焦炭一起进炉子，950°C 炼成锌锭' },
+            ore_fe: { name: '铁矿', col: 0x795548 , use: '加 1 份木炭／煤／焦炭一起进炉子，1538°C 炼成铁锭' },
             sulfur: { name: '硫', col: 0xfdd835, useLater: '后面的阶段' },
-            ore_sn: { name: '锡矿', col: 0xb0bec5 },
+            ore_sn: { name: '锡矿', col: 0xb0bec5 , use: '加 1 份木炭／煤／焦炭一起进炉子，1200°C 炼成锡锭' },
             ore_u: { name: '铀矿', col: 0x7cb342, useLater: '核和火箭' },
             pick_stone: { name: '石稿', col: 0x757575, tool: 1 },
             charcoal: { name: '木炭', col: 0x37474f, fuel: 120 },
@@ -394,10 +394,11 @@
             // 冶炼（只给硬核）：温度用真实熔点；出来的锭是烫的
             { in: { ingot_fe: 1, charcoal: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1550, time: 40, hard: true },
             { in: { ingot_cu: 1, ingot_zn: 1 }, out: { hot_brass: 2 }, cls: 'smelt', minT: 950, time: 20, hard: true },
-            { in: { ore_fe: 1 }, out: { hot_fe: 1 }, cls: 'smelt', minT: 1538, time: 30, hard: true },
-            { in: { ore_cu: 1 }, out: { hot_cu: 1 }, cls: 'smelt', minT: 1085, time: 20, hard: true },
-            { in: { ore_zn: 1 }, out: { hot_zn: 1 }, cls: 'smelt', minT: 420, time: 15, hard: true },
-            { in: { ore_sn: 1 }, out: { hot_sn: 1 }, cls: 'smelt', minT: 232, time: 15, hard: true },
+            // 矿要还原剂（任务 53）：每份矿 + 1 份木炭；煤、焦炭的两条在配方表最后（19-industry-real.js），别挪这里的序号
+            { in: { ore_fe: 1, charcoal: 1 }, out: { hot_fe: 1 }, cls: 'smelt', minT: 1538, time: 30, hard: true },
+            { in: { ore_cu: 1, charcoal: 1 }, out: { hot_cu: 1 }, cls: 'smelt', minT: 1085, time: 20, hard: true },
+            { in: { ore_zn: 1, charcoal: 1 }, out: { hot_zn: 1 }, cls: 'smelt', minT: 950, time: 15, hard: true },   // 锌 907°C 沸腾，950 是折中
+            { in: { ore_sn: 1, charcoal: 1 }, out: { hot_sn: 1 }, cls: 'smelt', minT: 1200, time: 15, hard: true },
             { in: { ingot_cu: 3, ingot_sn: 1 }, out: { hot_bronze: 4 }, cls: 'smelt', minT: 950, time: 30, hard: true },
             // 玻璃：草木灰当助熔剂（钾碱），1000°C（悠闲也能做，腌萝卜要用瓶子）；只有沙子要 1700°C（电炉）
             { in: { sand: 2, ash: 1 }, out: { glass_plate: 1 }, minT: 1000, time: 20, cls: 'bulk' },
@@ -2868,7 +2869,7 @@
                 return;
             }
             let r = IND_RECIPES[S.cook.i], n = S.cook.n || 1;
-            { let pool = ckPool(S); if (Object.keys(r.in).some(function (k) { return indHave(pool, k) < r.in[k] * n; })) { S.cook = null; indCookBadge(c); return; } }   // 原料被拿走了
+            { let pool = ckPool(S); if (Object.keys(r.in).some(function (k) { return indHave(pool, k) < r.in[k] * n; })) { S.cook = null; if (rlNeedReducer(S) && !ind.sleeping) indFlash('炼矿要加木炭、煤或焦炭'); indCookBadge(c); return; } }   // 原料被拿走了（老档里只放了矿的：停下提示，东西不丢）
             if (S.temp >= r.minT) S.cook.t += dt;
             if (r.burnT && S.temp > r.burnT) S.cook.burn += dt;
             if (S.cook.t >= r.time || S.cook.burn >= IND_BURN_S) {
@@ -2894,6 +2895,7 @@
             if (ind.where !== 'base' || ind.catching) return;
             let S = c.C, txt = '';
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; txt = indOutTxt(r, S.cook.n || 1) + '　' + Math.min(99, Math.floor(S.cook.t / r.time * 100)) + '%'; }
+            else if (indHard() && rlNeedReducer(S)) txt = '要加木炭／煤／焦炭';
             indBadge('cook' + c.id, c.x, c.ty === 'kiln' ? 3.6 : 3.1, c.z, txt);
             let sp = indSpoutPos(c), t2 = S.spout.length ? indSpoutTxt(c) : (S.cook && S.cook.full ? '出料槽满了' : '');
             indBadge('spout' + c.id, sp.x, 1.5, sp.z, t2);
@@ -3160,6 +3162,7 @@
             let st = '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + '<br>';
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; st += '正在做：' + indOutTxt(r, S.cook.n || 1) + (S.cook.n > 1 ? '（' + S.cook.n + ' 份）' : '') + ' ' + Math.floor(S.cook.t / r.time * 100) + '%'; }
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做' + (D.only ? '（只做冶炼）' : '') + '</span>';
+            if (!S.cook && indHard() && rlNeedReducer(S)) st += '<br><b style="color:#c62828">炼矿要加木炭、煤或焦炭（每份矿 1 份）</b>';
             let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !S.bellows) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
             fire += '<button id="ind-stove-off" style="' + IND_BTN + 'background:#455a64;" onclick="indStoveFire(0)">熄火并降温</button>' + (S.temp > 60 ? '<div style="font-size:13px;color:#888;">降到 60°C 还要约 ' + indFurnCoolSecs(c.ty, S) + ' 秒（收起要 60°C 以下）</div>' : '');
             let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';

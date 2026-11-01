@@ -22,7 +22,7 @@
 
         // ── 物品 ──
         Object.assign(IND_ITEMS_RAW, {
-            fluorite: { name: '萤石', col: 0x80cbc4 }, ore_pb: { name: '方铅矿', col: 0x546e7a },
+            fluorite: { name: '萤石', col: 0x80cbc4 }, ore_pb: { name: '方铅矿', col: 0x546e7a, use: '2 份加 1 份木炭／煤／焦炭进炉子，800°C 炼成铅锭（还出 1 份硫）' },
             ingot_pb: { name: '铅锭', col: 0x78909c }, hot_pb: { name: '铅锭（烫）', col: 0xff8a65, hot: 'ingot_pb', needTool: 'tongs' },
             b_so2: { name: '二氧化硫瓶', col: 0xfff59d, poison: '二氧化硫', use: '做硫酸（放掉是毒气）' },
             b_h2so4: { name: '硫酸瓶', col: 0xffee58, corrosive: true },
@@ -51,7 +51,7 @@
 
         // ── 配方（炉子上；硬核） ──
         IND_RECIPES.push(
-            { in: { ore_pb: 2 }, out: { hot_pb: 2, sulfur: 1 }, cls: 'smelt', minT: 327, time: 15, hard: true },   // 2 份方铅矿 → 2 铅锭 + 1 硫
+            { in: { ore_pb: 2, charcoal: 1 }, out: { hot_pb: 2, sulfur: 1 }, cls: 'smelt', minT: 800, time: 15, hard: true },   // 任务 53：要还原剂，800°C   // 2 份方铅矿 → 2 铅锭 + 1 硫
             { in: { sulfur: 1, b_o2: 1 }, out: { b_so2: 1 }, cls: 'chem', pri: true, minT: 400, time: 10, hard: true },
             { in: { b_so2: 1, b_o2: 1, water_raw: 1 }, out: { b_h2so4: 1, bottle: 1, bucket: 1 }, cls: 'chem', pri: true, minT: 450, time: 15, hard: true },
             { in: { ore_u_dust: 2, b_h2so4: 1, naoh: 1 }, out: { yellowcake: 1, bottle: 1 }, cls: 'chem', pri: true, minT: 80, time: 30, hard: true },
