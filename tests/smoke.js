@@ -9551,10 +9551,10 @@ async function enterExit(tab, key) {
                 if (!(!r.pw && r.wt > 100 && r.wu < 2.1)) bad.push('水泵没电时水塔 → 发电机还是流 ' + JSON.stringify(r));
                 // 不合规矩的接法
                 r = await J(`(function(){ ind.base.devs.push({ id: 6, ty: 'tower', x: indDev(3).x + 3, z: indDev(3).z, bats: 0, u: 0, on: true, ft: 20, st: {} }); ind.bag = { pipe: 20 }; rlDevAct(indDev(3), 'pipe'); rlDevAct(indDev(6), 'pipe'); let a = __fl.slice(-1)[0]; rlDevAct(indDev(4), 'pipe'); let b = __fl.slice(-1)[0]; ind.pipePend = null; return { a: a, b: b, n: ind.base.pipes.length, left: ind.bag.pipe }; })()`);
-                if (!(/水泵/.test(r.a) && /水源/.test(r.b) && r.n === 2 && r.left === 20)) bad.push('水塔接水塔、从发电机起头都不行，不花管道 ' + JSON.stringify(r));
+                if (!(/水泵/.test(r.a) && /源头/.test(r.b) && r.n === 2 && r.left === 20)) bad.push('水塔接水塔、从发电机起头都不行，不花管道 ' + JSON.stringify(r));
                 // 存档整理
                 r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.pipes.push([3, 999, 2], [4, 3, 2], 'x', [3, 4, 99]); b = indFixBase(b); return { p: b.pipes, wu: b.devs.filter(function (d) { return d.ty === 'tower'; })[0].wu }; })()`);
-                if (!(r.p.length === 2 && r.p.every(function (p) { return p.length === 3 && p[2] >= 1 && p[2] <= 20; }))) bad.push('存档整理管道 ' + JSON.stringify(r));
+                if (!(r.p.length === 2 && r.p.every(function (p) { return p.length === 4 && p[3] === 'w' && p[2] >= 1 && p[2] <= 20; }))) bad.push('存档整理管道 ' + JSON.stringify(r));
                 // 拿起水塔：相连的管道退段数
                 r = await J(`(function(){ ind.bag = {}; ind.base.chests[0].items = {}; let n = ind.base.pipes.filter(function (p) { return p[0] === 3 || p[1] === 3; }).reduce(function (m, p) { return m + p[2]; }, 0); indPickDev(indDev(3)); return { n: n, back: (ind.bag.pipe || 0) + (ind.base.chests[0].items.pipe || 0), pipes: ind.base.pipes.length, tower: ind.bag.dev_tower || 0 }; })()`);
                 if (!(r.n > 0 && r.back === r.n && r.pipes === 0 && r.tower === 1)) bad.push('拿起水塔退管道段数 ' + JSON.stringify(r));
@@ -9567,6 +9567,62 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND65 管道：水塔 → 发电机不要电、水泵没电不抽有电每秒 5 桶、水泵停了水塔照样流、段数按距离、乱接拒绝、存档、拿起退段数、炸了不退', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND66')) {
+            // IND66 管道第 2 期（任务 58）：电解槽接水管出氢氧不用水桶；炉子接水管，空铁桶装水烧成开水；反应堆接水塔管道算水冷、断水变空气冷却；
+            // 储油罐 → 水泵 → 漏斗，炉子燃料增加；储气罐 → 水泵 → 炉子燃料；储油罐、储气罐当仓库（倒进去、装出来）；一根管道一种流体
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                // 场地：远离水池（右下角是水池），设备都在左边
+                await T.eval(`(function(){ let B = ind.base; B.rule = 'hard'; B.off.stove = true; B.pipes = []; B.wires = []; B.dseq = 50; B.chests[0].items = {};
+                    B.cookers = [{ id: 5, ty: 'kiln', x: -20, z: 8, items: {}, out: {}, fuel: 99999, fire: 2, temp: 600, cook: null, spout: [], funnel: { ty: 'brick', oil: 0 } }];
+                    let mk = function (id, ty, x, z, o) { return Object.assign({ id: id, ty: ty, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}); };
+                    B.devs = [mk(1, 'tower', -14, 0, { wu: 20 }), mk(2, 'bank', -10, 4, { bats: 8, u: 1440 }), mk(3, 'el', -10, 0), mk(4, 'reactor', -24, -8, { rods: [], ctl: 1, T: 300 }),
+                              mk(6, 'oiltank', -26, 14, { oil: 3 }), mk(7, 'pump', -23, 14), mk(8, 'gastank', -14, 14, { gas: 2 }), mk(9, 'pump', -17, 14)];
+                    B.wires = [[2, 3], [2, 7], [2, 9]]; ind.furnDirty = true; indSyncFurn(); ind.devDirty = ind.wireDirty = true; })(); true;`);
+                const link = (a, b) => J(`(function(){ ind.bag = { pipe: 40 }; ind.pipePend = null; let r1 = rlPipeClick(${JSON.stringify(a)}), r2 = rlPipeClick(${JSON.stringify(b)}); return { ok: r1 && r2, fl: __fl.slice(-1)[0], n: ind.base.pipes.length }; })()`);
+                for (const [a, b] of [[1, 3], [1, 'k5'], [1, 4], [6, 7], [7, 'k5'], [8, 9], [9, 'k5']]) {
+                    const r = await link(a, b); if (!r.ok) bad.push('接不上 ' + a + ' → ' + b + ' ' + JSON.stringify(r));
+                }
+                const fl = await J(`ind.base.pipes.map(function (p) { return p[3]; }).join('')`);
+                if (fl !== 'wwwoogg') bad.push('每根管道的流体不对 ' + fl);
+                // 一根管道一种流体：储油罐的水泵不能再接水塔；储油罐不能直接接炉子（地面，要水泵）
+                let r = await link(1, 7); if (r.ok || !/只送一种/.test(r.fl)) bad.push('一个水泵只送一种 ' + JSON.stringify(r));
+                r = await link(6, 'k5'); if (r.ok || !/水泵/.test(r.fl)) bad.push('储油罐直接接炉子要说中间接水泵 ' + JSON.stringify(r));
+                // 电解槽：只放 3 个瓶，水从管道来
+                await T.eval(`(function(){ let d = indDev(3); d.st = { bottle: 3 }; ind.base.cookers[0].items = { bucket_fe: 2 }; ind.base.cookers[0].fuel = 99999; })(); true;`);
+                r = await J(`(function(){ indAdvance(21); let d = indDev(3), c = ind.base.cookers[0]; return { st: d.st, out: c.out, items: c.items, wu: indDev(1).wu }; })()`);
+                if (!(r.st.b_h2 === 2 && r.st.b_o2 === 1 && !r.st.bucket && !r.st.bottle)) bad.push('电解槽接水管出 2 氢 1 氧、不用水桶 ' + JSON.stringify(r.st));
+                if (!(r.out['water_boiled@fe'] === 2 && !r.items.bucket_fe)) bad.push('炉子接水管：铁桶装水烧成开水 ' + JSON.stringify([r.out, r.items]));
+                // 反应堆：连着有水的管道算水冷；水塔空了（缓冲用完）就是空气冷却
+                r = await J(`(function(){ let d = indDev(4); return [nkReactorCool(d), nkCoolK(d)]; })()`);
+                if (!(r[0] === true && r[1] === 1.33)) bad.push('反应堆接水塔管道算水冷 ' + JSON.stringify(r));
+                r = await J(`(function(){ indDev(1).wu = 0; indAdvance(20); let d = indDev(4); return [nkReactorCool(d), nkCoolK(d), d.wb]; })()`);
+                if (!(r[0] === false && r[1] === 0.5)) bad.push('水塔空了反应堆变空气冷却 ' + JSON.stringify(r));
+                // 石油：储油罐 → 水泵 → 漏斗；天然气：储气罐 → 水泵 → 炉子燃料（燃料低了才补）
+                r = await J(`(function(){ let c = ind.base.cookers[0]; c.items = {}; c.out = {}; c.funnel.oil = 0; c.fuel = 100; c.fire = 2; let f0 = c.fuel; indAdvance(2); return { oil: indDev(6).oil, gas: indDev(8).gas, funnel: c.funnel.oil, fuel: c.fuel, f0: f0 }; })()`);
+                if (!(r.oil < 3 && r.funnel + (r.fuel - r.f0) > 500)) bad.push('储油罐 → 水泵 → 漏斗 ' + JSON.stringify(r));
+                if (!(r.gas < 1.2 && r.gas > 0.5 && r.fuel > 1400 && r.fuel < 1900)) bad.push('储气罐 → 水泵 → 炉子燃料（补到 1800 左右） ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.base.wires = []; let c = ind.base.cookers[0]; c.funnel.oil = 0; c.fuel = 100; let o = indDev(6).oil, g = indDev(8).gas; indAdvance(2); return { o: indDev(6).oil - o, g: indDev(8).gas - g }; })()`);
+                if (r.o !== 0 || r.g !== 0) bad.push('水泵没电油和气不流 ' + JSON.stringify(r));
+                // 当仓库：油桶倒进去、空桶装出来；天然气灌进去、空钢瓶装出来
+                r = await J(`(function(){ let t = indDev(6), g = indDev(8); t.oil = 0; g.gas = 0; ind.bag = { 'oil@fe': 1, gas_ng: 1 }; rlDevAct(t, 'oil@fe'); rlDevAct(g, 'gas_ng'); let a = [t.oil, g.gas, ind.bag.bucket_fe, ind.bag.cyl]; rlDevAct(t, 'bucket_fe'); rlDevAct(g, 'cyl'); return a.concat([t.oil, g.gas, ind.bag['oil@fe'], ind.bag.gas_ng]); })()`);
+                if (r.join() !== '1,1,1,1,0,0,1,1') bad.push('储油罐、储气罐当仓库 ' + r.join());
+                const rc = await J(`[IND_CRAFT.find(function (x) { return x.out === 'dev_oiltank'; }).in, IND_CRAFT.find(function (x) { return x.out === 'dev_gastank'; }).in]`);
+                if (JSON.stringify(rc) !== JSON.stringify([{ steel: 6, brick: 4 }, { steel: 6, ingot_cu: 2 }])) bad.push('配方 ' + JSON.stringify(rc));
+                // 拿起炉子：接着的管道退段数
+                r = await J(`(function(){ let n = ind.base.pipes.filter(function (p) { return p[1] === 'k5'; }).reduce(function (m, p) { return m + p[2]; }, 0); let c = ind.base.cookers[0]; c.fire = 0; c.temp = 20; c.items = {}; c.out = {}; c.spout = []; c.fuel = 0; ind.bag = {}; indPickFurn({ ty: 'kiln', o: c }); return { n: n, back: (ind.bag.pipe || 0) + (ind.base.chests[0].items.pipe || 0), left: ind.base.pipes.filter(function (p) { return p[1] === 'k5'; }).length }; })()`);
+                if (!(r.n > 0 && r.back === r.n && r.left === 0)) bad.push('拿起炉子退管道 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND66 管道第 2 期：电解槽和炉子从管道取水、反应堆接水塔算水冷断水不算、储油罐储气罐经水泵送炉子、当仓库、一管一种、拿起炉子退管道', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

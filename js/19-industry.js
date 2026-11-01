@@ -1699,6 +1699,7 @@
             if (a && a.kind === 'funnel') { indFlash('进料漏斗：油 ' + Math.round(a.o.C.funnel.oil) + ' / ' + CK.funnelCap + '（拿装了油的桶右键倒进去）'); return false; }
             if (a && a.kind === 'door') return indDoorToggle(a.o);
             if (a && a.kind === 'chest') return indPanelBox(a.o.id);
+            if (a && (a.kind === 'stove' || a.kind === 'cook') && indSel() === 'pipe') return rlPipeClick(a.kind === 'stove' ? 'kstove' : 'k' + a.o.id);   // 拿钢管点炉子：接管道（任务 58）
             if (a && a.kind === 'stove') return indPanelStove('stove');
             if (a && a.kind === 'cook') return indPanelStove(a.o.id);
             if (a && a.kind === 'bed') return indSleep();
@@ -1973,9 +1974,9 @@
                 [c.items, c.out].forEach(function (m) { if (m) Object.keys(m).forEach(function (k) { add(k, m[k]); }); });
                 (c.spout || []).forEach(function (e) { add(e.k, 1); });
             });
+            rlBoomPipes(x, z, R);   // 炸到的管道没了，不退（任务 57）；要在设备、炉子删掉之前算
             B.devs = B.devs.filter(function (d) { if (Math.hypot(d.x - x, d.z - z) <= R) { gone[d.id] = 1; return false; } return true; });
             B.wires = B.wires.filter(function (w) { return !gone[w[0]] && !gone[w[1]]; });
-            rlBoomPipes(x, z, R, gone);   // 炸到的管道没了，不退（任务 57）
             let powder = nkPowderNear(x, z, R);   // 地上的火药碰到爆炸也炸
             B.ground = B.ground.filter(function (g) { return Math.hypot(g.x - x, g.z - z) > R; });
             B.fires = B.fires.filter(function (f) { return Math.hypot(f.x - x, f.z - z) > R; });
@@ -2179,9 +2180,10 @@
                 if (indFits(ind.bag, indBagSlots(), key, 1) < 1) { indFlash('背包满了'); return false; }
                 B.off[ty] = true;
             }
+            let np = (ty === 'stove' || IND_COOK[ty]) ? rlPickPipes(ty === 'stove' ? 'kstove' : 'k' + f.o.id) : 0;   // 炉子接着的管道退段数（任务 58）
             let big = ty === 'chest' && f.o.big; B.box = (B.chests.filter(function (c) { return c.big; })[0] || { items: {} }).items;
             indBagAdd(key, 1); ind.furnDirty = true; if (ind.panel) indPanelClose();
-            indSave(); indFlash('收起了' + indFurnName(ty) + (big ? '（里面的东西一起）' : ''));
+            indSave(); indFlash('收起了' + indFurnName(ty) + (big ? '（里面的东西一起）' : '') + (np > 0 ? '，还回了 ' + np + ' 段管道' : ''));
             return true;
         }
         function indPlaceFurn(k) {
@@ -2304,7 +2306,7 @@
             ind.base.wires = ind.base.wires.filter(function (w) { return w[0] !== d.id && w[1] !== d.id; });
             nw -= ind.base.wires.length;
             if (nw > 0) indBoxAdd('wire', nw);
-            let np = rlPickPipes(d);   // 相连的管道退段数（任务 57）   // 每根线退 1 根铜线（背包 → 仓库箱 → 地上，跟里面的东西一样；同一根线只在收起它的这个设备时退一次，因为收起后线就没了）
+            let np = rlPickPipes(d.id);   // 相连的管道退段数（任务 57）   // 每根线退 1 根铜线（背包 → 仓库箱 → 地上，跟里面的东西一样；同一根线只在收起它的这个设备时退一次，因为收起后线就没了）
             if (ind.wirePend === d.id) ind.wirePend = null;
             ind.devDirty = ind.wireDirty = true; indSave();
             let where = [tot.box ? '放进了仓库箱' + (tot.bag || tot.ground ? ' ' + tot.box + ' 个' : '') : '', tot.bag ? '放进了背包' + (tot.box || tot.ground ? ' ' + tot.bag + ' 个' : '') : '', tot.ground ? '掉在了地上' + (tot.box || tot.bag ? ' ' + tot.ground + ' 个' : '') : ''].filter(Boolean);
@@ -2429,11 +2431,12 @@
 
         // ── 电解槽、气体、元素表 ──
         function indElRecipe(d, V) {
+            let pw = rlElPipeWater(d), have = function (k) { return indHave(d.st, k) + (k === 'water_raw' ? pw : 0); };   // 接了水管的电解槽：管道里的水也算（任务 58）
             for (let i = 0; i < IND_EL_RECIPES.length; i++) {
                 let r = IND_EL_RECIPES[i];
                 if (V < r.minV || (r.hard && !indHard())) continue;
-                if (!Object.keys(r.in).every(function (k) { return indHave(d.st, k) >= r.in[k]; })) continue;
-                if (r.in.salt && !r.in.water_raw && indHave(d.st, 'water_raw') > 0) continue;   // 有水的时候不算熔融盐
+                if (!Object.keys(r.in).every(function (k) { return have(k) >= r.in[k]; })) continue;
+                if (r.in.salt && !r.in.water_raw && have('water_raw') > 0) continue;   // 有水的时候不算熔融盐
                 if (r.molten && !(indHeatNear(d.x, d.z, IND_GEN_R).temp >= r.molten)) continue;
                 return i;
             }
@@ -2446,6 +2449,9 @@
             if (d.et < IND_EL_TIME) return;
             d.et = 0;
             let r = IND_EL_RECIPES[i];
+            if (r.in.water_raw && rlElPipeWater(d) >= r.in.water_raw) {   // 先用管道里的水：不扣水桶，也不还桶
+                let r2 = { in: Object.assign({}, r.in), out: Object.assign({}, r.out) }; d.wb -= r.in.water_raw; r2.out.bucket = (r2.out.bucket || 0) - r.in.water_raw; delete r2.in.water_raw; if (!(r2.out.bucket > 0)) delete r2.out.bucket; r = r2;
+            }
             let mats = indConsume(d.st, r, 1);
             let bi = 0;
             Object.keys(r.out).forEach(function (k) {
@@ -2852,7 +2858,7 @@
             return order.map(function (k) { let b = by[k]; return indName(k) + ' ×' + b.n + '　' + (b.t > 0 ? '烫，还要 ' + Math.ceil(b.t) + ' 秒' : '已凉'); }).join('　');
         }
         function indCookTick(c, dt) {
-            indSpoutTick(c, dt); ckTick(c, dt);
+            indSpoutTick(c, dt); ckTick(c, dt); rlCookWaterTick(c);   // 接了水管：空桶自动装生水（任务 58）
             let S = c.C, K = indCookK(c.ty), F = indFireDef(c.ty, S.fire);
             if (S.fire > 0) {
                 let burn = F.burn * K.burn * dt;

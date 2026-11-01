@@ -117,7 +117,7 @@
         };
         function nkReactorHeat(d) { let n = 0; d.rods.forEach(function (r) { if (!r.spent) n++; }); return n * (1 - d.ctl) * NK.rodHeat; }
         function nkReactorCool(d) {
-            let P = IND_BASE_ST.pool, water = (!ind.base.off.pool && Math.hypot(P.x - d.x, P.z - d.z) <= NK.waterR + P.r) || ind.base.devs.some(function (p) { return p.ty === 'pump' && p.pw && Math.hypot(p.x - d.x, p.z - d.z) <= NK.waterR; });
+            let P = IND_BASE_ST.pool, water = (!ind.base.off.pool && Math.hypot(P.x - d.x, P.z - d.z) <= NK.waterR + P.r) || ind.base.devs.some(function (p) { return p.ty === 'pump' && p.pw && Math.hypot(p.x - d.x, p.z - d.z) <= NK.waterR; }) || rlReactorWet(d);   // 连着有水的管道也算水冷（任务 58）
             return water;
         }
         // 冷却跟温度成正比（任务 27）：每秒带走 k × (T − 环境温度)，水冷 k = 1.33、空气 k = 0.5，所以温度会自己稳在 20 + 发热 ÷ k
@@ -128,6 +128,7 @@
             if (d.T === undefined) IND_DEV_FIX.reactor(d);
             let heat = nkReactorHeat(d), cool = nkCoolNow(d), net = Math.max(-NK.maxRate, Math.min(NK.maxRate, (heat - cool) * NK.rate));
             d.T = Math.max(NK.amb, d.T + net * dt);
+            rlReactorUse(d, dt);   // 管道送来的冷却水，热着的时候慢慢用掉
             d.rods.forEach(function (r) { if (!r.spent) { r.b += (1 - d.ctl) * dt / (NK.rodDays * IND_DAY); if (r.b >= 1) { r.spent = true; delete r.i; delete r.b; if (ind.panel === 'reactor') ind.panelDirty = true; } } });
             d.melt = d.T > NK.meltT ? d.melt + dt : 0;
             if (d.melt >= NK.meltS) { nkMeltdown(d); return; }
