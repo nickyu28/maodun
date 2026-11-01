@@ -662,7 +662,29 @@
         function indCool(k) { return (IND_ITEMS[k] && IND_ITEMS[k].hot) || k; }
         // 把东西放回仓库箱（设备里的东西这类）：优先不限格数的那个，没有就任意一个箱子，都没有放进背包
         function indBoxTarget() { let C = ind.base.chests; return C.filter(function (c) { return c.big; })[0] || C[0] || null; }
-        function indBoxAdd(k, n) { k = indCool(k); let c = indBoxTarget(); if (c) c.items[k] = (c.items[k] || 0) + n; else indBagAdd(k, n); }   // 仓库箱里的烫锭当它凉了
+        // 返回 { box, bag, ground }：放进仓库箱几个、背包几个、掉在地上几个，总数守恒（以前没有箱子时背包放不下的直接丢了）。
+        // 顺序：不限格的箱子 → 还有空格的 30 格箱子 → 背包 → 掉在脚边地上
+        function indBoxAdd(k, n) {
+            k = indCool(k);   // 仓库箱里的烫锭当它凉了
+            let r = { box: 0, bag: 0, ground: 0 }; if (!(n > 0)) return r;
+            let C = ind.base.chests, order = C.filter(function (c) { return c.big; }).concat(C.filter(function (c) { return !c.big; }));
+            for (let i = 0; i < order.length && n > 0; i++) {
+                let c = order[i], t = c.big ? n : indFits(c.items, IND_CHEST_SLOTS, k, n);
+                if (t > 0) { c.items[k] = (c.items[k] || 0) + t; r.box += t; n -= t; }
+            }
+            if (n > 0) { let t = indBagAdd(k, n); r.bag = t; n -= t; }
+            if (n > 0) { indDropAtFeet(k, n); r.ground = n; }
+            return r;
+        }
+        // 放不下的东西掉在脚边（不限 IND_ITEM_CAP：宁可地上多，也不能让东西凭空没了）
+        function indDropAtFeet(k, n) {
+            let G = ind.where === 'trip' ? (ind.tripGround || (ind.tripGround = [])) : ind.base.ground, f = indFace();
+            for (let i = 0; i < n; i++) {
+                let a = (G.length + i) * 2.399, rr = 0.25 * Math.sqrt((G.length + i) % 12);
+                G.push({ k: k, x: ind.p.x + f.x * 1.0 + Math.cos(a) * rr, z: ind.p.z + f.z * 1.0 + Math.sin(a) * rr });
+            }
+            ind.itemDirty = true;
+        }
         function indRand() { return ind && ind.rng ? ind.rng() : Math.random(); }
         function indRoll(a) { return a[0] + Math.floor(indRand() * (a[1] - a[0] + 1)); }
 
@@ -2195,14 +2217,18 @@
         }
         function indPickDev(d) {
             let k = 'dev_' + d.ty; if (indBagAdd(k, 1) <= 0) { indFlash('背包满了'); return false; }
-            if (d.ty === 'bank') { let b = Math.ceil(d.u / IND_BAT_U - 1e-9); if (b > 0) indBagAdd('battery', b); }
-            if (d.st) Object.keys(d.st).forEach(function (k) { indBoxAdd(k, d.st[k]); });   // 电解槽里的东西放回仓库箱
-            if (d.rods) d.rods.forEach(function (r) { indBoxAdd(r.spent ? 'rod_spent' : nkRodKey(r), 1); });   // 反应堆里的燃料棒
-            if (d.cy) indBoxAdd(d.cy, 1);
+            let tot = { box: 0, bag: 0, ground: 0 }, put = function (key, n) { let r = indBoxAdd(key, n); tot.box += r.box; tot.bag += r.bag; tot.ground += r.ground; };
+            if (d.ty === 'bank') { let b = Math.ceil(d.u / IND_BAT_U - 1e-9); if (b > 0) { let t = indBagAdd('battery', b); if (t < b) put('battery', b - t); if (t > 0) tot.bag += t; } }   // 电池先还背包，放不下的走仓库箱／地上
+            if (d.st) Object.keys(d.st).forEach(function (k) { put(k, d.st[k]); });   // 电解槽里的东西放回仓库箱（放不下进背包，再放不下掉在地上，不会没）
+            if (d.rods) d.rods.forEach(function (r) { put(r.spent ? 'rod_spent' : nkRodKey(r), 1); });   // 反应堆里的燃料棒
+            if (d.cy) put(d.cy, 1);
+            let N = tot.box + tot.bag + tot.ground;
             ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
             ind.base.wires = ind.base.wires.filter(function (w) { return w[0] !== d.id && w[1] !== d.id; });
             if (ind.wirePend === d.id) ind.wirePend = null;
-            ind.devDirty = ind.wireDirty = true; indSave(); indFlash('收起了' + IND_DEVS[d.ty].name);
+            ind.devDirty = ind.wireDirty = true; indSave();
+            let where = [tot.box ? '放进了仓库箱' + (tot.bag || tot.ground ? ' ' + tot.box + ' 个' : '') : '', tot.bag ? '放进了背包' + (tot.box || tot.ground ? ' ' + tot.bag + ' 个' : '') : '', tot.ground ? '掉在了地上' + (tot.box || tot.bag ? ' ' + tot.ground + ' 个' : '') : ''].filter(Boolean);
+            indFlash('收起了' + IND_DEVS[d.ty].name + (N > 0 ? '，里面的 ' + N + ' 个东西' + where.join('、') : ''));
             return true;
         }
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关

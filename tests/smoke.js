@@ -3260,6 +3260,59 @@ async function enterExit(tab, key) {
             report('CK3 用电器接多个电源（并联）：电压取有电的最高、耗电平分给电池组、0 节忽略、有发电机电池组不掉电、最多 4 根、重复接拒绝不花铜线、超压照旧炸', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('CK4')) {
+            // CK4 任务 19：电解槽里放了铁桶，收起后东西不能没。收起时东西先进不限格的仓库箱，再进有空格的 30 格箱子，再进背包，再放不下掉在脚边地上，总数守恒；
+            // 屏幕上写去了哪；放下电解槽时槽是空的（设计）；电解槽自己用桶：一个装水的铁桶进去，电解完还回一个空铁桶
+            // 复现（改之前）：没有箱子、背包只剩放设备那一格时，30 个桶一个都没回来，凭空没了
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                // 某种东西在背包、所有箱子、所有设备里、地上一共有几个
+                const tot = (k) => T.eval(`(function(){ let n = ind.bag['${k}'] || 0; ind.base.chests.forEach(function (c) { n += c.items['${k}'] || 0; }); ind.base.devs.forEach(function (d) { n += (d.st && d.st['${k}']) || 0; }); n += ind.base.ground.filter(function (g) { return g.k === '${k}'; }).length; return n; })()`);
+                const where = (k) => T.eval(`JSON.stringify({ bag: ind.bag['${k}'] || 0, box: ind.base.chests.reduce(function (n, c) { return n + (c.items['${k}'] || 0); }, 0), ground: ind.base.ground.filter(function (g) { return g.k === '${k}'; }).length, dev: ind.base.devs.reduce(function (n, d) { return n + ((d.st && d.st['${k}']) || 0); }, 0) })`).then(JSON.parse);
+                const run = async (k, setup, label, expect) => {
+                    await T.eval(`ind.bag = {}; ind.base.devs = []; ind.base.wires = []; ind.base.ground = []; ind.base.chests = [{ id: 1, x: 12, z: 12, big: true, items: {} }]; true;`);
+                    const id = await T.eval(`(function(){ indBagAdd('dev_el', 1); indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_el'); indUse(); let d = ind.base.devs[ind.base.devs.length - 1]; d.st['${k}'] = 30; indBagDel('dev_el', 99); return d.id; })()`);
+                    await T.eval(`${setup}; true;`);
+                    const before = await tot(k);
+                    const fl = await T.eval(`(function(){ let f = []; let bf = blazeFlash; blazeFlash = function (t) { f.push(t); }; try { let d = indDev(${id}); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); ind.selIdx = 0; indPickDev(d); } finally { blazeFlash = bf; } return f.join('|'); })()`);
+                    const after = await tot(k), w = await where(k);
+                    if (after !== before || before !== 30) bad.push(label + '（' + k + '）总数不守恒 ' + before + '→' + after + ' ' + JSON.stringify(w));
+                    if (await T.eval(`!!indDev(${id})`)) bad.push(label + '（' + k + '）电解槽没收起');
+                    if (expect.where && w[expect.where] !== 30) bad.push(label + '（' + k + '）该全在' + expect.where + ' ' + JSON.stringify(w));
+                    if (!expect.flash.test(fl)) bad.push(label + '（' + k + '）提示 ' + fl);
+                    return w;
+                };
+                for (const k of ['bucket_fe', 'water_raw@fe']) {
+                    await run(k, '', '有不限格的箱子', { where: 'box', flash: /收起了电解槽，里面的 30 个东西放进了仓库箱/ });
+                    await run(k, 'ind.base.chests = []', '没有箱子', { where: 'bag', flash: /放进了背包/ });
+                    await run(k, 'ind.base.chests = []; for (let i = 0; i < 23; i++) ind.bag["pad" + i] = 99', '没有箱子、背包只剩放设备那一格', { where: 'ground', flash: /掉在了地上/ });
+                    await run(k, 'ind.base.chests[0].big = false; for (let i = 0; i < 30; i++) ind.base.chests[0].items["x" + i] = 1', '只有一个满了的 30 格箱子', { where: 'bag', flash: /放进了背包/ });
+                    await run(k, 'ind.base.chests[0].big = false; for (let i = 0; i < 30; i++) ind.base.chests[0].items["x" + i] = 1; for (let i = 0; i < 23; i++) ind.bag["pad" + i] = 99', '满了的 30 格箱子、背包也满', { where: 'ground', flash: /掉在了地上/ });
+                }
+                // 放下电解槽：槽是空的（设计）
+                const empty = await T.eval(`(function(){ indBagAdd('dev_el', 1); indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_el'); indUse(); let d = ind.base.devs[ind.base.devs.length - 1]; return Object.keys(d.st).length; })()`);
+                if (empty !== 0) bad.push('放下的电解槽该是空的');
+                // 电池组收起：电池还回来，背包放不下就掉地上
+                await T.eval(`ind.bag = {}; ind.base.devs = []; ind.base.ground = []; ind.base.chests = []; true;`);
+                const bk = await T.eval(`(function(){ indBagAdd('dev_bank', 1); indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_bank'); indUse(); let d = ind.base.devs[ind.base.devs.length - 1]; d.bats = 5; d.u = 5 * IND_BAT_U; indBagDel('dev_bank', 99); for (let i = 0; i < 23; i++) ind.bag["pad" + i] = 99; indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); indPickDev(d); return (ind.bag.battery || 0) + ind.base.ground.filter(function (g) { return g.k === 'battery'; }).length; })()`);
+                if (bk !== 5) bad.push('电池组收起：5 节电池一节都不能少 ' + bk);
+                // 电解槽自己用桶：装水的铁桶进去，电解完还回一个空铁桶，总数不变
+                await T.eval(`ind.bag = {}; ind.base.devs = []; ind.base.ground = []; true;`);
+                const el = await T.eval(`(function(){ indBagAdd('dev_el', 1); indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_el'); indUse(); indBagDel('dev_el', 99); let d = ind.base.devs[ind.base.devs.length - 1]; d.st = { 'water_raw@fe': 1, bottle: 3 }; d.pw = true; d.v = 12; indElTick(d, 25); return JSON.stringify(d.st); })()`);
+                const st = JSON.parse(el);
+                if (st.bucket_fe !== 1 || st['water_raw@fe'] || st.b_h2 !== 2 || st.b_o2 !== 1) bad.push('电解完该还回一个空铁桶 ' + el);
+                await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
+            }
+            await T.eval(`try { localStorage.removeItem('TH_hcdebug'); } catch (e) { } true;`);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('CK4 任务 19：电解槽收起后里面的东西总数守恒（仓库箱 → 30 格箱子 → 背包 → 掉地上）、提示写去了哪、电池组收起电池不少、电解槽用桶还桶', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('K1')) {
             // K1 合成倒计时：材料凑齐后等 3 秒再合成（合出大金的 5 秒），中间显示倒计时，材料被拿走就取消、放回去重新数
             const bad = [];
@@ -8586,7 +8639,7 @@ async function enterExit(tab, key) {
                 const sv1 = await J(`[ind.base.surv.food, ind.base.surv.water]`);
                 if (!(r1.fuel < st0[0] - 100 && r1.fuel > 0 && r1.ore === 0 && r1.temp > 500 && (r1.out.hot_sn || 0) + (r1.out.ingot_sn || 0) + r1.sp === 3)) bad.push('离开 10 分钟：燃料该少、锡矿炼成、炉子热着 ' + JSON.stringify(r1));
                 if (!(r1.away === null && Math.abs(r1.clock - r1.c) < 0.01)) bad.push('补完时钟回到现在、离开时刻清掉 ' + JSON.stringify(r1));
-                if (JSON.stringify(sv0) !== JSON.stringify(sv1)) bad.push('身上的饱食口渴不跟着补算 ' + JSON.stringify([sv0, sv1]));
+                if (Math.abs(sv0[0] - sv1[0]) > 0.3 || Math.abs(sv0[1] - sv1[1]) > 0.3) bad.push('身上的饱食口渴不跟着补算 ' + JSON.stringify([sv0, sv1]));   // 两次读数之间主循环还在走几帧，会差零点零几；补算 10 分钟的话会差好几点，所以按 0.3 比
                 if (!(r1.ms < 1000)) bad.push('补算 10 分钟太慢 ' + r1.ms + ' 毫秒');
                 // 燃料烧完火灭（不加保护）
                 await setStove(100, 2, {});
