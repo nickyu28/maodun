@@ -1708,6 +1708,7 @@
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             let k = indSel(), a = indAim();
+            if (a && a.kind === 'dev' && a.o.ty === 'bank' && k === 'battery') { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
             if (IND_ITEMS[k].dev) return indPlaceDev(k);
@@ -2241,6 +2242,41 @@
             indFlash('收起了' + IND_DEVS[d.ty].name + (nw > 0 ? '，还回了 ' + nw + ' 根铜线' : '') + (N > 0 ? '，里面的 ' + N + ' 个东西' + where.join('、') : ''));
             return true;
         }
+        // 电池组装电池：先补电再加节。有用完的（电量 < 节数 × 180）就是替换，节数、电压不变；满电了才加一节（上限 64）；
+        // 加一节之前看接着的用电器：电压会超过哪个的额定就不装。一次放 n 个，到上限或会超压就停；返回放了几个
+        function indBankMax(d) { return d.bats * IND_BAT_U; }
+        function indBankOver(d) {   // 再加一节会超过哪个用电器的额定？返回 { dev, V } 或 null
+            let V = (d.bats + 1) * IND_BAT_V, hit = null;
+            ind.base.wires.forEach(function (w) { if (w[0] !== d.id || hit) return; let x = indDev(w[1]); if (x && V > IND_DEVS[x.ty].rated + 1e-6) hit = { dev: x, V: V }; });
+            return hit;
+        }
+        function indBankPut(d, n) {
+            let done = 0, why = '', repl = 0, add = 0;
+            while (done < n && ind.bag.battery > 0) {
+                if (d.u < indBankMax(d) - 1e-6) { d.u = Math.min(indBankMax(d), d.u + IND_BAT_U); indBagDel('battery', 1); done++; repl++; continue; }
+                if (d.bats >= 64) { why = '装满了（64 节）'; break; }
+                let o = indBankOver(d);
+                if (o) { why = '再装一节就 ' + o.V.toFixed(1) + ' V，会超过' + IND_DEVS[o.dev.ty].name + '的额定 ' + IND_DEVS[o.dev.ty].rated + ' V，装不进去'; break; }
+                indBagDel('battery', 1); d.bats++; d.u += IND_BAT_U; done++; add++;
+            }
+            if (done > 0) indSave();
+            let st = d.bats + ' 节 ' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d);
+            if (done === 0) indFlash(why || '背包里没有电池');
+            else indFlash((repl ? '换了 ' + repl + ' 节用完的' : '') + (repl && add ? '，' : '') + (add ? '加了 ' + add + ' 节' : '') + '（' + st + '）' + (done < n && why ? '。' + why : ''));
+            if (ind.panel === 'bank') indPanelBank(d.id);
+            return done;
+        }
+        function indPanelBank(id) {
+            let d = indDev(id); if (!d || d.ty !== 'bank') return;
+            ind.panelEl = id;
+            indPanelShow('bank', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">电池组</div>' +
+                '<div style="line-height:1.7;">' + d.bats + ' 节　' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d) + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节</div>' +
+                '<div style="margin-top:8px;"><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',1)">放 1</button><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',999)">放全部</button>' +
+                '<input id="ind-bank-n" type="number" min="1" value="5" style="width:64px;padding:6px;font-size:15px;margin:3px;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indBankPutBtn(' + id + ',+document.getElementById(\'ind-bank-n\').value)">放这么多</button></div>' +
+                '<div style="margin-top:6px;font-size:12px;color:#888;">先替换用完的电池，满电了才加节；加节会超过接着的用电器额定就不装</div>' +
+                '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+        }
+        function indBankPutBtn(id, n) { let d = indDev(id); if (!d) return; n = Math.max(0, Math.floor(+n || 0)); if (n > 0) indBankPut(d, n); }
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
         function indDevAct(d) {
             let k = indSel(), D = IND_DEVS[d.ty];
@@ -2259,11 +2295,7 @@
                 ind.wireDirty = true; indSave(); indFlash('接上了：' + IND_DEVS[src.ty].name + ' → ' + IND_DEVS[dev.ty].name);
                 return true;
             }
-            if (d.ty === 'bank' && k === 'battery') {
-                if (d.bats >= 64) { indFlash('装满了'); return false; }
-                indBagDel('battery', 1); d.bats++; d.u += IND_BAT_U; indSave();
-                indFlash('装了一节电池（' + d.bats + ' 节，' + (d.bats * IND_BAT_V).toFixed(1) + ' V）'); return true;
-            }
+            if (d.ty === 'bank' && k === 'battery') { return indBankPut(d, 1) > 0; }
             if (d.ty === 'el') { indPanelEl(d.id); return true; }
             if (d.ty === 'comp') { indPanelComp(d.id); return true; }
             if (d.ty === 'press') { indPanelPress(d.id); return true; }
@@ -2275,7 +2307,7 @@
         function indDevInfo(d) {
             let D = IND_DEVS[d.ty];
             if (IND_DEV_INFO[d.ty]) return IND_DEV_INFO[d.ty](d);
-            if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' U';
+            if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + (d.bats * IND_BAT_V).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d);
             if (d.ty === 'gen') return D.name + ' ' + (indSrcVolt(d) > 0 ? '发电中 12 V' : '没在发电');
             let ss = indDevSrcs(d);
             let wired = ss.length ? '　接着 ' + ss.length + ' 个电源：' + ss.map(function (s) { let v = indSrcVolt(s); return IND_DEVS[s.ty].name + ' ' + (s.ty === 'bank' ? v.toFixed(1) : String(Math.round(v * 10) / 10)) + ' V'; }).join('、') + '，工作电压 ' + (Math.round(indDevVolt(d) * 10) / 10) + ' V' : '　没接电';
@@ -3208,7 +3240,7 @@
             else if (a && a.kind === 'funnel') hint = CK_FUNNEL[a.o.C.funnel.ty].name + '　油 ' + Math.round(a.o.C.funnel.oil) + ' / ' + CK.funnelCap + '<br><small>拿装了油的桶右键：倒进去　长按右键：收起（空的才行）</small>';
             else if (a && a.kind === 'spout') hint = ckSpoutDef(a.o.C).name + ' ' + (a.o.C.spout.length ? indSpoutTxt(a.o) : '空') + '<br><small>左键：取出（烫的要钳子）　拿水桶右键：浇凉</small>';
             else if (a && a.kind === 'cook') hint = IND_COOK[a.o.ty].name + ' ' + Math.round(a.o.temp) + '°C<br><small>左键：打开</small>';
-            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : a.o.ty === 'bank' ? '拿电池左键：装电池　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
+            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : a.o.ty === 'bank' ? '拿电池左键：装一节　右键：选放几个　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
             else if (a && a.kind === 'animal') {
                 let o = a.o, D = IND_ANIMALS[o.k];
                 if (R.where === 'trip') hint = (o.follow ? D.name + '（跟着你）' : '野生的' + D.name + (o.fed ? '（还要喂 ' + (D.tame - o.fed) + ' 次）' : '')) + '<br><small>爱吃：' + indFoodTxt(o.k) + '</small>';

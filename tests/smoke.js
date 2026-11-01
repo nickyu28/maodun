@@ -8794,6 +8794,52 @@ async function enterExit(tab, key) {
             report('IND43 设备上限 200（60 个放得下、存档不丢）、过压炸了说清是谁（名字、电压、额定、电源）', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND44')) {
+            // IND44 电池组装电池（任务 24）：先补电再加节（用完的电池是替换，节数电压不变）、满电了才加一节；接着的用电器会被超压就拒绝并说额定；一次放 N 个（先替换再加节，到上限或超压停）；面板显示节数电压电量
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                // 一个调用里做完：摆一个电池组（可接用电器），放 n 个，读结果（免得游戏帧耗电）
+                const put = (bats, u, n, load, have) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.rule = 'hard';
+                    let d = { id: 1, ty: 'bank', x: -20, z: 0, bats: ${bats}, u: ${u}, on: true, ft: 20, st: {} }; ind.base.devs = [d]; ind.base.wires = [];
+                    ${load ? "ind.base.devs.push({ id: 2, ty: '" + load + "', x: -18, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }); ind.base.wires.push([1, 2]);" : ''}
+                    ind.bag = { battery: ${have === undefined ? 50 : have} }; let done; try { done = indBankPut(d, ${n}); } finally { blazeFlash = bf; }
+                    return { done: done, bats: d.bats, u: Math.round(d.u), left: ind.bag.battery || 0, fl: fl.join('|') }; })()`);
+                let r = await put(16, 1080, 5);   // 16 节满电 2880，用掉一半后 1440? 这里 u = 1080（缺 1800）
+                if (!(r.done === 5 && r.bats === 16 && r.u === 1980 && r.left === 45)) bad.push('用掉电的 16 节再装 5 个：节数不变，电量 +900 ' + JSON.stringify(r));
+                r = await put(16, 2880, 1);
+                if (!(r.done === 1 && r.bats === 17 && r.u === 3060)) bad.push('满电再装一个 → 17 节 ' + JSON.stringify(r));
+                r = await put(16, 2880, 1, 'centrifuge');
+                if (!(r.done === 0 && r.bats === 16 && r.left === 50 && /离心机/.test(r.fl) && /24/.test(r.fl) && /25\.5/.test(r.fl))) bad.push('接着离心机（24 V）的 16 节满电组再装一个要被拒绝并说额定 ' + JSON.stringify(r));
+                r = await put(16, 2700, 3, 'centrifuge');   // 缺 180：先替换 1 个，满了再加就超压：放了 1 个
+                if (!(r.done === 1 && r.bats === 16 && r.u === 2880 && r.left === 49 && /额定 24/.test(r.fl))) bad.push('先替换再加节，到会超压就停 ' + JSON.stringify(r));
+                r = await put(10, 1800, 30, 'lamp');   // 电灯额定 6 V：10 节 15 V 本来就超，满电再加一定拒绝
+                if (!(r.done === 0 && /电灯/.test(r.fl))) bad.push('接着电灯（6 V）不能再加 ' + JSON.stringify(r));
+                r = await put(3, 540, 10);   // 没接东西：加 10 节
+                if (!(r.done === 10 && r.bats === 13 && r.u === 2340)) bad.push('没接东西的电池组批量加 10 节 ' + JSON.stringify(r));
+                r = await put(60, 10800, 10);
+                if (!(r.done === 4 && r.bats === 64 && /64/.test(r.fl))) bad.push('到 64 节上限停并说明 ' + JSON.stringify(r));
+                r = await put(2, 0, 4, undefined, 2);   // 背包只有 2 个：放 2 个
+                if (!(r.done === 2 && r.u === 360 && r.bats === 2 && r.left === 0)) bad.push('电池不够 N 个就放有的 ' + JSON.stringify(r));
+                // 左键拿电池 = 放 1 个；拿着电池右键 = 开框；面板上有节数电压电量，框里的数字撑得过刷新
+                await T.eval(`ind.base.devs = [{ id: 1, ty: 'bank', x: -20, z: 0, bats: 16, u: 900, on: true, ft: 20, st: {} }]; ind.base.wires = []; ind.bag = { battery: 20 }; indPanelBank(1); true;`);
+                const txt = await T.eval(`document.getElementById('ind-panel').innerText`);
+                if (!(/16 节/.test(txt) && /24\.0 V/.test(txt) && /900 \/ 2880/.test(txt))) bad.push('面板该显示 16 节 24 V 电量 900 / 2880 ' + txt);
+                await T.eval(`document.getElementById('ind-bank-n').value = '7'; true;`); await W(1600);
+                if (!(await T.eval(`document.getElementById('ind-bank-n') && document.getElementById('ind-bank-n').value === '7'`))) bad.push('填的数字被刷新冲掉了');
+                await T.eval(`document.getElementById('ind-bank-n').nextElementSibling.click(); true;`);
+                if (!(await T.eval(`ind.bag.battery === 13 && ind.base.devs[0].bats === 16 && Math.round(ind.base.devs[0].u) === 2160`))) bad.push('点"放这么多"放 7 个 ' + await T.eval(`JSON.stringify([ind.bag, ind.base.devs[0]])`));
+                await T.eval(`indPanelClose(); ind.bag = { battery: 5 }; indSelect('battery'); indLookAt(-20, 0); indTeleport(-18, 0); indUse(); true;`);
+                if (!(await T.eval(`ind.panel === 'bank'`))) bad.push('拿着电池右键电池组该弹框');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND44 电池组装电池：先替换用完的再加节、超压拒绝、一次放 N 个、面板显示节数电压电量', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
