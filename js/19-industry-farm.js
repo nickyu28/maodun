@@ -155,5 +155,33 @@
             else { c.C.blow = FM_PULL.grace; ind.effort = FM_PULL.bellows; }
         }
 
+        // ══ 任务 51：电动鼓风机 ══
+        // 设备（额定 12 V、minV 6、耗电 1，走电线）。放在炉子旁边（炉子边上 1.5 米内）就算装在这个炉子上：通电时炉子的「鼓风」档自己到 1600°C，不用人拉；没电掉回大火。
+        // 一个炉子风箱和鼓风机只能装一个（装了风箱的炉子旁边的鼓风机不管用，装了鼓风机的炉子装不了风箱）。放在地上不挨着炉子：通电时 3 米内的毒气消得快一倍
+        const FM_BLOW = { near: 1.5, gasR: 3, gasMul: 2 };
+        Object.assign(IND_ITEMS_RAW, { dev_blower: { name: '电动鼓风机', col: 0x78909c, dev: 'blower', use: '放在炉子旁边、接上电：炉子开「鼓风」档自己到 1600°C，不用人拉（手摇发电机 6 V 也带得动，但还是得有人摇；无人值守要电池组）。放在地上接电：吹散 3 米内的毒气，消得快一倍' } });
+        Object.assign(IND_DEVS, { blower: { name: '电动鼓风机', col: 0x78909c, rated: 12, minV: 6, draw: 1, size: [0.9, 0.8, 0.9] } });
+        IND_CRAFT.push({ out: 'dev_blower', in: { coil: 2, steel: 2, wire: 6, wood: 2 }, hard: true });
+        function fmBlowersOf(c) { return ind.where !== 'base' ? [] : ind.base.devs.filter(function (d) { return d.ty === 'blower' && Math.hypot(d.x - c.x, d.z - c.z) <= (IND_COOK[c.ty].r || 1.5) + FM_BLOW.near; }); }
+        function fmHasBlower(c) { return !!c && !c.C.bellows && fmBlowersOf(c).length > 0; }
+        function fmBlowerPw(c) {
+            if (!fmHasBlower(c)) return false;
+            let on = fmBlowersOf(c).some(function (d) { return d.pw; });
+            if (c.C.fire === 4 && !on && !c.C.nbw && !(c.C.blow > 0)) { c.C.nbw = true; if (!ind.sleeping) indFlash('鼓风机没电，' + IND_COOK[c.ty].name + '掉回大火'); }
+            if (on) c.C.nbw = false;
+            return on;
+        }
+        function fmBlowerCook(d) { return indCooks().filter(function (c) { return Math.hypot(d.x - c.x, d.z - c.z) <= (IND_COOK[c.ty].r || 1.5) + FM_BLOW.near; })[0] || null; }
+        IND_DEV_INFO.blower = function (d) {
+            let c = fmBlowerCook(d), w = d.on ? (d.pw ? '　工作中' : '　没电') : '　关着';
+            if (c && c.C.bellows) return '电动鼓风机（额定 12 V）　' + IND_COOK[c.ty].name + '装了风箱，鼓风机不管用' + w;
+            return '电动鼓风机（额定 12 V）　' + (c ? '装在' + IND_COOK[c.ty].name + '上（开「鼓风」档）' : '在地上：吹散 3 米内的毒气') + w;
+        };
+        // 毒气云：通着电、不挨着炉子的鼓风机 3 米内，消得快一倍
+        function fmCloudMul(cl) {
+            if (ind.where !== 'base') return 1;
+            return ind.base.devs.some(function (d) { return d.ty === 'blower' && d.pw && !fmBlowerCook(d) && Math.hypot(d.x - cl.x, d.z - cl.z) <= FM_BLOW.gasR; }) ? FM_BLOW.gasMul : 1;
+        }
+
         // ↓↓ 这一行要留在文件最后（任务 42）：给所有用皮的配方加人造革备选
         fmPleatherAlts();

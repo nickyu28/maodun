@@ -1648,6 +1648,7 @@
             let c = a && a.kind === 'stove' ? indCookById('stove') : a && a.kind === 'cook' ? indCookById(a.o.id) : (a && a.id !== undefined ? a : null);
             if (!c) { indFlash('风箱要装在炉子上：对着灶台、小熔炉或大窑左键'); return false; }
             if (c.C.bellows) { indFlash(IND_COOK[c.ty].name + '已经装了风箱'); return false; }
+            if (fmHasBlower(c)) { indFlash(IND_COOK[c.ty].name + '旁边有电动鼓风机了，风箱和鼓风机只能装一个'); return false; }
             indBagDel('bellows', 1); c.C.bellows = true; indSave();
             indFlash('风箱装好了，' + IND_COOK[c.ty].name + '多了一档「鼓风」：开着鼓风，站在旁边按住右键拉');
             return true;
@@ -2653,7 +2654,7 @@
             ind.inGas = null;
             if (!ind.clouds || !ind.clouds.length) return;
             let hit = null;
-            ind.clouds.forEach(function (c) { c.t -= dt; if (c.t <= 0) { c.m.visible = false; return; } if (Math.hypot(ind.p.x - c.x, ind.p.z - c.z) <= IND_GAS.r) hit = c; });
+            ind.clouds.forEach(function (c) { c.t -= dt * fmCloudMul(c); if (c.t <= 0) { c.m.visible = false; return; } if (Math.hypot(ind.p.x - c.x, ind.p.z - c.z) <= IND_GAS.r) hit = c; });
             ind.clouds = ind.clouds.filter(function (c) { return c.t > 0; });
             if (hit) { ind.inGas = hit.n || '毒气'; if (indHard()) indHurt(IND_GAS.dps * dt, 'gas', '站在' + ind.inGas + '里'); }
         }
@@ -2983,7 +2984,7 @@
             if (!ind) return;
             let S = indCookCur().C;
             if (lv > 0 && S.fuel <= 0) { indFlash('先加燃料（木头、木炭、煤）'); return; }
-            if (lv === 4 && !S.bellows) return;
+            if (lv === 4 && !S.bellows && !fmHasBlower(indCookCur())) return;
             S.fire = lv; indSave(); indPanelStove();
         }
         function indStoveTakeAll() {
@@ -3189,7 +3190,7 @@
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; st += '正在做：' + indOutTxt(r, S.cook.n || 1) + (S.cook.n > 1 ? '（' + S.cook.n + ' 份）' : '') + ' ' + Math.floor(S.cook.t / r.time * 100) + '%'; }
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做' + (D.only ? '（只做冶炼）' : '') + '</span>';
             if (!S.cook && indHard() && rlNeedReducer(S)) st += '<br><b style="color:#c62828">炼矿要加木炭、煤或焦炭（每份矿 1 份）</b>';
-            let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !S.bellows) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
+            let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !S.bellows && !fmHasBlower(c)) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
             fire += '<button id="ind-stove-off" style="' + IND_BTN + 'background:#455a64;" onclick="indStoveFire(0)">熄火并降温</button>' + (S.temp > 60 ? '<div style="font-size:13px;color:#888;">降到 60°C 还要约 ' + indFurnCoolSecs(c.ty, S) + ' 秒（收起要 60°C 以下）</div>' : '');
             let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
             let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';

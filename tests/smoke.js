@@ -9747,6 +9747,38 @@ async function enterExit(tab, key) {
             report('IND69 风箱要人拉：不拉停在大火、按住右键拉到 1600、松手掉回、拉掉体力、扇子扇炉子 1400、扇自己体温往 37、配方要皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND70')) {
+            // IND70 电动鼓风机（任务 51）：装在灶台旁、接 6 V 手摇发电机，鼓风档自己到 1600；断电掉回大火并提示；风箱和鼓风机只能装一个；地上的鼓风机让毒云消得快一倍
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`(function(){ let St = IND_BASE_ST.stove, B = ind.base; B.off.stove = false; B.cookers = []; B.stove = Object.assign(ckNewState(), { items: {}, fuel: 99999, fire: 3, temp: 1200, spout: [] });
+                    B.devs = [{ id: 1, ty: 'crank', x: St.x + 6, z: St.z + 4, bats: 0, u: 0, on: true, ft: 20, st: {}, cr: 1e6 }, { id: 2, ty: 'blower', x: St.x + 2.5, z: St.z, bats: 0, u: 0, on: true, ft: 20, st: {} }];
+                    B.wires = [[1, 2]]; B.dseq = 10; ind.cookId = 'stove'; indStoveFire(4); ind.cookId = null; indPanelClose(); })(); true;`);
+                let r = await J(`(function(){ indAdvance(10); return { fire: ind.base.stove.fire, t: ind.base.stove.temp, pw: indDev(2).pw, v: indDev(2).v, info: indDevInfo(indDev(2)) }; })()`);
+                if (!(r.fire === 4 && r.t >= 1599 && r.pw && /装在灶台上/.test(r.info))) bad.push('接 6 V 手摇发电机，没风箱也能开鼓风、到 1600 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.base.wires = []; __fl.length = 0; indAdvance(12); return { t: ind.base.stove.temp, fl: __fl.join('|') }; })()`);
+                if (!(r.t <= 1200.5 && /鼓风机没电/.test(r.fl))) bad.push('断电掉回大火、提示鼓风机没电 ' + JSON.stringify(r));
+                // 风箱和鼓风机只能装一个
+                r = await J(`(function(){ ind.bag = { bellows: 1 }; let ok = indInstallBellows(indCookById('stove')); return { ok: ok, bag: ind.bag.bellows, fl: __fl.slice(-1)[0] }; })()`);
+                if (!(r.ok === false && r.bag === 1 && /只能装一个/.test(r.fl))) bad.push('装了鼓风机不能再装风箱 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.base.stove.bellows = true; ind.base.wires = [[1, 2]]; ind.base.stove.temp = 1200; indAdvance(8); return { t: ind.base.stove.temp, has: fmHasBlower(indCookById('stove')), info: indDevInfo(indDev(2)) }; })()`);
+                if (!(r.t <= 1200.5 && !r.has && /不管用/.test(r.info))) bad.push('装了风箱的炉子鼓风机不管用 ' + JSON.stringify(r));
+                // 地上的鼓风机：毒云消得快一倍
+                r = await J(`(function(){ let B = ind.base; B.stove.bellows = false; B.devs.push({ id: 3, ty: 'blower', x: -20, z: 8, bats: 0, u: 0, on: true, ft: 20, st: {} }); B.wires = [[1, 3]]; let m1 = new THREE.Object3D(), m2 = new THREE.Object3D(); ind.clouds = [{ x: -20, z: 9, t: 45, m: m1, n: '氯气' }, { x: 20, z: -9, t: 45, m: m2, n: '氯气' }]; indTeleport(0, 18); indAdvance(10); return [ind.clouds.map(function (c) { return Math.round(c.t); }), indDevInfo(indDev(3))]; })()`);
+                if (!(r[0][0] <= 26 && r[0][0] >= 24 && r[0][1] >= 34 && r[0][1] <= 36 && /毒气/.test(r[1]))) bad.push('地上的鼓风机让毒云消得快一倍 ' + JSON.stringify(r));
+                const rc = await J(`IND_CRAFT.find(function (x) { return x.out === 'dev_blower'; }).in`);
+                if (JSON.stringify(rc) !== JSON.stringify({ coil: 2, steel: 2, wire: 6, wood: 2 })) bad.push('配方 ' + JSON.stringify(rc));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND70 电动鼓风机：接 6 V 自己鼓风到 1600、断电掉回大火有提示、风箱和鼓风机只装一个、地上的吹散毒云', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
