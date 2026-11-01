@@ -5479,6 +5479,9 @@ async function enterExit(tab, key) {
                         // 电解槽
                         // 第 6 阶段：粉碎机 铀矿 → 铀矿粉；离心机 六氟化铀罐一档档往上；反应堆（水池冷却）烧燃料棒 → 乏燃料棒
                         if (hard && have.dev_crusher && power() && have.ore_u) add('ore_u_dust');
+                        // 宰：拿着工具，远征里的野兔、野鹿（任务 41）；粉碎机碎骨头
+                        if (typeof FM_DROP !== 'undefined' && Object.keys(have).some(function (k) { return fmIsTool(k); })) ['rabbit', 'deer'].forEach(function (a) { Object.keys(FM_DROP[a]).forEach(add); });
+                        if (hard && have.dev_crusher && power() && have.bone) add('bonemeal');
                         if (hard && have.dev_centrifuge && power() && have['uf6:0']) { for (let i = 1; i <= 5; i++) add('uf6:' + i); add('uf6_dep'); }
                         if (hard && have.dev_reactor && (have['rod:4'] || have['rod:5'])) add('rod_spent');
                         if (hard && have.dev_el && power()) IND_EL_RECIPES.forEach(function (r) { if (Object.keys(r.in).every(function (k) { return have[k]; })) Object.keys(r.out).forEach(add); });
@@ -9623,6 +9626,57 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND66 管道第 2 期：电解槽和炉子从管道取水、反应堆接水塔算水冷断水不算、储油罐储气罐经水泵送炉子、当仓库、一管一种、拿起炉子退管道', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND67')) {
+            // IND67 肉、皮、骨（任务 41）：基地里宰成年羊（按住右键 1 秒 + 确认）得 2 生肉 1 皮，羊没了；幼崽、怀着的、狗、猫宰不了有提示；野鹿打 3 下；
+            // 灶台烤生肉出烤肉；狗吃生肉；骨进粉碎机出骨粉；骨粉撒地 ×1.75；生肉一半肚子疼
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const C = ind => `ind.base.clock`;
+                // 基地：一只成年羊、一只幼崽、一只怀着的牛、一只狗、一只猫，排成一排
+                await T.eval(`(function(){ let c = ind.base.clock; ind.base.ground = []; ind.base.animals = [{ k: 'sheep', x: 0, z: 0, food: 80 }, { k: 'sheep', x: 6, z: 0, food: 80, born: c }, { k: 'cow', x: 12, z: 0, food: 80, brk: 10, bx: 12, bz: 0 }, { k: 'dog', x: -6, z: 0, food: 80 }, { k: 'cat', x: -12, z: 0, food: 80 }]; })(); true;`);
+                const hold = (x, k) => J(`(function(){ let a = ind.base.animals.filter(function (a) { return Math.abs(a.x - ${x}) < 0.5; })[0]; ind.bag = { ${k}: 1 }; indSelect('${k}'); indTeleport(a.x, a.z + 2); indLookAt(a.x, a.z); a.x = ${x}; a.z = 0; a.tx = a.x; a.tz = a.z; a.wt = 99; let ok = fmKillStart({ kind: 'animal', o: a }); return { ok: ok, ch: !!ind.ch, fl: __fl.slice(-1)[0] }; })()`);
+                for (const [x, want] of [[6, '还太小'], [12, '怀着呢'], [-6, '这是朋友'], [-12, '这是朋友']]) {
+                    const r = await hold(x, 'axe'); if (r.ch || r.fl !== want) bad.push('宰不了要提示 ' + want + ' ' + JSON.stringify(r));
+                }
+                let r = await hold(0, 'shears');
+                if (!r.ch) bad.push('拿工具按住右键要开始宰 ' + JSON.stringify(r));
+                r = await J(`(function(){ for (let i = 0; i < 25; i++) { wdChTick(0.05); } let m = !document.getElementById('sys-modal').classList.contains('hidden') ? document.getElementById('sys-modal-title').innerText : null; return { m: m, n: ind.base.animals.length }; })()`);
+                if (!(r.m && /宰了这只羊/.test(r.m) && r.n === 5)) bad.push('按满 1 秒基地里要确认 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = document.querySelector('#sys-modal-btns button'); if (b) b.click(); let g = {}; ind.base.ground.forEach(function (x) { g[x.k] = (g[x.k] || 0) + 1; }); return { g: g, n: ind.base.animals.length, sheep: ind.base.animals.filter(function (a) { return a.k === 'sheep'; }).length }; })()`);
+                if (!(r.g.meat_raw === 2 && r.g.hide === 1 && r.n === 4 && r.sheep === 1)) bad.push('宰羊得 2 生肉 1 皮、羊没了 ' + JSON.stringify(r));
+                // 远征：野鹿打 3 下
+                r = await J(`(function(){ indGoTrip(2024); let hasW = ind.wild.some(function (a) { return a.k === 'rabbit' || a.k === 'deer'; }); ind.wild = [{ k: 'deer', x: 0, z: -5, fed: 0, follow: false, hp: 3, rest: 99 }]; let a = ind.wild[0]; ind.tripGround = []; ind.bag = { axe: 1 }; indSelect('axe'); indTeleport(0, -3); indLookAt(0, -5); let hits = []; for (let i = 0; i < 3; i++) { a.x = 0; a.z = -5; a.rest = 99; fmKillStart({ kind: 'animal', o: a }); for (let j = 0; j < 25; j++) wdChTick(0.05); hits.push(ind.wild.length); } let g = {}; ind.tripGround.forEach(function (x) { g[x.k] = (g[x.k] || 0) + 1; }); return { hasW: hasW, hits: hits, g: g }; })()`);
+                if (!(r.hasW && r.hits.join() === '1,1,0' && r.g.meat_raw === 2 && r.g.hide === 2 && r.g.bone === 1)) bad.push('野鹿打 3 下倒、掉 2 肉 2 皮 1 骨、地图上有野兔野鹿 ' + JSON.stringify(r));
+                r = await J(`(function(){ let a = { k: 'rabbit', x: 0, z: -3, fed: 0, follow: false, hp: 1 }; ind.wild = [a]; indTeleport(0, -1); indAnimalTick(0.5, true); return { moved: Math.hypot(a.x, a.z + 3), fl: (indAnimalAct(a), __fl.slice(-1)[0]) }; })()`);
+                if (!(r.moved > 0.5 && /不能驯/.test(r.fl))) bad.push('野兔见人跑、不能驯 ' + JSON.stringify(r));
+                await T.eval(`indGoBase(null); true;`);
+                // 烤肉、肉汤
+                r = await J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: { meat_raw: 2 }, out: {}, fuel: 9000, fire: 1, temp: 200, cook: null, spout: [] }]; indAdvance(31); let o1 = ind.base.cookers[0].out; ind.base.cookers[0].items = { meat_raw: 1, salt: 1, 'water_boiled@fe': 1 }; ind.base.cookers[0].out = {}; indAdvance(26); return [o1, ind.base.cookers[0].out]; })()`);
+                if (!(r[0].meat_roast === 2 && r[1]['meat_soup@fe'] === 1)) bad.push('烤肉、肉汤（装在铁桶里） ' + JSON.stringify(r));
+                // 狗吃生肉
+                r = await J(`(function(){ let d = ind.base.animals.filter(function (a) { return a.k === 'dog'; })[0]; d.food = 40; ind.bag = { meat_raw: 1 }; indSelect('meat_raw'); let ok = indAnimalAct(d); return [ok, d.food, ind.bag.meat_raw || 0, IND_ANIMALS.dog.food.indexOf('bone') >= 0]; })()`);
+                if (!(r[0] && r[1] === 70 && r[2] === 0 && r[3])) bad.push('狗吃生肉、骨也算狗的食物 ' + JSON.stringify(r));
+                // 骨进粉碎机
+                r = await J(`(function(){ ind.base.devs = [{ id: 1, ty: 'bank', x: -20, z: 4, bats: 8, u: 1440, on: true, ft: 20, st: {} }, { id: 2, ty: 'crusher', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: { bone: 1 } }]; ind.base.wires = [[1, 2]]; indAdvance(11); return indDev(2).st; })()`);
+                if (!(r.bonemeal === 2 && !r.bone)) bad.push('骨进粉碎机出 2 骨粉 ' + JSON.stringify(r));
+                r = await J(`(function(){ let c = { k: 'wheat', x: -20, z: 0, g: 0, wet: 1e9, times: 0 }; ind.base.crops = [c]; ind.bag = { bonemeal: 1 }; indFertilize(c, 'bonemeal'); return [indFertMul(c), ind.bag.bonemeal || 0]; })()`);
+                if (!(r[0] === 1.75 && r[1] === 0)) bad.push('骨粉撒地 ×1.75 ' + JSON.stringify(r));
+                // 生肉：一半肚子疼（口渴 −10，饱食 +5）
+                r = await J(`(function(){ let S = ind.base.surv, n = 0; for (let i = 0; i < 200; i++) { S.food = 50; S.water = 50; ind.bag = { meat_raw: 1 }; indEat('meat_raw'); if (S.water === 40) n++; } return [n, S.food]; })()`);
+                if (!(r[0] > 60 && r[0] < 140 && r[1] === 55)) bad.push('生肉一半肚子疼 ' + JSON.stringify(r));
+                const use = await J(`[IND_ITEMS.hide.use, IND_ITEMS.bone.use]`);
+                if (!(/风箱/.test(use[0]) && /粉碎机/.test(use[1]))) bad.push('皮、骨的说明 ' + JSON.stringify(use));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND67 肉皮骨：宰成年羊（按住 1 秒 + 确认）得 2 肉 1 皮、幼崽怀着狗猫宰不了、野鹿 3 下、烤肉肉汤、狗吃生肉、骨粉、生肉肚子疼', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

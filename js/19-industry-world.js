@@ -88,7 +88,7 @@
             let c = ind.ch; if (!c) return;
             if (Math.hypot(ind.p.x - c.px, ind.p.z - c.pz) > 0.35) { ind.ch = null; indFlash('动了，中断了'); return; }
             if (c.kind === 'peel' && indSel() !== 'cactus') { ind.ch = null; return; }
-            if (c.o && c.kind === 'chop') { let a = indAim(); if (!a || a.o !== c.o) { ind.ch = null; return; } }
+            if (c.o && (c.kind === 'chop' || c.kind === 'kill')) { let a = indAim(); if (!a || a.o !== c.o) { ind.ch = null; return; } }
             c.t += dt;
             if (c.t >= c.need) { ind.ch = null; c.done(); }
         }

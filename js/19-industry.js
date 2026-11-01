@@ -819,6 +819,8 @@
                 } else if (!base && a.follow) {
                     let d = Math.hypot(ind.p.x - a.x, ind.p.z - a.z);
                     if (d > 2.5) { tx = ind.p.x; tz = ind.p.z; sp = Math.min(9, 2 + d); } else { tx = a.x; tz = a.z; }
+                } else if (!base && fmFlee(a, dt)) {   // 野兔、野鹿见人就跑（19-industry-farm.js）
+                    tx = a.tx; tz = a.tz; sp = FM.fleeSp;
                 } else {
                     a.wt = (a.wt || 0) - dt;
                     if (a.wt <= 0 || a.tx === undefined) {
@@ -851,6 +853,7 @@
         // 左键对着动物：野生的喂它爱吃的（喂够就跟着你）；基地里的喂食、剪羊毛、拿空桶挤牛奶
         function indAnimalAct(a) {
             let D = IND_ANIMALS[a.k], k = indSel(), clock = ind.base.clock;
+            if (D.wildOnly) { indFlash(D.name + '不能驯：拿着工具对着它按住右键 1 秒'); return false; }
             if (ind.where === 'trip') {
                 if (a.follow) { indFlash(D.name + '跟着你呢，走回撤离点就一起回家'); return false; }
                 if (!k || D.food.indexOf(k) < 0) { indFlash('野生的' + D.name + '，爱吃：' + indFoodTxt(a.k)); return false; }
@@ -1249,6 +1252,7 @@
                 if (!ks.length) continue;
                 ind.wild.push({ k: ks[Math.floor(r() * ks.length)], x: x, z: z, fed: 0, follow: false }); i++;
             }
+            fmSpawnWild(M);   // 野兔、野鹿（另用一个随机数，不打乱上面的）
             ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 120);
             // 撤离点：4 个。1 个就在出生点脚下（走开一次才生效，不然一出生就回家了），另外 3 个每趟随机散在地图里（离出生点和彼此都 ≥ 150 米，找不到就一点点放宽）
             ind.exits = [{ x: 0, z: -4, name: '撤离点', armed: false }];
@@ -1718,6 +1722,7 @@
             if (f) { ind.rh = { f: f, t: 0, done: false }; return; }
             if (pwCrankDown(indAim())) return;   // 手摇发电机：按住右键摇（19-industry-power.js）
             if (indSel() === 'cactus') { wdPeelStart(); return; }   // 选中仙人掌点一下右键开始拔刺（R 键是生吃）
+            if (fmKillStart(indAim())) return;   // 拿着工具对着动物按住右键 1 秒：宰（19-industry-farm.js）
             indUse();
         }
         function indRightUp() {
@@ -1800,7 +1805,9 @@
             if (e.hot && S.temp < 37) { S.temp = Math.min(37, S.temp + IND_HOT_SOUP); warm = true; }   // 热汤：体温立刻 +1.5°C，最多到 37
             let sick = e.sick && indRand() < e.sick;
             if (sick) ind.sickT = IND_SURV.sick;
-            indFlash((e.w && !e.f ? '喝了' : '吃了') + indName(k) + (e.w < 0 ? '，越喝越渴' : '') + (warm ? '，身上暖和了' : '') + (sick ? '，肚子不舒服' : ''));
+            let ache = e.ache && indRand() < e.ache;   // 生肉：一半可能肚子疼，口渴 −10
+            if (ache) S.water = Math.max(0, S.water - 10);
+            indFlash((ache ? '肚子疼，' : '') + (e.w && !e.f ? '喝了' : '吃了') + indName(k) + (e.w < 0 ? '，越喝越渴' : '') + (warm ? '，身上暖和了' : '') + (sick ? '，肚子不舒服' : ''));
             return true;
         }
         function indGather(o) {
@@ -1840,7 +1847,7 @@
         function indFertilize(c, k) {
             if (c.fert) { indFlash('已经施过肥了'); return false; }
             if (indCropRipe(c)) { indFlash('已经熟了，不用施肥'); return false; }
-            k = k || 'ash'; indBagDel(k, 1); c.fert = IND_FERTS[k] || true; ind.cropDirty = true; indSave(); indFlash(k === 'k2so4' ? '撒了硫酸钾，这一季长得快 75%' : k === 'saltpeter' ? '撒了硝石，这一季长得快一倍' : '施了肥，这一季长得快 50%');
+            k = k || 'ash'; indBagDel(k, 1); c.fert = IND_FERTS[k] || true; ind.cropDirty = true; indSave(); indFlash(IND_FERTS[k] === 3 ? '撒了' + indName(k) + '，这一季长得快 75%' : k === 'saltpeter' ? '撒了硝石，这一季长得快一倍' : '施了肥，这一季长得快 50%');
             return true;
         }
         function indWater(c, k) {

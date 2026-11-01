@@ -81,15 +81,15 @@
             reactor: { name: '反应堆', col: 0xb71c1c, always: true, nowire: true, rated: 1e9, minV: 1e9, draw: 0, size: [3, 2, 3] }
         });
         // 粉碎机：左键打开放铀矿，通电（≥ 6 V，额定 12 V）有活干时每秒 2 U，每 10 秒 1 铀矿 → 2 铀矿粉
-        IND_DEV_BUSY.crusher = function (d) { return (d.st.ore_u || 0) > 0; };
+        IND_DEV_BUSY.crusher = function (d) { return (d.st.ore_u || 0) > 0 || (d.st.bone || 0) > 0; };   // 骨头也能碎成骨粉（任务 41）
         IND_DEV_TICK.crusher = function (d, dt) {
             if (!d.pw) { d.ct = 0; return; }
             d.ct = (d.ct || 0) + dt;
             if (d.ct < NK.crushT) return;
             d.ct = 0;
-            if (!(d.st.ore_u > 0)) return;
-            d.st.ore_u--; if (d.st.ore_u <= 0) delete d.st.ore_u;
-            d.st.ore_u_dust = (d.st.ore_u_dust || 0) + 2;
+            if (d.st.ore_u > 0) { d.st.ore_u--; if (d.st.ore_u <= 0) delete d.st.ore_u; d.st.ore_u_dust = (d.st.ore_u_dust || 0) + 2; }
+            else if (d.st.bone > 0) { d.st.bone--; if (d.st.bone <= 0) delete d.st.bone; d.st.bonemeal = (d.st.bonemeal || 0) + 2; }
+            else return;
             if (ind.panel === 'crusher') ind.panelDirty = true;
             indSave();
         };
@@ -152,8 +152,8 @@
         IND_DEV_HTML.crusher = function (d) {
             let V = indDevVolt(d);
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">粉碎机</div><div style="line-height:1.7;">电压 <b>' + V.toFixed(1) + ' V</b>（额定 12 V）' + (d.pw ? '　正在碎 ' + Math.floor((d.ct || 0) / NK.crushT * 100) + '%' : '') + '</div>' +
-                '<div style="margin-top:4px;">里面：' + nkDevItems(d) + '</div><div style="margin-top:6px;color:#888;font-size:13px;">每 ' + NK.crushT + ' 秒 1 铀矿 → 2 铀矿粉。</div>' +
-                '<div style="margin-top:6px;font-weight:bold;">身上的东西</div>' + (nkPutRows(d, function (k) { return k === 'ore_u'; }) || '<div style="color:#999;padding:6px 0;">身上没有铀矿</div>') + NK_FOOT(d);
+                '<div style="margin-top:4px;">里面：' + nkDevItems(d) + '</div><div style="margin-top:6px;color:#888;font-size:13px;">每 ' + NK.crushT + ' 秒 1 铀矿 → 2 铀矿粉；1 骨 → 2 骨粉。</div>' +
+                '<div style="margin-top:6px;font-weight:bold;">身上的东西</div>' + (nkPutRows(d, function (k) { return k === 'ore_u' || k === 'bone'; }) || '<div style="color:#999;padding:6px 0;">身上没有铀矿和骨</div>') + NK_FOOT(d);
         };
         IND_DEV_HTML.centrifuge = function (d) {
             let V = indDevVolt(d), lv = nkCentriLv(d);
