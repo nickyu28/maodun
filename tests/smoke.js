@@ -3183,7 +3183,7 @@ async function enterExit(tab, key) {
                 if (!recipe[0] || !recipe[1] || !recipe[2]) bad.push('缺配方 ' + JSON.stringify(recipe));
                 else if (JSON.stringify(recipe[0].slice(0, 5)) !== JSON.stringify(recipe[1].slice(0, 5)) || JSON.stringify(recipe[0].slice(0, 5)) !== JSON.stringify(recipe[2].slice(0, 5)) || recipe[0][0] !== 1550 || recipe[0][1] !== 40) bad.push('煤、焦炭的火候/时间/产出跟木炭不一样 ' + JSON.stringify(recipe));
                 for (const k of ['coal', 'char', 'charcoal']) {
-                    await T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: { ingot_fe: 1, ${k}: 1 }, fuel: 9000, fire: 4, bellows: true, temp: 1700, spout: [], spoutTy: 'brick' }); ind.cookId = 'stove'; true;`);
+                    await T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: { ingot_fe: 1, ${k}: 1 }, fuel: 9000, fire: 4, bellows: true, blow: 1e6, temp: 1700, spout: [], spoutTy: 'brick' }); ind.cookId = 'stove'; true;`);
                     if (!(await until(T, `(function(){ indAdvance(1); return (ind.base.stove.out.hot_steel || 0) >= 1; })()`, 60000))) bad.push('铁锭 + ' + k + ' 炼不出钢 ' + await T.eval(`JSON.stringify(ind.base.stove.out)`));
                     else if (!(await T.eval(`ind.base.stove.out.hot_steel === 1 && !ind.base.stove.items.ingot_fe && !ind.base.stove.items.${k}`))) bad.push('铁锭 + ' + k + ' 产出/原料不对 ' + await T.eval(`JSON.stringify([ind.base.stove.out, ind.base.stove.items])`));
                 }
@@ -3191,7 +3191,7 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: { ingot_fe: 1, coal: 1 }, fuel: 9000, fire: 3, temp: 1400, spout: [], spoutTy: 'brick' }); indAdvance(0.5); true;`);
                 if (await T.eval(`(ind.base.stove.out.hot_steel || 0) > 0 || (ind.base.stove.cook && IND_RECIPES[ind.base.stove.cook.i].minT <= 1400)`)) bad.push('火候不够不该炼钢');
                 // 悠闲不能炼钢
-                await T.eval(`ind.base.rule = 'casual'; ind.base.stove = Object.assign(ckNewState(), { items: { ingot_fe: 1, coal: 1 }, fuel: 9000, fire: 4, bellows: true, temp: 1700, spout: [], spoutTy: 'brick' }); indAdvance(45); true;`);
+                await T.eval(`ind.base.rule = 'casual'; ind.base.stove = Object.assign(ckNewState(), { items: { ingot_fe: 1, coal: 1 }, fuel: 9000, fire: 4, bellows: true, blow: 1e6, temp: 1700, spout: [], spoutTy: 'brick' }); indAdvance(45); true;`);
                 if (await T.eval(`(ind.base.stove.out.hot_steel || 0) > 0`)) bad.push('悠闲不该炼钢');
                 await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000);
             }
@@ -3229,7 +3229,7 @@ async function enterExit(tab, key) {
                         out.zero = { wires: B.wires.length, v: p.v, pw: p.pw, db: ub - b.u };
                         // 3) 电池组 + 发电机（灶台中火 3 米内）：电池组不掉电
                         reset(); let St = IND_BASE_ST.stove; B.off.stove = false; B.stove.fire = 3; B.stove.fuel = 9999; B.stove.temp = 800;
-                        let g = mk('gen', St.x + 1.5, St.z); b = mk('bank', St.x - 6, St.z + 6, 8); p = mk('pump', St.x - 4, St.z + 6);
+                        let g = mk('gen', St.x + 1.5, St.z); g.wt = 120; b = mk('bank', St.x - 6, St.z + 6, 8); p = mk('pump', St.x - 4, St.z + 6);
                         wire(g, p); wire(b, p); ub = b.u; indElecTick(1);
                         out.gen = { genV: indSrcVolt(g), v: p.v, pw: p.pw, db: ub - b.u };
                         // 4) 接第 5 根被拒绝、同一电源重复接被拒绝、铜线不少
