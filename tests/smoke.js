@@ -5901,9 +5901,9 @@ async function enterExit(tab, key) {
                 const click = (id, k) => T.eval(`(function(){ let d = indDev(${id}); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); if ('${k}') indSelect('${k}'); return indAction(); })()`);
                 const bank = await place('dev_bank', 0, 0), lamp = await place('dev_lamp', 6, 0);
                 await T.eval(`indBagAdd('wire', 10); indBagAdd('battery', 30); true;`);
+                for (let i = 0; i < 4; i++) await click(bank, 'battery');   // 先装电池再接线：接着灯的时候一边装一边耗电，CI 慢时电量不满，下一节会算成"替换"而不是加节（任务 24）
                 await click(bank, 'wire'); await click(lamp, 'wire');
                 if ((await T.eval(`ind.base.wires.length`)) !== 1) bad.push('铜线没接上 ' + await T.eval(`JSON.stringify(ind.base.wires)`));
-                for (let i = 0; i < 4; i++) await click(bank, 'battery');
                 await T.eval(`indTeleport(-8, 5); indAdvance(5); true;`);
                 const on = JSON.parse(await T.eval(`JSON.stringify({ pw: indDev(${lamp}).pw, u: indDev(${bank}).u, v: indSrcVolt(indDev(${bank})) })`));
                 if (!on.pw || on.v !== 6 || Math.abs(on.u - (720 - 1)) > 0.05) bad.push('6 V 灯不亮或耗电不对 ' + JSON.stringify(on));
@@ -5928,15 +5928,15 @@ async function enterExit(tab, key) {
                 // 电炉：24 V（16 节）放在灶台旁边，灶台不烧柴也升到 1800°C
                 await T.eval(`(function(){ indStoveFire(0); indPanelClose(); })(); true;`);
                 const bank2 = await place('dev_bank', 4, -14), fur = await place('dev_furnace', 6, -16);
+                for (let i = 0; i < 16; i++) await click(bank2, 'battery');   // 同上：先装电池再接线
                 await click(bank2, 'wire'); await click(fur, 'wire');
-                for (let i = 0; i < 16; i++) await click(bank2, 'battery');
                 await T.eval(`indTeleport(-8, 5); indAdvance(40); true;`);
                 const ft = JSON.parse(await T.eval(`JSON.stringify({ pw: !!(indDev(${fur}) || {}).pw, t: ind.base.stove.temp, fire: ind.base.stove.fire })`));
                 if (!ft.pw || ft.t < 1700 || ft.fire !== 0) bad.push('电炉没把灶台烧到 1800°C ' + JSON.stringify(ft));
                 // 电灯：夜里在亮着的灯旁边不那么黑
                 const lamp3 = await place('dev_lamp', -10, 10);
                 const bank3 = await place('dev_bank', -14, 10);
-                await click(bank3, 'wire'); await click(lamp3, 'wire'); await click(bank3, 'battery'); await click(bank3, 'battery');
+                await click(bank3, 'battery'); await click(bank3, 'battery'); await click(bank3, 'wire'); await click(lamp3, 'wire');
                 await T.eval(`ind.base.clock = Math.floor(ind.base.clock / IND_DAY) * IND_DAY + IND_DUSK + 100; indTeleport(-10, 13); indAdvance(0.2); true;`);
                 if (!(await T.eval(`indLampNear()`))) bad.push('夜里灯旁边不亮');
                 // 存档
@@ -8383,7 +8383,7 @@ async function enterExit(tab, key) {
                 await T.eval(`indPanelClose(); { let b = {}; for (let i = 0; i < 20; i++) b[Object.keys(IND_ITEMS)[i]] = 1; ind.bag = b; } ind.cookId = null; indPanelStove(); true;`);
                 const st0 = await T.eval(`(function(){ let p = document.getElementById('ind-panel'); p.scrollTop = 1e6; p.firstChild.setAttribute('data-old', '1'); return p.scrollTop; })()`);
                 if (!(st0 > 50)) bad.push('灶台面板滚不下去，检查不成立 ' + st0);
-                else if (!(await until(T, `!document.querySelector('#ind-panel [data-old]')`, 5000))) bad.push('灶台面板没自动刷新');
+                else if (!(await T.eval(`indAdvance(1.5); true;`)) || !(await until(T, `!document.querySelector('#ind-panel [data-old]')`, 5000))) bad.push('灶台面板没自动刷新');   // 用 indAdvance 推进游戏时间：CI 帧率很低时（每帧 dt 封顶 0.05 秒）5 秒真实时间里游戏时间可能走不满 1 秒
                 else if (!(await T.eval(`document.getElementById('ind-panel').scrollTop === ${st0}`))) bad.push('灶台面板自动刷新后回顶部了 ' + await T.eval(`document.getElementById('ind-panel').scrollTop`));
                 // 开另一个面板：回顶
                 await T.eval(`indPanelBench(); true;`);
