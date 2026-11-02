@@ -2673,7 +2673,7 @@
             ind.hotT = ind.hotT || {};
             let hot = false;
             Object.keys(ind.bag).forEach(function (k) {
-                let c = IND_ITEMS[k].hot; if (!c) return;
+                let c = IND_ITEMS[k] && IND_ITEMS[k].hot; if (!c) return;   // 不认识的东西（老档里删掉的、测试塞的）跳过，别让整帧报错
                 hot = true;
                 if (ind.hotT[k] === undefined) ind.hotT[k] = IND_HOT_COOL;
                 ind.hotT[k] -= dt;
@@ -2682,7 +2682,7 @@
             Object.keys(ind.hotT).forEach(function (k) { if (!ind.bag[k]) delete ind.hotT[k]; });
             if (hot && indHard() && !ind.bag.tongs) indHurt(IND_HOT_DPS * dt, 'burn', indHotDetail());
             if (ind && ind.where === 'base') ind.base.ground.forEach(function (g) {
-                let c = IND_ITEMS[g.k].hot; if (!c) return;
+                let c = IND_ITEMS[g.k] && IND_ITEMS[g.k].hot; if (!c) return;
                 g.ht = (g.ht === undefined ? IND_HOT_COOL : g.ht) - dt;
                 if (g.ht <= 0) { g.k = c; delete g.ht; ind.itemDirty = true; }
             });

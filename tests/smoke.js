@@ -5811,6 +5811,9 @@ async function enterExit(tab, key) {
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else {
                 await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; true;`);
+                // 背包、地上有不认识的东西（老档里删掉的、CK4 这种测试塞的）：烫锭那一步跳过，不报错（CI 上 CK4 挂过 "reading 'hot'"）
+                const unk = await T.eval(`(function(){ ind.bag.__nokey = 1; ind.base.ground.push({ k: '__nokey', x: 30, z: 30 }); try { indHotTick(0.1); return 'ok'; } catch (e) { return e.message; } finally { delete ind.bag.__nokey; ind.base.ground = ind.base.ground.filter(function (g) { return g.k !== '__nokey'; }); } })()`);
+                if (unk !== 'ok') bad.push('背包里有不认识的东西就报错 ' + unk);
                 // 大火炼铜矿
                 await T.eval(`(function(){ indBagAdd('wood', 20); indBagAdd('ore_cu', 2); indBagAdd('charcoal', 2); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStovePut('ore_cu', 1); indStovePut('charcoal', 1); indStoveFire(3); indPanelClose(); })(); true;`);
                 await T.eval(`indAdvance(45); true;`);
