@@ -10278,6 +10278,36 @@ async function enterExit(tab, key) {
             report('IND82 自动驾驶：点地图目的地、绕树、水／悬崖／动物／没电停、碰键接管、耗电多一半、装卸芯片', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND83')) {
+            // IND83 窑边中暑（任务 62 补充 2）：窑边取暖封顶 min(12, 温度/80)；体温 >39 回落快 3 倍；>38 喝水 −0.5°C；>38.5 提示一次
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let oc = window.indCooks, oa = window.indAirTemp; try {
+                    indGoBase(null); ind.base.rule = 'hard'; ind.sleeping = false; let S = ind.base.surv; S.temp = 37;
+                    window.indCooks = function () { return [{ x: ind.p.x, z: ind.p.z, ty: 'kiln', C: { temp: 1800 } }]; };
+                    let near = indAirTemp(); window.indCooks = function () { return []; }; let far = indAirTemp();
+                    window.indAirTemp = function () { return 20; };
+                    S.temp = 39.5; let t0 = S.temp; indBodyTick(10); let fast = t0 - S.temp;
+                    S.temp = 37.5; ind.heatHint = false; indBodyTick(0.01); fl.length = 0;
+                    S.temp = 38.6; indBodyTick(0.01); indBodyTick(0.01); let hints = fl.filter(function (t) { return /太热了/.test(t); }).length;
+                    S.temp = 38.8; ind.bag = { water_boiled: 1 }; indEat('water_boiled'); let drunk = 38.8 - S.temp;
+                    S.temp = 37.8; ind.bag = { water_boiled: 1 }; indEat('water_boiled'); let cool = 37.8 - S.temp;
+                    return { near: near - far, fast: fast, hints: hints, drunk: drunk, cool: cool }; } finally { window.indCooks = oc; window.indAirTemp = oa; blazeFlash = bf; } })()`);
+                if (!(Math.abs(r.near - 12) < 0.01)) bad.push('窑边取暖封顶 12 ' + JSON.stringify(r));
+                if (!(r.fast > 0.5 && r.fast < 0.7)) bad.push('体温 >39 回落 ×3（10 秒约 0.6） ' + JSON.stringify(r));
+                if (r.hints !== 1) bad.push('>38.5 只提示一次 ' + JSON.stringify(r));
+                if (!(Math.abs(r.drunk - 0.5) < 0.05)) bad.push('体温 >38 喝水 −0.5 ' + JSON.stringify(r));
+                if (!(Math.abs(r.cool) < 0.05)) bad.push('体温 ≤38 喝水不降 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND83 窑边中暑：取暖封顶 12、体温 >39 回落加快、喝水降温、>38.5 提示一次', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

@@ -733,7 +733,7 @@
                 if (indInWater() && !ind.onRaft) t -= IND_BODY.waterCold;
             } else {
                 let hot = 0;   // 灶台、小熔炉、大窑 4 米内取暖，取最热的一个
-                indCooks().forEach(function (c) { if (c.C.temp > 100 && Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < IND_BODY.fireR + (c.ty === 'kiln' ? 1 : 0)) hot = Math.max(hot, Math.min(25, c.C.temp / 40)); });
+                indCooks().forEach(function (c) { if (c.C.temp > 100 && Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < IND_BODY.fireR + (c.ty === 'kiln' ? 1 : 0)) hot = Math.max(hot, Math.min(12, c.C.temp / 80)); });
                 t += hot;
             }
             if (indFires().some(function (f) { return f.fuel > 0 && Math.hypot(ind.p.x - f.x, ind.p.z - f.z) < IND_BODY.fireR; })) t += IND_BODY.fireHeat;
@@ -749,8 +749,9 @@
             let S = ind.base.surv, B = IND_BODY, eff = indAirTemp() + indWarmth() * B.warmMul;
             if (eff < B.cold) S.temp -= (B.cold - eff) * B.rate * dt;
             else if (eff > B.hot) S.temp += (eff - B.hot) * B.rate * dt;
-            else S.temp += Math.max(-B.back * dt, Math.min(B.back * dt, 37 - S.temp));
+            else { let bk = B.back * (S.temp > 39 ? 3 : 1) * dt; S.temp += Math.max(-bk, Math.min(bk, 37 - S.temp)); }
             S.temp = Math.max(25, Math.min(45, S.temp));
+            if (S.temp > 38.5 && !ind.heatHint) { ind.heatHint = true; indFlash('太热了，离窑远点，喝点水'); } else if (S.temp < 38) ind.heatHint = false;
         }
         // 基地外面的草地按季节换颜色（冬天是雪）
         const IND_GRASS = [0xa5d6a7, 0x81c784, 0xd7c27a, 0xeceff1];
@@ -1817,7 +1818,7 @@
             indBagDel(k, 1);
             if (k === 'cactus' && indHard() && indHurt(60, 'thorn', '生吃了带刺的仙人掌')) return true;
             if (e.f) S.food = Math.max(0, Math.min(100, S.food + e.f));
-            if (e.w) S.water = Math.max(0, Math.min(100, S.water + e.w));
+            if (e.w) { S.water = Math.max(0, Math.min(100, S.water + e.w)); if (e.w > 0 && S.temp > 38) S.temp = Math.max(37, S.temp - 0.5); }
             if (e.back) indBagAdd(e.back, 1);
             let warm = false;
             if (e.hot && S.temp < 37) { S.temp = Math.min(37, S.temp + IND_HOT_SOUP); warm = true; }   // 热汤：体温立刻 +1.5°C，最多到 37
@@ -3272,6 +3273,7 @@
         function indStoveHtml() {
             let c = indCookCur(), S = c.C, D = IND_COOK[c.ty], F = indFireDef(c.ty, S.fire);
             let st = '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + '<br>';
+            if (S.fire === 4 && !S.blow && !fmBlowerOn(c)) st += '<br><span style="color:#888">鼓风要有人拉风箱，或者装电动鼓风机　实际：大火</span>';
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; st += '正在做：' + indOutTxt(r, S.cook.n || 1) + (S.cook.n > 1 ? '（' + S.cook.n + ' 份）' : '') + ' ' + Math.floor(S.cook.t / r.time * 100) + '%'; }
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做' + (D.only ? '（只做冶炼）' : '') + '</span>';
             if (!S.cook && indHard() && rlNeedReducer(S)) st += '<br><b style="color:#c62828">炼矿要加木炭、煤或焦炭（每份矿 1 份）</b>';
