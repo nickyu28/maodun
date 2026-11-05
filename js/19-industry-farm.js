@@ -49,7 +49,7 @@
             if (a.flee <= 0) { a.flee = 0; a.rest = FM.restT; }
             return true;
         }
-        function fmIsTool(k) { return !!k && !!IND_ITEMS[k] && (!!IND_ITEMS[k].tool || ['axe', 'knife', 'shears', 'tongs'].indexOf(k) >= 0); }
+        function fmIsTool(k) { return !!k && !!IND_ITEMS[k] && (!!IND_ITEMS[k].tool || k === 'tongs' || (typeof TL_TOOL !== 'undefined' && !!TL_TOOL[k])); }   // 各档斧子、小刀、剪刀、铲子都算
         // 能不能宰：不能的返回原因
         function fmWhyNot(a) {
             let D = IND_ANIMALS[a.k];

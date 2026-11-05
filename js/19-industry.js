@@ -887,7 +887,7 @@
                 if (clock < a.milkAt) { indFlash('牛奶还要等 ' + Math.ceil(a.milkAt - clock) + ' 秒'); return false; }
                 let mm = indContOf(k).mat; indBagDel(k, 1); indBagAdd(indFilledKey('milk', mm), 1); a.milkAt = clock + IND_MILK_EVERY; indSave(); indFlash('挤了一桶牛奶'); return true;
             }
-            if (a.k === 'sheep' && k === 'shears') {
+            if (a.k === 'sheep' && tlKind(k) === 'shears') {
                 if (indIsBaby(a)) { indFlash('还小，没有毛'); return false; }
                 if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
                 if (clock < a.woolAt) { indFlash('羊毛还要等 ' + Math.ceil(a.woolAt - clock) + ' 秒'); return false; }
@@ -1695,17 +1695,17 @@
             let S = ind.shear; if (!S) return;
             let a = S.a, L = ind.where === 'trip' ? ind.wild : ind.base.animals;
             if (!L || L.indexOf(a) < 0 || Math.hypot(ind.p.x - a.x, ind.p.z - a.z) > IND_SHEAR_R) { ind.shear = null; indFlash('羊跑远了，没剪成'); return; }
-            if (!ind.bag.shears) { ind.shear = null; indFlash('剪刀没了'); return; }
-            if (indSel() !== 'shears') return;
+            if (!tlHas('shears')) { ind.shear = null; indFlash('剪刀没了'); return; }
+            if (tlKind(indSel()) !== 'shears') return;
             a.tx = a.x; a.tz = a.z; a.wt = Math.max(a.wt || 0, 1);   // 剪着的时候羊站着不乱走
-            S.t += dt; if (S.t < IND_SHEAR_T) return;
-            ind.shear = null;
+            S.t += dt / tlMul(indSel()); if (S.t < IND_SHEAR_T) return;   // 剪刀分档：4 秒 × 倍数
+            ind.shear = null; tlUse(indSel());
             if (ind.base.clock < a.woolAt) return;
             if (indBagAdd('wool', 2) <= 0) { indFlash('背包满了'); return; }
             a.woolAt = ind.base.clock + IND_WOOL_EVERY; indSave(); indFlash('剪了 2 份羊毛');
         }
         // 手里的东西是不是工具（稿子、铜线、钳子、剪刀）：工具永远当工具用，不拿去喂动物
-        function indToolish(k) { return !!k && (!!IND_ITEMS[k].tool || k === 'wire' || k === 'tongs' || k === 'shears'); }
+        function indToolish(k) { return !!k && (!!IND_ITEMS[k].tool || k === 'wire' || k === 'tongs' || tlKind(k) === 'shears'); }
         // 左键：采集、拿、收菜、打开；对着空的农田格子、手里拿着种子：种下
         function indAction() {
             if (!ind || ind.paused) return;
@@ -1718,7 +1718,7 @@
             if (indSel() === 'bell') return indRing();
             if (indSel() === 'bellows') return indInstallBellows(indAim());
             let a = indAim();
-            if (a && a.kind === 'animal' && indToolish(indSel()) && indSel() !== 'shears') {   // 稿子、铜线、钳子对着动物：找别的目标，没有就只看状态
+            if (a && a.kind === 'animal' && indToolish(indSel()) && tlKind(indSel()) !== 'shears') {   // 稿子、铜线、钳子对着动物：找别的目标，没有就只看状态
                 let b = indAim(true);
                 if (b) a = b;
             }
@@ -3508,7 +3508,7 @@
             if (R.cave) st += '<br>' + cvHint();   // 矿洞（任务 66）
             { let mh = mbHud(); if (mh) st += '<br>' + mh; }   // 刀盾耐久（任务 70）
             if (R.peel) st += '<br>' + wdPeelTxt();
-            if (R.shear) st += '<br>剪羊毛 ' + Math.min(99, Math.floor(R.shear.t / IND_SHEAR_T * 100)) + '%' + (indSel() === 'shears' ? '' : '　<b style="color:#c62828">停着：拿上剪刀</b>');
+            if (R.shear) st += '<br>剪羊毛 ' + Math.min(99, Math.floor(R.shear.t / IND_SHEAR_T * 100)) + '%' + (tlKind(indSel()) === 'shears' ? '' : '　<b style="color:#c62828">停着：拿上剪刀</b>');
             let SL = indSlots(), sel = indSel(), bag = '';
             for (let i = 0; i < IND_HOTBAR; i++) {   // 快捷栏：背包前 10 格（任务 17），方格上写 1～9、0
                 let it = SL[i], lab = '<b style="position:absolute;left:3px;top:1px;font-size:11px;color:#777;">' + (i === 9 ? 0 : i + 1) + '</b>';

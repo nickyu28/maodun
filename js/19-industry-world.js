@@ -96,16 +96,11 @@
         }
         // 砍树：空手 8 秒、拿着稿子 3 秒，出 3～6 木头，倒下留树桩
         // 砍树的家伙：斧子 1.5 秒（木头 ×1.5）、稿子 3 秒、小刀 5 秒（木头 ×1.25）、空手 8 秒；背包里有几样就用最快的
-        function wdChopTool() {
-            if (ind.bag.axe) return { need: 1.5, mult: 1.5 };
-            let best = { need: 8, mult: 1 };
-            if (indTool() >= 1) best = { need: 3, mult: 1 };
-            if (ind.bag.knife && best.need > 5) best = { need: 5, mult: 1.25 };
-            return best;
-        }
+        function wdChopTool() { return tlChopTool(); }   // 分材质（19-industry-tool.js）：斧子、小刀的时间 × 档的倍数
         function wdChop(o) {
-            if (indHard() && !ind.bag.axe && !ind.bag.knife && indTool() < 1) { indFlash('空手砍不动，得有斧子或小刀'); return false; }   // 硬核砍树要工具（任务 2.7）
-            return wdChStart({ kind: 'chop', o: o, need: wdChopTool().need, label: '砍树', done: function () { indGather(o); } });
+            if (indHard() && !tlCanChop()) { indFlash('空手砍不动，得有斧子或小刀'); return false; }   // 硬核砍树要工具（任务 2.7）
+            let tk = wdChopTool();
+            return wdChStart({ kind: 'chop', o: o, need: tk.need, label: '砍树', done: function () { let d0 = o.dead, n0 = o.n; indGather(o); if (o.dead !== d0 || o.n !== n0) tlUse(tk.k); } });   // 砍倒一棵，工具耐久 −1
         }
         // 要花几秒的合成（敲尖石片）：站着别动，材料到时间才扣，动了中断不丢
         function wdCraftWait(i, r) {
@@ -135,7 +130,8 @@
             if (h < IND_WATER_Y + 0.25) { indFlash('水里挖不了'); return false; }
             let bm = indBiome(ind.map, x, z), k = WD_DIG[bm];
             if (k === 'stone' && indTool() < 1) { indFlash('挖石头要石稿'); return false; }
-            return wdChStart({ kind: 'dig', need: indTool() >= 1 ? 1 : 3, label: '挖地', done: function () {
+            let tk = tlDigTool(k === 'stone');   // 铲子 1 秒 × 倍数，镐 1 秒，空手 3 秒（19-industry-tool.js）
+            return wdChStart({ kind: 'dig', need: tk.need, label: '挖地', done: function () { tlUse(tk.k);
                 let item = k;
                 if (bm === 'volcano' && indHard() && indRand() < 0.1) item = 'sulfur';
                 if (indBagAdd(item, 1) <= 0) { indFlash('背包满了'); return; }
@@ -154,7 +150,7 @@
         }
         // 仙人掌：空手采（选中的不是剪刀或稿子）硬核固定扣 60 血，悠闲只提示；返回 true 表示人死了
         function wdThorn() {
-            let sel = indSel(), safe = sel === 'shears' || sel === 'axe' || (sel && IND_ITEMS[sel] && IND_ITEMS[sel].tool > 0);
+            let sel = indSel(), safe = tlKind(sel) === 'shears' || tlKind(sel) === 'axe' || (sel && IND_ITEMS[sel] && IND_ITEMS[sel].tool > 0);
             if (safe) return false;
             if (!indHard()) { indFlash('扎手了'); return false; }
             return indHurt(60, 'thorn', '空手摘了仙人掌');
@@ -162,7 +158,7 @@
         // 拔刺（任务 2.4、2.5）：选中仙人掌点一下右键开始（再点排队下一个）；进度看手上拿的：斧子 5 秒、小刀 10 秒、剪刀 30 秒、钳子 40 秒、拿着仙人掌（空手）60 秒；
         // 拿着别的就暂停（进度留着），边走边拔；仙人掌没了、用着的工具没了就中断
         const WD_PEEL = { axe: 5, knife: 10, shears: 30, tongs: 40, cactus: 60 };
-        function wdPeelTime() { return WD_PEEL[indSel()] || 0; }
+        function wdPeelTime() { return tlPeelTime(indSel()); }   // 各档斧子、小刀、剪刀 × 倍数（19-industry-tool.js）
         function wdPeelStart() {
             if (!(ind.bag.cactus > 0)) return false;
             let P = ind.peel;
@@ -182,7 +178,7 @@
             P.tool = indSel() === 'cactus' ? null : indSel();
             P.p += dt / need;
             if (P.p < 1) return;
-            indBagDel('cactus', 1); indBagAdd('cactus_peeled', 1);
+            indBagDel('cactus', 1); indBagAdd('cactus_peeled', 1); tlUse(P.tool);   // 拔一个，工具耐久 −1
             if (P.q > 0 && ind.bag.cactus > 0) { P.q--; P.p = 0; indFlash('拔好一个，接着拔下一个'); }
             else { ind.peel = null; indFlash('拔好了刺：去刺仙人掌'); }
         }
@@ -197,7 +193,7 @@
             if (o.key === 'oil') return ckOilHint(o);
             if (o.hard) return '硬岩<br><small>太硬，得炸：拿 2 份火药右键放下，退远点</small>';
             if (o.key === 'vent_ng') return '天然气喷口<br><small>拿空钢瓶右键装一瓶；别点火' + (o.until ? '（还冒 ' + Math.max(0, Math.round(o.until - ind.t)) + ' 秒）' : '') + '</small>';
-            if (o.tree) return WD_TREE_NAME[o.tree] + '（' + o.n + ' 木头）<br><small>' + (indHard() && !ind.bag.axe && !ind.bag.knife && indTool() < 1 ? '空手砍不动，得有斧子或小刀' : '左键：砍（' + wdChopTool().need + ' 秒，站着别动）') + '</small>';
+            if (o.tree) return WD_TREE_NAME[o.tree] + '（' + o.n + ' 木头）<br><small>' + (indHard() && !tlCanChop() ? '空手砍不动，得有斧子或小刀' : '左键：砍（' + wdChopTool().need + ' 秒，站着别动）') + '</small>';
             if (o.key === 'cactus') return '仙人掌：有刺<br><small>左键：采集（拿剪刀或稿子不扎手）</small>';
             if (o.rock) return (o.black ? '黑石头' : '大石头') + ' ×' + o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：敲' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
             if (o.out) return indName(o.key) + '矿脉　剩 ' + o.n + ' 份<br><small>' + (indTool() >= nd.tool ? '左键：挖（一次 1 份）' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';

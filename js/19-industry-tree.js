@@ -15,7 +15,7 @@
         IND_RECIPES.push({ in: { latex: 2, sulfur: 1 }, out: { rubber: 1 }, cls: 'bulk', minT: 150, time: 20, hard: true });   // 硫只有硬核有，熬橡胶只给硬核
         // 森林里 1/12 的树是橡胶树（按位置算，不吃随机数，别的树的位置和老地图不变）
         function trKind(M, x, z, base) { return base === 'oak' && indBiome(M, x, z) === 'forest' && indHash(Math.floor(x), Math.floor(z), 4141) < TR.rubber ? 'rubber' : base; }
-        function trHaveKnife() { let k = indSel(); return k === 'knife' || k === 'axe'; }
+        function trHaveKnife() { let k = indSel(); return tlKind(k) === 'knife' || tlKind(k) === 'axe'; }   // 各档的刀、斧都行
         function trResinLeft(o) {
             if (o.rs === undefined) o.rs = TR.resin;
             while (o.rs < TR.resin && ind.t >= o.rt) { o.rs++; o.rt += TR.resinT; }

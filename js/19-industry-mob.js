@@ -26,6 +26,8 @@
             boar: { name: '小野猪', hp: 5, dmg: 8, pet: 6, sp: 2.4, r: 0.6, wind: 1, dash: 12, dashLen: 5, rest: 2, knock: 2 },
             bee: { name: '小蜜蜂', hp: 1, dmg: 2, pet: 2, sp: 3.5, r: 0.3, cd: 0.6, fly: 1.3, away: 2 }
         };
+        // 冒烟测试开的页面网址带 ?notut=1：别的检查要在远征里待很久，怪会自己刷出来把人打死，所以测试页默认不自己刷（IND91 打开）。玩家的网址没有这个
+        let IND_MB_AUTO = !/[?&]notut\b/.test(location.search);
         const MB_SLIME_COL = { green: 0x3ddc84, blue: 0x42a5f5, pink: 0xf48fb1 };
         Object.assign(IND_HURT, {
             mob_slime: { die: '被史莱姆蹭死了', tag: '史莱姆' }, mob_mush: { die: '被小蘑菇撞死了', tag: '小蘑菇' }, mob_cactus: { die: '被刺球撞死了', tag: '刺球' },
@@ -95,8 +97,11 @@
         function mbShield(k) { return MB_SHIELD[k] || null; }
         function mbIsKnife(k) { return !!MB_KNIFE[k]; }
         // 手上那把刀／盾剩的耐久（同一种叠在一起，只记正在用的那一把）
+        // 耐久上限：刀、盾、工具（19-industry-tool.js）；悠闲 ×2
+        function mbDurTab(k) { return MB_KNIFE[k] || MB_SHIELD[k] || (typeof TL_TOOL !== 'undefined' && TL_TOOL[k]) || null; }
+        function mbMax(k) { let T = mbDurTab(k); return T ? T.dura * (indHard() ? 1 : 2) : 0; }
         function mbDura(k) {
-            let B = ind.base, D = B.dura = B.dura || {}, max = (MB_KNIFE[k] || MB_SHIELD[k]).dura;
+            let B = ind.base, D = B.dura = B.dura || {}, max = mbMax(k);
             if (!(D[k] > 0)) { let H = B.duraHalf = B.duraHalf || {}; if (H[k] > 0) { H[k]--; if (!H[k]) delete H[k]; D[k] = Math.ceil(max / 2); } else D[k] = max; }
             return D[k];
         }
@@ -193,7 +198,7 @@
             if (ind.where !== 'trip') { if (ind.mobs && ind.mobs.length) { ind.mobs.forEach(mbDrop); ind.mobs = []; } return; }
             if (!ind.mobs) ind.mobs = [];
             ind.mbSpawn = (ind.mbSpawn || 0) - dt;
-            if (ind.mbSpawn <= 0) { ind.mbSpawn = MB.spawnT; mbSpawnTry(); }
+            if (ind.mbSpawn <= 0) { ind.mbSpawn = MB.spawnT; if (IND_MB_AUTO) mbSpawnTry(); }
             if (ind.glue) ind.glue = ind.glue.filter(function (g) { return g.t > ind.t; });
             let tg = mbTargets();
             ind.mobs.forEach(function (m) {
@@ -415,8 +420,8 @@
             mbBarkTick();
         }
         function mbHud() {
-            let k = indSel(), D = MB_KNIFE[k] || MB_SHIELD[k]; if (!D) return '';
-            let s = indName(k) + ' 耐久 ' + mbDura(k) + ' / ' + D.dura;
+            let k = indSel(), D = mbDurTab(k); if (!D) return '';
+            let s = indName(k) + ' 耐久 ' + mbDura(k) + ' / ' + mbMax(k);
             if (MB_SHIELD[k] && ind.mbBlock && ind.mbBlock.cd > 0) s += ind.mbBlock.t > 0 ? '　<b>举着</b>' : '　冷却 ' + Math.ceil(ind.mbBlock.cd) + ' 秒';
             let P = ind.base.poisonK; if (P && P.k === k) s += '　带毒还剩 ' + P.n + ' 下';
             return s;
@@ -432,9 +437,9 @@
             };
         })();
         function mbFixBase(b) {
-            let fx = function (o, T) { if (!o || typeof o !== 'object' || Array.isArray(o)) return {}; let r = {}; Object.keys(o).forEach(function (k) { if (T[k]) r[k] = indNum(o[k], 1, 1, 1e4) | 0; }); return r; };
-            let T = Object.assign({}, MB_KNIFE, MB_SHIELD);
-            b.dura = fx(b.dura, T); b.duraHalf = fx(b.duraHalf, T);
+            let fx = function (o) { if (!o || typeof o !== 'object' || Array.isArray(o)) return {}; let r = {}; Object.keys(o).forEach(function (k) { if (mbDurTab(k)) r[k] = indNum(o[k], 1, 1, 1e4) | 0; }); return r; };
+            let T = null;
+            b.dura = fx(b.dura); b.duraHalf = fx(b.duraHalf);
             if (b.poisonK && !(MB_KNIFE[b.poisonK.k] && b.poisonK.n > 0)) delete b.poisonK; else if (b.poisonK) b.poisonK = { k: b.poisonK.k, n: indNum(b.poisonK.n, 1, 1, MB.poisonHits) | 0 };
             (b.animals || []).forEach(function (a) {
                 if (a.weapon !== undefined && !MB_KNIFE[a.weapon]) a.weapon = null;

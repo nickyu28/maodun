@@ -5496,7 +5496,7 @@ async function enterExit(tab, key) {
                         // 怪（任务 70）：拿刀打出门的怪掉黏液、蘑菇、毒蘑菇、云絮、蜂蜜、木炭、仙人掌、肉、皮；刀盾用坏了变断的
                         if (typeof MB_KNIFE !== 'undefined') {
                             if (Object.keys(MB_KNIFE).some(function (k) { return have[k]; })) ['goo', 'shroom', 'shroom_bad', 'fluff', 'honey', 'charcoal', 'cactus', 'meat_raw', 'hide'].forEach(add);
-                            Object.keys(MB_KNIFE).concat(Object.keys(MB_SHIELD)).forEach(function (k) { if (have[k]) add('broken_' + k); });
+                            Object.keys(MB_KNIFE).concat(Object.keys(MB_SHIELD), typeof TL_TOOL !== 'undefined' ? Object.keys(TL_TOOL) : []).forEach(function (k) { if (have[k] && RAW['broken_' + k]) add('broken_' + k); });   // 工具用坏（工具分材质）
                         }
                         if (hard && RAW.scrap_dev && power()) { add('scrap_dev'); add('battery_burnt'); }
                         if (hard && have.dev_el && power()) IND_EL_RECIPES.forEach(function (r) { if (Object.keys(r.in).every(function (k) { return have[k]; })) Object.keys(r.out).forEach(add); });
@@ -6966,13 +6966,13 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.base.fires = []; ind.base.ground = []; ind.base.crops = [{ k: 'wheat', x: -20, z: 0, g: 0, wet: 1e9, times: 0 }, { k: 'wheat', x: -20, z: 2, g: 0, wet: 1e9, times: 0 }, { k: 'wheat', x: -20, z: 4, g: 0, wet: 0, times: 0 }, { k: 'wheat', x: -20, z: 6, g: 0, wet: 0, times: 0 }]; ind.bag = { ash: 3 }; true;`);
                 const fert = (z) => T.eval(`indTeleport(-18.2, ${z}); indLookAt(-20, ${z}); indSelect('ash'); indUse(); true;`);   // 站在田旁边朝它看，免得前面一格挡住
                 await fert(0);
-                if (!(await T.eval(`ind.base.crops[0].fert === true && ind.bag.ash === 2`))) bad.push('草木灰施肥没用上 ' + await T.eval(`JSON.stringify([ind.base.crops[0], ind.bag])`));
+                if (!(await T.eval(`ind.base.crops[0].fert === true && ind.bag.ash === 2`))) bad.push('草木灰施肥没用上 ' + await T.eval(`JSON.stringify([ind.base.crops[0], ind.bag, ind.dead, ind.paused, ind.panel, indAim() && indAim().kind])`));
                 await T.eval(`window.__fl = []; true;`); await fert(0);
                 if (!(await T.eval(`ind.bag.ash === 2 && __fl.indexOf('已经施过肥了') >= 0`))) bad.push('不能重复施肥 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
                 await fert(4);
                 await T.eval(`indAdvance(40); true;`);
                 const gg = await J(`ind.base.crops.map(function (c) { return Math.round(c.g * 10) / 10; })`);
-                if (Math.abs(gg[0] - 60) > 1 || Math.abs(gg[1] - 40) > 1 || Math.abs(gg[2] - 30) > 1 || Math.abs(gg[3] - 20) > 1) bad.push('施肥长得快 50%，和浇水叠加（浇水施肥 60、浇水 40、施肥没浇水 30、都没有 20） ' + JSON.stringify(gg));
+                if (Math.abs(gg[0] - 60) > 1 || Math.abs(gg[1] - 40) > 1 || Math.abs(gg[2] - 30) > 1 || Math.abs(gg[3] - 20) > 1) bad.push('施肥长得快 50%，和浇水叠加（浇水施肥 60、浇水 40、施肥没浇水 30、都没有 20） ' + JSON.stringify(gg) + await T.eval(`JSON.stringify([ind.dead, ind.paused, ind.base.surv, indSeason()])`));
                 // 小标记
                 await T.eval(`ind.cropDirty = true; ind.cropT = 0; indSyncCrops(); true;`);
                 if ((await T.eval(`ind.fertMesh.count`)) !== 2) bad.push('施过肥的田上要有小标记（2 块） ' + await T.eval(`ind.fertMesh.count`));
@@ -10656,7 +10656,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); IND_MB_AUTO = true; true;`);   // 测试页默认不自己刷怪，这里打开
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const run = (body, rule) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { ind.base.rule = '${'${rule}'}' || 'hard'; ind.base.animals = []; ind.base.ach = {}; ind.dead = null; ind.hurt = null; let S = ind.base.surv; S.hp = 100; S.temp = 37; S.food = 80; S.water = 80; ind.bag = {}; ind.base.dura = {}; ind.base.duraHalf = {}; delete ind.base.poisonK;
                     let day = function () { ind.base.clock = IND_DAY * 3 + 300; }, night = function () { ind.base.clock = IND_DAY * 3 + IND_DUSK + 100; };
@@ -10762,6 +10762,43 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND92 窑面板写升温估计：冷窑大火估计时间跟真的差 30% 以内、到了不写', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND93')) {
+            // IND93 工具分材质 + 磨损：石／青铜／铁／钢，干活时间 × 1/0.7/0.6/0.5；砍倒一棵、挖一次、采一次、拔一个刺、剪一次毛耐久 −1，用完变坏了的；回收和胶水修；悠闲耐久 ×2；旧工具满耐久
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { ind.base.rule = 'hard'; ind.bag = {}; ind.base.dura = {}; ind.base.duraHalf = {}; indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.mbSpawn = 1e9; indTeleport(0, 0); indLookAt(0, -5);
+                    let tree = function () { let o = { key: 'wood', tree: 'oak', x: 0, z: -1.5, y: 0.5, n: 4, seed: 'seed_wheat', dead: false }; ind.nodes.push(o); return o; };
+                    let finish = function () { for (let i = 0; i < 200 && ind.ch; i++) wdChTick(0.1); };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 砍树时间：石斧 1.5、青铜 1.05、铁 0.9、钢 0.75；两把都在挑快的；小刀 5 × 倍数
+                let r = await run(`let t = {}; ['axe', 'axe_bronze', 'axe_iron', 'axe_steel', 'knife_bronze'].forEach(function (k) { ind.bag = {}; ind.bag[k] = 1; t[k] = wdChopTool().need; }); ind.bag = { axe: 1, axe_steel: 1 }; let pick = wdChopTool().k; return { t: t, pick: pick };`);
+                if (!(Math.abs(r.t.axe - 1.5) < 1e-9 && Math.abs(r.t.axe_bronze - 1.05) < 1e-9 && Math.abs(r.t.axe_iron - 0.9) < 1e-9 && Math.abs(r.t.axe_steel - 0.75) < 1e-9 && Math.abs(r.t.knife_bronze - 3.5) < 1e-9 && r.pick === 'axe_steel')) bad.push('砍树时间按档 ' + JSON.stringify(r));
+                // 砍倒一棵树斧子耐久 −1；石斧 40 次坏、变"坏了的石斧"
+                r = await run(`ind.bag = { axe: 1 }; indSelect('axe'); let o = tree(); indLookAt(o.x, o.z); wdChop(o); finish(); let d1 = mbDura('axe'); ind.base.dura.axe = 1; let o2 = tree(); wdChop(o2); finish(); return { d1: d1, axe: ind.bag.axe || 0, broken: ind.bag.broken_axe || 0, max: mbMax('axe'), mb: mbMax('axe_bronze'), fl: fl.join('|') };`);
+                if (!(r.d1 === 39 && r.axe === 0 && r.broken === 1 && r.max === 40 && r.mb === 120 && /用坏了/.test(r.fl))) bad.push('砍一棵 −1、用完变坏的 ' + JSON.stringify(r));
+                // 铲子挖地：石 1 秒、钢 0.5 秒，耐久 −1；镐采矿 −1
+                r = await run(`ind.bag = { shovel_stone: 1 }; let a = tlDigTool(false).need; ind.bag = { shovel_steel: 1 }; let b = tlDigTool(false).need; wdDig(); finish(); let d = mbDura('shovel_steel');
+                    ind.bag = { pick_stone: 1 }; let n = { key: 'ore_cu', x: 0, z: -1.5, y: 0.5, n: 5, seed: 'seed_wheat', dead: false }; ind.nodes.push(n); indGather(n); return { a: a, b: b, d: d, pd: mbDura('pick_stone') };`);
+                if (!(r.a === 1 && r.b === 0.5 && r.d === 399 && r.pd === 39)) bad.push('铲子按档、挖一次 −1、采矿镐 −1 ' + JSON.stringify(r));
+                // 拔刺、剪羊毛按档
+                r = await run(`return { kb: tlPeelTime('knife_bronze'), ss: tlPeelTime('shears_steel'), ax: tlPeelTime('axe'), tong: tlPeelTime('tongs'), sh: IND_SHEAR_T * tlMul('shears_iron') };`);
+                if (!(Math.abs(r.kb - 7) < 1e-9 && r.ss === 15 && r.ax === 5 && r.tong === 40 && Math.abs(r.sh - 2.4) < 1e-9)) bad.push('拔刺剪毛按档 ' + JSON.stringify(r));
+                // 回收一半主料、胶水修好耐久一半；悠闲 ×2；旧存档（没有耐久记录）满耐久
+                r = await run(`ind.bag = { broken_axe_iron: 2, glue: 1 }; let i = IND_CRAFT.findIndex(function (q) { return q.in.broken_axe_iron && !q.fix; }), j = IND_CRAFT.findIndex(function (q) { return q.fix && q.out === 'axe_iron'; });
+                    indCraft(i); indCraft(j); let fe = ind.bag.ingot_fe, fixed = ind.bag.axe_iron; let half = mbDura('axe_iron'); ind.base.rule = 'casual'; let cas = mbMax('axe'); ind.base.rule = 'hard';
+                    let f = indFixBase(Object.assign(JSON.parse(JSON.stringify(ind.base)), { dura: undefined, duraHalf: undefined })); return { fe: fe, fixed: fixed, half: half, cas: cas, old: f.dura, recipe: !!IND_CRAFT.filter(function (q) { return q.out === 'axe_bronze' && q.in.bronze === 2 && q.in.wood === 1; }).length };`);
+                if (!(r.fe === 1 && r.fixed === 1 && r.half === 100 && r.cas === 80 && JSON.stringify(r.old) === '{}' && r.recipe)) bad.push('回收、胶水修一半、悠闲 ×2、旧存档满 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND93 工具分材质 + 磨损：时间按档、用一次 −1、坏了回收或胶水修、悠闲 ×2、旧工具满耐久', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
