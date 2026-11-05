@@ -181,3 +181,19 @@
             let f = b.fx; if (!f || typeof f !== 'object') { delete b.fx; return; }
             b.fx = { speed: indNum(f.speed, 0, 0, PX.speedT), weak: indNum(f.weak, 0, 0, PX.weakT), heal: indNum(f.heal, 0, 0, PX.healT), healLeft: indNum(f.healLeft, 0, 0, PX.healAmt) };
         }
+
+// ── 鞋（装备栏"脚"，任务 43）：只加速、都不带 heavy。走路总倍数（鞋 × 药）不超过 ×2.0，载具不受影响 ──
+//  草鞋 ×1.15（草绳 4 + 草 2；透气，"热"阈值 +2）  皮鞋 ×1.3（皮 3 + 草绳 2；保暖，"冷"阈值 −2）  钢靴 ×1.5（钢 4 + 皮 2 + 铜线 4；受爆炸伤害 −20%）。皮的配方自动有人造革的备选
+        Object.assign(IND_ITEMS_RAW, {
+            shoe_straw: { name: '草鞋', col: 0xc0ca33, wear: 'foot', speed: 1.15, sweatAdd: 2, warm: 0, use: '穿在脚上，走路 ×1.15；透气，热的临界体温 +2°C' },
+            shoe_leather: { name: '皮鞋', col: 0x6d4c41, wear: 'foot', speed: 1.3, chillCut: 2, warm: 0, use: '穿在脚上，走路 ×1.3；保暖，冷的临界体温 −2°C' },
+            shoe_steel: { name: '钢靴', col: 0x78909c, wear: 'foot', speed: 1.5, blast: 0.2, warm: 0, use: '穿在脚上，走路 ×1.5；受爆炸伤害 −20%' }
+        });
+        IND_CRAFT.push(
+            { out: 'shoe_straw', in: { rope: 4, grass: 2 }, hard: true },
+            { out: 'shoe_leather', in: { hide: 3, rope: 2 }, hard: true },
+            { out: 'shoe_steel', in: { steel: 4, hide: 2, wire: 4 }, hard: true }
+        );
+        function pwShoeMul() { let w = ind.base.wear && ind.base.wear.foot; return w && IND_ITEMS[w] && IND_ITEMS[w].speed || 1; }
+        // 鞋 × 药，合起来最多 ×2.0（PX.cap 是同一个常数）
+        function pwMoveMul() { return Math.min(PX.cap, pwShoeMul() * pwSpeedMul()); }

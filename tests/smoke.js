@@ -10087,6 +10087,36 @@ async function enterExit(tab, key) {
             report('IND78 任务 61：箱子每行框各管各、背包换位只换一格、放射性不让睡、反应堆冷却来源和提醒、一批小问题、老的几条、不认识的物品不报错', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND79')) {
+            // IND79 鞋（任务 43，硬核）：草鞋 ×1.15、皮鞋 ×1.3、钢靴 ×1.5，都不带 heavy；鞋 × 速度药不超过 ×2.0；草鞋热阈值 +2、皮鞋冷阈值 −2、钢靴爆炸 −20%；存档读档还穿着；皮的配方有人造革备选
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ let B = ind.base; B.rule = 'hard'; B.wear = {}; B.fx = undefined; let o = {};
+                    o.none = pwMoveMul(); o.heavy0 = indHeavy();
+                    ['shoe_straw', 'shoe_leather', 'shoe_steel'].forEach(function (k) { ind.bag = {}; ind.bag[k] = 1; indWear(k); o[k] = pwMoveMul(); o['h_' + k] = indHeavy(); });
+                    o.sweatBoots = [indChillT(), indSweatT(), indBlastCut()];
+                    ind.bag = { shoe_straw: 1 }; indWear('shoe_straw'); o.straw = [indChillT(), indSweatT()];
+                    ind.bag = { shoe_leather: 1 }; indWear('shoe_leather'); o.leather = [indChillT(), indSweatT()];
+                    ind.bag = { shoe_steel: 1 }; indWear('shoe_steel'); B.fx = { speed: 100, weak: 0 }; o.boostBoots = pwMoveMul(); B.wear = { foot: 'shoe_straw' }; o.boostStraw = pwMoveMul(); B.fx = {};
+                    let b = indFixBase(JSON.parse(JSON.stringify(B))); o.save = b.wear.foot; B.wear = {};
+                    o.recipes = ['shoe_straw', 'shoe_leather', 'shoe_steel'].map(function (k) { return IND_CRAFT.filter(function (x) { return x.out === k; }).length; });
+                    return o; })()`);
+                if (!(r.none === 1 && r.shoe_straw === 1.15 && r.shoe_leather === 1.3 && r.shoe_steel === 1.5)) bad.push('草鞋 1.15、皮鞋 1.3、钢靴 1.5 ' + JSON.stringify(r));
+                if (!(r.heavy0 === 1 && r.h_shoe_straw === 1 && r.h_shoe_leather === 1 && r.h_shoe_steel === 1)) bad.push('鞋不带 heavy（indHeavy 不变） ' + JSON.stringify(r));
+                if (!(r.boostBoots === 2 && Math.abs(r.boostStraw - 1.725) < 0.01)) bad.push('钢靴 × 速度药封顶 ×2.0、草鞋 × 药 1.725 ' + JSON.stringify([r.boostBoots, r.boostStraw]));
+                if (!(r.straw[0] === 35 && r.straw[1] === 41 && r.leather[0] === 33 && r.leather[1] === 39 && Math.abs(r.sweatBoots[2] - 0.2) < 0.001)) bad.push('草鞋热阈值 +2、皮鞋冷阈值 −2、钢靴爆炸 −20% ' + JSON.stringify([r.straw, r.leather, r.sweatBoots]));
+                if (r.save !== 'shoe_straw') bad.push('读档还穿着鞋 ' + r.save);
+                if (!(r.recipes[0] === 1 && r.recipes[1] === 2 && r.recipes[2] === 2)) bad.push('皮鞋、钢靴各有一条人造革备选 ' + JSON.stringify(r.recipes));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND79 鞋：草鞋／皮鞋／钢靴 ×1.15／×1.3／×1.5 不带 heavy、鞋 × 药封顶 ×2.0、冷热阈值、爆炸减伤、读档还穿着', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

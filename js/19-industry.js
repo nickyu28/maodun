@@ -1394,7 +1394,7 @@
             let S = ind.base.surv, Q = IND_SURV;
             if (ind.sickT > 0) ind.sickT -= dt;
             S.food = Math.max(0, S.food - Q.food * dt);
-            S.water = Math.max(0, S.water - Q.water * (ind.sickT > 0 ? Q.sickWater : 1) * (S.temp > IND_BODY.sweat ? 2 : 1) * dt);
+            S.water = Math.max(0, S.water - Q.water * (ind.sickT > 0 ? Q.sickWater : 1) * (S.temp > indSweatT() ? 2 : 1) * dt);
             let em = (ind.running ? Q.runEnergy : 1) * (ind.where === 'trip' && indIsNight() ? Q.nightOut : 1);
             S.energy = Math.max(0, S.energy - Q.energy * em * dt);
             if (indSel() === 'dry_ice') S.temp = Math.max(25, S.temp - IND_DRY_COLD * dt);   // 干冰拿在手上，体温每秒 −0.05°C
@@ -1411,7 +1411,10 @@
             }
         }
         function indSlow() { let S = ind.base.surv; return S.food <= 0 || S.water <= 0 || S.energy <= 0; }
-        function indShiver() { return ind.base.surv.temp < IND_BODY.chill; }
+        // 鞋的第二个用途（任务 43）：草鞋透气，"热"阈值 +2；皮鞋保暖，"冷"阈值 −2
+        function indChillT() { let w = ind.base.wear.foot; return IND_BODY.chill - (w && IND_ITEMS[w].chillCut || 0); }
+        function indSweatT() { let w = ind.base.wear.foot; return IND_BODY.sweat + (w && IND_ITEMS[w].sweatAdd || 0); }
+        function indShiver() { return ind.base.surv.temp < indChillT(); }
         // ── 受伤和死亡：所有掉血都走 indHurt，记下来源（死因、飘字、血条旁的字都用它） ──
         const IND_HURT = { starve: { die: '饿死', tag: '饥饿' }, thirst: { die: '渴死', tag: '口渴' }, cold: { die: '冻死', tag: '冻伤' }, heat: { die: '热死', tag: '中暑' }, burn: { die: '烫伤', tag: '烫伤' }, gas: { die: '中毒', tag: '中毒' }, boom: { die: '爆炸', tag: '爆炸' }, rad: { die: '辐射', tag: '辐射' }, thorn: { die: '仙人掌扎的', tag: '扎伤' }, kick: { die: '踹了烫炉子', tag: '烫脚' } };
         function indHurt(n, key, detail, instant) {
@@ -1500,7 +1503,7 @@
                 else { R.stillT = (R.stillT || 0) + dt; if (R.stillT >= IND_WATER.stillT) R.stam = Math.min(100, R.stam + IND_WATER.stamRegen * dt); }
             } else if (R.effort > 0) { R.stillT = 0; R.stam = Math.max(0, R.stam - R.effort * dt); }   // 拉风箱、扇扇子吃体力（任务 44）
             else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }
-            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1) * pwSpeedMul();   // 药的跑速加成（19-industry-power.js）
+            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1) * pwMoveMul();   // 鞋和药的跑速加成，合起来不超过 ×2.0（19-industry-power.js）
             if (moving) {
                 let n = Math.hypot(mx, mz), run = Math.min(1, n); mx /= n; mz /= n;
                 let len = sp * run * dt, hs = R.where === 'base' && R.base.houses.length, steps = hs ? Math.max(1, Math.ceil(len / 0.2)) : 1;   // 有房子时一小步一小步走，不穿墙
@@ -3390,9 +3393,9 @@
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
             let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + indSeasonTxt() + '　' + rule + '<br>';
             st += (indHard() ? (S.hp < 30 ? '<span class="ind-low">' + indBar('血', S.hp, '#e53935') + '</span>' : indBar('血', S.hp, '#e53935')) : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047') + (R.where === 'trip' && R.deepSt && !R.onRaft ? '<b style="color:#0277bd">游泳中，不能跑</b>' : '');
-            let tc = S.temp < IND_BODY.chill ? '#1565c0' : S.temp > IND_BODY.sweat ? '#c62828' : '#2e7d32';
+            let tc = S.temp < indChillT() ? '#1565c0' : S.temp > indSweatT() ? '#c62828' : '#2e7d32';
             st += '<br>体温 <b style="color:' + tc + '">' + S.temp.toFixed(1) + '°C</b>　气温 ' + Math.round(indAirTemp()) + '°C　保暖 ' + indWarmth();
-            if (S.temp < IND_BODY.chill) st += '　<b style="color:#1565c0">冷得发抖</b>'; else if (S.temp > IND_BODY.sweat) st += '　<b style="color:#c62828">热得冒汗</b>';
+            if (S.temp < indChillT()) st += '　<b style="color:#1565c0">冷得发抖</b>'; else if (S.temp > indSweatT()) st += '　<b style="color:#c62828">热得冒汗</b>';
             if (indHard() && S.hp < 30 && R.hurt) {
                 let tags = {}; R.hurt.rec.forEach(function (r) { if (R.t - r.t <= 1.5) tags[IND_HURT[r.key].tag] = 1; });
                 if (Object.keys(tags).length) st += '<br><b style="color:#e53935">正在掉血：' + Object.keys(tags).join('、') + '</b>';
@@ -3462,7 +3465,7 @@
             else if (sel === 'dry_ice') hint = '<small>拿在手上体温每秒 −0.05°C　右键：放进装水的桶</small>';
             else if (sel && IND_ITEMS[sel].dev) hint = '<small>右键或 Q：放下' + indName(sel) + '</small>';
             else if (sel === 'wire' && R.wirePend) hint = '<small>再点另一个设备接线</small>';
-            let wr = ['body', 'head', 'neck', 'back'].filter(function (sl) { return R.base.wear[sl]; }).map(function (sl) { return '<span onclick="indTakeOff(\'' + sl + '\')" style="cursor:pointer;margin-right:6px;border-bottom:1px dashed #999;">' + indName(R.base.wear[sl]) + '</span>'; }).join('');
+            let wr = ['body', 'head', 'neck', 'foot', 'back'].filter(function (sl) { return R.base.wear[sl]; }).map(function (sl) { return '<span onclick="indTakeOff(\'' + sl + '\')" style="cursor:pointer;margin-right:6px;border-bottom:1px dashed #999;">' + indName(R.base.wear[sl]) + '</span>'; }).join('');
             wr = '穿着：' + (wr || '<span style="color:#999">什么都没穿</span>') + (wr ? '<small style="color:#999">（点一下脱下）</small>' : '');
             let sig = st + '|' + bag + '|' + hint + '|' + wr;
             if (sig === R.hudSig) return; R.hudSig = sig;
