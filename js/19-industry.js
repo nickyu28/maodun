@@ -1833,7 +1833,7 @@
             if (k === 'cactus' && indHard() && indHurt(60, 'thorn', '生吃了带刺的仙人掌')) return true;
             if (e.f) S.food = Math.max(0, Math.min(100, S.food + e.f));
             achEat(k);
-            if (e.w) { S.water = Math.max(0, Math.min(100, S.water + e.w)); if (e.w > 0 && S.temp > 38) S.temp = Math.max(37, S.temp - 0.5); }
+            if (e.w) { S.water = Math.max(0, Math.min(100, S.water + e.w)); if (e.w > 0 && !e.hot && S.temp > 38) S.temp = Math.max(37, S.temp - 0.5); }
             if (e.back) indBagAdd(e.back, 1);
             let warm = false;
             if (e.cool && S.temp > 37) S.temp = Math.max(37, S.temp - 1);   // 冰块：体温 −1°C，最低 37

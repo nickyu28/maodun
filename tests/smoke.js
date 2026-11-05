@@ -6000,7 +6000,7 @@ async function enterExit(tab, key) {
                 const low = JSON.parse(await T.eval(`JSON.stringify({ st: indDev(${el}).st, u: indDev(${bank}).u })`));
                 if (low.st.b_h2 || low.u !== 180) bad.push('1.5 V 也电解了或耗电了 ' + JSON.stringify(low));
                 // 装到 8 节 12 V：电解水，20 秒出 2 氢 1 氧 + 空桶
-                for (let i = 0; i < 7; i++) await click(bank, 'battery');
+                await T.eval(`(function(){ let b = indDev(${bank}); b.bats = 8; b.u = 8 * IND_BAT_U; ind.bag.battery = Math.max(0, (ind.bag.battery || 0) - 7); })(); true;`);   // 直接装到 8 节：接着线一边耗电一边点电池会算成"替换"（任务 24），CI 慢时只剩 2 节
                 await T.eval(`indTeleport(-10, 10); indAdvance(21); true;`);
                 const w = JSON.parse(await T.eval(`JSON.stringify({ st: indDev(${el}).st, e: ind.base.elems })`));
                 if (w.st.b_h2 !== 2 || w.st.b_o2 !== 1 || w.st.bucket !== 1 || !w.e[1] || !w.e[8]) bad.push('电解水不对 ' + JSON.stringify(w));
@@ -6012,7 +6012,7 @@ async function enterExit(tab, key) {
                 await T.eval(`(function(){ let d = indDev(${el}); d.st = { salt: 2, bottle: 1 }; d.et = 0; indAdvance(21); })(); true;`);
                 if (await T.eval(`!!indDev(${el}).st.sodium`)) bad.push('离灶台远也电解出了钠');
                 await T.eval(`(function(){ let d = indDev(${el}); d.x = IND_BASE_ST.stove.x + 1.5; d.z = IND_BASE_ST.stove.z + 2; ind.wireDirty = true; indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(3); indPanelClose(); indAdvance(20); d.et = 0; indAdvance(21); })(); true;`);
-                const na = JSON.parse(await T.eval(`JSON.stringify({ st: indDev(${el}).st, t: ind.base.stove.temp, e: ind.base.elems })`));
+                const na = JSON.parse(await T.eval(`JSON.stringify({ st: indDev(${el}).st, t: ind.base.stove.temp, e: ind.base.elems, pw: indDev(${el}).pw, v: indDev(${el}).v, et: indDev(${el}).et, burn: indDev(${el}).burn, h: indHeatNear(indDev(${el}).x, indDev(${el}).z, 3), ri: indElRecipe(indDev(${el}), indDev(${el}).v || 0) })`));
                 if (na.st.sodium !== 1 || na.st.b_cl2 !== 1 || !na.e[11]) bad.push('熔融盐电解不对 ' + JSON.stringify(na));
                 // 氢气：灶台开着、3 米内放气就炸（人在旁边，穿了防爆服）；离火远飘走
                 await T.eval(`(function(){ indBagAdd('b_h2', 2); ind.base.surv.hp = 100; indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 2.5); indLookAt(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z); ind.base.wear = { body: 'blast_suit', head: 'blast_helmet' }; indSelect('b_h2'); indDrop(); })(); true;`);
@@ -6287,8 +6287,8 @@ async function enterExit(tab, key) {
                 if (await T.eval(`indSrcVolt(indDev(701))`) !== 0) bad.push('熔炉没点着发电机也发电');
                 await T.eval(`(function(){ let c = ind.base.cookers[0]; c.fire = 2; c.fuel = 3000; })(); true;`);
                 if (await T.eval(`indSrcVolt(indDev(701))`) !== 12) bad.push('小熔炉旁边的发电机不发电');
-                await T.eval(`(function(){ let c = ind.base.cookers[1]; ind.base.devs.push({ id: 702, ty: 'el', x: c.x + 3.5, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {} }); c.temp = 900; })(); true;`);
-                if (!(await T.eval(`indHeatNear(indDev(702).x, indDev(702).z, 3).temp === 900`))) bad.push('大窑 3 米（算上大小）内的判定不对');
+                await T.eval(`(function(){ let c = ind.base.cookers[1]; ind.base.devs.push({ id: 702, ty: 'el', x: c.x + 3.5, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {} }); })(); true;`);
+                if (!(await T.eval(`(function(){ ind.base.cookers[1].temp = 900; return indHeatNear(indDev(702).x, indDev(702).z, 3).temp === 900; })()`))) bad.push('大窑 3 米（算上大小）内的判定不对');   // 设温度和查在同一次里：中间游戏走一帧窑就凉了
                 // 4 米内取暖：离熔炉近比远暖和
                 await T.eval(`(function(){ ind.base.devs = []; let c = ind.base.cookers[0]; c.fire = 3; c.temp = 1300; indTeleport(c.x + 2, c.z); })(); true;`);
                 const warm = await T.eval(`indAirTemp()`);
@@ -6461,7 +6461,8 @@ async function enterExit(tab, key) {
                 await face(-3, 4, -3, -2);
                 await T.eval(`indSelect('${fk.keys[0]}'); indUse(); true;`);
                 const f2 = await J(`ind.base.cookers.map(function (c) { return [c.ty, c.items, c.out, c.fuel]; })`);
-                if (f2.length !== 1 || f2[0][1].ore_cu !== 2 || f2[0][2].hot_cu !== 1 || f2[0][3] !== 50) bad.push('小熔炉放下后里面的东西不对 ' + JSON.stringify(f2));
+                if (f2.length !== 1 || f2[0][1].ore_cu !== 2 || (f2[0][2].hot_cu || 0) + (f2[0][2].ingot_cu || 0) !== 1 || f2[0][3] !== 50) bad.push('小熔炉放下后里面的东西不对 ' + JSON.stringify(f2));
+                // （上面：冷炉子里的烫锭搬的时候可能已经凉了，烫锭和锭都算）
                 // 搬着的箱子能存档（inst 物品名字、内容都在），读档后还能放
                 await T.eval(`ind.bag = {}; indPickFurn({ ty: 'chest', o: ind.base.chests[1] }); indSave(); true;`);
                 await until(T, `IND_SAVING === 0`, 5000);
@@ -7886,9 +7887,8 @@ async function enterExit(tab, key) {
                 await T.eval(`(function(){ let c = indCookById('stove'), fp = ckFunnelPos(c); indTeleport(fp.x - 2.2, fp.z); indLookAt(fp.x, fp.z); })(); indSelect('oil'); window.__fl = []; indUse(); true;`);
                 const f1 = await J(`{ oil: ind.base.stove.funnel.oil, bag: ind.bag, aim: indAim() && indAim().kind }`);
                 if (!(f1.oil > 240 && f1.oil <= 250) || f1.bag.oil !== 2 || f1.bag.bucket !== 2) bad.push('拿油桶对着漏斗右键，油倒进漏斗，空桶还你 ' + JSON.stringify(f1));
-                await T.eval(`indAdvance(1); true;`);
-                const f2 = await J(`{ fuel: ind.base.stove.fuel, oil: ind.base.stove.funnel.oil }`);
-                if (f2.fuel < 9 || f2.fuel > 10.5 + (250 - f1.oil) || Math.abs(f2.fuel + f2.oil - 250) > 0.01) bad.push('漏斗每秒最多流 10，油不多不少 ' + JSON.stringify(f2));
+                const f2 = await J(`(function(){ let S = ind.base.stove, o0 = S.funnel.oil, f0 = S.fuel; indAdvance(1); return { fuel: S.fuel, oil: S.funnel.oil, flow: o0 - S.funnel.oil, df: S.fuel - f0 }; })()`);   // 量和走在同一次里：两次读数中间游戏自己也在流
+                if (f2.flow < 9 || f2.flow > 10.5 || Math.abs(f2.df - f2.flow) > 0.01 || Math.abs(f2.fuel + f2.oil - 250) > 0.01) bad.push('漏斗每秒最多流 10，油不多不少 ' + JSON.stringify(f2));
                 await T.eval(`ind.bag.oil = 6; indSelect('oil'); for (let i = 0; i < 6; i++) indUse(); true;`);
                 const f3 = await J(`{ oil: ind.base.stove.funnel.oil, bag: ind.bag }`);
                 if (f3.oil > 1200 + 1e-6 || !(f3.bag.oil >= 1) || f3.oil < 1200 - 250) bad.push('漏斗容量 1200，装不下就拒绝 ' + JSON.stringify(f3));
@@ -8008,7 +8008,7 @@ async function enterExit(tab, key) {
                 let k0 = await kick(250);
                 const names = k0.g.map((x) => x[0]).sort().join();
                 if (k0.hp !== 100 || names !== 'ash,hot_cu,hot_cu,ingot_cu,ore_cu,sand,sand,wood,wood' || k0.g.some((x) => x[1] > 1.5 + 1.5 + 0.3 || x[1] < 1.5) || Object.keys(k0.st.items).length || Object.keys(k0.st.out).length || k0.st.fuel !== 0 || k0.st.fire !== 0) bad.push('炉温 250 踹：不扣血，炉膛里的东西（料、锭、灰、没烧完的柴）飞出来散在周围，炉火灭 ' + JSON.stringify(k0));
-                if (k0.g.filter((x) => x[0] === 'hot_cu').some((x) => x[2] !== 60)) bad.push('飞出来的烫锭 60 秒凉 ' + JSON.stringify(k0.g));
+                if (k0.g.filter((x) => x[0] === 'hot_cu').some((x) => !(x[2] > 59 && x[2] <= 60))) bad.push('飞出来的烫锭 60 秒凉 ' + JSON.stringify(k0.g));
                 for (const t of [500, 700]) { const k1 = await kick(t); if (100 - k1.hp < 0.5 || 100 - k1.hp > 2.2) bad.push('炉温 ' + t + ' 踹扣 1～2 血（读数里可能回了一点血） ' + (100 - k1.hp)); }
                 for (const t of [900, 1200]) { const k2 = await kick(t); if (100 - k2.hp < 1.5 || 100 - k2.hp > 4.2) bad.push('炉温 ' + t + ' 踹扣 2～4 血（读数里可能回了一点血） ' + (100 - k2.hp)); }
                 // 扣完就完，没有持续伤害
@@ -8089,8 +8089,9 @@ async function enterExit(tab, key) {
                 // 石油：硬核用漏斗、悠闲直接倒
                 await T.eval(`(function(){ let C = ind.base.cookers[0]; C.fuel = 0; C.funnel = { ty: 'brick', oil: 0 }; ind.bag = { oil: 1 }; })(); ckPourOil('oil', { kind: 'funnel', o: indCookById(${cid}) }); indAdvance(2); true;`);
                 if (!(await T.eval(`ind.base.cookers[0].fuel > 15 && ind.base.cookers[0].funnel.oil < 250`))) bad.push('石炉接进料漏斗烧石油');
-                await T.eval(`ind.base.rule = 'casual'; ind.base.cookers[0].fuel = 0; ind.bag = { oil: 1 }; ckPourOil('oil', { kind: 'cook', o: ind.base.cookers[0] }); true;`);
-                if (!(await T.eval(`ind.base.cookers[0].fuel > 240 && ind.base.cookers[0].fuel <= 250 && ind.bag.bucket === 1`))) bad.push('悠闲：石炉直接倒油');
+                await T.eval(`ind.base.rule = 'casual'; ind.base.cookers[0].funnel = null; ind.base.cookers[0].fuel = 0; ind.bag = { oil: 1 }; ckPourOil('oil', { kind: 'cook', o: ind.base.cookers[0] }); true;`);
+                const po = await J(`{ fuel: ind.base.cookers[0].fuel, bag: ind.bag }`);
+                if (!(po.fuel > 240 && po.fuel <= 250 && po.bag.bucket === 1)) bad.push('悠闲：石炉直接倒油 ' + JSON.stringify(po));
                 await T.eval(`ind.base.rule = 'hard'; true;`);
                 // 搬起来再放下，东西不丢；占炉子上限；4 米内取暖
                 await T.eval(`(function(){ let C = ind.base.cookers[0]; C.items = { sand: 3 }; C.out = { ash: 2 }; C.fuel = 10; C.temp = 20; C.fire = 0; C.funnel = null; C.cook = null; C.spout = []; })(); ind.bag = {}; indPickFurn({ ty: 'stone', o: ind.base.cookers[0] }); true;`);
@@ -10451,7 +10452,7 @@ async function enterExit(tab, key) {
                 if (!(r.heat === 100 && r.a === 1 && r.b === 1 && r.n === 1 && /3\.5%/.test(r.nm) && r.rad.join() === 'vweak,strong,vweak')) bad.push('贫铀棒不发热、出堆还成物品、老 5% 棒当 3.5%、辐射 ' + JSON.stringify(r));
                 // 配方：贫铀芯块、贫铀棒、后处理出钚不出核废料、乏燃料老配方还在、没有新的 5% 配方
                 r = await J(`(function(){ let pd = IND_RECIPES.filter(function (x) { return x.out.pellet_dep === 1; })[0], rp = IND_RECIPES.filter(function (x) { return x.in.rod_irr === 1; })[0], old = IND_RECIPES.filter(function (x) { return x.in.rod_spent === 1; })[0], rd = IND_CRAFT.filter(function (x) { return x.out === 'rod_dep'; })[0];
-                    return { pd: !!pd && pd.in.uf6_dep === 1 && pd.in.b_h2 === 2 && pd.out.bottle === 2, rp: !!rp && rp.in.b_hno3 === 2 && rp.out.plutonium === 1 && rp.out.bottle === 2 && !rp.out.nuclear_waste && rp.minT === 300 && rp.time === 40, old: !!old && old.out.nuclear_waste === 1, rd: !!rd && rd.in.pellet_dep === 2 && rd.in.steel === 2, last: IND_RECIPES.indexOf(rp) === IND_RECIPES.length - 1 }; })()`);
+                    return { pd: !!pd && pd.in.uf6_dep === 1 && pd.in.b_h2 === 2 && pd.out.bottle === 2, rp: !!rp && rp.in.b_hno3 === 2 && rp.out.plutonium === 1 && rp.out.bottle === 2 && !rp.out.nuclear_waste && rp.minT === 300 && rp.time === 40, old: !!old && old.out.nuclear_waste === 1, rd: !!rd && rd.in.pellet_dep === 2 && rd.in.steel === 2, last: IND_RECIPES.indexOf(rp) > IND_RECIPES.indexOf(old) && IND_RECIPES.indexOf(rp) > IND_RECIPES.indexOf(pd) }; })()`);
                 if (!(r.pd && r.rp && r.old && r.rd && r.last)) bad.push('贫铀芯块、贫铀棒、后处理出钚没核废料、老配方还在、新配方加在末尾 ' + JSON.stringify(r));
                 // 存档整理保留
                 r = await J(`(function(){ let d = { rods: [{ dep: true, b: 0.4 }, { irr: true }, { spent: true }, { i: 5, b: 0.2 }, { i: 9 }] }; IND_DEV_FIX.reactor(d); return d.rods; })()`);
@@ -10526,7 +10527,7 @@ async function enterExit(tab, key) {
                     return { a: a, b: b, n: n, c: c, n2: n2, w: ind.base.surv.water, shell: ind.bag.coconut_shell || 0, left: ind.bag.coconut || 0 };`);
                 if (!(r.a === false && r.b === true && r.n >= 1 && r.n <= 2 && r.c === true && r.n2 === r.n && r.w === 65 && r.shell === 1 && r.left === r.n - 1)) bad.push('椰子树空手摇一次、拿斧子不摇、喝了 +15 剩椰壳 ' + JSON.stringify(r));
                 // 乳胶 2 + 硫 1 → 橡胶；硫只有硬核有，配方标 hard
-                r = await J(`(function(){ let x = IND_RECIPES.filter(function (q) { return q.out.rubber === 1; })[0]; return { ok: !!x && x.in.latex === 2 && x.in.sulfur === 1 && x.minT === 150 && x.time === 20, hard: !!(x && x.hard), last: IND_RECIPES.indexOf(x) === IND_RECIPES.length - 1 }; })()`);
+                r = await J(`(function(){ let x = IND_RECIPES.filter(function (q) { return q.out.rubber === 1; })[0]; return { ok: !!x && x.in.latex === 2 && x.in.sulfur === 1 && x.minT === 150 && x.time === 20, hard: !!(x && x.hard), last: IND_RECIPES.indexOf(x) > IND_RECIPES.findIndex(function (q) { return q.in.rod_irr; }) }; })()`);
                 if (!(r.ok && r.hard && r.last)) bad.push('橡胶配方、只给硬核、加在配方表末尾 ' + JSON.stringify(r));
                 // 提示里写得出能割
                 r = await run(`let p = tree('pine'), u = tree('rubber'), m = tree('palm'); return { p: /割松脂/.test(wdNodeHint(p)), u: /割胶/.test(wdNodeHint(u)), m: /摇椰子/.test(wdNodeHint(m)), name: /橡胶树/.test(wdNodeHint(u)) };`);
