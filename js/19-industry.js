@@ -232,7 +232,7 @@
                 if (typeof k === 'string' && IND_DYN.length && t[k] === undefined) { let dy = indDynItem(k); if (dy) return dy; }
                 if (typeof k === 'string' && k.indexOf('inst:') === 0) {
                     let c = indCarried(k); if (!c) return undefined;
-                    let nm = c.ty === 'chest' ? (c.lead ? '铅箱（' : '仓库箱（') + (Object.keys(c.items).length ? '装着 ' + Object.keys(c.items).length + ' 样' : '空') + '）' : IND_COOK[c.ty].name;
+                    let nm = c.ty === 'chest' ? (c.lead ? '铅箱（' : c.cold ? '冷藏箱（' : '仓库箱（') + (Object.keys(c.items).length ? '装着 ' + Object.keys(c.items).length + ' 样' : '空') + '）' : IND_COOK[c.ty].name;
                     return { name: nm, col: c.ty === 'chest' ? 0x6d4c41 : IND_COOK[c.ty].col || 0xb71c1c, furn: c.ty, inst: true };
                 }
                 if (typeof k === 'string' && k.indexOf('cyl:') === 0) { let g = indCylParse(k); return g ? { name: indCylName(g), col: indCylLiquid(g) ? 0x4fc3f7 : 0x78909c, cyl: g } : undefined; }
@@ -544,13 +544,13 @@
             b.chests = b.chests.filter(function (c) { return c && isFinite(c.x) && isFinite(c.z) && c.items && typeof c.items === 'object'; }).slice(0, 20);
             let seen = {};
             b.chests.forEach(function (c) {
-                c.big = !!c.big; c.lead = !!c.lead; c.x = indNum(c.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); c.z = indNum(c.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1);
+                c.big = !!c.big; c.lead = !!c.lead; c.cold = !!c.cold; c.x = indNum(c.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); c.z = indNum(c.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1);
                 Object.keys(c.items).forEach(function (k) { if (!IND_ITEMS[k] || !(c.items[k] > 0)) delete c.items[k]; else c.items[k] = Math.floor(c.items[k]); });
                 c.id = indNum(c.id, 0, 0, 1e9) | 0; while (!c.id || seen[c.id]) c.id = ++b.cid; seen[c.id] = 1; b.cid = Math.max(b.cid, c.id);
             });
             Object.keys(b.carried).forEach(function (id) {
                 let c = b.carried[id]; b.cid = Math.max(b.cid, +id || 0);
-                if (c.ty === 'chest') { c.big = !!c.big; c.lead = !!c.lead; Object.keys(c.items).forEach(function (k) { if (!IND_ITEMS[k] || !(c.items[k] > 0) || k === 'inst:' + id) delete c.items[k]; }); }
+                if (c.ty === 'chest') { c.big = !!c.big; c.lead = !!c.lead; c.cold = !!c.cold; Object.keys(c.items).forEach(function (k) { if (!IND_ITEMS[k] || !(c.items[k] > 0) || k === 'inst:' + id) delete c.items[k]; }); }
                 else indFixCook(c.st, b);
             });
             let bigC = b.chests.filter(function (c) { return c.big; })[0]; b.box = bigC ? bigC.items : {};
@@ -1177,7 +1177,7 @@
                     B.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * (o.animal === undefined ? 1 : o.animal) * h); });
                     indElecTick(h); indStoveTick(h);
                     if (o.bombs) nkBombTick(h);
-                    rcAdvance(h, ff);
+                    rcAdvance(h, ff); clStep(h, o.spBag !== false, true);
                     if (!ind || ind.over) return;
                 }
             } finally { if (o.quiet) indFlash = oldFlash; if (ind) { B.clock = end; ind.sleeping = false; ind.catching = false; } }
@@ -1186,7 +1186,7 @@
             let B = ind.base; if (typeof B.away !== 'number') return 0;
             let now = B.clock, span = Math.max(0, Math.min(IND_AWAY.cap, now - B.away)); B.away = null;
             if (!(span > 0) || !B.rule) return 0;
-            indFastForward(span, now, { animal: 1 });
+            indFastForward(span, now, { animal: 1, spBag: false });
             ind.cropDirty = true; ind.fireDirty = true; ind.devDirty = true; ind.itemDirty = true;
             indCooks().forEach(indCookBadge);
             return span;
@@ -1360,7 +1360,7 @@
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); clStep(dt, true, ind.where === 'base'); }   // 出门时家里不在这里跑，回家补算（任务 3）
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
             if (!ind || ind.over || ind.dead) return;
@@ -1700,6 +1700,7 @@
             if (ind.ch) { ind.ch = null; indFlash('停了'); return false; }
             if (ind.ride || (indSel() && IND_ITEMS[indSel()].veh)) { if (rdBlockAction(indAim())) return false; }   // 骑着只能做单手的事（任务 46）；拿着车左键开面板
             if (ind.onRaft) return indRaftToggle(ind.onRaft);
+            if (clIceAct()) return true;   // 冬天站水边拿镐凿冰（19-industry-cold.js）
             if (indSel() === 'bell') return indRing();
             if (indSel() === 'bellows') return indInstallBellows(indAim());
             let a = indAim();
@@ -1821,6 +1822,7 @@
             if (e.w) { S.water = Math.max(0, Math.min(100, S.water + e.w)); if (e.w > 0 && S.temp > 38) S.temp = Math.max(37, S.temp - 0.5); }
             if (e.back) indBagAdd(e.back, 1);
             let warm = false;
+            if (e.cool && S.temp > 37) S.temp = Math.max(37, S.temp - 1);   // 冰块：体温 −1°C，最低 37
             if (e.hot && S.temp < 37) { S.temp = Math.min(37, S.temp + IND_HOT_SOUP); warm = true; }   // 热汤：体温立刻 +1.5°C，最多到 37
             let sick = e.sick && indRand() < e.sick;
             if (sick) ind.sickT = IND_SURV.sick;
@@ -1996,6 +1998,7 @@
                 if (d.ty === 'bank') indBankCells(d).forEach(function (c) { add(c[0], c[1]); });
                 if (d.rods) d.rods.forEach(function (r) { add(r.spent ? 'rod_spent' : nkRodKey(r), 1); });
                 if (d.cy) add(d.cy, 1);
+                if (d.ty === 'fridge' && d.items) Object.keys(d.items).forEach(function (k) { add(k, d.items[k]); });
             });
             B.cookers.forEach(function (c) {
                 if (Math.hypot(c.x - x, c.z - z) > R) return;
@@ -2201,7 +2204,7 @@
             if (ty === 'chest' || ty === 'stove' || IND_COOK[ty]) {
                 id = ++B.cid; key = 'inst:' + id;
                 if (indFits(ind.bag, indBagSlots(), key, 1) < 1) { indFlash('背包满了'); return false; }
-                if (ty === 'chest') { B.carried[id] = { ty: 'chest', big: f.o.big, lead: !!f.o.lead, items: f.o.items }; B.chests = B.chests.filter(function (c) { return c !== f.o; }); }
+                if (ty === 'chest') { B.carried[id] = { ty: 'chest', big: f.o.big, lead: !!f.o.lead, cold: !!f.o.cold, iceT: f.o.iceT || 0, age: f.o.age || {}, items: f.o.items }; B.chests = B.chests.filter(function (c) { return c !== f.o; }); }
                 else if (ty === 'stove') { B.carried[id] = { ty: 'stove', st: B.stove }; B.stove = ckNewState(); B.off.stove = true; }
                 else { let c = f.o, st = {}; ['items', 'out', 'fuel', 'fire', 'temp', 'cook', 'ashT', 'bellows', 'spout', 'spoutTy', 'funnel'].forEach(function (k) { st[k] = c[k]; }); B.carried[id] = { ty: ty, st: st }; B.cookers = B.cookers.filter(function (x) { return x !== c; }); }
             } else {
@@ -2224,7 +2227,7 @@
             x = Math.max(-IND_BASE.x + r, Math.min(IND_BASE.x - r, x)); z = Math.max(-IND_BASE.z + r, Math.min(IND_BASE.z - r, z));
             if (!indSpotFree(x, z, r)) { indFlash('这里放不下，换个空地'); return false; }
             indBagDel(k, 1);
-            if (ty === 'chest') B.chests.push({ id: pay ? +k.slice(5) : ++B.cid, x: x, z: z, big: pay ? pay.big : false, lead: pay ? !!pay.lead : !!d.lead, items: pay ? pay.items : {} });
+            if (ty === 'chest') B.chests.push({ id: pay ? +k.slice(5) : ++B.cid, x: x, z: z, big: pay ? pay.big : false, lead: pay ? !!pay.lead : !!d.lead, cold: pay ? !!pay.cold : !!d.cold, iceT: pay ? pay.iceT || 0 : 0, age: pay && pay.age ? pay.age : {}, items: pay ? pay.items : {} });
             else if (ty === 'stove') { B.off.stove = false; B.pos.stove = { x: x, z: z }; if (pay) B.stove = pay.st; indApplyPos(B); }
             else if (ty === 'bed' || ty === 'bench' || ty === 'pool') { B.off[ty] = false; B.pos[ty] = { x: x, z: z }; indApplyPos(B); }
             else B.cookers.push(Object.assign({ id: ++B.cseq, ty: ty, x: x, z: z }, pay ? pay.st : ckNewState()));
@@ -2249,7 +2252,7 @@
         function indFurnList() {
             let L = [], S = IND_BASE_ST, B = ind.base;
             ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { if (!B.off[k]) L.push({ key: k, ty: k, x: S[k].x, z: S[k].z, C: k === 'stove' ? B.stove : undefined, sig: k === 'stove' ? ckSig(B.stove) : undefined }); });
-            B.chests.forEach(function (c) { L.push({ key: 'chest' + c.id, ty: 'chest', big: c.big, lead: c.lead, x: c.x, z: c.z }); });
+            B.chests.forEach(function (c) { L.push({ key: 'chest' + c.id, ty: 'chest', big: c.big, lead: c.lead, cold: c.cold, x: c.x, z: c.z }); });
             B.cookers.forEach(function (c) { L.push({ key: 'cook' + c.id, ty: c.ty, x: c.x, z: c.z, C: c, sig: ckSig(c) }); });
             B.houses.forEach(function (h) { L.push({ key: 'house' + h.id, ty: 'house', h: h, x: h.x, z: h.z, sig: h.ty + h.side + (h.open ? 'o' : 'c') }); });
             return L;
@@ -2260,6 +2263,7 @@
             if (f.ty === 'chest') {
                 if (f.big) { m.push(indBox(2.2, 1.2, 1.6, 0x455a64, x, 0.6, z)); m.push(indSign('仓库箱', x, 2.2, z, 2.4, 0.6)); }
                 else if (f.lead) { m.push(indBox(1.6, 1.0, 1.2, 0x546e7a, x, 0.5, z)); m.push(indSign('铅箱', x, 1.9, z, 2.0, 0.5)); }
+                else if (f.cold) { m.push(indBox(1.6, 1.0, 1.2, 0x90caf9, x, 0.5, z)); m.push(indSign('冷藏箱', x, 1.9, z, 2.0, 0.5)); }
                 else { m.push(indBox(1.6, 1.0, 1.2, 0x6d4c41, x, 0.5, z)); m.push(indSign('仓库箱', x, 1.9, z, 2.0, 0.5)); }
             } else if (f.ty === 'stove') { m.push(indBox(2.4, 1.0, 1.6, 0xb71c1c, x, 0.5, z)); m.push(indSign('灶台', x, 2.2, z, 2.4, 0.6)); }
             else if (f.ty === 'bed') { m.push(indBox(2.2, 0.5, 3.2, 0x5c6bc0, x, 0.25, z)); m.push(indSign('床', x, 1.8, z, 2, 0.5)); }
@@ -2328,7 +2332,7 @@
             if (d.st) Object.keys(d.st).forEach(function (k) { put(k, d.st[k]); });   // 电解槽里的东西放回仓库箱（放不下进背包，再放不下掉在地上，不会没）
             if (d.rods) d.rods.forEach(function (r) { put(r.spent ? 'rod_spent' : nkRodKey(r), 1); });   // 反应堆里的燃料棒
             if (d.cy) put(d.cy, 1);
-            rcPickHook(d, put);   // 电路元件：信号线退回、芯片里的元件退回
+            rcPickHook(d, put); if (d.ty === 'fridge' && d.items) Object.keys(d.items).forEach(function (k) { put(k, d.items[k]); });   // 电路元件：信号线退回、芯片里的元件退回
             if (d.ty === 'gen' && d.wt > 0) put(indFilledKey('water_raw', d.wm || 'wood'), 1);   // 蒸汽发电机水箱里没用完的水还回成一桶
             let N = tot.box + tot.bag + tot.ground;
             ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
@@ -2395,6 +2399,7 @@
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
         function indDevAct(d) {
             let k = indSel(), D = IND_DEVS[d.ty];
+            { let r = clDevAct(d); if (r !== undefined) return r; }   // 冰箱（19-industry-cold.js）
             { let r = rcDevAct(d, k); if (r !== undefined) return r; }   // 电路元件（19-industry-circuit.js）
             { let r = rlDevAct(d, k); if (r !== undefined) return r; }   // 管道、水塔（19-industry-real.js）
             if (k === 'wire') {
@@ -3057,7 +3062,7 @@
             if (el) el.value = '';
             if (kind === 'box') {
                 let c = indChestCur(); if (!c || !c.items[k]) return false;
-                let want = Math.min(n, c.items[k]), t = indBagAdd(k, want);
+                let want = Math.min(n, c.items[k]), t = indBagAdd(k, want); if (t > 0) clMv(c, k, false);
                 if (t < want) indFlash(t > 0 ? '背包满了，只拿了 ' + t + ' 个' : '背包满了');
                 c.items[k] -= t; if (c.items[k] <= 0) delete c.items[k];
                 indSave(); if (ind.panel === 'box') indPanelBox(); return t > 0;
@@ -3079,7 +3084,7 @@
             document.body.appendChild(p);
         }
         function indRow(left, right) { return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 0;border-bottom:1px solid #eee;"><span style="flex:1;min-width:0;">' + left + '</span><span style="white-space:nowrap;">' + right + '</span></div>'; }
-        function indChestCur() { let C = ind.base.chests; return C.filter(function (c) { return c.id === ind.boxId; })[0] || indBoxTarget(); }
+        function indChestCur() { let C = ind.base.chests; if (typeof ind.boxId === 'string') { let f = clFridgeOf(ind.boxId); if (f) return f; } return C.filter(function (c) { return c.id === ind.boxId; })[0] || indBoxTarget(); }
         function indChestCap(c) { return c.big ? 0 : IND_CHEST_SLOTS; }
         // 格子：{ 物品: 总数 } 按 99 一格切开（和背包一样）
         function indSlotsIn(B) { let L = []; Object.keys(B).forEach(function (k) { let c = B[k]; while (c > 0) { L.push({ k: k, n: Math.min(IND_STACK, c) }); c -= IND_STACK; } }); return L; }
@@ -3108,7 +3113,7 @@
                     indRow(indName(it.k) + ' × ' + it.n, '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',1)">拿 1</button>' + indNumBox('box', i, it.k, '拿') + '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',' + IND_STACK + ')">全拿</button><button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
             }).join('') : '<div style="color:#999;padding:8px 0;">空的</div>';
             let selBtn = S ? (S.from === 'bag' ? '<button id="ind-box-selput" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveSel()">放进箱子</button>' : '<button id="ind-box-seltake" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveSel()">拿回来</button>') : '';
-            indPanelShow('box', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">仓库箱' + (c.big ? '' : '　' + indSlotsOf(box) + ' / ' + IND_CHEST_SLOTS + ' 格') + '</div>' +
+            indPanelShow('box', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + (c.ty === 'fridge' ? '冰箱' + (c.pw ? '（通电）' : '（没电）') : c.cold ? '冷藏箱' + (c.iceT > 0 ? '（有冰）' : c.items.ice ? '' : '（没冰）') : '仓库箱') + (c.big ? '' : '　' + indSlotsOf(box) + ' / ' + IND_CHEST_SLOTS + ' 格') + '</div>' +
                 '<div id="ind-box-zone" style="min-height:40px;border-radius:6px;">' + rows + '</div>' +
                 '<div style="margin-top:8px;font-weight:bold;">身上　<small style="color:#888;font-weight:normal;">按住一格拖进箱子；点一下选中再点按钮也行</small></div>' +
                 '<div id="ind-bag-zone" style="min-height:40px;border-radius:6px;padding:2px;">' + indBagChips() + '</div>' +
@@ -3154,11 +3159,11 @@
             if (from === 'bag') {
                 let it = indSlots()[i]; if (!it) return false;
                 if (indFits(c.items, indChestCap(c), it.k, it.n) < it.n) { indFlash('箱子放不下了'); return false; }
-                indBagDel(it.k, it.n); c.items[it.k] = (c.items[it.k] || 0) + it.n;
+                clMv(c, it.k, true); indBagDel(it.k, it.n); c.items[it.k] = (c.items[it.k] || 0) + it.n;
             } else {
                 let it = indSlotsIn(c.items)[i]; if (!it) return false;
                 if (indFits(ind.bag, indBagSlots(), it.k, it.n) < it.n) { indFlash('背包放不下了'); return false; }
-                indBagAdd(it.k, it.n); c.items[it.k] -= it.n; if (c.items[it.k] <= 0) delete c.items[it.k];
+                clMv(c, it.k, false); indBagAdd(it.k, it.n); c.items[it.k] -= it.n; if (c.items[it.k] <= 0) delete c.items[it.k];
             }
             ind.boxSel = null; indSave(); indPanelBox(); return true;
         }
@@ -3248,7 +3253,7 @@
         }
         function indBoxTake(k, n) {
             let c = ind && indChestCur(); if (!c || !c.items[k]) return;
-            let t = indBagAdd(k, Math.min(n, c.items[k]));
+            let t = indBagAdd(k, Math.min(n, c.items[k])); if (t > 0) clMv(c, k, false);
             if (t <= 0) indFlash('背包满了');
             c.items[k] -= t; if (c.items[k] <= 0) delete c.items[k];
             indSave(); if (ind.panel === 'box') indPanelBox();
@@ -3261,7 +3266,7 @@
             Object.keys(ind.bag).forEach(function (k) {
                 if (only && !c.items[k]) return;
                 let t = indFits(c.items, cap, k, ind.bag[k]);
-                if (t > 0) { c.items[k] = (c.items[k] || 0) + t; indBagDel(k, t); moved += t; }
+                if (t > 0) { clMv(c, k, true); c.items[k] = (c.items[k] || 0) + t; indBagDel(k, t); moved += t; }
                 left += ind.bag[k] || 0;
             });
             if (!only && left) indFlash('箱子放满了，还剩 ' + left + ' 个在背包里');

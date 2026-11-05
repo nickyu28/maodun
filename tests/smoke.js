@@ -10308,6 +10308,65 @@ async function enterExit(tab, key) {
             report('IND83 窑边中暑：取暖封顶 12、体温 >39 回落加快、喝水降温、>38.5 提示一次', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND84')) {
+            // IND84 冰块、冷藏箱、冰箱、氟利昂、食物变质（任务 63）：熟肉背包里 2 个游戏日变腐烂；冷藏箱有冰不坏、冰用完接着坏；冰箱通电不坏、断电接着坏；制冰一桶出 4 块还回空桶；吃冰体温降；腐烂食物拉肚子、能当肥料；冬天凿冰；氟利昂
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; let B = ind.base; B.clAge = {}; B.clHint = false; B.chests = []; B.devs = [];
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 背包：熟肉 2 个游戏日（2400 秒）变腐烂，没到不变
+                let r = await run(`ind.bag = { meat_roast: 2, wood: 3 }; clStep(2300, true, false); let a = { m: ind.bag.meat_roast || 0, r: ind.bag.rotfood || 0 }; clStep(200, true, false); return { a: a, m: ind.bag.meat_roast || 0, r: ind.bag.rotfood || 0, w: ind.bag.wood, fl: fl.join('|') };`);
+                if (!(r.a.m === 2 && r.a.r === 0 && r.m === 0 && r.r === 2 && r.w === 3)) bad.push('熟肉背包里 2 天变腐烂、没到不变、木头不变 ' + JSON.stringify(r));
+                if (!/放坏了/.test(r.fl)) bad.push('第一次放坏了有提示 ' + JSON.stringify(r));
+                r = await run(`ind.bag = { tomato: 1, meat_raw: 1, bread: 1, sugar: 1 }; clStep(1300, true, false); let a = JSON.stringify(ind.bag); clStep(3600, true, false); return { a: a, b: ind.bag };`);
+                if (!(/"meat_raw":/.test(r.a) === false && /"rotfood":1/.test(r.a) && r.b.sugar === 1 && !r.b.tomato && !r.b.bread && r.b.rotfood === 3)) bad.push('生肉 1 天、蔬菜 4 天、面包 3 天、糖不坏 ' + JSON.stringify(r));
+                // 冷藏箱：有冰不坏（3 块冰撑 3 天），冰用完接着坏；没冰的普通箱子照坏；一块冰一天
+                r = await run(`let c = { id: 90, x: 0, z: 0, big: false, cold: true, iceT: 0, age: {}, items: { meat_roast: 2, ice: 3 } }, p = { id: 91, x: 4, z: 4, big: false, items: { meat_roast: 2 }, age: {} }; B.chests = [c, p];
+                    let adv = function (n) { for (let i = 0; i < n / 10; i++) clStep(10, false, true); };
+                    adv(600); let a = { ice: c.items.ice, t: c.iceT > 0 }; adv(2900); let b = { m: c.items.meat_roast || 0, ice: c.items.ice || 0, rp: p.items.rotfood || 0 }; adv(2600); return { a: a, b: b, m: c.items.meat_roast || 0, rc: c.items.rotfood || 0 };`);
+                if (!(r.a.ice === 2 && r.a.t && r.b.m === 2 && r.b.rp === 2 && r.m === 0 && r.rc === 2)) bad.push('冷藏箱有冰不坏（一块一天）、没冰的箱子坏、冰没了接着坏 ' + JSON.stringify(r));
+                // 冰箱：通电不坏、断电接着坏；制冰
+                r = await run(`let d = { id: ++B.dseq, ty: 'fridge', x: 5, z: 5, on: true, pw: true, items: { meat_roast: 2 }, age: {} }, e = { id: ++B.dseq, ty: 'fridge', x: 8, z: 5, on: true, pw: false, items: { meat_roast: 2 }, age: {} }; B.devs = [d, e];
+                    clStep(6000, false, true); ind.bag = {}; let ok = clDevAct(d), tx = (document.getElementById('ind-panel') || { innerText: '' }).innerText; indPanelClose(); return { a: d.items.meat_roast || 0, ar: d.items.rotfood || 0, b: e.items.meat_roast || 0, br: e.items.rotfood || 0, ok: ok, tx: /冰箱（通电）/.test(tx) };`);
+                if (!(r.a === 2 && r.ar === 0 && r.b === 0 && r.br === 2 && r.ok === true && r.tx)) bad.push('冰箱通电不坏、断电接着坏、点冰箱开面板 ' + JSON.stringify(r));
+                r = await run(`let d = { id: ++B.dseq, ty: 'fridge', x: 5, z: 5, on: true, pw: true, items: { water_raw: 1 }, age: {} }, e = { id: ++B.dseq, ty: 'fridge', x: 8, z: 5, on: true, pw: false, items: { water_raw: 1 }, age: {} }; B.devs = [d, e];
+                    clStep(30, false, true); let half = d.items.ice || 0; clStep(31, false, true); return { half: half, ice: d.items.ice || 0, bk: d.items.bucket || 0, w: d.items.water_raw || 0, eice: e.items.ice || 0 };`);
+                if (!(r.half === 0 && r.ice === 4 && r.bk === 1 && r.w === 0 && r.eice === 0)) bad.push('制冰一桶 60 秒出 4 块还回空桶、断电不制冰 ' + JSON.stringify(r));
+                // 冰块：吃了体温 −1（最低 37）、口渴 +5；背包里 10 分钟化掉
+                r = await run(`let S = B.surv; S.temp = 38; S.water = 50; ind.bag = { ice: 2 }; indEat('ice'); let a = { t: S.temp, w: S.water }; S.temp = 36.5; indEat('ice'); let b = S.temp; clStep(700, true, false); return { a: a, b: b, left: ind.bag.ice || 0 };`);
+                if (!(Math.abs(r.a.t - 37) < 0.01 && r.a.w === 55 && Math.abs(r.b - 36.5) < 0.01 && r.left === 0)) bad.push('吃冰体温 −1 最低 37、口渴 +5、背包里化掉 ' + JSON.stringify(r));
+                // 腐烂的食物：吃了拉肚子、能当肥料
+                r = await run(`ind.base.surv.food = 20; ind.sickT = 0; ind.bag = { rotfood: 1 }; indEat('rotfood'); return { sick: ind.sickT > 0, fert: !!IND_FERTS.rotfood };`);
+                if (!(r.sick && r.fert)) bad.push('腐烂的食物拉肚子、能当肥料 ' + JSON.stringify(r));
+                // 两堆并在一起取更老的年龄（箱子拿到背包）
+                r = await run(`let c = { id: 90, x: 0, z: 0, big: false, items: { meat_roast: 2 }, age: { meat_roast: 1500 } }; B.chests = [c]; ind.bag = { meat_roast: 1 }; B.clAge = { meat_roast: 100 }; ind.boxId = 90; indBoxTake('meat_roast', 1); return { bag: B.clAge.meat_roast, n: ind.bag.meat_roast };`);
+                if (!(r.bag === 1500 && r.n === 2)) bad.push('从箱子拿到背包取更老的年龄 ' + JSON.stringify(r));
+                // 存档：年龄、冷藏箱标记、冰箱里的东西读档整理后还在
+                r = await run(`let c = { id: 90, x: 0, z: 0, big: false, cold: true, iceT: 500, age: { meat_roast: 700 }, items: { meat_roast: 2, ice: 1 } }; B.chests = [c]; B.clAge = { bread: 300 }; B.devs = [{ id: ++B.dseq, ty: 'fridge', x: 5, z: 5, on: true, items: { bread: 3, junk_x: 2 }, age: { bread: 50 } }];
+                    let b = JSON.parse(JSON.stringify(B)); clFixBase(b); return { cold: b.chests[0].cold, t: b.chests[0].iceT, a: b.chests[0].age.meat_roast, bag: b.clAge.bread, f: b.devs[0].items.bread, junk: b.devs[0].items.junk_x || 0 };`);
+                if (!(r.cold === true && r.t === 500 && r.a === 700 && r.bag === 300 && r.f === 3 && r.junk === 0)) bad.push('读档整理保留年龄、冷藏箱、冰箱里的东西 ' + JSON.stringify(r));
+                // 氟利昂：能做出来；冰箱配方要它
+                r = await J(`(function(){ let fr = IND_RECIPES.filter(function (x) { return x.out.b_freon === 1; })[0], fc = IND_CRAFT.filter(function (x) { return x.out === 'dev_fridge'; })[0], cc = IND_CRAFT.filter(function (x) { return x.out === 'chest_cold'; })[0];
+                    return { fr: !!fr && fr.in.b_hf === 2 && fr.in.b_cl2 === 2 && fr.in.coal === 1 && fr.minT === 120 && fr.time === 20 && fr.out.bottle === 3, fc: !!fc && fc.in.b_freon === 1, cc: !!cc && cc.in.wood === 6 && cc.in.ingot_fe === 2 }; })()`);
+                if (!(r.fr && r.fc && r.cc)) bad.push('氟利昂配方、冰箱要氟利昂、冷藏箱配方 ' + JSON.stringify(r));
+                // 冬天拿镐站水边凿冰：每次 1～2 块；别的季节、没镐没有
+                r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let os = window.indSeason, ow = window.indAtWater; try {
+                    indGoTrip(2024); ind.base.rule = 'hard'; ind.bag = { pick_stone: 1 }; indSelect('pick_stone'); window.indAtWater = function () { return true; };
+                    window.indSeason = function () { return 2; }; let a = clIceAct(), n0 = ind.bag.ice || 0;
+                    window.indSeason = function () { return 3; }; let b = clIceAct(), n1 = ind.bag.ice || 0; ind.iceCd = 0; let c = clIceAct(), n2 = ind.bag.ice || 0;
+                    ind.bag = { wood: 1 }; indSelect('wood'); ind.iceCd = 0; let d = clIceAct();
+                    return { a: a, n0: n0, b: b, n1: n1, c: c, n2: n2, d: d }; } finally { window.indSeason = os; window.indAtWater = ow; blazeFlash = bf; } })()`);
+                if (!(r.a === false && r.n0 === 0 && r.b === true && r.n1 >= 1 && r.n1 <= 2 && r.c === true && r.n2 - r.n1 >= 1 && r.d === false)) bad.push('冬天拿镐凿冰、别的季节和没镐没有 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND84 冰块冷藏箱冰箱变质：熟肉 2 天腐烂、冷藏箱有冰不坏冰没了接着坏、冰箱通电不坏断电坏、制冰、吃冰降温、腐烂拉肚子当肥料、年龄取老的、冬天凿冰、氟利昂', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
