@@ -1165,7 +1165,7 @@
         // 一秒一秒快进家里（回家补算和睡觉共用，任务 35）：时钟按当时的时刻走，补完回到 end；作物、篝火、动物饿、电和设备（反应堆、离心机、电解槽、汽轮发电机）、灶台一起走。
         // o.animal：动物饿的倍数；o.bombs：原子弹倒计时也走（睡觉时走，出门不算）；o.quiet：快进期间不弹一条条提示。辐射伤害不算（人在床上／在外面）
         function indFastForward(span, end, o) {
-            let B = ind.base, oldFlash = indFlash;
+            let B = ind.base, oldFlash = indFlash, ff = {};
             ind.sleeping = true; ind.catching = true;
             if (o.quiet) indFlash = function () { };
             try {
@@ -1176,6 +1176,7 @@
                     B.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * (o.animal === undefined ? 1 : o.animal) * h); });
                     indElecTick(h); indStoveTick(h);
                     if (o.bombs) nkBombTick(h);
+                    rcAdvance(h, ff);
                     if (!ind || ind.over) return;
                 }
             } finally { if (o.quiet) indFlash = oldFlash; if (ind) { B.clock = end; ind.sleeping = false; ind.catching = false; } }
@@ -1371,7 +1372,7 @@
             if (!ind || ind.over || ind.dead) return;
             if (ind.where === 'base') indStoveTick(dt);
             if (!ind || ind.over) return;
-            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); fmPullTick(dt); rkTick(dt); pwFxTick(dt); rdTick(dt);
+            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); fmPullTick(dt); rkTick(dt); pwFxTick(dt); rdTick(dt); rcTick(dt); rcDrawSigs();
             if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
@@ -2034,6 +2035,7 @@
         function indPlaceDev(k) {
             if (ind.where !== 'base') { indFlash('设备只能放在基地里'); return false; }
             if (ind.base.devs.length >= IND_DEV_CAP) { indFlash('设备太多了'); return false; }
+            if (!rcPlaceOk(IND_ITEMS[k].dev)) return false;   // 电路上限：40 个芯片、400 个元件
             let f = indFace(), x = ind.p.x + f.x * 1.6, z = ind.p.z + f.z * 1.6;
             x = Math.max(-IND_BASE.x + 0.8, Math.min(IND_BASE.x - 0.8, x)); z = Math.max(-IND_BASE.z + 0.8, Math.min(IND_BASE.z - 0.8, z));
             if (indCooks().some(function (c) { let sp = indSpoutPos(c); return Math.hypot(x - sp.x, z - sp.z) < 1.2; })) { indFlash('这里是出料槽的位置，换个地方'); return false; }
@@ -2324,6 +2326,7 @@
             if (d.st) Object.keys(d.st).forEach(function (k) { put(k, d.st[k]); });   // 电解槽里的东西放回仓库箱（放不下进背包，再放不下掉在地上，不会没）
             if (d.rods) d.rods.forEach(function (r) { put(r.spent ? 'rod_spent' : nkRodKey(r), 1); });   // 反应堆里的燃料棒
             if (d.cy) put(d.cy, 1);
+            rcPickHook(d, put);   // 电路元件：信号线退回、芯片里的元件退回
             if (d.ty === 'gen' && d.wt > 0) put(indFilledKey('water_raw', d.wm || 'wood'), 1);   // 蒸汽发电机水箱里没用完的水还回成一桶
             let N = tot.box + tot.bag + tot.ground;
             ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
@@ -2390,6 +2393,7 @@
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
         function indDevAct(d) {
             let k = indSel(), D = IND_DEVS[d.ty];
+            { let r = rcDevAct(d, k); if (r !== undefined) return r; }   // 电路元件（19-industry-circuit.js）
             { let r = rlDevAct(d, k); if (r !== undefined) return r; }   // 管道、水塔（19-industry-real.js）
             if (k === 'wire') {
                 if (D.nowire) { indFlash(D.name + '不用接线'); return false; }

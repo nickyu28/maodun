@@ -10171,6 +10171,77 @@ async function enterExit(tab, key) {
             report('IND80 自行车和车：2 ×／3 × 冲刺速度、脚踏吃体力、电池组 12～24 V 才启动、骑着挖矿被拒编织能做、撞树停、深水下车、面板和存档', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND81')) {
+            // IND81 电路第 1 期（C1～C6，docs/circuit-steps.md）：信号线规矩（8 根、1 根、自己连自己）、存档整理；按钮 → 灯亮 1 秒灭、拉杆；四种门真值表、锁存；没电输出 0；
+            // 延时验收电路"按一下按钮灯亮，5 秒后自己灭"；放进基础芯片里也一样；第 9 个元件放不进去；离家补算结果跟实时一样；上限提示
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const dv = (id, ty, x, o) => JSON.stringify(Object.assign({ id: id, ty: ty, x: x, z: -6, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}));
+                // 公共：一个有电的电池组（2 节 3 V）通过铜线接所有有源元件
+                const setup = (devs, wires, sig) => `(function(){ let B = ind.base; B.rule = 'hard'; B.off.pool = true; B.rad = []; B.fires = []; B.cookers = []; B.devs = [${dv(1, 'bank', -28, { bats: 2, u: 99999, um: 99999 })}, ${devs.join(',')}]; B.wires = ${JSON.stringify(wires)}; B.sig = ${JSON.stringify(sig)}; B.dseq = 100; ind.sigPend = null;
+                    B.devs.forEach(function (d) { if (IND_DEV_FIX[d.ty]) IND_DEV_FIX[d.ty](d); }); B.devs[0].um = 99999; B.devs[0].u = 99999; return true; })()`;
+                // 真值表和锁存、没电输出 0
+                const tt = await J(`(function(){ let o = {}; [['cand', [0, 0, 0, 1]], ['cor', [0, 1, 1, 1]], ['cxor', [0, 1, 1, 0]]].forEach(function (g) { o[g[0]] = [[0, 0], [1, 0], [0, 1], [1, 1]].map(function (ab) { return rcEval(g[0], ab[0], ab[1], {}, 1); }).join(''); }); o.cnot = rcEval('cnot', 0, 0, {}, 1) + '' + rcEval('cnot', 5, 0, {}, 1);
+                    let st = { q: 0 }; o.latch = [rcEval('clatch', 1, 0, st, 1), rcEval('clatch', 0, 0, st, 1), rcEval('clatch', 0, 1, st, 1), rcEval('clatch', 1, 1, st, 1)].join(''); return o; })()`);
+                if (!(tt.cand === '0001' && tt.cor === '0111' && tt.cxor === '0110' && tt.cnot === '10' && tt.latch === '1100')) bad.push('真值表：与 0001、或 0111、异或 0110、非 10、锁存 置→保持→复位 ' + JSON.stringify(tt));
+                // 按钮 → 灯（不吃电）亮 1 秒
+                await T.eval(`${setup([dv(10, 'cbtn', -20), dv(12, 'clamp', -16)], [], [[10, 0, 12, 0]])}; true;`);
+                const bt = await J(`(function(){ let B = ind.base, a = []; indDev(10).pt = 1; for (let i = 0; i < 5; i++) { indAdvance(0.5); a.push(indDev(12).out); } indAdvance(0.5); a.push(indDev(12).out); return a; })()`);
+                if (bt.join('') !== '110000') bad.push('按钮按一下灯亮约 1 秒就灭 ' + bt.join(''));
+                // 拉杆
+                await T.eval(`${setup([dv(10, 'clev', -20), dv(12, 'clamp', -16)], [], [[10, 0, 12, 0]])}; true;`);
+                const lv = await J(`(function(){ let a = []; indAdvance(0.5); a.push(indDev(12).out); indDev(10).on1 = 1; indAdvance(1); a.push(indDev(12).out); indAdvance(3); a.push(indDev(12).out); indDev(10).on1 = 0; indAdvance(0.5); a.push(indDev(12).out); return a; })()`);
+                if (lv.join('') !== '0110') bad.push('拉杆拉上灯一直亮、拉下灭 ' + lv.join(''));
+                // 没电输出 0：与门没接电 → 输出 0；接了电 → 1
+                await T.eval(`${setup([dv(10, 'clev', -22), dv(11, 'clev', -21), dv(13, 'cand', -18), dv(12, 'clamp', -16)], [], [[10, 0, 13, 0], [11, 0, 13, 1], [13, 0, 12, 0]])}; indDev(10).on1 = 1; indDev(11).on1 = 1; true;`);
+                const np = await J(`(function(){ indAdvance(1); return indDev(12).out; })()`);
+                await T.eval(`ind.base.wires = [[1, 13]]; true;`);
+                const wp = await J(`(function(){ indAdvance(1); return indDev(12).out; })()`);
+                if (!(np === 0 && wp === 1)) bad.push('与门没电输出 0、接电后两个输入都 1 才亮 ' + JSON.stringify([np, wp]));
+                // 验收电路：按钮 → 锁存置；锁存 → 灯；锁存 → 延时 50 刻 → 锁存复位
+                const acc = (devs, sig) => J(`(function(){ ${setup(devs, [[1, 11], [1, 13]], sig)}; indDev(10).pt = 1; let a = []; [1.2, 2, 3, 5.5].forEach(function (t, i) { let dt = t - (i ? [1.2, 2, 3, 5.5][i - 1] : 0); indAdvance(dt); a.push(indDev(12).out); }); indAdvance(1.5); a.push(indDev(12).out); return a; })()`);
+                let r = await acc([dv(10, 'cbtn', -20), dv(11, 'clatch', -18), dv(12, 'clamp', -14), dv(13, 'cdelay', -16, { t: 50 })], [[10, 0, 11, 0], [11, 0, 12, 0], [11, 0, 13, 0], [13, 0, 11, 1]]);
+                if (r.join('') !== '11100') bad.push('按一下按钮灯亮，5 秒后自己灭 ' + r.join(''));
+                // 放进基础芯片里：芯片里一个锁存 + 一个延时 + 线
+                const chip = { els: [{ k: 'clatch', x: 2, y: 0, t: 10, q: 0, out: 0, buf: [] }, { k: 'cdelay', x: 3, y: 0, t: 50, q: 0, out: 0, buf: [] }], w: [[100, 0, 0, 0], [0, 0, 200, 0], [0, 0, 1, 0], [1, 0, 0, 1]], outs: [0, 0, 0, 0] };
+                const ch = await J(`(function(){ ${setup([dv(10, 'cbtn', -20), dv(14, 'cchip', -18, { chip: chip }), dv(12, 'clamp', -14)], [[1, 14]], [[10, 0, 14, 0], [14, 0, 12, 0]])}; indDev(10).pt = 1; let a = []; indAdvance(1.5); a.push(indDev(12).out); indAdvance(2); a.push(indDev(12).out); indAdvance(3); a.push(indDev(12).out); return a; })()`);
+                if (ch.join('') !== '110') bad.push('同样的电路放进基础芯片里也一样 ' + ch.join(''));
+                // 第 9 个元件放不进去（点选放置）
+                const els8 = []; for (let i = 0; i < 8; i++) els8.push({ k: 'cand', x: 1 + (i % 7), y: 5 + Math.floor(i / 7), t: 10, q: 0, out: 0, buf: [] });
+                const nine = await J(`(function(){ ${setup([dv(14, 'cchip', -18, { chip: { els: els8, w: [], outs: [0, 0, 0, 0] } })], [], [])}; ind.bag = { dev_cand: 3 }; ind.rcSel = { id: 14, tool: 'cand', pend: null }; rcCell(14, 5, 8); return { n: indDev(14).chip.els.length, left: ind.bag.dev_cand }; })()`);
+                if (!(nine.n === 8 && nine.left === 3)) bad.push('第 9 个元件放不进去、不扣东西 ' + JSON.stringify(nine));
+                // 信号线接线规矩
+                const wr = await J(`(function(){ ${setup([dv(10, 'clev', -22), dv(11, 'cnot', -20), dv(12, 'clamp', -18), dv(13, 'cor', -16)], [[1, 11], [1, 13]], [])}; ind.bag = { sigwire: 20 }; indSelect('sigwire'); let res = [];
+                    let click = function (id) { return indDevAct(indDev(id)); };
+                    click(10); res.push(click(11)); click(10); res.push(click(11));   // 第二次：非门只有 1 个输入口已经接了
+                    click(10); res.push(click(10));   // 自己连自己
+                    click(11); res.push(click(12));
+                    for (let i = 0; i < 9; i++) { click(10); click(13); }   // 或门 2 个输入口，其余被拒
+                    let outN = ind.base.sig.filter(function (w) { return w[0] === 10; }).length; return { res: res, sig: ind.base.sig.length, outN: outN, left: ind.bag.sigwire }; })()`);
+                if (!(wr.res[0] === true && wr.res[1] === false && wr.res[2] === false)) bad.push('接线：一个输入口 1 根、自己连自己拒绝 ' + JSON.stringify(wr));
+                // 一个输出口最多 8 根：造 9 个灯，从拉杆接 9 根
+                const eight = await J(`(function(){ let lamps = []; for (let i = 0; i < 9; i++) lamps.push({ id: 30 + i, ty: 'clamp', x: -10 + i, z: -2, bats: 0, u: 0, on: true, ft: 20, st: {} }); ${setup([dv(10, 'clev', -22)], [], [])}; ind.base.devs = ind.base.devs.concat(lamps); ind.bag = { sigwire: 20 }; indSelect('sigwire'); let ok = 0; for (let i = 0; i < 9; i++) { indDevAct(indDev(10)); if (indDevAct(indDev(30 + i))) ok++; } return { ok: ok, n: ind.base.sig.length }; })()`);
+                if (eight.n !== 8) bad.push('一个输出口最多 8 根线 ' + JSON.stringify(eight));
+                // 存档整理：坏线、重复输入口、超 8 根都被整理掉
+                const fx = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.devs = [${dv(10, 'clev', -22)}, ${dv(11, 'cnot', -20)}, ${dv(12, 'clamp', -18)}]; b.sig = [[10, 0, 11, 0], [10, 0, 11, 0], [10, 0, 10, 0], [10, 5, 12, 0], [99, 0, 12, 0], 'x', [10, 0, 12, 0]]; indFixBase(b); return b.sig; })()`);
+                if (JSON.stringify(fx) !== '[[10,0,11,0],[10,0,12,0]]') bad.push('存档整理：重复／自己连自己／口号错／没有的块都整理掉 ' + JSON.stringify(fx));
+                // 离家补算：计时电路结果跟实时一样（按钮按下 → 锁存 → 5 秒后复位；补算 10 秒后灯灭，补算 3 秒灯还亮）
+                const ffo = (secs) => J(`(function(){ ${setup([dv(10, 'cbtn', -20), dv(11, 'clatch', -18), dv(12, 'clamp', -14), dv(13, 'cdelay', -16, { t: 50 })], [[1, 11], [1, 13]], [[10, 0, 11, 0], [11, 0, 12, 0], [11, 0, 13, 0], [13, 0, 11, 1]])}; indDev(10).pt = 1; indFastForward(${secs}, ind.base.clock, {}); return indDev(12).out; })()`);
+                const f3 = await ffo(3), f10 = await ffo(10);
+                if (!(f3 === 1 && f10 === 0)) bad.push('补算 3 秒灯还亮、10 秒灯灭（跟实时一样） ' + JSON.stringify([f3, f10]));
+                // 上限：40 个芯片
+                const cap = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let chips = []; for (let i = 0; i < 40; i++) chips.push({ id: 200 + i, ty: 'cchip', x: -10 + (i % 20), z: 2 + Math.floor(i / 20), bats: 0, u: 0, on: true, ft: 20, st: {} }); ind.base.devs = chips; ind.bag = { dev_cchip: 1 }; indSelect('dev_cchip'); indTeleport(0, 5); indLookAt(0, 0); let ok = indPlaceDev('dev_cchip'); blazeFlash = bf; return { ok: ok, fl: fl[fl.length - 1] }; })()`);
+                if (!(cap.ok === false && /电路太多了/.test(cap.fl))) bad.push('第 41 个芯片提示电路太多了 ' + JSON.stringify(cap));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND81 电路第 1 期：信号线规矩、门真值表和锁存、没电输出 0、按钮灯拉杆、延时验收电路、基础芯片（8 个元件）、存档整理、补算一致、上限', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
