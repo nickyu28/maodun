@@ -10890,6 +10890,68 @@ async function enterExit(tab, key) {
             report('IND95 起火：灭着点不着、火种火柴打火机打火石火把、钻木取火 15 秒、火种 60 秒灭、木头晾干、篝火要火源、悠闲照旧、火苗仔掉火种', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND96')) {
+            // IND96 自己挖水池（水池养鱼第 1、2 步的这一半）：铲子挖一格 4 秒 × 档、出 2 泥土掉 2 精力；四邻连成一个池子水是平的；每格 4 桶；接水倒水喝；
+            // 没铺漏 0.1 桶/分、黏土不漏、砖少蒸发两成；木盖不蒸发、盖着接不了；铲子填回要 2 泥土；最多 60 格；存档；补算也漏
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; ind.bag = {}; ind.base.pond = []; ind.base.surv.energy = 100; indPanelClose(); ind.base.clock = IND_DAY * 2 + 300;
+                    let spot = null; for (let x = -25; x <= 25 && !spot; x += 2) for (let z = -15; z <= 18 && !spot; z += 2) { let ok = true; for (let dx = -1; dx <= 3; dx++) for (let dz = -1; dz <= 4; dz++) if (!indSpotFree(x + dx, z + dz, 0.5)) ok = false; if (ok) spot = { x: x, z: z }; }
+                    let dig = function (i, j) { indTeleport(i, j - 1.6); indLookAt(i, j); let r = pdDig(); for (let k = 0; k < 200 && ind.ch; k++) wdChTick(0.1); return r; };
+                    let face = function (i, j) { indTeleport(i, j - 1.6); indLookAt(i, j); };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 挖：石铲 4 秒、钢铲 2 秒；出 2 泥土、掉 2 精力；L 形 3 格连成一个池子
+                let r = await run(`ind.bag = { shovel_stone: 1 }; indSelect('shovel_stone'); face(spot.x, spot.z); pdDig(); let need = ind.ch && ind.ch.need; for (let k = 0; k < 200 && ind.ch; k++) wdChTick(0.1);
+                    let one = ind.base.pond.length, dirt = ind.bag.dirt, en = ind.base.surv.energy; dig(spot.x + 1, spot.z); dig(spot.x + 1, spot.z + 1); ind.bag.shovel_steel = 1; indSelect('shovel_steel'); face(spot.x + 3, spot.z + 3); pdDig(); let need2 = ind.ch && ind.ch.need; ind.ch = null;
+                    return { spot: spot, need: need, one: one, dirt: dirt, en: en, n: ind.base.pond.length, g: pdGroup(ind.base.pond[0]).length, need2: need2 };`);
+                if (!(r.spot && r.need === 4 && r.one === 1 && r.dirt === 2 && r.en === 98 && r.n === 3 && r.g === 3 && r.need2 === 2)) bad.push('铲子挖、4 秒 × 档、2 泥土 2 精力、L 形连成一个 ' + JSON.stringify(r));
+                // 倒 3 桶、水是平的；接 1 桶；满了倒不进；喝一口 0.1
+                r = await run(`ind.base.pond = [{ i: spot.x, j: spot.z, w: 0 }, { i: spot.x + 1, j: spot.z, w: 0 }, { i: spot.x + 1, j: spot.z + 1, w: 0 }]; ind.bag = { water_raw: 3 }; indSelect('water_raw'); face(spot.x, spot.z); for (let k = 0; k < 3; k++) pdUse('water_raw');
+                    let ws = ind.base.pond.map(function (c) { return Math.round(c.w * 100) / 100; }); ind.bag = { bucket: 1 }; pdUse('bucket'); let after = Math.round(pdWater(ind.base.pond) * 100) / 100, got = ind.bag.water_raw;
+                    ind.base.pond.forEach(function (c) { c.w = 4; }); ind.bag = { water_raw: 1 }; pdUse('water_raw'); let full = ind.bag.water_raw; ind.bag = {}; pdUse(null); return { ws: ws, after: after, got: got, full: full, sip: Math.round(pdWater(ind.base.pond) * 100) / 100, fl: fl.join('|') };`);
+                if (!(r.ws.join() === '1,1,1' && r.after === 2 && r.got === 1 && r.full === 1 && /池子满了/.test(r.fl) && r.sip === 11.9)) bad.push('倒水、平的、接水、满了、喝一口 ' + JSON.stringify(r));
+                // 漏水和蒸发（白天）：没铺 60 秒 0.1 + 0.02；黏土只蒸发；砖蒸发 ×0.8；盖了不蒸发；盖着接不了
+                r = await run(`ind.base.pond = [{ i: 0, j: 0, w: 3 }, { i: 10, j: 0, w: 3, l: 'clay' }, { i: 20, j: 0, w: 3, l: 'brick' }, { i: 30, j: 0, w: 3, l: 'clay', lid: true }]; for (let k = 0; k < 60; k++) pdTick(1);
+                    let loss = ind.base.pond.map(function (c) { return Math.round((3 - c.w) * 10000) / 10000; }); return { loss: loss };`);
+                if (!(Math.abs(r.loss[0] - 0.12) < 1e-3 && Math.abs(r.loss[1] - 0.02) < 1e-3 && Math.abs(r.loss[2] - 0.016) < 1e-3 && r.loss[3] === 0)) bad.push('漏水蒸发、黏土、砖、木盖 ' + JSON.stringify(r));
+                r = await run(`ind.base.pond = [{ i: spot.x, j: spot.z, w: 3 }]; face(spot.x, spot.z); ind.bag = { pond_lid: 1, clay: 2 }; pdUse('pond_lid'); let lid = ind.base.pond[0].lid; ind.bag.bucket = 1; pdUse('bucket'); let opened = !ind.base.pond[0].lid, w = ind.base.pond[0].w, back = ind.bag.pond_lid;
+                    pdUse('clay'); let lined = ind.base.pond[0].l; ind.bag = { shovel_stone: 1, dirt: 1 }; pdUse('shovel_stone'); let still = ind.base.pond.length; ind.bag.dirt = 2; pdUse('shovel_stone'); return { lid: lid, opened: opened, w: w, back: back, lined: lined, still: still, gone: ind.base.pond.length, dirt: ind.bag.dirt || 0 };`);
+                if (!(r.lid === true && r.opened && r.w === 3 && r.back === 1 && r.lined === 'clay' && r.still === 1 && r.gone === 0 && r.dirt === 0)) bad.push('木盖、铺黏土、填回要 2 泥土 ' + JSON.stringify(r));
+                // 最多 60 格；存档整理；回家补算也漏
+                r = await run(`ind.base.pond = []; for (let k = 0; k < 60; k++) ind.base.pond.push({ i: -100 - k, j: 0, w: 0 }); ind.bag = { shovel_stone: 1 }; indSelect('shovel_stone'); face(spot.x, spot.z); pdDig(); let cap = !ind.ch && fl.some(function (t) { return /最多 60 格/.test(t); });
+                    let f = indFixBase(Object.assign(JSON.parse(JSON.stringify(ind.base)), { pond: [{ i: 1.7, j: 2, w: 9, l: 'gold', lid: 1 }, { i: 1, j: 2, w: 1 }, null] }));
+                    ind.base.pond = [{ i: 0, j: 0, w: 4 }]; let c0 = ind.base.clock; ind.base.away = c0 - 600; indCatchUp(); return { cap: cap, f: f.pond, w: Math.round(ind.base.pond[0].w * 1000) / 1000 };`);
+                if (!(r.cap && r.f.length === 1 && r.f[0].w === 4 && !r.f[0].l && r.f[0].lid === true && r.w < 4 - 1 && r.w > 4 - 1.3)) bad.push('60 格上限、存档整理、补算也漏 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND96 自己挖水池：铲子挖、连成一个、每格 4 桶、接倒喝、漏水蒸发、铺黏土砖、木盖、填回、60 格、存档、补算', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND97')) {
+            // IND97 石屋（home-expand.md 分步第 1 步）：硬核 石头 50 + 木头 10、悠闲减半，6 × 6、保暖 9、能放下
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const r = JSON.parse(await T.eval(`JSON.stringify((function(){ indGoBase(null); ind.base.houses = []; ind.bag = { stone: 50, wood: 10 }; let i = IND_CRAFT.findIndex(function (q) { return q.out === 'house_stone' && q.hard; }); indCraft(i); let got = ind.bag.house_stone || 0;
+                    let cas = IND_CRAFT.filter(function (q) { return q.out === 'house_stone' && q.casual; })[0]; ind.base.devs = []; ind.base.cookers = []; indTeleport(9, 0); indLookAt(30, 0); indSelect('house_stone'); indUse(); let h = ind.base.houses[0];   // 跟 IND19 放木屋同一个地方
+                    return { got: got, left: Object.keys(ind.bag).length, cas: cas && cas.in.stone === 25 && cas.in.wood === 5, placed: !!h && h.ty === 'stone', dim: h && indHouseDim(h), warm: IND_HOUSE.stone.warm };
+                })())`));
+                if (!(r.got === 1 && r.cas && r.placed && r.dim.w === 6 && r.dim.d === 6 && r.warm === 9)) bad.push('石屋配方、放下、6 × 6、保暖 9 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND97 石屋：50 石头 + 10 木头、悠闲减半、6 × 6、保暖 9', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

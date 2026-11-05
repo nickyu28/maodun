@@ -1147,6 +1147,7 @@
             ind.fertMesh = indInst(new THREE.BoxGeometry(0.3, 0.2, 0.3), IND_CROP_CAP);
             ind.tileMesh = indInst(new THREE.PlaneGeometry(1.9, 1.9).rotateX(-Math.PI / 2), IND_TILE_CAP); ind.tileDirty = true;
             indSyncFurn();   // 家具马上画出来（不等第一帧），进出时物体数每次一样
+            ind.pdMesh = null; pdSync();   // 自己挖的水池也马上画（19-industry-pond.js）
             ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 120);
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             ind.devMesh = indInst(new THREE.BoxGeometry(1, 1, 1), IND_DEV_CAP); ind.devDirty = true;
@@ -1184,7 +1185,7 @@
                     B.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * (o.animal === undefined ? 1 : o.animal) * h); });
                     indElecTick(h); indStoveTick(h);
                     if (o.bombs) nkBombTick(h);
-                    rcAdvance(h, ff); clStep(h, o.spBag !== false, true);
+                    rcAdvance(h, ff); clStep(h, o.spBag !== false, true); pdTick(h);
                     if (!ind || ind.over) return;
                 }
             } finally { if (o.quiet) indFlash = oldFlash; if (ind) { B.clock = end; ind.sleeping = false; ind.catching = false; } }
@@ -1368,7 +1369,7 @@
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); clStep(dt, true, ind.where === 'base'); achTick(); trTick(dt); mbBodyTick(dt); fiTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') { indCropTick(dt); pdTick(dt); } clStep(dt, true, ind.where === 'base'); achTick(); trTick(dt); mbBodyTick(dt); fiTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
             if (!ind || ind.over || ind.dead) return;
@@ -1394,7 +1395,7 @@
                 ind.exitT = inExit ? ind.exitT + dt : 0;
                 if (ind.exitT >= IND_T.extract) indGoBase(true);
             }
-            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); indHouseFadeTick(dt); indSyncTiles(); mbSync(); if (ind.carve) ctBar();
+            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); indHouseFadeTick(dt); indSyncTiles(); mbSync(); if (ind.carve) ctBar(); pdSync();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
             ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); indSeasonLook(); }
@@ -1746,6 +1747,7 @@
             if (a && a.kind === 'animal') return indAnimalAct(a.o);
             if (a && a.kind === 'dev') return indDevAct(a.o);
             let k = indSel();
+            if (ind.where === 'base' && !a && tlKind(k) === 'shovel') return pdDig();   // 拿铲子对着空地：挖水池（19-industry-pond.js）
             if (ind.where === 'base' && k && IND_ITEMS[k].seed) return indPlant(k);
             if (ind.where === 'trip' && !a) return wdDig();   // 对着地面左键：挖
         }
@@ -1791,6 +1793,7 @@
             if (k === 'torch') return cvLightTorch();   // 右键点火把（任务 66）
             if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
             if (k && stkTryStack(k, a)) return true;   // 拿着同种设备右键已经放下的那台：叠上去（任务 68）
+            if (ind.where === 'base' && !a && pdUse(k)) return true;   // 对着自己挖的水池：接水、倒水、喝、铺、盖、填回
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
             if (IND_ITEMS[k].dev) return indPlaceDev(k);
@@ -2227,6 +2230,7 @@
             B.chests.forEach(function (c) { if (c !== skip && Math.hypot(x - c.x, z - c.z) < r + 1.2) ok = false; });
             if (Math.abs(x - S.gate.x) < 4 + r && z < -IND_BASE.z + 4 + r) ok = false;
             if (indInField(x, z)) ok = false;
+            if (pdNear(x, z, r)) ok = false;   // 自己挖的水池上不能放东西
             B.cookers.forEach(function (c) { if (c !== skip && Math.hypot(x - c.x, z - c.z) < r + IND_COOK[c.ty].r + 0.2) ok = false; });
             B.devs.forEach(function (d) { if (Math.hypot(x - d.x, z - d.z) < r + 0.8) ok = false; });
             return ok;
@@ -3558,6 +3562,8 @@
             else if (a && a.kind === 'bed') hint = '床<br><small>左键：睡觉（夜里或累了）</small>';
             else if (a && a.kind === 'pool') hint = '水池<br><small>右键：喝一口，拿空桶右键接水</small>';
             else if (R.where === 'base' && sel && IND_ITEMS[sel].seed && indInField(R.p.x + indFace().x * 1.4, R.p.z + indFace().z * 1.4)) hint = '左键：种' + indName(sel);
+            else if (R.where === 'base' && !a && pdAimCell()) hint = pdHint();   // 自己挖的水池（19-industry-pond.js）
+            else if (R.where === 'base' && !a && tlKind(sel) === 'shovel') hint = '<small>左键：挖一格水池</small>';
             else if (R.where === 'base' && Math.hypot(R.p.x - IND_BASE_ST.gate.x, R.p.z - IND_BASE_ST.gate.z) < 6) hint = '从门里走出去就是远征';
             else if (sel === 'bell') hint = '<small>左键：摇铃，30 米内的动物走过来</small>';
             else if (sel && IND_ITEMS[sel].eat) hint = '<small>右键：' + (IND_ITEMS[sel].eat.f ? '吃' : '喝') + indName(sel) + '</small>';
