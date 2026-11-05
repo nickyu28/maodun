@@ -25,7 +25,7 @@
         function ckSpoutOn(S) { return S.spoutTy !== null; }
         function ckSpoutDef(S) { return CK_SPOUT[S.spoutTy || 'auto'] || CK_SPOUT.auto; }
         // 这块烫锭这个炉子的槽接不接得住（没装槽、槽耐温不够都留在炉膛里）
-        function ckSpoutTakes(S, k) { return ckSpoutOn(S) && (CK_MELT[k] === undefined || CK_MELT[k] <= ckSpoutDef(S).maxT); }
+        function ckSpoutTakes(S, k) { return ckSpoutOn(S) && !S.mold && (CK_MELT[k] === undefined || CK_MELT[k] <= ckSpoutDef(S).maxT); }
         function ckSig(C) { return (C.spoutTy === undefined ? 'a' : String(C.spoutTy)) + '|' + (C.funnel ? C.funnel.ty : ''); }
         function ckHotOf(k) { return IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot; }
 
@@ -43,10 +43,12 @@
                 S.out[cool] = (S.out[cool] || 0) + S.out[k]; delete S.out[k];
                 if (ind.panel === 'stove') ind.panelDirty = true;
             });
+            if (typeof ctTick === 'function') ctTick(c, dt);   // 铸造：化锭、往模具里流（19-industry-cast.js）
         }
 
         // ── 读档整理（indFixCook 调）──
         function ckFix(S, b) {
+            if (typeof ctFix === 'function') ctFix(S);   // 熔池、槽里的模具（铸造）
             if (!(S.spoutTy === null || CK_SPOUT[S.spoutTy])) S.spoutTy = undefined;
             if (S.spoutTy === undefined && b && b.rule) S.spoutTy = b.rule === 'hard' ? 'brick' : 'auto';   // 老档：硬核的炉子补一个砖槽（里面的锭不丢），悠闲照旧自带
             if (S.funnel && (typeof S.funnel !== 'object' || !CK_FUNNEL[S.funnel.ty])) S.funnel = null;

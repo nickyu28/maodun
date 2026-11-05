@@ -5464,6 +5464,7 @@ async function enterExit(tab, key) {
                         });
                         // 工作台
                         IND_CRAFT.forEach(function (r) {
+                            if (r.off) return;   // 换成别的做法、不显示的老配方
                             if (r.hard && !hard) return;
                             if (r.casual && hard) return;
                             if (!Object.keys(r.in).every(function (k) { return have[k]; })) return;
@@ -5493,6 +5494,10 @@ async function enterExit(tab, key) {
                         if (hard && RAW.ice && tl >= 1) add('ice');
                         if (hard && RAW.rotfood && Object.keys(have).some(function (k) { return RAW[k] && RAW[k].eat && k !== 'ice'; })) add('rotfood');
                         if (have.bulb) add('bulb_dead');   // 灯泡没电（任务 66）
+                        // 起火：木头放基地地上晾成干木头；干木头 + 草／松脂钻木取火出火种；硬核挖大石头掉燧石
+                        if (hard && RAW.wood_dry && have.wood) add('wood_dry'); if (hard && RAW.ember && have.wood_dry && (have.grass || have.resin)) add('ember'); if (hard && RAW.flint && tl >= 1) add('flint');
+                        // 铸造：拿小刀 + 2 黏土雕生模具；熟模具 + 青铜锭 + 950°C + 出料槽 → 青铜零件
+                        if (hard && typeof CT_SHAPE !== 'undefined' && have.clay && Object.keys(have).some(function (k) { return tlKind(k) === 'knife'; })) Object.keys(CT_SHAPE).forEach(function (s) { add('mold_' + s + '_raw'); if (have['mold_' + s] && have.bronze && maxT >= 950 && (have.spout_brick || have.spout_iron)) add('part_' + s + '_bronze'); });
                         // 怪（任务 70）：拿刀打出门的怪掉黏液、蘑菇、毒蘑菇、云絮、蜂蜜、木炭、仙人掌、肉、皮；刀盾用坏了变断的
                         if (typeof MB_KNIFE !== 'undefined') {
                             if (Object.keys(MB_KNIFE).some(function (k) { return have[k]; })) ['goo', 'shroom', 'shroom_bad', 'fluff', 'honey', 'charcoal', 'cactus', 'meat_raw', 'hide'].forEach(add);
@@ -5877,7 +5882,7 @@ async function enterExit(tab, key) {
                 if ((await T.eval(`indOutCount(ind.base.stove, 'hot_bronze')`)) !== 4) bad.push('3 铜锭 + 1 锡锭炼不出 4 青铜锭 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 await T.eval(`ind.base.stove = { items: { ingot_cu: 3, ingot_sn: 1 }, out: {}, fuel: 3000, fire: 2, temp: 600, cook: null }; indAdvance(40); true;`);
                 if (await T.eval(`indOutCount(ind.base.stove, 'hot_bronze') > 0`)) bad.push('600°C 也炼出青铜');
-                await T.eval(`ind.bag = {}; indBagAdd('bronze', 3); indBagAdd('wood', 2); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pick_bronze'; })); true;`);
+                await T.eval(`ind.bag = {}; indBagAdd('part_pick_bronze', 1); indBagAdd('handle', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pick_bronze' && r.in.part_pick_bronze; })); true;`);   // 铸造以后青铜稿是 镐头 + 木柄（IND94 测怎么铸）
                 if (!(await T.eval(`ind.bag.pick_bronze === 1 && indTool() === 2`))) bad.push('做不出青铜稿 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 await T.eval(`indBagAdd('ingot_sn', 1); true;`);
                 if (!(await T.eval(`!!ind.base.elems[50]`))) bad.push('锡没点亮元素表');
@@ -10697,7 +10702,7 @@ async function enterExit(tab, key) {
                 // 小蘑菇蹭一下 3 血；云团体温 −0.3、火苗仔 +0.5 都不掉血；毒蘑菇 15%；吃毒蘑菇中毒；云絮吃了饱食 +3 体温 −0.5；火苗仔不掉火种
                 r = await run(`trip(); mbHit(mob('mush'), { me: true }); let mu = 100 - ind.base.surv.hp; ind.base.surv.hp = 100; ind.base.surv.temp = 37; mbHit(mob('cloud'), { me: true }); let ct = ind.base.surv.temp; mbHit(mob('flame'), { me: true }); let ft = ind.base.surv.temp;
                     let bad = 0, N = 400; for (let i = 0; i < N; i++) { ind.tripGround = []; let m = mob('mush'); m.dead = false; mbDamage(m, 9); if (ind.tripGround.some(function (g) { return g.k === 'shroom_bad'; })) bad++; }
-                    let fire = 0; for (let i = 0; i < 50; i++) { ind.tripGround = []; mbDamage(mob('flame'), 9); if (ind.tripGround.some(function (g) { return !/^(charcoal)$/.test(g.k); })) fire++; }
+                    let fire = 0; for (let i = 0; i < 50; i++) { ind.tripGround = []; mbDamage(mob('flame'), 9); if (ind.tripGround.some(function (g) { return !/^(charcoal|ember)$/.test(g.k); })) fire++; }
                     ind.base.surv.hp = 100; ind.bag = { shroom_bad: 1, fluff: 1 }; indEat('shroom_bad'); for (let i = 0; i < 12; i++) mbBodyTick(1); let ph = 100 - ind.base.surv.hp;
                     ind.base.surv.food = 50; ind.base.surv.temp = 38; indEat('fluff'); return { mu: mu, ct: ct, ft: ft, hp: ind.base.surv.hp, p: bad / N, fire: fire, ph: ph, food: ind.base.surv.food, temp: ind.base.surv.temp, fl: fl.join('|') };`);
                 if (!(r.mu === 3 && Math.abs(r.ct - 36.7) < 1e-9 && Math.abs(r.ft - 37.2) < 1e-9 && r.p > 0.15 * 0.6 && r.p < 0.15 * 1.4 && r.fire === 0 && Math.abs(r.ph - 10) < 0.01 && r.food === 53 && Math.abs(r.temp - 37.5) < 1e-9 && /棉花糖/.test(r.fl))) bad.push('小蘑菇 3、云团 −0.3、火苗仔 +0.5、毒蘑菇 15%、吃毒蘑菇中毒 10 秒、云絮 ' + JSON.stringify(r));
@@ -10793,12 +10798,96 @@ async function enterExit(tab, key) {
                 // 回收一半主料、胶水修好耐久一半；悠闲 ×2；旧存档（没有耐久记录）满耐久
                 r = await run(`ind.bag = { broken_axe_iron: 2, glue: 1 }; let i = IND_CRAFT.findIndex(function (q) { return q.in.broken_axe_iron && !q.fix; }), j = IND_CRAFT.findIndex(function (q) { return q.fix && q.out === 'axe_iron'; });
                     indCraft(i); indCraft(j); let fe = ind.bag.ingot_fe, fixed = ind.bag.axe_iron; let half = mbDura('axe_iron'); ind.base.rule = 'casual'; let cas = mbMax('axe'); ind.base.rule = 'hard';
-                    let f = indFixBase(Object.assign(JSON.parse(JSON.stringify(ind.base)), { dura: undefined, duraHalf: undefined })); return { fe: fe, fixed: fixed, half: half, cas: cas, old: f.dura, recipe: !!IND_CRAFT.filter(function (q) { return q.out === 'axe_bronze' && q.in.bronze === 2 && q.in.wood === 1; }).length };`);
+                    let f = indFixBase(Object.assign(JSON.parse(JSON.stringify(ind.base)), { dura: undefined, duraHalf: undefined })); return { fe: fe, fixed: fixed, half: half, cas: cas, old: f.dura, recipe: !!IND_CRAFT.filter(function (q) { return q.out === 'axe_iron' && q.in.ingot_fe === 2 && q.in.wood === 1 && !q.off; }).length };`);
                 if (!(r.fe === 1 && r.fixed === 1 && r.half === 100 && r.cas === 80 && JSON.stringify(r.old) === '{}' && r.recipe)) bad.push('回收、胶水修一半、悠闲 ×2、旧存档满 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND93 工具分材质 + 磨损：时间按档、用一次 −1、坏了回收或胶水修、悠闲 ×2、旧工具满耐久', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND94')) {
+            // IND94 铸造：小刀 + 2 黏土雕斧头模（按 X 命中率定耐久）、600°C 烧硬、青铜锭化进熔池（10 秒 1 份）、模具放进砖槽流满出烫斧头、60 秒凉取出耐久 −1、
+            // 凉了熔池凝成烫锭、黏土模具浇铁裂、头 + 木柄装成青铜斧、原来锭直接做的配方不显示
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; ind.bag = {}; ind.base.moldQ = {}; ind.carve = null; indPanelClose(); let B = ind.base; B.cookers = []; B.devs = [];
+                    let cook = function (ty) { let c = Object.assign({ id: ++B.cseq, ty: ty, x: 5, z: 5 }, ckNewState()); c.spoutTy = 'brick'; c.fuel = 5000; B.cookers.push(c); ind.cookId = c.id; return c; };
+                    let tick = function (c, secs) { let e = indCooks().filter(function (x) { return x.id === c.id; })[0]; for (let t = 0; t < secs - 1e-9; t += 0.25) indCookTick(e, 0.25); };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 雕：12 刀，中间按偏一次 → 命中率 12/13 → 耐久 29；黏土扣 2
+                let r = await run(`ind.bag = { knife: 1, clay: 3 }; indSelect('knife'); indUse(); let p = ind.panel; ctCarveStart('axe'); let C = ind.carve;
+                    for (let i = 0; i < 12; i++) { C.t0 = ind.t - 0.6; ctHit(); if (i === 3) { C.t0 = ind.t; ctHit(); } }
+                    return { p: p, raw: ind.bag.mold_axe_raw || 0, clay: ind.bag.clay, q: ind.base.moldQ.axe, carve: !!ind.carve, bar: !!document.getElementById('ind-carve') };`);
+                if (!(r.p === 'carve' && r.raw === 1 && r.clay === 1 && r.q && r.q[0] === 29 && !r.carve && !r.bar)) bad.push('雕模具 12 刀、命中率定耐久、扣 2 黏土 ' + JSON.stringify(r));
+                // 烧硬 600°C 30 秒；化锭 10 秒 1 份；放进槽流满出烫斧头；凉了取、耐久 −1；槽里有模具不接锭
+                r = await run(`ind.base.moldQ = { axe: [29] }; let c = cook('stone'); c.items = { mold_axe_raw: 1 }; c.fire = 2; c.temp = 650; tick(c, 31); let fired = c.out.mold_axe || 0;
+                    c.out = {}; ind.bag = { mold_axe: 1 }; c.items = { bronze: 3 }; c.fire = 3; c.temp = 1200; tick(c, 9); let p9 = c.pool ? c.pool.n : 0; tick(c, 21.5); let p30 = c.pool ? c.pool.n : 0;
+                    ctMoldPut('mold_axe'); let takes = ckSpoutTakes(c, 'hot_cu'); tick(c, 2.5); let part = c.mold.part, left = c.pool ? c.pool.n : 0; let early = ctTake(indCooks().filter(function (x) { return x.id === c.id; })[0]); let got0 = ind.bag.part_axe_bronze || 0;
+                    tick(c, 61); ctTake(indCooks().filter(function (x) { return x.id === c.id; })[0]);
+                    let html = indStoveHtml(); c.fire = 0; c.temp = 900; tick(c, 0.25);
+                    return { fired: fired, p9: p9, p30: p30, takes: takes, part: part, left: left, got0: got0, got: ind.bag.part_axe_bronze || 0, dura: c.mold && c.mold.dura, html: /熔池/.test(html), solid: c.out.hot_bronze || 0, pool: c.pool };`);
+                if (!(r.fired === 1 && r.p9 === 0 && r.p30 === 3 && r.takes === false && r.part === 'part_axe_bronze' && r.left === 1 && r.got0 === 0 && r.got === 1 && r.dura === 28 && r.html && r.solid === 1 && !r.pool)) bad.push('烧硬、化锭、流满出零件、凉了取耐久 −1、凝成烫锭 ' + JSON.stringify(r));
+                // 黏土模具浇铁会裂；装配：斧头 + 木柄 → 青铜斧；锭直接做青铜斧的配方不显示
+                r = await run(`let c = cook('kiln'); c.spoutTy = 'auto'; c.pool = { m: 'ingot_fe', n: 2 }; c.temp = 1600; c.fire = 4; c.blow = 99; c.mold = { s: 'axe', dura: 20 }; tick(c, 0.25);
+                    ind.bag = { part_axe_bronze: 1, wood: 1 }; let h = IND_CRAFT.findIndex(function (q) { return q.out === 'handle'; }), a = IND_CRAFT.findIndex(function (q) { return q.out === 'axe_bronze' && q.in.part_axe_bronze; }); indCraft(h); indCraft(a);
+                    let old = IND_CRAFT.filter(function (q) { return q.out === 'axe_bronze' && q.in.bronze; }).map(indCraftShow);
+                    return { mold: c.mold, crack: fl.some(function (t) { return /裂了/.test(t); }), axe: ind.bag.axe_bronze || 0, handle: ind.bag.handle || 0, old: old };`);
+                if (!(r.mold === null && r.crack && r.axe === 1 && r.handle === 1 && r.old.length && r.old.every(function (x) { return x === false; }))) bad.push('黏土模具浇铁裂、装配、老配方不显示 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND94 铸造：雕模具、烧硬、化锭、流进模具出零件、凉了取、凝固、黏土浇铁裂、装配', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND95')) {
+            // IND95 起火（硬核）：灭着的炉子火候按钮点不着、写先点火；火种／火柴／打火机／打火石／点着的火把左键点着；没柴先放柴；钻木取火 15 秒一定成；火种 60 秒灭；
+            // 木头放地上 120 秒干（着着的炉子旁 30 秒）；篝火要火源；火把在着着的炉子上点着；悠闲照旧；火苗仔 35% 掉火种
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); IND_FIRE_FREE = false; true;`);   // 测试页默认免点火，这里打开
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; ind.bag = {}; ind.torchT = 0; ind.drill = null; ind.base.emberAt = []; ind.base.lighterN = 0; indPanelClose(); let B = ind.base; B.ground = []; B.fires = [];
+                    B.stove = ckNewState(); B.stove.fuel = 300; ind.cookId = 'stove'; let st = { kind: 'stove' };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 灭着的点不着、面板写先点火；火种点着（小火）、用掉；然后按钮能调；没柴先放柴
+                let r = await run(`indStoveFire(3); let f0 = B.stove.fire, html = indStoveHtml(); ind.bag = { ember: 1 }; indSelect('ember'); let lit = fiLightCook(st); let f1 = B.stove.fire; indStoveFire(3); let f3 = B.stove.fire;
+                    B.stove = ckNewState(); B.stove.fuel = 0; ind.bag = { match: 2 }; indSelect('match'); fiLightCook(st); return { f0: f0, html: /先点火/.test(html), lit: lit, f1: f1, f3: f3, ember: ind.bag.ember || 0, nofuel: B.stove.fire, match: ind.bag.match, fl: fl.join('|') };`);
+                if (!(r.f0 === 0 && r.html && r.lit === true && r.f1 === 1 && r.f3 === 3 && r.ember === 0 && r.nofuel === 0 && r.match === 2 && /先放柴/.test(r.fl) && /先点火/.test(r.fl))) bad.push('灭着点不着、火种点着、没柴先放柴 ' + JSON.stringify(r));
+                // 火柴一根一次；打火机没油点不着、拿石油桶加满 50 次；打火石要铁锭和引火物、90%（200 次 ±15%）
+                r = await run(`ind.bag = { match: 2 }; indSelect('match'); fiLightCook(st); let m = { fire: B.stove.fire, left: ind.bag.match };
+                    B.stove = ckNewState(); B.stove.fuel = 300; ind.bag = { lighter: 1, oil: 1 }; indSelect('lighter'); fiLightCook(st); let l0 = B.stove.fire; indUse(); let n = ind.base.lighterN; fiLightCook(st); let l1 = B.stove.fire;
+                    B.stove = ckNewState(); B.stove.fuel = 300; ind.bag = { flint: 1, grass: 1 }; indSelect('flint'); fiLightCook(st); let noFe = B.stove.fire;
+                    let ok = 0; for (let i = 0; i < 200; i++) { B.stove.fire = 0; ind.bag = { flint: 1, ingot_fe: 1, grass: 5 }; indSelect('flint'); fiLightCook(st); if (B.stove.fire > 0) ok++; }
+                    return { m: m, l0: l0, n: n, l1: l1, left: ind.base.lighterN, noFe: noFe, p: ok / 200, bucket: ind.bag.bucket };`);
+                if (!(r.m.fire === 1 && r.m.left === 1 && r.l0 === 0 && r.n === 50 && r.l1 === 1 && r.left === 49 && r.noFe === 0 && r.p > 0.75 && r.p <= 1)) bad.push('火柴、打火机加油、打火石 ' + JSON.stringify(r));
+                // 钻木取火：拿着干木头 15 秒一定出火种；换别的停；没引火物不行；火种 60 秒灭成灰
+                r = await run(`ind.bag = { wood_dry: 1 }; indSelect('wood_dry'); indUse(); let none = !!ind.drill; ind.bag = { wood_dry: 2, grass: 1, stone: 1 }; indSelect('wood_dry'); indUse(); fiTick(10); indSelect('stone'); fiTick(10); let mid = ind.bag.ember || 0; indSelect('wood_dry'); fiTick(5.1);
+                    let got = ind.bag.ember || 0, used = [ind.bag.wood_dry, ind.bag.grass || 0]; ind.t += 61; fiTick(0.01); return { none: none, mid: mid, got: got, used: used, after: ind.bag.ember || 0, ash: ind.bag.ash || 0 };`);
+                if (!(r.none === false && r.mid === 0 && r.got === 1 && r.used.join() === '1,0' && r.after === 0 && r.ash === 1)) bad.push('钻木取火 15 秒、换别的停、火种 60 秒灭 ' + JSON.stringify(r));
+                // 木头放地上 120 秒干；着着的炉子旁 30 秒
+                r = await run(`B.ground = [{ k: 'wood', x: -25, z: 10 }, { k: 'wood', x: IND_BASE_ST.stove.x + 1.5, z: IND_BASE_ST.stove.z }]; B.stove.fire = 2; for (let i = 0; i < 31; i++) fiTick(1); let a = B.ground.map(function (g) { return g.k; }); for (let i = 0; i < 90; i++) fiTick(1); return { a: a, b: B.ground.map(function (g) { return g.k; }) };`);
+                if (!(r.a.join() === 'wood,wood_dry' && r.b.join() === 'wood_dry,wood_dry')) bad.push('木头晾干 120 秒、炉子旁 30 秒 ' + JSON.stringify(r));
+                // 篝火要火源；火把在着着的炉子上点着；悠闲照旧
+                r = await run(`ind.bag = { campfire: 1 }; indSelect('campfire'); indPlaceFire(); let no = B.fires.length; ind.bag = { campfire: 1, match: 1 }; indSelect('campfire'); indPlaceFire(); let yes = B.fires.length, m = ind.bag.match || 0;
+                    B.stove.fire = 2; ind.bag = { torch: 1 }; indSelect('torch'); fiLightCook(st); let torch = ind.torchT;
+                    ind.base.rule = 'casual'; B.stove = ckNewState(); B.stove.fuel = 100; indStoveFire(2); let cas = B.stove.fire; ind.base.rule = 'hard'; return { no: no, yes: yes, m: m, torch: torch, cas: cas };`);
+                if (!(r.no === 0 && r.yes === 1 && r.m === 0 && r.torch === 90 && r.cas === 2)) bad.push('篝火要火源、火把点着、悠闲照旧 ' + JSON.stringify(r));
+                // 火苗仔 35% 掉火种
+                r = await J(`(function(){ indGoTrip(977); ind.mbSpawn = 1e9; let n = 0, N = 400; for (let i = 0; i < N; i++) { ind.tripGround = []; let m = mbNew('flame', 0, -8); mbDamage(m, 9); if (ind.tripGround.some(function (g) { return g.k === 'ember'; })) n++; } return { p: n / N }; })()`);
+                if (!(r.p > 0.35 * 0.7 && r.p < 0.35 * 1.3)) bad.push('火苗仔 35% 掉火种 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND95 起火：灭着点不着、火种火柴打火机打火石火把、钻木取火 15 秒、火种 60 秒灭、木头晾干、篝火要火源、悠闲照旧、火苗仔掉火种', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

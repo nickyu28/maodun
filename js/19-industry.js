@@ -1008,7 +1008,7 @@
             document.body.onmousedown = null;
             if (R.onMouse) { document.removeEventListener('mouseup', R.onMouseUp); document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); }
             if (document.pointerLockElement) document.exitPointerLock();
-            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead', 'ind-compass', 'ind-rad', 'ind-geiger', 'ind-flash', 'ind-undo', 'ind-goal'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
+            ['ind-hud', 'ind-night', 'ind-red', 'ind-dead', 'ind-compass', 'ind-rad', 'ind-geiger', 'ind-flash', 'ind-undo', 'ind-goal', 'ind-carve'].forEach(function (id) { let e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
             indClearWorld();
             if (R.me) scene.remove(R.me);
             scene.background = R.oldBg; scene.fog = R.oldFog;
@@ -1368,7 +1368,7 @@
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); clStep(dt, true, ind.where === 'base'); achTick(); trTick(dt); mbBodyTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); clStep(dt, true, ind.where === 'base'); achTick(); trTick(dt); mbBodyTick(dt); fiTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
             if (!ind || ind.over || ind.dead) return;
@@ -1394,7 +1394,7 @@
                 ind.exitT = inExit ? ind.exitT + dt : 0;
                 if (ind.exitT >= IND_T.extract) indGoBase(true);
             }
-            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); indHouseFadeTick(dt); indSyncTiles(); mbSync();
+            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); indHouseFadeTick(dt); indSyncTiles(); mbSync(); if (ind.carve) ctBar();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
             ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); indSeasonLook(); }
@@ -1645,6 +1645,7 @@
         }
         // 出料槽：凉了的左键取进背包；拿着钳子（背包里有钳子）烫的也能取
         function indSpoutTake(c) {
+            if (ctTake(c)) return true;   // 槽里是模具：取零件（铸造）
             let sp = c.C.spout, tongs = !!ind.bag.tongs, took = [], hotLeft = 0, full = false;
             c.C.spout = sp.filter(function (e) {
                 let hot = e.t > 0;
@@ -1735,6 +1736,7 @@
             if (a && a.kind === 'door') return indDoorToggle(a.o);
             if (a && a.kind === 'chest') return indPanelBox(a.o.id);
             if (a && (a.kind === 'stove' || a.kind === 'cook') && indSel() === 'pipe') return rlPipeClick(a.kind === 'stove' ? 'kstove' : 'k' + a.o.id);   // 拿钢管点炉子：接管道（任务 58）
+            if (a && fiLightCook(a)) return true;   // 硬核拿火源左键点炉子（起火，19-industry-fire.js）
             if (a && stkLeft(a)) return true;   // 叠了 2 台以上：左键先看堆叠清单（任务 68）
             if (a && a.kind === 'stove') return indPanelStove('stove');
             if (a && a.kind === 'cook') return indPanelStove(a.o.id);
@@ -1815,9 +1817,12 @@
             if (k === 'dry_ice') return indDryIceBucket();
             if (IND_ITEMS[k].hot) return indQuench(k);
             if (mbUse(k, a)) return true;   // 云絮浇地、胶水倒地上（任务 70）
+            if (k === 'wood_dry' && indHard()) return fiDrillStart();   // 钻木取火（起火）
+            if (k === 'lighter') return fiFillLighter();
             if (IND_ITEMS[k].eat) return indEat(k);
             if (IND_ITEMS[k].wear) return indWear(k);
             if (k === 'campfire') return indPlaceFire();
+            if (tlKind(k) === 'knife' && ctCarveMenu()) return true;   // 拿小刀右键：雕模具（铸造，背包里有 2 黏土）
             return indSip(a);
         }
         // 手里没有能用的东西，对着水池右键喝一口生水（口渴 +10，30% 拉肚子，和桶装生水一样）；在海里喝一口海水（越喝越渴，同桶装海水）
@@ -2806,6 +2811,7 @@
         }
         function indPlaceFire() {
             let F = indFires(); if (F.length >= 30) { indFlash('火太多了'); return false; }
+            if (!fiCampfireOk()) return false;   // 硬核：要火源（起火）
             let f = indFace(), x = ind.p.x + f.x * 1.6, z = ind.p.z + f.z * 1.6;
             if (ind.where === 'base') { x = Math.max(-IND_BASE.x + 0.5, Math.min(IND_BASE.x - 0.5, x)); z = Math.max(-IND_BASE.z + 0.5, Math.min(IND_BASE.z - 0.5, z)); }
             indBagDel('campfire', 1); F.push({ x: x, z: z, fuel: 120 });
@@ -2819,7 +2825,7 @@
             indFlash('加了 1 个' + indName(k) + '，还能烧 ' + Math.ceil(f.fuel) + ' 秒');
             return true;
         }
-        function indCraftShow(r) { return (!r.hard || indHard()) && !(r.casual && indHard()); }   // casual：只在悠闲出现的简单配方
+        function indCraftShow(r) { return !r.off && (!r.hard || indHard()) && !(r.casual && indHard()); }   // off：换成别的做法了，留着下标   // casual：只在悠闲出现的简单配方
         function indCraftCan(r) { return indCraftShow(r) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.glass && (!ind.base.gh || ind.base.glass)) && !(r.pot && ind.base.pot); }
         function indCraft(i) {
             if (!ind) return false;
@@ -3081,6 +3087,7 @@
             if (!ind) return;
             let S = indCookCur().C;
             if (lv > 0 && S.fuel <= 0) { indFlash('先加燃料（木头、木炭、煤）'); return; }
+            if (fiStoveBlocked(S, lv)) { indFlash('先点火：拿火种、火柴、打火机、打火石或点着的火把左键点炉子'); return; }   // 硬核起火
             if (lv === 4 && !S.bellows && !fmHasBlower(indCookCur())) return;
             S.fire = lv; indSave(); indPanelStove();
         }
@@ -3358,10 +3365,12 @@
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做' + (D.only ? '（只做冶炼）' : '') + '</span>';
             if (!S.cook && indHard() && rlNeedReducer(S)) st += '<br><b style="color:#c62828">炼矿要加木炭、煤或焦炭（每份矿 1 份）</b>';
             let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !S.bellows && !fmHasBlower(c)) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
+            if (fiOn() && !(S.fire > 0)) fire = '<div style="color:#c62828;font-size:13px;">先点火：拿火种、火柴、打火机、打火石或点着的火把左键点炉子</div><span style="opacity:.4;pointer-events:none;">' + fire + '</span>';   // 硬核灭着：火候按钮灰的
             fire += '<button id="ind-stove-off" style="' + IND_BTN + 'background:#455a64;" onclick="indStoveFire(0)">熄火并降温</button>' + (S.temp > 60 ? '<div style="font-size:13px;color:#888;">降到 60°C 还要约 ' + indFurnCoolSecs(c.ty, S) + ' 秒（收起要 60°C 以下）</div>' : '');
             let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k] && IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
             let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';
             let spt = !ckSpoutOn(S) ? '没装出料槽（冶炼出的锭留在炉膛里，凉了直接取，烫的要钳子）' : S.spout.length ? ckSpoutDef(S).name + ' ' + indSpoutTxt(c) + '（左键点炉子旁边的出料槽取出）' : ckSpoutDef(S).name + ' 空';
+            spt += ctHtml(c);   // 熔池、模具（铸造）
             if (indHard() && !S.funnel) spt += '<br><span style="color:#888">石油要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒</span>';
             if (S.funnel) spt += '<br>进料漏斗：油 ' + Math.round(S.funnel.oil) + ' / ' + CK.funnelCap + '（每秒流 ' + CK.funnelRate + '）';
             if (S.cook && S.cook.full) st += '<br><b style="color:#c62828">出料槽满了</b>';
@@ -3436,6 +3445,7 @@
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）
             if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); indTrashHand(); return; }   // Ctrl+Q：销毁手上那一格（5 秒能撤销）
             if ((k === 'b' || k === 'e') && (!ind.panel || ind.panel === 'bag')) { if (ind.panel) indPanelClose(); else indPanelBag(); return; }   // E 和 B 开同一个背包面板（任务 17）
+            if (k === 'x' && ind.carve && !ind.panel) { ctHit(); return; }   // 雕模具：光标在亮区里按 X
             if (ind.panel) return;
             if (k === 'q' || k === 'g') indDrop(); else if (k === 'f') indAction(); else if (k === 'r') indUse();   // E 不再是左键动作（任务 17）
             else if (/^[0-9]$/.test(k)) ind.selIdx = k === '0' ? 9 : +k - 1;   // 快捷栏 1～9、0 是第 10 格
@@ -3507,6 +3517,7 @@
             }
             if (R.cave) st += '<br>' + cvHint();   // 矿洞（任务 66）
             { let mh = mbHud(); if (mh) st += '<br>' + mh; }   // 刀盾耐久（任务 70）
+            { let fh = fiHud(); if (fh) st += '<br>' + fh; }   // 钻木取火、火种、打火机
             if (R.peel) st += '<br>' + wdPeelTxt();
             if (R.shear) st += '<br>剪羊毛 ' + Math.min(99, Math.floor(R.shear.t / IND_SHEAR_T * 100)) + '%' + (tlKind(indSel()) === 'shears' ? '' : '　<b style="color:#c62828">停着：拿上剪刀</b>');
             let SL = indSlots(), sel = indSel(), bag = '';

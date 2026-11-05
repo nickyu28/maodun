@@ -251,7 +251,7 @@
             if (m.ty === 'slime') put('goo', r(0, 2));
             else if (m.ty === 'mush') { put('shroom', r(0, 2)); if (indRand() < 0.15) put('shroom_bad', 1); }
             else if (m.ty === 'cloud') put('fluff', r(0, 1));
-            else if (m.ty === 'flame') put('charcoal', r(0, 1));
+            else if (m.ty === 'flame') { put('charcoal', r(0, 1)); if (IND_ITEMS_RAW.ember && indRand() < 0.35) put('ember', 1); }   // 火种（起火）：捡起来 60 秒灭
             else if (m.ty === 'cactus') put('cactus', 1);
             else if (m.ty === 'boar') { put('meat_raw', r(1, 2)); put('hide', r(0, 1)); }
             else if (m.ty === 'bee') put('honey', r(0, 1));
