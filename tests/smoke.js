@@ -5492,6 +5492,7 @@ async function enterExit(tab, key) {
                         // 冬天远征拿稿子凿冰；吃的东西放久了会烂；接错电会烧坏设备和电池（任务 63、69）
                         if (hard && RAW.ice && tl >= 1) add('ice');
                         if (hard && RAW.rotfood && Object.keys(have).some(function (k) { return RAW[k] && RAW[k].eat && k !== 'ice'; })) add('rotfood');
+                        if (have.bulb) add('bulb_dead');   // 灯泡没电（任务 66）
                         if (hard && RAW.scrap_dev && power()) { add('scrap_dev'); add('battery_burnt'); }
                         if (hard && have.dev_el && power()) IND_EL_RECIPES.forEach(function (r) { if (Object.keys(r.in).every(function (k) { return have[k]; })) Object.keys(r.out).forEach(add); });
                     }
@@ -5670,9 +5671,9 @@ async function enterExit(tab, key) {
                 const sl = JSON.parse(await T.eval(`JSON.stringify({ tod: indTod(), e: ind.base.surv.energy })`));
                 if (sl.tod > 2 || sl.e < 99.9) bad.push('睡觉没睡到早上或精力没满（两次读数中间游戏又走了一两帧，差一点点不算） ' + JSON.stringify(sl));
                 // 存档读得回来
-                await T.eval(`indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
+                const clk0 = await T.eval(`ind.base.clock`); await T.eval(`indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);   // 存的那一刻的时钟（存档写库有时要一两秒，游戏时间照走）
                 const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ rule: b.rule, clock: b.clock, e: b.surv.energy, ver: b.ver })); }); })`));
-                if (sv.rule !== 'hard' || Math.abs(sv.e - 100) > 0.5 || sv.ver < 2 || Math.abs(sv.clock - (await T.eval(`ind.base.clock`))) > 1) bad.push('存档读回来不对 ' + JSON.stringify(sv));
+                if (sv.rule !== 'hard' || Math.abs(sv.e - 100) > 0.5 || sv.ver < 2 || Math.abs(sv.clock - clk0) > 1) bad.push('存档读回来不对 ' + JSON.stringify(sv) + ' 存的时候 ' + clk0);
                 // 硬核：饿渴到血 0 会死，身上的东西没了，回到基地
                 await T.eval(`(function(){ indBagAdd('stone', 3); indGoTrip(4242); let S = ind.base.surv; S.food = 0; S.water = 0; S.hp = 5; indAdvance(3); })(); true;`);
                 const dscr = JSON.parse(await T.eval(`JSON.stringify({ d: ind.dead, el: !!document.getElementById('ind-dead') })`));
@@ -5928,9 +5929,9 @@ async function enterExit(tab, key) {
                 if (bm.lamp || !bm.bank || bm.wires !== 0 || bm.scrap !== 1 || !bm.fire || bm.hp !== 100) bad.push('过压 3 秒后烧坏（不爆炸）、留废品、旁边起火 ' + JSON.stringify(bm));
                 // 装着气的电解槽过压还是炸：人在旁边按距离扣血
                 const lamp2 = await place('dev_el', 6, 9);
-                await T.eval(`(function(){ let d = indDev(${lamp2}); d.st = { b_h2: 1 }; let b = indDev(${bank}); b.bats = 9; b.u = 9 * IND_BAT_U; indBagAdd('wire', 3); })(); true;`);
+                await T.eval(`(function(){ let d = indDev(${lamp2}); d.st = { b_h2: 1 }; let b = indDev(${bank}); b.bats = 4; b.u = 4 * IND_BAT_U; indBagAdd('wire', 3); })(); true;`);   // 先按 6 V 接好线，人站到 2.9 米再加到 9 节：不然游戏循环在接线和站位之间就炸了（人还在 1.5 米）
                 await click(bank, 'wire'); await click(lamp2, 'wire');
-                await T.eval(`(function(){ let d = indDev(${lamp2}); indTeleport(d.x + 2.9, d.z); indAdvance(0.2); })(); true;`);
+                await T.eval(`(function(){ let d = indDev(${lamp2}); indTeleport(d.x + 2.9, d.z); let b = indDev(${bank}); b.bats = 9; b.u = 9 * IND_BAT_U; indAdvance(0.2); })(); true;`);
                 if (Math.abs((await T.eval(`ind.base.surv.hp`)) - (await T.eval(`100 - indBoomDmg(2.9, IND_BOOM_R)`))) > 0.5) bad.push('装着气的过压还是炸，人在 2.9 米按距离扣血（离中心越近越多，范围边上 60） ' + await T.eval(`ind.base.surv.hp`));
                 // 发电机：中火灶台 3 米内 12 V，带水泵，水泵把地浇了
                 await T.eval(`(function(){ ind.base.crops.push({ k: 'wheat', x: -17, z: 3, g: 0, wet: 0, times: 0 }); indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(2); indPanelClose(); })(); true;`);
@@ -10533,6 +10534,56 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND88 树种：橡胶树在森林、松脂 3 份 300 秒长、割胶 8 秒 4 份、摇椰子一次、椰子 +15 剩壳、橡胶配方', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND89')) {
+            // IND89 矿洞（任务 66）：硬核山地／古老岩层有洞口、悠闲没有；洞里白天洞口 8 米内看得见、超过 15 米全黑、夜里洞口也黑；火把 8 米烧 90 秒；灯泡 12 米没电变黑；
+            // 有瓦斯的洞里点火把爆炸、灯泡不炸；走回洞口出洞；老电灯照旧有效；工作台的电灯配方原地改成灯泡
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { ind.base.rule = 'hard'; let s = 1; for (; s < 60; s++) { indGoTrip(s * 131); if (ind.caves.length) break; } ind.bag = {}; ind.base.wear = {}; ind.torchT = 0; ind.base.surv.hp = 100; delete ind.base.bulbU;
+                    let day = function () { ind.base.clock = IND_DAY * 3 + 300; }, night = function () { ind.base.clock = IND_DAY * 3 + IND_DUSK + 100; }, c = ind.caves[0];
+                    let at = function (d) { indTeleport(c.cx + d, c.cz); return cvViewR(); };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 洞口在山地／古老岩层；悠闲没有
+                let r = await J(`(function(){ let n = 0, badB = 0; for (let s = 1; s <= 8; s++) { indGoTrip(s * 977); ind.caves.forEach(function (c) { n++; if (c.bm !== 'mountain' && c.bm !== 'ancient') badB++; }); } ind.base.rule = 'casual'; indGoTrip(977); let cas = ind.caves.length; ind.base.rule = 'hard'; return { n: n, badB: badB, cas: cas }; })()`);
+                if (!(r.n >= 4 && r.badB === 0 && r.cas === 0)) bad.push('硬核山地古老岩层有洞口、悠闲没有 ' + JSON.stringify(r));
+                // 走进洞口进洞；不带光：白天洞口 5 米看得见、8 米还看得见、20 米全黑；夜里洞口也黑；走回洞口出洞
+                r = await run(`day(); indTeleport(c.x, c.z); cvTick(0.1); let inn = ind.cave === c, gone = Math.hypot(ind.p.x - c.x, ind.p.z - c.z) > 100;
+                    let v5 = at(5), v8 = at(8), v12 = at(12), v20 = at(20); night(); let n2 = at(2); day();
+                    at(10); cvTick(0.1); indTeleport(c.cx - 0.5, c.cz); cvTick(0.1); return { inn: inn, gone: gone, v5: v5, v8: v8, v12: v12, v20: v20, n2: n2, out: !ind.cave, back: Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < 4 };`);
+                if (!(r.inn && r.gone && r.v5 >= 8 && r.v8 >= 8 && r.v12 > 0 && r.v12 < r.v8 && r.v20 === 0 && r.n2 === 0 && r.out && r.back)) bad.push('进洞、白天 8 米内看得见、超 15 米全黑、夜里洞口也黑、走回洞口出洞 ' + JSON.stringify(r));
+                // 火把：木 1 + 煤 1 → 2 根；点一根 8 米、烧 90 秒后熄
+                r = await run(`let rc = IND_CRAFT.filter(function (q) { return q.out === 'torch'; }); cvEnter(c); c.gas = false; night(); at(30); ind.bag = { torch: 2 }; indSelect('torch'); indUse();
+                    let a = cvViewR(), left = ind.bag.torch; for (let i = 0; i < 89; i++) cvTick(1); let b = cvViewR(); cvTick(1.1); return { rc: rc.length, n: rc[0] && rc[0].n, coal: !!rc[0] && rc[0].in.wood === 1 && rc[0].in.coal === 1, a: a, left: left, b: b, c: cvViewR(), fl: fl.join('|') };`);
+                if (!(r.rc === 2 && r.n === 2 && r.coal && r.a === 8 && r.left === 1 && r.b === 8 && r.c === 0 && /烧完了/.test(r.fl))) bad.push('火把 2 根、8 米、烧 90 秒熄 ' + JSON.stringify(r));
+                // 灯泡：戴头上 12 米；没电变"没电的灯泡"、黑；工作台的电灯配方原地变成灯泡（铜线 2 + 玻璃板 1 + 锂电池 1）
+                r = await run(`cvEnter(c); c.gas = false; night(); at(30); ind.bag = { bulb: 1 }; indSelect('bulb'); indUse(); let a = cvViewR(); cvTick(1); let u = ind.base.bulbU; ind.base.bulbU = 0.2; cvTick(1);
+                    let i = IND_CRAFT.findIndex(function (q) { return q.out === 'bulb' && q.in.wire === 2; }), q = IND_CRAFT[i] || { in: {} };
+                    return { a: a, u: u, head: ind.base.wear.head, b: cvViewR(), lampOut: IND_CRAFT.some(function (q) { return q.out === 'dev_lamp'; }), rec: q.in.glass_plate === 1 && q.in.battery_li === 1, early: i >= 0 && i < IND_CRAFT.length - 10, fix: IND_CRAFT.some(function (q) { return q.out === 'bulb' && q.in.bulb_dead === 1 && q.in.battery_li === 1; }) };`);
+                if (!(r.a === 12 && r.u > 719 && r.u < 720 && r.head === 'bulb_dead' && r.b === 0 && !r.lampOut && r.rec && r.early && r.fix)) bad.push('灯泡 12 米、没电变黑、配方原地改 ' + JSON.stringify(r));
+                // 瓦斯：点着火把走进 15 米以里炸；戴灯泡不炸
+                r = await run(`cvEnter(c); c.gas = true; ind.lastBoom = null; day(); at(5); ind.bag = { torch: 1 }; indSelect('torch'); indUse(); cvTick(0.1); let a = { boom: !!ind.lastBoom, hp: ind.base.surv.hp };
+                    at(25); cvTick(0.1); let b = { boom: !!ind.lastBoom, hp: ind.base.surv.hp, torch: ind.torchT, gas: c.gas };
+                    cvEnter(c); c.gas = true; ind.lastBoom = null; ind.base.surv.hp = 100; ind.base.wear = { head: 'bulb' }; at(30); cvTick(0.5);
+                    return { a: a, b: b, bulbBoom: !!ind.lastBoom, hp2: ind.base.surv.hp, fl: fl.join('|') };`);
+                if (!(!r.a.boom && r.a.hp === 100 && r.b.boom && r.b.hp < 100 && r.b.torch === 0 && !r.b.gas && !r.bulbBoom && r.hp2 === 100 && /瓦斯/.test(r.fl))) bad.push('瓦斯：火把炸、灯泡不炸 ' + JSON.stringify(r));
+                // 洞里有硬岩、萤石、方铅矿；每次进去重新撒
+                r = await run(`cvEnter(c); let k = {}; ind.nodes.forEach(function (o) { if (o.cave === c.i) k[o.key] = (k[o.key] || 0) + 1; }); let a = ind.nodes.filter(function (o) { return o.cave === c.i; }).map(function (o) { return o.x.toFixed(1); }).join();
+                    cvLeave(); let left = ind.nodes.filter(function (o) { return o.cave !== undefined; }).length; cvEnter(c); let b = ind.nodes.filter(function (o) { return o.cave === c.i; }).map(function (o) { return o.x.toFixed(1); }).join(); return { k: k, left: left, diff: a !== b };`);
+                if (!(r.k.rock_hard >= 3 && r.k.fluorite >= 2 && r.k.ore_pb >= 2 && r.left === 0 && r.diff)) bad.push('洞里的矿、每次重新撒 ' + JSON.stringify(r));
+                // 老存档里已放的电灯照旧有效
+                r = await J(`(function(){ indGoBase(null); ind.base.devs = [{ id: 1, ty: 'lamp', x: 2, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, pw: true }]; indTeleport(0, 0); return { near: indLampNear(), item: !!IND_ITEMS.dev_lamp }; })()`);
+                if (!(r.near && r.item)) bad.push('老电灯照旧 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND89 矿洞：洞口在山地、白天洞口 8 米内看得见超 15 米全黑、夜里黑、火把 8 米 90 秒、灯泡 12 米没电黑、瓦斯遇火把炸、老电灯照旧', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

@@ -211,7 +211,7 @@
                 { ins: ['cactus'], outs: ['cactus'], name: '仙人掌', txt: '仙人掌：空手采会扎手（硬核扣 60 血），拿剪刀或稿子采不扎；生吃口渴 +5（硬核扣 60 血）', where: '盐湖沙漠' },
                 { ins: ['cactus', 'axe', 'knife', 'shears', 'tongs'], outs: ['cactus_peeled'], name: '拔刺', txt: '仙人掌 → 去刺仙人掌（口渴 +8、饱食 +3）：选中仙人掌点一下右键开始，再点排下一个；看手上拿的：斧子 5 秒、小刀 10 秒、剪刀 30 秒、钳子 40 秒、拿着仙人掌 60 秒；能边走边拔，拿着别的就停着', where: '手上' },
                 { ins: ['shears'], outs: ['wool'], name: '剪羊毛', txt: '拿着剪刀对着羊左键：' + IND_SHEAR_T + ' 秒剪完出 2 份羊毛；能边走边剪，换走剪刀就停着，离羊超过 3 米就断了', where: '羊' }
-            ];
+            ].concat(typeof cvBookLines === 'function' ? cvBookLines() : []);   // 矿洞（19-industry-cave.js）
         }
 
         // ── 画：视野内的树、石头、露头、仙人掌、树桩、坑（InstancedMesh，一类一个）──

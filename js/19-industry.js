@@ -322,7 +322,7 @@
             { out: 'battery', in: { ingot_cu: 1, ingot_zn: 1, salt: 1 }, hard: true }, { out: 'wire', n: 4, in: { ingot_cu: 1 }, hard: true },
             { out: 'dev_bank', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_gen', in: { ingot_cu: 3, ingot_fe: 2, steel: 1 }, hard: true },
             { out: 'dev_el', in: { ingot_fe: 2, ingot_cu: 2, bottle: 1 }, hard: true },
-            { out: 'dev_lamp', in: { ingot_cu: 1, sand: 2 }, hard: true }, { out: 'dev_pump', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_furnace', in: { ingot_fe: 4, clay: 4, ingot_cu: 2 }, hard: true }, { out: 'pick_iron', in: { ingot_fe: 3, wood: 2 }, hard: true }, { out: 'pick_steel', in: { steel: 3, wood: 2 }, hard: true },
+            { out: 'bulb', in: { wire: 2, glass_plate: 1, battery_li: 1 }, hard: true }, { out: 'dev_pump', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_furnace', in: { ingot_fe: 4, clay: 4, ingot_cu: 2 }, hard: true }, { out: 'pick_iron', in: { ingot_fe: 3, wood: 2 }, hard: true }, { out: 'pick_steel', in: { steel: 3, wood: 2 }, hard: true },
             { out: 'bucket', in: { wood: 3 } }, { out: 'shears', in: { stone: 2, wood: 1 } },
             { out: 'pick_bronze', in: { bronze: 3, wood: 2 }, hard: true },
             { out: 'bell', in: { brass: 1 }, hard: true },
@@ -454,6 +454,7 @@
         function indElev(M, x, z) { return indFbm(x / 70, z / 70, M.seed); }
         function indMoist(M, x, z) { return indFbm(x / 90, z / 90, M.seed + 101); }
         function indBiome(M, x, z) {
+            if (x > IND_MAP + 50) return cvBiome(x, z);   // 矿洞跟洞口一样
             for (let i = 0; i < M.volc.length; i++) { let v = M.volc[i]; if (Math.hypot(x - v.x, z - v.z) < v.r) return 'volcano'; }
             let e = indElev(M, x, z), m = indMoist(M, x, z), rr = Math.hypot(x, z) / IND_MAP;
             if (Math.hypot(x, z) < 14) return 'plain';
@@ -464,6 +465,7 @@
             return 'plain';
         }
         function indHeight(M, x, z) {
+            if (x > IND_MAP + 50) return CV.floor;   // 地图外面是矿洞（19-industry-cave.js，任务 66），地面平的
             let e0 = indElev(M, x, z), h = e0 * 9 + Math.max(0, e0 - 0.32) * 26;   // 山地更陡
             if (M.riv) h = wdRiverCarve(M, x, z, h);   // 河（19-industry-world.js）
             let dsp = Math.hypot(x, z), spawn = Math.max(0, 1 - dsp / 14); h *= (1 - spawn); if (dsp < 14) h = Math.max(h, 0.4 * Math.min(1, (14 - dsp) / 4));   // 出生点周围 10 米一定是陆地
@@ -627,15 +629,18 @@
                 } catch (e) { cb(indNewBase()); }
             });
         }
-        let IND_SAVING = 0;
+        let IND_SAVING = 0, IND_SAVE_SEQ = 0, IND_SAVE_PUT = 0;   // IND_SAVE_SEQ：第几次存；IND_SAVE_PUT：已经开始写的最新一次
         function indSave(cb) {
             if (!ind || !ind.base) { if (cb) cb(false); return; }
             let data = JSON.parse(JSON.stringify(ind.base));
             data.bag = ind.where === 'base' ? JSON.parse(JSON.stringify(ind.bag)) : {};   // 基地里背包跟着存；在远征里的不存（回不来就丢了）
             IND_SAVING++;
+            let seq = ++IND_SAVE_SEQ;
             indDb(function (db) {
                 let done = function (ok) { IND_SAVING--; if (db) try { db.close(); } catch (e) { } if (cb) cb(ok); };
                 if (!db) { done(false); return; }
+                if (seq < IND_SAVE_PUT) { done(true); return; }   // 后存的那次已经先写了：旧的不再盖上去（两次存档几乎同时，库打开的先后不一定）
+                IND_SAVE_PUT = seq;
                 try {
                     let tx = db.transaction(IND_STORE, 'readwrite');
                     tx.objectStore(IND_STORE).put(data, indKey());
@@ -1120,7 +1125,7 @@
         function indApplyPos(b) { ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { let p = b.pos && b.pos[k]; IND_BASE_ST[k].x = p ? p.x : IND_ST_DEF[k].x; IND_BASE_ST[k].z = p ? p.z : IND_ST_DEF[k].z; }); }
         function indGoBase(fromTrip) {
             let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];
-            ind.wild = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null;
+            ind.wild = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.cave = null; ind.caves = [];
             indClearWorld();
             ind.where = 'base'; ind.map = null; ind.exitT = 0;
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
@@ -1244,7 +1249,7 @@
                 else if (key === 'stone') node.rock = true;   // 大石头
                 ind.nodes.push(node);
             }
-            wdExtraNodes(M, casual); if (!casual) rkGen(M);   // 硬岩（19-industry-rock.js）   // 河边的黏土和锡砂、火山周围的黑石头
+            wdExtraNodes(M, casual); if (!casual) rkGen(M); if (!casual) cvGen(M); else { ind.caves = []; ind.cave = null; }   // 矿洞洞口（19-industry-cave.js，任务 66）   // 硬岩（19-industry-rock.js）   // 河边的黏土和锡砂、火山周围的黑石头
             ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true; wdMakeMeshes(); wdScatter(M);
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             // 野生动物：平原有羊和牛，森林有狗和猫
@@ -1380,6 +1385,7 @@
                 let g = IND_BASE_ST.gate;
                 if (Math.abs(ind.p.x - g.x) < IND_T.gateR && ind.p.z < g.z + 0.3) indGoTrip();
             } else {
+                cvTick(dt); if (!ind || ind.over || ind.dead) return;   // 矿洞：进出、火把、灯泡、瓦斯（任务 66）
                 wdTripTick(dt);   // 19-industry-world.js：脚下的撤离点走开才生效、看见过的撤离点、走过的地方、指南针
                 let inExit = ind.exits.some(function (e) { return e.armed !== false && Math.hypot(ind.p.x - e.x, ind.p.z - e.z) <= IND_T.exitR; });
                 ind.exitT = inExit ? ind.exitT + dt : 0;
@@ -1525,9 +1531,12 @@
                 R.me.rotation.y = Math.atan2(mx, mz);
             }
             let lim = R.where === 'base' ? { x: IND_BASE.x - 0.6, z: IND_BASE.z - 0.6 } : { x: IND_MAP - 1, z: IND_MAP - 1 };
-            R.p.x = Math.max(-lim.x, Math.min(lim.x, R.p.x));
-            let zMin = R.where === 'base' && Math.abs(R.p.x) < IND_T.gateR ? -IND_BASE.z - 1 : -lim.z;
-            R.p.z = Math.max(zMin, Math.min(lim.z, R.p.z));
+            if (R.cave) cvClamp(R.p);   // 矿洞里只能在洞里走（任务 66）
+            else {
+                R.p.x = Math.max(-lim.x, Math.min(lim.x, R.p.x));
+                let zMin = R.where === 'base' && Math.abs(R.p.x) < IND_T.gateR ? -IND_BASE.z - 1 : -lim.z;
+                R.p.z = Math.max(zMin, Math.min(lim.z, R.p.z));
+            }
             if (R.where === 'base' && R.base.houses.length) indHouseCollide(R.p);
             let gy = indGround(R.p.x, R.p.z);
             if (k.jump && R.p.y <= gy + 0.001 && !blocked && !R.onRaft) R.p.vy = 9;
@@ -1539,7 +1548,8 @@
             // 夜里：天空和雾变暗，屏幕盖一层半透明黑（不改场景里原有的灯）
             let d = indDark(), nightEl = document.getElementById('ind-night');
             if (nightEl) nightEl.style.opacity = (d * 0.55 * (indLampNear() ? 0.35 : 1)).toFixed(3);
-            if (ind.where === 'trip' && scene.fog) { scene.fog.far = indViewR(d); scene.fog.near = indViewR(d) * 0.35; }
+            if (ind.cave) cvRender(nightEl);   // 矿洞里按离洞口多深、身上的光（任务 66）
+            else if (ind.where === 'trip' && scene.fog) { scene.fog.far = indViewR(d); scene.fog.near = indViewR(d) * 0.35; }
             let eye = camera.position.clone(), rx = camera.rotation.x, ry = camera.rotation.y, rz = camera.rotation.z;
             let dir = new THREE.Vector3(); camera.getWorldDirection(dir);
             let dd = IND_CAM.back, cx = eye.x - dir.x * dd, cz = eye.z - dir.z * dd;
@@ -1769,6 +1779,7 @@
             if (k && IND_ITEMS[k].potion) return pwDrink(k);   // 右键喝药
             if (k === 'gunpowder' && a && a.kind === 'node' && a.o.hard) return rkFuse(a.o);   // 火药对着硬岩：点引线
             if (k === 'cyl' && a && a.kind === 'node' && a.o.key === 'vent_ng') return rkFillVent(a.o);   // 空钢瓶对着喷口：装天然气
+            if (k === 'torch') return cvLightTorch();   // 右键点火把（任务 66）
             if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
@@ -3472,6 +3483,7 @@
                 let near = R.exits.reduce(function (a, e) { let dd = Math.hypot(R.p.x - e.x, R.p.z - e.z); return dd < a ? dd : a; }, 1e9);
                 st += '<br>远征　' + bm + '　最近的撤离点 ' + Math.round(near) + ' 米' + (R.exitT > 0 ? '　<b style="color:#2e7d32">撤离中 ' + Math.ceil(IND_T.extract - R.exitT) + '</b>' : '');
             }
+            if (R.cave) st += '<br>' + cvHint();   // 矿洞（任务 66）
             if (R.peel) st += '<br>' + wdPeelTxt();
             if (R.shear) st += '<br>剪羊毛 ' + Math.min(99, Math.floor(R.shear.t / IND_SHEAR_T * 100)) + '%' + (indSel() === 'shears' ? '' : '　<b style="color:#c62828">停着：拿上剪刀</b>');
             let SL = indSlots(), sel = indSel(), bag = '';
