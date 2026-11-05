@@ -1240,7 +1240,7 @@
                 }
                 let node = { key: key, x: x, z: z, y: h, n: nd.give[0] + Math.floor(roll * (nd.give[1] - nd.give[0] + 1)), seed: IND_SEED_KINDS[Math.floor(r() * IND_SEED_KINDS.length)], dead: false };
                 if (key === 'oil') { node.n = CK.oilMax; node.max = CK.oilMax; node.t0 = 0; }   // 油点：存量 4 桶
-                if (key === 'wood') { node.tree = indBiome(M, x, z) === 'mountain' ? 'pine' : indBiome(M, x, z) === 'beach' ? 'palm' : 'oak'; }   // 树：森林阔叶、山地松树、海边椰子树
+                if (key === 'wood') { node.tree = trKind(M, x, z, indBiome(M, x, z) === 'mountain' ? 'pine' : indBiome(M, x, z) === 'beach' ? 'palm' : 'oak'); }   // 树：森林阔叶、山地松树、海边椰子树
                 else if (key === 'stone') node.rock = true;   // 大石头
                 ind.nodes.push(node);
             }
@@ -1360,7 +1360,7 @@
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); clStep(dt, true, ind.where === 'base'); achTick(); }   // 出门时家里不在这里跑，回家补算（任务 3）
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); clStep(dt, true, ind.where === 'base'); achTick(); trTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
             if (!ind || ind.over || ind.dead) return;
@@ -1710,6 +1710,7 @@
             }
             if (a && a.kind === 'raft') return indRaftToggle(a.o);
             if (a && a.kind === 'bomb') return nkBombAct(a.o);
+            if (a && a.kind === 'node' && a.o.tree === 'palm' && trShake(a.o)) return true;   // 空手摇椰子（19-industry-tree.js）
             if (a && a.kind === 'node' && a.o.tree) return wdChop(a.o);
             if (a && a.kind === 'node') return indGather(a.o);
             if (a && a.kind === 'item' && indSel() === 'wire' && IND_ITEMS[a.o.k] && IND_ITEMS[a.o.k].dev) { indFlash('这是掉在地上的' + indName(a.o.k) + '，不是放好的设备。要放好，拿着它按右键'); return false; }   // 拿铜线左键点到地上的设备物品，别当成收起来（任务 13）
@@ -1739,6 +1740,7 @@
             if (f) { ind.rh = { f: f, t: 0, done: false }; return; }
             if (!ind.ride && pwCrankDown(indAim())) return;   // 手摇发电机：按住右键摇（19-industry-power.js）
             if (indSel() === 'cactus') { wdPeelStart(); return; }   // 选中仙人掌点一下右键开始拔刺（R 键是生吃）
+            if (trTap(indAim())) return;   // 松树割松脂、橡胶树割胶（19-industry-tree.js）
             if (fmKillStart(indAim())) return;   // 拿着工具对着动物按住右键 1 秒：宰（19-industry-farm.js）
             indUse();
         }
@@ -1941,18 +1943,53 @@
             return 0;
         }
         // 每帧：按电线算电压；超过额定就炸；够电压、开着、电池有电就工作并耗电
+        // 任务 69：电按现实来。过压是烧坏不是爆炸（冒烟 3 秒，变一个烧坏的设备，旁边有木头、作物就起火），只有装着气的电解槽、压缩机还会炸；
+        // 并联的电压差超过 1 V，高的灌低的，低的电池组 3 秒后烧坏、旁边起火。短路（电池两端连同一条线）没做：电源和电源不能直接接线
+        const IND_BURN_T = 3, IND_PAR_DV = 1;
+        function indGasDev(d) { return (d.ty === 'el' || d.ty === 'comp') && Object.keys(d.st || {}).some(function (k) { return d.st[k] > 0 && (/^b_(h2|o2)$|^cyl:/.test(k) || (IND_ITEMS[k] && IND_ITEMS[k].cyl)); }); }
+        function indBurnFire(x, z) {
+            let B = ind.base, near = B.crops.some(function (c) { return Math.hypot(c.x - x, c.z - z) < 2.5; }) || B.chests.some(function (c) { return !c.lead && Math.hypot(c.x - x, c.z - z) < 2.5; }) || B.ground.some(function (g) { return (g.k === 'wood' || g.k === 'wheat') && Math.hypot(g.x - x, g.z - z) < 2.5; });
+            if (!near || B.fires.length >= 30) return false;
+            B.fires.push({ x: x, z: z, fuel: 60 }); ind.fireDirty = true; return true;
+        }
+        function indBurnDrop(d, extra) {
+            let B = ind.base, loot = {}, add = function (k, n) { if (n > 0) loot[indCool(k)] = (loot[indCool(k)] || 0) + n; };
+            if (d.st) Object.keys(d.st).forEach(function (k) { add(k, d.st[k]); });
+            if (d.rods) d.rods.forEach(function (r) { add(nkRodKeyOf(r), 1); });
+            if (d.cy) add(d.cy, 1);
+            if (d.ty === 'fridge' && d.items) Object.keys(d.items).forEach(function (k) { add(k, d.items[k]); });
+            Object.keys(extra || {}).forEach(function (k) { add(k, extra[k]); });
+            let li = 0; Object.keys(loot).forEach(function (k) { for (let i = 0; i < loot[k]; i++, li++) { let a = li * 2.399, rr = 0.5 + 0.3 * Math.sqrt(li); B.ground.push({ k: k, x: d.x + Math.cos(a) * rr, z: d.z + Math.sin(a) * rr }); } });
+            B.devs = B.devs.filter(function (x) { return x !== d; }); B.wires = B.wires.filter(function (w) { return w[0] !== d.id && w[1] !== d.id; });
+            if (ind.wirePend === d.id) ind.wirePend = null;
+            let fire = indBurnFire(d.x, d.z);
+            ind.itemDirty = ind.devDirty = ind.wireDirty = true; indSave();
+            return { n: li, fire: fire };
+        }
+        function indBurnEnd(d) {
+            if (!ind || ind.over || !indDev(d.id)) return;
+            let x = d.x, z = d.z, nm = IND_DEVS[d.ty].name, r = indBurnDrop(d, { scrap_dev: 1 });
+            if (!ind.sleeping) indFlash(nm + '烧坏了' + (r.fire ? '，旁边起火了' : ''));
+        }
+        function indBurnBank(d) {
+            if (!ind || ind.over || !indDev(d.id)) return;
+            let n = d.bats || 0, r = indBurnDrop(d, { battery_burnt: n });
+            if (!ind.sleeping) indFlash('电池组烧坏了，' + n + ' 节电池报废' + (r.fire ? '，旁边起火了' : ''));
+        }
         function indElecTick(dt) {
             if (ind.where !== 'base') return;
             let B = ind.base, booms = [];
-            B.devs.forEach(function (d) { d.pwPrev = d.pw; d.pw = false; });
+            B.devs.forEach(function (d) { d.pwPrev = d.pw; d.pw = false; d.lowNow = false; });
+            B.devs.forEach(function (d) { if (d.burn > 0) { d.burn -= dt; if (d.burn <= 0) booms.push({ end: d }); } });   // 任务 69：过压的设备冒烟 3 秒后烧坏
             // 一个用电器可以接好几个电源（并联，任务 16）：电压 = 还有电的电源里最高的；耗电平分给还有电的电池组；有发电机在发电时电池组不扣电
             let seen = {};
             B.wires.forEach(function (w) {
-                let d = indDev(w[1]); if (!d || seen[d.id]) return; seen[d.id] = 1;
+                let d = indDev(w[1]); if (!d || seen[d.id] || d.burn > 0) return; seen[d.id] = 1;
                 let D = IND_DEVS[d.ty], live = indDevSrcs(d).filter(function (s) { return indSrcVolt(s) > 0; });
                 let V = live.reduce(function (m, s) { return Math.max(m, indSrcVolt(s)); }, 0);
                 if (V > D.rated + 1e-6) { booms.push({ d: d, V: V, live: live }); return; }
                 d.v = V;
+                live.forEach(function (s) { if (s.ty === 'bank' && indSrcVolt(s) < V - IND_PAR_DV - 1e-6) { s.lowNow = true; s.low = (s.low || 0) + dt; if (!s.lowWarned) { s.lowWarned = true; if (!ind.sleeping) indFlash('两个电池电压不一样，会烧。'); } } });   // 并联电压差超过 1 V：高的往低的灌电，低的 3 秒后烧坏
                 if (!live.length || !d.on || V < D.minV) return;
                 if (d.ty === 'el' && indElRecipe(d, V) < 0) return;   // 电解槽没活干不耗电
                 if (d.ty === 'comp' && !indCompBusy(d)) return;   // 压缩机、压力机也是有活干才耗电
@@ -1962,12 +1999,16 @@
                 if (banks.length === up.length) banks.forEach(function (s) { s.u = Math.max(0, s.u - D.draw * dt * pwAccelMultDev(d) / banks.length); });
                 d.pw = true;
             });
+            B.devs.forEach(function (d) { if (d.ty === 'bank' && !d.lowNow) { d.low = 0; d.lowWarned = false; } else if (d.ty === 'bank' && d.low >= IND_BURN_T) booms.push({ endBank: d }); });
             booms.forEach(function (b) {
+                if (b.end) { indBurnEnd(b.end); return; }
+                if (b.endBank) { indBurnBank(b.endBank); return; }
                 let d = b.d; if (!(ind && !ind.over && ind.where === 'base' && indDev(d.id))) return;
                 // 说清楚是谁炸的：设备名、电压、额定，以及电压最高的电源
                 let srcs = b.live.slice().sort(function (p, q) { return indSrcVolt(q) - indSrcVolt(p); }).map(function (s) { return IND_DEVS[s.ty].name + (s.ty === 'bank' ? ' ' + s.bats + ' 节' : '') + ' ' + indSrcVolt(s).toFixed(1) + ' V'; });
                 let msg = IND_DEVS[d.ty].name + ' ' + b.V.toFixed(1) + ' V，额定 ' + IND_DEVS[d.ty].rated + ' V，炸了' + (srcs.length ? '（电源：' + srcs.slice(0, 4).join('、') + (srcs.length > 4 ? ' 等' : '') + '）' : '');
-                indBoom(d.x, d.z, 0, msg); if (ind && !ind.over) indFlash(msg + (ind.lastBoomLoot ? '；里面的 ' + ind.lastBoomLoot + ' 个东西掉在了地上' : ''));
+                if (indGasDev(d)) { indBoom(d.x, d.z, 0, msg); if (ind && !ind.over) indFlash(msg + (ind.lastBoomLoot ? '；里面的 ' + ind.lastBoomLoot + ' 个东西掉在了地上' : '')); }   // 充了气的才炸
+                else { d.burn = IND_BURN_T; d.pw = false; indFlash(msg.replace('炸了', '冒烟了，3 秒后烧坏')); ind.devDirty = true; }
             });
             if (!ind || ind.over || ind.where !== 'base') return;
             B.devs.forEach(function (d) { let h = dt * pwAccelMultDev(d); if (d.ty === 'el') indElTick(d, h); else if (d.ty === 'comp') indCompTick(d, h); else if (d.ty === 'press') indPressTick(d, h); else if (IND_DEV_TICK[d.ty]) IND_DEV_TICK[d.ty](d, h); });

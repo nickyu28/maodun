@@ -3241,7 +3241,7 @@ async function enterExit(tab, key) {
                         // 5) 24 V + 12 V 接额定 12 V 的电解槽：炸
                         reset(); a = mk('bank', 10, -10, 16); b = mk('bank', 14, -10, 8); let e = mk('el', 12, -10);
                         wire(a, e); wire(b, e); let eid = e.id; indElecTick(0.1);
-                        out.boom = { gone: !indDev(eid) };
+                        out.boom = { gone: !indDev(eid) || indDev(eid).burn > 0 };   // 任务 69：过压先冒烟再烧坏
                     } finally { blazeFlash = bf; ind.paused = false; }
                     return JSON.stringify(out);
                 })()`));
@@ -5910,16 +5910,20 @@ async function enterExit(tab, key) {
                 await T.eval(`indTeleport(-8, 5); indAdvance(5); true;`);
                 const on = JSON.parse(await T.eval(`JSON.stringify({ pw: indDev(${lamp}).pw, u: indDev(${bank}).u, v: indSrcVolt(indDev(${bank})) })`));
                 if (!on.pw || on.v !== 6 || Math.abs(on.u - (720 - 1)) > 0.05) bad.push('6 V 灯不亮或耗电不对 ' + JSON.stringify(on));
-                // 再装一节：7.5 V > 6 V，灯炸了，3 米外的电池组还在，人在远处不扣血
-                await T.eval(`(function(){ indBagAdd('wheat', 1); ind.base.ground.push({ k: 'wheat', x: 6.5, z: -1.6 }); indDev(${bank}).bats++; indDev(${bank}).u += IND_BAT_U; })(); true;`);   // 任务 24 以后装电池会拒绝超压，所以这里直接把电池组改成 5 节（7.5 V > 灯 6 V）来测过压爆炸
+                // 再装一节：7.5 V > 6 V，灯冒烟 3 秒后烧坏（任务 69：不爆炸），3 米外的电池组还在，人在远处不扣血，旁边有麦子起火
+                await T.eval(`(function(){ indBagAdd('wheat', 1); ind.base.ground.push({ k: 'wheat', x: 6.5, z: -1.6 }); indDev(${bank}).bats++; indDev(${bank}).u += IND_BAT_U; })(); true;`);   // 任务 24 以后装电池会拒绝超压，所以这里直接把电池组改成 5 节（7.5 V > 灯 6 V）
                 await T.eval(`indTeleport(-8, 5); indAdvance(0.2); true;`);
-                const bm = JSON.parse(await T.eval(`JSON.stringify({ lamp: !!indDev(${lamp}), bank: !!indDev(${bank}), wires: ind.base.wires.length, ground: ind.base.ground.filter(function (g) { return g.x > 6; }).length, hp: ind.base.surv.hp })`));
-                if (bm.lamp || !bm.bank || bm.wires !== 0 || bm.ground !== 0 || bm.hp !== 100) bad.push('过压爆炸不对 ' + JSON.stringify(bm));
-                // 人在旁边炸：按距离扣血
-                const lamp2 = await place('dev_lamp', 6, 0);
+                const sm = JSON.parse(await T.eval(`JSON.stringify({ lamp: !!indDev(${lamp}), burn: (indDev(${lamp}) || {}).burn > 0, pw: (indDev(${lamp}) || {}).pw })`));
+                if (!(sm.lamp && sm.burn && !sm.pw)) bad.push('过压先冒烟、不供电 ' + JSON.stringify(sm));
+                await T.eval(`indAdvance(3.3); true;`);
+                const bm = JSON.parse(await T.eval(`JSON.stringify({ lamp: !!indDev(${lamp}), bank: !!indDev(${bank}), wires: ind.base.wires.length, scrap: ind.base.ground.filter(function (g) { return g.k === 'scrap_dev'; }).length, fire: ind.base.fires.some(function (f) { return f.x > 5 && f.x < 8; }), hp: ind.base.surv.hp })`));
+                if (bm.lamp || !bm.bank || bm.wires !== 0 || bm.scrap !== 1 || !bm.fire || bm.hp !== 100) bad.push('过压 3 秒后烧坏（不爆炸）、留废品、旁边起火 ' + JSON.stringify(bm));
+                // 装着气的电解槽过压还是炸：人在旁边按距离扣血
+                const lamp2 = await place('dev_el', 6, 9);
+                await T.eval(`(function(){ let d = indDev(${lamp2}); d.st = { b_h2: 1 }; let b = indDev(${bank}); b.bats = 9; b.u = 9 * IND_BAT_U; indBagAdd('wire', 3); })(); true;`);
                 await click(bank, 'wire'); await click(lamp2, 'wire');
                 await T.eval(`(function(){ let d = indDev(${lamp2}); indTeleport(d.x + 2.9, d.z); indAdvance(0.2); })(); true;`);
-                if (Math.abs((await T.eval(`ind.base.surv.hp`)) - (await T.eval(`100 - indBoomDmg(2.9, IND_BOOM_R)`))) > 0.5) bad.push('人在 2.9 米按距离扣血（离中心越近越多，范围边上 60） ' + await T.eval(`ind.base.surv.hp`));
+                if (Math.abs((await T.eval(`ind.base.surv.hp`)) - (await T.eval(`100 - indBoomDmg(2.9, IND_BOOM_R)`))) > 0.5) bad.push('装着气的过压还是炸，人在 2.9 米按距离扣血（离中心越近越多，范围边上 60） ' + await T.eval(`ind.base.surv.hp`));
                 // 发电机：中火灶台 3 米内 12 V，带水泵，水泵把地浇了
                 await T.eval(`(function(){ ind.base.crops.push({ k: 'wheat', x: -17, z: 3, g: 0, wet: 0, times: 0 }); indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(2); indPanelClose(); })(); true;`);
                 const gen = await place('dev_gen', 8, -15), pump = await place('dev_pump', 12, -10);
@@ -8798,8 +8802,8 @@ async function enterExit(tab, key) {
                 if (cap.cap !== 200 || cap.n !== 61 || cap.saved !== 61) bad.push('60 个设备外再放 1 个、存档整理后不丢 ' + JSON.stringify(cap));
                 const boom = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.base.chests = [{ id: 1, x: 12, z: 12, big: true, items: {} }];
                     ind.base.devs = [{ id: 1, ty: 'bank', x: 30, z: 20, bats: 17, u: 3060, on: true, ft: 20, st: {} }, { id: 2, ty: 'centrifuge', x: 32, z: 20, bats: 0, u: 0, on: true, ft: 20, st: {} }]; ind.base.wires = [[1, 2]];
-                    try { indElecTick(0.1); } finally { blazeFlash = bf; } return { fl: fl.join('|'), left: ind.base.devs.map(function (d) { return d.id; }) }; })()`);
-                if (!(/离心机/.test(boom.fl) && /25\.5/.test(boom.fl) && /24/.test(boom.fl) && /电池组 17 节/.test(boom.fl) && boom.left.indexOf(2) < 0)) bad.push('过压提示要有设备名、25.5、24 和电源 ' + JSON.stringify(boom));
+                    try { indElecTick(0.1); for (let i = 0; i < 35; i++) indElecTick(0.1); } finally { blazeFlash = bf; } return { fl: fl.join('|'), left: ind.base.devs.map(function (d) { return d.id; }) }; })()`);
+                if (!(/离心机/.test(boom.fl) && /25\.5/.test(boom.fl) && /24/.test(boom.fl) && /电池组 17 节/.test(boom.fl) && boom.left.indexOf(2) < 0)) bad.push('过压提示要有设备名、25.5、24 和电源，3 秒后烧坏 ' + JSON.stringify(boom));
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND43 设备上限 200（60 个放得下、存档不丢）、过压炸了说清是谁（名字、电压、额定、电源）', bad.length === 0, bad.join(' / '));
@@ -9041,7 +9045,7 @@ async function enterExit(tab, key) {
                 const D = (id, ty, x, o) => JSON.stringify(Object.assign({ id: id, ty: ty, x: x, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}));
                 const run = (wires, out, extra) => J(`(function(){ ind.base.rule = 'hard'; ind.base.rad = []; ind.base.off.pool = true; ind.bag = {};
                     ind.base.devs = [{ id: 1, ty: 'reactor', x: 20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }], ctl: 1, T: 300, melt: 0 }, ${D(2, 'turbine', 21)}, ${D(3, 'xfmr', 24, { out: 'OUT' })}, ${D(4, 'centrifuge', 27, { st: { 'uf6:0': 2 } })}${extra || ''}]; ind.base.wires = ${JSON.stringify(wires)};
-                    indAdvance(0.3); return { cen: !!indDev(4), pw: indDev(4) ? indDev(4).pw : null, xf: !!indDev(3), v: indDev(4) ? indDev(4).v : 0 }; })()`.replace('OUT', out));
+                    indAdvance(0.3); return { cen: !!indDev(4) && !(indDev(4).burn > 0), pw: indDev(4) ? indDev(4).pw : null, xf: !!indDev(3), v: indDev(4) ? indDev(4).v : 0 }; })()`.replace('OUT', out));
                 let r = await run([[2, 3], [3, 4]], 24);
                 if (!(r.cen && r.pw === true && r.xf)) bad.push('汽轮发电机 → 变压器 24 V → 离心机该通电不炸 ' + JSON.stringify(r));
                 r = await run([[2, 4]], 24);
@@ -9053,7 +9057,7 @@ async function enterExit(tab, key) {
                 if (!(lo.lamp && lo.pw && Math.abs(lo.v - 6) < 0.01)) bad.push('输出不高于输入（4 节 6 V → 24 V 档只有 6 V） ' + JSON.stringify(lo));
                 if (!(lo.u < 720 - 0.1 && lo.u > 719)) bad.push('变压器后面的电灯耗电该扣电池组（1 秒约 0.2） ' + lo.u);
                 // 输出 24 V 接电灯（额定 6）该炸（玩家自己选的）
-                const bm = await J(`(function(){ ind.base.devs = [${D(1, 'bank', 10, { bats: 20, u: 3600 })}, ${D(2, 'xfmr', 12, { out: 24 })}, ${D(3, 'lamp', 14)}]; ind.base.wires = [[1, 2], [2, 3]]; indAdvance(0.2); return { lamp: !!indDev(3), xf: !!indDev(2) }; })()`);
+                const bm = await J(`(function(){ ind.base.devs = [${D(1, 'bank', 10, { bats: 20, u: 3600 })}, ${D(2, 'xfmr', 12, { out: 24 })}, ${D(3, 'lamp', 14)}]; ind.base.wires = [[1, 2], [2, 3]]; indAdvance(0.2); return { lamp: !!indDev(3) && !(indDev(3).burn > 0), xf: !!indDev(2) }; })()`);
                 if (bm.lamp) bad.push('输出 24 V 接电灯该炸灯');
                 // 点一下切换 6 → 12 → 24 → 6
                 const cy = await J(`(function(){ ind.base.devs = [${D(2, 'xfmr', 12, { out: 6 })}]; ind.base.wires = []; let d = indDev(2), a = []; for (let i = 0; i < 4; i++) { pwXfmrCycle(d); a.push(d.out); } return a; })()`);
@@ -10446,6 +10450,81 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND86 贫铀增殖：满 1 天变辐照棒、没燃料棒／温度不够／没在烧不增殖、后处理出钚没核废料、老配方在、老 5% 当 3.5%', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND87')) {
+            // IND87 电按现实来（任务 69）：并联电压差超过 1 V → 低的电池组 3 秒后烧坏（电池变烧坏的电池、旁边有麦子起火）、只提示一次；同电压并联安全；过压设备先冒烟 3 秒再烧坏不爆炸；装着气的电解槽过压还是炸；没负载的短路没做
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; let B = ind.base; B.devs = []; B.wires = []; B.ground = []; B.fires = []; B.crops = []; B.surv.hp = 100; indTeleport(-30, 20); indPanelClose();
+                    let mk = function (id, ty, x, bats, li) { let d = { id: id, ty: ty, x: x, z: 0, bats: bats, u: bats * 180, on: true, ft: 20, st: {} }; if (li) d.li = true; return d; };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 6 V 和 9 V 的电池组并联接水泵：低的 3 秒后烧坏，高的还在，泵接着转
+                let r = await run(`B.crops.push({ k: 'wheat', x: 0.5, z: 1, g: 0, wet: 0, times: 0 }); B.devs = [mk(1, 'bank', 0, 4), mk(2, 'bank', 2, 6), mk(3, 'pump', 4, 0)]; B.wires = [[1, 3], [2, 3]];
+                    for (let i = 0; i < 20; i++) indElecTick(0.1); let a = { alive: !!indDev(1), n: fl.filter(function (t) { return /电压不一样/.test(t); }).length };
+                    for (let i = 0; i < 20; i++) indElecTick(0.1); let b = { alive: !!indDev(1), n: fl.filter(function (t) { return /电压不一样/.test(t); }).length };
+                    return { a: a, b: b, hi: !!indDev(2), pump: !!indDev(3) && indDev(3).pw, burnt: B.ground.filter(function (g) { return g.k === 'battery_burnt'; }).length, fire: B.fires.length, wires: B.wires.length, hp: B.surv.hp };`);
+                if (!(r.a.alive && r.a.n === 1 && !r.b.alive && r.b.n === 1 && r.hi && r.pump && r.burnt === 4 && r.fire === 1 && r.wires === 1 && r.hp === 100)) bad.push('电压差超 1 V：低的 3 秒后烧坏、只提示一次、高的还在泵接着转、起火不爆炸 ' + JSON.stringify(r));
+                // 同电压（4 节 6 V + 2 节锂 6 V）并联：安全，一直在
+                r = await run(`B.devs = [mk(1, 'bank', 0, 4), mk(2, 'bank', 2, 2, true), mk(3, 'pump', 4, 0)]; indDev(2).u = 2 * 720; B.wires = [[1, 3], [2, 3]];
+                    for (let i = 0; i < 100; i++) indElecTick(0.1); return { a: !!indDev(1), b: !!indDev(2), fl: fl.join('|') };`);
+                if (!(r.a && r.b && !/电压不一样/.test(r.fl))) bad.push('同电压并联安全 ' + JSON.stringify(r));
+                // 过压设备：先冒烟（不供电）、3 秒后烧坏变废品，没爆炸（人不扣血、旁边设备不丢）
+                r = await run(`B.devs = [mk(1, 'bank', 0, 5), mk(2, 'lamp', 2, 0), mk(3, 'bank', 4, 4)]; B.wires = [[1, 2]]; B.chests = [{ id: 1, x: 6, z: 6, big: true, items: {} }];
+                    indElecTick(0.1); let a = { burn: indDev(2).burn > 0, pw: indDev(2).pw, fl: fl.join('|') }; for (let i = 0; i < 40; i++) indElecTick(0.1);
+                    return { a: a, gone: !indDev(2), scrap: B.ground.filter(function (g) { return g.k === 'scrap_dev'; }).length, other: !!indDev(1) && !!indDev(3), hp: B.surv.hp, wires: B.wires.length, boom: !!ind.lastBoom && ind.lastBoom.x === 2 };`);
+                if (!(r.a.burn && !r.a.pw && /冒烟了/.test(r.a.fl) && r.gone && r.scrap === 1 && r.other && r.hp === 100 && r.wires === 0 && !r.boom)) bad.push('过压先冒烟 3 秒再烧坏、留废品、不爆炸 ' + JSON.stringify(r));
+                // 装着氢气的电解槽过压还是炸
+                r = await run(`B.devs = [mk(1, 'bank', 0, 9), mk(2, 'el', 2, 0)]; indDev(2).st = { b_h2: 1 }; B.wires = [[1, 2]]; B.chests = [{ id: 1, x: 6, z: 6, big: true, items: {} }]; indTeleport(40, 40);
+                    indElecTick(0.1); return { gone: !indDev(2), bank: !!indDev(1), boom: !!ind.lastBoom, loot: B.ground.filter(function (g) { return g.k === 'b_h2'; }).length };`);
+                if (!(r.gone && r.boom && r.loot === 1)) bad.push('装着气的过压还是炸 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND87 电按现实来：电压差超 1 V 低的烧坏、同电压安全、过压冒烟再烧坏不爆炸、装着气的还是炸', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND88')) {
+            // IND88 树种（任务 4 步骤 7）：森林里有橡胶树（约 1/12）；松树右键割松脂（一棵 3 份、300 秒长 1 份）；橡胶树右键割胶 8 秒（一棵 4 份、走远断）；椰子树空手左键摇（一棵一次）；椰子喝了口渴 +15 剩椰壳；乳胶 2 + 硫 1 → 橡胶
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoTrip(2024); ind.base.rule = 'hard'; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = {}; ind.tap = null; indTeleport(0, 0);
+                    let tree = function (t) { let o = { key: 'wood', tree: t, x: 1, z: 0, y: 0.5, n: 4, seed: 'seed_wheat', dead: false }; ind.nodes.push(o); return o; }, aim = function (o) { return { kind: 'node', o: o }; };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 森林里有橡胶树，比例不大
+                let r = await J(`(function(){ let rub = 0, oak = 0; for (let s = 1; s <= 12; s++) { indGoTrip(s * 977); ind.nodes.forEach(function (o) { if (o.tree === 'rubber') { rub++; if (indBiome(ind.map, o.x, o.z) !== 'forest') rub += 1000; } else if (o.tree === 'oak') oak++; }); } return { rub: rub, oak: oak }; })()`);
+                if (!(r.rub >= 1 && r.rub < 1000 && r.rub * 4 < r.oak + r.rub)) bad.push('森林里有橡胶树、不多、只在森林 ' + JSON.stringify(r));
+                // 松脂：3 份、第 4 次没有、300 秒后长 1 份；没刀不行
+                r = await run(`let o = tree('pine'); ind.bag = {}; let a = trTap(aim(o)), n0 = ind.bag.resin || 0; ind.bag = { knife: 1 }; indSelect('knife'); let got = []; for (let i = 0; i < 4; i++) { trTap(aim(o)); got.push(ind.bag.resin || 0); }
+                    let before = ind.t; ind.t += 299; trTap(aim(o)); let early = ind.bag.resin; ind.t += 2; trTap(aim(o)); return { a: a, n0: n0, got: got, early: early, after: ind.bag.resin, fl: fl.join('|') };`);
+                if (!(r.a === true && r.n0 === 0 && r.got.join() === '1,2,3,3' && r.early === 3 && r.after === 4 && /小刀或斧子/.test(r.fl) && /割完了/.test(r.fl))) bad.push('松脂 3 份、第 4 次没有、300 秒长 1 份、没刀不行 ' + JSON.stringify(r));
+                // 橡胶树割胶：8 秒 1 份乳胶，一棵 4 份，走远断
+                r = await run(`let o = tree('rubber'); ind.bag = { knife: 1 }; indSelect('knife'); trTap(aim(o)); trTick(7); let a = ind.bag.latex || 0; trTick(1.1); let b = ind.bag.latex || 0;
+                    for (let k = 0; k < 3; k++) { trTap(aim(o)); trTick(8.1); } let c = ind.bag.latex || 0; let more = trTap(aim(o)); trTick(9); let d = ind.bag.latex;
+                    let o2 = tree('rubber'); o2.x = 1; trTap(aim(o2)); trTick(3); indTeleport(10, 0); trTick(1); let cut = !ind.tap; trTick(9); return { a: a, b: b, c: c, d: d, cut: cut, left: o.lx, l2: ind.bag.latex, fl: fl.join('|') };`);
+                if (!(r.a === 0 && r.b === 1 && r.c === 4 && r.d === 4 && r.cut && r.left === 0 && /割完了/.test(r.fl))) bad.push('割胶 8 秒 1 份、一棵 4 份、走远断 ' + JSON.stringify(r));
+                // 椰子树：空手左键摇一次 1～2 个；拿着斧子是砍树不摇；喝了口渴 +15 剩椰壳
+                r = await run(`let o = tree('palm'); ind.bag = { axe: 1 }; indSelect('axe'); let a = trShake(o); ind.bag = {}; let b = trShake(o), n = ind.bag.coconut || 0; let c = trShake(o), n2 = ind.bag.coconut || 0; ind.base.surv.water = 50; indEat('coconut');
+                    return { a: a, b: b, n: n, c: c, n2: n2, w: ind.base.surv.water, shell: ind.bag.coconut_shell || 0, left: ind.bag.coconut || 0 };`);
+                if (!(r.a === false && r.b === true && r.n >= 1 && r.n <= 2 && r.c === true && r.n2 === r.n && r.w === 65 && r.shell === 1 && r.left === r.n - 1)) bad.push('椰子树空手摇一次、拿斧子不摇、喝了 +15 剩椰壳 ' + JSON.stringify(r));
+                // 乳胶 2 + 硫 1 → 橡胶；悠闲也有（配方没标 hard）
+                r = await J(`(function(){ let x = IND_RECIPES.filter(function (q) { return q.out.rubber === 1; })[0]; return { ok: !!x && x.in.latex === 2 && x.in.sulfur === 1 && x.minT === 150 && x.time === 20, hard: !!(x && x.hard), last: IND_RECIPES.indexOf(x) === IND_RECIPES.length - 1 }; })()`);
+                if (!(r.ok && !r.hard && r.last)) bad.push('橡胶配方、悠闲也有、加在配方表末尾 ' + JSON.stringify(r));
+                // 提示里写得出能割
+                r = await run(`let p = tree('pine'), u = tree('rubber'), m = tree('palm'); return { p: /割松脂/.test(wdNodeHint(p)), u: /割胶/.test(wdNodeHint(u)), m: /摇椰子/.test(wdNodeHint(m)), name: /橡胶树/.test(wdNodeHint(u)) };`);
+                if (!(r.p && r.u && r.m && r.name)) bad.push('树的提示 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND88 树种：橡胶树在森林、松脂 3 份 300 秒长、割胶 8 秒 4 份、摇椰子一次、椰子 +15 剩壳、橡胶配方', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

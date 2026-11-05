@@ -177,6 +177,7 @@
         // 跑速乘数：速度药 ×1.5、虚弱 ×0.8；药加鞋等加成的总上限 ×2.0
         function pwSpeedMul() { let fx = ind.base.fx; if (!fx) return 1; let m = fx.speed > 0 ? PX.speedMul : fx.weak > 0 ? PX.weakMul : 1; return Math.min(PX.cap, m); }
         function pwWorkMul() { let fx = ind.base && ind.base.fx; return fx && fx.speed > 0 ? PX.work : 1; }
+        Object.assign(IND_ITEMS_RAW, { scrap_dev: { name: '烧坏的设备', col: 0x424242, use: '烧坏的废品，没用' }, battery_burnt: { name: '烧坏的电池', col: 0x3e2723, use: '烧坏的废品，没用' } });
         function pwFixBase(b) {
             if (typeof rdFixBase === 'function') rdFixBase(b);
             if (typeof rcFixBase === 'function') rcFixBase(b);
