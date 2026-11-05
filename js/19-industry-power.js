@@ -178,6 +178,7 @@
         function pwSpeedMul() { let fx = ind.base.fx; if (!fx) return 1; let m = fx.speed > 0 ? PX.speedMul : fx.weak > 0 ? PX.weakMul : 1; return Math.min(PX.cap, m); }
         function pwWorkMul() { let fx = ind.base && ind.base.fx; return fx && fx.speed > 0 ? PX.work : 1; }
         function pwFixBase(b) {
+            if (typeof rdFixBase === 'function') rdFixBase(b);
             let f = b.fx; if (!f || typeof f !== 'object') { delete b.fx; return; }
             b.fx = { speed: indNum(f.speed, 0, 0, PX.speedT), weak: indNum(f.weak, 0, 0, PX.weakT), heal: indNum(f.heal, 0, 0, PX.healT), healLeft: indNum(f.healLeft, 0, 0, PX.healAmt) };
         }

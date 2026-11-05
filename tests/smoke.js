@@ -10117,6 +10117,60 @@ async function enterExit(tab, key) {
             report('IND79 鞋：草鞋／皮鞋／钢靴 ×1.15／×1.3／×1.5 不带 heavy、鞋 × 药封顶 ×2.0、冷热阈值、爆炸减伤、读档还穿着', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND80')) {
+            // IND80 自行车和车（任务 46、47，硬核）：自行车 2 × 冲刺速度、脚踏吃体力、没体力只有走路速度；车 3 ×，电池组 12～24 V 才启动（16 节 24 V 能开、17 节 25.5 V 不启动提示）；骑着挖矿被拒、编织能做；撞树停；深水下车；
+            // 车电池槽和面板；配方（轮子有塑料备选、皮配方有人造革备选）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                // 速度：base 里从原点朝前走 0.3 秒（冲刺速度 = 走路 × 1.6 = 11.2 米/秒）
+                const spd = (item, setup, secs) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.rule = 'hard'; ind.base.devs = []; ind.base.cookers = []; ind.base.houses = []; ind.base.fx = undefined; ind.base.wear = { foot: 'shoe_steel' };
+                    ind.bag = {}; ind.bag['${item}'] = 1; ${setup || ''} indSelect('${item}'); ind.ride = null; indTeleport(0, 8); indLookAt(0, -10); indUse(); let on = !!ind.ride; let p0 = { x: ind.p.x, z: ind.p.z }; ind.k = { w: true }; indAdvance(${secs || 0.3}); ind.k = {}; let d = Math.hypot(ind.p.x - p0.x, ind.p.z - p0.z); let st = ind.stam; blazeFlash = bf; let m = fl.join('|'); if (ind.ride) rdDismount(); return { on: on, v: d / ${secs || 0.3}, st: st, fl: m }; })()`);
+                let r = await spd('veh_bike', 'ind.stam = 100;');
+                const sprint = await T.eval(`IND_T.speed * IND_T.run`);
+                if (!(r.on && Math.abs(r.v - 2 * sprint) < 1.5)) bad.push('自行车 = 2 × 冲刺速度（穿着钢靴也不变） ' + JSON.stringify(r) + ' / ' + sprint);
+                if (!(r.st < 100)) bad.push('脚踏吃体力 ' + r.st);
+                r = await spd('veh_bike', 'ind.stam = 0;', 0.2);
+                if (!(r.on && r.v < 9 && r.v > 5)) bad.push('没体力只有走路速度 ' + JSON.stringify(r));
+                r = await spd('veh_car', "ind.base.car = { bats: 16, u: 2880, um: 2880, ni: 0, li: false };");
+                if (!(r.on && Math.abs(r.v - 3 * sprint) < 2)) bad.push('车 = 3 × 冲刺速度 ' + JSON.stringify(r));
+                r = await spd('veh_car', "ind.base.car = { bats: 17, u: 3060, um: 3060, ni: 0, li: false };");
+                if (!(!r.on && /25\.5/.test(r.fl))) bad.push('17 节 25.5 V 不启动并提示（不炸） ' + JSON.stringify(r));
+                r = await spd('veh_car', "ind.base.car = { bats: 4, u: 720, um: 720, ni: 0, li: false };");
+                if (!(!r.on && /6\.0 V/.test(r.fl))) bad.push('4 节 6 V 不启动并提示 ' + JSON.stringify(r));
+                r = await spd('veh_car', "ind.base.car = { bats: 0, u: 0, um: 0, ni: 0, li: false };");
+                if (r.on) bad.push('没电池车不启动');
+                // 车行驶耗电
+                const dr = await J(`(function(){ ind.base.car = { bats: 16, u: 2880, um: 2880, ni: 0, li: false }; ind.bag = { veh_car: 1 }; indSelect('veh_car'); indTeleport(0, 8); indLookAt(0, -10); indUse(); ind.k = { w: true }; indAdvance(0.5); ind.k = {}; let u = ind.base.car.u; rdDismount(); return u; })()`);
+                if (!(dr < 2880 - 3 && dr > 2880 - 8)) bad.push('行驶每秒耗约 10 U（0.5 秒 ≈ 5） ' + dr);
+                // 骑着挖矿被拒、编织能做、撞树停、深水下车
+                const rd = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; indGoTrip(2024); ind.base.rule = 'hard'; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = { veh_bike: 1, wool: 2, wood: 3, pick_stone: 1 }; ind.stam = 100;
+                    ind.nodes.push({ key: 'stone', x: 0, z: -9, y: indGround(0, -9), n: 3, rock: true, seed: 'seed_wheat', dead: false }); ind.nodes.push({ key: 'wood', tree: 'oak', x: 0, z: -11, y: indGround(0, -11), n: 4, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true;
+                    indTeleport(0, -6.5); indLookAt(0, -9); indSelect('veh_bike'); indUse(); let on = !!ind.ride; indSelect('pick_stone'); indAction(); let stone = ind.bag.stone || 0, msg = fl[fl.length - 1];
+                    let ky = IND_CRAFT.findIndex(function (r) { return r.out === 'yarn'; }), kb = IND_CRAFT.findIndex(function (r) { return r.out === 'bucket'; }); let okY = indCraft(ky), yarn = ind.bag.yarn || 0; let okB = indCraft(kb);
+                    ind.nodes.forEach(function (o) { if (o.key === 'stone') o.dead = true; });
+                    indTeleport(0, -6.5); indLookAt(0, -11); ind.k = { w: true }; indAdvance(1); ind.k = {}; let z = ind.p.z, hit = Math.hypot(ind.p.x - 0, ind.p.z + 11);
+                    let ow = window.indWaterDepth; window.indWaterDepth = function () { return 0.9; }; indTeleport(5, 5); ind.k = {}; indAdvance(0.2); let still = !!ind.ride; window.indWaterDepth = ow; blazeFlash = bf;
+                    return { on: on, stone: stone, msg: msg, okY: okY, yarn: yarn, okB: okB, z: z, hit: hit, still: still }; })()`);
+                if (!(rd.on && rd.stone === 0 && /骑着没法用/.test(rd.msg))) bad.push('骑着挖矿被拒 ' + JSON.stringify(rd));
+                if (!(rd.okY && rd.yarn === 1 && rd.okB === false)) bad.push('编织能做、别的合成被拒 ' + JSON.stringify(rd));
+                if (!(rd.hit >= 0.95 && rd.hit < 2.5 && rd.z > -11)) bad.push('撞树就停 ' + JSON.stringify(rd));
+                if (rd.still) bad.push('骑进深水掉下车');
+                // 车面板放电池、配方、存档
+                const pn = await J(`(function(){ ind.base.rule = 'hard'; indGoBase(null); ind.base.car = { bats: 0, u: 0, um: 0, ni: 0, li: false }; ind.bag = { veh_car: 1, battery: 20 }; indSelect('veh_car'); indPanelClose(); indAction(); let open = ind.panel === 'veh'; rdPutCells(5); let a = ind.base.car.bats; rdPutCells(99); let b = ind.base.car.bats; let txt = document.getElementById('ind-panel') ? document.getElementById('ind-panel').innerText : '';
+                    let bb = indFixBase(JSON.parse(JSON.stringify(ind.base))); let rec = function (o) { return IND_CRAFT.filter(function (r) { return r.out === o; }).length; };
+                    return { open: open, a: a, b: b, panel: /电池槽/.test(txt), save: bb.car && bb.car.bats, wheel: rec('wheel'), seat: rec('seat'), bike: rec('veh_bike'), car: rec('veh_car') }; })()`);
+                if (!(pn.open && pn.a === 5 && pn.b >= 16 && pn.panel && pn.save === pn.b)) bad.push('左键开面板、放电池、存档 ' + JSON.stringify(pn));
+                if (!(pn.wheel >= 2 && pn.seat >= 2 && pn.bike >= 2 && pn.car >= 2)) bad.push('配方（轮子塑料备选、座椅人造革备选、铝架备选） ' + JSON.stringify(pn));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND80 自行车和车：2 ×／3 × 冲刺速度、脚踏吃体力、电池组 12～24 V 才启动、骑着挖矿被拒编织能做、撞树停、深水下车、面板和存档', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

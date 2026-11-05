@@ -1371,7 +1371,7 @@
             if (!ind || ind.over || ind.dead) return;
             if (ind.where === 'base') indStoveTick(dt);
             if (!ind || ind.over) return;
-            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); fmPullTick(dt); rkTick(dt); pwFxTick(dt);
+            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); fmPullTick(dt); rkTick(dt); pwFxTick(dt); rdTick(dt);
             if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
@@ -1497,18 +1497,22 @@
             if (!blocked && !fwd && !strafe && gState.control === 'pad') { fwd = -tMove.y; strafe = tMove.x; }
             let mx = cd.x * fwd - cd.z * strafe, mz = cd.z * fwd + cd.x * strafe, moving = !!(mx || mz);
             let S = R.base.surv, deep = R.where === 'trip' && indDeep(), canRun = k.run && moving && R.stam > 0 && S.energy > 0 && !deep && !R.onRaft;
+            if (R.ride && deep) rdDismount('掉进深水，下车了');   // 骑进深水掉下车（任务 46）
             R.running = canRun;
             if (deep) {   // 游泳：动才掉体力；站着不掉，停 3 秒后开始回
                 if (moving) { R.stillT = 0; R.stam = Math.max(0, R.stam - IND_WATER.stamDrain * dt); }
                 else { R.stillT = (R.stillT || 0) + dt; if (R.stillT >= IND_WATER.stillT) R.stam = Math.min(100, R.stam + IND_WATER.stamRegen * dt); }
-            } else if (R.effort > 0) { R.stillT = 0; R.stam = Math.max(0, R.stam - R.effort * dt); }   // 拉风箱、扇扇子吃体力（任务 44）
+            } else if (R.ride && R.ride.ty === 'bike') { R.stillT = 0; R.stam = moving ? Math.max(0, R.stam - RD.pedal * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }   // 脚踏吃体力
+            else if (R.effort > 0) { R.stillT = 0; R.stam = Math.max(0, R.stam - R.effort * dt); }   // 拉风箱、扇扇子吃体力（任务 44）
             else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }
             let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1) * pwMoveMul();   // 鞋和药的跑速加成，合起来不超过 ×2.0（19-industry-power.js）
+            if (R.ride) sp = rdMoveSpeed(dt, moving);   // 载具速度固定，鞋药不乘（19-industry-ride.js）
             if (moving) {
                 let n = Math.hypot(mx, mz), run = Math.min(1, n); mx /= n; mz /= n;
                 let len = sp * run * dt, hs = R.where === 'base' && R.base.houses.length, steps = hs ? Math.max(1, Math.ceil(len / 0.2)) : 1;   // 有房子时一小步一小步走，不穿墙
                 let ox = R.p.x, oz = R.p.z;
                 for (let i = 0; i < steps; i++) { R.p.x += mx * len / steps; R.p.z += mz * len / steps; if (hs) indHouseCollide(R.p); }
+                if (R.ride && rdBlocked(R.p.x, R.p.z)) { R.p.x = ox; R.p.z = oz; }   // 撞树、石头、水就停
                 if (R.onRaft) {   // 筏在水上走，不能上岸：碰到岸就沿着岸滑，实在不行停住
                     let wet = function (x, z) { return indHeight(R.map, x, z) < IND_WATER_Y - 0.05; };
                     let nx = R.p.x, nz = R.p.z;
@@ -1691,6 +1695,7 @@
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             if (ind.ch) { ind.ch = null; indFlash('停了'); return false; }
+            if (ind.ride || (indSel() && IND_ITEMS[indSel()].veh)) { if (rdBlockAction(indAim())) return false; }   // 骑着只能做单手的事（任务 46）；拿着车左键开面板
             if (ind.onRaft) return indRaftToggle(ind.onRaft);
             if (indSel() === 'bell') return indRing();
             if (indSel() === 'bellows') return indInstallBellows(indAim());
@@ -1726,9 +1731,9 @@
         function indRightDown() {
             if (!ind || ind.over || ind.dead || ind.panel) return;
             if (fmPullDown(indAim())) return;   // 拉风箱、扇扇子（任务 44）：要在"按住收起炉子"前面
-            let f = indFurnOf(indAim());
+            let f = ind.ride ? null : indFurnOf(indAim());   // 骑着不能搬东西
             if (f) { ind.rh = { f: f, t: 0, done: false }; return; }
-            if (pwCrankDown(indAim())) return;   // 手摇发电机：按住右键摇（19-industry-power.js）
+            if (!ind.ride && pwCrankDown(indAim())) return;   // 手摇发电机：按住右键摇（19-industry-power.js）
             if (indSel() === 'cactus') { wdPeelStart(); return; }   // 选中仙人掌点一下右键开始拔刺（R 键是生吃）
             if (fmKillStart(indAim())) return;   // 拿着工具对着动物按住右键 1 秒：宰（19-industry-farm.js）
             indUse();
@@ -1753,6 +1758,8 @@
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             let k = indSel(), a = indAim();
+            if (k && IND_ITEMS[k].veh) return rdToggle(k);   // 右键：上车／下车
+            if (ind.ride && !rdOneHand(k, a)) { indFlash('骑着没法用'); return false; }
             if (k && IND_ITEMS[k].potion) return pwDrink(k);   // 右键喝药
             if (k === 'gunpowder' && a && a.kind === 'node' && a.o.hard) return rkFuse(a.o);   // 火药对着硬岩：点引线
             if (k === 'cyl' && a && a.kind === 'node' && a.o.key === 'vent_ng') return rkFillVent(a.o);   // 空钢瓶对着喷口：装天然气
@@ -1901,6 +1908,7 @@
             if (!ind || ind.paused) return;
             if (ind.over || ind.panel) return;
             let k = indSel(); if (!k) return;
+            if (IND_ITEMS[k].dev && ind.ride) { indFlash('骑着没法用'); return; }
             if (IND_ITEMS[k].dev) return indPlaceDev(k);   // 设备类物品按 Q 等于右键放设备，不丢在地上（任务 13）
             if (IND_ITEMS[k].gas) { let f = indFace(); indReleaseGas(k, ind.p.x + f.x, ind.p.z + f.z); return; }
             if (IND_ITEMS[k].poison) { let f = indFace(); nkReleasePoison(k, ind.p.x + f.x, ind.p.z + f.z); return; }
@@ -2740,6 +2748,7 @@
         function indCraft(i) {
             if (!ind) return false;
             let r = IND_CRAFT[i]; if (!r || !indCraftCan(r)) { indFlash('原料不够'); return false; }
+            if (ind.ride && !rdKnitOk(r)) { indFlash('骑着没法用（只能做编织的活）'); return false; }
             if (r.time && !ind.craftNow) return wdCraftWait(i, r);   // 要花几秒的合成（敲尖石片）：先站着别动
             if (!r.gh && !r.glass && !r.pot) {   // 先把材料扣掉再看放不放得下成品
                 let B = Object.assign({}, ind.bag);
