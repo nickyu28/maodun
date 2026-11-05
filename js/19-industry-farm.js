@@ -208,6 +208,7 @@
         }
         // 点地图：点在记号旁边就去掉，不然加一个（最多 8 个）
         function fmMapClick(x, z) {
+            if (typeof rdMapDest === 'function' && rdMapDest(x, z)) return true;   // 开着带自动驾驶的车：点地图 = 设目的地（任务 50）
             let M = ind.base.marks = ind.base.marks || [];
             let i = M.findIndex(function (m) { return Math.hypot(m.x - x, m.z - z) <= FM_MAP.hit; });
             if (i >= 0) { M.splice(i, 1); indFlash('去掉了一个记号'); }

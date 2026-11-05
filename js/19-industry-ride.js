@@ -22,14 +22,14 @@
             { out: 'veh_car', in: { steel: 8, wheel: 4, motor: 1, seat: 1, chain: 2 }, hard: true },
             { out: 'veh_car', in: { ingot_al: 8, wheel: 4, motor: 1, seat: 1, chain: 2 }, hard: true }
         );
-        const RD = { bike: 2, car: 3, pedal: 3, draw: 10, vmin: 12, vmax: 24, hit: 1.1, cells: ['battery', 'battery_ni', 'battery_li'] };
+        const RD = { bike: 2, car: 3, pedal: 3, draw: 10, autoMul: 1.5, autoStep: 2.5, autoArrive: 3, animalR: 4, cliff: 2.5, vmin: 12, vmax: 24, hit: 1.1, cells: ['battery', 'battery_ni', 'battery_li'] };
         const RD_KNIT = { yarn: 1, sweater: 1, wool_hat: 1, wool_scarf: 1, scarf: 1, hat: 1, rope: 1, shoe_straw: 1, pack_grass: 1, fan: 1 };   // 编织、草编的活：骑着也能做
         function rdKnitOk(r) { return !!r && !!RD_KNIT[r.out]; }
         // 车里的电池槽（一个，存在存档里 base.car）：用电池组一样的规则（先替换用完的、满了才加节、防超压、不能混装）
         function rdCar() { let B = ind.base; if (!B.car) B.car = { bats: 0, u: 0, um: 0, ni: 0, li: false }; return B.car; }
         function rdFixBase(b) {
             let c = b.car; if (!c || typeof c !== 'object') { delete b.car; return; }
-            c.li = !!c.li; c.bats = indNum(c.bats, 0, 0, c.li ? 128 : 64) | 0; c.ni = indNum(c.ni, 0, 0, 64) | 0; c.um = indNum(c.um, 0, 0, 128 * 720); c.u = indNum(c.u, 0, 0, c.um);
+            c.auto = !!c.auto; c.li = !!c.li; c.bats = indNum(c.bats, 0, 0, c.li ? 128 : 64) | 0; c.ni = indNum(c.ni, 0, 0, 64) | 0; c.um = indNum(c.um, 0, 0, 128 * 720); c.u = indNum(c.u, 0, 0, c.um);
         }
         function rdCarV() { return indBankV(rdCar()); }
         function rdCarOk() { let c = rdCar(), v = indBankV(c); return c.u > 0 && v >= RD.vmin - 1e-6 && v <= RD.vmax + 1e-6; }
@@ -72,7 +72,7 @@
             if (R.ty === 'bike') return ind.stam > 0 ? rdSpeed() * RD.bike : IND_T.speed;
             let c = rdCar();
             if (!rdCarOk()) { if (moving && !(R.why > ind.t)) { R.why = ind.t + 4; indFlash(rdCarWhy()); } return 0; }
-            if (moving) c.u = Math.max(0, c.u - RD.draw * dt);
+            if (moving) c.u = Math.max(0, c.u - RD.draw * (R.dest ? RD.autoMul : 1) * dt);   // 自动驾驶耗电多一半
             return rdSpeed() * RD.car;
         }
         // 撞树、石头、水就停
@@ -99,8 +99,48 @@
             let ty = IND_ITEMS[k].veh, c = rdCar();
             let body = ty === 'bike' ? '<div style="line-height:1.7;">2 × 冲刺速度，脚踏吃体力（没体力只有走路速度）。<br>撞树、石头、水就停；骑着只能做单手的事。</div>' :
                 '<div style="line-height:1.7;">电池槽：' + c.bats + ' 节　' + indBankV(c).toFixed(1) + ' V　电量 ' + Math.ceil(c.u) + ' / ' + c.um + '<br>' + (rdCarOk() ? '能开：3 × 冲刺速度，行驶每秒耗 ' + RD.draw + ' U' : '<span style="color:#c62828">' + rdCarWhy() + '</span>') + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节' + (ind.bag.battery_ni ? '，镍电池 ' + ind.bag.battery_ni : '') + (ind.bag.battery_li ? '，锂电池 ' + ind.bag.battery_li : '') + '</div>' +
-                '<div style="margin-top:6px;"><button style="' + IND_BTN + '" onclick="rdPutCells(1)">放 1 节</button><button style="' + IND_BTN + '" onclick="rdPutCells(99)">放全部</button></div>';
+                '<div style="margin-top:6px;"><button style="' + IND_BTN + '" onclick="rdPutCells(1)">放 1 节</button><button style="' + IND_BTN + '" onclick="rdPutCells(99)">放全部</button></div>' +
+                '<div style="margin-top:6px;">自动驾驶：' + (c.auto ? '装着（开着车按 M 点地图设目的地）' : '没装') + '<button style="' + IND_BTN + '" onclick="rdAutoToggle()">' + (c.auto ? '拆下来' : '装芯片') + '</button></div>';
             indPanelShow('veh', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + IND_ITEMS[k].name + '</div>' + body + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+        }
+        // ── 自动驾驶（任务 50）：车里装上自动驾驶芯片，在地图上点目的地，车自己开：直线 + 简单绕障（树、石头）；水、悬崖、动物、没电就停并提示；碰方向键就接管；耗电多一半 ──
+        Object.assign(IND_ITEMS_RAW, { chip_auto: { name: '自动驾驶芯片', col: 0x00e676, use: '装进车（左键点车开面板）：开着车按 M 点地图设目的地，车自己开；也是以后无人设备的控制芯片' } });
+        IND_CRAFT.push({ out: 'chip_auto', in: { dev_cchip: 1, ingot_ge: 2, ingot_ga: 2, wire: 4 }, hard: true });
+        function rdMapDest(x, z) {
+            let R = ind.ride; if (!R || R.ty !== 'car' || !rdCar().auto) return false;
+            R.dest = { x: x, z: z }; indFlash('目的地设好了：车自己开，碰方向键接管'); if (ind.panel === 'map') wdMapDraw(); return true;
+        }
+        function rdStopAuto(msg) { let R = ind.ride; if (R) R.dest = null; if (msg) indFlash(msg); }
+        function rdNodeHit(x, z) { return ind.nodes.some(function (o) { return !o.dead && (o.tree || o.rock || o.hard || o.key === 'cactus') && Math.hypot(o.x - x, o.z - z) < RD.hit + 0.6; }); }
+        // 返回这一帧的行进方向 { x, z }（单位向量）；null = 没有（到了、停了、被接管了）
+        function rdAuto(manual) {
+            let R = ind.ride; if (!R || !R.dest) return null;
+            if (manual) { rdStopAuto('接管了'); return null; }
+            if (R.ty !== 'car' || !rdCar().auto) { R.dest = null; return null; }
+            if (!rdCarOk()) { rdStopAuto('没电了，自动驾驶停了'); return null; }
+            let dx = R.dest.x - ind.p.x, dz = R.dest.z - ind.p.z, d = Math.hypot(dx, dz);
+            if (d < RD.autoArrive) { rdStopAuto('到了'); return null; }
+            let a0 = Math.atan2(dz, dx), tr = ind.where === 'trip', h0 = tr ? indHeight(ind.map, ind.p.x, ind.p.z) : 0;
+            if (tr) {
+                let ax = ind.p.x + Math.cos(a0) * RD.autoStep, az = ind.p.z + Math.sin(a0) * RD.autoStep;
+                if (indWaterDepth(ax, az) > IND_WATER.wet) { rdStopAuto('前面是水，停下了'); return null; }
+                if (Math.abs(indHeight(ind.map, ax, az) - h0) > RD.cliff) { rdStopAuto('前面是悬崖，停下了'); return null; }
+                if ((ind.wild || []).some(function (w) { return !w.follow && Math.hypot(w.x - ax, w.z - az) < RD.animalR; })) { rdStopAuto('前面有动物，停下了'); return null; }
+            }
+            let offs = [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5];
+            for (let i = 0; i < offs.length; i++) {
+                let a = a0 + offs[i], x = ind.p.x + Math.cos(a) * RD.autoStep, z = ind.p.z + Math.sin(a) * RD.autoStep;
+                if (tr && (rdNodeHit(x, z) || indWaterDepth(x, z) > IND_WATER.wet)) continue;
+                return { x: Math.cos(a), z: Math.sin(a) };
+            }
+            rdStopAuto('绕不过去，停下了'); return null;
+        }
+        function rdAutoToggle() {
+            let c = rdCar();
+            if (c.auto) { c.auto = false; indBagAdd('chip_auto', 1); indFlash('把自动驾驶芯片拆下来了'); }
+            else if (ind.bag.chip_auto > 0) { indBagDel('chip_auto', 1); c.auto = true; indFlash('装上了自动驾驶芯片：开着车按 M 在地图上点目的地'); }
+            else indFlash('背包里没有自动驾驶芯片');
+            indSave(); if (ind.panel === 'veh') rdPanel();
         }
         function rdPutCells(n) {
             let key = ind.bag.battery ? 'battery' : ind.bag.battery_ni ? 'battery_ni' : ind.bag.battery_li ? 'battery_li' : 'battery';

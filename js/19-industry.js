@@ -1497,6 +1497,7 @@
             let fwd = blocked ? 0 : (k.w ? 1 : 0) - (k.s ? 1 : 0), strafe = blocked ? 0 : (k.d ? 1 : 0) - (k.a ? 1 : 0);
             if (!blocked && !fwd && !strafe && gState.control === 'pad') { fwd = -tMove.y; strafe = tMove.x; }
             let mx = cd.x * fwd - cd.z * strafe, mz = cd.z * fwd + cd.x * strafe, moving = !!(mx || mz);
+            if (R.ride && R.ride.dest) { let ap = rdAuto(moving); if (ap) { mx = ap.x; mz = ap.z; moving = true; } }   // 自动驾驶（任务 50）
             let S = R.base.surv, deep = R.where === 'trip' && indDeep(), canRun = k.run && moving && R.stam > 0 && S.energy > 0 && !deep && !R.onRaft;
             if (R.ride && deep) rdDismount('掉进深水，下车了');   // 骑进深水掉下车（任务 46）
             R.running = canRun;

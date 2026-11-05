@@ -10242,6 +10242,42 @@ async function enterExit(tab, key) {
             report('IND81 电路第 1 期：信号线规矩、门真值表和锁存、没电输出 0、按钮灯拉杆、延时验收电路、基础芯片（8 个元件）、存档整理、补算一致、上限', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND82')) {
+            // IND82 自动驾驶（任务 50）：装了芯片的车在地图上点目的地自己开（耗电多一半）；绕树；前面是水／悬崖／动物、没电就停并提示；碰方向键接管；没装芯片点地图不设目的地；芯片配方；装卸芯片
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                // 平地（水深 0、高度一样）里测，免得被地图上的水和坡打断；水、悬崖单独用替换函数造
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let ow = window.indWaterDepth, oh = window.indHeight; window.indWaterDepth = function () { return 0; }; window.indHeight = function () { return 0.5; };
+                    try { indGoTrip(2024); ind.base.rule = 'hard'; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.base.wear = {}; ind.stam = 100; ind.base.car = { bats: 16, u: 2880, um: 2880, ni: 0, li: false, auto: true };
+                        rdDismount(); ind.ride = null; ind.bag = { veh_car: 1 }; indSelect('veh_car'); indTeleport(0, 0); indLookAt(0, -30); indUse(); ${body} } finally { window.indWaterDepth = ow; window.indHeight = oh; blazeFlash = bf; } })()`);
+                let r = await run(`let on = !!ind.ride, ok = rdMapDest(0, -40); let u0 = ind.base.car.u; indAdvance(3); return { on: on, ok: ok, z: ind.p.z, dest: !!ind.ride && !!ind.ride.dest, u: u0 - ind.base.car.u, fl: fl.join('|') };`);
+                if (!(r.on && r.ok && r.z < -37 && r.z > -43 && r.dest === false && /到了/.test(r.fl))) bad.push('点目的地车自己开到、到了提示 ' + JSON.stringify(r));
+                if (!(r.u > 5)) bad.push('自动驾驶耗电 ' + r.u);
+                r = await run(`ind.nodes.push({ key: 'wood', tree: 'oak', x: 0, z: -15, y: 0.5, n: 4, seed: 'seed_wheat', dead: false }); rdMapDest(0, -40); let min = 99; for (let i = 0; i < 80; i++) { indAdvance(0.05); min = Math.min(min, Math.hypot(ind.p.x, ind.p.z + 15)); } return { z: ind.p.z, x: ind.p.x, min: min, dest: !!ind.ride && !!ind.ride.dest };`);
+                if (!(r.min >= 1.0 && r.z < -30)) bad.push('绕过树、没撞上 ' + JSON.stringify(r));
+                r = await run(`rdMapDest(0, -60); window.indWaterDepth = function (x, z) { return z < -20 ? 1 : 0; }; indAdvance(3); return { z: ind.p.z, dest: !!ind.ride && !!ind.ride.dest, fl: fl.join('|') };`);
+                if (!(r.z > -21 && r.dest === false && /前面是水/.test(r.fl))) bad.push('前面是水就停 ' + JSON.stringify(r));
+                r = await run(`rdMapDest(0, -60); window.indHeight = function (m, x, z) { return z < -20 ? 10 : 0.5; }; indAdvance(3); return { z: ind.p.z, dest: !!ind.ride && !!ind.ride.dest, fl: fl.join('|') };`);
+                if (!(r.z > -21 && r.dest === false && /悬崖/.test(r.fl))) bad.push('前面是悬崖就停 ' + JSON.stringify(r));
+                r = await run(`ind.wild = [{ k: 'sheep', x: 0, z: -22, food: 60 }]; rdMapDest(0, -60); indAdvance(3); return { z: ind.p.z, dest: !!ind.ride && !!ind.ride.dest, fl: fl.join('|') };`);
+                if (!(r.z > -22 && r.dest === false && /动物/.test(r.fl))) bad.push('前面有动物就停 ' + JSON.stringify(r));
+                r = await run(`rdMapDest(0, -60); indAdvance(0.3); ind.base.car.u = 0; indAdvance(1); return { dest: !!ind.ride && !!ind.ride.dest, on: !!ind.ride, fl: fl.join('|') };`);
+                if (!(r.dest === false && /没电/.test(r.fl))) bad.push('没电就停 ' + JSON.stringify(r));
+                r = await run(`rdMapDest(0, -60); indAdvance(0.3); ind.k = { w: true }; indAdvance(0.1); ind.k = {}; return { dest: !!ind.ride && !!ind.ride.dest, fl: fl.join('|') };`);
+                if (!(r.dest === false && /接管/.test(r.fl))) bad.push('碰方向键接管 ' + JSON.stringify(r));
+                // 没装芯片：点地图不设目的地；装卸芯片
+                const ins = await J(`(function(){ ind.base.rule = 'hard'; indGoBase(null); ind.base.car = { bats: 16, u: 2880, um: 2880, ni: 0, li: false }; ind.bag = { veh_car: 1, chip_auto: 1 }; indSelect('veh_car'); ind.ride = null; indUse(); let a = rdMapDest(0, -10); rdAutoToggle(); let b = [!!ind.base.car.auto, ind.bag.chip_auto || 0]; rdAutoToggle(); let c = [!!ind.base.car.auto, ind.bag.chip_auto || 0]; let rec = IND_CRAFT.filter(function (r) { return r.out === 'chip_auto'; }).length; return { a: a, b: b, c: c, rec: rec }; })()`);
+                if (!(ins.a === false && ins.b.join() === 'true,0' && ins.c.join() === 'false,1' && ins.rec === 1)) bad.push('没装芯片不设目的地、装卸芯片、配方 ' + JSON.stringify(ins));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND82 自动驾驶：点地图目的地、绕树、水／悬崖／动物／没电停、碰键接管、耗电多一半、装卸芯片', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
