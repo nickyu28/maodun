@@ -9730,7 +9730,7 @@ async function enterExit(tab, key) {
                 // 按住右键拉（一帧一帧走，跟真的按着一样）
                 r = await J(`(function(){ let a = indAim(); indRightDown(); let s0 = ind.stam; for (let i = 0; i < 100; i++) indAdvance(0.05); let t1 = ind.base.stove.temp, s1 = ind.stam; indRightUp(); for (let i = 0; i < 200; i++) indAdvance(0.05); return { aim: a && a.kind, t1: t1, s0: s0, s1: s1, t2: ind.base.stove.temp, pull: !!ind.pull }; })()`);
                 if (!(r.aim === 'stove' && r.t1 > 1390 && r.t1 <= 1600)) bad.push('按住右键拉风箱温度往 1600 升（5 秒 +250） ' + JSON.stringify(r));
-                if (!(r.s1 < r.s0 - 20)) bad.push('拉风箱掉体力 ' + JSON.stringify(r));
+                if (!(r.s1 < r.s0 - 10)) bad.push('拉风箱掉体力 ' + JSON.stringify(r));
                 if (!(r.t2 <= 1200.5 && !r.pull)) bad.push('松手掉回大火 ' + JSON.stringify(r));
                 // 扇子：对着大火的炉子扇，到 1400 不到 1600
                 await T.eval(setup + '; ind.base.stove.fire = 3; true;');
@@ -9972,6 +9972,51 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND76 填数字：放 17、填 999 全放、回车、0 和乱填提示、刷新不丢数字和光标、箱子拿同样、背包满了能拿几个拿几个', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND77')) {
+            // IND77 炼钢（任务 62）：电炉（通电 24 V）能炼钢，电炉配方不再要钢；人手拉风箱也能炼出一炉钢（拉风箱每秒 3 体力、进度掉温暂停不清零）；缺条件有一句提示
+            // 实测（改之前，硬核，铁锭 + 木炭，鼓风，每秒耗 6 体力）：小熔炉／灶台 1200→1550 约 7 秒；拉着能撑 16.8 秒；松手后 1.3 秒掉到 1550 以下；进度遇到掉温是暂停（不清零）；大窑每秒只升 10°C，35 秒才到，体力撑不到，手拉炼不了
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const dev = (id, ty, x, z, o) => JSON.stringify(Object.assign({ id: id, ty: ty, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}));
+                // 电炉：16 节电池组（24 V）→ 电炉，3 米内的小熔炉（大火，没风箱）炼钢；大窑也行
+                const el = (cty, power) => J(`(function(){ ind.base.rule = 'hard'; ind.base.off.pool = true; ind.base.fires = [];
+                    ind.base.devs = [${dev(1, 'bank', 26, 20, { bats: 16, u: power ? 2880 : 0 })}, ${dev(2, 'furnace', 28, 20)}]; ind.base.wires = [[1, 2]];
+                    ind.base.cookers = [Object.assign(ckNewState(), { id: 5, ty: '${cty}', x: 30, z: 20, items: { ingot_fe: 1, charcoal: 1 }, fuel: 5000, fire: 3, temp: 1200 })];
+                    indAdvance(${cty === 'kiln' ? 120 : 60}); let c = ind.base.cookers[0]; return { steel: (c.out.hot_steel || 0) + c.spout.filter(function (e) { return e.k === 'hot_steel'; }).length, temp: Math.round(c.temp) }; })()`);
+                let r = await el('furnace', true);
+                if (r.steel !== 1) bad.push('电炉通电：小熔炉里铁锭 + 木炭炼出钢 ' + JSON.stringify(r));
+                r = await el('kiln', true);
+                if (r.steel !== 1) bad.push('电炉通电：大窑也能炼出钢 ' + JSON.stringify(r));
+                r = await el('furnace', false);
+                if (r.steel !== 0) bad.push('电炉没电不行 ' + JSON.stringify(r));
+                const rc = await J(`(function(){ let r = IND_CRAFT.find(function (x) { return x.out === 'dev_furnace'; }); return { steel: r.in.steel || 0, fe: r.in.ingot_fe }; })()`);
+                if (!(rc.steel === 0 && rc.fe >= 1)) bad.push('电炉配方不能再要钢（要钢就是死循环） ' + JSON.stringify(rc));
+                // 手拉风箱：体力每秒 3；分几次拉（体力够就拉、没力气就歇），在小熔炉里炼出一炉钢
+                const pull = await J(`(function(){ ind.base.rule = 'hard'; ind.base.devs = []; ind.base.wires = []; ind.base.fires = [];
+                    ind.base.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'furnace', x: 30, z: 20, items: { ingot_fe: 1, charcoal: 1 }, fuel: 5000, fire: 4, bellows: true, temp: 1200, spout: [] })];
+                    let c = ind.base.cookers[0]; ind.stam = 100; indTeleport(27.5, 20); indLookAt(30, 20);
+                    let t = 0, pulls = 0, prog = [], resetSeen = false, last = -1;
+                    while (t < 400 && !((c.out.hot_steel || 0) + c.spout.filter(function (e) { return e.k === 'hot_steel'; }).length)) {
+                        if (!ind.pull && ind.stam >= 90) { ind.pull = { c: 5, fan: false, t: 0 }; pulls++; }
+                        indAdvance(0.5, 0.05); t += 0.5;
+                        if (c.cook) { if (c.cook.t < last - 1e-6) resetSeen = true; last = c.cook.t; }
+                    }
+                    return { t: t, pulls: pulls, steel: (c.out.hot_steel || 0) + c.spout.filter(function (e) { return e.k === 'hot_steel'; }).length, reset: resetSeen, rate: FM_PULL.bellows }; })()`);
+                if (!(pull.steel === 1 && pull.rate === 3 && pull.pulls >= 2 && !pull.reset)) bad.push('手拉风箱分几次炼出一炉钢，进度不清零 ' + JSON.stringify(pull));
+                // 缺条件的一句提示：大火炼钢料，温度不够
+                const hint = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.devs = []; ind.base.wires = [];
+                    ind.base.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'furnace', x: 30, z: 20, items: { ingot_fe: 1, charcoal: 1 }, fuel: 5000, fire: 3, temp: 1300, spout: [] })]; indAdvance(1); blazeFlash = bf; return fl; })()`);
+                if (!hint.some(function (t) { return /温度不够，要鼓风或者用电炉/.test(t); })) bad.push('缺条件要有一句短提示 ' + JSON.stringify(hint));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND77 炼钢：电炉通电炼钢（小熔炉、大窑）、电炉配方不要钢、手拉风箱（每秒 3 体力）分几次也炼得出、进度掉温不清零、缺条件有提示', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

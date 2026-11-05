@@ -322,7 +322,7 @@
             { out: 'battery', in: { ingot_cu: 1, ingot_zn: 1, salt: 1 }, hard: true }, { out: 'wire', n: 4, in: { ingot_cu: 1 }, hard: true },
             { out: 'dev_bank', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_gen', in: { ingot_cu: 3, ingot_fe: 2, steel: 1 }, hard: true },
             { out: 'dev_el', in: { ingot_fe: 2, ingot_cu: 2, bottle: 1 }, hard: true },
-            { out: 'dev_lamp', in: { ingot_cu: 1, sand: 2 }, hard: true }, { out: 'dev_pump', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_furnace', in: { steel: 2, clay: 4, ingot_cu: 2 }, hard: true }, { out: 'pick_iron', in: { ingot_fe: 3, wood: 2 }, hard: true }, { out: 'pick_steel', in: { steel: 3, wood: 2 }, hard: true },
+            { out: 'dev_lamp', in: { ingot_cu: 1, sand: 2 }, hard: true }, { out: 'dev_pump', in: { ingot_fe: 2, ingot_cu: 1 }, hard: true }, { out: 'dev_furnace', in: { ingot_fe: 4, clay: 4, ingot_cu: 2 }, hard: true }, { out: 'pick_iron', in: { ingot_fe: 3, wood: 2 }, hard: true }, { out: 'pick_steel', in: { steel: 3, wood: 2 }, hard: true },
             { out: 'bucket', in: { wood: 3 } }, { out: 'shears', in: { stone: 2, wood: 1 } },
             { out: 'pick_bronze', in: { bronze: 3, wood: 2 }, hard: true },
             { out: 'bell', in: { brass: 1 }, hard: true },
@@ -2893,6 +2893,7 @@
             if (!S.cook) {
                 let pool = ckPool(S), i = indCookFind(pool, K, Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20), S.items);
                 if (i >= 0 && S.temp >= IND_RECIPES[i].minT) S.cook = { i: i, t: 0, burn: 0, n: indBatchN(IND_RECIPES[i], pool, K) };
+                else if (i >= 0 && IND_RECIPES[i].minT >= 1500 && S.fire > 0 && !ind.sleeping && !(S.hintT > ind.t)) { S.hintT = ind.t + 20; indFlash('温度不够，要鼓风或者用电炉'); }   // 钢、铁这类 1500°C 以上的：第一次缺条件给一句短提示（任务 62）
                 indCookBadge(c);
                 return;
             }

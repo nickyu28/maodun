@@ -115,9 +115,9 @@
         }
 
         // ══ 任务 44：风箱要人拉 + 扇子 ══
-        // 风箱（不用电）：炉子开着"鼓风"档、人站在旁边按住右键拉，目标温度才是 1600°C；松手掉回大火（1200）。拉的时候每秒吃 6 体力（扇炉子 4、扇自己 2）。
+        // 风箱（不用电）：炉子开着"鼓风"档、人站在旁边按住右键拉，目标温度才是 1600°C；松手掉回大火（1200）。拉的时候每秒吃 3 体力（扇炉子 4、扇自己 2）。
         // 扇子：手里拿着按住右键。对着点着的炉子（3 米内）扇，目标 1400°C；不对着炉子是扇自己，体温往 37°C 拉（每秒 0.3°C）。没体力就停
-        const FM_PULL = { near: 3, grace: 0.3, bellows: 6, fanCook: 4, fanSelf: 2, fanT: 1400, selfRate: 0.3 };
+        const FM_PULL = { near: 3, grace: 0.3, bellows: 3, fanCook: 4, fanSelf: 2, fanT: 1400, selfRate: 0.3 };
         Object.assign(IND_ITEMS_RAW, { fan: { name: '扇子', col: 0xdce775, use: '按住右键扇：对着点着的炉子扇到 1400°C；不对着炉子是扇自己，热了凉快、冷了也往舒服拉（吃体力）' } });
         IND_ITEMS_RAW.bellows.use = '装在炉子上多一档「鼓风」，要人站在旁边按住右键拉才到 1600°C，松手掉回大火（吃体力）';
         IND_CRAFT.push({ out: 'fan', in: { grass: 6, rope: 2, wood: 1 }, hard: true });
