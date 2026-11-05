@@ -5485,6 +5485,14 @@ async function enterExit(tab, key) {
                         if (hard && have.dev_crusher && power() && have.wheat) add('flour');   // 粉碎机磨面（任务 56；悠闲在工作台手磨）
                         if (hard && have.dev_centrifuge && power() && have['uf6:0']) { for (let i = 1; i <= 5; i++) add('uf6:' + i); add('uf6_dep'); }
                         if (hard && have.dev_reactor && (have['rod:4'] || have['rod:5'])) add('rod_spent');
+                        if (hard && have.dev_reactor && (have['rod:4'] || have['rod:5']) && have.rod_dep) add('rod_irr');   // 贫铀增殖（任务 67）
+                        // 树（树种）：松树、橡胶树拿刀或斧子割；椰子空手摇，喝完剩椰壳
+                        if (RAW.latex && (have.knife || have.axe)) { add('latex'); add('resin'); }
+                        if (RAW.coconut) add('coconut'); if (RAW.coconut_shell && have.coconut) add('coconut_shell');
+                        // 冬天远征拿稿子凿冰；吃的东西放久了会烂；接错电会烧坏设备和电池（任务 63、69）
+                        if (hard && RAW.ice && tl >= 1) add('ice');
+                        if (hard && RAW.rotfood && Object.keys(have).some(function (k) { return RAW[k] && RAW[k].eat && k !== 'ice'; })) add('rotfood');
+                        if (hard && RAW.scrap_dev && power()) { add('scrap_dev'); add('battery_burnt'); }
                         if (hard && have.dev_el && power()) IND_EL_RECIPES.forEach(function (r) { if (Object.keys(r.in).every(function (k) { return have[k]; })) Object.keys(r.out).forEach(add); });
                     }
                     return have;
@@ -10516,9 +10524,9 @@ async function enterExit(tab, key) {
                 r = await run(`let o = tree('palm'); ind.bag = { axe: 1 }; indSelect('axe'); let a = trShake(o); ind.bag = {}; let b = trShake(o), n = ind.bag.coconut || 0; let c = trShake(o), n2 = ind.bag.coconut || 0; ind.base.surv.water = 50; indEat('coconut');
                     return { a: a, b: b, n: n, c: c, n2: n2, w: ind.base.surv.water, shell: ind.bag.coconut_shell || 0, left: ind.bag.coconut || 0 };`);
                 if (!(r.a === false && r.b === true && r.n >= 1 && r.n <= 2 && r.c === true && r.n2 === r.n && r.w === 65 && r.shell === 1 && r.left === r.n - 1)) bad.push('椰子树空手摇一次、拿斧子不摇、喝了 +15 剩椰壳 ' + JSON.stringify(r));
-                // 乳胶 2 + 硫 1 → 橡胶；悠闲也有（配方没标 hard）
+                // 乳胶 2 + 硫 1 → 橡胶；硫只有硬核有，配方标 hard
                 r = await J(`(function(){ let x = IND_RECIPES.filter(function (q) { return q.out.rubber === 1; })[0]; return { ok: !!x && x.in.latex === 2 && x.in.sulfur === 1 && x.minT === 150 && x.time === 20, hard: !!(x && x.hard), last: IND_RECIPES.indexOf(x) === IND_RECIPES.length - 1 }; })()`);
-                if (!(r.ok && !r.hard && r.last)) bad.push('橡胶配方、悠闲也有、加在配方表末尾 ' + JSON.stringify(r));
+                if (!(r.ok && r.hard && r.last)) bad.push('橡胶配方、只给硬核、加在配方表末尾 ' + JSON.stringify(r));
                 // 提示里写得出能割
                 r = await run(`let p = tree('pine'), u = tree('rubber'), m = tree('palm'); return { p: /割松脂/.test(wdNodeHint(p)), u: /割胶/.test(wdNodeHint(u)), m: /摇椰子/.test(wdNodeHint(m)), name: /橡胶树/.test(wdNodeHint(u)) };`);
                 if (!(r.p && r.u && r.m && r.name)) bad.push('树的提示 ' + JSON.stringify(r));

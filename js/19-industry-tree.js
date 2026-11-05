@@ -1,7 +1,7 @@
 // 猫盾工业：树种（docs/tools-trees.md 第 6 节、步骤 7）。放在 19-industry-ach.js 后面，只做"能拿到"：
 // 松树：拿小刀或斧子右键割松脂，一棵 3 份，割一份 300 秒后再长 1 份；橡胶树：森林里 1/12 的树，右键割胶（站在 3 米内 8 秒，可以边走），一棵 4 份乳胶；椰子树：空手左键摇，掉 1～2 个椰子，一棵一趟一次。
 // 乳胶 2 + 硫 1，灶台 150°C 20 秒 → 橡胶。椰子右键喝（口渴 +15），喝完变椰壳。椰壳装水、橡胶的用处（电线外皮、手柄）这次不做。
-// 悠闲也有。远征地图不存档，树上剩多少只记在这一趟的树上。
+// 割松脂、割胶、摇椰子悠闲也有；熬橡胶要硫，只给硬核。远征地图不存档，树上剩多少只记在这一趟的树上。
         const TR = { resin: 3, resinT: 300, latex: 4, tap: 8, tapR: 3, rubber: 1 / 12 };
         WD_TREE.rubber = { th: 2.4, tw: 0.5, cy: 3.4, cs: [1.4, 1.7, 1.4], col: 0x7cb342 };
         WD_TREE_NAME.rubber = '橡胶树';
@@ -12,7 +12,7 @@
             coconut: { name: '椰子', col: 0x795548, eat: { w: 15, back: 'coconut_shell' }, use: '右键喝，口渴 +15，喝完剩椰壳' },
             coconut_shell: { name: '椰壳', col: 0x5d4037, use: '喝完椰子剩下的壳' }
         });
-        IND_RECIPES.push({ in: { latex: 2, sulfur: 1 }, out: { rubber: 1 }, cls: 'bulk', minT: 150, time: 20 });
+        IND_RECIPES.push({ in: { latex: 2, sulfur: 1 }, out: { rubber: 1 }, cls: 'bulk', minT: 150, time: 20, hard: true });   // 硫只有硬核有，熬橡胶只给硬核
         // 森林里 1/12 的树是橡胶树（按位置算，不吃随机数，别的树的位置和老地图不变）
         function trKind(M, x, z, base) { return base === 'oak' && indBiome(M, x, z) === 'forest' && indHash(Math.floor(x), Math.floor(z), 4141) < TR.rubber ? 'rubber' : base; }
         function trHaveKnife() { let k = indSel(); return k === 'knife' || k === 'axe'; }
