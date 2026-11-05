@@ -1,15 +1,15 @@
 // 猫盾工业 · 第 6 阶段：核和原子弹（只给硬核）
 // 接在 19-industry.js 后面，用它里面的函数和表：往物品、配方、设备、资源点的表里加东西，再挂几个钩子（动态物品、设备面板、辐射、爆炸）。
 // 数字都按 docs/queue-code2.md 的 Q 条写；没写到的按最贴近现实、最保守的做。
-        // ── 丰度台阶：0.7 → 1.05 → 1.6 → 2.4 → 3.5 → 5（离心机每转一轮上一台阶，5% 封顶；要 3% 以上才能做芯块） ──
-        const NK_LV = [0.7, 1.05, 1.6, 2.4, 3.5, 5], NK_LV_MIN = 4, NK_LV_MAX = NK_LV.length - 1;
+        // ── 丰度台阶：0.7 → 1.05 → 1.6 → 2.4 → 3.5（离心机每转一轮上一台阶，3.5% 封顶；燃料芯块、燃料棒只认 3.5%） ──
+        const NK_LV = [0.7, 1.05, 1.6, 2.4, 3.5, 3.5], NK_LV_MIN = 4, NK_LV_MAX = 4, NK_LV_OLD = 5;   // 3.5% 封顶（任务 67）；台阶 5 是老存档里的 5% 罐、芯块、棒，当 3.5% 用，不再能做出新的
         // 辐射：strong 强（每秒 2 血）、weak 弱（每秒 0.2 血）、vweak 很弱（不扣血，盖格计数器能读到）
         const NK_RAD = { strong: 2, weak: 0.2, vweak: 0 }, NK_RAD_READ = { strong: 2, weak: 0.2, vweak: 0.02 };
-        const NK = { crushT: 10, centriT: 60, rodDays: 2, rodHeat: 100, coolWaterK: 1.33, coolAirK: 0.5, rate: 0.1, maxRate: 10, amb: 20, turbineT: 250, turbineR: 3, waterR: 6, meltT: 400, meltS: 20, zoneDays: 3, apron: 0.5, bombT: 30, bombR: 40, bombNear: 1000, bombClose: 10, powderR: 2 };
+        const NK = { crushT: 10, centriT: 60, rodDays: 2, rodHeat: 100, coolWaterK: 1.33, coolAirK: 0.5, rate: 0.1, maxRate: 10, amb: 20, turbineT: 250, breedT: 250, turbineR: 3, waterR: 6, meltT: 400, meltS: 20, zoneDays: 3, apron: 0.5, bombT: 30, bombR: 40, bombNear: 1000, bombClose: 10, powderR: 2 };
 
         // ── 动态物品：六氟化铀罐 uf6:台阶、二氧化铀芯块 pellet:台阶、燃料棒 rod:台阶 或 rod:台阶:已烧百分比 ──
         function nkLvTxt(i) { return NK_LV[i] + '%'; }
-        function nkLvOf(s) { return /^\d+$/.test(s) && +s <= NK_LV_MAX ? +s : -1; }
+        function nkLvOf(s) { return /^\d+$/.test(s) && +s <= NK_LV_OLD ? +s : -1; }
         IND_DYN.push({ prefix: 'uf6:', get: function (k) { let i = nkLvOf(k.slice(4)); return i < 0 ? undefined : { name: '六氟化铀罐（丰度 ' + nkLvTxt(i) + '）', col: 0xcddc39, rad: 'vweak', use: i < NK_LV_MAX ? '放进离心机' : '到头了' }; } });
         IND_DYN.push({ prefix: 'pellet:', get: function (k) { let i = nkLvOf(k.slice(7)); return i < 0 ? undefined : { name: '二氧化铀芯块（丰度 ' + nkLvTxt(i) + '）', col: 0x9e9d24, rad: 'weak', use: '做燃料棒' }; } });
         IND_DYN.push({ prefix: 'rod:', get: function (k) {
@@ -28,8 +28,11 @@
             b_h2so4: { name: '硫酸瓶', col: 0xffee58, corrosive: true },
             b_hf: { name: '氟化氢瓶', col: 0xb2dfdb },
             ore_u_dust: { name: '铀矿粉', col: 0xaed581, rad: 'vweak' }, yellowcake: { name: '黄饼', col: 0xfdd835, rad: 'vweak' },
-            uf6_dep: { name: '贫铀罐（丰度 0.3%）', col: 0x9e9e9e, rad: 'vweak', useLater: '后面的阶段' },
+            uf6_dep: { name: '贫铀罐（丰度 0.3%）', col: 0x9e9e9e, rad: 'vweak', use: '2 个氢气瓶 + 1 罐 → 贫铀芯块，做贫铀棒（放进反应堆增殖钚）' },
             rod_spent: { name: '乏燃料棒', col: 0x33691e, rad: 'strong', use: '后处理出钚（放在铅箱里）' },
+            pellet_dep: { name: '贫铀芯块', col: 0x9e9e9e, rad: 'vweak', use: '2 个加 2 钢锭做贫铀棒' },
+            rod_dep: { name: '贫铀棒', col: 0x78909c, rad: 'vweak', use: '放进反应堆（旁边要有在烧的燃料棒、温度 ≥ 250°C），满 1 个游戏日变成辐照贫铀棒' },
+            rod_irr: { name: '辐照贫铀棒', col: 0x558b2f, rad: 'strong', use: '拿 2 硝酸瓶在炉子里提钚，没有核废料（放在铅箱里）' },
             plutonium: { name: '钚', col: 0x7b1fa2, rad: 'strong', use: '做原子弹（放在铅箱里）' },
             nuclear_waste: { name: '核废料', col: 0x2e7d32, rad: 'strong', useLater: '后面的阶段' },
             saltpeter: { name: '硝石', col: 0xeceff1, use: '撒在农田上，作物长得快一倍；也能做火药' }, gunpowder: { name: '火药', col: 0x424242, explosive: true, use: '碰到爆炸或放进炉子就炸' },
@@ -64,7 +67,7 @@
         // ── 配方（工作台；硬核） ──
         IND_CRAFT.push(
             { out: 'dev_crusher', in: { steel: 4, wire: 2 }, hard: true }, { out: 'dev_centrifuge', in: { steel: 6, wire: 4, brass: 2 }, hard: true },
-            { out: 'rod:4', in: { 'pellet:4': 2, steel: 2 }, hard: true }, { out: 'rod:5', in: { 'pellet:5': 2, steel: 2 }, hard: true },
+            { out: 'rod:4', in: { 'pellet:4': 2, steel: 2 }, hard: true }, { out: 'rod:5', in: { 'pellet:5': 2, steel: 2 }, hard: true }, { out: 'rod_dep', in: { pellet_dep: 2, steel: 2 }, hard: true },
             { out: 'dev_reactor', in: { steel: 20, brick: 30, ingot_pb: 10, wire: 10, glass_plate: 2 }, hard: true },
             { out: 'dev_turbine', in: { steel: 10, wire: 6, brass: 4 }, hard: true },
             { out: 'chest_lead', in: { ingot_pb: 8 }, hard: true }, { out: 'geiger', in: { wire: 2, bottle: 1, battery: 1 }, hard: true },
@@ -113,10 +116,12 @@
         // 反应堆：4 个燃料棒位、控制棒插入比例（默认 100% = 停堆）；发热 = 棒数 × (1 − 插入) × 100；水池或开着的水泵 6 米内每秒带走 250，没水 20；温度每秒最多变 10°C
         IND_DEV_FIX.reactor = function (d) {
             if (!Array.isArray(d.rods)) d.rods = [];
-            d.rods = d.rods.filter(function (r) { return r && (r.spent || (r.i >= 0 && r.i <= NK_LV_MAX)); }).slice(0, 4).map(function (r) { return r.spent ? { spent: true } : { i: r.i | 0, b: indNum(r.b, 0, 0, 1) }; });
+            d.rods = d.rods.filter(function (r) { return r && (r.spent || r.irr || r.dep || (r.i >= 0 && r.i <= NK_LV_OLD)); }).slice(0, 4).map(function (r) { return r.spent ? { spent: true } : r.irr ? { irr: true } : r.dep ? { dep: true, b: indNum(r.b, 0, 0, 1) } : { i: r.i | 0, b: indNum(r.b, 0, 0, 1) }; });
             d.ctl = indNum(d.ctl, 1, 0, 1); d.T = indNum(d.T, NK.amb, NK.amb, 2000); d.melt = indNum(d.melt, 0, 0, 100);
         };
-        function nkReactorHeat(d) { let n = 0; d.rods.forEach(function (r) { if (!r.spent) n++; }); return n * (1 - d.ctl) * NK.rodHeat; }
+        function nkFuelRod(r) { return !r.spent && !r.dep && !r.irr; }
+        function nkRodKeyOf(r) { return r.spent ? 'rod_spent' : r.dep ? 'rod_dep' : r.irr ? 'rod_irr' : nkRodKey(r); }
+        function nkReactorHeat(d) { let n = 0; d.rods.forEach(function (r) { if (nkFuelRod(r)) n++; }); return n * (1 - d.ctl) * NK.rodHeat; }
         // 冷却水从哪来（任务 61）：水池 6 米内、开着的水泵 6 米内、管道送来的水（水塔／水泵）；都没有就是空气冷却
         function nkCoolSrc(d) {
             let P = IND_BASE_ST.pool;
@@ -147,7 +152,9 @@
             d.T = Math.max(NK.amb, d.T + net * dt);
             rlReactorUse(d, dt);   // 管道送来的冷却水，热着的时候慢慢用掉
             nkCoolWarn(d);
-            d.rods.forEach(function (r) { if (!r.spent) { r.b += (1 - d.ctl) * dt / (NK.rodDays * IND_DAY); if (r.b >= 1) { r.spent = true; delete r.i; delete r.b; if (ind.panel === 'reactor') ind.panelDirty = true; } } });
+            let burning = d.ctl < 1 && d.rods.some(nkFuelRod);   // 贫铀棒增殖（任务 67）：旁边有在烧的燃料棒、温度 ≥ 250°C，累计 1 个游戏日变辐照贫铀棒
+            d.rods.forEach(function (r) { if (r.dep && burning && d.T >= NK.breedT) { r.b += dt / IND_DAY; if (r.b >= 1) { delete r.dep; delete r.b; r.irr = true; if (ind.panel === 'reactor') ind.panelDirty = true; } } });
+            d.rods.forEach(function (r) { if (nkFuelRod(r)) { r.b += (1 - d.ctl) * dt / (NK.rodDays * IND_DAY); if (r.b >= 1) { r.spent = true; delete r.i; delete r.b; if (ind.panel === 'reactor') ind.panelDirty = true; } } });
             d.melt = d.T > NK.meltT ? d.melt + dt : 0;
             if (d.melt >= NK.meltS) { nkMeltdown(d); return; }
             if (ind.where === 'base') indBadge('rx' + d.id, d.x, 3.6, d.z, '反应堆 ' + Math.round(d.T) + '°C');
@@ -182,8 +189,8 @@
         };
         IND_DEV_HTML.reactor = function (d) {
             let heat = nkReactorHeat(d), cool = nkCoolNow(d), water = nkReactorCool(d);
-            let rods = d.rods.map(function (r, i) { return indRow(r.spent ? '乏燃料棒' : indName(nkRodKey(r)), '<button style="' + IND_BTN + '" onclick="nkRodOut(' + d.id + ',' + i + ')">取出</button>'); }).join('') || '<div style="color:#999;padding:6px 0;">一根燃料棒都没放</div>';
-            let put = Object.keys(ind.bag).filter(function (k) { return nkRod(k); }).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="nkRodIn(' + d.id + ',\'' + k + '\')">放 1 根</button>'); }).join('');
+            let rods = d.rods.map(function (r, i) { return indRow(r.dep ? '贫铀棒（增殖 ' + Math.floor(r.b * 100) + '%）' : indName(nkRodKeyOf(r)), '<button style="' + IND_BTN + '" onclick="nkRodOut(' + d.id + ',' + i + ')">取出</button>'); }).join('') || '<div style="color:#999;padding:6px 0;">一根燃料棒都没放</div>';
+            let put = Object.keys(ind.bag).filter(function (k) { return nkRod(k) || k === 'rod_dep'; }).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="nkRodIn(' + d.id + ',\'' + k + '\')">放 1 根</button>'); }).join('');
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">反应堆</div>' +
                 '<div style="line-height:1.7;">温度 <b style="color:' + nkTempCol(d.T) + '">' + Math.round(d.T) + '°C</b>　<span style="display:inline-block;width:120px;height:10px;background:#ddd;vertical-align:middle;border-radius:5px;overflow:hidden;"><span style="display:block;height:100%;width:' + Math.min(100, d.T / 5) + '%;background:' + nkTempCol(d.T) + ';"></span></span><br>' +
                 '功率 <b>' + Math.round(heat) + '</b>　冷却 <b>' + Math.round(cool) + '</b>（' + (water ? '冷却水：' + nkCoolSrc(d) : '没有水，只靠空气') + '）　稳定在约 <b>' + Math.round(nkSteadyT(d)) + '°C</b>' + (d.T >= NK.turbineT ? '　≥ ' + NK.turbineT + '°C，' + (ind.base.devs.some(function (t) { return t.ty === 'turbine' && Math.hypot(t.x - d.x, t.z - d.z) <= NK.turbineR + 1.5; }) ? '汽轮发电机有电' : '但 ' + NK.turbineR + ' 米内没有汽轮发电机') : '') + (d.T >= 350 && d.melt <= 0 ? '<br><b style="color:#c62828">快到 ' + NK.meltT + '°C 了（超过 ' + NK.meltT + '°C 持续 ' + NK.meltS + ' 秒就熔毁），插控制棒或者加水冷</b>' : '') + (d.melt > 0 ? '<br><b style="color:#c62828">温度超过 ' + NK.meltT + '°C 已经 ' + Math.floor(d.melt) + ' 秒</b>' : '') + '</div>' +
@@ -193,13 +200,13 @@
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>';
         };
         function nkRodIn(id, k) {
-            let d = indDev(id), r = nkRod(k); if (!d || !r || !ind.bag[k]) return;
+            let d = indDev(id), r = k === 'rod_dep' ? { dep: true } : nkRod(k); if (!d || !r || !ind.bag[k]) return;
             if (d.rods.length >= 4) { indFlash('只有 4 个位置'); return; }
-            indBagDel(k, 1); d.rods.push({ i: r.i, b: r.b }); indSave(); indPanelNk(id);
+            indBagDel(k, 1); d.rods.push(r.dep ? { dep: true, b: 0 } : { i: r.i, b: r.b }); indSave(); indPanelNk(id);
         }
         function nkRodOut(id, i) {
             let d = indDev(id); if (!d || !d.rods[i]) return;
-            let r = d.rods[i], k = r.spent ? 'rod_spent' : nkRodKey(r);
+            let r = d.rods[i], k = nkRodKeyOf(r);
             if (indBagAdd(k, 1) <= 0) { indFlash('背包满了'); return; }
             d.rods.splice(i, 1); indSave(); indPanelNk(id);
         }

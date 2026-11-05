@@ -7463,11 +7463,12 @@ async function enterExit(tab, key) {
                 for (let i = 1; i < 4; i++) { await T.eval(`indDev(3).st = { 'uf6:${i}': 2 }; indDev(3).ct = 0; indAdvance(61); true;`); steps.push(await J(`Object.keys(indDev(3).st).filter(function (k) { return k.indexOf('uf6:') === 0; })`)); }
                 if (steps.join('|') !== 'uf6:2|uf6:3|uf6:4') bad.push('离心机一档档往上 ' + steps.join('|'));
                 if (!/3\.5%/.test(await T.eval(`indName('uf6:4')`))) bad.push('4 轮后应该是 3.5%');
-                await T.eval(`indDev(3).st = { 'uf6:4': 2 }; indDev(3).ct = 0; indAdvance(61); true;`);
-                if ((await J(`indDev(3).st['uf6:5'] || 0`)) !== 1) bad.push('3.5% → 5% 一轮');
-                await T.eval(`indDev(3).st = { 'uf6:5': 2 }; indDev(3).ct = 0; indAdvance(70); indPanelNk(3); true;`);
-                if ((await J(`indDev(3).st['uf6:5']`)) !== 2 || (await J(`Object.keys(indDev(3).st).length`)) !== 1) bad.push('到 5% 不再涨 ' + await T.eval(`JSON.stringify(indDev(3).st)`));
-                if (!/到头了/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('到 5% 面板要写到头了');
+                await T.eval(`indDev(3).st = { 'uf6:4': 2 }; indDev(3).ct = 0; indAdvance(70); indPanelNk(3); true;`);
+                if ((await J(`indDev(3).st['uf6:4']`)) !== 2 || (await J(`Object.keys(indDev(3).st).length`)) !== 1 || (await J(`indDev(3).st['uf6:5'] || 0`)) !== 0) bad.push('3.5% 封顶不再涨（没有 5% 这一档） ' + await T.eval(`JSON.stringify(indDev(3).st)`));
+                if (!/到头了/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('到 3.5% 面板要写到头了');
+                // 老存档里的 5% 罐：名字当 3.5%，不再往上转
+                await T.eval(`indDev(3).st = { 'uf6:5': 2 }; indDev(3).ct = 0; indAdvance(70); true;`);
+                if ((await J(`indDev(3).st['uf6:5']`)) !== 2 || !/3\.5%/.test(await T.eval(`indName('uf6:5')`)) || !/3\.5%/.test(await T.eval(`indName('rod:5')`))) bad.push('老 5% 罐当 3.5% 用、不再转 ' + await T.eval(`JSON.stringify(indDev(3).st)`));
                 await T.eval(`indPanelClose(); true;`);
                 // ── 反应堆 ──
                 const rx = (extra) => T.eval(`ind.base.devs = []; ind.base.wires = []; ind.base.rad = []; ind.base.off.pool = true; (function(){ ind.base.devs.push(Object.assign({ id: 5, ty: 'reactor', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }, { i: 4, b: 0 }], ctl: 1, T: 20, melt: 0 }, ${JSON.stringify(extra || {})})); ind.devDirty = true; indTeleport(10, 10); })(); true;`);
@@ -10408,6 +10409,43 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND85 成就：弹一次、隐藏规则、冰冰冰、6767、烤熟了、有毒、动物图鉴、铁器、青铜镐、塞不下了、妈妈的味道、3 年、存档', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND86')) {
+            // IND86 贫铀增殖（任务 67）：贫铀棒放进反应堆，旁边有在烧的燃料棒 + 温度 ≥ 250°C 满 1 个游戏日变辐照贫铀棒；后处理出钚没核废料；乏燃料老配方还在；老 5% 的棒当 3.5% 用
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const breed = (rods, temp, ctl, secs) => J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; let d = { id: ++ind.base.dseq, ty: 'reactor', x: 20, z: 20, on: true, rods: ${rods}, ctl: ${ctl}, T: ${temp}, melt: 0, st: {} }; ind.base.devs = [d];
+                    for (let i = 0; i < ${secs} / 10; i++) { d.T = ${temp}; IND_DEV_TICK.reactor(d, 10); } return { rods: d.rods.map(function (r) { return r.dep ? 'dep' + Math.floor(r.b * 100) : r.irr ? 'irr' : r.spent ? 'spent' : 'fuel'; }).join(',') }; })()`);
+                let r = await breed(`[{ i: 4, b: 0 }, { dep: true, b: 0 }]`, 300, 0, 600);
+                if (r.rods !== 'fuel,dep50') bad.push('半个游戏日增殖到一半 ' + JSON.stringify(r));
+                r = await breed(`[{ i: 4, b: 0 }, { dep: true, b: 0 }]`, 300, 0, 1210);
+                if (r.rods !== 'fuel,irr') bad.push('满 1 个游戏日变辐照贫铀棒 ' + JSON.stringify(r));
+                r = await breed(`[{ dep: true, b: 0 }]`, 700, 0, 1300);
+                if (r.rods !== 'dep0') bad.push('旁边没有燃料棒不增殖 ' + JSON.stringify(r));
+                r = await breed(`[{ i: 4, b: 0 }, { dep: true, b: 0 }]`, 200, 0, 1300);
+                if (r.rods !== 'fuel,dep0') bad.push('温度不到 250°C 不增殖 ' + JSON.stringify(r));
+                r = await breed(`[{ i: 4, b: 0 }, { dep: true, b: 0 }]`, 700, 1, 1300);
+                if (r.rods !== 'fuel,dep0') bad.push('控制棒全插（没在烧）不增殖 ' + JSON.stringify(r));
+                // 贫铀棒不发热、不占发热；辐照的出堆变 rod_irr；老 5% 棒还能放、当 3.5%
+                r = await J(`(function(){ indGoBase(null); let d = { id: ++ind.base.dseq, ty: 'reactor', x: 20, z: 20, on: true, rods: [{ dep: true, b: 0 }, { irr: true }, { i: 5, b: 0 }], ctl: 0, T: 20, melt: 0, st: {} }; ind.base.devs = [d]; IND_DEV_FIX.reactor(d);
+                    let heat = nkReactorHeat(d); ind.bag = {}; nkRodOut(d.id, 1); let a = ind.bag.rod_irr; nkRodOut(d.id, 0); return { heat: heat, a: a, b: ind.bag.rod_dep, n: d.rods.length, nm: indName('rod:5'), rad: [IND_ITEMS.rod_dep.rad, IND_ITEMS.rod_irr.rad, IND_ITEMS.pellet_dep.rad] }; })()`);
+                if (!(r.heat === 100 && r.a === 1 && r.b === 1 && r.n === 1 && /3\.5%/.test(r.nm) && r.rad.join() === 'vweak,strong,vweak')) bad.push('贫铀棒不发热、出堆还成物品、老 5% 棒当 3.5%、辐射 ' + JSON.stringify(r));
+                // 配方：贫铀芯块、贫铀棒、后处理出钚不出核废料、乏燃料老配方还在、没有新的 5% 配方
+                r = await J(`(function(){ let pd = IND_RECIPES.filter(function (x) { return x.out.pellet_dep === 1; })[0], rp = IND_RECIPES.filter(function (x) { return x.in.rod_irr === 1; })[0], old = IND_RECIPES.filter(function (x) { return x.in.rod_spent === 1; })[0], rd = IND_CRAFT.filter(function (x) { return x.out === 'rod_dep'; })[0];
+                    return { pd: !!pd && pd.in.uf6_dep === 1 && pd.in.b_h2 === 2 && pd.out.bottle === 2, rp: !!rp && rp.in.b_hno3 === 2 && rp.out.plutonium === 1 && rp.out.bottle === 2 && !rp.out.nuclear_waste && rp.minT === 300 && rp.time === 40, old: !!old && old.out.nuclear_waste === 1, rd: !!rd && rd.in.pellet_dep === 2 && rd.in.steel === 2, last: IND_RECIPES.indexOf(rp) === IND_RECIPES.length - 1 }; })()`);
+                if (!(r.pd && r.rp && r.old && r.rd && r.last)) bad.push('贫铀芯块、贫铀棒、后处理出钚没核废料、老配方还在、新配方加在末尾 ' + JSON.stringify(r));
+                // 存档整理保留
+                r = await J(`(function(){ let d = { rods: [{ dep: true, b: 0.4 }, { irr: true }, { spent: true }, { i: 5, b: 0.2 }, { i: 9 }] }; IND_DEV_FIX.reactor(d); return d.rods; })()`);
+                if (JSON.stringify(r) !== '[{"dep":true,"b":0.4},{"irr":true},{"spent":true},{"i":5,"b":0.2}]') bad.push('读档整理保留贫铀棒、辐照棒、老 5% 棒 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND86 贫铀增殖：满 1 天变辐照棒、没燃料棒／温度不够／没在烧不增殖、后处理出钚没核废料、老配方在、老 5% 当 3.5%', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

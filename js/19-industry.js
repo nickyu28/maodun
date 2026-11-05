@@ -1997,7 +1997,7 @@
                 if (Math.hypot(d.x - x, d.z - z) > R) return;
                 if (d.st) Object.keys(d.st).forEach(function (k) { add(k, d.st[k]); });
                 if (d.ty === 'bank') indBankCells(d).forEach(function (c) { add(c[0], c[1]); });
-                if (d.rods) d.rods.forEach(function (r) { add(r.spent ? 'rod_spent' : nkRodKey(r), 1); });
+                if (d.rods) d.rods.forEach(function (r) { add(nkRodKeyOf(r), 1); });
                 if (d.cy) add(d.cy, 1);
                 if (d.ty === 'fridge' && d.items) Object.keys(d.items).forEach(function (k) { add(k, d.items[k]); });
             });
@@ -2331,7 +2331,7 @@
             let tot = { box: 0, bag: 0, ground: 0 }, put = function (key, n) { let r = indBoxAdd(key, n); tot.box += r.box; tot.bag += r.bag; tot.ground += r.ground; };
             if (d.ty === 'bank') indBankCells(d).forEach(function (c) { put(c[0], c[1]); })   ;   // 电池先还背包，放不下的走仓库箱／地上
             if (d.st) Object.keys(d.st).forEach(function (k) { put(k, d.st[k]); });   // 电解槽里的东西放回仓库箱（放不下进背包，再放不下掉在地上，不会没）
-            if (d.rods) d.rods.forEach(function (r) { put(r.spent ? 'rod_spent' : nkRodKey(r), 1); });   // 反应堆里的燃料棒
+            if (d.rods) d.rods.forEach(function (r) { put(nkRodKeyOf(r), 1); });   // 反应堆里的燃料棒
             if (d.cy) put(d.cy, 1);
             rcPickHook(d, put); if (d.ty === 'fridge' && d.items) Object.keys(d.items).forEach(function (k) { put(k, d.items[k]); });   // 电路元件：信号线退回、芯片里的元件退回
             if (d.ty === 'gen' && d.wt > 0) put(indFilledKey('water_raw', d.wm || 'wood'), 1);   // 蒸汽发电机水箱里没用完的水还回成一桶
@@ -2956,7 +2956,7 @@
             indBadge('spout' + c.id, sp.x, 1.5, sp.z, t2);
         }
         // 设备、燃料棒、电池不是原料，炉子面板里没有「放」按钮，也放不进去（手摇发电机别放进大窑，任务 61）
-        function indNotForStove(k) { let d = IND_ITEMS[k]; return !d || (!!d.dev || !!d.cellU || k === 'battery' || k === 'rod_spent' || /^rod:/.test(k) || (typeof nkRod === 'function' && !!nkRod(k))); }
+        function indNotForStove(k) { let d = IND_ITEMS[k]; return !d || (!!d.dev || !!d.cellU || k === 'battery' || k === 'rod_spent' || k === 'rod_dep' || k === 'rod_irr' || /^rod:/.test(k) || (typeof nkRod === 'function' && !!nkRod(k))); }
         function indStovePut(k, n) {
             if (!ind || !ind.bag[k]) return;
             if (k === 'gunpowder') { nkPowderInCooker(indCookCur()); return; }   // 火药放进炉子就炸

@@ -24,6 +24,11 @@
             { out: 'water_raw', in: { ice: 2, bucket: 1 }, hard: true }
         );
         IND_RECIPES.push({ in: { b_hf: 2, b_cl2: 2, coal: 1 }, out: { b_freon: 1, bottle: 3 }, cls: 'chem', pri: true, minT: 120, time: 20, hard: true });
+        // 任务 67（贫铀增殖）：配方下标存在炉子里，所以新配方只能加在整张表的末尾（这个文件是目前最后一个有配方的）
+        IND_RECIPES.push(
+            { in: { uf6_dep: 1, b_h2: 2 }, out: { pellet_dep: 1, bottle: 2 }, cls: 'chem', pri: true, minT: 600, time: 20, hard: true },
+            { in: { rod_irr: 1, b_hno3: 2 }, out: { plutonium: 1, bottle: 2 }, cls: 'chem', pri: true, minT: 300, time: 40, hard: true }
+        );
         // 一堆东西过 dt 秒：keep 为真时不老；noIce 为真时冰块不按保质期化（冷藏箱自己一天烧一块）。返回变质的数量
         function clPile(items, age, dt, keep, noIce) {
             let rot = 0;
