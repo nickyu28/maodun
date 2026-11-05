@@ -5493,6 +5493,11 @@ async function enterExit(tab, key) {
                         if (hard && RAW.ice && tl >= 1) add('ice');
                         if (hard && RAW.rotfood && Object.keys(have).some(function (k) { return RAW[k] && RAW[k].eat && k !== 'ice'; })) add('rotfood');
                         if (have.bulb) add('bulb_dead');   // 灯泡没电（任务 66）
+                        // 怪（任务 70）：拿刀打出门的怪掉黏液、蘑菇、毒蘑菇、云絮、蜂蜜、木炭、仙人掌、肉、皮；刀盾用坏了变断的
+                        if (typeof MB_KNIFE !== 'undefined') {
+                            if (Object.keys(MB_KNIFE).some(function (k) { return have[k]; })) ['goo', 'shroom', 'shroom_bad', 'fluff', 'honey', 'charcoal', 'cactus', 'meat_raw', 'hide'].forEach(add);
+                            Object.keys(MB_KNIFE).concat(Object.keys(MB_SHIELD)).forEach(function (k) { if (have[k]) add('broken_' + k); });
+                        }
                         if (hard && RAW.scrap_dev && power()) { add('scrap_dev'); add('battery_burnt'); }
                         if (hard && have.dev_el && power()) IND_EL_RECIPES.forEach(function (r) { if (Object.keys(r.in).every(function (k) { return have[k]; })) Object.keys(r.out).forEach(add); });
                     }
@@ -6223,7 +6228,8 @@ async function enterExit(tab, key) {
                 await T.eval(`(function(){ indTeleport(10, -2); indLookAt(10, -10); indSelect('cook_furnace'); indUse(); })(); true;`);
                 if (!(await T.eval(`ind.base.cookers.length === 1 && ind.base.cookers[0].ty === 'furnace' && !ind.bag.cook_furnace`))) bad.push('小熔炉放不下 ' + await T.eval(`JSON.stringify(ind.base.cookers)`));
                 await T.eval(`(function(){ indBagAdd('cook_furnace', 1); indSelect('cook_furnace'); indUse(); })(); true;`);
-                if (await T.eval(`ind.base.cookers.length !== 1`)) bad.push('两个小熔炉叠在一起');
+                if (await T.eval(`ind.base.cookers.length !== 1 || ind.base.cookers[0].n !== 2`)) bad.push('对着小熔炉再放一个应该叠上去（任务 68）');
+                await T.eval(`delete ind.base.cookers[0].n; true;`);   // 下面按一台测
                 await T.eval(`(function(){ indTeleport(-1, 10); indLookAt(-1, 3); indSelect('cook_kiln'); indUse(); })(); true;`);
                 if (!(await T.eval(`ind.base.cookers.length === 2 && ind.base.cookers[1].ty === 'kiln'`))) bad.push('大窑放不下 ' + await T.eval(`JSON.stringify(ind.base.cookers.map(function (c) { return [c.ty, c.x, c.z]; }))`));
                 await T.eval(`indSyncFurn(); true;`);
@@ -10585,6 +10591,177 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND89 矿洞：洞口在山地、白天洞口 8 米内看得见超 15 米全黑、夜里黑、火把 8 米 90 秒、灯泡 12 米没电黑、瓦斯遇火把炸、老电灯照旧', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND90')) {
+            // IND90 设备叠起来（任务 68）：石炉叠 3 台一炉份数 ×3、燃料 ×3、配方时间不变；左键弹清单、收第 2 台剩 ×2；离心机 ×2 一次 4 罐出 2 个；电解槽 ×2 耗电 ×2；
+            // 电池组叠成一组：容量相加、按电量分担、不同电压叠不上、收起带走自己的电池；反应堆叠不上；被炸里面的东西照掉；老存档没有 n 当 1
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; let B = ind.base; B.devs = []; B.wires = []; B.ground = []; B.cookers = []; ind.bag = {}; indPanelClose(); indTeleport(-30, 20);
+                    let cook = function (ty) { let c = Object.assign({ id: ++B.cseq, ty: ty, x: 5, z: 5 }, ckNewState()); B.cookers.push(c); return c; };
+                    let mk = function (id, ty, x, bats) { let d = { id: id, ty: ty, x: x, z: 0, bats: bats || 0, u: (bats || 0) * 180, on: true, ft: 20, st: {} }; B.devs.push(d); return d; };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 石炉叠 3 台：份数 ×3、燃料 ×3、配方时间不变
+                let r = await run(`let c = cook('stone'); ind.bag = { cook_stone: 2 }; let a = { kind: 'cook', o: c }; stkTryStack('cook_stone', a); stkTryStack('cook_stone', a);
+                    let K1 = indCookK('stone', {}), K3 = indCookK('stone', c), e = indCooks().filter(function (x) { return x.id === c.id; })[0];
+                    c.fuel = 100; c.fire = 2; c.temp = 300; indCookTick(e, 1); let used3 = 100 - c.fuel;
+                    let c1 = cook('stone'); c1.x = -5; let e1 = indCooks().filter(function (x) { return x.id === c1.id; })[0]; c1.fuel = 100; c1.fire = 2; c1.temp = 300; indCookTick(e1, 1); let used1 = 100 - c1.fuel;
+                    let rb = IND_RECIPES.filter(function (q) { return q.out.bread; })[0];
+                    return { n: c.n, left: ind.bag.cook_stone || 0, f1: K1.batch.food, f3: K3.batch.food, s3: K3.batch.smelt, used1: used1, used3: used3, time: rb.time, fl: fl.join('|') };`);
+                if (!(r.n === 3 && r.left === 0 && r.f3 === r.f1 * 3 && r.s3 === 3 && r.used1 > 0 && Math.abs(r.used3 - 3 * r.used1) < 1e-6 && r.time === 40 && /×3/.test(r.fl))) bad.push('石炉叠 3 台：份数 ×3、燃料每秒 ×3、时间不变 ' + JSON.stringify(r));
+                // 左键弹堆叠清单（n ≥ 2），选第 2 台收起剩 ×2，东西回背包；n = 1 时左键还是原来的面板；正在做的时候不让收
+                r = await run(`let c = cook('kiln'); c.n = 3; let a = { kind: 'cook', o: c }; let L = stkLeft(a), p = ind.panel, html = (document.getElementById('ind-panel') || {}).innerHTML || '';
+                    let ok = stkTake('cook', c.id, 1); let n2 = c.n, bag = ind.bag.cook_kiln || 0;
+                    c.cook = { i: 0, t: 1, n: 1 }; let busy = stkTake('cook', c.id, 0); c.cook = null;
+                    let c1 = cook('furnace'); let L1 = stkLeft({ kind: 'cook', o: c1 });
+                    return { L: L, p: p, rows: (html.match(/第 [0-9] 台/g) || []).length, ok: ok, n2: n2, bag: bag, busy: busy, n3: c.n, L1: L1 };`);
+                if (!(r.L && r.p === 'stack' && r.rows === 3 && r.ok && r.n2 === 2 && r.bag === 1 && r.busy === false && r.n3 === 2 && r.L1 === false)) bad.push('左键清单、收第 2 台剩 ×2、在做不让收、n=1 照旧 ' + JSON.stringify(r));
+                // 离心机 ×2：一次 4 个罐出 2 个高一档 + 2 个贫铀；电解槽 ×2 耗电 ×2 一轮出 2 份
+                r = await run(`let d = mk(1, 'centrifuge', 0); d.n = 2; d.st = { 'uf6:0': 4 }; d.pw = true; IND_DEV_TICK.centrifuge(d, NK.centriT + 0.01);
+                    let b = mk(2, 'bank', 4, 8), e = mk(3, 'el', 6); e.n = 2; e.st = { water_raw: 2, bottle: 6 }; B.wires = [[2, 3]]; let u0 = b.u; indElecTick(1); let used = u0 - b.u;
+                    e.et = IND_EL_TIME - 0.5; indElecTick(1);
+                    return { st: d.st, used: used, h2: e.st.b_h2 || 0, o2: e.st.b_o2 || 0 };`);
+                if (!(r.st['uf6:1'] === 2 && r.st.uf6_dep === 2 && !r.st['uf6:0'] && Math.abs(r.used - 4) < 1e-6 && r.h2 === 4 && r.o2 === 2)) bad.push('离心机 ×2 一次 4 罐出 2 个、电解槽 ×2 耗电 ×2 出 2 份 ' + JSON.stringify(r));
+                // 电池组叠成一组：容量相加、按电量分担；不同电压叠不上；收起带走自己的电池
+                r = await run(`let b = mk(1, 'bank', 0, 4), p = mk(2, 'pump', 3); B.wires = [[1, 2]]; ind.bag = { dev_bank: 1, battery: 4 };
+                    let a = stkTryStack('dev_bank', { kind: 'dev', o: b }), g = b.grp && b.grp.length; let empty = stkBankU(b); stkFill(1, 1);
+                    let U = stkBankU(b), M = stkBankMax(b); b.u = 600; b.grp[0].u = 300; stkDrain(b, 30); let share = [b.u, b.grp[0].u];
+                    let diff = stkBankJoin(b, { bats: 6, u: 1080 }), same = stkBankJoin(b, { bats: 4, u: 10 });
+                    ind.bag = {}; let take = stkTake('dev', 1, 1); return { a: a, g: g, empty: empty, U: U, M: M, share: share, diff: diff, same: same, take: take, grp: !!b.grp, bag: ind.bag, fl: fl.join('|') };`);
+                if (!(r.a && r.g === 1 && r.empty === 720 && r.U === 1440 && r.M === 1440 && Math.abs(r.share[0] - 580) < 1e-6 && Math.abs(r.share[1] - 290) < 1e-6 && r.diff === false && r.same === true && /电压不一样，叠不上/.test(r.fl) && r.take && !r.grp && r.bag.dev_bank === 1 && r.bag.battery === 2)) bad.push('电池组一组：容量相加、按电量分担、不同电压叠不上、收起带走自己的 ' + JSON.stringify(r));
+                // 反应堆叠不上（照原来的放）；老存档没有 n 当 1；读档留着 n
+                r = await run(`let d = mk(1, 'reactor', 0); d.rods = []; d.T = 20; d.ctl = 1; let a = stkTryStack('dev_reactor', { kind: 'dev', o: d });
+                    let c = cook('kiln'); let K = indCookK('kiln', c); c.n = 4; let fb = indFixBase(JSON.parse(JSON.stringify(B)));
+                    return { a: a, n: d.n, k1: K.batch.food, kn: fb.cookers.filter(function (x) { return x.ty === 'kiln'; })[0].n };`);
+                if (!(r.a === false && r.n === undefined && r.k1 === 16 && r.kn === 4)) bad.push('反应堆叠不上、老存档当 1、读档留 n ' + JSON.stringify(r));
+                // 被炸：叠着的整堆没了，里面的东西掉地上
+                r = await run(`let c = cook('kiln'); c.n = 3; c.items = { clay: 5 }; indTeleport(40, 40); indBoom(c.x, c.z, 3, '测试'); return { left: B.cookers.length, clay: B.ground.filter(function (g) { return g.k === 'clay'; }).length };`);
+                if (!(r.left === 0 && r.clay === 5)) bad.push('被炸整堆没了、东西掉地上 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND90 设备叠起来：份数燃料 ×n、清单收一台、离心机电解槽 ×n、电池组一组、反应堆不叠、被炸、老存档', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND91')) {
+            // IND91 怪、刀盾、宠物（任务 70 + 补充 + 补充 2）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body, rule) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { ind.base.rule = '${'${rule}'}' || 'hard'; ind.base.animals = []; ind.base.ach = {}; ind.dead = null; ind.hurt = null; let S = ind.base.surv; S.hp = 100; S.temp = 37; S.food = 80; S.water = 80; ind.bag = {}; ind.base.dura = {}; ind.base.duraHalf = {}; delete ind.base.poisonK;
+                    let day = function () { ind.base.clock = IND_DAY * 3 + 300; }, night = function () { ind.base.clock = IND_DAY * 3 + IND_DUSK + 100; };
+                    let trip = function () { indGoTrip(977); ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = []; ind.mbDead = {}; indTeleport(0, -4); indLookAt(0, -10); }, mob = function (k, dz, o) { let m = mbNew(k, 0, -4 - (dz || 1.5), o); m.aggro = true; return m; };
+                    let pet = function (k, x) { let a = { k: k, x: x || 0, z: 0, food: 80, woolAt: 0, milkAt: 0 }; ind.base.animals.push(a); return a; };
+                    ${body} } finally { blazeFlash = bf; } })()`.replace("'${rule}'", "'" + (rule || 'hard') + "'"));
+                // 哪儿刷什么：基地不刷；平原夜里有史莱姆、白天没有；白天有云团蜜蜂；沙漠刺球；洞里火苗仔
+                let r = await run(`indGoBase(null); ind.mbSpawn = 0; for (let i = 0; i < 30; i++) mbTick(0.5); let base = (ind.mobs || []).length;
+                    night(); let pn = mbKinds('plain', null), fn = mbKinds('forest', null); day(); let pd = mbKinds('plain', null), dd = mbKinds('desert', null), cv = mbKinds('mountain', { bm: 'ancient' });
+                    trip(); night(); ind.mbSpawn = 0; for (let i = 0; i < 200; i++) { ind.mbSpawn = 0; mbTick(0.01); } let n = mbCount(); return { base: base, pn: pn, fn: fn, pd: pd, dd: dd, cv: cv, n: n };`);
+                if (!(r.base === 0 && r.pn.indexOf('slime:green') >= 0 && r.pd.indexOf('slime:green') < 0 && r.pd.indexOf('cloud') >= 0 && r.pd.indexOf('bee') >= 0 && r.pn.indexOf('bee') < 0 && r.pn.indexOf('cloud') < 0 && r.dd.indexOf('cactus') >= 0 && r.fn.indexOf('mush') >= 0 && r.cv.indexOf('flame') >= 0 && r.cv.indexOf('slime:pink') >= 0 && r.n > 0 && r.n <= 5)) bad.push('哪儿刷什么、基地不刷、最多 5 只 ' + JSON.stringify(r));
+                // 史莱姆：大的打没了裂 2 个中的，中的裂小的，小的打死没了；分裂的不算数；蹭人大 4 中 3 小 2（掉血）
+                r = await run(`trip(); let m = mob('slime:green'); mbDamage(m, 3); let mids = ind.mobs.filter(function (x) { return !x.dead && x.sz === 1; }); let c0 = mbCount(); mbDamage(mids[0], 2); let smalls = ind.mobs.filter(function (x) { return !x.dead && x.sz === 2; }).length;
+                    let sm = ind.mobs.filter(function (x) { return !x.dead && x.sz === 2; })[0]; mbDamage(sm, 1); let hp = []; [0, 1, 2].forEach(function (sz) { ind.base.surv.hp = 100; let q = mob('slime:green', 1, { sz: sz }); mbHit(q, { me: true }); hp.push(100 - ind.base.surv.hp); }); return { mids: mids.length, c0: c0, smalls: smalls, dead: sm.dead, hp: hp, w: ind.base.surv.water };`);
+                if (!(r.mids === 2 && r.c0 === 0 && r.smalls === 2 && r.dead && r.hp.join() === '4,3,2' && r.w === 80)) bad.push('史莱姆分裂、蹭人掉血 4/3/2 ' + JSON.stringify(r));
+                // 悠闲伤害减半、不会被打死
+                r = await run(`trip(); let q = mob('slime:green'); mbHit(q, { me: true }); let a = 100 - ind.base.surv.hp; ind.base.surv.hp = 1.5; mbHit(q, { me: true }); return { a: a, left: ind.base.surv.hp, dead: !!ind.dead };`, 'casual');
+                if (!(r.a === 2 && r.left >= 1 && !r.dead)) bad.push('悠闲减半、打不死 ' + JSON.stringify(r));
+                // 刀按档伤害；左键挥（冷却 0.6）；耐久用完变断刀
+                r = await run(`trip(); let out = {}; Object.keys(MB_KNIFE).forEach(function (k) { let m = mob('boar'); m.hp = 50; ind.bag = {}; ind.bag[k] = 1; indSelect(k); ind.mbSwing = 0; mbAttack(); out[k] = 50 - m.hp; mbDrop(m); m.dead = true; });
+                    let m = mob('boar'); m.hp = 50; ind.bag = { knife_wood: 1 }; indSelect('knife_wood'); ind.mbSwing = 0; mbAttack(); mbAttack(); let cd = 50 - m.hp;
+                    ind.base.dura.knife_wood = 1; ind.mbSwing = 0; mbAttack(); return { out: out, cd: cd, broken: ind.bag.broken_knife_wood || 0, left: ind.bag.knife_wood || 0 };`);
+                if (!(r.out.knife_wood === 1 && r.out.knife === 2 && r.out.knife_bronze === 3 && r.out.knife_iron === 4 && r.out.knife_steel === 6 && r.out.knife_diamond === 8 && r.cd === 1 && r.broken === 1 && r.left === 0)) bad.push('刀按档伤害、冷却、用坏变断刀 ' + JSON.stringify(r));
+                // 盾：钢 100% 0.75 秒冷却 5 秒、木 50%；冷却里点不了；举盾走路 ×0.6；选中盾不拉风箱
+                r = await run(`trip(); ind.bag = { shield_steel: 1, shield_wood: 1 }; indSelect('shield_steel'); ind.mbBlock = null; mbShieldDown(); let up = ind.mbBlock.t, cd = ind.mbBlock.cd, mv = mbMoveMul();
+                    let q = mob('boar'); mbHit(q, { me: true }); let st = 100 - ind.base.surv.hp; mbBlockTick(1); let again = mbShieldDown(), t2 = ind.mbBlock.t, fl1 = fl.join('|');
+                    ind.mbBlock = null; indSelect('shield_wood'); mbShieldDown(); ind.base.surv.hp = 100; mbHit(q, { me: true }); let wd = 100 - ind.base.surv.hp; indSelect('shield_wood');
+                    return { up: up, cd: cd, mv: mv, st: st, t2: t2, cool: /冷却/.test(fl1), wd: wd, wup: MB_SHIELD.shield_wood.up, wcd: MB_SHIELD.shield_wood.cd };`);
+                if (!(r.up === 0.75 && Math.abs(r.cd - 5.75) < 1e-9 && r.mv === 0.6 && r.st === 0 && r.t2 === 0 && r.cool && r.wd === 4 && r.wup === 0.45 && r.wcd === 8)) bad.push('盾按档挡、持续冷却、冷却里点不了、走路 ×0.6 ' + JSON.stringify(r));
+                r = await run(`indGoBase(null); ind.bag = { shield_wood: 1, wood: 1 }; indSelect('shield_wood'); ind.mbBlock = null; let a = mbShieldDown(); indSelect('wood'); let b = mbShieldDown(); return { a: a, b: b };`);
+                if (!(r.a === true && r.b === false)) bad.push('选中盾举盾、选中别的不举（才能拉风箱） ' + JSON.stringify(r));
+                // 刺球：前摇 0.8 秒再撞 −5；小野猪刨地 1 秒再冲 −8 击退，举钢盾挡住
+                r = await run(`trip(); let c = mob('cactus', 3); mbTick(0.05); let w = c.st; for (let i = 0; i < 7; i++) mbTick(0.1); let early = c.st; for (let i = 0; i < 20 && c.st !== 'rest'; i++) mbTick(0.05); let ch = 100 - ind.base.surv.hp; mbDrop(c); c.dead = true; mbTick(0.01);
+                    ind.base.surv.hp = 100; indTeleport(0, -4); let b = mob('boar', 3); mbTick(0.05); let bw = b.st; for (let i = 0; i < 9; i++) mbTick(0.1); let be = b.st, z0 = ind.p.z; for (let i = 0; i < 30 && b.st !== 'rest'; i++) mbTick(0.05); let bh = 100 - ind.base.surv.hp, kn = Math.abs(ind.p.z - z0); mbDrop(b); b.dead = true; mbTick(0.01);
+                    ind.base.surv.hp = 100; indTeleport(0, -4); indLookAt(0, -10); ind.bag = { shield_steel: 1 }; indSelect('shield_steel'); ind.mbBlock = null; let b2 = mob('boar', 3); mbTick(0.05); for (let i = 0; i < 10; i++) mbTick(0.1); mbShieldDown(); for (let i = 0; i < 14 && b2.st !== 'rest'; i++) mbTick(0.05);
+                    return { w: w, early: early, ch: ch, bw: bw, be: be, bh: bh, kn: kn, blocked: 100 - ind.base.surv.hp };`);
+                if (!(r.w === 'wind' && r.early === 'wind' && r.ch === 5 && r.bw === 'wind' && r.be === 'wind' && r.bh === 8 && r.kn >= 1.5 && r.blocked === 0)) bad.push('刺球前摇 0.8 撞 5、小野猪刨地 1 秒冲 8 击退、举盾挡 ' + JSON.stringify(r));
+                // 小蘑菇蹭一下 3 血；云团体温 −0.3、火苗仔 +0.5 都不掉血；毒蘑菇 15%；吃毒蘑菇中毒；云絮吃了饱食 +3 体温 −0.5；火苗仔不掉火种
+                r = await run(`trip(); mbHit(mob('mush'), { me: true }); let mu = 100 - ind.base.surv.hp; ind.base.surv.hp = 100; ind.base.surv.temp = 37; mbHit(mob('cloud'), { me: true }); let ct = ind.base.surv.temp; mbHit(mob('flame'), { me: true }); let ft = ind.base.surv.temp;
+                    let bad = 0, N = 400; for (let i = 0; i < N; i++) { ind.tripGround = []; let m = mob('mush'); m.dead = false; mbDamage(m, 9); if (ind.tripGround.some(function (g) { return g.k === 'shroom_bad'; })) bad++; }
+                    let fire = 0; for (let i = 0; i < 50; i++) { ind.tripGround = []; mbDamage(mob('flame'), 9); if (ind.tripGround.some(function (g) { return !/^(charcoal)$/.test(g.k); })) fire++; }
+                    ind.base.surv.hp = 100; ind.bag = { shroom_bad: 1, fluff: 1 }; indEat('shroom_bad'); for (let i = 0; i < 12; i++) mbBodyTick(1); let ph = 100 - ind.base.surv.hp;
+                    ind.base.surv.food = 50; ind.base.surv.temp = 38; indEat('fluff'); return { mu: mu, ct: ct, ft: ft, hp: ind.base.surv.hp, p: bad / N, fire: fire, ph: ph, food: ind.base.surv.food, temp: ind.base.surv.temp, fl: fl.join('|') };`);
+                if (!(r.mu === 3 && Math.abs(r.ct - 36.7) < 1e-9 && Math.abs(r.ft - 37.2) < 1e-9 && r.p > 0.15 * 0.6 && r.p < 0.15 * 1.4 && r.fire === 0 && Math.abs(r.ph - 10) < 0.01 && r.food === 53 && Math.abs(r.temp - 37.5) < 1e-9 && /棉花糖/.test(r.fl))) bad.push('小蘑菇 3、云团 −0.3、火苗仔 +0.5、毒蘑菇 15%、吃毒蘑菇中毒 10 秒、云絮 ' + JSON.stringify(r));
+                // 毒刀：涂一次接下来 10 下让怪中毒
+                r = await run(`trip(); ind.bag = { knife: 1, shroom_bad: 1 }; let i = IND_CRAFT.findIndex(function (q) { return q.poison && q.out === 'knife'; }); indCraft(i); let n0 = ind.base.poisonK && ind.base.poisonK.n; indSelect('knife');
+                    let m = mob('boar'); m.hp = 99; ind.mbSwing = 0; mbAttack(); let p = m.poison > 0; for (let k = 0; k < 9; k++) { ind.mbSwing = 0; mbAttack(); } let left = ind.base.poisonK; m.poison = 0; ind.mbSwing = 0; mbAttack(); return { n0: n0, p: p, left: !!left, after: m.poison > 0, knife: ind.bag.knife };`);
+                if (!(r.n0 === 10 && r.p && !r.left && !r.after && r.knife === 1)) bad.push('毒刀 10 下 ' + JSON.stringify(r));
+                // 蜜蜂 3 只一群、晚上没有；小蜜蜂蜇 2 血然后飞开
+                r = await run(`trip(); day(); ind.mbDead = {}; let got = 0; for (let t = 0; t < 400 && !got; t++) { ind.mobs.forEach(mbDrop); ind.mobs = []; let m = mbSpawnTry(); if (m && m.ty === 'bee') got = ind.mobs.filter(function (x) { return x.ty === 'bee'; }).length; }
+                    ind.mobs.forEach(mbDrop); ind.mobs = []; let b = mob('bee', 0.5); mbTick(0.05); let st = b.st, hp = 100 - ind.base.surv.hp; return { got: got, st: st, hp: hp };`);
+                if (!(r.got === 3 && r.st === 'away' && r.hp === 2)) bad.push('蜜蜂 3 只一群、蜇 2 血飞开 ' + JSON.stringify(r));
+                // 胶水：2 黏液 → 1 胶水；修断刀耐久一半；胶水滩让怪慢 70%
+                r = await run(`trip(); let g = IND_RECIPES.filter(function (q) { return q.out.glue; })[0]; ind.bag = { broken_knife_iron: 1, glue: 2 }; let i = IND_CRAFT.findIndex(function (q) { return q.fix && q.out === 'knife_iron'; }); indCraft(i); indSelect('knife_iron'); let d = mbDura('knife_iron');
+                    indSelect('glue'); indUse(); let pd = ind.glue && ind.glue[0]; let m = mob('slime:green', 8); m.x = pd.x; m.z = pd.z; m.aggro = true; let x0 = m.z; mbTick(0.5); let slow = Math.abs(m.z - x0); let m2 = mob('slime:green', 8); m2.x = 5; m2.aggro = true; let z2 = m2.z; mbTick(0.5); let fast = Math.abs(m2.z - z2) + Math.abs(m2.x - 5);
+                    return { g: !!g && g.in.goo === 2 && g.minT === 80 && g.time === 10, d: d, puddle: !!pd, ratio: slow / fast };`);
+                if (!(r.g && r.d === 100 && r.puddle && r.ratio > 0.2 && r.ratio < 0.4)) bad.push('胶水配方、修好耐久一半、胶水滩慢 70% ' + JSON.stringify(r));
+                // 宠物：装刀；第 6 只装不上；跟着出门打怪；饱食 0 睡着不打、喂了醒；装刀盾的成就
+                r = await run(`indGoBase(null); let ds = []; for (let i = 0; i < 6; i++) ds.push(pet('dog', i)); ind.bag = { knife_iron: 6, shield_iron: 1 }; indSelect('knife_iron'); for (let i = 0; i < 6; i++) mbPetUse(ds[i], 'knife_iron');
+                    let armed = ds.filter(function (a) { return a.weapon; }).length, sixth = fl.some(function (t) { return /最多 5 只/.test(t); }); mbPetUse(ds[0], 'shield_iron'); let ach = !!ind.base.ach.dogsword;
+                    let c = pet('cat', 9); ind.bag = { knife: 1, shield_wood: 1 }; ds[4].weapon = null; mbPetUse(c, 'knife'); mbPetUse(c, 'shield_wood'); let cach = !!ind.base.ach.catshield;
+                    trip(); let e = ind.wild.filter(function (w) { return w.petRef === ds[0]; })[0]; let m = mob('boar', 2); m.hp = 50; e.x = m.x + 0.5; e.z = m.z; e.hitT = 0; mbTick(0.1); let hit = 50 - m.hp;
+                    ds[0].food = 0; e.hitT = 0; let h0 = m.hp; mbTick(1.1); let sleepHit = h0 - m.hp, zz = mbAsleep(e); ds[0].food = 50; e.hitT = 0; mbTick(0.1);
+                    return { armed: armed, sixth: sixth, ach: ach, cach: cach, out: ind.wild.filter(function (w) { return w.petRef; }).length, hit: hit, sleepHit: sleepHit, zz: zz, woke: 50 - m.hp > hit };`);
+                if (!(r.armed === 5 && r.sixth && r.ach && r.cach && r.out === 5 && r.hit === 4 && r.sleepHit === 0 && r.zz && r.woke)) bad.push('宠物装刀、最多 5 只、跟出门打怪、睡着不打、刀盾成就 ' + JSON.stringify(r));
+                // 宠物保湿度：被大史莱姆蹭 −8；水边自己喝；桶喂水；盾按概率不掉（钢 90%，200 次 ±15%）
+                r = await run(`indGoBase(null); let d = pet('dog'); d.weapon = 'knife'; trip(); let e = ind.wild.filter(function (w) { return w.petRef === d; })[0]; mbHitPet(mob('slime:green'), e, 8); let h1 = d.hyd;
+                    ind.bag = { water_raw: 1 }; let fed = mbPetUse(e, 'water_raw'); let h2 = d.hyd; d.shield = 'shield_steel'; let keep = 0; for (let i = 0; i < 200; i++) { d.hyd = 100; d.sd = 999; mbHitPet({ ty: 'slime' }, e, 8); if (d.hyd === 100) keep++; }
+                    indGoBase(null); d.hyd = 10; d.x = IND_BASE_ST.pool.x + 1; d.z = IND_BASE_ST.pool.z; mbPetLife(d, d.x, d.z, 0.1, false); return { h1: h1, fed: fed, h2: h2, keep: keep / 200, pool: d.hyd, bag: ind.bag };`);
+                if (!(r.h1 === 92 && r.fed && r.h2 === 100 && r.keep > 0.9 - 0.15 && r.keep <= 1 && r.pool === 100 && !r.bag.water_raw)) bad.push('宠物保湿度、喂水、水边喝、盾概率 ' + JSON.stringify(r));
+                // 狗叫：叫 1.5 秒；12 米内的狗跟着叫；一只 3 秒内不重复叫；三只同时叫成就，三只刀盾狗再一个
+                r = await run(`indGoBase(null); let a = pet('dog', 0), b = pet('dog', 3), c = pet('dog', 6), far = pet('dog', 30); let t0 = ind.t; mbBark(a); let on = a.barkT - t0; let again = mbBark(a);
+                    ind.t += 0.6; mbBarkTick(); let follow = [b.barkT > ind.t, c.barkT > ind.t, !(far.barkT > ind.t)]; let ach1 = !!ind.base.ach.bark3, ach2 = !!ind.base.ach.bark3arm;
+                    ind.t += 3; [a, b, c].forEach(function (x) { x.weapon = 'knife'; x.shield = 'shield_wood'; }); mbBark(a); ind.t += 0.6; mbBarkTick();
+                    return { on: on, again: again, follow: follow, ach1: ach1, ach2: ach2, ach3: !!ind.base.ach.bark3arm, wa: mbBarking().length };`);
+                if (!(Math.abs(r.on - 1.5) < 1e-9 && r.again === false && r.follow.every(Boolean) && r.ach1 && !r.ach2 && r.ach3 && r.wa === 3)) bad.push('狗叫 1.5 秒、跟着叫、3 秒不重复、三只叫成就 ' + JSON.stringify(r));
+                // 存档：宠物的刀盾、保湿度、耐久读档还在；老存档没有当没装、满
+                r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.animals = [{ k: 'dog', x: 0, z: 0, food: 50, weapon: 'knife_steel', wd: 300, shield: 'shield_iron', sd: 20, hyd: 40 }, { k: 'cat', x: 1, z: 0, food: 50 }, { k: 'dog', x: 2, z: 0, food: 50, weapon: 'nope' }]; b.dura = { knife: 7, bogus: 3 }; let f = indFixBase(b);
+                    return { a: f.animals[0], c: mbHyd(f.animals[1]), w: f.animals[1].weapon || null, bad: f.animals[2].weapon, dura: f.dura }; })()`);
+                if (!(r.a.weapon === 'knife_steel' && r.a.wd === 300 && r.a.shield === 'shield_iron' && r.a.hyd === 40 && r.c === 100 && r.w === null && r.bad === null && r.dura.knife === 7 && !r.dura.bogus)) bad.push('存档 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND91 怪和刀盾宠物：刷怪地方、分裂、刀盾档位、前摇冲撞、蘑菇云团火苗、毒刀、蜜蜂、胶水、宠物装刀盾打怪睡觉、保湿度、狗叫、存档', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND92')) {
+            // IND92 窑面板写升温估计（任务 71）：冷窑选大火，"现在 N°C，升到 X°C 约要 Y 秒"，Y 跟真升到的时间差 30% 以内；到了就不写；小熔炉也写
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const r = JSON.parse(await T.eval(`JSON.stringify((function(){ indGoBase(null); let B = ind.base; B.devs = []; B.cookers = [Object.assign({ id: 801, ty: 'kiln', x: 5, z: 5 }, ckNewState()), Object.assign({ id: 802, ty: 'furnace', x: -5, z: 5 }, ckNewState())];
+                    let k = B.cookers[0]; k.fuel = 5000; k.temp = 20; ind.cookId = 801; indStoveFire(3); let html = indStoveHtml(), m = html.match(/现在 (\\d+)°C，升到 (\\d+)°C 约要 (\\d+) 秒/);
+                    let c = indCooks().filter(function (x) { return x.id === 801; })[0], t = 0; while (k.temp < (m ? +m[2] : 1200) - 0.5 && t < 1000) { indCookTick(c, 0.5); t += 0.5; }
+                    let after = /升到/.test(indStoveHtml()); let f = B.cookers[1]; f.fuel = 500; f.temp = 20; ind.cookId = 802; indStoveFire(2); let fh = /升到 \\d+°C 约要 \\d+ 秒/.test(indStoveHtml()); indPanelClose();
+                    return { m: m && [+m[1], +m[2], +m[3]], real: t, after: after, fh: fh };
+                })())`));
+                if (!(r.m && r.m[0] === 20 && r.m[1] === 1200 && Math.abs(r.m[2] - r.real) <= r.real * 0.3 && !r.after && r.fh)) bad.push('冷窑大火写升温估计、数字合理、到了不写、小熔炉也写 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND92 窑面板写升温估计：冷窑大火估计时间跟真的差 30% 以内、到了不写', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

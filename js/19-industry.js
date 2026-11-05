@@ -818,7 +818,8 @@
             let A = indAnimals(), base = ind.where === 'base';
             if (live) indBreedTick(dt);
             A.forEach(function (a, i) {
-                if (base && live) a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * dt);
+                if (base && live) { a.food = Math.max(0, a.food - (a.k === 'dog' || a.k === 'cat' ? MB.petFood : IND_ANIMAL_HUNGER) * dt); mbPetLife(a, a.x, a.z, dt, false); }   // 狗猫每分钟 −1、保湿度（任务 70）
+                if (a.fight || mbAsleep(a)) return;   // 在打怪（位置在 19-industry-mob.js 里动）、睡着了：不走
                 let sp = 1.2, tx, tz;
                 if (a.call > 0) {   // 听到铃铛：走到玩家身边
                     a.call -= dt;
@@ -861,6 +862,7 @@
         // 左键对着动物：野生的喂它爱吃的（喂够就跟着你）；基地里的喂食、剪羊毛、拿空桶挤牛奶
         function indAnimalAct(a) {
             let D = IND_ANIMALS[a.k], k = indSel(), clock = ind.base.clock;
+            mbBark(a);   // 点驯服的狗它叫一声（任务 70），再接着原来的
             if (D.wildOnly) { indFlash(D.name + '不能驯：拿着工具对着它按住右键 1 秒'); return false; }
             if (ind.where === 'trip') {
                 if (a.follow) { indFlash(D.name + '跟着你呢，走回撤离点就一起回家'); return false; }
@@ -1124,8 +1126,8 @@
         const IND_FURN_R = { stove: 1.5, bed: 2.0, bench: 1.4, pool: 2.4, chest: 1.2, furnace: 1.2, kiln: 2.1, stone: 1.5 };
         function indApplyPos(b) { ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { let p = b.pos && b.pos[k]; IND_BASE_ST[k].x = p ? p.x : IND_ST_DEF[k].x; IND_BASE_ST[k].z = p ? p.z : IND_ST_DEF[k].z; }); }
         function indGoBase(fromTrip) {
-            let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];
-            ind.wild = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.cave = null; ind.caves = [];
+            let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && !a.petRef && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];   // 跟出去的宠物本来就是基地的（任务 70）
+            ind.wild = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.cave = null; ind.caves = []; mbReset();
             indClearWorld();
             ind.where = 'base'; ind.map = null; ind.exitT = 0;
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
@@ -1202,7 +1204,7 @@
         const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin', 'seed_cotton', 'seed_cabbage', 'seed_radish'];
         function indGoTrip(seed) {
             if (ind.base.rule && typeof ind.base.away !== 'number') ind.base.away = ind.base.clock;   // 记下出门时刻，回家补算（任务 3）
-            indClearWorld();
+            indClearWorld(); mbReset();
             ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
             let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed);
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 30, IND_VIEW.day);
@@ -1280,6 +1282,7 @@
                 indSign(e.name, e.x, y + 3.2, e.z, 2.6, 0.65);
             });
             ind.p.x = 0; ind.p.z = -4; ind.p.y = indHeight(M, 0, -4); ind.p.vy = 0;
+            mbPetsOut();   // 装了刀的宠物跟着出门（任务 70）
             indSave();
             indFlash('出发了！走回绿色撤离圈里站 ' + IND_T.extract + ' 秒才算带回来');
         }
@@ -1365,7 +1368,7 @@
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); clStep(dt, true, ind.where === 'base'); achTick(); trTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); clStep(dt, true, ind.where === 'base'); achTick(); trTick(dt); mbBodyTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
             if (!ind || ind.over || ind.dead) return;
@@ -1378,7 +1381,7 @@
             if (!ind || ind.over || ind.dead) return;
             if (ind.where === 'base') indStoveTick(dt);
             if (!ind || ind.over) return;
-            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); fmPullTick(dt); rkTick(dt); pwFxTick(dt); rdTick(dt); rcTick(dt); rcDrawSigs();
+            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); fmPullTick(dt); rkTick(dt); pwFxTick(dt); rdTick(dt); rcTick(dt); rcDrawSigs(); mbTick(dt);   // 怪、盾、宠物打怪（19-industry-mob.js，任务 70）
             if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
@@ -1391,7 +1394,7 @@
                 ind.exitT = inExit ? ind.exitT + dt : 0;
                 if (ind.exitT >= IND_T.extract) indGoBase(true);
             }
-            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); indHouseFadeTick(dt); indSyncTiles();
+            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); indHouseFadeTick(dt); indSyncTiles(); mbSync();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
             ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); indSeasonLook(); }
@@ -1514,7 +1517,7 @@
             } else if (R.ride && R.ride.ty === 'bike') { R.stillT = 0; R.stam = moving ? Math.max(0, R.stam - RD.pedal * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }   // 脚踏吃体力
             else if (R.effort > 0) { R.stillT = 0; R.stam = Math.max(0, R.stam - R.effort * dt); }   // 拉风箱、扇扇子吃体力（任务 44）
             else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }
-            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1) * pwMoveMul();   // 鞋和药的跑速加成，合起来不超过 ×2.0（19-industry-power.js）
+            let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1) * pwMoveMul() * mbMoveMul();   // 举着盾 ×0.6   // 鞋和药的跑速加成，合起来不超过 ×2.0（19-industry-power.js）
             if (R.ride) sp = rdMoveSpeed(dt, moving);   // 载具速度固定，鞋药不乘（19-industry-ride.js）
             if (moving) {
                 let n = Math.hypot(mx, mz), run = Math.min(1, n); mx /= n; mz /= n;
@@ -1708,6 +1711,7 @@
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             if (ind.ch) { ind.ch = null; indFlash('停了'); return false; }
+            if (mbAttack()) return true;   // 拿着刀左键：打面前的怪（任务 70）
             if (ind.ride || (indSel() && IND_ITEMS[indSel()].veh)) { if (rdBlockAction(indAim())) return false; }   // 骑着只能做单手的事（任务 46）；拿着车左键开面板
             if (ind.onRaft) return indRaftToggle(ind.onRaft);
             if (clIceAct()) return true;   // 冬天站水边拿镐凿冰（19-industry-cold.js）
@@ -1731,6 +1735,7 @@
             if (a && a.kind === 'door') return indDoorToggle(a.o);
             if (a && a.kind === 'chest') return indPanelBox(a.o.id);
             if (a && (a.kind === 'stove' || a.kind === 'cook') && indSel() === 'pipe') return rlPipeClick(a.kind === 'stove' ? 'kstove' : 'k' + a.o.id);   // 拿钢管点炉子：接管道（任务 58）
+            if (a && stkLeft(a)) return true;   // 叠了 2 台以上：左键先看堆叠清单（任务 68）
             if (a && a.kind === 'stove') return indPanelStove('stove');
             if (a && a.kind === 'cook') return indPanelStove(a.o.id);
             if (a && a.kind === 'bed') return indSleep();
@@ -1745,6 +1750,8 @@
         // 右键：对着能搬的东西，按住 1 秒收起来，没按够就松开是原来的右键（吃喝、浇水、接水）；别的东西按下就是右键
         function indRightDown() {
             if (!ind || ind.over || ind.dead || ind.panel) return;
+            if (mbShieldDown()) return;   // 选中盾：举盾，不拉风箱（任务 70）
+            { let aa = indAim(); if (aa && aa.kind === 'animal' && (mbPetUse(aa.o, indSel()) || mbBark(aa.o))) return; }   // 右键狗猫：装刀盾、喂水，不然就叫一声
             if (fmPullDown(indAim())) return;   // 拉风箱、扇扇子（任务 44）：要在"按住收起炉子"前面
             let f = ind.ride ? null : indFurnOf(indAim());   // 骑着不能搬东西
             if (f) { ind.rh = { f: f, t: 0, done: false }; return; }
@@ -1781,6 +1788,7 @@
             if (k === 'cyl' && a && a.kind === 'node' && a.o.key === 'vent_ng') return rkFillVent(a.o);   // 空钢瓶对着喷口：装天然气
             if (k === 'torch') return cvLightTorch();   // 右键点火把（任务 66）
             if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
+            if (k && stkTryStack(k, a)) return true;   // 拿着同种设备右键已经放下的那台：叠上去（任务 68）
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
             if (IND_ITEMS[k].dev) return indPlaceDev(k);
@@ -1806,6 +1814,7 @@
             if ((kb === 'water_raw' || kb === 'water_boiled') && a && a.kind === 'crop') return indWater(a.o, k);
             if (k === 'dry_ice') return indDryIceBucket();
             if (IND_ITEMS[k].hot) return indQuench(k);
+            if (mbUse(k, a)) return true;   // 云絮浇地、胶水倒地上（任务 70）
             if (IND_ITEMS[k].eat) return indEat(k);
             if (IND_ITEMS[k].wear) return indWear(k);
             if (k === 'campfire') return indPlaceFire();
@@ -1832,7 +1841,7 @@
             indBagDel(k, 1);
             if (k === 'cactus' && indHard() && indHurt(60, 'thorn', '生吃了带刺的仙人掌')) return true;
             if (e.f) S.food = Math.max(0, Math.min(100, S.food + e.f));
-            achEat(k);
+            achEat(k); mbAte(k);
             if (e.w) { S.water = Math.max(0, Math.min(100, S.water + e.w)); if (e.w > 0 && !e.hot && S.temp > 38) S.temp = Math.max(37, S.temp - 0.5); }
             if (e.back) indBagAdd(e.back, 1);
             let warm = false;
@@ -1948,7 +1957,7 @@
         function indNearStove(x, z, r) { return indCooks().some(function (c) { return Math.hypot(x - c.x, z - c.z) <= r + (c.ty === 'kiln' ? 1 : 0); }); }
         function indHeatNear(x, z, r) { let t = 0, f = 0; indCooks().forEach(function (c) { if (Math.hypot(x - c.x, z - c.z) <= r + (c.ty === 'kiln' ? 1 : 0)) { t = Math.max(t, c.C.temp); f = Math.max(f, c.C.fire); } }); return { temp: t, fire: f }; }
         function indSrcVolt(d) {
-            if (d.ty === 'bank') return d.u > 0 ? indBankV(d) : 0;
+            if (d.ty === 'bank') return stkBankU(d) > 0 ? indBankV(d) : 0;   // 叠成一组的电池组：组里还有电就有电压（任务 68）
             if (d.ty === 'gen') return rlGenOn(d) ? IND_DEVS.gen.volt : 0;   // 蒸汽发电机（任务 55）：旁边有点着的炉子而且水箱里有水
             if (IND_DEV_VOLT[d.ty]) return IND_DEV_VOLT[d.ty](d);
             return 0;
@@ -1984,7 +1993,7 @@
         }
         function indBurnBank(d) {
             if (!ind || ind.over || !indDev(d.id)) return;
-            let n = d.bats || 0, r = indBurnDrop(d, { battery_burnt: n });
+            let n = (d.bats || 0) + (d.grp || []).reduce(function (t, m) { return t + (m.bats || 0); }, 0), r = indBurnDrop(d, { battery_burnt: n });   // 一组一起烧（任务 68）
             if (!ind.sleeping) indFlash('电池组烧坏了，' + n + ' 节电池报废' + (r.fire ? '，旁边起火了' : ''));
         }
         function indElecTick(dt) {
@@ -2007,7 +2016,7 @@
                 if (d.ty === 'press' && !indPressBusy(d)) return;
                 if (IND_DEV_BUSY[d.ty] && !IND_DEV_BUSY[d.ty](d)) return;
                 let up = pwUpstream(live), banks = up.filter(function (s) { return s.ty === 'bank'; });   // 变压器后面的用电器，耗电算回变压器输入端的电池组
-                if (banks.length === up.length) banks.forEach(function (s) { s.u = Math.max(0, s.u - D.draw * dt * pwAccelMultDev(d) / banks.length); });
+                if (banks.length === up.length) banks.forEach(function (s) { stkDrain(s, D.draw * stkN(d) * dt * pwAccelMultDev(d) / banks.length); });   // 叠了 n 台耗电 ×n；电池组叠成一组按电量分担（任务 68）
                 d.pw = true;
             });
             B.devs.forEach(function (d) { if (d.ty === 'bank' && !d.lowNow) { d.low = 0; d.lowWarned = false; } else if (d.ty === 'bank' && d.low >= IND_BURN_T) booms.push({ endBank: d }); });
@@ -2049,6 +2058,7 @@
                 if (Math.hypot(d.x - x, d.z - z) > R) return;
                 if (d.st) Object.keys(d.st).forEach(function (k) { add(k, d.st[k]); });
                 if (d.ty === 'bank') indBankCells(d).forEach(function (c) { add(c[0], c[1]); });
+                if (d.ty === 'bank' && d.grp) d.grp.forEach(function (m) { indBankCells(m).forEach(function (c) { add(c[0], c[1]); }); });   // 叠成一组的：每个电池组各自掉电池（任务 68）
                 if (d.rods) d.rods.forEach(function (r) { add(nkRodKeyOf(r), 1); });
                 if (d.cy) add(d.cy, 1);
                 if (d.ty === 'fridge' && d.items) Object.keys(d.items).forEach(function (k) { add(k, d.items[k]); });
@@ -2253,6 +2263,7 @@
                 B.tiles = B.tiles.filter(function (t) { return t !== f.o; }); indBagAdd('dirt', 1); ind.tileDirty = true; indSave(); indFlash('收回了一格农田');
                 return true;
             }
+            if ((ty === 'stove' || IND_COOK[ty]) && stkN(ty === 'stove' ? B.stove : f.o) > 1) { indFlash('叠在一起的，左键点它选一台收'); return false; }   // 任务 68
             if ((ty === 'stove' || IND_COOK[ty]) && indFurnHotWhy(ty, f.o)) { indFlash('还烫着：' + indFurnHotWhy(ty, f.o)); return false; }
             if (ty === 'chest' || ty === 'stove' || IND_COOK[ty]) {
                 id = ++B.cid; key = 'inst:' + id;
@@ -2379,6 +2390,7 @@
             Object.keys(want).forEach(function (key) { if (!ind.furnMesh[key]) ind.furnMesh[key] = { x: want[key].x, z: want[key].z, sig: want[key].sig, m: indFurnBuild(want[key]) }; });
         }
         function indPickDev(d) {
+            if (stkN(d) > 1 || (d.grp && d.grp.length)) { indFlash('叠在一起的，左键点它选一台收'); return false; }   // 任务 68
             let k = 'dev_' + d.ty; if (indBagAdd(k, 1) <= 0) { indFlash('背包满了'); return false; }
             let tot = { box: 0, bag: 0, ground: 0 }, put = function (key, n) { let r = indBoxAdd(key, n); tot.box += r.box; tot.bag += r.bag; tot.ground += r.ground; };
             if (d.ty === 'bank') indBankCells(d).forEach(function (c) { put(c[0], c[1]); })   ;   // 电池先还背包，放不下的走仓库箱／地上
@@ -2442,7 +2454,7 @@
             let d = indDev(id); if (!d || d.ty !== 'bank') return;
             ind.panelEl = id;
             indPanelShow('bank', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">电池组</div>' +
-                '<div style="line-height:1.7;">' + d.bats + ' 节　' + indBankV(d).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d) + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节' + (ind.bag.battery_ni ? '，镍电池 ' + ind.bag.battery_ni + ' 节' : '') + (ind.bag.battery_li ? '，锂电池 ' + ind.bag.battery_li + ' 节' : '') + (d.li ? '　（锂电池组，只能装锂电池，最多 128 节）' : '') + '</div>' +
+                '<div style="line-height:1.7;">' + d.bats + ' 节　' + indBankV(d).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d) + (d.grp ? '　<b>一组 ' + (d.grp.length + 1) + ' 个，总电量 ' + Math.ceil(stkBankU(d)) + ' / ' + stkBankMax(d) + '</b>（左键看每一个）' : '') + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节' + (ind.bag.battery_ni ? '，镍电池 ' + ind.bag.battery_ni + ' 节' : '') + (ind.bag.battery_li ? '，锂电池 ' + ind.bag.battery_li + ' 节' : '') + (d.li ? '　（锂电池组，只能装锂电池，最多 128 节）' : '') + '</div>' +
                 '<div style="margin-top:8px;"><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',1)">放 1</button><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',999)">放全部</button>' +
                 '<input id="ind-bank-n" type="number" min="1" value="5" style="width:64px;padding:6px;font-size:15px;margin:3px;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indBankPutBtn(' + id + ',+document.getElementById(\'ind-bank-n\').value)">放这么多</button></div>' +
                 '<div style="margin-top:6px;font-size:12px;color:#888;">先替换用完的电池，满电了才加节；加节会超过接着的用电器额定就不装</div>' +
@@ -2486,11 +2498,11 @@
         function indDevInfo(d) {
             let D = IND_DEVS[d.ty];
             if (IND_DEV_INFO[d.ty]) return IND_DEV_INFO[d.ty](d);
-            if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + indBankV(d).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d);
+            if (d.ty === 'bank') return D.name + ' ' + d.bats + ' 节 ' + indBankV(d).toFixed(1) + ' V　电量 ' + Math.ceil(stkBankU(d)) + ' / ' + stkBankMax(d) + (d.grp ? '（一组 ' + (d.grp.length + 1) + ' 个）' : '');
             if (d.ty === 'gen') return rlGenInfo(d);
             let ss = indDevSrcs(d);
             let wired = ss.length ? '　接着 ' + ss.length + ' 个电源：' + ss.map(function (s) { let v = indSrcVolt(s); return IND_DEVS[s.ty].name + ' ' + (s.ty === 'bank' ? v.toFixed(1) : String(Math.round(v * 10) / 10)) + ' V'; }).join('、') + '，工作电压 ' + (Math.round(indDevVolt(d) * 10) / 10) + ' V' : '　没接电';
-            return D.name + '（额定 ' + D.rated + ' V）' + wired + (d.on ? (d.pw ? '　工作中' : '　没在工作') : '　关着');
+            return D.name + (stkN(d) > 1 ? ' ×' + stkN(d) : '') + '（额定 ' + D.rated + ' V）' + wired + (d.on ? (d.pw ? '　工作中' : '　没在工作') : '　关着');
         }
         // 画设备（一组画完，有电的亮）和电线（一组线段）
         function indSyncDevs() {
@@ -2866,9 +2878,11 @@
         }
         function indCookById(id) { return indCooks().filter(function (c) { return c.id === id; })[0] || null; }
         function indCookCur() { return indCookById(ind.cookId || 'stove') || indCookById('stove'); }
-        function indCookK(ty) {
-            let D = IND_COOK[ty];
-            return { rate: D.rate, burn: D.burn, only: D.only || null, top: D.top || 0, batch: ty === 'stove' || ty === 'stone' ? { food: ind.base.pot ? IND_BATCH_POT : IND_BATCH, smelt: 1, bulk: 1, chem: 1 } : D.batch };
+        // C：炉子的状态。叠了 n 台（任务 68）：一炉的份数 ×n、燃料 ×n，升降温速度不变
+        function indCookK(ty, C) {
+            let D = IND_COOK[ty], n = stkN(C), b0 = ty === 'stove' || ty === 'stone' ? { food: ind.base.pot ? IND_BATCH_POT : IND_BATCH, smelt: 1, bulk: 1, chem: 1 } : D.batch, b = {};
+            Object.keys(b0).forEach(function (k) { b[k] = b0[k] * n; });
+            return { rate: D.rate, burn: D.burn * n, only: D.only || null, top: D.top || 0, batch: b, n: n };
         }
         function indFireDef(ty, lv) { let F = IND_FIRE[lv]; return ty === 'furnace' && lv === 3 ? { name: F.name, t: IND_COOK.furnace.top, burn: F.burn } : F; }
         // 找第一个原料够、这个炉子做得了的配方
@@ -2902,7 +2916,7 @@
             }
             return first;
         }
-        function indStoveFind(items) { return indCookFind(items, indCookK('stove')); }
+        function indStoveFind(items) { return indCookFind(items, indCookK('stove', ind.base.stove)); }
         // 灶台一炉多份：做吃的（和烧水、煮盐）原料够几份就同时做几份，最多 4 份（装了黄铜大锅 8 份），时间和 1 份一样，燃料不多烧；
         // 冶炼、木炭、玻璃、砖还是一次 1 份。烧焦就整炉焦（每份出 1 焦炭，桶照样还）
         function indBatchCap(K, r) { return (K.batch[r.cls || 'food']) || 0; }
@@ -2949,7 +2963,7 @@
         }
         function indCookTick(c, dt) {
             indSpoutTick(c, dt); ckTick(c, dt); rlCookWaterTick(c);   // 接了水管：空桶自动装生水（任务 58）
-            let S = c.C, K = indCookK(c.ty), F = fmFireEff(c, dt);   // 鼓风要有人拉风箱（任务 44），扇子扇到 1400
+            let S = c.C, K = indCookK(c.ty, c.C), F = fmFireEff(c, dt);   // 鼓风要有人拉风箱（任务 44），扇子扇到 1400
             if (S.fire > 0) {
                 let burn = F.burn * K.burn * dt;
                 S.fuel -= burn;
@@ -3028,7 +3042,7 @@
         }
         function indStoveFill() {
             if (!ind) return;
-            let c = indCookCur(), S = c.C, K = indCookK(c.ty), ri = S.cook ? S.cook.i : indCookFind(ckPool(S), K, undefined, S.items), pool = ckPool(S);
+            let c = indCookCur(), S = c.C, K = indCookK(c.ty, S), ri = S.cook ? S.cook.i : indCookFind(ckPool(S), K, undefined, S.items), pool = ckPool(S);
             if (ri < 0 || (!S.cook && Object.keys(S.items).length === 0)) {
                 ri = -1;
                 for (let i = 0; i < IND_RECIPES.length && ri < 0; i++) {
@@ -3328,10 +3342,18 @@
         }
         function indBoxPutAll() { indBoxPut(false); }
         function indBoxPutSame() { indBoxPut(true); }
+        // 升温估计（任务 71）：火候定的目标温度（旁边有电炉就是电炉的），按这个炉子现在的升温速度（每秒几度）估还要几秒；到了、没点火就不写
+        function indHeatEta(c) {
+            let S = c.C; if (!(S.fire > 0)) return null;
+            let X = Math.max(indFireDef(c.ty, S.fire).t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20);
+            if (S.temp >= X - 1) return null;
+            return { t: X, s: Math.max(1, Math.round((X - S.temp) / IND_COOK[c.ty].rate)) };
+        }
         function indStoveHtml() {
             let c = indCookCur(), S = c.C, D = IND_COOK[c.ty], F = indFireDef(c.ty, S.fire);
-            let st = '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + '<br>';
+            let sn = stkN(S), st = (sn > 1 ? '<b>×' + sn + '（' + sn + ' 台叠在一起）</b><br>' : '') + '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + (sn > 1 ? '　每秒烧 ×' + sn : '') + '<br>';
             if (S.fire === 4 && !S.blow && !fmBlowerOn(c)) st += '<br><span style="color:#888">鼓风要有人拉风箱，或者装电动鼓风机　实际：大火</span>';
+            { let eta = indHeatEta(c); if (eta) st += '<br><span style="color:#888">现在 ' + Math.round(S.temp) + '°C，升到 ' + eta.t + '°C 约要 ' + eta.s + ' 秒</span>'; }   // 升温估计（任务 71）
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; st += '正在做：' + indOutTxt(r, S.cook.n || 1) + (S.cook.n > 1 ? '（' + S.cook.n + ' 份）' : '') + ' ' + Math.floor(S.cook.t / r.time * 100) + '%'; }
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做' + (D.only ? '（只做冶炼）' : '') + '</span>';
             if (!S.cook && indHard() && rlNeedReducer(S)) st += '<br><b style="color:#c62828">炼矿要加木炭、煤或焦炭（每份矿 1 份）</b>';
@@ -3343,7 +3365,7 @@
             if (indHard() && !S.funnel) spt += '<br><span style="color:#888">石油要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒</span>';
             if (S.funnel) spt += '<br>进料漏斗：油 ' + Math.round(S.funnel.oil) + ' / ' + CK.funnelCap + '（每秒流 ' + CK.funnelRate + '）';
             if (S.cook && S.cook.full) st += '<br><b style="color:#c62828">出料槽满了</b>';
-            { let pool = ckPool(S), K0 = indCookK(c.ty), ri = S.cook ? S.cook.i : indCookFind(pool, K0, undefined, S.items);   // 这次出多少（任务 36）：现在放进去的东西能做几份，连空瓶空桶一起写
+            { let pool = ckPool(S), K0 = indCookK(c.ty, S), ri = S.cook ? S.cook.i : indCookFind(pool, K0, undefined, S.items);   // 这次出多少（任务 36）：现在放进去的东西能做几份，连空瓶空桶一起写
               if (ri >= 0) { let r0 = IND_RECIPES[ri], n0 = S.cook ? (S.cook.n || 1) : indBatchN(r0, pool, K0); st += '<br>这次出：<b>' + indOutAll(r0, n0) + '</b>' + (n0 > 1 ? '（' + n0 + ' 份）' : '') + (!S.cook && S.temp < r0.minT ? '<br><span style="color:#c62828">温度不够：要 ' + r0.minT + '°C，现在 ' + Math.round(S.temp) + '°C' + (r0.minT > 1200 ? '（要鼓风或者电炉）' : '') + '</span>' : ''); } }
             let put = Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k); }).map(function (k) {
                 let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button>' + indNumBox('stove', 0, k, '放') + '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',' + ind.bag[k] + ')">全放</button>';
@@ -3484,6 +3506,7 @@
                 st += '<br>远征　' + bm + '　最近的撤离点 ' + Math.round(near) + ' 米' + (R.exitT > 0 ? '　<b style="color:#2e7d32">撤离中 ' + Math.ceil(IND_T.extract - R.exitT) + '</b>' : '');
             }
             if (R.cave) st += '<br>' + cvHint();   // 矿洞（任务 66）
+            { let mh = mbHud(); if (mh) st += '<br>' + mh; }   // 刀盾耐久（任务 70）
             if (R.peel) st += '<br>' + wdPeelTxt();
             if (R.shear) st += '<br>剪羊毛 ' + Math.min(99, Math.floor(R.shear.t / IND_SHEAR_T * 100)) + '%' + (indSel() === 'shears' ? '' : '　<b style="color:#c62828">停着：拿上剪刀</b>');
             let SL = indSlots(), sel = indSel(), bag = '';

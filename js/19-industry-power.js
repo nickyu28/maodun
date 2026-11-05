@@ -184,6 +184,8 @@
             if (typeof clFixBase === 'function') clFixBase(b);
             if (typeof achFixBase === 'function') achFixBase(b);
             if (typeof cvFixBase === 'function') cvFixBase(b);
+            if (typeof stkFixBase === 'function') stkFixBase(b);
+            if (typeof mbFixBase === 'function') mbFixBase(b);
             let f = b.fx; if (!f || typeof f !== 'object') { delete b.fx; return; }
             b.fx = { speed: indNum(f.speed, 0, 0, PX.speedT), weak: indNum(f.weak, 0, 0, PX.weakT), heal: indNum(f.heal, 0, 0, PX.healT), healLeft: indNum(f.healLeft, 0, 0, PX.healAmt) };
         }
