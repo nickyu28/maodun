@@ -8404,13 +8404,13 @@ async function enterExit(tab, key) {
                 if (!(await until(T, `!document.getElementById('ind-undo')`, 8000)) || Date.now() - t0 < 4000) bad.push('撤销条该 5 秒后才消失 ' + (Date.now() - t0));
                 if (!(await T.eval(`indUndo() === false && ind.bag.coal === undefined`))) bad.push('过了 5 秒撤销不该还原');
                 // Ctrl+Q 销毁手上那格
-                await T.eval(`indPanelClose(); ind.bag = { wood: 5, b_water: 1 }; indSelect('b_water'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', ctrlKey: true })); true;`);
-                if (!(await T.eval(`ind.bag.b_water === undefined && ind.bag.wood === 5 && !!document.getElementById('ind-undo')`))) bad.push('Ctrl+Q 该销毁手上那格（装水的桶也能销毁） ' + await T.eval(`JSON.stringify(ind.bag)`));
+                await T.eval(`indPanelClose(); ind.bag = { wood: 5, sulfur: 1 }; indSelect('sulfur'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', ctrlKey: true })); true;`);
+                if (!(await T.eval(`ind.bag.sulfur === undefined && ind.bag.wood === 5 && !!document.getElementById('ind-undo')`))) bad.push('Ctrl+Q 该销毁手上那格（装水的桶也能销毁） ' + await T.eval(`JSON.stringify(ind.bag)`));
                 // 背包满了撤销放不回去
-                await T.eval(`{ let b = {}; Object.keys(IND_ITEMS).filter(function (k) { return k !== 'b_water'; }).slice(0, 24).forEach(function (k) { b[k] = 1; }); ind.bag = b; } true;`);
+                await T.eval(`{ let b = {}; Object.keys(IND_ITEMS).filter(function (k) { return k !== 'sulfur'; }).slice(0, 24).forEach(function (k) { b[k] = 1; }); ind.bag = b; } true;`);
                 if (await T.eval(`indSlots().length === 24`)) {
                     await T.eval(`window.__fl = []; indUndo(); true;`);
-                    if (!(await T.eval(`ind.bag.b_water === undefined && __fl.some(function (t) { return /放不下了/.test(t); })`))) bad.push('背包满时撤销该提示放不下了');
+                    if (!(await T.eval(`ind.bag.sulfur === undefined && __fl.some(function (t) { return /放不下了/.test(t); })`))) bad.push('背包满时撤销该提示放不下了');
                 }
                 await T.eval(`ind.undo = null; indUndoBar(); true;`);
                 // ── 箱子里销毁、撤销 ──
@@ -10017,6 +10017,74 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND77 炼钢：电炉通电炼钢（小熔炉、大窑）、电炉配方不要钢、手拉风箱（每秒 3 体力）分几次也炼得出、进度掉温不清零、缺条件有提示', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND78')) {
+            // IND78 任务 61（Code1 真玩 7 条）：①仓库箱同种东西占好几行、每行的数字框各管各的 ②背包面板点格子换到手上，占好几格的东西别被挤走 ③带放射性的东西睡觉被拒（穿铅围裙放行）
+            // ④反应堆冷却来源写实际的、水塔快空和变空气冷却各提醒一次 ⑤小问题合并 ⑥老的几条（大窑镍温度不够、汽轮发电机看距离、超 330°C 标红、手摇吃体力） ⑦不认识的物品 key 不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const dev = (id, ty, x, z, o) => JSON.stringify(Object.assign({ id: id, ty: ty, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}));
+                // ① 同一样东西好几行：每行的框各管各的
+                const b1 = await J(`(function(){ ind.base.rule = 'hard'; ind.bag = {}; ind.base.chests = [{ id: 1, x: 12, z: 12, big: true, items: { stone: 500 } }]; ind.boxId = 1; indPanelBox(1);
+                    let ids = Array.prototype.map.call(document.querySelectorAll('#ind-panel input.ind-num'), function (e) { return e.id; }).filter(function (i) { return /stone/.test(i); }); let uniq = ids.filter(function (v, i) { return ids.indexOf(v) === i; }).length;
+                    document.getElementById(ids[2]).value = '30'; let row = ids[2].split('-')[3]; indNumGo('box', +row, 'stone'); return { n: ids.length, uniq: uniq, got: ind.bag.stone || 0, left: ind.base.chests[0].items.stone }; })()`);
+                if (!(b1.n === 6 && b1.uniq === 6 && b1.got === 30 && b1.left === 470)) bad.push('仓库箱第 3 行填 30 拿 30（每行框的 id 不同） ' + JSON.stringify(b1));
+                // ② 背包点格子换到手上
+                const b2 = await J(`(function(){ ind.bag = { wood: 1, stone: 203, tomato: 1, wheat: 5 }; ind.selIdx = 2; indBagToHand(4); let ks = Object.keys(ind.bag), sl = indSlots(), stoneIdx = []; sl.forEach(function (x, i) { if (x.k === 'stone') stoneIdx.push(i); });
+                    return { ks: ks, stone: ind.bag.stone, sel: indSel(), stoneIdx: stoneIdx }; })()`);
+                if (!(b2.ks.join() === 'wood,tomato,stone,wheat' && b2.stone === 203 && b2.sel === 'tomato' && b2.stoneIdx.every(function (i) { return i < 10; }))) bad.push('点番茄只换那一格：石头不被挤出快捷栏、别的东西先后不变 ' + JSON.stringify(b2));
+                // ③ 放射性的东西睡觉
+                const b3 = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let B = ind.base; B.rule = 'hard'; B.clock = Math.floor(B.clock / IND_DAY) * IND_DAY + IND_DAY - 200; B.surv.energy = 40; B.wear = {}; ind.bag = { rod_spent: 1 };
+                    let a = indSleep(), m = fl[fl.length - 1]; B.wear = { body: 'lead_apron' }; let b = indSleep(); ind.bag = {}; B.wear = {}; B.clock = Math.floor(B.clock / IND_DAY) * IND_DAY + IND_DAY - 200; B.surv.energy = 40; let c = indSleep(); blazeFlash = bf; return [a, m, b, c]; })()`);
+                if (!(b3[0] === false && /放射性/.test(b3[1]) && b3[3] === true)) bad.push('带放射性的东西睡觉被拒，不带可以睡 ' + JSON.stringify(b3));
+                // ④ 反应堆冷却来源和提醒
+                const b4 = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let B = ind.base; B.rule = 'hard'; B.off.pool = true; B.rad = []; B.wires = [];
+                    B.devs = [${dev(1, 'tower', 5, 5, { wu: 2.5 })}, { id: 2, ty: 'reactor', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [{ i: 4, b: 0 }], ctl: 1, T: 100, melt: 0, wb: 5 }]; B.pipes = [[1, 2, 2]];
+                    let d = B.devs[1]; IND_DEV_TICK.reactor(d, 0.1); let n1 = fl.length; IND_DEV_TICK.reactor(d, 0.1); let n2 = fl.length; let src = nkCoolSrc(d);
+                    d.wb = 0; IND_DEV_TICK.reactor(d, 0.1); let n3 = fl.length; IND_DEV_TICK.reactor(d, 0.1); let n4 = fl.length; let src2 = nkCoolSrc(d);
+                    d.wb = 5; indPanelNk(2); let txt = document.getElementById('ind-panel') ? document.getElementById('ind-panel').innerText : ''; blazeFlash = bf; return { fl: fl, n: [n1, n2, n3, n4], src: src, src2: src2, panel: /冷却水：管道送来的水/.test(txt) }; })()`);
+                if (!(b4.n[0] === 1 && /水塔只剩 2 桶/.test(b4.fl[0]) && b4.n[1] === 1)) bad.push('水塔剩 ≤ 3 桶提醒一次 ' + JSON.stringify(b4));
+                if (!(b4.n[2] === 2 && /没水冷了/.test(b4.fl[1]) && b4.n[3] === 2 && b4.src2 === '')) bad.push('变空气冷却再提醒一次 ' + JSON.stringify(b4));
+                if (!(/管道/.test(b4.src) && b4.panel)) bad.push('面板写实际的冷却来源 ' + JSON.stringify(b4));
+                // ⑤ 小问题
+                const b5 = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let B = ind.base; indPanelClose(); B.devs = []; ind.bag = {}; indBagAdd('dev_tower', 1); indBagAdd('dev_reactor', 1); indBagAdd('dev_lamp', 1);
+                    indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_tower'); indUse(); let a = fl[fl.length - 1]; indSelect('dev_lamp'); indTeleport(-22, 10); indLookAt(-22, 5); indUse(); let b = fl[fl.length - 1];
+                    B.devs = [{ id: 7, ty: 'solar', x: 0, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 8, ty: 'gen', x: 3, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 0 }, { id: 9, ty: 'tower', x: 6, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, wu: 0 }]; B.pipes = [[9, 8, 2]];
+                    let solar = indDevInfo(B.devs[0]), gen = indDevInfo(B.devs[1]);
+                    ind.bag = { dev_crank: 1, dev_lamp: 1, battery: 2, rod_spent: 1, stone: 3 }; B.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'kiln', x: 20, z: 12 })]; ind.cookId = 5; let html = indStoveHtml(); let putBtn = function (k) { return html.indexOf("indStovePut('" + k + "'") >= 0; };
+                    indStovePut('dev_crank', 1); let into = B.cookers[0].items.dev_crank || 0; blazeFlash = bf;
+                    return { a: a, b: b, solar: solar, gen: gen, crankBtn: putBtn('dev_crank'), lampBtn: putBtn('dev_lamp'), batBtn: putBtn('battery'), rodBtn: putBtn('rod_spent'), stoneBtn: putBtn('stone'), into: into }; })()`);
+                if (/接上电/.test(b5.a)) bad.push('放水塔别提示接电 ' + b5.a);
+                if (!/接上电/.test(b5.b)) bad.push('放电灯还是提示接电 ' + b5.b);
+                if (!/13:30 最亮/.test(b5.solar) || /正午/.test(b5.solar)) bad.push('太阳能板写 13:30 最亮 ' + b5.solar);
+                if (!/水塔没水了/.test(b5.gen) || /生水左键/.test(b5.gen)) bad.push('蒸汽发电机接着水塔空了写水塔没水了 ' + b5.gen);
+                if (b5.crankBtn || b5.lampBtn || b5.batBtn || b5.rodBtn || !b5.stoneBtn || b5.into) bad.push('炉子面板：设备、电池、燃料棒没有放按钮、手摇发电机放不进窑；石头还有 ' + JSON.stringify(b5));
+                // 水塔头上不写"左键：开关"
+                const hint = await T.eval(`(function(){ let D = IND_DEVS.tower; return (!D.src && !D.nowire && !D.always) ? '左键：开关' : ''; })()`);
+                if (hint) bad.push('水塔头上别写左键：开关');
+                // ⑥ 大窑炼镍温度不够；汽轮发电机看距离；330°C 标红；手摇吃体力
+                const b6 = await J(`(function(){ let B = ind.base; B.rule = 'hard'; B.devs = []; B.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'kiln', x: 20, z: 12, items: { ore_ni: 1, charcoal: 1 }, fuel: 900, fire: 3, temp: 1200, spout: [] })]; ind.cookId = 5; let h = indStoveHtml(); window.__h = '';
+                    B.devs = [{ id: 2, ty: 'reactor', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, rods: [], ctl: 1, T: 300, melt: 0 }]; indPanelNk(2); let far = document.getElementById('ind-panel').innerText;
+                    B.devs.push({ id: 3, ty: 'turbine', x: -18, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }); indPanelNk(2); let near = document.getElementById('ind-panel').innerText;
+                    B.devs[0].T = 360; indPanelNk(2); let hot = document.getElementById('ind-panel').innerText;
+                    indPanelClose(); B.devs = [{ id: 1, ty: 'crank', x: 30, z: 20, bats: 0, u: 0, on: true, ft: 20, st: {}, cr: 0 }]; ind.bag = {}; ind.stam = 100; indTeleport(28.5, 20); indLookAt(30, 20); indRightDown(); indAdvance(1); let s1 = ind.stam; ind.stam = 0; indAdvance(1); let pw0 = B.devs[0].cr > 0; indRightUp();
+                    return { nickel: /温度不够：要 1455°C，现在 \\d+°C/.test(h), far: /但 3 米内没有汽轮发电机/.test(far), near: /汽轮发电机有电/.test(near), hot: /快到 400°C/.test(hot), col: nkTempCol(335) === '#c62828' && nkTempCol(300) === '#f9a825', s1: s1, pw0: pw0, h: window.__h }; })()`);
+                if (!b6.nickel) bad.push('大窑没鼓风炼镍要写温度不够 ' + JSON.stringify(b6));
+                if (!(b6.far && b6.near)) bad.push('反应堆面板汽轮发电机有电要看距离 ' + JSON.stringify(b6));
+                if (!(b6.hot && b6.col)) bad.push('超过 330°C 标红、350 以上写快到 400 ' + JSON.stringify(b6));
+                if (!(b6.s1 < 100 && b6.pw0 === false)) bad.push('手摇发电机吃体力，没体力摇不动 ' + JSON.stringify(b6));
+                // ⑦ 不认识的物品 key 不报错
+                const b7 = await J(`(function(){ try { ind.bag = { mystery_item_xyz: 3, stone: 2 }; let B = ind.base; B.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'kiln', x: 20, z: 12, items: { mystery_item_xyz: 1 } })]; ind.cookId = 5; ind.hudSig = ''; indHudUpdate(); indStoveHtml(); indPanelBag(); indPanelClose(); return 'ok'; } catch (e) { return String(e); } })()`);
+                if (b7 !== 'ok') bad.push('不认识的物品 key 要跳过不报错 ' + b7);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND78 任务 61：箱子每行框各管各、背包换位只换一格、放射性不让睡、反应堆冷却来源和提醒、一批小问题、老的几条、不认识的物品不报错', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

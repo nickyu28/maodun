@@ -117,9 +117,25 @@
             d.ctl = indNum(d.ctl, 1, 0, 1); d.T = indNum(d.T, NK.amb, NK.amb, 2000); d.melt = indNum(d.melt, 0, 0, 100);
         };
         function nkReactorHeat(d) { let n = 0; d.rods.forEach(function (r) { if (!r.spent) n++; }); return n * (1 - d.ctl) * NK.rodHeat; }
-        function nkReactorCool(d) {
-            let P = IND_BASE_ST.pool, water = (!ind.base.off.pool && Math.hypot(P.x - d.x, P.z - d.z) <= NK.waterR + P.r) || ind.base.devs.some(function (p) { return p.ty === 'pump' && p.pw && Math.hypot(p.x - d.x, p.z - d.z) <= NK.waterR; }) || rlReactorWet(d);   // 连着有水的管道也算水冷（任务 58）
-            return water;
+        // 冷却水从哪来（任务 61）：水池 6 米内、开着的水泵 6 米内、管道送来的水（水塔／水泵）；都没有就是空气冷却
+        function nkCoolSrc(d) {
+            let P = IND_BASE_ST.pool;
+            if (!ind.base.off.pool && Math.hypot(P.x - d.x, P.z - d.z) <= NK.waterR + P.r) return '水池';
+            if (rlReactorWet(d)) return '管道送来的水（水塔）';
+            if (ind.base.devs.some(function (p) { return p.ty === 'pump' && p.pw && Math.hypot(p.x - d.x, p.z - d.z) <= NK.waterR; })) return '水泵';
+            return '';
+        }
+        function nkReactorCool(d) { return !!nkCoolSrc(d); }
+        // 水塔快空、反应堆变空气冷却时各提醒一次
+        function nkCoolWarn(d) {
+            let wet = nkReactorCool(d);
+            if (d.wetPrev === undefined) d.wetPrev = wet;
+            if (d.wetPrev && !wet && !ind.sleeping) indFlash('反应堆没水冷了，现在只靠空气，温度会一路涨');
+            d.wetPrev = wet;
+            rlPipesOf(d.id).filter(function (p) { return p[1] === d.id; }).forEach(function (p) {
+                let n = rlNode(p[0]), t = n && n.d; if (!t || t.ty !== 'tower') return;
+                if ((t.wu || 0) <= 3) { if (!t.lowWarned) { t.lowWarned = true; if (!ind.sleeping) indFlash('水塔只剩 ' + Math.max(0, Math.floor(t.wu || 0)) + ' 桶了，反应堆的冷却水快没了'); } } else t.lowWarned = false;
+            });
         }
         // 冷却跟温度成正比（任务 27）：每秒带走 k × (T − 环境温度)，水冷 k = 1.33、空气 k = 0.5，所以温度会自己稳在 20 + 发热 ÷ k
         function nkCoolK(d) { return nkReactorCool(d) ? NK.coolWaterK : NK.coolAirK; }
@@ -130,6 +146,7 @@
             let heat = nkReactorHeat(d), cool = nkCoolNow(d), net = Math.max(-NK.maxRate, Math.min(NK.maxRate, (heat - cool) * NK.rate));
             d.T = Math.max(NK.amb, d.T + net * dt);
             rlReactorUse(d, dt);   // 管道送来的冷却水，热着的时候慢慢用掉
+            nkCoolWarn(d);
             d.rods.forEach(function (r) { if (!r.spent) { r.b += (1 - d.ctl) * dt / (NK.rodDays * IND_DAY); if (r.b >= 1) { r.spent = true; delete r.i; delete r.b; if (ind.panel === 'reactor') ind.panelDirty = true; } } });
             d.melt = d.T > NK.meltT ? d.melt + dt : 0;
             if (d.melt >= NK.meltS) { nkMeltdown(d); return; }
@@ -142,7 +159,7 @@
             indBoom(x, z, 10, '反应堆熔毁'); indFlash('反应堆熔毁了');
             if (ind) ind.radDirty = true;
         }
-        function nkTempCol(T) { return T < 300 ? '#2e7d32' : T <= 350 ? '#f9a825' : '#c62828'; }
+        function nkTempCol(T) { return T < 280 ? '#2e7d32' : T <= 330 ? '#f9a825' : '#c62828'; }   // 超过 330°C 就标红，离 400°C 的红线还有一段
         function nkDevItems(d) { return Object.keys(d.st).map(function (k) { return indName(k) + '×' + d.st[k]; }).join('、') || '空'; }
         function nkPutRows(d, filter) {
             return Object.keys(ind.bag).filter(filter).map(function (k) {
@@ -169,7 +186,7 @@
             let put = Object.keys(ind.bag).filter(function (k) { return nkRod(k); }).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="nkRodIn(' + d.id + ',\'' + k + '\')">放 1 根</button>'); }).join('');
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">反应堆</div>' +
                 '<div style="line-height:1.7;">温度 <b style="color:' + nkTempCol(d.T) + '">' + Math.round(d.T) + '°C</b>　<span style="display:inline-block;width:120px;height:10px;background:#ddd;vertical-align:middle;border-radius:5px;overflow:hidden;"><span style="display:block;height:100%;width:' + Math.min(100, d.T / 5) + '%;background:' + nkTempCol(d.T) + ';"></span></span><br>' +
-                '功率 <b>' + Math.round(heat) + '</b>　冷却 <b>' + Math.round(cool) + '</b>（' + (water ? '6 米内有水' : '没有水，只靠空气') + '）　稳定在约 <b>' + Math.round(nkSteadyT(d)) + '°C</b>' + (d.T >= NK.turbineT ? '　≥ ' + NK.turbineT + '°C，汽轮发电机有电' : '') + (d.melt > 0 ? '<br><b style="color:#c62828">温度超过 ' + NK.meltT + '°C 已经 ' + Math.floor(d.melt) + ' 秒</b>' : '') + '</div>' +
+                '功率 <b>' + Math.round(heat) + '</b>　冷却 <b>' + Math.round(cool) + '</b>（' + (water ? '冷却水：' + nkCoolSrc(d) : '没有水，只靠空气') + '）　稳定在约 <b>' + Math.round(nkSteadyT(d)) + '°C</b>' + (d.T >= NK.turbineT ? '　≥ ' + NK.turbineT + '°C，' + (ind.base.devs.some(function (t) { return t.ty === 'turbine' && Math.hypot(t.x - d.x, t.z - d.z) <= NK.turbineR + 1.5; }) ? '汽轮发电机有电' : '但 ' + NK.turbineR + ' 米内没有汽轮发电机') : '') + (d.T >= 350 && d.melt <= 0 ? '<br><b style="color:#c62828">快到 ' + NK.meltT + '°C 了（超过 ' + NK.meltT + '°C 持续 ' + NK.meltS + ' 秒就熔毁），插控制棒或者加水冷</b>' : '') + (d.melt > 0 ? '<br><b style="color:#c62828">温度超过 ' + NK.meltT + '°C 已经 ' + Math.floor(d.melt) + ' 秒</b>' : '') + '</div>' +
                 '<div style="margin-top:6px;">控制棒插入 <b>' + Math.round(d.ctl * 100) + '%</b>（100% 停堆）　<button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',-0.1)">拔 10%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',-0.01)">拔 1%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',0.01)">插 1%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',0.1)">插 10%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',1)">全插</button></div>' +
                 '<div style="margin-top:6px;font-weight:bold;">燃料棒（最多 4 根）</div>' + rods +
                 '<div style="margin-top:6px;font-weight:bold;">身上的燃料棒</div>' + (put || '<div style="color:#999;padding:6px 0;">身上没有燃料棒</div>') +

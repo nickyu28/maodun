@@ -51,7 +51,7 @@
             if (d.wt <= 0 && !ind.sleeping) indFlash('蒸汽发电机没水了');
         };
         function rlGenInfo(d) {
-            let D = IND_DEVS.gen, w = d.wt > 0 ? '水箱剩 ' + Math.ceil(d.wt) + ' 秒' : '水箱空了，拿一桶生水左键装点水';
+            let D = IND_DEVS.gen, w = d.wt > 0 ? '水箱剩 ' + Math.ceil(d.wt) + ' 秒' : rlPipesOf(d.id).some(function (p) { return p[1] === d.id; }) ? '水塔没水了' : '水箱空了，拿一桶生水左键装点水';
             if (rlGenOn(d)) return D.name + ' 发电中 12 V　' + w;
             return D.name + ' 没在发电　' + w + (rlGenHot(d) ? '' : '　3 米内要有点着的炉子（中火以上）');
         }

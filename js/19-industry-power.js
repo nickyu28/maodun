@@ -1,7 +1,7 @@
 // 猫盾工业：电磁线圈、手摇发电机（任务 32）。放在 19-industry-nuke.js 后面。
 // 电磁线圈（工作台）：磁石 2 + 铜线 10 + 铅 1。用途：手摇发电机、变压器（任务 30）、以后的时间加速器。
 // 手摇发电机：不用燃料，站在旁边按住右键摇，摇的时候是 6 V 电源（能让电解槽、水泵、压缩机、粉碎机跑；离心机、压力机、电炉不行），松手 0.3 秒后没电。
-// 摇不花体力（没必要），要站在 3 米内、准星对着它。短按右键还是收起。
+// 摇的时候每秒吃 1.5 体力（没体力就摇不动），要站在 3 米内、准星对着它。短按右键还是收起。
         Object.assign(IND_ITEMS_RAW, {
             coil: { name: '电磁线圈', col: 0xb87333, use: '做手摇发电机、变压器（以后还有时间加速器）' },
             dev_crank: { name: '手摇发电机', col: 0x7cb342, dev: 'crank', use: '放下，按住右键摇，摇的时候是 6 V 电源；也能给铜线接的用电器（电解槽、水泵）应急' }
@@ -10,7 +10,7 @@
             { out: 'coil', in: { magnet: 2, wire: 10, ingot_pb: 1 }, hard: true },
             { out: 'dev_crank', in: { coil: 2, steel: 2, wood: 4 }, hard: true }
         );
-        const PW = { volt: 6, hold: 0.3, near: 3 };
+        const PW = { volt: 6, hold: 0.3, near: 3, stam: 1.5 };   // 摇的时候每秒吃 1.5 体力（扇炉子 4、扇自己 2，比它们少；任务 61）
         Object.assign(IND_DEVS, { crank: { name: '手摇发电机', col: 0x7cb342, src: true, volt: PW.volt, size: [1, 0.9, 0.9] } });
         IND_DEV_VOLT.crank = function (d) { return d.cr > 0 ? PW.volt : 0; };
         IND_DEV_INFO.crank = function (d) { return '手摇发电机 ' + (d.cr > 0 ? '摇着 ' + PW.volt + ' V' : '没在摇（按住右键摇）'); };
@@ -29,6 +29,7 @@
         }
         // 每帧：摇着的刷新电压，没摇的衰减；摇要站在 3 米内、准星还对着它、有体力
         function pwCrankTick(dt) {
+            ind.crankEffort = 0;
             if (ind.where !== 'base') { ind.crank = null; return; }
             ind.base.devs.forEach(function (d) { if (d.ty === 'crank' && d.cr > 0) d.cr = Math.max(0, d.cr - dt); });
             let c = ind.crank; if (!c) return;
@@ -36,7 +37,8 @@
             if (!(a && a.kind === 'dev' && a.o === c.d) || Math.hypot(ind.p.x - c.d.x, ind.p.z - c.d.z) > PW.near + 0.5 || !indDev(c.d.id)) { ind.crank = null; return; }
             c.t += dt;
             if (c.t < 0.25) return;   // 先看是不是短按
-            c.d.cr = PW.hold;
+            if (ind.stam <= 0) { ind.crank = null; indFlash('没力气了'); return; }
+            ind.crankEffort = PW.stam; c.d.cr = PW.hold;
         }
 
 // ── 变压器（任务 30）──

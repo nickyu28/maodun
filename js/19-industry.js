@@ -654,7 +654,8 @@
             let c = B[k] || 0, free = cap - indSlotsOf(B);
             return Math.max(0, Math.min(n, (Math.ceil(c / IND_STACK) + free) * IND_STACK - c));
         }
-        function indSlots() { let L = []; Object.keys(ind.bag).forEach(function (k) { let c = ind.bag[k]; while (c > 0) { L.push({ k: k, n: Math.min(IND_STACK, c) }); c -= IND_STACK; } }); return L; }
+        // 不认识的物品 key 跳过（任务 61）
+        function indSlots() { let L = []; Object.keys(ind.bag).forEach(function (k) { if (!IND_ITEMS[k]) return; let c = ind.bag[k]; while (c > 0) { L.push({ k: k, n: Math.min(IND_STACK, c) }); c -= IND_STACK; } }); return L; }
         function indBagAdd(k, n) {
             if (IND_ELEM_OF[k] && ind.base && !ind.base.elems[IND_ELEM_OF[k]]) { ind.base.elems[IND_ELEM_OF[k]] = 1; indFlash('元素表点亮了：' + IND_ELEM_NAME[IND_ELEM_OF[k]]); }
             let B = ind.bag, take = indFits(B, indBagSlots(), k, n);
@@ -1878,6 +1879,7 @@
         function indSleep() {
             let S = ind.base.surv;
             if (!indIsNight() && S.energy > 70) { indFlash('还不困（夜里或者累了才能睡）'); return false; }
+            if (Object.keys(ind.bag).some(function (k) { return nkRadOf(k); }) && ind.base.wear.body !== 'lead_apron') { indFlash('身上有放射性的东西，睡不着'); return false; }   // 睡着不算辐射的漏洞：带着燃料棒、乏燃料、钚这些（没放进铅箱、没穿铅围裙）不让睡（任务 61）
             let B = ind.base, skip = (Math.floor(B.clock / IND_DAY) + 1) * IND_DAY - B.clock, end = B.clock + skip;
             S.food = Math.max(0, S.food - IND_SURV.food * 0.3 * skip); S.water = Math.max(0, S.water - IND_SURV.water * 0.3 * skip);
             S.energy = 100; S.temp = 37;
@@ -2027,7 +2029,7 @@
             if (IND_ITEMS[k].dev === 'reactor' && !indSpotFree(x, z, 2.2)) { indFlash('反应堆占 3×3 米，这里放不下，换个空地'); return false; }
             indBagDel(k, 1);
             ind.base.devs.push({ id: ++ind.base.dseq, ty: IND_ITEMS[k].dev, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} });
-            ind.devDirty = true; indSave(); indFlash('放好了' + indName(k) + '（拿铜线点电源再点它，接上电）');
+            ind.devDirty = true; indSave(); indFlash('放好了' + indName(k) + (IND_DEVS[IND_ITEMS[k].dev] && IND_DEVS[IND_ITEMS[k].dev].nowire ? '' : '（拿铜线点电源再点它，接上电）'));
             return true;
         }
         // ── 房子：墙是几块薄长方形（门口留一个缺口，门关着时缺口里再放一块），人、瞄准、放东西都按这几块算 ──
@@ -2929,9 +2931,12 @@
             let sp = indSpoutPos(c), t2 = S.spout.length ? indSpoutTxt(c) : (S.cook && S.cook.full ? '出料槽满了' : '');
             indBadge('spout' + c.id, sp.x, 1.5, sp.z, t2);
         }
+        // 设备、燃料棒、电池不是原料，炉子面板里没有「放」按钮，也放不进去（手摇发电机别放进大窑，任务 61）
+        function indNotForStove(k) { let d = IND_ITEMS[k]; return !d || (!!d.dev || !!d.cellU || k === 'battery' || k === 'rod_spent' || /^rod:/.test(k) || (typeof nkRod === 'function' && !!nkRod(k))); }
         function indStovePut(k, n) {
             if (!ind || !ind.bag[k]) return;
             if (k === 'gunpowder') { nkPowderInCooker(indCookCur()); return; }   // 火药放进炉子就炸
+            if (indNotForStove(k)) { indFlash('这个不能放进炉子'); return; }
             let S = indCookCur().C, kc = indContOf(k);
             if (indHard() && kc && kc.base === 'oil') { indFlash('油桶得用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒'); return; }   // 硬核：油桶不能直接放进炉子
             if (kc && kc.mat === 'wood') { indFlash('木桶不能上火'); return; }
@@ -3082,7 +3087,7 @@
             let rows = SL.length ? SL.map(function (it, i) {
                 let on = S && S.from === 'box' && S.i === i;
                 return '<div class="ind-slot" data-from="box" data-i="' + i + '" onpointerdown="indDragDown(event,\'box\',' + i + ')" style="cursor:grab;user-select:none;touch-action:manipulation;' + (on ? 'background:#ede7f6;outline:2px solid #5e35b1;' : '') + '">' +
-                    indRow(indName(it.k) + ' × ' + it.n, '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',1)">拿 1</button>' + indNumBox('box', 0, it.k, '拿') + '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',' + IND_STACK + ')">全拿</button><button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
+                    indRow(indName(it.k) + ' × ' + it.n, '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',1)">拿 1</button>' + indNumBox('box', i, it.k, '拿') + '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',' + IND_STACK + ')">全拿</button><button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
             }).join('') : '<div style="color:#999;padding:8px 0;">空的</div>';
             let selBtn = S ? (S.from === 'bag' ? '<button id="ind-box-selput" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveSel()">放进箱子</button>' : '<button id="ind-box-seltake" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveSel()">拿回来</button>') : '';
             indPanelShow('box', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">仓库箱' + (c.big ? '' : '　' + indSlotsOf(box) + ' / ' + IND_CHEST_SLOTS + ' 格') + '</div>' +
@@ -3109,7 +3114,16 @@
         function indBagToHand(i) {
             let h = Math.min(ind.selIdx, IND_HOTBAR - 1), SL = indSlots();
             if (!SL[i]) return false;
-            if (i !== h && SL[h]) { let k = SL[i].k; indBagSwap(i, h); let L2 = indSlots(), ni = L2.findIndex(function (x) { return x.k === k; }); ind.selIdx = ni >= 0 && ni < IND_HOTBAR ? ni : h; }
+            if (i !== h && SL[h] && SL[i].k === SL[h].k) ind.selIdx = h;
+            else if (i !== h && SL[h]) {
+                let k = SL[i].k, hk = SL[h].k, multi = ind.bag[k] > IND_STACK || ind.bag[hk] > IND_STACK;
+                if (!multi) indBagSwap(i, h);   // 两边都只占一格：直接换
+                else {   // 有占好几格的：只把点的这种东西挪到手上那种前面，别的东西的先后不动（任务 61）
+                    let ks = Object.keys(ind.bag).filter(function (x) { return x !== k; }); ks.splice(ks.indexOf(hk), 0, k);
+                    let cp = Object.assign({}, ind.bag); Object.keys(cp).forEach(function (x) { delete ind.bag[x]; }); ks.forEach(function (x) { ind.bag[x] = cp[x]; });
+                }
+                let L2 = indSlots(), ni = L2.findIndex(function (x) { return x.k === k; }); ind.selIdx = ni >= 0 && ni < IND_HOTBAR ? ni : h;
+            }
             else ind.selIdx = Math.min(i, IND_HOTBAR - 1);
             indSave(); if (ind.panel === 'bag') indPanelBag(); return true;
         }
@@ -3246,15 +3260,15 @@
             if (!S.cook && indHard() && rlNeedReducer(S)) st += '<br><b style="color:#c62828">炼矿要加木炭、煤或焦炭（每份矿 1 份）</b>';
             let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !S.bellows && !fmHasBlower(c)) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
             fire += '<button id="ind-stove-off" style="' + IND_BTN + 'background:#455a64;" onclick="indStoveFire(0)">熄火并降温</button>' + (S.temp > 60 ? '<div style="font-size:13px;color:#888;">降到 60°C 还要约 ' + indFurnCoolSecs(c.ty, S) + ' 秒（收起要 60°C 以下）</div>' : '');
-            let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
+            let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k] && IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
             let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';
             let spt = !ckSpoutOn(S) ? '没装出料槽（冶炼出的锭留在炉膛里，凉了直接取，烫的要钳子）' : S.spout.length ? ckSpoutDef(S).name + ' ' + indSpoutTxt(c) + '（左键点炉子旁边的出料槽取出）' : ckSpoutDef(S).name + ' 空';
             if (indHard() && !S.funnel) spt += '<br><span style="color:#888">石油要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒</span>';
             if (S.funnel) spt += '<br>进料漏斗：油 ' + Math.round(S.funnel.oil) + ' / ' + CK.funnelCap + '（每秒流 ' + CK.funnelRate + '）';
             if (S.cook && S.cook.full) st += '<br><b style="color:#c62828">出料槽满了</b>';
             { let pool = ckPool(S), K0 = indCookK(c.ty), ri = S.cook ? S.cook.i : indCookFind(pool, K0, undefined, S.items);   // 这次出多少（任务 36）：现在放进去的东西能做几份，连空瓶空桶一起写
-              if (ri >= 0) { let r0 = IND_RECIPES[ri], n0 = S.cook ? (S.cook.n || 1) : indBatchN(r0, pool, K0); st += '<br>这次出：<b>' + indOutAll(r0, n0) + '</b>' + (n0 > 1 ? '（' + n0 + ' 份）' : ''); } }
-            let put = Object.keys(ind.bag).map(function (k) {
+              if (ri >= 0) { let r0 = IND_RECIPES[ri], n0 = S.cook ? (S.cook.n || 1) : indBatchN(r0, pool, K0); st += '<br>这次出：<b>' + indOutAll(r0, n0) + '</b>' + (n0 > 1 ? '（' + n0 + ' 份）' : '') + (!S.cook && S.temp < r0.minT ? '<br><span style="color:#c62828">温度不够：要 ' + r0.minT + '°C，现在 ' + Math.round(S.temp) + '°C' + (r0.minT > 1200 ? '（要鼓风或者电炉）' : '') + '</span>' : ''); } }
+            let put = Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k); }).map(function (k) {
                 let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button>' + indNumBox('stove', 0, k, '放') + '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',' + ind.bag[k] + ')">全放</button>';
                 if (IND_ITEMS[k].fuel && !(indHard() && indContOf(k) && indContOf(k).base === 'oil')) b += '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="indStoveFuel(\'' + k + '\')">' + (indContOf(k) ? '倒进炉子' : '当柴烧') + '</button>';
                 return indRow(indName(k) + ' × ' + ind.bag[k], b);
@@ -3421,7 +3435,7 @@
             else if (a && a.kind === 'funnel') hint = CK_FUNNEL[a.o.C.funnel.ty].name + '　油 ' + Math.round(a.o.C.funnel.oil) + ' / ' + CK.funnelCap + '<br><small>拿装了油的桶右键：倒进去　长按右键：收起（空的才行）</small>';
             else if (a && a.kind === 'spout') hint = ckSpoutDef(a.o.C).name + ' ' + (a.o.C.spout.length ? indSpoutTxt(a.o) : '空') + '<br><small>左键：取出（烫的要钳子）　拿水桶右键：浇凉</small>';
             else if (a && a.kind === 'cook') hint = IND_COOK[a.o.ty].name + ' ' + Math.round(a.o.temp) + '°C' + (a.o.temp > 60 && !a.o.fire ? '　降到 60°C 还要约 ' + indFurnCoolSecs(a.o.ty, a.o) + ' 秒' : '') + '<br><small>左键：打开</small>';
-            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : sel === 'pipe' ? '左键：接管道（先水源再目的地）　' : a.o.ty === 'bank' ? '拿电池左键：装一节　右键：选放几个　' : !D.src ? '左键：开关　' : '') + '右键：收起</small>'; }
+            else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : sel === 'pipe' ? '左键：接管道（先水源再目的地）　' : a.o.ty === 'bank' ? '拿电池左键：装一节　右键：选放几个　' : (!D.src && !D.nowire && !D.always) ? '左键：开关　' : '') + '右键：收起</small>'; }
             else if (a && a.kind === 'animal') {
                 let o = a.o, D = IND_ANIMALS[o.k];
                 if (R.where === 'trip') hint = (o.follow ? D.name + '（跟着你）' : '野生的' + D.name + (o.fed ? '（还要喂 ' + (D.tame - o.fed) + ' 次）' : '')) + '<br><small>爱吃：' + indFoodTxt(o.k) + '</small>';

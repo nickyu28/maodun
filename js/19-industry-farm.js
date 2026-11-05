@@ -140,7 +140,7 @@
         }
         function fmPullUp() { if (!ind || !ind.pull) return false; ind.pull = null; ind.effort = 0; return true; }
         function fmPullTick(dt) {
-            ind.effort = 0;
+            ind.effort = ind.crankEffort || 0;   // 摇手摇发电机也吃体力（19-industry-power.js）
             let P = ind.pull; if (!P) return;
             if (ind.stam <= 0) { ind.pull = null; indFlash('没力气了'); return; }
             if (P.fan && indSel() !== 'fan') { ind.pull = null; return; }
@@ -225,7 +225,7 @@
         IND_ITEMS_RAW.ingot_si.use = '做太阳能板的电池片；以后做芯片的基片也要用'; delete IND_ITEMS_RAW.ingot_si.useLater;
         function fmSun() { let t = indTod(); return t >= IND_DUSK ? 0 : Math.sin(Math.PI * t / IND_DUSK); }
         IND_DEV_VOLT.solar = function (d) { return Math.round(IND_DEVS.solar.volt * fmSun() * 10) / 10; };
-        IND_DEV_INFO.solar = function (d) { let v = IND_DEV_VOLT.solar(d); return '太阳能板　' + (v > 0 ? '出电 ' + v.toFixed(1) + ' V（正午最高 12 V）' : '夜里不出电'); };
+        IND_DEV_INFO.solar = function (d) { let v = IND_DEV_VOLT.solar(d); return '太阳能板　' + (v > 0 ? '出电 ' + v.toFixed(1) + ' V（13:30 最亮，最高 12 V）' : '夜里不出电（13:30 最亮）'); };
 
         // ══ 任务 49：小型核电（先做成基地里的设备；车的铅仓等车做了再接）══
         // 钢 6 + 铅锭 6 + 电磁线圈 2 + 铜线 6。拿燃料棒（3.5% 或 5%）左键装一根，出 12 V，撑 3 个游戏日，烧完变乏燃料棒、停电。
