@@ -10367,6 +10367,49 @@ async function enterExit(tab, key) {
             report('IND84 冰块冷藏箱冰箱变质：熟肉 2 天腐烂、冷藏箱有冰不坏冰没了接着坏、冰箱通电不坏断电坏、制冰、吃冰降温、腐烂拉肚子当肥料、年龄取老的、冬天凿冰、氟利昂', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND85')) {
+            // IND85 成就（任务 64）：拿到才弹、只弹一次；隐藏的没拿到列表里不出现；冰冰冰、6767、烤熟了、有毒、感觉有害、动物图鉴、青铜镐、铁器时代、塞不下了、妈妈的味道、住满 3 年；存档还在
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; let B = ind.base; B.ach = {}; B.achT = {}; B.ground = []; ind.bag = {}; ind.achT = 0; indPanelClose();
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`let a = indAch('roast'), b = indAch('roast'); return { a: a, b: b, n: fl.filter(function (t) { return /成就：烤熟了/.test(t); }).length, t: B.ach.roast !== undefined };`);
+                if (!(r.a === true && r.b === false && r.n === 1 && r.t)) bad.push('拿到弹一次、拿过不重复 ' + JSON.stringify(r));
+                r = await run(`ind.bag = { ice: 2 }; achTick(); let a = achGot('ice3'); ind.bag = { ice: 3 }; ind.achT = 0; achTick(); return { a: a, b: achGot('ice3') };`);
+                if (!(r.a === false && r.b === true)) bad.push('冰冰冰：3 块冰才算 ' + JSON.stringify(r));
+                r = await run(`indHurt(0.1, 'heat', 'x'); indHurt(0.1, 'gas', 'x'); return { h: achGot('roast'), g: achGot('poison'), b: achGot('boom') };`);
+                if (!(r.h && r.g)) bad.push('烤熟了（中暑）、有毒（中毒） ' + JSON.stringify(r));
+                r = await run(`ind.bag = { ingot_fe: 1, pick_bronze: 1 }; achTick(); return { i: achGot('iron'), b: achGot('bronze') };`);
+                if (!(r.i && r.b)) bad.push('铁器时代、脱离原始人 ' + JSON.stringify(r));
+                r = await run(`ind.bag = { cat: 0 }; let ks = Object.keys(IND_ANIMALS).filter(function (a) { return IND_ANIMALS[a].tame > 0; }); ks.slice(0, ks.length - 1).forEach(achTame); let a = achGot('zoo'); achTame(ks[ks.length - 1]); return { a: a, b: achGot('zoo'), n: ks.length };`);
+                if (!(r.a === false && r.b === true && r.n >= 4)) bad.push('动物图鉴：每种都驯服过才算 ' + JSON.stringify(r));
+                r = await run(`achEat('tomato'); let a = achGot('mom'); achEat('meat_roast'); return { a: a, b: achGot('mom') };`);
+                if (!(r.a === false && r.b === true)) bad.push('妈妈的味道：生吃不算、做出来的菜吃了才算 ' + JSON.stringify(r));
+                r = await run(`B.clock = 36 * IND_DAY - 10; achTick(); let a = achGot('years'); B.clock = 36 * IND_DAY + 10; ind.achT = 0; achTick(); return { a: a, b: achGot('years') };`);
+                if (!(r.a === false && r.b === true)) bad.push('呆满 3 年（第 37 天） ' + JSON.stringify(r));
+                r = await run(`let c = []; for (let i = 0; i < 66; i++) c.push({ k: 'stone', x: 3 + (i % 8) * 0.5, z: 3 + Math.floor(i / 8) * 0.5 }); B.ground = c; ind.achT = 0; achTick(); let a = achGot('p6767'); B.ground.push({ k: 'stone', x: 4, z: 4 }); ind.achT = 0; achTick(); let b = achGot('p6767');
+                    B.ach = {}; let far = []; for (let i = 0; i < 70; i++) far.push({ k: 'stone', x: (i % 7) * 20 - 60, z: Math.floor(i / 7) * 20 - 90 }); B.ground = far; ind.achT = 0; achTick(); return { a: a, b: b, far: achGot('p6767') };`);
+                if (!(r.a === false && r.b === true && r.far === false)) bad.push('6767：半径 6 米内 67 个才算 ' + JSON.stringify(r));
+                r = await run(`let m = achMaxBag(), full = {}; let ks = Object.keys(IND_ITEMS).filter(function (k) { return IND_ITEMS[k].wear === 'back' && IND_ITEMS[k].slots === m - IND_BAG_SLOTS; }); B.wear.back = ks[0]; ind.bag = {}; for (let i = 0; i < indBagSlots(); i++) ind.bag['stone' + (i ? '' : '')] = 99 * indBagSlots(); achTick(); let a = achGot('full'); B.wear.back = null; ind.bag = { stone: 99 * indBagSlots() }; B.ach = {}; ind.achT = 0; achTick(); return { a: a, e: achGot('full'), m: m };`);
+                if (!(r.a === true && r.e === false)) bad.push('塞不下了：最大的背包塞满才算 ' + JSON.stringify(r));
+                // 成就表：隐藏的没拿到不出现、拿到才出现；没标的写名字和条件；已获得 N / 总数
+                r = await run(`achPanel(); let t0 = document.getElementById('ind-panel').innerText; indAch('ice3'); indAch('roast'); achPanel(); let t1 = document.getElementById('ind-panel').innerText; indPanelClose();
+                    return { h0: /冰冰冰/.test(t0), n0: /烤熟了/.test(t0) && /中暑一次/.test(t0), c0: (/已获得 (\\d+) \\/ (\\d+)/.exec(t0) || []).slice(1).join('/'), h1: /冰冰冰/.test(t1), c1: (/已获得 (\\d+) \\/ (\\d+)/.exec(t1) || []).slice(1).join('/') };`);
+                let tot = await J(`ACH.filter(function (a) { return !a.hide; }).length`);
+                if (!(r.h0 === false && r.n0 && r.c0 === '0/' + tot && r.h1 === true && r.c1 === '2/' + (tot + 1))) bad.push('成就表隐藏规则、已获得 N / 总数 ' + JSON.stringify(r) + ' tot=' + tot);
+                // 存档整理
+                r = await run(`B.ach = { roast: 12, bogus: 5 }; B.achT = { dog: 1, ufo: 1 }; let b = JSON.parse(JSON.stringify(B)); achFixBase(b); return { a: Object.keys(b.ach).join(), t: Object.keys(b.achT).join() };`);
+                if (!(r.a === 'roast' && r.t === 'dog')) bad.push('读档整理只留认识的成就和动物 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            await T.close();
+            report('IND85 成就：弹一次、隐藏规则、冰冰冰、6767、烤熟了、有毒、动物图鉴、铁器、青铜镐、塞不下了、妈妈的味道、3 年、存档', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

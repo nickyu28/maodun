@@ -861,7 +861,7 @@
                 if (a.follow) { indFlash(D.name + '跟着你呢，走回撤离点就一起回家'); return false; }
                 if (!k || D.food.indexOf(k) < 0) { indFlash('野生的' + D.name + '，爱吃：' + indFoodTxt(a.k)); return false; }
                 indBagDel(k, 1); a.fed = (a.fed || 0) + 1;
-                if (a.fed >= D.tame) { a.follow = true; indFlash(D.name + '跟着你了！'); }
+                if (a.fed >= D.tame) { a.follow = true; indFlash(D.name + '跟着你了！'); achTame(a.k); }
                 else indFlash(D.name + '吃了，还要喂 ' + (D.tame - a.fed) + ' 次');
                 return true;
             }
@@ -1360,7 +1360,7 @@
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); clStep(dt, true, ind.where === 'base'); }   // 出门时家里不在这里跑，回家补算（任务 3）
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') indCropTick(dt); clStep(dt, true, ind.where === 'base'); achTick(); }   // 出门时家里不在这里跑，回家补算（任务 3）
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
             if (!ind || ind.over || ind.dead) return;
@@ -1422,7 +1422,7 @@
         function indHurt(n, key, detail, instant) {
             if (!ind || ind.over || ind.dead || !(n > 0)) return false;
             let S = ind.base.surv, R = ind.hurt = ind.hurt || { rec: [], acc: {}, ft: {} };
-            S.hp -= n; ind.redT = 1; ind.lastHurt = IND_HURT[key].die;
+            S.hp -= n; ind.redT = 1; ind.lastHurt = IND_HURT[key].die; achHurt(key);
             R.rec.push({ t: ind.t, key: key, n: n, detail: detail || '' });
             R.rec = R.rec.filter(function (r) { return ind.t - r.t <= 2; });
             R.acc[key] = (R.acc[key] || 0) + n;
@@ -1819,6 +1819,7 @@
             indBagDel(k, 1);
             if (k === 'cactus' && indHard() && indHurt(60, 'thorn', '生吃了带刺的仙人掌')) return true;
             if (e.f) S.food = Math.max(0, Math.min(100, S.food + e.f));
+            achEat(k);
             if (e.w) { S.water = Math.max(0, Math.min(100, S.water + e.w)); if (e.w > 0 && S.temp > 38) S.temp = Math.max(37, S.temp - 0.5); }
             if (e.back) indBagAdd(e.back, 1);
             let warm = false;
@@ -3388,7 +3389,7 @@
             d.innerHTML =
                 '<div style="position:absolute;left:8px;top:8px;"><div id="ind-status" style="background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
                 '<div id="ind-wear" style="margin-top:4px;background:rgba(255,255,255,.92);padding:4px 10px;border-radius:8px;font-size:13px;pointer-events:auto;"></div></div>' +
-                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-bag" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-map" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) wdMapToggle()">地图</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
+                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-bag" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-map" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) wdMapToggle()">地图</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-ach" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="achPanel()">成就</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
                 '<div id="ind-hint" style="position:absolute;left:50%;bottom:150px;transform:translateX(-50%);color:#fff;padding:4px 12px;font-size:20px;font-weight:bold;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
