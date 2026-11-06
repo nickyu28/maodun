@@ -661,14 +661,15 @@ async function enterExit(tab, key) {
                 }
                 localDayNum = real; return JSON.stringify({ bad: out.bad.slice(0, 3), n: out.n }); })()`));
             if (r.bad.length) bad.push(r.bad.join(' / '));
-            const g = JSON.parse(await T.eval(`(function(){ gState.quest = null; let q = questToday(), c0 = gState.mcoin || 0, res = [];
+            const g = JSON.parse(await T.eval(`(function(){ let realWeekly = weeklyMode; weeklyMode = function () { return 'none'; };   // 本周活动那个模式猫盾币翻倍，哪个模式是按日期轮的，测试里关掉，不然换了一周就红
+                gState.quest = null; let q = questToday(), c0 = gState.mcoin || 0, res = [];
                 // 先打一个不在任务里的模式：不该多给
                 let other = QUEST_MODES.filter(function (m) { return !q.some(function (t) { return t.mode === m; }); })[0];
                 let a = gState.mcoin; coinsSettle(other, true); let base = gState.mcoin - a;
                 // 任务里的，一个个做（输了的话 win 类不算；赢了才算）
                 let gains = [], labs = [];
                 q.forEach(function (t, i) { if (t.kind === 'win') { let b = gState.mcoin; coinsSettle(t.mode, false); res.push(gState.mcoin - b); } let b2 = gState.mcoin; coinsSettle(t.mode, true); gains.push(gState.mcoin - b2); labs.push(coinsLast.parts.map(function (p) { return p[0] + p[1]; }).join(',')); });
-                saveProgress(); let saved = JSON.stringify(gState.quest); gState.quest = null; loadProgress(gState.id);
+                saveProgress(); let saved = JSON.stringify(gState.quest); gState.quest = null; loadProgress(gState.id); weeklyMode = realWeekly;
                 return JSON.stringify({ base: base, lostWin: res, gains: gains, labs: labs, done: questDoneCount(), all: gState.quest.all, saved: saved, loaded: JSON.stringify(gState.quest), text: q.map(questText) }); })()`));
             if (g.lostWin.some(function (x) { return x > 3; })) bad.push('输了的“赢”任务也算了 ' + JSON.stringify(g.lostWin));
             if (g.done !== 3 || g.all !== 1) bad.push('三个没都记上 ' + JSON.stringify(g));
