@@ -266,3 +266,19 @@
             });
             (b.devs || []).forEach(function (d) { if (d.chg && OD_CHG[d.ty]) d.chg = { u: indNum(d.chg.u, 0, 0, OD.chg) }; else delete d.chg; });
         }
+        // ── 地图和指南针上的钉住的块（这趟盖着的才显示；基站没电的块这趟没盖，不显示）──
+        function odActive() { return (ind.odLive || []).filter(function (b) { return odBlocks().indexOf(b) >= 0; }); }
+        function odMapDraw(g, px) {
+            g.strokeStyle = '#00e5ff'; g.lineWidth = 2;
+            odActive().forEach(function (b) { let w = Math.max(5, b.n * px); g.strokeRect((b.x + IND_MAP) * px - w / 2, (b.z + IND_MAP) * px - w / 2, w, w); });
+        }
+        function odCompass(f, rx, rz) {
+            let w = document.getElementById('ind-compass-bw'); if (!w) return;
+            let best = null, bd = 1e9; odActive().forEach(function (b) { let d = Math.hypot(b.x - ind.p.x, b.z - ind.p.z); if (d < bd) { bd = d; best = b; } });
+            if (!best) { w.style.display = 'none'; return; }
+            w.style.display = 'inline';
+            let tx = best.x - ind.p.x, tz = best.z - ind.p.z, ang = Math.atan2(tx * rx + tz * rz, tx * f.x + tz * f.z) * 180 / Math.PI;
+            document.getElementById('ind-compass-ba').style.transform = 'rotate(' + ang.toFixed(0) + 'deg)';
+            document.getElementById('ind-compass-bt').textContent = Math.round(bd) + ' 米';
+            ind.compassB = { deg: ang, d: bd };
+        }

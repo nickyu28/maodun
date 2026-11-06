@@ -11379,6 +11379,32 @@ async function enterExit(tab, key) {
             report('IND107 硬核石稿从零做、新号什么都不送、没有备用石稿', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND108')) {
+            // IND108 钉住的块在地图和指南针上（任务 74）：这趟盖着的块在地图上画青色框、指南针多一个青色箭头和距离；基站没电这趟没盖的不显示；收起后没了
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.blocks = []; indGoTrip(2024); B.rule = 'hard'; ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = []; indTeleport(0, 0);
+                    let on = { x: 60, z: 40, n: 5, bm: 'plain', h: new Array(25).fill(0), lava: [], nodes: [], devs: [{ ty: 'wind', dx: 0, dz: 0 }], anch: null }, off = { x: -80, z: -60, n: 3, bm: 'plain', h: new Array(9).fill(0), lava: [], nodes: [], devs: [], anch: [{ x: 1, z: 1, chg: null, t: 0 }, { x: 2, z: 1, chg: null, t: 0 }, { x: 1, z: 2, chg: null, t: 0 }, { x: 2, z: 2, chg: null, t: 0 }] };
+                    B.blocks.push(on, off); ind.odLive = [on];
+                    ind.bag = { compass: 1, map: 1 }; wdTripInit(); wdCompassTick(); let t = document.getElementById('ind-compass-bt'), w = document.getElementById('ind-compass-bw');
+                    let d = Math.round(Math.hypot(60, 40)), shown = w && w.style.display !== 'none', txt = t && t.textContent;
+                    wdMapToggle(); let cv = document.getElementById('ind-map'), g = cv.getContext('2d'), px = cv.width / (IND_MAP * 2);
+                    let hit = function (b) { let x = Math.round((b.x + IND_MAP) * px - Math.max(5, b.n * px) / 2), z = Math.round((b.z + IND_MAP) * px); let d = g.getImageData(x - 3, z - 3, 7, 7).data; for (let q = 0; q < d.length; q += 4) if (d[q] < 90 && d[q + 1] > 170 && d[q + 2] > 190) return true; return false; };
+                    let mapOn = hit(on), mapOff = hit(off); indPanelClose();
+                    ind.odLive = []; wdCompassTick(); let none = document.getElementById('ind-compass-bw').style.display === 'none';
+                    return { d: d, shown: shown, txt: txt, mapOn: mapOn, mapOff: mapOff, none: none }; })()`);
+                if (!(r.shown && r.txt === r.d + ' 米' && r.mapOn === true && r.mapOff === false && r.none)) bad.push('地图画块、指南针多一个箭头和距离、没盖的块不显示 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND108 钉住的块在地图和指南针上', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

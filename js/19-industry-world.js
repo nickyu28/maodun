@@ -35,7 +35,7 @@
         function wdCompassTick() {
             let el = document.getElementById('ind-compass'), on = ind.where === 'trip' && ind.bag.compass > 0 && !ind.dead;
             if (!on) { if (el && el.parentNode) el.parentNode.removeChild(el); ind.compass = null; return; }
-            if (!el) { el = document.createElement('div'); el.id = 'ind-compass'; el.style.cssText = 'position:fixed;left:50%;top:6px;transform:translateX(-50%);z-index:42;pointer-events:none;background:rgba(0,0,0,.55);color:#fff;font-family:"Microsoft YaHei",sans-serif;font-size:16px;font-weight:bold;padding:4px 14px;border-radius:18px;text-align:center;min-width:90px;'; el.innerHTML = '<span id="ind-compass-a" style="display:inline-block;color:#76ff03;">▲</span> <span id="ind-compass-t"></span>'; document.body.appendChild(el); }
+            if (!el) { el = document.createElement('div'); el.id = 'ind-compass'; el.style.cssText = 'position:fixed;left:50%;top:6px;transform:translateX(-50%);z-index:42;pointer-events:none;background:rgba(0,0,0,.55);color:#fff;font-family:"Microsoft YaHei",sans-serif;font-size:16px;font-weight:bold;padding:4px 14px;border-radius:18px;text-align:center;min-width:90px;'; el.innerHTML = '<span id="ind-compass-a" style="display:inline-block;color:#76ff03;">▲</span> <span id="ind-compass-t"></span><span id="ind-compass-bw" style="display:none;margin-left:10px;"><span id="ind-compass-ba" style="display:inline-block;color:#00e5ff;">▲</span> <span id="ind-compass-bt"></span></span>'; document.body.appendChild(el); }
             let n = wdNearestExit(); if (!n) return;
             let f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
             let tx = n.e.x - ind.p.x, tz = n.e.z - ind.p.z, rx = -f.z, rz = f.x;
@@ -43,6 +43,7 @@
             ind.compass = { deg: ang, d: n.d };
             document.getElementById('ind-compass-a').style.transform = 'rotate(' + ang.toFixed(0) + 'deg)';
             document.getElementById('ind-compass-t').textContent = Math.round(n.d) + ' 米';
+            if (typeof odCompass === 'function') odCompass(f, rx, rz);   // 钉住的块的方向（19-industry-outdoor.js）
         }
         // ── 地图（按 M）：走过的地方的地貌颜色，没走过的灰；看见过的撤离点；自己的位置 ──
         function wdMapToggle() {

@@ -201,6 +201,7 @@
                 if (!n.seen || n.dead || n.tree || n.dry) return;   // 采完的油点（干井）不再标
                 g.fillStyle = '#' + ('000000' + fmNodeCol(n).toString(16)).slice(-6); g.fillRect((n.x + IND_MAP) * px - 1.5, (n.z + IND_MAP) * px - 1.5, 3, 3);
             });
+            if (typeof odMapDraw === 'function') odMapDraw(g, px);   // 钉住的块（19-industry-outdoor.js）
             g.fillStyle = '#5d4037'; g.fillRect(IND_MAP * px - 5, IND_MAP * px - 5, 10, 10);   // 家：出生点
             g.strokeStyle = '#ffd600'; g.lineWidth = 2;
             (ind.base.marks || []).forEach(function (m) { let x = (m.x + IND_MAP) * px, z = (m.z + IND_MAP) * px; g.beginPath(); g.moveTo(x - 5, z - 5); g.lineTo(x + 5, z + 5); g.moveTo(x + 5, z - 5); g.lineTo(x - 5, z + 5); g.stroke(); });
