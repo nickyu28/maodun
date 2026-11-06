@@ -82,3 +82,5 @@
             }
             ind.itemDirty = true;
         }
+        // 任务 77：硬核石稿从零做（跟石斧一个价）：尖石片 2 + 木头 1 + 草绳 2；配方表只能往后加，所以放在这个最后加载的文件里
+        IND_CRAFT.push({ out: 'pick_stone', in: { sharp_flint: 2, wood: 1, rope: 2 }, hard: true });

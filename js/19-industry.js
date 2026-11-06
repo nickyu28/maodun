@@ -489,7 +489,6 @@
             } catch (e) { cb(null); }
         }
         function indKey() { return 'p_' + (gState.id || 'guest'); }
-        const IND_START_BOX_HARD = { pick_stone: 1, bake_potato: 3 };   // 硬核新号不送礼包（任务 2.9），只留石稿（没有配方，不给会卡死）和 3 个烤土豆
         const IND_START_BOX = { pick_stone: 1, shears: 1, compass: 1, bucket: 2, seed_wheat: 6, seed_potato: 4, seed_cotton: 4, seed_cabbage: 3, wood: 8, salt: 2, bake_potato: 3 };
         const IND_V3_GIFT = { seed_cotton: 4, seed_cabbage: 3 };
         const IND_V12_GIFT = { compass: 1 };   // 存档版本 12：新号送一个指南针，老档读档时补一个
@@ -976,12 +975,11 @@
             setTimeout(function () { g.style.opacity = '0'; }, 3200);
             setTimeout(function () { if (g.parentNode) g.parentNode.removeChild(g); }, 4000);
         }
-        // 新号第一次选硬核：箱子里没动过的起步礼包换成硬核的（老存档、升级成硬核的不动）
+        // 新号第一次选硬核：箱子里没动过的起步礼包清空（任务 77：什么都不送；老存档、升级成硬核的不动）
         function indHardStartBox() {
             let B = ind.base, c = (B.chests || []).filter(function (x) { return x.big; })[0], it = c ? c.items : B.box;
             if (!it || B.trips || JSON.stringify(Object.keys(it).sort().map(function (k) { return [k, it[k]]; })) !== JSON.stringify(Object.keys(IND_START_BOX).sort().map(function (k) { return [k, IND_START_BOX[k]]; }))) return false;
             Object.keys(it).forEach(function (k) { delete it[k]; });
-            Object.keys(IND_START_BOX_HARD).forEach(function (k) { it[k] = IND_START_BOX_HARD[k]; });
             return true;
         }
         function indHard() { return ind.base.rule === 'hard'; }
@@ -1493,7 +1491,7 @@
             if (!ind || !ind.dead) return;
             let e = document.getElementById('ind-dead'); if (e && e.parentNode) e.parentNode.removeChild(e);
             ind.dead = null;
-            indGoBase(null); wdEnsurePick(); indSave();
+            indGoBase(null); indSave();
         }
         // 作物：浇过水（当天）全速长，没浇水半速
         function indCropTick(dt) {

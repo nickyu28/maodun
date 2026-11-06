@@ -253,12 +253,6 @@
             });
             ind.nodeDirty = false;
         }
-        // 大石头和山地要石稿才挖得动：死了把稿子丢光、箱子里也没有，就在仓库箱里补一把备用石稿，不然捡不到石头再也做不出稿子
-        function wdEnsurePick() {
-            let has = Object.keys(ind.bag).some(function (k) { return IND_ITEMS[k].tool > 0; }) || ind.base.chests.some(function (c) { return Object.keys(c.items).some(function (k) { return IND_ITEMS[k] && IND_ITEMS[k].tool > 0; }); });
-            if (has) return;
-            indBoxAdd('pick_stone', 1); indFlash('仓库箱里放了一把备用石稿');
-        }
 
         // ── 河：每张图 1～3 条，从山地顺着地势往低处走，一直流进海里；宽 4～8 米，浅水为主（中间一溜深一点） ──
         // 河床低于水面（水面是整张图同一个高度），两岸按坡度缓缓抬起来；用 10 米一格的表查附近的河段，不拖慢 indHeight

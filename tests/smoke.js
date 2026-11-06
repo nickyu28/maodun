@@ -5430,7 +5430,7 @@ async function enterExit(tab, key) {
                 Object.keys(RAW).forEach(function (k) { if (RAW[k].later) { later[k] = RAW[k].later; out.later.push(k + '（' + RAW[k].later + '）'); } if (RAW[k].useLater) { useLater[k] = RAW[k].useLater; out.later.push(k + '（' + RAW[k].useLater + '，已能拿到）'); } });
                 function reach(rule) {
                     const hard = rule === 'hard', have = {}, why = {};
-                    const box0 = hard && typeof IND_START_BOX_HARD !== 'undefined' ? IND_START_BOX_HARD : IND_START_BOX;   // 硬核新号没有礼包（任务 2.9）
+                    const box0 = hard ? {} : IND_START_BOX;   // 硬核新号什么都没有（任务 77）
                     Object.keys(box0).forEach(function (k) { have[k] = 1; });
                     Object.keys(RAW).forEach(function (k) { if (RAW[k].furn && !RAW[k].inst) have[k] = 1; });   // 基地里本来就有的床、工作台、水池：搬起来就是物品
                     const add = function (k) { if (!have[k]) { have[k] = 1; ch = true; } };
@@ -5636,8 +5636,8 @@ async function enterExit(tab, key) {
                 if ((await T.eval(`ind.base.clock`)) !== c0) bad.push('没选规则时间就走了');
                 await T.eval(`${HIDE} indSetRule('hard'); indSetRule('casual'); ind.rng = function () { return 0.99; }; true;`);
                 if ((await T.eval(`ind.base.rule`)) !== 'hard') bad.push('硬核居然退回了悠闲');
-                // 硬核新号没礼包（任务 2.9）：箱子里只有石稿和烤土豆；后面要用的东西这里补进箱子
-                if ((await T.eval(`JSON.stringify(indBoxTarget().items)`)) !== JSON.stringify({ pick_stone: 1, bake_potato: 3 })) bad.push('硬核新号箱子里该只有石稿和 3 个烤土豆 ' + await T.eval(`JSON.stringify(indBoxTarget().items)`));
+                // 硬核新号什么都没有（任务 77）：箱子是空的；后面要用的东西这里补进箱子
+                if ((await T.eval(`JSON.stringify(indBoxTarget().items)`)) !== '{}') bad.push('硬核新号箱子该是空的 ' + await T.eval(`JSON.stringify(indBoxTarget().items)`));
                 await T.eval(`Object.assign(indBoxTarget().items, JSON.parse(JSON.stringify(IND_START_BOX))); true;`);
                 // 生存值：60 秒饱食掉约 2、口渴掉约 4
                 const s0 = JSON.parse(await T.eval(`JSON.stringify(ind.base.surv)`));
@@ -8599,7 +8599,7 @@ async function enterExit(tab, key) {
                 // ── 新号礼包 ──
                 const box = (rule) => J(`(function(){ let b = indNewBase(); indFixBase(b); ind.base = b; indSetRule('${rule}'); let c = b.chests.filter(function (x) { return x.big; })[0]; return c.items; })()`);
                 const bh = await box('hard'), bc = await box('casual');
-                if (JSON.stringify(bh) !== JSON.stringify({ pick_stone: 1, bake_potato: 3 })) bad.push('硬核新号箱子里只该有石稿和 3 个烤土豆 ' + JSON.stringify(bh));
+                if (JSON.stringify(bh) !== '{}') bad.push('硬核新号箱子该是空的 ' + JSON.stringify(bh));
                 if (!(bc.compass === 1 && bc.shears === 1 && bc.seed_wheat === 6 && bc.wood === 8)) bad.push('悠闲新号礼包照旧 ' + JSON.stringify(bc));
                 // 悠闲升级成硬核：礼包不收回
                 const up = await J(`(function(){ indSetRule('hard'); return ind.base.chests.filter(function (x) { return x.big; })[0].items; })()`);
@@ -11339,6 +11339,44 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND106 矿石分布（地面约 30%、洞里、裂纹岩）和 TNT', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND107')) {
+            // IND107 硬核石稿从零做（任务 77）：硬核新号开局背包和仓库箱都空；出生点 15 米内捡到的东西做出石稿、挖到石头；死后回基地仓库箱里没有备用石稿；悠闲礼包还在；老存档读档不补不收
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let mk = function (rule) { let b = indNewBase(); indFixBase(b); ind.base = b; indSetRule(rule); let c = b.chests.filter(function (x) { return x.big; })[0]; return JSON.stringify(c.items); };
+                    let hard = mk('hard'), hbag = JSON.stringify(ind.bag), cas = JSON.parse(mk('casual')); let old = indFixBase({ ver: 12, rule: 'hard', box: { pick_stone: 1, bake_potato: 3 } }); let kept = JSON.stringify(old.box), old2 = indFixBase({ ver: 1, rule: 'hard', box: { pick_stone: 1 } });
+                    return { hard: hard, hbag: hbag, cas: cas.pick_stone === 1 && cas.compass === 1 && cas.shears === 1 && cas.seed_wheat === 6 && cas.wood === 8, kept: kept, hasFn: typeof wdEnsurePick, boxConst: typeof IND_START_BOX_HARD }; })()`);
+                if (!(r.hard === '{}' && r.hbag === '{}' && r.cas && r.kept === '{"pick_stone":1,"bake_potato":3}' && r.hasFn === 'undefined' && r.boxConst === 'undefined')) bad.push('硬核新号箱子和背包都空、悠闲礼包照旧、老存档不补不收、备用石稿的代码没了 ' + JSON.stringify(r));
+                // 从零开局只靠出生点 15 米内地上的东西：敲尖石片、搓草绳、做小刀、砍树要木头、做石稿、挖石头
+                r = await J(`(function(){ let b = indNewBase(); indFixBase(b); ind.base = b; indSetRule('hard'); indGoTrip(2024); ind.base.rule = 'hard'; ind.bag = {}; ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = [];
+                    let near = ind.tripGround.filter(function (g) { return Math.hypot(g.x, g.z) <= 15; }); near.forEach(function (g) { indBagAdd(g.k, 1); });
+                    let have0 = JSON.stringify(Object.keys(ind.bag).sort());
+                    let craft = function (out) { let i = IND_CRAFT.findIndex(function (q) { return q.out === out && q.hard && !q.off && !q.fix; }); ind.craftNow = true; try { return indCraft(i); } finally { ind.craftNow = false; } };
+                    let steps = []; let rope = 0; while ((ind.bag.grass || 0) >= 2 && rope < 3) { craft('rope'); rope++; } steps.push(ind.bag.rope || 0);
+                    let fl = 0; while ((ind.bag.stone || 0) >= 2 && fl < 4) { craft('sharp_flint'); fl++; } steps.push(ind.bag.sharp_flint || 0);
+                    craft('knife'); steps.push(ind.bag.knife || 0);
+                    ind.nodes.forEach(function (o) { o.dead = true; }); let tree = { key: 'wood', tree: 'oak', x: 3, z: 3, y: 0.5, n: 4, seed: IND_SEED_KINDS[0], dead: false }, rock = { key: 'stone', rock: true, x: 6, z: 3, y: 0.5, n: 3, seed: IND_SEED_KINDS[0], dead: false }; ind.nodes.push(tree, rock);
+                    indSelect('knife'); let chop = indGather(tree); let wood = ind.bag.wood || 0; craft('pick_stone'); let pick = ind.bag.pick_stone || 0;
+                    let before = ind.bag.stone || 0; indSelect('pick_stone'); let dug = indGather(rock); let stone = (ind.bag.stone || 0) - before;
+                    return { n: near.length, have0: have0, steps: steps, chop: chop, wood: wood, pick: pick, dug: dug, stone: stone }; })()`);
+                if (!(r.n >= 10 && r.steps[0] >= 2 && r.steps[1] >= 2 && r.steps[2] === 1 && r.wood >= 1 && r.pick === 1 && r.dug && r.stone >= 1)) bad.push('只靠出生点地上捡的东西做出石稿并挖到石头 ' + JSON.stringify(r));
+                // 石稿配方跟石斧一个价、只有硬核有；不加教怎么做的提示
+                r = await J(`(function(){ let p = IND_CRAFT.filter(function (q) { return q.out === 'pick_stone' && q.in.sharp_flint; }), a = IND_CRAFT.filter(function (q) { return q.out === 'axe' && q.hard; })[0]; return { n: p.length, hard: p[0].hard === true, same: JSON.stringify(p[0].in) === JSON.stringify(a.in) }; })()`);
+                if (!(r.n === 1 && r.hard && r.same)) bad.push('石稿配方只有硬核有、跟石斧一个价 ' + JSON.stringify(r));
+                // 死后丢光稿子回基地：仓库箱里不补稿子，也没有备用石稿的提示
+                r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { let b = indNewBase(); indFixBase(b); ind.base = b; indSetRule('hard'); indGoTrip(2024); ind.base.rule = 'hard'; ind.bag = {}; ind.dead = { why: 'x' }; indRespawn(); let box = JSON.stringify(indBoxTarget().items), bag = JSON.stringify(ind.bag); return { box: box, bag: bag, tip: fl.some(function (t) { return /备用/.test(t); }), w: ind.where }; } finally { blazeFlash = bf; } })()`);
+                if (!(r.box === '{}' && r.bag === '{}' && !r.tip && r.w === 'base')) bad.push('死后回基地仓库箱和背包都空、没有备用石稿提示 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND107 硬核石稿从零做、新号什么都不送、没有备用石稿', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
