@@ -11405,6 +11405,31 @@ async function enterExit(tab, key) {
             report('IND108 钉住的块在地图和指南针上', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND109')) {
+            // IND109 TNT 炸动物（任务 75）：半径 4 米内的动物死了，掉的东西跟打死的一样；远的不受影响；基地里的也一样
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indGoTrip(2024); ind.base.rule = 'hard'; ind.nodes.forEach(function (o) { o.dead = true; }); ind.mobs.forEach(mbDrop); ind.mobs = []; ind.tripGround = []; indTeleport(-30, 0); ind.base.surv.hp = 100;
+                    ind.wild = [{ k: 'sheep', x: 2, z: 0, food: 60 }, { k: 'cow', x: 0, z: 3, food: 60 }, { k: 'deer', x: 30, z: 0, food: 60 }];
+                    ind.tnts = [{ x: 0, z: 0, t: 0.1, w: 'trip' }]; orTntTick(0.2); let g = {}; ind.tripGround.forEach(function (q) { g[q.k] = (g[q.k] || 0) + 1; });
+                    return { left: ind.wild.map(function (a) { return a.k; }).join(), meat: g.meat_raw, hide: g.hide, bone: g.bone }; })()`);
+                if (!(r.left === 'deer' && r.meat === 5 && r.hide === 3 && r.bone === 1)) bad.push('野外 TNT 炸死 4 米内的羊和牛（掉的跟宰的一样）、远处的鹿还在 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.devs = []; B.crops = []; B.fires = []; B.ground = []; indTeleport(-20, 15); B.surv.hp = 100;
+                    B.animals = [{ k: 'sheep', x: 12, z: 12, food: 60, woolAt: 0, milkAt: 0 }, { k: 'sheep', x: 25, z: 12, food: 60, woolAt: 0, milkAt: 0 }];
+                    ind.tnts = [{ x: 12, z: 13, t: 0.1, w: 'base' }]; orTntTick(0.2); let g = {}; B.ground.forEach(function (q) { g[q.k] = (g[q.k] || 0) + 1; });
+                    return { n: B.animals.length, meat: g.meat_raw, hide: g.hide }; })()`);
+                if (!(r.n === 1 && r.meat === 2 && r.hide === 1)) bad.push('基地里 TNT 炸死 4 米内的羊、掉东西留在地上 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND109 TNT 炸动物', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

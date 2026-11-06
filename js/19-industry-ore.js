@@ -54,6 +54,7 @@
             ind.tnts = ind.tnts.filter(function (f) { if (f.w !== ind.where) return false; f.t -= dt; if (f.t <= 0) { go.push(f); return false; } return true; });
             go.forEach(orBlast);
         }
+        function orKillAnimals(x, z, R) { indAnimals().filter(function (a) { return Math.hypot(a.x - x, a.z - z) <= R; }).forEach(function (a) { fmKill(a); }); }
         function orBlast(f) {
             let R = OR.R, x = f.x, z = f.z, trip = ind.where === 'trip', G = ind.tripGround = ind.tripGround || [];
             if (Math.hypot(ind.p.x - x, ind.p.z - z) <= OR.hurtR && !ind.dead) indHurt(OR.dmg, 'boom', 'TNT 炸到了', true);
@@ -72,11 +73,13 @@
                 });
                 ind.tntBlast = false;
                 (ind.mobs || []).forEach(function (m) { if (!m.dead && Math.hypot(m.x - x, m.z - z) <= R) mbDamage(m, 5); });
+                orKillAnimals(x, z, R);   // 野生动物炸死，掉的跟打死的一样
                 (ind.tdevs || []).slice().forEach(function (t) { if (Math.hypot(t.x - x, t.z - z) <= R) { odPickUp(t); } });
                 if (typeof nkTripItemsSync === 'function') nkTripItemsSync();
                 indBoomFx(x, z);
             } else {
                 indBoom(x, z, R, 'TNT 炸了');   // 基地里：设备、炉子、作物都炸掉，里面的东西掉地上
+                orKillAnimals(x, z, R);   // 基地里的动物也炸死（在爆炸清地面之后，掉的东西才留得住）
                 let i = Math.round(x), j = Math.round(z);
                 if (ind.where === 'base' && !pdCellAt(i, j) && pdCells().length < PD.max && i > IND_BASE.x0 + 1 && i < IND_BASE.x1 - 1 && j > IND_BASE.z0 + 1 && j < IND_BASE.z1 - 1 && indSpotFree(i, j, 0.5)) { pdCells().push({ i: i, j: j, w: 0 }); pdLevel(pdGroup(pdCellAt(i, j))); ind.pdDirty = true; }
             }
