@@ -5866,7 +5866,7 @@ async function enterExit(tab, key) {
                 await T.eval(`(function(){ indBagAdd('wood', 6); indBagAdd('clay', 4); indBagAdd('ingot_cu', 2); indBagAdd('rope', 10); indBagAdd('hide', 2); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'bellows' && r.in.hide; })); indInstallBellows(indCookById('stove')); indBagAdd('wood', 10); for (let i = 0; i < 10; i++) indStoveFuel('wood'); indStoveFire(4); ind.base.stove.blow = 1e6; indPanelClose(); indAdvance(60); })(); true;`);
                 if (!(await T.eval(`ind.base.stove.bellows && !ind.bag.bellows && indOutCount(ind.base.stove, 'hot_fe') === 1`))) bad.push('鼓风炼不出铁 ' + await T.eval(`JSON.stringify([ind.base.stove, ind.bag])`));
                 // 铁稿挖铁矿
-                await T.eval(`(function(){ ind.base.stove.fire = 0; indBagAdd('ingot_fe', 3); indBagAdd('wood', 2); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pick_iron'; })); })(); true;`);
+                await T.eval(`(function(){ ind.base.stove.fire = 0; indBagAdd('part_pick_ingot_fe', 1); indBagAdd('handle', 1); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pick_iron' && r.in.part_pick_ingot_fe; })); })(); true;`);   // 铁稿改成铸造做：铁镐头 + 木柄
                 const dug = await T.eval(`(function(){ let o = { key: 'ore_fe', n: 2, dead: false }; return indGather(o) ? 'dug' : 'refused'; })()`);
                 if (dug !== 'dug') bad.push('有铁稿还挖不动铁矿');
                 // 配方查询：搜"铁"能看到铁矿→铁锭和铁稿
@@ -6394,7 +6394,7 @@ async function enterExit(tab, key) {
                 const kinds = ch0.kinds;
                 await T.eval(`indPickFurn({ ty: 'chest', o: ind.base.chests[0] }); true;`);
                 const held = await J(`{ keys: Object.keys(ind.bag), nm: Object.keys(ind.bag).map(indName), chests: ind.base.chests.length }`);
-                if (held.chests !== 0 || held.keys.length !== 1 || !/^inst:/.test(held.keys[0]) || held.nm[0] !== '仓库箱（装着 ' + kinds + ' 样）') bad.push('收起仓库箱不对（名字要写装着几样） ' + JSON.stringify(held) + ' 应该 ' + kinds);
+                if (held.chests !== 0 || held.keys.length !== 1 || !/^inst:/.test(held.keys[0]) || held.nm[0] !== (kinds ? '仓库箱（装着 ' + kinds + ' 样）' : '仓库箱（空）')) bad.push('收起仓库箱不对（名字要写装着几样） ' + JSON.stringify(held) + ' 应该 ' + kinds);
                 await face(5, 10, 5, 4);
                 await T.eval(`indSelect('${held.keys[0]}'); indUse(); true;`);
                 const back = await J(`{ chests: ind.base.chests.map(function (c) { return [c.big, Object.keys(c.items).length, Math.round(c.x * 10) / 10, Math.round(c.z * 10) / 10]; }), bag: Object.keys(ind.bag).length, box: Object.keys(ind.base.box).length }`);
