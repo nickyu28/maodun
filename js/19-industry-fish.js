@@ -1,5 +1,5 @@
 // 猫盾工业：原水池有限、水井、养鱼（docs/water-fish.md 分步第 2～5 步剩下的）。放在 19-industry-lava.js 后面。
-// 原水池（出生点那个）：存量开局 40 桶（悠闲 80），不漏，算 4 格蒸发；接水 1 桶、喝一口 0.1 桶、基地里每只动物每 10 分钟喝 0.2 桶；拿水桶右键倒回去。老存档给满。
+// 原水池（出生点那个）：存量开局 40 桶（悠闲 80），不漏，算 4 格蒸发；接水 1 桶、喝一口 0.1 桶、基地里每只动物每 10 分钟喝 0.2 桶；旁边（水池边 2 米内）有井就由井补水。老存档给满。
 // 水井：拿铲子对着自己挖的空池格左键，同一格连挖 5 次（每次 6 秒 × 铲子档）出水，这格变成井：每分钟出 1 桶（旁边有通电的水泵 2 米内 ×3），先流进四邻的池子格，没有就存在井里（最多 10 桶），空桶右键接。最多 2 口。
 // 鱼：钓竿（木 2 + 草绳 2）站在河边海边右键，站着 10～30 秒咬钩；渔网（草绳 6）右键放水里，60 秒后再右键收，0～2 条。活鱼在背包里 10 分钟死成生鱼。
 //  拿活鱼右键自己挖的池子放进去（每条要 2 桶水）；小麦、白菜、萝卜右键池子投食槽（最多 20 份）；每条鱼每 5 分钟吃 1 份；吃着的小鱼 600 秒长大，2 条大鱼 + 有吃的每 900 秒多 1 条；
@@ -21,11 +21,7 @@
             if (plW() < n - 1e-9) { indFlash('池子里没水了'); return false; }
             ind.base.poolW = Math.max(0, ind.base.poolW - n); return true;
         }
-        function plPour(k) {
-            let kc = k && indContOf(k); if (!kc || !(kc.base === 'water_raw' || kc.base === 'water_boiled' || kc.base === 'water_sea')) return false;
-            if (plW() > plCap() - 1 + 1e-9) { indFlash('池子满了（' + plCap() + ' 桶）'); return true; }
-            ind.base.poolW += 1; indBagDel(k, 1); indBagAdd(indEmptyKey(kc.mat), 1); return true;
-        }
+        // 原水池只能靠旁边的井补水（拿水桶对着它右键是喝，不是倒）
         // ── 井 ──
         function wlList() { return ind.base.wells = ind.base.wells || []; }
         function wlAt(i, j) { return wlList().filter(function (w) { return w.i === i && w.j === j; })[0] || null; }
@@ -55,6 +51,7 @@
             wlList().forEach(function (w) {
                 let pump = ind.base.devs.some(function (d) { return d.ty === 'pump' && d.pw && Math.hypot(d.x - w.i, d.z - w.j) <= 2; });
                 let add = FH.wellRate * (pump ? FH.wellPump : 1) * dt, to = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return pdCellAt(w.i + d[0], w.j + d[1]); }).filter(function (c) { return c && !(c.lid); })[0];
+                if (!to) { let P = IND_BASE_ST.pool; if (!ind.base.off.pool && Math.hypot(w.i - P.x, w.j - P.z) <= P.r + 2) { let room = plCap() - plW(); let g = Math.min(add, Math.max(0, room)); ind.base.poolW += g; add -= g; } }
                 if (to) { let G = pdGroup(to), room = G.length * PD.cap - pdWater(G); if (room > 0) { let g = Math.min(add, room); to.w = (to.w || 0) + g; add -= g; } }
                 w.w = Math.min(FH.wellStore, w.w + add);
             });

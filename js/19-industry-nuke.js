@@ -288,7 +288,7 @@
         function nkPlaceBomb(k) {
             let f = indFace(), x = ind.p.x + f.x * 2, z = ind.p.z + f.z * 2;
             if (ind.where === 'base') {
-                x = Math.max(-IND_BASE.x + 1, Math.min(IND_BASE.x - 1, x)); z = Math.max(-IND_BASE.z + 1, Math.min(IND_BASE.z - 1, z));
+                x = Math.max(IND_BASE.x0 + 1, Math.min(IND_BASE.x1 - 1, x)); z = Math.max(IND_BASE.z0 + 1, Math.min(IND_BASE.z1 - 1, z));
                 if (!indSpotFree(x, z, 0.8)) { indFlash('这里放不下，换个空地'); return false; }
             }
             if (nkBombs().length >= 4) { indFlash('场上已经有 4 颗了'); return false; }
@@ -405,7 +405,7 @@
         // 读档整理
         function nkFixBase(b) {
             b.rad = Array.isArray(b.rad) ? b.rad.filter(function (z) { return z && isFinite(z.x) && isFinite(z.z) && z.r > 0 && z.until > 0; }).slice(0, 8).map(function (z) { return { x: indNum(z.x, 0, -1000, 1000), z: indNum(z.z, 0, -1000, 1000), r: indNum(z.r, 10, 1, 100), until: indNum(z.until, 0, 0, 1e9) }; }) : [];
-            b.bombs = Array.isArray(b.bombs) ? b.bombs.filter(function (o) { return o && isFinite(o.x) && isFinite(o.z); }).slice(0, 4).map(function (o, i) { return { id: i + 1, x: indNum(o.x, 0, -IND_BASE.x, IND_BASE.x), z: indNum(o.z, 0, -IND_BASE.z, IND_BASE.z), t: o.t >= 0 ? indNum(o.t, NK.bombT, 0, NK.bombT) : -1 }; }) : [];
+            b.bombs = Array.isArray(b.bombs) ? b.bombs.filter(function (o) { return o && isFinite(o.x) && isFinite(o.z); }).slice(0, 4).map(function (o, i) { return { id: i + 1, x: indNum(o.x, 0, IND_BASE.x0, IND_BASE.x1), z: indNum(o.z, 0, IND_BASE.z0, IND_BASE.z1), t: o.t >= 0 ? indNum(o.t, NK.bombT, 0, NK.bombT) : -1 }; }) : [];
         }
 
         // 二氧化硫瓶放掉：一团毒气云（规则同氯气）；瓶子还给你

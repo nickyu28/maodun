@@ -187,7 +187,7 @@
             thrown.slice(0, 60).forEach(function (t) {
                 if (G.length >= IND_ITEM_CAP) return;
                 let a2 = indRand() * Math.PI * 2, d = r0 + 0.2 + indRand() * CK.scatter;
-                let g = { k: t.k, x: Math.max(-IND_BASE.x + 0.5, Math.min(IND_BASE.x - 0.5, best.x + Math.cos(a2) * d)), z: Math.max(-IND_BASE.z + 0.5, Math.min(IND_BASE.z - 0.5, best.z + Math.sin(a2) * d)) };
+                let g = { k: t.k, x: Math.max(IND_BASE.x0 + 0.5, Math.min(IND_BASE.x1 - 0.5, best.x + Math.cos(a2) * d)), z: Math.max(IND_BASE.z0 + 0.5, Math.min(IND_BASE.z1 - 0.5, best.z + Math.sin(a2) * d)) };
                 if (t.hot) g.ht = CK.kickCool;   // 飞出来的烫锭在空气里自己凉，大约 60 秒
                 G.push(g); n++;
             });

@@ -39,7 +39,7 @@
         const IND_VIEW = { day: 80, night: 40, margin: 6 };
         function indViewR(d) { if (d === undefined) d = indDark(); return IND_VIEW.day - (IND_VIEW.day - IND_VIEW.night) * d; }
         const IND_T = { extract: 3, pickR: 2.6, gateR: 2.2, exitR: 3, speed: 7, run: 1.6 };
-        const IND_BASE = { x: 30, z: 22.5 };          // 基地半宽、半深（60 × 45 米）
+        const IND_BASE = { x: 30, z: 22.5, x0: -30, x1: 30, z0: -22.5, z1: 22.5 };          // 基地半宽、半深（60 × 45 米）
         const IND_FIELD = { x0: -28, x1: -6, z0: -18, z1: 18, tile: 2 };   // 农田（基地左边），2 米一格
         const IND_MAP = 300;                          // 远征地图半宽（600 × 600 米）
         const IND_BAG_SLOTS = 24, IND_STACK = 99, IND_CHEST_SLOTS = 30;        // 背包 24 格，每格最多 99 个，同一种能占多格；新做的箱子 30 格，原来那个仓库箱不限
@@ -522,6 +522,7 @@
                 let c = b.carried[id];
                 if (!c || !(c.ty === 'chest' || (IND_COOK[c.ty] && c.ty !== undefined)) || (c.ty === 'chest' ? (!c.items || typeof c.items !== 'object') : (!c.st || typeof c.st !== 'object'))) delete b.carried[id];
             });
+            hmApply(b);   // 扩展家园：先按存档里的 ext 定基地边界（19-industry-home.js）
             IND_CTX_BASE = b;
             try { b = indFixBase0(b); } finally { IND_CTX_BASE = null; }
             return b;
@@ -539,14 +540,14 @@
             // 家具：位置（可搬）、被收起来的、箱子（原来的仓库箱不限，新做的 30 格）、搬着的
             b.cid = indNum(b.cid, 1, 1, 1e9) | 0;
             if (!b.pos || typeof b.pos !== 'object') b.pos = {};
-            ['stove', 'bed', 'bench'].forEach(function (k) { let p = b.pos[k]; if (!p || !isFinite(p.x) || !isFinite(p.z)) delete b.pos[k]; else b.pos[k] = { x: indNum(p.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1), z: indNum(p.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1) }; });
+            ['stove', 'bed', 'bench'].forEach(function (k) { let p = b.pos[k]; if (!p || !isFinite(p.x) || !isFinite(p.z)) delete b.pos[k]; else b.pos[k] = { x: indNum(p.x, 0, IND_BASE.x0 + 1, IND_BASE.x1 - 1), z: indNum(p.z, 0, IND_BASE.z0 + 1, IND_BASE.z1 - 1) }; });
             delete b.pos.pool;   // 水池是挖在地上的，不能搬：以前收起来的读档时放回原位（背包里的 furn_pool 下面按未知物品清掉）
             let off = {}; ['stove', 'bed', 'bench'].forEach(function (k) { if (b.off && b.off[k]) off[k] = true; }); b.off = off;
             if (!Array.isArray(b.chests)) { let bp = b.pos.box; b.chests = [{ id: 1, x: bp ? bp.x : IND_ST_DEF.box.x, z: bp ? bp.z : IND_ST_DEF.box.z, big: true, items: b.box }]; }   // 老档：原来的仓库箱变成不限格数的那个箱子
             b.chests = b.chests.filter(function (c) { return c && isFinite(c.x) && isFinite(c.z) && c.items && typeof c.items === 'object'; }).slice(0, 20);
             let seen = {};
             b.chests.forEach(function (c) {
-                c.big = !!c.big; c.lead = !!c.lead; c.cold = !!c.cold; c.x = indNum(c.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); c.z = indNum(c.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1);
+                c.big = !!c.big; c.lead = !!c.lead; c.cold = !!c.cold; c.x = indNum(c.x, 0, IND_BASE.x0 + 1, IND_BASE.x1 - 1); c.z = indNum(c.z, 0, IND_BASE.z0 + 1, IND_BASE.z1 - 1);
                 Object.keys(c.items).forEach(function (k) { if (!IND_ITEMS[k] || !(c.items[k] > 0)) delete c.items[k]; else c.items[k] = Math.floor(c.items[k]); });
                 c.id = indNum(c.id, 0, 0, 1e9) | 0; while (!c.id || seen[c.id]) c.id = ++b.cid; seen[c.id] = 1; b.cid = Math.max(b.cid, c.id);
             });
@@ -557,9 +558,9 @@
             });
             let bigC = b.chests.filter(function (c) { return c.big; })[0]; b.box = bigC ? bigC.items : {};
             b.tiles = Array.isArray(b.tiles) ? b.tiles.filter(function (t) { return t && isFinite(t.x) && isFinite(t.z); }).slice(0, IND_TILE_CAP) : [];
-            b.houses = Array.isArray(b.houses) ? b.houses.filter(function (h) { return h && IND_HOUSE[h.ty] && isFinite(h.x) && isFinite(h.z); }).slice(0, IND_HOUSE_CAP) : [];
+            b.houses = Array.isArray(b.houses) ? b.houses.filter(function (h) { return h && IND_HOUSE[h.ty] && isFinite(h.x) && isFinite(h.z); }).slice(0, indHouseCap()) : [];
             b.houses.forEach(function (h) {
-                h.x = indNum(h.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); h.z = indNum(h.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1);
+                h.x = indNum(h.x, 0, IND_BASE.x0 + 1, IND_BASE.x1 - 1); h.z = indNum(h.z, 0, IND_BASE.z0 + 1, IND_BASE.z1 - 1);
                 h.side = indNum(h.side, 0, 0, 3) | 0; h.open = !!h.open;
                 h.id = indNum(h.id, 0, 0, 1e9) | 0; while (!h.id || seen[h.id]) h.id = ++b.cid; seen[h.id] = 1; b.cid = Math.max(b.cid, h.id);
             });
@@ -570,7 +571,7 @@
             if (indSlotsOf(b.bag) > IND_BAG_SLOTS + (b.wear && IND_ITEMS[b.wear.back] ? IND_ITEMS[b.wear.back].slots || 0 : 0)) b.bag = {};   // 超过 24 格的（乱写的）不要
             if (!Array.isArray(b.ground)) b.ground = [];
             b.ground = b.ground.filter(function (g) { return g && IND_ITEMS[g.k] && isFinite(g.x) && isFinite(g.z); });
-            b.ground.forEach(function (g) { g.x = indNum(g.x, 0, -IND_BASE.x + 0.5, IND_BASE.x - 0.5); g.z = indNum(g.z, 0, -IND_BASE.z + 0.5, IND_BASE.z - 0.5); });
+            b.ground.forEach(function (g) { g.x = indNum(g.x, 0, IND_BASE.x0 + 0.5, IND_BASE.x1 - 0.5); g.z = indNum(g.z, 0, IND_BASE.z0 + 0.5, IND_BASE.z1 - 0.5); });
             if (!Array.isArray(b.crops)) b.crops = [];
             b.crops = b.crops.filter(function (c) { return c && IND_CROPS[c.k] && isFinite(c.x) && isFinite(c.z); });
             b.crops.forEach(function (c) { c.g = indNum(c.g, 0, 0, 1e7); c.wet = indNum(c.wet, 0, 0, 1e9); c.times = indNum(c.times, 0, 0, 10); c.fert = c.fert === 2 || c.fert === 3 ? c.fert : !!c.fert; });
@@ -587,7 +588,7 @@
             b.devs = b.devs.filter(function (d) { return d && IND_DEVS[d.ty] && isFinite(d.x) && isFinite(d.z) && d.id; }).slice(0, IND_DEV_CAP);
             b.devs.forEach(function (d) { if (!d.st || typeof d.st !== 'object') d.st = {}; Object.keys(d.st).forEach(function (k) { if (!IND_ITEMS[k] || !(d.st[k] > 0)) delete d.st[k]; }); d.et = indNum(d.et, 0, 0, 1e3); d.bats = indNum(d.bats, 0, 0, 128) | 0; d.u = indNum(d.u, 0, 0, 64 * IND_BAT_U); d.on = d.on !== false; d.ft = indNum(d.ft, 20, 20, 2000); });
             if (!Array.isArray(b.cookers)) b.cookers = [];
-            b.cookers = b.cookers.filter(function (c) { return c && IND_COOK[c.ty] && c.ty !== 'stove' && isFinite(c.x) && isFinite(c.z) && c.id; }).slice(0, IND_COOK_CAP);
+            b.cookers = b.cookers.filter(function (c) { return c && IND_COOK[c.ty] && c.ty !== 'stove' && isFinite(c.x) && isFinite(c.z) && c.id; }).slice(0, indCookCap());
             b.cookers.forEach(function (c) { indFixCook(c, b); });
             b.cseq = indNum(b.cseq, 0, 0, 1e9) | 0; b.cookers.forEach(function (c) { b.cseq = Math.max(b.cseq, c.id); });
             b.devs.forEach(function (d) { if (d.ty === 'bank') { d.li = !!d.li; if (d.bats > (d.li ? 128 : 64)) d.bats = d.li ? 128 : 64; d.ni = indNum(d.ni, 0, 0, 64); if (d.um !== undefined) d.um = indNum(d.um, 0, 0, 128 * 720); } d.cy = typeof d.cy === 'string' && indCylParse(d.cy) ? d.cy : null; d.ct = indNum(d.ct, 0, 0, 100); d.pt = indNum(d.pt, 0, 0, 100); if (IND_DEV_FIX[d.ty]) IND_DEV_FIX[d.ty](d); });
@@ -605,10 +606,10 @@
             b.animals.forEach(function (a) {   // 繁殖字段：老档没有的当成年、不发情、不冷却
                 if (a.born !== undefined) { if (isFinite(a.born)) a.born = Math.min(a.born, b.clock); else delete a.born; }
                 a.love = indNum(a.love, 0, 0, IND_BREED.love); a.cd = indNum(a.cd, 0, 0, 1200); a.brk = indNum(a.brk, 0, 0, IND_BREED.birth);
-                if (a.brk > 0) { a.bx = indNum(a.bx, a.x, -IND_BASE.x + 1, IND_BASE.x - 1); a.bz = indNum(a.bz, a.z, -IND_BASE.z + 1, IND_BASE.z - 1); } else { delete a.bx; delete a.bz; }
+                if (a.brk > 0) { a.bx = indNum(a.bx, a.x, IND_BASE.x0 + 1, IND_BASE.x1 - 1); a.bz = indNum(a.bz, a.z, IND_BASE.z0 + 1, IND_BASE.z1 - 1); } else { delete a.bx; delete a.bz; }
             });
             b.animals.forEach(function (a) { a.food = indNum(a.food, 60, 0, 100); a.woolAt = Math.min(indNum(a.woolAt, 0, 0, 1e9), b.clock + IND_WOOL_EVERY); a.milkAt = Math.min(indNum(a.milkAt, 0, 0, 1e9), b.clock + IND_MILK_EVERY);   // 旧档里记的下次时间比新间隔晚，改成现在 + 新间隔
-             a.x = indNum(a.x, 0, -IND_BASE.x + 1, IND_BASE.x - 1); a.z = indNum(a.z, 0, -IND_BASE.z + 1, IND_BASE.z - 1); });
+             a.x = indNum(a.x, 0, IND_BASE.x0 + 1, IND_BASE.x1 - 1); a.z = indNum(a.z, 0, IND_BASE.z0 + 1, IND_BASE.z1 - 1); });
             if (b.surv.hp <= 0) b.surv.hp = 100;
             if (!b.stove || typeof b.stove !== 'object') b.stove = n.stove;
             if (b.bellows) b.stove.bellows = true;   // 老档：基地装过风箱，算装在原来的灶台上
@@ -841,7 +842,7 @@
                 }
                 let dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz);
                 if (d > 0.1) { let st = Math.min(d, sp * dt); a.x += dx / d * st; a.z += dz / d * st; a.ry = Math.atan2(dx, dz); }
-                if (base) { a.x = Math.max(-IND_BASE.x + 1, Math.min(IND_BASE.x - 1, a.x)); a.z = Math.max(-IND_BASE.z + 1, Math.min(IND_BASE.z - 1, a.z)); }
+                if (base) { a.x = Math.max(IND_BASE.x0 + 1, Math.min(IND_BASE.x1 - 1, a.x)); a.z = Math.max(IND_BASE.z0 + 1, Math.min(IND_BASE.z1 - 1, a.z)); }
                 else { a.x = Math.max(-IND_MAP + 2, Math.min(IND_MAP - 2, a.x)); a.z = Math.max(-IND_MAP + 2, Math.min(IND_MAP - 2, a.z)); }
             });
         }
@@ -1119,7 +1120,7 @@
         // 基地：一块地、一圈矮篱笆、农田、仓库箱、灶台、床、水池、出发门
         const IND_BASE_ST = {
             box: { x: -2, z: -19, name: '仓库箱' }, stove: { x: 8, z: -19, name: '灶台' }, bed: { x: 22, z: -18, name: '床' }, bench: { x: 15, z: -19, name: '工作台' },
-            pool: { x: 20, z: 10, r: 2.2, name: '水池' }, gate: { x: 0, z: -IND_BASE.z, name: '出发' }
+            pool: { x: 20, z: 10, r: 2.2, name: '水池' }, gate: { x: 0, z: IND_BASE.z0, name: '出发' }
         };
         // 家具能搬：IND_BASE_ST 里的坐标跟着存档走（base.pos），默认位置在这里
         const IND_ST_DEF = JSON.parse(JSON.stringify(IND_BASE_ST));
@@ -1131,13 +1132,13 @@
             indClearWorld();
             ind.where = 'base'; ind.map = null; ind.exitT = 0;
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
-            let X = IND_BASE.x, Z = IND_BASE.z, F = IND_FIELD;
-            ind.grass = indPlane(2 * X + 30, 2 * Z + 30, 0xa5d6a7, 0, 0, 0); ind.grassSeason = -1;
-            indPlane(2 * X, 2 * Z, 0xbcaaa4, 0, 0.01, 0);
+            let X0 = IND_BASE.x0, X1 = IND_BASE.x1, Z0 = IND_BASE.z0, Z1 = IND_BASE.z1, F = IND_FIELD, CX = (X0 + X1) / 2, CZ = (Z0 + Z1) / 2, W = X1 - X0, D = Z1 - Z0;
+            ind.grass = indPlane(W + 30, D + 30, 0xa5d6a7, CX, 0, CZ); ind.grassSeason = -1;
+            indPlane(W, D, 0xbcaaa4, CX, 0.01, CZ);
             indPlane(F.x1 - F.x0, F.z1 - F.z0, 0x6d4c41, (F.x0 + F.x1) / 2, 0.02, (F.z0 + F.z1) / 2);
             indSign('农田', (F.x0 + F.x1) / 2, 2.5, F.z0 - 1, 2.4, 0.6);
-            indBox(2 * X, 0.6, 0.2, 0x6d4c41, 0, 0.3, Z); indBox(0.2, 0.6, 2 * Z, 0x6d4c41, -X, 0.3, 0); indBox(0.2, 0.6, 2 * Z, 0x6d4c41, X, 0.3, 0);
-            indBox(X - 2.5, 0.6, 0.2, 0x6d4c41, -(X + 2.5) / 2, 0.3, -Z); indBox(X - 2.5, 0.6, 0.2, 0x6d4c41, (X + 2.5) / 2, 0.3, -Z);
+            indBox(W, 0.6, 0.2, 0x6d4c41, CX, 0.3, Z1); indBox(0.2, 0.6, D, 0x6d4c41, X0, 0.3, CZ); indBox(0.2, 0.6, D, 0x6d4c41, X1, 0.3, CZ);
+            indBox(-2.5 - X0, 0.6, 0.2, 0x6d4c41, (X0 - 2.5) / 2, 0.3, Z0); indBox(X1 - 2.5, 0.6, 0.2, 0x6d4c41, (X1 + 2.5) / 2, 0.3, Z0);
             let S = IND_BASE_ST;   // 仓库箱、灶台、床、工作台、水池、小熔炉、大窑能搬，画在 indSyncFurn 里
             if (ind.base.gh) indBuildGh();
             let g = S.gate; indBox(0.4, 3.2, 0.4, 0x5d4037, g.x - 2.4, 1.6, g.z); indBox(0.4, 3.2, 0.4, 0x5d4037, g.x + 2.4, 1.6, g.z); indBox(5.2, 0.5, 0.5, 0x5d4037, g.x, 3.3, g.z);
@@ -1147,18 +1148,18 @@
             ind.fertMesh = indInst(new THREE.BoxGeometry(0.3, 0.2, 0.3), IND_CROP_CAP);
             ind.tileMesh = indInst(new THREE.PlaneGeometry(1.9, 1.9).rotateX(-Math.PI / 2), IND_TILE_CAP); ind.tileDirty = true;
             indSyncFurn();   // 家具马上画出来（不等第一帧），进出时物体数每次一样
-            ind.pdMesh = null; pdSync();   // 自己挖的水池也马上画（19-industry-pond.js）
+            ind.pdMesh = null; pdSync(); hmSync();   // 自己挖的水池也马上画（19-industry-pond.js）；石墙石地板（19-industry-home.js）
             ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 120);
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             ind.devMesh = indInst(new THREE.BoxGeometry(1, 1, 1), IND_DEV_CAP); ind.devDirty = true;
             ind.wireLine = new THREE.LineSegments(indGeo(new THREE.BufferGeometry()), indMat(new THREE.LineBasicMaterial({ color: 0xff7043 }))); ind.wireLine.frustumCulled = false; indAdd(ind.wireLine); ind.wireDirty = true;
             ind.pipeLine = new THREE.LineSegments(indGeo(new THREE.BufferGeometry()), indMat(new THREE.LineBasicMaterial({ color: 0x29b6f6 }))); ind.pipeLine.frustumCulled = false; indAdd(ind.pipeLine);   // 管道（任务 57），跟电线一起重画
-            ind.p.x = 0; ind.p.z = fromTrip ? -IND_BASE.z + 4 : 4; ind.p.y = 0; ind.p.vy = 0;
+            ind.p.x = 0; ind.p.z = fromTrip ? IND_BASE.z0 + 4 : 4; ind.p.y = 0; ind.p.vy = 0;
             if (fromTrip) {
                 let got = Object.keys(ind.bag).map(function (k) { return indName(k) + '×' + ind.bag[k]; });
                 fol.forEach(function (a, i) {
                     if (ind.base.animals.length >= IND_ANIMAL_CAP) return;
-                    ind.base.animals.push({ k: a.k, x: 6 + i * 1.5, z: -IND_BASE.z + 6, food: 60, woolAt: ind.base.clock + IND_WOOL_EVERY, milkAt: ind.base.clock });
+                    ind.base.animals.push({ k: a.k, x: 6 + i * 1.5, z: IND_BASE.z0 + 6, food: 60, woolAt: ind.base.clock + IND_WOOL_EVERY, milkAt: ind.base.clock });
                     got.push(IND_ANIMALS[a.k].name);
                 });
                 ind.base.trips++;
@@ -1395,7 +1396,7 @@
                 ind.exitT = inExit ? ind.exitT + dt : 0;
                 if (ind.exitT >= IND_T.extract) indGoBase(true);
             }
-            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); indHouseFadeTick(dt); indSyncTiles(); mbSync(); if (ind.carve) ctBar(); pdSync();
+            indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); hmSync(); indHouseFadeTick(dt); indSyncTiles(); mbSync(); if (ind.carve) ctBar(); pdSync();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
             ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); indSeasonLook(); }
@@ -1534,14 +1535,15 @@
                 }
                 R.me.rotation.y = Math.atan2(mx, mz);
             }
-            let lim = R.where === 'base' ? { x: IND_BASE.x - 0.6, z: IND_BASE.z - 0.6 } : { x: IND_MAP - 1, z: IND_MAP - 1 };
+            let lim = R.where === 'base' ? { x0: IND_BASE.x0 + 0.6, x1: IND_BASE.x1 - 0.6, z0: IND_BASE.z0 + 0.6, z1: IND_BASE.z1 - 0.6 } : { x0: -IND_MAP + 1, x1: IND_MAP - 1, z0: -IND_MAP + 1, z1: IND_MAP - 1 };
             if (R.cave) cvClamp(R.p);   // 矿洞里只能在洞里走（任务 66）
             else {
-                R.p.x = Math.max(-lim.x, Math.min(lim.x, R.p.x));
-                let zMin = R.where === 'base' && Math.abs(R.p.x) < IND_T.gateR ? -IND_BASE.z - 1 : -lim.z;
-                R.p.z = Math.max(zMin, Math.min(lim.z, R.p.z));
+                R.p.x = Math.max(lim.x0, Math.min(lim.x1, R.p.x));
+                let zMin = R.where === 'base' && Math.abs(R.p.x) < IND_T.gateR ? IND_BASE.z0 - 1 : lim.z0;
+                R.p.z = Math.max(zMin, Math.min(lim.z1, R.p.z));
             }
             if (R.where === 'base' && R.base.houses.length) indHouseCollide(R.p);
+            if (R.where === 'base') hmCollide(R.p);   // 石墙挡路（19-industry-home.js）
             let gy = indGround(R.p.x, R.p.z);
             if (k.jump && R.p.y <= gy + 0.001 && !blocked && !R.onRaft) R.p.vy = 9;
             R.p.vy -= 25 * dt; R.p.y += R.p.vy * dt;
@@ -1578,7 +1580,7 @@
             if (ind.where !== 'base') { indFlash('泥土只能在基地里开农田'); return false; }
             if (ind.base.tiles.length >= IND_TILE_CAP) { indFlash('农田开满了'); return false; }
             let f = indFace(), t = indTileAt(ind.p.x + f.x * 2.2, ind.p.z + f.z * 2.2);
-            if (Math.abs(t.x) > IND_BASE.x - 1 || Math.abs(t.z) > IND_BASE.z - 1) { indFlash('这里开不了'); return false; }
+            if (t.x < IND_BASE.x0 + 1 || t.x > IND_BASE.x1 - 1 || t.z < IND_BASE.z0 + 1 || t.z > IND_BASE.z1 - 1) { indFlash('这里开不了'); return false; }
             if (indInField(t.x, t.z)) { indFlash('这里已经是农田了'); return false; }
             if (!indSpotFree(t.x, t.z, 1.0)) { indFlash('这里放不下，换个空地'); return false; }
             indBagDel('dirt', 1); ind.base.tiles.push({ x: t.x, z: t.z }); ind.tileDirty = true; indSave(); indFlash('开了一格农田');
@@ -1795,8 +1797,8 @@
             if (k === 'torch') return cvLightTorch();   // 右键点火把（任务 66）
             if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
             if (k && stkTryStack(k, a)) return true;   // 拿着同种设备右键已经放下的那台：叠上去（任务 68）
-            if (ind.where === 'base' && a && a.kind === 'pool' && plPour(k)) return true;   // 水桶倒回原水池（19-industry-fish.js）
             if (fhRod(k) || fhNet(k)) return true;   // 钓竿、渔网
+            if (ind.where === 'base' && hmUse(k, a)) return true;   // 石头右键栅栏扩展家园、石墙石地板放下／收起（19-industry-home.js）
             if (ind.where === 'base' && !a && pdUse(k)) return true;   // 对着自己挖的水池：接水、倒水、喝、铺、盖、填回
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
@@ -1959,7 +1961,7 @@
             indBagDel(k, 1);
             let a = ind.base.ground.length * 2.399, rr = 0.25 * Math.sqrt(ind.base.ground.length % 12), f = indFace();
             let x = ind.p.x + f.x * 1.0 + Math.cos(a) * rr, z = ind.p.z + f.z * 1.0 + Math.sin(a) * rr;
-            x = Math.max(-IND_BASE.x + 0.5, Math.min(IND_BASE.x - 0.5, x)); z = Math.max(-IND_BASE.z + 0.5, Math.min(IND_BASE.z - 0.5, z));
+            x = Math.max(IND_BASE.x0 + 0.5, Math.min(IND_BASE.x1 - 0.5, x)); z = Math.max(IND_BASE.z0 + 0.5, Math.min(IND_BASE.z1 - 0.5, z));
             ind.base.ground.push({ k: k, x: x, z: z });
             ind.itemDirty = true; indSave();
         }
@@ -2118,7 +2120,7 @@
             if (ind.base.devs.length >= IND_DEV_CAP) { indFlash('设备太多了'); return false; }
             if (!rcPlaceOk(IND_ITEMS[k].dev)) return false;   // 电路上限：40 个芯片、400 个元件
             let f = indFace(), x = ind.p.x + f.x * 1.6, z = ind.p.z + f.z * 1.6;
-            x = Math.max(-IND_BASE.x + 0.8, Math.min(IND_BASE.x - 0.8, x)); z = Math.max(-IND_BASE.z + 0.8, Math.min(IND_BASE.z - 0.8, z));
+            x = Math.max(IND_BASE.x0 + 0.8, Math.min(IND_BASE.x1 - 0.8, x)); z = Math.max(IND_BASE.z0 + 0.8, Math.min(IND_BASE.z1 - 0.8, z));
             if (indCooks().some(function (c) { let sp = indSpoutPos(c); return Math.hypot(x - sp.x, z - sp.z) < 1.2; })) { indFlash('这里是出料槽的位置，换个地方'); return false; }
             if (IND_ITEMS[k].dev === 'reactor' && !indSpotFree(x, z, 2.2)) { indFlash('反应堆占 3×3 米，这里放不下，换个空地'); return false; }
             indBagDel(k, 1);
@@ -2187,7 +2189,7 @@
         // 放房子：门朝着你，房子放在面前；整块地方要是空的（不压家具、农田、出发门，不贴着人）
         function indHouseFree(h) {
             let b = indHouseBox(h), B = ind.base, S = IND_BASE_ST, ok = true, m = 0.5;
-            if (b.x0 < -IND_BASE.x + 0.5 || b.x1 > IND_BASE.x - 0.5 || b.z0 < -IND_BASE.z + 0.5 || b.z1 > IND_BASE.z - 0.5) return false;
+            if (b.x0 < IND_BASE.x0 + 0.5 || b.x1 > IND_BASE.x1 - 0.5 || b.z0 < IND_BASE.z0 + 0.5 || b.z1 > IND_BASE.z1 - 0.5) return false;
             let box = { x0: b.x0 - m, x1: b.x1 + m, z0: b.z0 - m, z1: b.z1 + m };
             let hit = function (o, r) { if (indRectDist(o.x, o.z, box) < r) ok = false; };
             [['stove', 1.5], ['bed', 2.0], ['bench', 1.4], ['pool', S.pool.r + 0.3]].forEach(function (q) { if (!B.off[q[0]]) hit(S[q[0]], q[1]); });
@@ -2200,15 +2202,15 @@
             B.ground.forEach(function (g) { hit(g, 0.5); });
             B.houses.forEach(function (o) { if (o !== h) { let q = indHouseBox(o); if (b.x0 < q.x1 + 1 && b.x1 > q.x0 - 1 && b.z0 < q.z1 + 1 && b.z1 > q.z0 - 1) ok = false; } });
             let F = IND_FIELD; if (b.x0 < F.x1 + 0.5 && b.x1 > F.x0 - 0.5 && b.z0 < F.z1 + 0.5 && b.z1 > F.z0 - 0.5) ok = false;
-            if (b.x1 > S.gate.x - 4 && b.x0 < S.gate.x + 4 && b.z0 < -IND_BASE.z + 5) ok = false;
-            [{ x: 0, z: 4 }, { x: 0, z: -IND_BASE.z + 4 }].forEach(function (q) { hit(q, 1.5); });
+            if (b.x1 > S.gate.x - 4 && b.x0 < S.gate.x + 4 && b.z0 < IND_BASE.z0 + 5) ok = false;
+            [{ x: 0, z: 4 }, { x: 0, z: IND_BASE.z0 + 4 }].forEach(function (q) { hit(q, 1.5); });
             if (indRectDist(ind.p.x, ind.p.z, box) < 0.3) ok = false;
             return ok;
         }
         function indPlaceHouse(k) {
             if (ind.where !== 'base') { indFlash('只能放在基地里'); return false; }
             let B = ind.base, ty = IND_ITEMS[k].house;
-            if (B.houses.length >= IND_HOUSE_CAP) { indFlash('房子太多了'); return false; }
+            if (B.houses.length >= indHouseCap()) { indFlash('房子太多了'); return false; }
             let f = indFace(), alongZ = Math.abs(f.z) >= Math.abs(f.x), sx = alongZ ? 0 : (f.x > 0 ? 1 : -1), sz = alongZ ? (f.z > 0 ? 1 : -1) : 0;
             let h = { id: 0, ty: ty, x: 0, z: 0, side: alongZ ? (sz > 0 ? 1 : 0) : (sx > 0 ? 3 : 2), open: false };
             let m = indHouseDim(h), ext = (alongZ ? m.d : m.w) / 2 + 1.2;
@@ -2233,7 +2235,7 @@
             B.houses.forEach(function (h) { indHouseRects(h).forEach(function (rc) { if (indRectDist(x, z, rc) < r + 0.1) ok = false; }); });
             [['stove', 1.5], ['bed', 2.0], ['bench', 1.4], ['pool', S.pool.r + 0.3]].forEach(function (p) { if (!B.off[p[0]] && Math.hypot(x - S[p[0]].x, z - S[p[0]].z) < r + p[1]) ok = false; });
             B.chests.forEach(function (c) { if (c !== skip && Math.hypot(x - c.x, z - c.z) < r + 1.2) ok = false; });
-            if (Math.abs(x - S.gate.x) < 4 + r && z < -IND_BASE.z + 4 + r) ok = false;
+            if (Math.abs(x - S.gate.x) < 4 + r && z < IND_BASE.z0 + 4 + r) ok = false;
             if (indInField(x, z)) ok = false;
             if (pdNear(x, z, r)) ok = false;   // 自己挖的水池上不能放东西
             B.cookers.forEach(function (c) { if (c !== skip && Math.hypot(x - c.x, z - c.z) < r + IND_COOK[c.ty].r + 0.2) ok = false; });
@@ -2300,9 +2302,9 @@
             if (ind.where !== 'base') { indFlash('只能放在基地里'); return false; }
             let B = ind.base, d = IND_ITEMS[k], ty = d.furn, pay = d.inst ? B.carried[k.slice(5)] : null, r = IND_FURN_R[ty];
             if (ty === 'chest' && B.chests.length >= 20) { indFlash('箱子太多了'); return false; }
-            if (IND_COOK[ty] && ty !== 'stove' && B.cookers.length >= IND_COOK_CAP) { indFlash('炉子太多了'); return false; }
+            if (IND_COOK[ty] && ty !== 'stove' && B.cookers.length >= indCookCap()) { indFlash('炉子太多了'); return false; }
             let f = indFace(), x = ind.p.x + f.x * (r + 1.2), z = ind.p.z + f.z * (r + 1.2);
-            x = Math.max(-IND_BASE.x + r, Math.min(IND_BASE.x - r, x)); z = Math.max(-IND_BASE.z + r, Math.min(IND_BASE.z - r, z));
+            x = Math.max(IND_BASE.x0 + r, Math.min(IND_BASE.x1 - r, x)); z = Math.max(IND_BASE.z0 + r, Math.min(IND_BASE.z1 - r, z));
             if (!indSpotFree(x, z, r)) { indFlash('这里放不下，换个空地'); return false; }
             indBagDel(k, 1);
             if (ty === 'chest') B.chests.push({ id: pay ? +k.slice(5) : ++B.cid, x: x, z: z, big: pay ? pay.big : false, lead: pay ? !!pay.lead : !!d.lead, cold: pay ? !!pay.cold : !!d.cold, iceT: pay ? pay.iceT || 0 : 0, age: pay && pay.age ? pay.age : {}, items: pay ? pay.items : {} });
@@ -2317,9 +2319,9 @@
         function indPlaceCook(k) {
             if (ind.where !== 'base') { indFlash('只能放在基地里'); return false; }
             let ty = IND_ITEMS[k].cook, D = IND_COOK[ty];
-            if (ind.base.cookers.length >= IND_COOK_CAP) { indFlash('炉子太多了'); return false; }
+            if (ind.base.cookers.length >= indCookCap()) { indFlash('炉子太多了'); return false; }
             let f = indFace(), x = ind.p.x + f.x * (D.r + 1.2), z = ind.p.z + f.z * (D.r + 1.2);
-            x = Math.max(-IND_BASE.x + D.r, Math.min(IND_BASE.x - D.r, x)); z = Math.max(-IND_BASE.z + D.r, Math.min(IND_BASE.z - D.r, z));
+            x = Math.max(IND_BASE.x0 + D.r, Math.min(IND_BASE.x1 - D.r, x)); z = Math.max(IND_BASE.z0 + D.r, Math.min(IND_BASE.z1 - D.r, z));
             if (!indSpotFree(x, z, D.r)) { indFlash('这里放不下，换个空地'); return false; }
             indBagDel(k, 1);
             ind.base.cookers.push(Object.assign({ id: ++ind.base.cseq, ty: ty, x: x, z: z }, ckNewState()));
@@ -2822,7 +2824,7 @@
             let F = indFires(); if (F.length >= 30) { indFlash('火太多了'); return false; }
             if (!fiCampfireOk()) return false;   // 硬核：要火源（起火）
             let f = indFace(), x = ind.p.x + f.x * 1.6, z = ind.p.z + f.z * 1.6;
-            if (ind.where === 'base') { x = Math.max(-IND_BASE.x + 0.5, Math.min(IND_BASE.x - 0.5, x)); z = Math.max(-IND_BASE.z + 0.5, Math.min(IND_BASE.z - 0.5, z)); }
+            if (ind.where === 'base') { x = Math.max(IND_BASE.x0 + 0.5, Math.min(IND_BASE.x1 - 0.5, x)); z = Math.max(IND_BASE.z0 + 0.5, Math.min(IND_BASE.z1 - 0.5, z)); }
             indBagDel('campfire', 1); F.push({ x: x, z: z, fuel: 120 });
             ind.fireDirty = true; indSave(); indFlash('篝火点上了（拿着木头对着它左键加柴）');
             return true;
@@ -3567,7 +3569,8 @@
             else if (a && a.kind === 'bed') hint = '床<br><small>左键：睡觉（夜里或累了）</small>';
             else if (a && a.kind === 'pool') hint = '水池　' + (Math.round(plW() * 10) / 10) + ' / ' + plCap() + ' 桶';
             else if (R.where === 'base' && sel && IND_ITEMS[sel].seed && indInField(R.p.x + indFace().x * 1.4, R.p.z + indFace().z * 1.4)) hint = '左键：种' + indName(sel);
-            else if (R.where === 'base' && !a && pdAimCell()) hint = pdHint();   // 自己挖的水池（19-industry-pond.js）
+            else if (R.where === 'base' && !a && pdAimCell()) hint = pdHint();
+            else if (R.where === 'base' && !a && hmHint()) hint = hmHint();   // 拿石头靠近栅栏：还能扩几次   // 自己挖的水池（19-industry-pond.js）
             else if (R.where === 'base' && !a && tlKind(sel) === 'shovel') hint = '<small>左键：挖一格水池</small>';
             else if (R.where === 'base' && Math.hypot(R.p.x - IND_BASE_ST.gate.x, R.p.z - IND_BASE_ST.gate.z) < 6) hint = '从门里走出去就是远征';
             else if (sel === 'bell') hint = '<small>左键：摇铃，30 米内的动物走过来</small>';

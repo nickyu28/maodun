@@ -27,7 +27,7 @@
             let p = pdFront(), B = ind.base;
             if (pdCellAt(p.i, p.j)) return wlDeepen(pdCellAt(p.i, p.j));   // 已经挖好的格子再往下挖：井（19-industry-fish.js）
             if (pdCells().length >= PD.max) { indFlash('池子太大了（最多 ' + PD.max + ' 格）'); return true; }
-            if (Math.abs(p.i) > IND_BASE.x - 1 || Math.abs(p.j) > IND_BASE.z - 1 || !indSpotFree(p.i, p.j, 0.5) || (B.tiles || []).some(function (t) { return Math.abs(t.x - p.i) < 1.5 && Math.abs(t.z - p.j) < 1.5; })) { indFlash('这里挖不了（农田、家具、房子、出发门旁边）'); return true; }
+            if (p.i < IND_BASE.x0 + 1 || p.i > IND_BASE.x1 - 1 || p.j < IND_BASE.z0 + 1 || p.j > IND_BASE.z1 - 1 || !indSpotFree(p.i, p.j, 0.5) || (B.tiles || []).some(function (t) { return Math.abs(t.x - p.i) < 1.5 && Math.abs(t.z - p.j) < 1.5; })) { indFlash('这里挖不了（农田、家具、房子、出发门旁边）'); return true; }
             let sh = indSel();
             return wdChStart({ kind: 'pond', need: PD.dig * tlMul(sh), label: '挖水池', done: function () {
                 if (pdCellAt(p.i, p.j)) return;

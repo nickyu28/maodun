@@ -10623,7 +10623,7 @@ async function enterExit(tab, key) {
                     let c1 = cook('stone'); c1.x = -5; let e1 = indCooks().filter(function (x) { return x.id === c1.id; })[0]; c1.fuel = 100; c1.fire = 2; c1.temp = 300; indCookTick(e1, 1); let used1 = 100 - c1.fuel;
                     let rb = IND_RECIPES.filter(function (q) { return q.out.bread; })[0];
                     return { n: c.n, left: ind.bag.cook_stone || 0, f1: K1.batch.food, f3: K3.batch.food, s3: K3.batch.smelt, used1: used1, used3: used3, time: rb.time, fl: fl.join('|') };`);
-                if (!(r.n === 3 && r.left === 0 && r.f3 === r.f1 * 3 && r.s3 === 3 && r.used1 > 0 && Math.abs(r.used3 - 3 * r.used1) < 1e-6 && r.time === 40 && /×3/.test(r.fl))) bad.push('石炉叠 3 台：份数 ×3、燃料每秒 ×3、时间不变 ' + JSON.stringify(r));
+                if (!(r.n === 3 && r.left === 0 && r.f3 === r.f1 * 3 && r.s3 === 3 && r.used1 > 0 && Math.abs(r.used3 - 3 * r.used1) < 1e-6 && r.time === 40)) bad.push('石炉叠 3 台：份数 ×3、燃料每秒 ×3、时间不变 ' + JSON.stringify(r));
                 // 左键弹堆叠清单（n ≥ 2），选第 2 台收起剩 ×2，东西回背包；n = 1 时左键还是原来的面板；正在做的时候不让收
                 r = await run(`let c = cook('kiln'); c.n = 3; let a = { kind: 'cook', o: c }; let L = stkLeft(a), p = ind.panel, html = (document.getElementById('ind-panel') || {}).innerHTML || '';
                     let ok = stkTake('cook', c.id, 1); let n2 = c.n, bag = ind.bag.cook_kiln || 0;
@@ -11047,10 +11047,9 @@ async function enterExit(tab, key) {
                     let cell = function (i, j, w) { let c = { i: i, j: j, w: w || 0 }; B.pond.push(c); return c; }, shovel = Object.keys(TL_TOOL).filter(function (k) { return TL_TOOL[k].kind === 'shovel'; })[0];
                     ${body} } finally { blazeFlash = bf; } })()`);
                 // 原水池
-                let r = await run(`let a = plW(); let ok1 = plTake(1), w1 = B.poolW; ok1 = ok1 && plTake(0.1); let w2 = B.poolW; B.poolW = 0.5; fl.length = 0; let no = plTake(1); let msg = fl.join('|'); B.poolW = 10; ind.bag = { bucket_water: 1 }; let kfull = Object.keys(IND_ITEMS).filter(function (k) { return indContOf(k) && !indContOf(k).empty && indContOf(k).base === 'water_raw'; })[0]; ind.bag = {}; ind.bag[kfull] = 1; let pour = plPour(kfull), w3 = B.poolW, back = Object.keys(ind.bag).join();
-                    B.poolW = 5; B.animals = [{ k: 'sheep' }, { k: 'sheep' }, { k: 'cow' }]; ind.base.clock = 300; fhTickAll(600); let w4 = B.poolW; B.rule = 'casual'; delete B.poolW; let cas = plW(); B.rule = 'hard';
-                    return { a: a, w1: w1, w2: w2, no: no, msg: msg, pour: pour, w3: w3, back: back, w4: w4, cas: cas };`);
-                if (!(r.a === 40 && r.w1 === 39 && Math.abs(r.w2 - 38.9) < 1e-6 && r.no === false && /池子里没水了/.test(r.msg) && r.pour === true && r.w3 === 11 && /bucket/.test(r.back) && r.w4 < 5 - 0.5 && r.w4 > 5 - 1.5 && r.cas === 80)) bad.push('原水池 40／80 桶、接 1 桶喝 0.1、空了说没水、倒回去 +1、动物喝水和蒸发 ' + JSON.stringify(r));
+                let r = await run(`let a = plW(); let ok1 = plTake(1), w1 = B.poolW; ok1 = ok1 && plTake(0.1); let w2 = B.poolW; B.poolW = 0.5; fl.length = 0; let no = plTake(1); let msg = fl.join('|'); B.poolW = 10; let P = IND_BASE_ST.pool; B.wells = [{ i: Math.round(P.x + P.r + 1), j: Math.round(P.z), w: 0 }]; wlTick(120); let w3 = B.poolW; B.wells = []; B.poolW = 5; B.animals = [{ k: 'sheep' }, { k: 'sheep' }, { k: 'cow' }]; ind.base.clock = 300; fhTickAll(600); let w4 = B.poolW; B.rule = 'casual'; delete B.poolW; let cas = plW(); B.rule = 'hard';
+                    return { a: a, w1: w1, w2: w2, no: no, msg: msg, w3: w3, w4: w4, cas: cas };`);
+                if (!(r.a === 40 && r.w1 === 39 && Math.abs(r.w2 - 38.9) < 1e-6 && r.no === false && /池子里没水了/.test(r.msg) && Math.abs(r.w3 - 12) < 0.01 && r.w4 < 5 - 0.5 && r.w4 > 5 - 1.5 && r.cas === 80)) bad.push('原水池 40／80 桶、接 1 桶喝 0.1、空了说没水、旁边的井补水、动物喝水和蒸发 ' + JSON.stringify(r));
                 // 老存档整理：没有 poolW 的不写，用的时候给满；有的按范围夹住
                 r = await J(`(function(){ let a = {}; fhFixBase(a); let b = { poolW: 17, wells: [{ i: 1, j: 2, w: 99 }, { i: 3, j: 4, w: 1 }, { i: 5, j: 6, w: 1 }, { bad: 1 }], pond: [{ i: 0, j: 0, w: 1, f: { s: 2, b: 1, fd: 99, junk: 1 } }, { i: 1, j: 0, w: 1, f: 'x' }] }; fhFixBase(b); return { a: 'poolW' in a, b: b.poolW, wells: b.wells.length, w0: b.wells[0].w, f: b.pond[0].f, f2: b.pond[1].f === undefined }; })()`);
                 if (!(r.a === false && r.b === 17 && r.wells === 2 && r.w0 === 10 && r.f.s === 2 && r.f.b === 1 && r.f.fd === 20 && !('junk' in r.f) && r.f2)) bad.push('读档整理：老档不写 poolW、井最多 2 口存量夹到 10、鱼字段白名单 ' + JSON.stringify(r));
@@ -11090,6 +11089,48 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND100 水池养鱼剩下的：原水池有限、井、钓竿渔网、放鱼投食长大繁殖缺氧、捞、烤鱼', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND101')) {
+            // IND101 扩展家园、石墙、石地板（home-expand.md 第 2、3 步）：往东南西各扩 10 米、成本 120 起每次 +60（悠闲减半）、东西最多 4 次南最多 4 次、北边不扩出发门不动、边界跟着变、炉子房子上限按面积涨、旧存档 60 × 45；石墙挡人、石地板、收起、存档
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { let B0 = indNewBase(); B0.rule = 'hard'; hmApply({}); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ext = { e: 0, w: 0, s: 0 }; hmApply(B); B.walls = []; B.floors = []; ind.bag = { stone: 5000 }; indPanelClose();
+                    ${body} } finally { blazeFlash = bf; hmApply({}); } })()`);
+                let r = await run(`let a0 = [IND_BASE.x0, IND_BASE.x1, IND_BASE.z0, IND_BASE.z1], cap0 = indHouseCap(); indTeleport(IND_BASE.x1 - 1, 0); let d = hmFenceDir(); hmAsk('e'); let tx = document.getElementById('ind-panel').innerText; indPanelClose();
+                    let costs = []; for (let i = 0; i < 4; i++) { let s0 = ind.bag.stone; indTeleport(IND_BASE.x1 - 1, 0); hmExpand('e'); costs.push(s0 - ind.bag.stone); }
+                    let e5 = hmExpand('e'); let a1 = [IND_BASE.x0, IND_BASE.x1, IND_BASE.z0, IND_BASE.z1], w5 = hmExpand('w');
+                    return { a0: a0, cap0: cap0, d: d, tx: tx, costs: costs, e5: e5, w5: w5, a1: a1, ext: B.ext, cap1: indHouseCap(), gate: IND_BASE_ST.gate.z };`);
+                if (!(r.a0.join() === '-30,30,-22.5,22.5' && r.cap0 === 6 && r.d === 'e' && /往东扩 10 米，要 120 块石头，扩吗/.test(r.tx) && r.costs.join() === '120,180,240,300' && r.e5 === false && r.w5 === false && r.a1.join() === '-30,70,-22.5,22.5' && r.ext.e === 4 && r.cap1 === 8 && r.gate === -22.5)) bad.push('往东扩：边界 +10、成本 120/180/240/300、东西最多 4 次、门不动 ' + JSON.stringify(r));
+                r = await run(`indTeleport(0, IND_BASE.z1 - 1); let d = hmFenceDir(), c = []; for (let i = 0; i < 5; i++) { let s0 = ind.bag.stone; let ok = hmExpand('s'); c.push(ok ? s0 - ind.bag.stone : 0); }
+                    let nw = hmExpand('w'); let a = [IND_BASE.x0, IND_BASE.x1, IND_BASE.z0, IND_BASE.z1]; indTeleport(0, IND_BASE.z0 + 1); let north = hmFenceDir(); indTeleport(0, 0); let none = hmFenceDir();
+                    return { d: d, c: c, a: a, area: indHouseCap(), north: north, none: none, nw: nw };`);
+                if (!(r.d === 's' && r.c.join() === '120,180,240,300,0' && r.a.join() === '-40,30,-22.5,62.5' && r.north === null && r.none === null && r.nw === true)) bad.push('往南最多 4 次、西也能扩、北边和中间不能扩 ' + JSON.stringify(r));
+                // 悠闲成本减半（向上取整）；石头不够不扩；炉子房子上限随面积涨
+                r = await run(`B.rule = 'casual'; let s0 = ind.bag.stone; hmExpand('e'); let c1 = s0 - ind.bag.stone; B.rule = 'hard'; ind.bag = { stone: 100 }; fl.length = 0; let ok = hmExpand('s'); let msg = fl.join('|'); B.ext = { e: 4, w: 0, s: 4 }; hmApply(B); let big = indHouseCap(), cook = indCookCap(); B.ext = { e: 0, w: 0, s: 0 }; hmApply(B);
+                    return { c1: c1, ok: ok, msg: msg, big: big, cook: cook };`);
+                if (!(r.c1 === 60 && r.ok === false && /要 \d+ 块石头/.test(r.msg) && r.big === 16 && r.cook === 16)) bad.push('悠闲成本减半、石头不够、上限按面积涨（100 × 85 → 16） ' + JSON.stringify(r));
+                // 边界跟着变：扩了以后东边新地方能放东西、走得进去；存档整理保留；老存档没有 ext 是 60 × 45
+                r = await run(`B.ext = { e: 2, w: 1, s: 1 }; hmApply(B); indGoBase(null); let lim = [IND_BASE.x0, IND_BASE.x1, IND_BASE.z1]; ind.p.x = 49; ind.p.z = 30; ind.k = { d: true }; for (let i = 0; i < 30; i++) indMove(0.1); ind.k = {}; let reach = ind.p.x;
+                    let b = JSON.parse(JSON.stringify(B)); b.walls = [{ x: 1, z: 1, r: 1 }, { x: 'x' }]; b.floors = [{ x: 4, z: 4 }]; let fixed = indFixBase(b); let ext = fixed.ext; let old = indFixBase({ ver: 12, rule: 'hard' }); let oldLim = [IND_BASE.x0, IND_BASE.x1, IND_BASE.z0, IND_BASE.z1];
+                    return { lim: lim, reach: reach, ext: ext, w: fixed.walls.length, f: fixed.floors.length, old: oldLim };`);
+                if (!(r.lim.join() === '-40,50,32.5' && r.reach > 48.9 && r.reach <= 49.5 + 1 && r.ext.e === 2 && r.ext.w === 1 && r.ext.s === 1 && r.w === 1 && r.f === 1 && r.old.join() === '-30,30,-22.5,22.5')) bad.push('边界跟着变、存档整理保留 ext 石墙石地板、老存档 60 × 45 ' + JSON.stringify(r));
+                // 石墙：石头 4 / 石地板：石头 2；放下挡路；空手右键收起
+                r = await run(`let w = IND_CRAFT.filter(function (x) { return x.out === 'stone_wall'; })[0], fl2 = IND_CRAFT.filter(function (x) { return x.out === 'stone_floor'; })[0]; ind.bag = { stone_wall: 1, stone_floor: 1 }; indTeleport(0, 0); indLookAt(0, 10);
+                    indSelect('stone_wall'); let p1 = hmUse('stone_wall', null); indSelect('stone_floor'); let p2 = hmUse('stone_floor', null); let walls = B.walls.slice(), floors = B.floors.length;
+                    let wx = walls[0].x, wz = walls[0].z; ind.p.x = wx; ind.p.z = wz - 1.2; ind.p.z += 0.9; hmCollide(ind.p); let pushed = ind.p.z <= wz - 0.4;
+                    indTeleport(0, 0); ind.bag = {}; let get = hmUse(null, null), get2 = hmUse(null, null);
+                    return { w: !!w && w.in.stone === 4, f: !!fl2 && fl2.in.stone === 2, p: [p1, p2], n: walls.length, floors: floors, pushed: pushed, get: get, get2: get2, back: Object.keys(ind.bag).sort().join(), left: B.walls.length + B.floors.length };`);
+                if (!(r.w && r.f && r.p.join() === 'true,true' && r.n === 1 && r.floors === 1 && r.pushed && r.get && r.get2 && r.back === 'stone_floor,stone_wall' && r.left === 0)) bad.push('石墙石头 4、石地板石头 2、放下挡路、空手右键收起 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND101 扩展家园和石墙石地板：往东南西扩、成本递增、上限、门不动、上限按面积涨、存档、石墙挡路', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
