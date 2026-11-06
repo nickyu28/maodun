@@ -10084,14 +10084,14 @@ async function enterExit(tab, key) {
                 if (!(/管道/.test(b4.src) && b4.panel)) bad.push('面板写实际的冷却来源 ' + JSON.stringify(b4));
                 // ⑤ 小问题
                 const b5 = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let B = ind.base; indPanelClose(); B.devs = []; ind.bag = {}; indBagAdd('dev_tower', 1); indBagAdd('dev_reactor', 1); indBagAdd('dev_lamp', 1);
-                    indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_tower'); indUse(); let a = fl[fl.length - 1]; indSelect('dev_lamp'); indTeleport(-22, 10); indLookAt(-22, 5); indUse(); let b = fl[fl.length - 1];
+                    indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_tower'); indUse(); let a = fl[fl.length - 1]; indSelect('dev_lamp'); indTeleport(-22, 10); indLookAt(-22, 5); indUse(); let b = fl[fl.length - 1], lamp = B.devs.some(function (d) { return d.ty === 'lamp'; });
                     B.devs = [{ id: 7, ty: 'solar', x: 0, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 8, ty: 'gen', x: 3, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 0 }, { id: 9, ty: 'tower', x: 6, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, wu: 0 }]; B.pipes = [[9, 8, 2]];
                     let solar = indDevInfo(B.devs[0]), gen = indDevInfo(B.devs[1]);
                     ind.bag = { dev_crank: 1, dev_lamp: 1, battery: 2, rod_spent: 1, stone: 3 }; B.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'kiln', x: 20, z: 12 })]; ind.cookId = 5; let html = indStoveHtml(); let putBtn = function (k) { return html.indexOf("indStovePut('" + k + "'") >= 0; };
                     indStovePut('dev_crank', 1); let into = B.cookers[0].items.dev_crank || 0; blazeFlash = bf;
-                    return { a: a, b: b, solar: solar, gen: gen, crankBtn: putBtn('dev_crank'), lampBtn: putBtn('dev_lamp'), batBtn: putBtn('battery'), rodBtn: putBtn('rod_spent'), stoneBtn: putBtn('stone'), into: into }; })()`);
+                    return { a: a, b: b, lamp: lamp, solar: solar, gen: gen, crankBtn: putBtn('dev_crank'), lampBtn: putBtn('dev_lamp'), batBtn: putBtn('battery'), rodBtn: putBtn('rod_spent'), stoneBtn: putBtn('stone'), into: into }; })()`);
                 if (/接上电/.test(b5.a)) bad.push('放水塔别提示接电 ' + b5.a);
-                if (!/接上电/.test(b5.b)) bad.push('放电灯还是提示接电 ' + b5.b);
+                if (!b5.lamp) bad.push('电灯放得下（放好了的提示按任务 72 删了，改成看设备在不在） ' + b5.b);
                 if (!/13:30 最亮/.test(b5.solar) || /正午/.test(b5.solar)) bad.push('太阳能板写 13:30 最亮 ' + b5.solar);
                 if (!/水塔没水了/.test(b5.gen) || /生水左键/.test(b5.gen)) bad.push('蒸汽发电机接着水塔空了写水塔没水了 ' + b5.gen);
                 if (b5.crankBtn || b5.lampBtn || b5.batBtn || b5.rodBtn || !b5.stoneBtn || b5.into) bad.push('炉子面板：设备、电池、燃料棒没有放按钮、手摇发电机放不进窑；石头还有 ' + JSON.stringify(b5));
