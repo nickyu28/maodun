@@ -30,12 +30,12 @@
             if (o.tree === 'pine') {
                 if (trResinLeft(o) < 1) { indFlash('这棵的松脂割完了，过一阵会再长'); return true; }
                 if (o.rs === TR.resin) o.rt = ind.t + TR.resinT;
-                o.rs--; indBoxAdd('resin', 1); indFlash('割了 1 份松脂'); ind.hudSig = ''; return true;
+                o.rs--; indBoxAdd('resin', 1); ind.hudSig = ''; return true;
             }
             if (o.lx === undefined) o.lx = TR.latex;
             if (o.lx < 1) { indFlash('这棵橡胶树割完了'); return true; }
             if (ind.tap && ind.tap.o === o) return true;
-            ind.tap = { o: o, t: 0 }; indFlash('开始割胶，站在旁边 ' + TR.tap + ' 秒（可以走动，别离太远）'); return true;
+            ind.tap = { o: o, t: 0 }; return true;
         }
         function trTick(dt) {
             let P = ind && ind.tap; if (!P) return;
@@ -43,15 +43,15 @@
             if (!trHaveKnife()) { ind.tap = null; indFlash('割胶停了：手上要拿小刀或斧子'); return; }
             if (Math.hypot(ind.p.x - P.o.x, ind.p.z - P.o.z) > TR.tapR) { ind.tap = null; indFlash('离树太远，割胶停了'); return; }
             P.t += dt; if (P.t < TR.tap) return;
-            ind.tap = null; P.o.lx--; let r = indBoxAdd('latex', 1); indFlash('割到 1 份乳胶' + (r.ground ? '，背包满了，掉在脚边' : '') + (P.o.lx < 1 ? '，这棵割完了' : '')); ind.hudSig = '';
+            ind.tap = null; P.o.lx--; let r = indBoxAdd('latex', 1); if (P.o.lx < 1) indFlash('这棵割完了'); ind.hudSig = '';
         }
         // 空手左键摇椰子树：掉 1～2 个椰子，一棵一趟一次；手上拿着斧子、小刀、稿子就是砍树，不摇
         function trShake(o) {
             if (!ind || ind.where !== 'trip' || !o || o.tree !== 'palm' || o.dead) return false;
             let k = indSel(); if (k === 'axe' || k === 'knife' || (k && IND_ITEMS[k] && IND_ITEMS[k].tool)) return false;
-            if (o.sh) { indFlash('这棵树上的椰子已经摇下来了'); return true; }
+            if (o.sh) { return true; }
             o.sh = 1; let n = 1 + Math.floor(indRand() * 2), r = indBoxAdd('coconut', n);
-            indFlash('摇下来 ' + n + ' 个椰子' + (r.ground ? '，背包满了，掉在脚边' : '')); ind.hudSig = ''; return true;
+            ind.hudSig = ''; return true;
         }
         const wdNodeHint0 = wdNodeHint;
         wdNodeHint = function (o) {

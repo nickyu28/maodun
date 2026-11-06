@@ -189,7 +189,7 @@
         };
         IND_DEV_HTML.reactor = function (d) {
             let heat = nkReactorHeat(d), cool = nkCoolNow(d), water = nkReactorCool(d);
-            let rods = d.rods.map(function (r, i) { return indRow(r.dep ? '贫铀棒（增殖 ' + Math.floor(r.b * 100) + '%）' : indName(nkRodKeyOf(r)), '<button style="' + IND_BTN + '" onclick="nkRodOut(' + d.id + ',' + i + ')">取出</button>'); }).join('') || '<div style="color:#999;padding:6px 0;">一根燃料棒都没放</div>';
+            let rods = d.rods.map(function (r, i) { return indRow(r.dep ? '贫铀棒（增殖 ' + Math.floor(r.b * 100) + '%）' : indName(nkRodKeyOf(r)), '<button style="' + IND_BTN + '" onclick="nkRodOut(' + d.id + ',' + i + ')">取出</button>'); }).join('') || '';
             let put = Object.keys(ind.bag).filter(function (k) { return nkRod(k) || k === 'rod_dep'; }).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="nkRodIn(' + d.id + ',\'' + k + '\')">放 1 根</button>'); }).join('');
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">反应堆</div>' +
                 '<div style="line-height:1.7;">温度 <b style="color:' + nkTempCol(d.T) + '">' + Math.round(d.T) + '°C</b>　<span style="display:inline-block;width:120px;height:10px;background:#ddd;vertical-align:middle;border-radius:5px;overflow:hidden;"><span style="display:block;height:100%;width:' + Math.min(100, d.T / 5) + '%;background:' + nkTempCol(d.T) + ';"></span></span><br>' +

@@ -69,7 +69,7 @@
             let S = c.C, M = S.mold; if (!M || !M.part) return false;
             if (M.t > 0) { indFlash(indName(M.part) + '还烫，等 ' + Math.ceil(M.t) + ' 秒'); return true; }
             if (indBagAdd(M.part, 1) <= 0) { indFlash('背包满了'); return true; }
-            indFlash('取出了' + indName(M.part)); M.part = null; M.dura--;
+            M.part = null; M.dura--;
             if (M.dura <= 0) { S.mold = null; indFlash('模具用到头，碎了'); }
             indSave(); if (ind.panel === 'stove') ind.panelDirty = true;
             return true;
@@ -100,11 +100,11 @@
         // ── 雕模具 ──
         function ctCarveMenu() {
             if (!indHard()) return false;
-            if (ind.carve) { indFlash('正在雕' + CT_SHAPE[ind.carve.s].n + '模具：光标在亮区里按 X'); return true; }
+            if (ind.carve) { return true; }
             if ((ind.bag.clay || 0) < 2) return false;
             indPanelShow('carve', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">雕模具（用 2 黏土）</div>' + Object.keys(CT_SHAPE).map(function (s) {
                 return indRow(CT_SHAPE[s].n + '模具（' + CT_SHAPE[s].cuts + ' 刀）', '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="ctCarveStart(\'' + s + '\')">雕</button>');
-            }).join('') + '<div style="margin-top:6px;color:#888;font-size:13px;">右下角的条：光标走到亮区里按 X（触屏点"刻"），能边走边雕</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+            }).join('') + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
             return true;
         }
         function ctCarveStart(s) {

@@ -324,15 +324,15 @@
             if (mbIsKnife(k)) {
                 if (!p.weapon && mbPetCount(p) >= MB.petMax) { indFlash('最多 ' + MB.petMax + ' 只战斗的宠物'); return true; }
                 if (p.weapon) indBagAdd(p.weapon, 1);
-                indBagDel(k, 1); p.weapon = k; p.wd = MB_KNIFE[k].dura; indFlash(nm + '装上了' + indName(k)); mbPetAch(p); indSave(); return true;
+                indBagDel(k, 1); p.weapon = k; p.wd = MB_KNIFE[k].dura; mbPetAch(p); indSave(); return true;
             }
             if (MB_SHIELD[k]) {
                 if (p.shield) indBagAdd(p.shield, 1);
-                indBagDel(k, 1); p.shield = k; p.sd = MB_SHIELD[k].dura; indFlash(nm + '装上了' + indName(k)); mbPetAch(p); indSave(); return true;
+                indBagDel(k, 1); p.shield = k; p.sd = MB_SHIELD[k].dura; mbPetAch(p); indSave(); return true;
             }
             let kc = indContOf(k);
             if ((p.k === 'dog' || p.k === 'cat') && kc && (kc.base === 'water_raw' || kc.base === 'water_boiled')) {
-                indBagDel(k, 1); indBagAdd(indEmptyKey(kc.mat), 1); p.hyd = 100; indFlash('给' + nm + '喝了水'); indSave(); return true;
+                indBagDel(k, 1); indBagAdd(indEmptyKey(kc.mat), 1); p.hyd = 100; indSave(); return true;
             }
             return false;
         }
@@ -430,10 +430,10 @@
         }
         // ── 用东西：吃毒蘑菇、吃云絮、云絮浇地、胶水倒地上 ──
         function mbUse(k, a) {
-            if (k === 'fluff' && a && a.kind === 'crop') { indBagDel(k, 1); let end = (Math.floor(ind.base.clock / IND_DAY) + 1) * IND_DAY; a.o.wet = end; ind.cropDirty = true; indSave(); indFlash('撒了云絮，当浇了一次水'); return true; }
+            if (k === 'fluff' && a && a.kind === 'crop') { indBagDel(k, 1); let end = (Math.floor(ind.base.clock / IND_DAY) + 1) * IND_DAY; a.o.wet = end; ind.cropDirty = true; indSave(); return true; }
             if (k === 'glue') {
                 if (ind.where !== 'trip') { indFlash('胶水出门时倒在地上，粘住怪'); return true; }
-                let f = indFace(); indBagDel('glue', 1); (ind.glue = ind.glue || []).push({ x: ind.p.x + f.x * 1.5, z: ind.p.z + f.z * 1.5, t: ind.t + MB.glueT }); indFlash('倒了一滩胶水，怪踩上去走不动'); return true;
+                let f = indFace(); indBagDel('glue', 1); (ind.glue = ind.glue || []).push({ x: ind.p.x + f.x * 1.5, z: ind.p.z + f.z * 1.5, t: ind.t + MB.glueT }); return true;
             }
             return false;
         }
@@ -458,8 +458,8 @@
             let c0 = indCraft;
             indCraft = function (i) {
                 let r = IND_CRAFT[i], ok = c0(i);
-                if (ok && r && r.poison) { ind.base.poisonK = { k: r.out, n: MB.poisonHits }; indFlash(indName(r.out) + '涂上毒了：接下来 ' + MB.poisonHits + ' 下让怪中毒'); }
-                if (ok && r && r.fix) { let H = ind.base.duraHalf = ind.base.duraHalf || {}; H[r.out] = (H[r.out] || 0) + 1; indFlash('修好了' + indName(r.out) + '（耐久一半）'); }
+                if (ok && r && r.poison) { ind.base.poisonK = { k: r.out, n: MB.poisonHits }; indFlash(indName(r.out) + '涂上毒了'); }
+                if (ok && r && r.fix) { let H = ind.base.duraHalf = ind.base.duraHalf || {}; H[r.out] = (H[r.out] || 0) + 1; }
                 return ok;
             };
         })();

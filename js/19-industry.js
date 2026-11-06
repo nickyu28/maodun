@@ -1369,7 +1369,7 @@
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') { indCropTick(dt); pdTick(dt); } clStep(dt, true, ind.where === 'base'); achTick(); scTick(dt); trTick(dt); mbBodyTick(dt); fiTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') { indCropTick(dt); pdTick(dt); } clStep(dt, true, ind.where === 'base'); achTick(); scTick(dt); trTick(dt); fhTripTick(dt); mbBodyTick(dt); fiTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
             if (!ind || ind.over || ind.dead) return;
@@ -1747,6 +1747,7 @@
             if (a && a.kind === 'animal') return indAnimalAct(a.o);
             if (a && a.kind === 'dev') return indDevAct(a.o);
             let k = indSel();
+            if (ind.where === 'base' && !a && !tlKind(k) && fhCatch()) return true;   // 空手左键池子：捞鱼
             if (ind.where === 'base' && !a && tlKind(k) === 'shovel') return pdDig();   // 拿铲子对着空地：挖水池（19-industry-pond.js）
             if (ind.where === 'base' && k && IND_ITEMS[k].seed) return indPlant(k);
             if (ind.where === 'trip' && !a) return wdDig();   // 对着地面左键：挖
@@ -1794,6 +1795,8 @@
             if (k === 'torch') return cvLightTorch();   // 右键点火把（任务 66）
             if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
             if (k && stkTryStack(k, a)) return true;   // 拿着同种设备右键已经放下的那台：叠上去（任务 68）
+            if (ind.where === 'base' && a && a.kind === 'pool' && plPour(k)) return true;   // 水桶倒回原水池（19-industry-fish.js）
+            if (fhRod(k) || fhNet(k)) return true;   // 钓竿、渔网
             if (ind.where === 'base' && !a && pdUse(k)) return true;   // 对着自己挖的水池：接水、倒水、喝、铺、盖、填回
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
@@ -1808,7 +1811,7 @@
             if (indIsEmptyCont(k)) {   // 空桶：水池接生水，海里接海水（桶是什么材质，水就装在什么材质里）；油点装一桶石油
                 let m = indContOf(k).mat;
                 if (a && a.kind === 'node' && a.o.key === 'oil') return ckFillOil(k, a.o);
-                if (a && a.kind === 'pool') { let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶生水'); return true; }
+                if (a && a.kind === 'pool') { if (!plTake(1)) return true; let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); return true; }
                 if (indAtWater() && wdRiverNear(ind.map, ind.p.x, ind.p.z, 1)) { let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶河水（生水）'); return true; }
                 if (indAtWater()) { let w = indFilledKey('water_sea', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶海水'); return true; }
                 indFlash('到水池、河里或海边才能接水'); return false;
@@ -1833,6 +1836,7 @@
         function indSip(a) {
             let S = ind.base.surv;
             if (ind.where === 'base' && a && a.kind === 'pool') {
+                if (!plTake(0.1)) return true;
                 S.water = Math.min(100, S.water + 10);
                 let sick = indRand() < 0.3; if (sick) ind.sickT = IND_SURV.sick;
                 indFlash('喝了一口生水' + (sick ? '，肚子不舒服' : '')); return true;
@@ -2119,7 +2123,7 @@
             if (IND_ITEMS[k].dev === 'reactor' && !indSpotFree(x, z, 2.2)) { indFlash('反应堆占 3×3 米，这里放不下，换个空地'); return false; }
             indBagDel(k, 1);
             ind.base.devs.push({ id: ++ind.base.dseq, ty: IND_ITEMS[k].dev, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} });
-            ind.devDirty = true; indSave(); indFlash('放好了' + indName(k) + (IND_DEVS[IND_ITEMS[k].dev] && IND_DEVS[IND_ITEMS[k].dev].nowire ? '' : '（拿铜线点电源再点它，接上电）'));
+            ind.devDirty = true; indSave(); 
             return true;
         }
         // ── 房子：墙是几块薄长方形（门口留一个缺口，门关着时缺口里再放一块），人、瞄准、放东西都按这几块算 ──
@@ -2480,7 +2484,7 @@
             if (k === 'wire') {
                 if (D.nowire) { indFlash(D.name + '不用接线'); return false; }
                 if (!ind.wirePend) { ind.wirePend = d.id; ind.devDirty = true; indFlash('选了' + D.name + '，再点另一个'); return true; }
-                if (ind.wirePend === d.id) { if (scShortTry(d)) return true; ind.wirePend = null; ind.devDirty = true; indFlash('取消了'); return true; }
+                if (ind.wirePend === d.id) { if (scShortTry(d)) return true; ind.wirePend = null; ind.devDirty = true; return true; }
                 let a = indDev(ind.wirePend); ind.wirePend = null; ind.devDirty = true;
                 if (!a) return false;
                 let src = D.src ? d : a, dev = D.src ? a : d;
@@ -3092,7 +3096,7 @@
             if (!ind) return;
             let S = indCookCur().C;
             if (lv > 0 && S.fuel <= 0) { indFlash('先加燃料（木头、木炭、煤）'); return; }
-            if (fiStoveBlocked(S, lv)) { indFlash('先点火：拿火种、火柴、打火机、打火石或点着的火把左键点炉子'); return; }   // 硬核起火
+            if (fiStoveBlocked(S, lv)) { indFlash('先点火'); return; }   // 硬核起火
             if (lv === 4 && !S.bellows && !fmHasBlower(indCookCur())) return;
             S.fire = lv; indSave(); indPanelStove();
         }
@@ -3370,7 +3374,7 @@
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做' + (D.only ? '（只做冶炼）' : '') + '</span>';
             if (!S.cook && indHard() && rlNeedReducer(S)) st += '<br><b style="color:#c62828">炼矿要加木炭、煤或焦炭（每份矿 1 份）</b>';
             let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !S.bellows && !fmHasBlower(c)) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
-            if (fiOn() && !(S.fire > 0)) fire = '<div style="color:#c62828;font-size:13px;">先点火：拿火种、火柴、打火机、打火石或点着的火把左键点炉子</div><span style="opacity:.4;pointer-events:none;">' + fire + '</span>';   // 硬核灭着：火候按钮灰的
+            if (fiOn() && !(S.fire > 0)) fire = '<div style="color:#c62828;font-size:13px;">先点火</div><span style="opacity:.4;pointer-events:none;">' + fire + '</span>';   // 硬核灭着：火候按钮灰的
             fire += '<button id="ind-stove-off" style="' + IND_BTN + 'background:#455a64;" onclick="indStoveFire(0)">熄火并降温</button>' + (S.temp > 60 ? '<div style="font-size:13px;color:#888;">降到 60°C 还要约 ' + indFurnCoolSecs(c.ty, S) + ' 秒（收起要 60°C 以下）</div>' : '');
             let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k] && IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
             let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';
@@ -3561,7 +3565,7 @@
             else if (a && a.kind === 'chest') hint = '仓库箱' + (a.o.big ? '' : '（' + indSlotsOf(a.o.items) + '/' + IND_CHEST_SLOTS + ' 格）') + '<br><small>左键：打开　长按右键：收起</small>';
             else if (a && a.kind === 'stove') hint = '灶台 ' + Math.round(R.base.stove.temp) + '°C<br><small>左键：打开</small>';
             else if (a && a.kind === 'bed') hint = '床<br><small>左键：睡觉（夜里或累了）</small>';
-            else if (a && a.kind === 'pool') hint = '水池<br><small>右键：喝一口，拿空桶右键接水</small>';
+            else if (a && a.kind === 'pool') hint = '水池　' + (Math.round(plW() * 10) / 10) + ' / ' + plCap() + ' 桶';
             else if (R.where === 'base' && sel && IND_ITEMS[sel].seed && indInField(R.p.x + indFace().x * 1.4, R.p.z + indFace().z * 1.4)) hint = '左键：种' + indName(sel);
             else if (R.where === 'base' && !a && pdAimCell()) hint = pdHint();   // 自己挖的水池（19-industry-pond.js）
             else if (R.where === 'base' && !a && tlKind(sel) === 'shovel') hint = '<small>左键：挖一格水池</small>';

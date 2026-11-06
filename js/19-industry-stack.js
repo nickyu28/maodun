@@ -38,13 +38,13 @@
                 let m = { bats: 0, u: 0 }; if (!stkBankJoin(t.o, m)) return true;
                 if ((t.o.grp || []).length + 1 >= STK.max) { indFlash('最多叠 ' + STK.max + ' 个'); return true; }
                 indBagDel(k, 1); (t.o.grp = t.o.grp || []).push(m); ind.devDirty = true; indSave();
-                indFlash('叠上去了，现在一组 ' + (t.o.grp.length + 1) + ' 个电池组（并联）。左键点它给新的装电池');
+                
                 return true;
             }
             if (!(t.kind === 'cook' ? STK.cook[t.ty] : STK.dev[t.ty])) return false;   // 反应堆这些不叠，照原来的放
             let n = stkN(t.o); if (n >= STK.max) { indFlash('最多叠 ' + STK.max + ' 台'); return true; }
             indBagDel(k, 1); t.o.n = n + 1; ind.devDirty = true; ind.furnDirty = true; indSave();
-            indFlash('叠上去了，现在 ×' + t.o.n); if (ind.panel) indPanelRefresh();
+            if (ind.panel) indPanelRefresh();
             return true;
         }
         // ── 左键：堆叠清单 ──
@@ -99,7 +99,7 @@
             if (d.li && !m.li && m.bats > 0) { indFlash('一个电池组只能装一种电池'); return false; }
             m.li = !!d.li; m.um = indBankMax(m);
             while ((m.bats || 0) < d.bats && (ind.bag[key] || 0) > 0) { indBagDel(key, 1); m.bats = (m.bats || 0) + 1; m.um += cellU; m.u = (m.u || 0) + cellU; if (key === 'battery_ni') m.ni = (m.ni || 0) + 1; put++; }
-            if (!put) indFlash('背包里没有' + indName(key)); else indFlash('装了 ' + put + ' 节');
+            if (!put) indFlash('背包里没有' + indName(key));
             indSave(); stkPanel('dev', id); return put > 0;
         }
         // 收起一台：炉子要凉了、没在做；电池组带走它自己的电池和电量
@@ -114,7 +114,7 @@
                     d.bats = nx.bats || 0; d.u = nx.u || 0; d.li = !!nx.li; d.ni = nx.ni || 0; if (nx.um !== undefined) d.um = nx.um; else delete d.um;
                 } else { d.grp.splice(i - 1, 1); put('dev_bank', 1); indBankCells(m).forEach(function (c) { put(c[0], c[1]); }); }
                 if (!d.grp.length) delete d.grp;
-                ind.devDirty = true; indSave(); indFlash('收起了一个电池组，带着它自己的电池');
+                ind.devDirty = true; indSave(); 
                 if (d.grp) stkPanel('dev', id); else indPanelClose();
                 return true;
             }
@@ -126,7 +126,7 @@
             } else put('dev_' + t.ty, 1);
             t.o.n = n - 1; if (t.o.n <= 1) delete t.o.n;
             ind.devDirty = true; ind.furnDirty = true; indSave();
-            indFlash('收起了第 ' + (i + 1) + ' 台，现在 ×' + stkN(t.o) + (tot.bag ? '' : tot.box ? '（放进了仓库箱）' : '（掉在地上）'));
+            
             if (stkN(t.o) >= 2) stkPanel(kind, id); else indPanelClose();
             return true;
         }

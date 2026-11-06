@@ -66,14 +66,14 @@
             ind.cave = c; ind.caveFrom = { x: ind.p.x, z: ind.p.z };
             ind.p.x = c.cx + 3; ind.p.z = c.cz; ind.p.y = CV.floor; ind.p.vy = 0; ind.caveArm = false;
             scene.background = new THREE.Color(0x000000); if (scene.fog) scene.fog.color.setHex(0x000000);
-            indFlash(c.gas ? '进矿洞了。有股怪味' : '进矿洞了，里面很黑');
+            if (c.gas) indFlash('有股怪味');
         }
         function cvLeave() {
             let c = ind.cave; if (!c) return;
             ind.cave = null; ind.nodes = ind.nodes.filter(function (o) { return o.cave === undefined; }); ind.nodeDirty = true;
             ind.p.x = c.x; ind.p.z = c.z - 2.5; ind.p.y = indHeight(ind.map, ind.p.x, ind.p.z); ind.p.vy = 0;
             scene.background = new THREE.Color(0xbfe3ff); if (scene.fog) scene.fog.color.setHex(0xbfe3ff);
-            indFlash('出洞了');
+            
         }
         // 洞里能看多远：自然光（只看离洞口多深、白天黑夜）和身上的光取大的
         function cvNatR(depth) { let day = 1 - indDark(); if (day <= 0) return 0; let v = depth <= CV.lit ? CV.natR : depth >= CV.dim ? 0 : CV.natR * (CV.dim - depth) / (CV.dim - CV.lit); return v * day; }
@@ -91,8 +91,8 @@
         }
         // 右键点火把：一根烧 90 秒（手里还有就接着用下一根）
         function cvLightTorch() {
-            if (ind.torchT > 0) { indFlash('火把还在烧'); return true; }
-            indBagDel('torch', 1); ind.torchT = CV.torch; indFlash('点着了火把，能烧 ' + CV.torch + ' 秒');
+            if (ind.torchT > 0) { return true; }
+            indBagDel('torch', 1); ind.torchT = CV.torch; 
             cvGasCheck(); return true;
         }
         function cvGasCheck() {

@@ -26,7 +26,7 @@
             let B = ind.base;
             if (k === 'ember' && ind.bag.ember > 0) { indBagDel('ember', 1); fiEmberDel(); return true; }
             if (k === 'match' && ind.bag.match > 0) { indBagDel('match', 1); return true; }
-            if (k === 'lighter' && ind.bag.lighter > 0) { if (!(B.lighterN > 0)) { indFlash('打火机没油了：对着装石油的桶右键加满'); return 'miss'; } B.lighterN--; return true; }
+            if (k === 'lighter' && ind.bag.lighter > 0) { if (!(B.lighterN > 0)) { indFlash('打火机没油了'); return 'miss'; } B.lighterN--; return true; }
             if (k === 'torch' && ind.torchT > 0) return true;
             if (k === 'flint' && ind.bag.flint > 0) {
                 let t = fiTinder(); if (!(ind.bag.ingot_fe > 0)) { indFlash('打火石还要一块铁锭'); return 'miss'; } if (!t) { indFlash('打火石要草或松脂引火'); return 'miss'; }
@@ -39,11 +39,11 @@
             if (!fiOn() || !a || (a.kind !== 'stove' && a.kind !== 'cook')) return false;
             let c = a.kind === 'stove' ? indCookById('stove') : indCookById(a.o.id); if (!c) return false;
             let k = indSel(), S = c.C;
-            if (S.fire > 0) { if (k === 'torch' && !(ind.torchT > 0)) { indBagDel('torch', 1); ind.torchT = CV.torch; indFlash('火把点着了（能烧 ' + CV.torch + ' 秒）'); return true; } return false; }
+            if (S.fire > 0) { if (k === 'torch' && !(ind.torchT > 0)) { indBagDel('torch', 1); ind.torchT = CV.torch; return true; } return false; }
             if (['ember', 'match', 'lighter', 'torch', 'flint'].indexOf(k) < 0) return false;
             if (!(S.fuel > 0)) { indFlash('先放柴'); return true; }
             let r = fiUseSource(k); if (r !== true) { if (r === false) return false; return true; }
-            S.fire = 1; S.lit = true; indSave(); indFlash(IND_COOK[c.ty].name + '点着了，面板里调火候'); ind.hudSig = '';
+            S.fire = 1; S.lit = true; indSave(); ind.hudSig = '';
             return true;
         }
         // 面板的火候按钮：灭着的时候点不着
@@ -60,9 +60,9 @@
         // ── 钻木取火：选中干木头点一下右键开始，边走边做 ──
         function fiDrillStart() {
             if (!indHard()) return false;
-            if (ind.drill) { indFlash('正在钻木取火 ' + Math.floor(ind.drill.t / FI.drill * 100) + '%'); return true; }
+            if (ind.drill) { return true; }
             if (!fiTinder()) { indFlash('钻木取火要草或松脂引火'); return true; }
-            ind.drill = { t: 0 }; indFlash('钻木取火：拿着干木头，' + FI.drill + ' 秒'); return true;
+            ind.drill = { t: 0 }; return true;
         }
         function fiTick(dt) {
             let D = ind.drill;
@@ -70,7 +70,7 @@
                 if (!(ind.bag.wood_dry > 0) || !fiTinder()) { ind.drill = null; indFlash('干木头或引火物没了，停了'); }
                 else if (indSel() === 'wood_dry') {
                     D.t += dt;
-                    if (D.t >= FI.drill) { ind.drill = null; let t = fiTinder(); indBagDel('wood_dry', 1); indBagDel(t, 1); indBagAdd('ember', 1); fiEmberAdd(); indFlash('钻出火种了！60 秒内去点炉子'); ind.hudSig = ''; }
+                    if (D.t >= FI.drill) { ind.drill = null; let t = fiTinder(); indBagDel('wood_dry', 1); indBagDel(t, 1); indBagAdd('ember', 1); fiEmberAdd(); indFlash('钻出火种了'); ind.hudSig = ''; }
                 }
             }
             // 火种 60 秒灭
@@ -98,9 +98,9 @@
         function fiFillLighter() {
             if (!(ind.bag.lighter > 0)) return false;
             let k = Object.keys(ind.bag).filter(function (x) { let c = indContOf(x); return c && c.base === 'oil' && ind.bag[x] > 0; })[0];
-            if (!k) { indFlash('打火机还剩 ' + (ind.base.lighterN || 0) + ' 次。背包里有装石油的桶，右键就能加满'); return true; }
+            if (!k) { indFlash('打火机还剩 ' + (ind.base.lighterN || 0) + ' 次'); return true; }
             if ((ind.base.lighterN || 0) >= FI.lighterN) { indFlash('打火机是满的（' + FI.lighterN + ' 次）'); return true; }
-            indBagDel(k, 1); indBagAdd(indEmptyKey(indContOf(k).mat), 1); ind.base.lighterN = FI.lighterN; indSave(); indFlash('打火机加满了（' + FI.lighterN + ' 次）');
+            indBagDel(k, 1); indBagAdd(indEmptyKey(indContOf(k).mat), 1); ind.base.lighterN = FI.lighterN; indSave(); 
             return true;
         }
         // 山地、古老岩层挖大石头 15% 多掉 1 个燧石
@@ -109,7 +109,7 @@
             indGather = function (o) {
                 let n0 = o && o.n, d0 = o && o.dead, rock = o && o.rock && !o.hard && o.key === 'stone' && ind.where === 'trip' && indHard(), bm = rock ? indBiome(ind.map, o.x, o.z) : '';
                 let r = g0.apply(this, arguments);
-                if (rock && (bm === 'mountain' || bm === 'ancient') && (o.n !== n0 || o.dead !== d0) && indRand() < FI.flintDrop) { indBagAdd('flint', 1); indFlash('敲出一块燧石'); }
+                if (rock && (bm === 'mountain' || bm === 'ancient') && (o.n !== n0 || o.dead !== d0) && indRand() < FI.flintDrop) { indBagAdd('flint', 1); }
                 return r;
             };
         })();

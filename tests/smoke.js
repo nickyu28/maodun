@@ -11034,6 +11034,64 @@ async function enterExit(tab, key) {
             report('IND99 成就 pic1：电池组短路 3 秒爆炸、只有图标', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND100')) {
+            // IND100 水池养鱼剩下的：原水池有限（40／80 桶、接水喝水动物喝蒸发、倒回去、老档给满）；水井（连挖 5 次、每分钟 1 桶流进旁边的池子、存 10 桶、水泵 ×3、最多 2 口）；钓竿渔网；放鱼要 2 桶水、投食、长大、繁殖、缺氧、水干死、捞、烤鱼
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; B.pond = []; B.wells = []; B.devs = []; B.animals = []; delete B.poolW; delete B.wellDig; ind.bag = {}; ind.ch = null; ind.fishing = null; ind.fnet = null; indPanelClose();
+                    let cell = function (i, j, w) { let c = { i: i, j: j, w: w || 0 }; B.pond.push(c); return c; }, shovel = Object.keys(TL_TOOL).filter(function (k) { return TL_TOOL[k].kind === 'shovel'; })[0];
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 原水池
+                let r = await run(`let a = plW(); let ok1 = plTake(1), w1 = B.poolW; ok1 = ok1 && plTake(0.1); let w2 = B.poolW; B.poolW = 0.5; fl.length = 0; let no = plTake(1); let msg = fl.join('|'); B.poolW = 10; ind.bag = { bucket_water: 1 }; let kfull = Object.keys(IND_ITEMS).filter(function (k) { return indContOf(k) && !indContOf(k).empty && indContOf(k).base === 'water_raw'; })[0]; ind.bag = {}; ind.bag[kfull] = 1; let pour = plPour(kfull), w3 = B.poolW, back = Object.keys(ind.bag).join();
+                    B.poolW = 5; B.animals = [{ k: 'sheep' }, { k: 'sheep' }, { k: 'cow' }]; ind.base.clock = 300; fhTickAll(600); let w4 = B.poolW; B.rule = 'casual'; delete B.poolW; let cas = plW(); B.rule = 'hard';
+                    return { a: a, w1: w1, w2: w2, no: no, msg: msg, pour: pour, w3: w3, back: back, w4: w4, cas: cas };`);
+                if (!(r.a === 40 && r.w1 === 39 && Math.abs(r.w2 - 38.9) < 1e-6 && r.no === false && /池子里没水了/.test(r.msg) && r.pour === true && r.w3 === 11 && /bucket/.test(r.back) && r.w4 < 5 - 0.5 && r.w4 > 5 - 1.5 && r.cas === 80)) bad.push('原水池 40／80 桶、接 1 桶喝 0.1、空了说没水、倒回去 +1、动物喝水和蒸发 ' + JSON.stringify(r));
+                // 老存档整理：没有 poolW 的不写，用的时候给满；有的按范围夹住
+                r = await J(`(function(){ let a = {}; fhFixBase(a); let b = { poolW: 17, wells: [{ i: 1, j: 2, w: 99 }, { i: 3, j: 4, w: 1 }, { i: 5, j: 6, w: 1 }, { bad: 1 }], pond: [{ i: 0, j: 0, w: 1, f: { s: 2, b: 1, fd: 99, junk: 1 } }, { i: 1, j: 0, w: 1, f: 'x' }] }; fhFixBase(b); return { a: 'poolW' in a, b: b.poolW, wells: b.wells.length, w0: b.wells[0].w, f: b.pond[0].f, f2: b.pond[1].f === undefined }; })()`);
+                if (!(r.a === false && r.b === 17 && r.wells === 2 && r.w0 === 10 && r.f.s === 2 && r.f.b === 1 && r.f.fd === 20 && !('junk' in r.f) && r.f2)) bad.push('读档整理：老档不写 poolW、井最多 2 口存量夹到 10、鱼字段白名单 ' + JSON.stringify(r));
+                // 井：同一格连挖 5 次才出水；出水后这格变成井，旁边的池子格每分钟 +1 桶，没池子存在井里（最多 10）；水泵 ×3；最多 2 口
+                r = await run(`let c = cell(5, 5, 0), n = cell(6, 5, 0); ind.bag = {}; ind.bag[shovel] = 1; indSelect(shovel); let steps = []; for (let i = 0; i < 5; i++) { wlDeepen(c); steps.push(!!ind.ch); let need = ind.ch && ind.ch.need; ind.ch.done(); ind.ch = null; steps.push(wlList().length); }
+                    let well = wlAt(5, 5), cellGone = !pdCellAt(5, 5); wlTick(60); let a = n.w; let lone = (function () { B.pond = []; let w2 = { i: 20, j: 20, w: 0 }; B.wells.push(w2); wlTick(1000); return w2.w; })();
+                    B.pond = []; B.wells = [{ i: 1, j: 1, w: 0 }]; wlTick(60); let slow = B.wells[0].w; B.wells[0].w = 0; B.devs = [{ id: 1, ty: 'pump', x: 1, z: 2, pw: true, on: true, st: {} }]; wlTick(60); let fast = B.wells[0].w;
+                    B.devs = []; B.wells = [{ i: 1, j: 1, w: 0 }, { i: 2, j: 2, w: 0 }]; B.pond = [{ i: 9, j: 9, w: 0 }]; fl.length = 0; ind.bag = {}; ind.bag[shovel] = 1; indSelect(shovel); let third = wlDeepen(B.pond[0]), ch3 = !!ind.ch;
+                    return { steps: steps, well: !!well, cellGone: cellGone, a: a, lone: lone, slow: slow, fast: fast, third: third, ch3: ch3, fl: fl.join('|') };`);
+                if (!(r.steps.join() === 'true,0,true,0,true,0,true,0,true,1' && r.well && r.cellGone && Math.abs(r.a - 1) < 0.01 && r.lone === 10 && Math.abs(r.slow - 1) < 0.01 && Math.abs(r.fast - 3) < 0.01 && r.third === true && r.ch3 === false && /最多 2 口井/.test(r.fl))) bad.push('井：连挖 5 次才出水、每分钟 1 桶流进旁边的池子、没池子存 10 桶、水泵 ×3、最多 2 口 ' + JSON.stringify(r));
+                // 放鱼要 2 桶水；投食；小鱼吃着 600 秒长大；2 条大鱼 + 食槽 900 秒多 1 条；鱼数超过水量÷2 缺氧死（硬核）；水干全死；捞；烤鱼
+                r = await run(`let c = cell(0, 0, 3), d = cell(1, 0, 3); let G = pdGroup(c); ind.bag = { fish_live: 3, wheat: 25 }; fl.length = 0; let p1 = fhUse('fish_live', c, G), p2 = fhUse('fish_live', c, G), p3 = fhUse('fish_live', c, G), msg = fl.join('|'), f = fhOf(G, false);
+                    let n3 = fhN(f); for (let i = 0; i < 22; i++) fhUse('wheat', c, G); let fd = f.fd, full = fl.join('|');
+                    f.s = 1; f.b = 0; f.fd = 20; f.g = 0; B.pond[0].w = 6; B.pond[1].w = 6; for (let i = 0; i < 61; i++) fhTick(10); let grown = { s: f.s, b: f.b };
+                    f.s = 0; f.b = 2; f.m = 0; f.fd = 20; for (let i = 0; i < 91; i++) fhTick(10); let bred = fhN(f);
+                    f.s = 0; f.b = 5; f.fd = 20; f.h = 0; B.pond[0].w = 2; B.pond[1].w = 2; for (let i = 0; i < 61; i++) fhTick(10); let after = fhN(f), dead1 = f.dead;
+                    B.pond[0].w = 0; B.pond[1].w = 0; fhTick(1); let allDead = { n: fhN(f), dead: f.dead };
+                    f.s = 1; f.b = 1; f.dead = 1; ind.bag = {}; indTeleport(0, -1.6); indLookAt(0, 5); fhCatch(); fhCatch(); fhCatch(); let got = ind.bag.fish_raw || 0, left = f.b + f.s + f.dead;
+                    return { p: [p1, p2, p3], msg: msg, n3: n3, fd: fd, grown: grown, bred: bred, after: after, dead1: dead1, allDead: allDead, got: got, left: left };`);
+                if (!(r.p.join() === 'true,true,true' && r.n3 === 3 && r.fd === 20 && r.grown.b === 1 && r.grown.s === 0 && r.bred === 3 && r.after === 3 && r.dead1 === 2 && r.allDead.n === 0 && r.allDead.dead >= 3 && r.got === 3 && r.left === 0)) bad.push('放鱼、食槽 20 份、600 秒长大、900 秒繁殖、缺氧死、干了全死、捞 ' + JSON.stringify(r));
+                r = await run(`let c = cell(0, 0, 3), G = pdGroup(c); ind.bag = { fish_live: 3 }; fl.length = 0; let p = [fhUse('fish_live', c, G)]; B.pond[0].w = 1.5; B.pond[0].f.s = 0; let q = fhUse('fish_live', c, G); return { p: p, q: q, msg: fl.join('|'), still: ind.bag.fish_live };`);
+                if (!(r.p[0] === true && r.q === true && /水太少了/.test(r.msg) && r.still === 2)) bad.push('水少放不进去（每条鱼 2 桶水） ' + JSON.stringify(r));
+                // 悠闲不缺氧死
+                r = await run(`B.rule = 'casual'; let c = cell(0, 0, 3), G = pdGroup(c); let f = fhOf(G, true); f.b = 6; f.fd = 20; for (let i = 0; i < 60; i++) fhTick(10); return { n: fhN(f) >= 6 };`);
+                if (!r.n) bad.push('悠闲不缺氧死 ' + JSON.stringify(r));
+                // 活鱼在背包 10 分钟死成生鱼；生鱼烤成烤鱼的配方
+                r = await run(`ind.bag = { fish_live: 2 }; clStep(590, true, false); let a = ind.bag.fish_live; clStep(20, true, false); let rec = IND_RECIPES.filter(function (x) { return x.in.fish_raw === 1; })[0]; return { a: a, live: ind.bag.fish_live || 0, raw: ind.bag.fish_raw, rec: !!rec && rec.out.fish_cooked === 1 && rec.minT === 180 && rec.time === 10 && rec.burnT === 400, eat: IND_ITEMS.fish_cooked.eat.f };`);
+                if (!(r.a === 2 && r.live === 0 && r.raw === 2 && r.rec && r.eat === 40)) bad.push('活鱼 10 分钟死成生鱼、烤鱼配方饱食 +40 ' + JSON.stringify(r));
+                // 钓竿站着 10～30 秒咬钩、动了跑掉；渔网 60 秒后收 0～2 条
+                r = await J(`(function(){ let oa = window.indAtWater; try { indGoTrip(2024); ind.base.rule = 'hard'; window.indAtWater = function () { return true; }; ind.bag = { fishing_rod: 1, fish_net: 1 }; indSelect('fishing_rod'); indTeleport(0, 0);
+                    let s = fhRod('fishing_rod'), need = ind.fishing.need; fhTripTick(5); let mid = ind.bag.fish_live || 0; fhTripTick(31); let got = ind.bag.fish_live || 0;
+                    fhRod('fishing_rod'); indTeleport(3, 3); fhTripTick(1); let run = ind.fishing; indTeleport(0, 0); ind.bag = { fish_net: 1 }; indSelect('fish_net'); let tot = [], fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); };
+                    for (let i = 0; i < 30; i++) { ind.fnet = null; fhNet('fish_net'); let early = fhNet('fish_net'); ind.t += 61; ind.bag = { fish_net: 1 }; fhNet('fish_net'); tot.push(ind.bag.fish_live || 0); } blazeFlash = bf;
+                    return { s: s, ok: need >= 10 && need <= 30, mid: mid, got: got, run: run, min: Math.min.apply(null, tot), max: Math.max.apply(null, tot), early: fl.some(function (t) { return /还没到时候/.test(t); }) }; } finally { window.indAtWater = oa; } })()`);
+                if (!(r.s === true && r.ok && r.mid === 0 && r.got === 1 && r.run === null && r.min === 0 && r.max === 2 && r.early)) bad.push('钓竿 10～30 秒咬钩、动了跑掉；渔网 60 秒后收 0～2 条 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND100 水池养鱼剩下的：原水池有限、井、钓竿渔网、放鱼投食长大繁殖缺氧、捞、烤鱼', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

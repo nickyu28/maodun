@@ -7,7 +7,8 @@
         const CL_LIFE = { meat_raw: 1, meat_roast: 2, meat_soup: 2, bake_potato: 2, bake_corn: 2, tomato_soup: 2, radish_soup: 2, cabbage_stew: 2, pumpkin_pie: 2, cactus_roast: 2, bread: 3, milk: 2,
             tomato: 4, cabbage: 4, radish: 4, potato: 4, corn: 4, pumpkin: 4, cactus: 4, cactus_peeled: 4 };
         Object.keys(CL_LIFE).forEach(function (k) { CL_LIFE[k] *= CL.day; });
-        CL_LIFE.ice = CL.ice;
+        CL_LIFE.ice = CL.ice; CL_LIFE.fish_live = 600; CL_LIFE.fish_raw = CL.day;   // 活鱼在背包里 10 分钟死成生鱼；生鱼 1 天坏
+        const CL_TO = { fish_live: 'fish_raw' };
         Object.assign(IND_ITEMS_RAW, {
             ice: { name: '冰块', col: 0xb3e5fc, eat: { w: 5, cool: 1 }, use: '拿着右键吃一块：体温 −1°C、口渴 +5。放进冷藏箱保鲜。放在身上和普通箱子里 10 分钟就化了' },
             rotfood: { name: '腐烂的食物', col: 0x6d4c41, eat: { f: 5, sick: 1 }, use: '吃了拉肚子。撒在农田里当肥料' },
@@ -37,7 +38,8 @@
                 let L = CL_LIFE[k]; if (!L || !(items[k] > 0) || keep || (noIce && k === 'ice')) return;
                 age[k] = (age[k] || 0) + dt; if (age[k] < L) return;
                 let n = items[k]; delete items[k]; delete age[k];
-                if (k !== 'ice') { items.rotfood = (items.rotfood || 0) + n; rot += n; }
+                if (CL_TO[k]) items[CL_TO[k]] = (items[CL_TO[k]] || 0) + n;
+                else if (k !== 'ice') { items.rotfood = (items.rotfood || 0) + n; rot += n; }
             });
             return rot;
         }
@@ -84,7 +86,7 @@
             if (ind.iceCd > ind.t) return true;
             ind.iceCd = ind.t + 1;
             let n = 1 + Math.floor(indRand() * 2), r = indBoxAdd('ice', n);
-            indFlash('凿下 ' + n + ' 块冰' + (r.ground ? '，背包满了，掉在脚边' : '')); ind.hudSig = ''; return true;
+            ind.hudSig = ''; return true;
         }
         function clFixBase(b) {
             b.clHint = !!b.clHint; if (!b.clAge || typeof b.clAge !== 'object') b.clAge = {};

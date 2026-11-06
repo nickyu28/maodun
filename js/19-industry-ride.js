@@ -48,7 +48,7 @@
             if (ind.ride) { rdDismount('下车了'); return true; }
             if (ind.onRaft) { indFlash('在筏上不能上车'); return false; }
             if (ty === 'car' && !rdCarOk()) { indFlash(rdCarWhy()); return false; }
-            ind.ride = { ty: ty, k: k, m: null, why: 0 }; ind.k = {}; indFlash('上车了：' + IND_ITEMS[k].name + (ty === 'bike' ? '（脚踏吃体力）' : '（' + rdCarV().toFixed(1) + ' V）') + '，右键下车');
+            ind.ride = { ty: ty, k: k, m: null, why: 0 }; ind.k = {}; 
             return true;
         }
         function rdDismount(msg) {
@@ -108,7 +108,7 @@
         IND_CRAFT.push({ out: 'chip_auto', in: { dev_cchip: 1, ingot_ge: 2, ingot_ga: 2, wire: 4 }, hard: true });
         function rdMapDest(x, z) {
             let R = ind.ride; if (!R || R.ty !== 'car' || !rdCar().auto) return false;
-            R.dest = { x: x, z: z }; indFlash('目的地设好了：车自己开，碰方向键接管'); if (ind.panel === 'map') wdMapDraw(); return true;
+            R.dest = { x: x, z: z }; if (ind.panel === 'map') wdMapDraw(); return true;
         }
         function rdStopAuto(msg) { let R = ind.ride; if (R) R.dest = null; if (msg) indFlash(msg); }
         function rdNodeHit(x, z) { return ind.nodes.some(function (o) { return !o.dead && (o.tree || o.rock || o.hard || o.key === 'cactus') && Math.hypot(o.x - x, o.z - z) < RD.hit + 0.6; }); }
@@ -137,8 +137,8 @@
         }
         function rdAutoToggle() {
             let c = rdCar();
-            if (c.auto) { c.auto = false; indBagAdd('chip_auto', 1); indFlash('把自动驾驶芯片拆下来了'); }
-            else if (ind.bag.chip_auto > 0) { indBagDel('chip_auto', 1); c.auto = true; indFlash('装上了自动驾驶芯片：开着车按 M 在地图上点目的地'); }
+            if (c.auto) { c.auto = false; indBagAdd('chip_auto', 1); }
+            else if (ind.bag.chip_auto > 0) { indBagDel('chip_auto', 1); c.auto = true; }
             else indFlash('背包里没有自动驾驶芯片');
             indSave(); if (ind.panel === 'veh') rdPanel();
         }

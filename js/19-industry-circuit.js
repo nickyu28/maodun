@@ -79,18 +79,18 @@
             let K = RC_KINDS[d.ty]; if (!K) return undefined;
             if (k === 'sigwire') return rcSigClick(d);
             if (k === 'wire') return K.act ? undefined : (indFlash(K.name + '不用接铜线'), false);
-            if (d.ty === 'cbtn') { d.pt = 1; indFlash('按了一下'); return true; }
-            if (d.ty === 'clev') { d.on1 = d.on1 ? 0 : 1; indFlash('拉杆' + (d.on1 ? '拉上了' : '拉下了')); indSave(); return true; }
+            if (d.ty === 'cbtn') { d.pt = 1; return true; }
+            if (d.ty === 'clev') { d.on1 = d.on1 ? 0 : 1; indSave(); return true; }
             if (d.ty === 'cdelay' || d.ty === 'cchip') { rcPanel(d.id); return true; }
             let st = d.ty === 'clamp' ? (d.out > 0 ? '亮着' : '灭着') : '输出 ' + d.out + (indDev(d.id).pw ? '' : '（没电）');
-            indFlash(K.name + '：' + st); return true;
+            return true;
         }
         function rcFreeIn(id, n) { let used = {}; (ind.base.sig || []).forEach(function (w) { if (w[2] === id) used[w[3]] = 1; }); for (let i = 0; i < n; i++) if (!used[i]) return i; return -1; }
         function rcSigClick(d) {
             let B = ind.base, K = RC_KINDS[d.ty]; if (!B.sig) B.sig = [];
             if (!ind.sigPend) {
                 if (!K.outs) { indFlash(K.name + '没有输出口，先点输出的块'); return false; }
-                ind.sigPend = { id: d.id, port: d.ty === 'cchip' && ind.sigPort && ind.sigPort.id === d.id && ind.sigPort.kind === 'out' ? ind.sigPort.port : 0 }; ind.devDirty = true; indFlash('选了' + K.name + '，再点输入的块'); return true;
+                ind.sigPend = { id: d.id, port: d.ty === 'cchip' && ind.sigPort && ind.sigPort.id === d.id && ind.sigPort.kind === 'out' ? ind.sigPort.port : 0 }; ind.devDirty = true; return true;
             }
             let P = ind.sigPend; ind.sigPend = null; ind.devDirty = true;
             if (P.id === d.id) { indFlash('不能自己连自己'); return false; }
@@ -102,7 +102,7 @@
             if (B.sig.filter(function (w) { return w[0] === P.id && w[1] === P.port; }).length >= RC.outMax) { indFlash('一个输出口最多 ' + RC.outMax + ' 根线'); return false; }
             if (!indBagDel('sigwire', 1)) { indFlash('信号线不够'); return false; }
             B.sig.push([P.id, P.port, d.id, port]); ind.sigDirty = true; indSave();
-            indFlash('接上了：' + RC_KINDS[src.ty].name + ' → ' + K.name); return true;
+            return true;
         }
         // 每个电路刻：所有元件按上一刻的输出算这一刻的输出（所以每个元件延迟 1 刻）
         function rcStep() {
@@ -189,7 +189,7 @@
             let tools = Object.keys(RC_INSIDE).map(function (k) { return '<button style="' + IND_BTN + (S.tool === k ? 'background:#ef6c00;' : '') + '" onclick="rcTool(' + d.id + ',\'' + k + '\')">' + RC_KINDS[k].name + '（' + (ind.bag[RC_ITEM[k]] || 0) + '）</button>'; }).join('') +
                 '<button style="' + IND_BTN + (S.tool === 'wire' ? 'background:#ef6c00;' : '') + '" onclick="rcTool(' + d.id + ',\'wire\')">连线</button><button style="' + IND_BTN + (S.tool === 'erase' ? 'background:#ef6c00;' : '') + '" onclick="rcTool(' + d.id + ',\'erase\')">拆</button>';
             let ports = '<div style="margin-top:6px;font-size:13px;">外面接信号线用的口：' + [0, 1, 2, 3].map(function (i) { return '<button style="' + IND_BTN + (ind.sigPort && ind.sigPort.id === d.id && ind.sigPort.kind === 'in' && ind.sigPort.port === i ? 'background:#ef6c00;' : '') + '" onclick="rcPort(' + d.id + ',\'in\',' + i + ')">入 ' + i + '</button>'; }).join('') + [0, 1, 2, 3].map(function (i) { return '<button style="' + IND_BTN + (ind.sigPort && ind.sigPort.id === d.id && ind.sigPort.kind === 'out' && ind.sigPort.port === i ? 'background:#ef6c00;' : '') + '" onclick="rcPort(' + d.id + ',\'out\',' + i + ')">出 ' + i + '</button>'; }).join('') + '</div>';
-            indPanelShow('rc', '<div style="font-size:18px;font-weight:bold;margin-bottom:4px;">基础芯片　' + c.els.length + ' / ' + RC.chipEl + ' 个元件</div><div style="font-size:12px;color:#888;margin-bottom:4px;">选一个元件再点空格子放进去；选"连线"，点源（输入针脚或元件）再点目标（元件或输出针脚）；选"拆"点元件拆掉。关上就封装。</div>' +
+            indPanelShow('rc', '<div style="font-size:18px;font-weight:bold;margin-bottom:4px;">基础芯片　' + c.els.length + ' / ' + RC.chipEl + ' 个元件</div>' +
                 '<div>' + tools + '</div><table style="border-collapse:collapse;margin:6px 0;">' + rows + '</table>' + ports + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上（封装）</button></div>');
             ind.rcId = d.id;
         }

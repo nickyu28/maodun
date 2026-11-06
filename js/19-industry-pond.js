@@ -25,7 +25,7 @@
         function pdDig() {
             if (ind.where !== 'base' || tlKind(indSel()) !== 'shovel') return false;
             let p = pdFront(), B = ind.base;
-            if (pdCellAt(p.i, p.j)) { indFlash('这里已经是水池了'); return true; }
+            if (pdCellAt(p.i, p.j)) return wlDeepen(pdCellAt(p.i, p.j));   // 已经挖好的格子再往下挖：井（19-industry-fish.js）
             if (pdCells().length >= PD.max) { indFlash('池子太大了（最多 ' + PD.max + ' 格）'); return true; }
             if (Math.abs(p.i) > IND_BASE.x - 1 || Math.abs(p.j) > IND_BASE.z - 1 || !indSpotFree(p.i, p.j, 0.5) || (B.tiles || []).some(function (t) { return Math.abs(t.x - p.i) < 1.5 && Math.abs(t.z - p.j) < 1.5; })) { indFlash('这里挖不了（农田、家具、房子、出发门旁边）'); return true; }
             let sh = indSel();
@@ -33,19 +33,21 @@
                 if (pdCellAt(p.i, p.j)) return;
                 pdCells().push({ i: p.i, j: p.j, w: 0 }); let S = B.surv; S.energy = Math.max(0, S.energy - PD.energy);
                 let G = pdGroup(pdCellAt(p.i, p.j)); pdLevel(G);
-                indBoxAdd('dirt', 2); tlUse(sh); ind.pdDirty = true; indSave(); indFlash('挖了一格水池（这个池子 ' + G.length + ' 格）');
+                indBoxAdd('dirt', 2); tlUse(sh); ind.pdDirty = true; indSave(); 
             } });
         }
         // 右键对着自己挖的池子
         function pdUse(k) {
+            if (wlUse(k)) return true;
             let c = pdAimCell(); if (!c) return false;
             let G = pdGroup(c), w = pdWater(G), kc = k && indContOf(k);
-            if (k === 'pond_lid') { if (c.lid) { indFlash('这格已经盖了'); return true; } indBagDel(k, 1); c.lid = true; ind.pdDirty = true; indSave(); indFlash('盖上了一格'); return true; }
-            if (c.lid && !(k && tlKind(k) === 'shovel')) { indBagAdd('pond_lid', 1); c.lid = false; ind.pdDirty = true; indSave(); indFlash('掀开了木盖'); return true; }
+            if (fhUse(k, c, G)) return true;
+            if (k === 'pond_lid') { if (c.lid) { indFlash('这格已经盖了'); return true; } indBagDel(k, 1); c.lid = true; ind.pdDirty = true; indSave(); return true; }
+            if (c.lid && !(k && tlKind(k) === 'shovel')) { indBagAdd('pond_lid', 1); c.lid = false; ind.pdDirty = true; indSave(); return true; }
             if (k === 'clay' || k === 'brick') {
                 let need = k === 'clay' ? 2 : 1; if (c.l) { indFlash('这格已经铺了'); return true; }
                 if ((ind.bag[k] || 0) < need) { indFlash('铺一格要 ' + need + ' 份' + indName(k)); return true; }
-                indBagDel(k, need); c.l = k; ind.pdDirty = true; indSave(); indFlash('铺好了：这格不漏水' + (k === 'brick' ? '，蒸发少两成' : '')); return true;
+                indBagDel(k, need); c.l = k; ind.pdDirty = true; indSave(); return true;
             }
             if (k && tlKind(k) === 'shovel') {
                 let soil = (ind.bag.dirt || 0) >= PD.fill ? 'dirt' : (ind.bag.sand || 0) >= PD.fill ? 'sand' : null;
@@ -53,15 +55,15 @@
                 indBagDel(soil, PD.fill); let left = w - (c.w || 0); if (c.lid) indBagAdd('pond_lid', 1);
                 ind.base.pond = pdCells().filter(function (x) { return x !== c; });
                 G.filter(function (x) { return x !== c; }).forEach(function (x) { x.w = 0; }); let rest = G.filter(function (x) { return x !== c; }); if (rest.length) { rest[0].w = left; pdLevel(pdGroup(rest[0])); }
-                ind.pdDirty = true; indSave(); indFlash('填回了一格'); return true;
+                ind.pdDirty = true; indSave(); return true;
             }
             if (indIsEmptyCont(k)) {
                 if (w < 1 - 1e-9) { indFlash('池子里没水了'); return true; }
-                G.forEach(function (x) { x.w -= 1 / G.length; }); indBagDel(k, 1); indBagAdd(indFilledKey('water_raw', kc.mat), 1); ind.pdDirty = true; indFlash('接了一桶生水（池子还剩 ' + (Math.round((w - 1) * 10) / 10) + ' 桶）'); return true;
+                G.forEach(function (x) { x.w -= 1 / G.length; }); indBagDel(k, 1); indBagAdd(indFilledKey('water_raw', kc.mat), 1); ind.pdDirty = true; return true;
             }
             if (kc && (kc.base === 'water_raw' || kc.base === 'water_boiled' || kc.base === 'water_sea')) {
                 if (w > G.length * PD.cap - 1 + 1e-9) { indFlash('池子满了（' + G.length * PD.cap + ' 桶）'); return true; }
-                G.forEach(function (x) { x.w += 1 / G.length; }); indBagDel(k, 1); indBagAdd(indEmptyKey(kc.mat), 1); ind.pdDirty = true; indFlash('倒进去一桶（池子 ' + (Math.round((w + 1) * 10) / 10) + ' / ' + G.length * PD.cap + ' 桶）'); return true;
+                G.forEach(function (x) { x.w += 1 / G.length; }); indBagDel(k, 1); indBagAdd(indEmptyKey(kc.mat), 1); ind.pdDirty = true; return true;
             }
             if (!k) {
                 if (w < PD.sip) { indFlash('池子里没水了'); return true; }
@@ -72,6 +74,7 @@
         }
         // 每秒：漏水、蒸发（基地里实时走，出门回来补算也走）
         function pdTick(dt) {
+            fhTickAll(dt);
             let L = pdCells(); if (!L.length) return;
             let night = indIsNight(), mul = indHard() ? 1 : 0.5;
             L.forEach(function (c) {
@@ -84,7 +87,7 @@
         // 画：一格一个方块（空池子土色、有水蓝色、盖了木色、铺了颜色深一点）
         function pdSync() {
             if (ind.where !== 'base') return;
-            if (!ind.pdMesh || !ind.pdMesh.parent) { ind.pdMesh = indInst(new THREE.BoxGeometry(1, 0.1, 1), PD.max); ind.pdDirty = true; }
+            if (!ind.pdMesh || !ind.pdMesh.parent) { ind.pdMesh = indInst(new THREE.BoxGeometry(1, 0.1, 1), PD.max + 4); ind.pdDirty = true; }
             if (!ind.pdDirty) return; ind.pdDirty = false; indDummy();
             let L = pdCells();
             L.forEach(function (c, n) {
@@ -92,16 +95,17 @@
                 ind.pdMesh.setMatrixAt(n, IND_DUMMY.matrix);
                 ind.pdMesh.setColorAt(n, IND_COL.setHex(c.lid ? 0xa1887f : c.w > 0.05 ? (c.l === 'brick' ? 0x0277bd : 0x29b6f6) : c.l === 'brick' ? 0xbf5b3a : c.l === 'clay' ? 0x8d6e63 : 0x5d4037));
             });
-            ind.pdMesh.count = L.length; ind.pdMesh.instanceMatrix.needsUpdate = true; if (ind.pdMesh.instanceColor) ind.pdMesh.instanceColor.needsUpdate = true;
+            wlList().forEach(function (w, n) { IND_DUMMY.position.set(w.i, 0.03, w.j); IND_DUMMY.rotation.set(0, 0, 0); IND_DUMMY.scale.set(0.8, 1, 0.8); IND_DUMMY.updateMatrix(); ind.pdMesh.setMatrixAt(L.length + n, IND_DUMMY.matrix); ind.pdMesh.setColorAt(L.length + n, IND_COL.setHex(0x01579b)); });
+            ind.pdMesh.count = L.length + wlList().length; ind.pdMesh.instanceMatrix.needsUpdate = true; if (ind.pdMesh.instanceColor) ind.pdMesh.instanceColor.needsUpdate = true;
         }
         function pdHint() {
             let c = pdAimCell(); if (!c) return '';
             let G = pdGroup(c), w = pdWater(G), lined = G.filter(function (x) { return x.l; }).length;
-            return '水池（自己挖的）' + G.length + ' 格，水 ' + (Math.round(w * 10) / 10) + ' / ' + G.length * PD.cap + ' 桶，铺了 ' + lined + ' 格' + (lined < G.length && w > 0 ? '，漏水中' : '') + (c.lid ? '　这格盖着' : '') + '<br><small>空桶右键接水、水桶右键倒水、空手右键喝；黏土 2／砖 1 右键铺；铲子右键填回</small>';
+            return '水池（自己挖的）' + G.length + ' 格，水 ' + (Math.round(w * 10) / 10) + ' / ' + G.length * PD.cap + ' 桶，铺了 ' + lined + ' 格' + (lined < G.length && w > 0 ? '，漏水中' : '') + (c.lid ? '　这格盖着' : '') + fhHint(G) + '<br><small>空桶右键接水、水桶右键倒水、空手右键喝；黏土 2／砖 1 右键铺；铲子右键填回</small>';
         }
         function pdFixBase(b) {
             if (!Array.isArray(b.pond)) { delete b.pond; return; }
             let seen = {};
             b.pond = b.pond.filter(function (c) { if (!c || !isFinite(c.i) || !isFinite(c.j)) return false; let k = (c.i | 0) + ',' + (c.j | 0); if (seen[k]) return false; seen[k] = 1; return true; }).slice(0, PD.max)
-                .map(function (c) { let o = { i: c.i | 0, j: c.j | 0, w: indNum(c.w, 0, 0, PD.cap) }; if (c.l === 'clay' || c.l === 'brick') o.l = c.l; if (c.lid) o.lid = true; return o; });
+                .map(function (c) { let o = { i: c.i | 0, j: c.j | 0, w: indNum(c.w, 0, 0, PD.cap) }; if (c.l === 'clay' || c.l === 'brick') o.l = c.l; if (c.lid) o.lid = true; if (c.f) o.f = c.f; return o; });
         }
