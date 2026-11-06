@@ -10568,7 +10568,7 @@ async function enterExit(tab, key) {
                     ${body} } finally { blazeFlash = bf; } })()`);
                 // 洞口在山地／古老岩层；悠闲没有
                 let r = await J(`(function(){ let n = 0, badB = 0; for (let s = 1; s <= 8; s++) { indGoTrip(s * 977); ind.caves.forEach(function (c) { n++; if (c.bm !== 'mountain' && c.bm !== 'ancient') badB++; }); } ind.base.rule = 'casual'; indGoTrip(977); let cas = ind.caves.length; ind.base.rule = 'hard'; return { n: n, badB: badB, cas: cas }; })()`);
-                if (!(r.n >= 4 && r.badB === 0 && r.cas === 0)) bad.push('硬核山地古老岩层有洞口、悠闲没有 ' + JSON.stringify(r));
+                if (!(r.n >= 4 && r.badB <= 8 && r.cas === 0)) bad.push('硬核山地古老岩层有洞口（平原森林沙漠每张图最多多 1 个，任务 75）、悠闲没有 ' + JSON.stringify(r));
                 // 走进洞口进洞；不带光：白天洞口 5 米看得见、8 米还看得见、20 米全黑；夜里洞口也黑；走回洞口出洞
                 r = await run(`day(); indTeleport(c.x, c.z); cvTick(0.1); let inn = ind.cave === c, gone = Math.hypot(ind.p.x - c.x, ind.p.z - c.z) > 100;
                     let v5 = at(5), v8 = at(8), v12 = at(12), v20 = at(20); night(); let n2 = at(2); day();
@@ -11150,7 +11150,7 @@ async function enterExit(tab, key) {
                 r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.cookers = []; let c = Object.assign({ id: ++B.cseq, ty: 'kiln', x: 5, z: 5 }, ckNewState()); B.cookers.push(c); let e = indCooks().filter(function (x) { return x.id === c.id; })[0];
                     let run = function (T, secs) { c.items = { clay_fire: 2 }; c.out = {}; c.cook = null; c.fuel = 1e5; c.fire = 4; c.blow = 999; for (let i = 0; i < secs; i++) { c.temp = T; c.fire = 4; indCookTick(e, 1); } return { out: JSON.stringify(c.out), items: JSON.stringify(c.items), cook: !!c.cook }; };
                     let lo = run(1400, 50), hi39 = run(1600, 39), hi = run(1600, 45); let rec = IND_RECIPES.filter(function (q) { return q.out.brick_fire === 1; })[0];
-                    return { lo: lo, hi39: hi39, hi: hi, rec: !!rec && rec.in.clay_fire === 2 && rec.minT === 1500 && rec.time === 40 && rec.hard === true, last: IND_RECIPES.indexOf(rec) === IND_RECIPES.length - 1 }; })()`);
+                    return { lo: lo, hi39: hi39, hi: hi, rec: !!rec && rec.in.clay_fire === 2 && rec.minT === 1500 && rec.time === 40 && rec.hard === true, last: IND_RECIPES.indexOf(rec) > IND_RECIPES.findIndex(function (q) { return q.out.b_freon; }) && IND_RECIPES.indexOf(rec) < IND_RECIPES.findIndex(function (q) { return q.out.tnt; }) }; })()`);
                 if (!(!/brick_fire/.test(r.lo.out) && !/brick_fire/.test(r.hi39.out) && /brick_fire/.test(r.hi.out) && r.rec && r.last)) bad.push('1400°C 烧不成、1600°C 40 秒出耐火砖、配方加在末尾 ' + JSON.stringify(r));
                 // 耐火砖槽：耐 1700、90 秒凉；接得住铁钢（砖槽、铁槽接不住）；耐火砖 4 做
                 r = await J(`(function(){ let t = function (ty, k) { return ckSpoutTakes({ spoutTy: ty, mold: null }, k); }; let rc = IND_CRAFT.filter(function (x) { return x.out === 'spout_fire'; })[0], it = IND_ITEMS.spout_fire;
