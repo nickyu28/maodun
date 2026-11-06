@@ -8,7 +8,7 @@
 //  小野猪：森林、平原，5 血，刨地 1 秒再冲 5 米，撞上 8 血、击退 2 米；掉肉 1～2、皮 0～1
 //  小蜜蜂：平原白天，3 只一群，1 血，蜇一下 2 血，蜇完飞开 2 秒；掉蜂蜜 0～1
 // 看见（10 米）才追，离开 15 米不追。悠闲伤害 ×0.5、不会被打死（最少剩 1 血）。
-// 刀：木 1、石（原来的小刀）2、青铜 3、铁 4、钢 6、钻石 8；左键对着怪挥（冷却 0.6 秒），打一下耐久 −1，用完变断刀（工作台回收一半主料，或加胶水修好、耐久一半）。
+// 刀：木 1、石（原来的小刀）2、青铜 3、铁 4、钢 6、钻石 8；左键对着怪挥（冷却 0.6 秒），打一下耐久 −1，用完变断刀（修、拆、熔见 19-industry-repair.js）。
 // 盾：选中盾点一下右键举 0.45～0.9 秒，正前方 120° 内挡掉一部分伤害，挡一下耐久 −1，然后冷却；举着走路 ×0.6；选中盾不拉风箱。
 // 宠物（驯服的狗、猫）：右键拿刀装刀、拿盾装盾；装了刀的是战斗宠物（最多 5 只），出门跟着你，8 米内有怪就上去打（每秒一下，饱食 −1）。
 //  宠物有饱食（狗猫每分钟 −1）和保湿度（每 1.5 分钟 −1，被怪蹭掉），哪个到 0 就睡着（不动、不打），喂吃的／喂水醒；水边 3 米内自己喝。
@@ -99,16 +99,18 @@
         // 手上那把刀／盾剩的耐久（同一种叠在一起，只记正在用的那一把）
         // 耐久上限：刀、盾、工具（19-industry-tool.js）；悠闲 ×2
         function mbDurTab(k) { return MB_KNIFE[k] || MB_SHIELD[k] || (typeof TL_TOOL !== 'undefined' && TL_TOOL[k]) || null; }
-        function mbMax(k) { let T = mbDurTab(k); return T ? T.dura * (indHard() ? 1 : 2) : 0; }
+        // 原始满耐久（不算修过降的上限）；mbMax 是正在用的那一把的上限（修过 N 次少 N × 10%，任务 78，19-industry-repair.js）
+        function mbMax0(k) { let T = mbDurTab(k); return T ? T.dura * (indHard() ? 1 : 2) : 0; }
+        function mbMax(k) { return rpCap(mbMax0(k), rpCurN(k)); }
         function mbDura(k) {
-            let B = ind.base, D = B.dura = B.dura || {}, max = mbMax(k);
-            if (!(D[k] > 0)) { let H = B.duraHalf = B.duraHalf || {}; if (H[k] > 0) { H[k]--; if (!H[k]) delete H[k]; D[k] = Math.ceil(max / 2); } else D[k] = max; }
+            let B = ind.base, D = B.dura = B.dura || {};
+            if (!(D[k] > 0)) { rpNext(k); D[k] = mbMax(k); }   // 换下一把：先用修过的
             return D[k];
         }
-        function mbWear(k) {   // 用掉 1 点耐久；用完这一把变成断的
+        function mbWear(k) {   // 用掉 1 点耐久；用完这一把变成断的（修过几次跟着它）
             let B = ind.base, left = mbDura(k) - 1;
             if (left > 0) { B.dura[k] = left; return false; }
-            delete B.dura[k]; indBagDel(k, 1); indBoxAdd('broken_' + k, 1);
+            rpBroke(k); delete B.dura[k]; indBagDel(k, 1); indBoxAdd('broken_' + k, 1);
             indFlash(indName(k) + '用坏了，变成' + indName('broken_' + k)); ind.hudSig = '';
             return true;
         }
@@ -453,13 +455,15 @@
             let P = ind.base.poisonK; if (P && P.k === k) s += '　带毒还剩 ' + P.n + ' 下';
             return s;
         }
-        // 合成：涂毒、胶水修（耐久一半）
+        // 合成：涂毒、胶水 + 原料修（每修一次上限少 10%）
         (function () {
             let c0 = indCraft;
             indCraft = function (i) {
-                let r = IND_CRAFT[i], ok = c0(i);
+                let r = IND_CRAFT[i];
+                if (r && r.fix && !rpFixOk(r.out)) return false;   // 修到上限只剩 0 就修不了（任务 78）
+                let ok = c0(i);
                 if (ok && r && r.poison) { ind.base.poisonK = { k: r.out, n: MB.poisonHits }; indFlash(indName(r.out) + '涂上毒了'); }
-                if (ok && r && r.fix) { let H = ind.base.duraHalf = ind.base.duraHalf || {}; H[r.out] = (H[r.out] || 0) + 1; }
+                if (ok && r && r.fix) rpFixed(r.out);
                 return ok;
             };
         })();

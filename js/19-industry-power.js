@@ -187,6 +187,7 @@
             if (typeof stkFixBase === 'function') stkFixBase(b);
             if (typeof mbFixBase === 'function') mbFixBase(b);
             if (typeof ctFixBase === 'function') ctFixBase(b);
+            if (typeof rpFixBase === 'function') rpFixBase(b);
             if (typeof fiFixBase === 'function') fiFixBase(b);
             if (typeof pdFixBase === 'function') pdFixBase(b);
             if (typeof fhFixBase === 'function') fhFixBase(b);

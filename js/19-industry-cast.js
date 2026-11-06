@@ -32,6 +32,10 @@
             // 青铜工具原来的"锭直接做"配方：留着下标，标 off 不显示
             IND_CRAFT.forEach(function (r) { if (r.hard && !r.fix && !r.poison && /^(knife|axe|pick|shovel|shears)_bronze$/.test(r.out) && r.in.bronze) r.off = true; });
         })();
+        function ctMeltUnit(S) {   // 炉膛里下一样能化的：{ k 物品, m 金属, n 份 }
+            let u = null; Object.keys(S.items).forEach(function (k) { if (u || !(S.items[k] > 0)) return; if (CT_METAL[k]) u = { k: k, m: k, n: 1 }; else { let q = typeof rpMeltOf === 'function' ? rpMeltOf(k) : null; if (q) u = { k: k, m: q.m, n: q.n }; } });
+            return u;
+        }
         function ctMetalOf(S) { let m = null; Object.keys(S.items).forEach(function (k) { if (!m && CT_METAL[k] && S.items[k] > 0) m = k; }); return m; }
         function ctCap(c) { return c.ty === 'kiln' ? CT.capKiln : CT.cap; }
         // 每个炉子每帧（ckTick 里调）：化锭、凝固、往模具里流、零件凉
@@ -42,12 +46,12 @@
                 let h = CT_METAL[P.m].hot; S.out[h] = (S.out[h] || 0) + P.n; S.pool = null; P = null; S.flowT = 0;
                 if (ind.panel === 'stove') ind.panelDirty = true;
             }
-            let m = !S.cook ? ctMetalOf(S) : null;
+            let U = !S.cook ? ctMeltUnit(S) : null, m = U && U.m;   // 锭化 1 份；坏了的金属工具化几份（任务 78，19-industry-repair.js）
             if (m && S.temp >= CT_METAL[m].melt && indCookFind(ckPool(S), indCookK(c.ty, S), undefined, S.items) < 0) {
                 if (P && P.m !== m) { if (!S.ctWarn) { S.ctWarn = 1; indFlash('熔池里是' + CT_METAL[P.m].n + '，先倒完'); } }
-                else if (!P || P.n < ctCap(c)) {
+                else if (!P || P.n + U.n <= ctCap(c)) {
                     S.meltT = (S.meltT || 0) + dt;
-                    if (S.meltT >= CT.meltT) { S.meltT = 0; S.items[m]--; if (S.items[m] <= 0) delete S.items[m]; S.pool = P = { m: m, n: (P ? P.n : 0) + 1 }; S.ctWarn = 0; if (ind.panel === 'stove') ind.panelDirty = true; }
+                    if (S.meltT >= CT.meltT) { S.meltT = 0; S.items[U.k]--; if (S.items[U.k] <= 0) delete S.items[U.k]; S.pool = P = { m: m, n: (P ? P.n : 0) + U.n }; S.ctWarn = 0; if (ind.panel === 'stove') ind.panelDirty = true; }
                 }
             } else S.meltT = 0;
             let M = S.mold; if (!M) return;
