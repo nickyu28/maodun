@@ -370,7 +370,7 @@
                     let a = rv.pts[i - 1], b = rv.pts[i], dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1, side = r() < 0.5 ? -1 : 1, off = rv.w / 2 + 1.2 + r() * 2.5;
                     let x = b[0] - dz / l * off * side, z = b[1] + dx / l * off * side, h = indHeight(M, x, z);
                     if (h < IND_WATER_Y + 0.1 || Math.hypot(x, z) < 8) continue;
-                    let key = (!casual && r() < WD_RIVER.sn) ? 'sand_sn' : 'clay', nd = IND_NODES[key];
+                    let key = (!casual && r() < WD_RIVER.sn) ? 'sand_sn' : 'clay'; if (key === 'clay' && !casual && indBiome(M, x, z) === 'mountain' && indHash(Math.floor(x), Math.floor(z), 5151) < 0.5) key = 'clay_fire'; let nd = IND_NODES[key];   // 山地河边一半是耐火黏土（19-industry-brick.js）
                     ind.nodes.push({ key: key, x: x, z: z, y: h, n: nd.give[0] + Math.floor(r() * (nd.give[1] - nd.give[0] + 1)), seed: IND_SEED_KINDS[0], dead: false, river: true });
                 }
             });

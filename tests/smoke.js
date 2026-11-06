@@ -11133,6 +11133,38 @@ async function enterExit(tab, key) {
             report('IND101 扩展家园和石墙石地板：往东南西扩、成本递增、上限、门不动、上限按面积涨、存档、石墙挡路', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND102')) {
+            // IND102 耐火砖（tools-trees.md 第 2 节）：古老岩层和山地河边有耐火黏土（一次 2～4、硬核才有）；2 耐火黏土 1500°C 以上 40 秒烧成耐火砖（1400°C 不行）；耐火砖槽（砖 4）耐 1700°C、90 秒凉、接得住铁钢
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let anc = 0, mtn = 0, cas = 0, gv = [], bad = 0; for (let s = 1; s <= 24; s++) { indGoTrip(s * 7919); ind.nodes.forEach(function (o) { if (o.key !== 'clay_fire') return; let bm = indBiome(ind.map, o.x, o.z); if (bm === 'ancient') anc++; else if (bm === 'mountain') mtn++; gv.push(o.n); }); }
+                    ind.base.rule = 'casual'; for (let s = 1; s <= 12; s++) { indGoTrip(s * 7919); ind.nodes.forEach(function (o) { if (o.key === 'clay_fire') cas++; }); } ind.base.rule = 'hard';
+                    return { anc: anc, mtn: mtn, cas: cas, min: Math.min.apply(null, gv), max: Math.max.apply(null, gv), n: IND_NODES.clay_fire.give.join(), tool: IND_NODES.clay_fire.tool }; })()`);
+                if (!(r.anc >= 1 && r.mtn >= 1 && r.cas === 0 && r.n === '2,4' && r.tool === 0 && r.min >= 2 && r.max <= 4)) bad.push('古老岩层和山地河边有耐火黏土（2～4、空手）、悠闲没有 ' + JSON.stringify(r));
+                // 烧耐火砖：1400°C 不行、1600°C 40 秒出 1 块
+                r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.cookers = []; let c = Object.assign({ id: ++B.cseq, ty: 'kiln', x: 5, z: 5 }, ckNewState()); B.cookers.push(c); let e = indCooks().filter(function (x) { return x.id === c.id; })[0];
+                    let run = function (T, secs) { c.items = { clay_fire: 2 }; c.out = {}; c.cook = null; c.fuel = 1e5; c.fire = 4; c.blow = 999; for (let i = 0; i < secs; i++) { c.temp = T; c.fire = 4; indCookTick(e, 1); } return { out: JSON.stringify(c.out), items: JSON.stringify(c.items), cook: !!c.cook }; };
+                    let lo = run(1400, 50), hi39 = run(1600, 39), hi = run(1600, 45); let rec = IND_RECIPES.filter(function (q) { return q.out.brick_fire === 1; })[0];
+                    return { lo: lo, hi39: hi39, hi: hi, rec: !!rec && rec.in.clay_fire === 2 && rec.minT === 1500 && rec.time === 40 && rec.hard === true, last: IND_RECIPES.indexOf(rec) === IND_RECIPES.length - 1 }; })()`);
+                if (!(!/brick_fire/.test(r.lo.out) && !/brick_fire/.test(r.hi39.out) && /brick_fire/.test(r.hi.out) && r.rec && r.last)) bad.push('1400°C 烧不成、1600°C 40 秒出耐火砖、配方加在末尾 ' + JSON.stringify(r));
+                // 耐火砖槽：耐 1700、90 秒凉；接得住铁钢（砖槽、铁槽接不住）；耐火砖 4 做
+                r = await J(`(function(){ let t = function (ty, k) { return ckSpoutTakes({ spoutTy: ty, mold: null }, k); }; let rc = IND_CRAFT.filter(function (x) { return x.out === 'spout_fire'; })[0], it = IND_ITEMS.spout_fire;
+                    return { fire: [t('fire', 'hot_fe'), t('fire', 'hot_steel'), t('fire', 'hot_cu')], brick: [t('brick', 'hot_fe'), t('brick', 'hot_cu')], iron: [t('iron', 'hot_fe'), t('iron', 'hot_steel'), t('iron', 'hot_cu')], cool: CK_SPOUT.fire.cool, maxT: CK_SPOUT.fire.maxT, rc: !!rc && rc.in.brick_fire === 4 && rc.hard === true, at: it.attach === 'spout' && it.spoutTy === 'fire' }; })()`);
+                if (!(r.fire.join() === 'true,true,true' && r.brick.join() === 'false,true' && r.iron.join() === 'false,false,true' && r.cool === 90 && r.maxT === 1700 && r.rc && r.at)) bad.push('耐火砖槽接得住铁钢、砖槽铁槽接不住、90 秒凉、砖 4 做 ' + JSON.stringify(r));
+                // 装到炉子旁
+                r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.cookers = []; let c = Object.assign({ id: ++B.cseq, ty: 'kiln', x: 5, z: 5 }, ckNewState()); B.cookers.push(c); ind.bag = { spout_fire: 1 }; indSelect('spout_fire'); let ok = ckAttach('spout_fire', { kind: 'cook', o: c }); return { ok: ok, ty: c.spoutTy, left: ind.bag.spout_fire || 0 }; })()`);
+                if (!(r.ok === true && r.ty === 'fire' && r.left === 0)) bad.push('耐火砖槽装到炉子旁 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND102 耐火砖：耐火黏土在古老岩层和山地河边、1500°C 40 秒烧成、耐火砖槽接铁钢', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中
