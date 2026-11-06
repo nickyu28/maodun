@@ -5502,6 +5502,9 @@ async function enterExit(tab, key) {
                         if (hard && RAW.wood_dry && have.wood) add('wood_dry'); if (hard && RAW.ember && have.wood_dry && (have.grass || have.resin)) add('ember'); if (hard && RAW.flint && tl >= 1) add('flint');
                         // 铸造：拿小刀 + 2 黏土雕生模具；熟模具 + 青铜锭 + 950°C + 出料槽 → 青铜零件
                         if (hard && typeof CT_SHAPE !== 'undefined' && have.clay && Object.keys(have).some(function (k) { return tlKind(k) === 'knife'; })) Object.keys(CT_SHAPE).forEach(function (s) { add('mold_' + s + '_raw'); if (have['mold_' + s] && have.bronze && maxT >= 950 && (have.spout_brick || have.spout_iron)) add('part_' + s + '_bronze'); });
+                        // 铸造后半：拿小刀 + 2 耐火砖雕耐火砖生模具；≥1500°C 烧硬；熟模具 + 铁／钢锭 + 耐火砖槽 → 铁／钢零件
+                        if (hard && typeof CT_SHAPE !== 'undefined' && have.brick_fire && Object.keys(have).some(function (k) { return tlKind(k) === 'knife'; })) Object.keys(CT_SHAPE).forEach(function (s) { add('mold_' + s + '_f_raw'); if (have['mold_' + s + '_f'] && have.spout_fire) { if (have.ingot_fe && maxT >= 1538) add('part_' + s + '_ingot_fe'); if (have.steel && maxT >= 1550) add('part_' + s + '_steel'); } });
+                        if (hard && typeof CT_SHAPE !== 'undefined' && maxT >= 1500) Object.keys(CT_SHAPE).forEach(function (s) { if (have['mold_' + s + '_f_raw']) add('mold_' + s + '_f'); });
                         // 怪（任务 70）：拿刀打出门的怪掉黏液、蘑菇、毒蘑菇、云絮、蜂蜜、木炭、仙人掌、肉、皮；刀盾用坏了变断的
                         if (typeof MB_KNIFE !== 'undefined') {
                             if (Object.keys(MB_KNIFE).some(function (k) { return have[k]; })) ['goo', 'shroom', 'shroom_bad', 'fluff', 'honey', 'charcoal', 'cactus', 'meat_raw', 'hide'].forEach(add);
@@ -10799,10 +10802,10 @@ async function enterExit(tab, key) {
                 // 拔刺、剪羊毛按档
                 r = await run(`return { kb: tlPeelTime('knife_bronze'), ss: tlPeelTime('shears_steel'), ax: tlPeelTime('axe'), tong: tlPeelTime('tongs'), sh: IND_SHEAR_T * tlMul('shears_iron') };`);
                 if (!(Math.abs(r.kb - 7) < 1e-9 && r.ss === 15 && r.ax === 5 && r.tong === 40 && Math.abs(r.sh - 2.4) < 1e-9)) bad.push('拔刺剪毛按档 ' + JSON.stringify(r));
-                // 回收一半主料、胶水修好耐久一半；悠闲 ×2；旧存档（没有耐久记录）满耐久
+                // 回收一半主料、胶水修好耐久一半；悠闲 ×2；旧存档（没有耐久记录）满耐久；铁斧改成铸造做（任务 4 铸造后半），直接用锭的那条留着下标、标 off
                 r = await run(`ind.bag = { broken_axe_iron: 2, glue: 1 }; let i = IND_CRAFT.findIndex(function (q) { return q.in.broken_axe_iron && !q.fix; }), j = IND_CRAFT.findIndex(function (q) { return q.fix && q.out === 'axe_iron'; });
                     indCraft(i); indCraft(j); let fe = ind.bag.ingot_fe, fixed = ind.bag.axe_iron; let half = mbDura('axe_iron'); ind.base.rule = 'casual'; let cas = mbMax('axe'); ind.base.rule = 'hard';
-                    let f = indFixBase(Object.assign(JSON.parse(JSON.stringify(ind.base)), { dura: undefined, duraHalf: undefined })); return { fe: fe, fixed: fixed, half: half, cas: cas, old: f.dura, recipe: !!IND_CRAFT.filter(function (q) { return q.out === 'axe_iron' && q.in.ingot_fe === 2 && q.in.wood === 1 && !q.off; }).length };`);
+                    let f = indFixBase(Object.assign(JSON.parse(JSON.stringify(ind.base)), { dura: undefined, duraHalf: undefined })); return { fe: fe, fixed: fixed, half: half, cas: cas, old: f.dura, recipe: IND_CRAFT.filter(function (q) { return q.out === 'axe_iron' && q.in.ingot_fe === 2 && q.in.wood === 1 && q.off; }).length === 1 && IND_CRAFT.some(function (q) { return q.out === 'axe_iron' && q.in.part_axe_ingot_fe && !q.off; }) };`);
                 if (!(r.fe === 1 && r.fixed === 1 && r.half === 100 && r.cas === 80 && JSON.stringify(r.old) === '{}' && r.recipe)) bad.push('回收、胶水修一半、悠闲 ×2、旧存档满 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
@@ -11428,6 +11431,47 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND109 TNT 炸动物', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND110')) {
+            // IND110 铸造后半：耐火砖雕模具、1500°C 烧硬、铁钢熔池流进耐火砖模具出零件、零件 + 木柄做铁钢工具；黏土模具浇铁钢照旧裂；直接用锭做铁钢工具的配方标 off
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.cookers = []; ind.bag = {}; indPanelClose(); ind.carve = null;
+                    let cook = function (ty) { let c = Object.assign({ id: ++B.cseq, ty: ty, x: 5, z: 5 }, ckNewState()); B.cookers.push(c); return c; }, ent = function (c) { return indCooks().filter(function (x) { return x.id === c.id; })[0]; }, tick = function (c, secs, T0) { let e = ent(c); for (let i = 0; i < secs; i++) { if (T0) c.temp = T0; indCookTick(e, 1); } };
+                    ${body} })()`);
+                // 雕耐火砖模具：2 耐火砖 + 小刀，雕够刀数得耐火砖生模具；黏土不够也能雕
+                let r = await run(`ind.bag = { brick_fire: 2, knife: 1 }; indSelect('knife'); let menu = ctCarveMenu(); let txt = document.getElementById('ind-panel').innerText; ctCarveStart('knife', 1); let cuts = CT_SHAPE.knife.cuts;
+                    for (let i = 0; i < 400 && ind.carve; i++) { ind.t = ind.carve.t0 + 0.6 + 2.4 * i; ctHit(); } return { menu: menu, both: /耐火砖/.test(txt), raw: ind.bag.mold_knife_f_raw || 0, brick: ind.bag.brick_fire || 0, q: ind.base.moldQ.knife_f && ind.base.moldQ.knife_f[0] };`);
+                if (!(r.menu && r.both && r.raw === 1 && r.brick === 0 && r.q >= 15 && r.q <= 30)) bad.push('雕耐火砖模具 ' + JSON.stringify(r));
+                // 烧硬：1400°C 不行，1600°C 60 秒变熟模具；配方在表末尾之后
+                r = await run(`let c = cook('kiln'); c.fire = 4; c.blow = 999; c.fuel = 1e5; c.items = { mold_axe_f_raw: 1 }; tick(c, 70, 1400); let lo = c.out.mold_axe_f || 0; c.items = { mold_axe_f_raw: 1 }; c.out = {}; c.cook = null; tick(c, 50, 1600); let mid = c.out.mold_axe_f || 0; tick(c, 20, 1600); let hi = c.out.mold_axe_f || 0;
+                    let rec = IND_RECIPES.filter(function (q) { return q.in.mold_axe_f_raw === 1; })[0]; return { lo: lo, mid: mid, hi: hi, rec: !!rec && rec.minT === 1500 && rec.time === 60 && rec.hard === true, after: IND_RECIPES.indexOf(rec) > IND_RECIPES.findIndex(function (q) { return q.out.tnt; }) };`);
+                if (!(r.lo === 0 && r.mid === 0 && r.hi === 1 && r.rec && r.after)) bad.push('耐火砖生模具 1500°C 60 秒烧硬、配方在末尾 ' + JSON.stringify(r));
+                // 铸铁斧头：耐火砖模具 + 耐火砖槽 + 铁熔池 1538°C → 零件；钢也行；黏土模具浇铁裂
+                r = await run(`let c = cook('kiln'); c.spoutTy = 'fire'; c.items = { ingot_fe: 3 }; c.fire = 4; c.blow = 999; c.fuel = 1e5; ind.bag = { mold_axe_f: 1 }; ind.base.moldQ = { axe_f: [25] };
+                    ind.cookId = c.id; tick(c, 31, 1600); let pool = c.pool ? c.pool.n : 0; ctMoldPut('mold_axe_f'); let f = c.mold && c.mold.f; tick(c, 3, 1600); let part = c.mold && c.mold.part; let left = c.pool ? c.pool.n : 0;
+                    tick(c, 95, 1600); let take = ctTake(ent(c)), got = ind.bag.part_axe_ingot_fe || 0, dura = c.mold && c.mold.dura; let html = ctHtml(ent(c));
+                    ctMoldOut(); let back = ind.bag.mold_axe_f || 0, q = ind.base.moldQ.axe_f;
+                                        return { pool: pool, f: f, part: part, left: left, got: got, take: take, dura: dura, back: back, q: q, html: /耐火砖斧头/.test(html) };`);
+                if (!(r.pool === 3 && r.f === true && r.part === 'part_axe_ingot_fe' && r.left === 1 && r.take === true && r.got === 1 && r.dura === 24 && r.back === 1 && JSON.stringify(r.q) === '[24]')) bad.push('耐火砖模具铸铁斧头（2 份、耐久 −1、取下模具耐久记着） ' + JSON.stringify(r));
+                r = await run(`let c = cook('kiln'); c.spoutTy = 'fire'; c.items = { ingot_fe: 1 }; c.fire = 4; c.blow = 999; c.fuel = 1e5; ind.bag = { mold_knife: 1 }; ind.base.moldQ = {}; ind.cookId = c.id; tick(c, 12, 1600); ctMoldPut('mold_knife'); tick(c, 3, 1600); return { cracked: !c.mold, hot: JSON.stringify(c.spout.map(function (q) { return q.k; })) };`);
+                if (!(r.cracked && /hot_fe/.test(r.hot))) bad.push('黏土模具浇铁照旧裂、凝成烫锭 ' + JSON.stringify(r));
+                // 零件 + 木柄 → 铁／钢的工具；直接用锭的配方标 off；旧存档里的铁钢工具照旧能用
+                r = await J(`(function(){ let want = [['knife', 'iron'], ['axe', 'iron'], ['pick', 'iron'], ['shovel', 'iron'], ['shears', 'iron'], ['knife', 'steel'], ['axe', 'steel'], ['pick', 'steel'], ['shovel', 'steel'], ['shears', 'steel']], bad = [];
+                    want.forEach(function (w) { let k = w[0] + '_' + w[1], m = w[1] === 'iron' ? 'ingot_fe' : 'steel', part = 'part_' + w[0] + '_' + m; let np = IND_CRAFT.filter(function (q) { return q.out === k && q.in[part] && !q.off; }).length, off = IND_CRAFT.filter(function (q) { return q.out === k && (q.in.ingot_fe || q.in.steel) && !q.in[part] && !q.fix && !q.off; }).length; if (np !== 1 || off !== 0 || !IND_ITEMS[part]) bad.push(k); });
+                    indGoBase(null); ind.base.rule = 'hard'; ind.bag = { part_axe_steel: 1, handle: 1 }; indCraft(IND_CRAFT.findIndex(function (q) { return q.out === 'axe_steel' && q.in.part_axe_steel; })); let made = ind.bag.axe_steel || 0;
+                    let old = indFixBase({ ver: 12, rule: 'hard', bag: {}, box: { axe_iron: 1, pick_steel: 1 } }); return { bad: bad, made: made, old: JSON.stringify(old.box) }; })()`);
+                if (!(r.bad.length === 0 && r.made === 1 && r.old === '{"axe_iron":1,"pick_steel":1}')) bad.push('零件 + 木柄做铁钢工具、直接用锭的配方 off、旧工具还在 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND110 铸造后半：耐火砖模具、铁钢零件、铁钢工具改成铸造', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
