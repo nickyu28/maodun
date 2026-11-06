@@ -4,7 +4,7 @@
 //  裂纹岩每张图 3～6 块（地面上带裂纹的大石头，挖不动，只有 TNT 炸得开，掉 3～6 个矿，所有种类，包括锂锗镓），火药炸不动。
 // TNT：石油 1 + 硝酸瓶 2 + 硫酸瓶 1 → 3 个，大窑 80°C（石油用桶装的那个，桶还你）。右键放下，4 秒引线，半径 4 米，能炸任何东西：硬岩（掉锂锗镓）、裂纹岩（掉矿）、
 //  树（木头 ×2）、设备（基地里用爆炸那套：设备毁掉里面的东西掉地上）、怪（5 点）、玩家（5 米内 −50，放下时说"退远点"）；基地里空地上炸出一格水池。
-        const OR = { surf: 0.3, caveN: [3, 8], crackN: [3, 6], crackOre: [3, 6], fuse: 4, R: 4, hurtR: 5, dmg: 50, plainCave: 0.4 };
+        const OR = { surf: 0.5, caveN: [2, 4], crackN: [3, 6], crackOre: [3, 6], fuse: 4, R: 4, hurtR: 5, dmg: 50, plainCave: 0.4 };
         const OR_ORE = { ore_cu: 1, ore_zn: 1, ore_sn: 1, ore_fe: 1, ore_u: 1, fluorite: 1, ore_pb: 1, ore_al: 1, ore_ni: 1 };
         const OR_ALL = Object.keys(OR_ORE).concat(['ore_li', 'ore_ge', 'ore_ga']);
         const OR_CAVE = { mountain: { ore_cu: 3, ore_zn: 2, ore_sn: 3, ore_fe: 2, ore_pb: 1, fluorite: 1, ore_al: 1, ore_ni: 1 }, ancient: { ore_u: 2, ore_fe: 2, fluorite: 2, ore_pb: 1, ore_ni: 1, ore_al: 1, ore_cu: 1 }, other: { ore_cu: 1, ore_fe: 1, ore_sn: 1 } };
