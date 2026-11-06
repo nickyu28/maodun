@@ -962,7 +962,7 @@ async function enterExit(tab, key) {
         }
 
                 if (want('V3')) {
-            // V3：更新公告规则——只留最新 3 条；每条最多 5 句、每句一行（不换行、不长）、不提保底/必出；发版的那条 id 跟版本号一致；CLAUDE.md 里写了这条规则
+            // V3：更新公告规则——只留最新 3 条；每条最多 5 句、每句一行（不换行、不长）、不提保底/必出；发版的那条 id 的日期跟版本号一致、N 不超过版本号；CLAUDE.md 里写了这条规则
             const bad = [];
             const T = await openTab(chrome, url);
             const r = JSON.parse(await T.eval(`JSON.stringify({ n: CHANGELOG.length, items: CHANGELOG.map(function (e) { return e.items; }), ids: CHANGELOG.map(function (e) { return e.id; }), ver: GAME_VERSION })`));
@@ -971,12 +971,15 @@ async function enterExit(tab, key) {
                 if (it.length > 5) bad.push('第 ' + (i + 1) + ' 条有 ' + it.length + ' 句（最多 5 句）');
                 it.forEach(function (t) { if (t.length > 32 || /[\n<]/.test(t)) bad.push('太长或带换行：' + t); if (/保底|必出/.test(t)) bad.push('提到了保底/必出：' + t); });
             });
-            if (r.ids[0] !== r.ver) bad.push('最新一条的 id（' + r.ids[0] + '）跟版本号（' + r.ver + '）不一致');
+            // id 的日期部分必须等于版本号的日期部分，N 不能比版本号的大（Code2 只加 N 不写公告时，公告 id 可以落后；公告不能比版本号新，日期也不能对不上）
+            const pv = /^(\d+\.\d+\.\d+)-(\d+)$/.exec(r.ver), pi = /^(\d+\.\d+\.\d+)-(\d+)$/.exec(r.ids[0] || '');
+            if (!pv || !pi) bad.push('版本号或公告 id 格式不对：' + r.ver + ' / ' + r.ids[0]);
+            else if (pi[1] !== pv[1] || +pi[2] > +pv[2]) bad.push('最新一条的 id（' + r.ids[0] + '）日期要跟版本号（' + r.ver + '）一样，N 不能比版本号大');
             const md = fs.readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8');
             if (!/每次发版只写一条公告/.test(md) || !/只保留最新 3 条/.test(md)) bad.push('CLAUDE.md 里没写更新公告规则');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('V3 更新公告：只留最新几条（≤3）、每条 ≤5 句、短、不提保底；最新一条 id = 版本号；CLAUDE.md 写了规则', bad.length === 0, bad.join(' / '));
+            report('V3 更新公告：只留最新几条（≤3）、每条 ≤5 句、短、不提保底；最新一条 id 的日期 = 版本号的日期、N ≤ 版本号的 N；CLAUDE.md 写了规则', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('D1')) {
