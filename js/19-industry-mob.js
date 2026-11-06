@@ -154,10 +154,11 @@
             let p = kind.split(':'), ty = p[0], T = MB_T[ty], m = { ty: ty, x: x, z: z, sz: 0, child: false, hp: 0, cd: 0, st: '', stT: 0, shake: 0, ry: 0 };
             if (o) Object.assign(m, o);
             m.hp = T.hp instanceof Array ? T.hp[m.sz] : T.hp;
+            if (ty === 'flame') { m.pts = 3; m.pt = 0; m.life = 5; m.lt = 0; }   // 点数最高 3（每 90 秒回 1）、寿命 5 次（任务 70 补充 4、5）
             m.col = ty === 'slime' ? (m.col || MB_SLIME_COL[p[1] || 'green']) : 0;
             m.g = mbMesh(m); ind.mobs.push(m); return m;
         }
-        function mbCount() { return (ind.mobs || []).filter(function (m) { return !m.child && !m.dead; }).length; }
+        function mbCount() { return (ind.mobs || []).filter(function (m) { return !m.child && !m.dead && m.ty !== 'flame'; }).length; }   // 火苗仔不死、不算在上限里
         function mbSpawnTry() {
             let n = mbCount(); if (n >= MB.cap) return null;
             let cave = ind.cave, x, z;
@@ -206,6 +207,7 @@
                 m.cd = Math.max(0, m.cd - dt); m.shake = Math.max(0, m.shake - dt);
                 if (m.poison > 0) { m.poison -= dt; m.pt = (m.pt || 0) + dt; if (m.pt >= 1) { m.pt -= 1; mbDamage(m, 1, true); } }
                 if (m.dead) return;
+                if (m.ty === 'flame') { mbFlameTick(m, dt); if (m.dead) return; }
                 let best = null, bd = 1e9; tg.forEach(function (t) { let d = Math.hypot(t.x - m.x, t.z - m.z); if (d < bd) { bd = d; best = t; } });
                 if (!m.aggro && bd <= MB.see) m.aggro = true; else if (m.aggro && bd > MB.lose) m.aggro = false;
                 let slow = (ind.glue || []).some(function (g) { return Math.hypot(g.x - m.x, g.z - m.z) <= MB.glueR; }) ? MB.glueSlow : 1;
@@ -232,6 +234,30 @@
             });
             mbPetTick(dt);
             mbBlockTick(dt);
+            mbFlameSpawn(); lvTick(dt);
+        }
+        // ── 火苗仔：点数（颜色）、寿命、岩浆边不燃尽（任务 70 补充 4、5）──
+        const MB_FLAME = { cols: [0x37474f, 0xb71c1c, 0xffb300, 0xff9800], ptT: 90, lifeT: 60, lifeMax: 5, lavaR: 3, volcR: 30 };
+        function mbFlameLook(m) {
+            if (!m.g) return; let c = MB_FLAME.cols[Math.max(0, Math.min(3, m.pts))];
+            m.g.children[0].material = mbMat(c, false); m.g.children[1].material = mbMat(m.pts > 0 ? 0xffeb3b : 0x616161, true);
+        }
+        function mbFlameOut(m) { m.dead = true; mbDrop(m); indFlash('燃尽了'); }
+        function mbFlameTick(m, dt) {
+            if (m.pts < 3) { m.pt += dt; if (m.pt >= MB_FLAME.ptT) { m.pt = 0; m.pts++; } }
+            if (m.life < MB_FLAME.lifeMax && lvDist(m.x, m.z) <= MB_FLAME.lavaR) { m.lt += dt; if (m.lt >= MB_FLAME.lifeT) { m.lt = 0; m.life++; } } else if (lvDist(m.x, m.z) > MB_FLAME.lavaR) m.lt = 0;
+            if (m.look !== m.pts) { m.look = m.pts; mbFlameLook(m); }
+        }
+        // 出门地图上的火山边（30 米内）同一时刻最多 1 只；玩家走到火山附近才刷
+        function mbFlameSpawn() {
+            if (!IND_MB_AUTO || ind.cave || !ind.map || !ind.map.volc) return;
+            ind.map.volc.forEach(function (v, i) {
+                if (Math.hypot(ind.p.x - v.x, ind.p.z - v.z) > v.r * 1.6 + 40) return;
+                if (ind.mobs.some(function (m) { return m.ty === 'flame' && !m.dead && Math.hypot(m.x - v.x, m.z - v.z) < MB_FLAME.volcR + v.r; })) return;
+                let k = (ind.mbFl = ind.mbFl || {}); if (k[i] !== undefined && ind.t - k[i] < MB.respawn) return;
+                k[i] = ind.t; let a = indRand() * Math.PI * 2, d = v.r * 0.45 + 6 + indRand() * 10;
+                mbNew('flame', v.x + Math.cos(a) * d, v.z + Math.sin(a) * d);
+            });
         }
         function mbHit(m, t) {
             let T = MB_T[m.ty], dmg = T.dmg instanceof Array ? T.dmg[m.sz] : (T.dmg || 0);
@@ -241,6 +267,7 @@
         // 打怪：血打没了史莱姆裂开，别的掉东西
         function mbDamage(m, n, poison) {
             if (m.dead) return;
+            if (m.ty === 'flame') { m.shake = 0.3; return; }   // 火苗仔打不死，只抖一下
             m.hp -= n; m.shake = 0.3;
             if (m.hp > 0) return;
             m.dead = true; mbDrop(m);
@@ -251,7 +278,6 @@
             if (m.ty === 'slime') put('goo', r(0, 2));
             else if (m.ty === 'mush') { put('shroom', r(0, 2)); if (indRand() < 0.15) put('shroom_bad', 1); }
             else if (m.ty === 'cloud') put('fluff', r(0, 1));
-            else if (m.ty === 'flame') { put('charcoal', r(0, 1)); if (IND_ITEMS_RAW.ember && indRand() < 0.35) put('ember', 1); }   // 火种（起火）：捡起来 60 秒灭
             else if (m.ty === 'cactus') put('cactus', 1);
             else if (m.ty === 'boar') { put('meat_raw', r(1, 2)); put('hide', r(0, 1)); }
             else if (m.ty === 'bee') put('honey', r(0, 1));
@@ -264,6 +290,7 @@
             let best = null, bd = MB.reach;
             ind.mobs.forEach(function (m) { let d = Math.hypot(m.x - ind.p.x, m.z - ind.p.z); if (!m.dead && d <= bd && (d < 0.8 || mbFront(m.x, m.z))) { bd = d; best = m; } });
             if (!best) return false;
+            if (best.ty === 'flame') { best.shake = 0.3; return true; }   // 刀打火苗仔：抖一下，不伤刀、不弹字
             if (ind.mbSwing > ind.t) return true;
             ind.mbSwing = ind.t + MB.swing;
             let P = ind.base.poisonK, pois = P && P.k === k && P.n > 0;

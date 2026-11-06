@@ -1,7 +1,7 @@
 // 猫盾工业：成就（任务 64）。放在 19-industry-cold.js 后面。
 // 数据：ind.base.ach = { id: 获得时的游戏时间 }（跟着基地存档）；ind.base.achT = { 动物: 1 } 驯服过哪几种。
 // 标 hide 的没拿到之前列表里完全不出现，拿到才出现；没标的一开始就写名字和条件。"已获得 N / 总数"的总数只算没标隐藏的 + 已经拿到的隐藏的。
-// 还没接的：上天（等火箭）、pic1（游戏里没有短路这件事：电源和电源不能直接接）。我的刀盾、我的猫盾和两条狗叫的在 19-industry-mob.js 里加（任务 70）。
+// 还没接的：上天（等火箭）。pic1 = 电池组短路爆炸一次（拿铜线点电池组再点同一个）。我的刀盾、我的猫盾和两条狗叫的在 19-industry-mob.js 里加（任务 70）。
         const ACH = [
             { id: 'ice3', hide: 1, ico: '❄️', name: '冰冰冰', desc: '获得 3 块冰' },
             { id: 'p6767', hide: 1, ico: '🔢', name: '6767', desc: '往地上扔 67 个东西摆在一起' },
@@ -14,6 +14,7 @@
             { id: 'full', hide: 1, ico: '🎒', name: '塞不下了', desc: '把最大的背包塞满' },
             { id: 'mom', ico: '🍲', name: '妈妈的味道', desc: '做一道菜并吃一次' },
             { id: 'years', hide: 1, ico: '⏳', name: '我是来这里干嘛的？', desc: '呆满 3 年' },
+            { id: 'pic1', hide: 1, pic: 1, ico: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#757575" stroke-width="1.2" stroke-linecap="round"><path d="M10 19H4V5H20V19H14"/><line x1="10" y1="15.5" x2="10" y2="22.5"/><line x1="14" y1="17" x2="14" y2="21" stroke-width="2.8"/></svg>', name: '', desc: '' },
             { id: 'bulb', ico: '💡', name: '会发光！', desc: '获得灯泡' }
         ];
         const ACH_BY = {}; ACH.forEach(function (a) { ACH_BY[a.id] = a; });
@@ -62,7 +63,21 @@
             let A = ind.base.ach || {}, vis = ACH.filter(function (a) { return !a.hide || A[a.id] !== undefined; }), n = vis.filter(function (a) { return A[a.id] !== undefined; }).length;
             let rows = vis.map(function (a) {
                 let got = A[a.id] !== undefined;
-                return '<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #eee;' + (got ? '' : 'opacity:.55;') + '"><span style="font-size:24px;width:32px;text-align:center;' + (got ? '' : 'filter:grayscale(1);') + '">' + a.ico + '</span><span><b>' + a.name + '</b><br><small style="color:#666;">' + a.desc + '</small></span></div>';
+                return '<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #eee;' + (got ? '' : 'opacity:.55;') + '"><span style="font-size:24px;width:32px;text-align:center;' + (got ? '' : 'filter:grayscale(1);') + '">' + a.ico + '</span><span>' + (a.pic ? '' : '<b>' + a.name + '</b><br><small style="color:#666;">' + a.desc + '</small>') + '</span></div>';
             }).join('');
             indPanelShow('ach', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">成就　已获得 ' + n + ' / ' + vis.length + '</div><div style="max-height:60vh;overflow:auto;">' + rows + '</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+        }
+        // 短路（成就 pic1）：拿着铜线对着有电的电池组点一下，再点同一个电池组 = 电池两端用线连起来，没有负载；3 秒后爆炸（半径 3 米）
+        function scShortTry(d) {
+            if (d.ty !== 'bank' || !(d.u > 0) || !(d.bats > 0) || !(ind.bag.wire > 0) || d.short > 0) return false;
+            ind.wirePend = null; indBagDel('wire', 1); d.short = 3; ind.devDirty = true;
+            indFlash('电池组两端接到一起了，在发烫'); return true;
+        }
+        function scTick(dt) {
+            if (!ind || ind.where !== 'base' || !ind.base.devs) return;
+            ind.base.devs.forEach(function (d) {
+                if (!(d.short > 0)) return;
+                d.short -= dt; if (d.short > 0) return;
+                let x = d.x, z = d.z; indAch('pic1'); indBoom(x, z, 0, '电池组短路爆炸');
+            });
         }

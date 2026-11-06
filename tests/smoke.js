@@ -3634,11 +3634,11 @@ async function enterExit(tab, key) {
                 gState.inv[3] = { n: '腰包', type: 'backpack_ext', v: 0, w: 1, bag: [it('铜钱', 600, 1), null, null] };
                 gState.garage = Array(200).fill(null); gState.garage[0] = it('皇冠', 3000000, 9); gState.garage[1] = it('铜币', 80, 1); openPouch = gState.inv[3]; initGarage(); updateHUD(); })(); true;`);
             const txt = JSON.parse(await T.eval(`JSON.stringify({
-                inv: Array.prototype.map.call(document.getElementById('garage-active-inv').children, function (c) { return c.innerText.replace(/\\s+/g, ' '); }).slice(0, 4),
-                gar: Array.prototype.map.call(document.getElementById('garage-stash-container').children, function (c) { return c.innerText.replace(/\\s+/g, ' '); }).slice(0, 2),
-                bag: Array.prototype.map.call(document.querySelectorAll('#garage-pouch-row .slot'), function (c) { return c.innerText.replace(/\\s+/g, ' '); }),
-                bp: Array.prototype.map.call(document.querySelectorAll('#bp-hotbar-slots .slot, #bp-backpack-slots .slot'), function (c) { return c.innerText.replace(/\\s+/g, ' '); }).slice(0, 2),
-                hud: document.getElementById('hud-slot-0').innerText.replace(/\\s+/g, ' ') })`));
+                inv: Array.prototype.map.call(document.getElementById('garage-active-inv').children, function (c) { return c.innerText.replace(/\s+/g, ' '); }).slice(0, 4),
+                gar: Array.prototype.map.call(document.getElementById('garage-stash-container').children, function (c) { return c.innerText.replace(/\s+/g, ' '); }).slice(0, 2),
+                bag: Array.prototype.map.call(document.querySelectorAll('#garage-pouch-row .slot'), function (c) { return c.innerText.replace(/\s+/g, ' '); }),
+                bp: Array.prototype.map.call(document.querySelectorAll('#bp-hotbar-slots .slot, #bp-backpack-slots .slot'), function (c) { return c.innerText.replace(/\s+/g, ' '); }).slice(0, 2),
+                hud: document.getElementById('hud-slot-0').innerText.replace(/\s+/g, ' ') })`));
             if (!/黄金猫盾/.test(txt.inv[0]) || !/重:5/.test(txt.inv[0]) || !/值:80万/.test(txt.inv[0])) bad.push('仓库界面的背包格 ' + txt.inv[0]);
             if (!/值:1\.5万/.test(txt.inv[1])) bad.push('1.5 万 ' + txt.inv[1]);
             if (!/值:300万/.test(txt.gar[0]) || !/值:80/.test(txt.gar[1])) bad.push('仓库格 ' + txt.gar.join(' | '));
@@ -3656,7 +3656,7 @@ async function enterExit(tab, key) {
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} gState.mcoin = 5; gState.owned = {}; NIGHT_MATCH_WAIT = 0; enterNightMatch('survivor'); true;`);
             if (!(await until(T, `!document.getElementById('night-pick').classList.contains('hidden')`, 8000))) bad.push('选角色页没出来');
-            const cards = JSON.parse(await T.eval(`JSON.stringify(Array.prototype.map.call(document.getElementById('night-pick-grid').children, function (c) { return c.innerText.replace(/\\s+/g, ' '); }))`));
+            const cards = JSON.parse(await T.eval(`JSON.stringify(Array.prototype.map.call(document.getElementById('night-pick-grid').children, function (c) { return c.innerText.replace(/\s+/g, ' '); }))`));
             if (cards.length !== 7 || !/7号/.test(cards[6]) || !/牵制/.test(cards[6]) || !/20/.test(cards[6])) bad.push('选角色页没有 7 号/没标价 ' + JSON.stringify(cards));
             if (await T.eval(`NIGHT_CHARS.c3.desc.indexOf('保底') >= 0 || NIGHT_CHARS.c3.desc.indexOf('必出') >= 0`)) bad.push('7 号说明里有不该写的词');
             await T.eval(`nightPickChar('c3'); true;`);
@@ -10885,13 +10885,13 @@ async function enterExit(tab, key) {
                     B.stove.fire = 2; ind.bag = { torch: 1 }; indSelect('torch'); fiLightCook(st); let torch = ind.torchT;
                     ind.base.rule = 'casual'; B.stove = ckNewState(); B.stove.fuel = 100; indStoveFire(2); let cas = B.stove.fire; ind.base.rule = 'hard'; return { no: no, yes: yes, m: m, torch: torch, cas: cas };`);
                 if (!(r.no === 0 && r.yes === 1 && r.m === 0 && r.torch === 90 && r.cas === 2)) bad.push('篝火要火源、火把点着、悠闲照旧 ' + JSON.stringify(r));
-                // 火苗仔 35% 掉火种
+                // 火苗仔不掉火种
                 r = await J(`(function(){ indGoTrip(977); ind.mbSpawn = 1e9; let n = 0, N = 400; for (let i = 0; i < N; i++) { ind.tripGround = []; let m = mbNew('flame', 0, -8); mbDamage(m, 9); if (ind.tripGround.some(function (g) { return g.k === 'ember'; })) n++; } return { p: n / N }; })()`);
-                if (!(r.p > 0.35 * 0.7 && r.p < 0.35 * 1.3)) bad.push('火苗仔 35% 掉火种 ' + JSON.stringify(r));
+                if (r.p !== 0) bad.push('火苗仔打不死、不掉火种（任务 70 补充 3、4） ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND95 起火：灭着点不着、火种火柴打火机打火石火把、钻木取火 15 秒、火种 60 秒灭、木头晾干、篝火要火源、悠闲照旧、火苗仔掉火种', bad.length === 0, bad.join(' / '));
+            report('IND95 起火：灭着点不着、火种火柴打火机打火石火把、钻木取火 15 秒、火种 60 秒灭、木头晾干、篝火要火源、悠闲照旧、火苗仔不掉火种', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND96')) {
@@ -10954,6 +10954,84 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND97 石屋：50 石头 + 10 木头、悠闲减半、6 × 6、保暖 9', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND98')) {
+            // IND98 火苗仔、岩浆、地热发电机（任务 70 补充 3～5）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); IND_MB_AUTO = true; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoTrip(977); ind.base.rule = 'hard'; ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = []; ind.base.surv.hp = 100; ind.torchT = 0; ind.bag = {}; ind.tripGround = []; indTeleport(0, -4);
+                    let flame = function (dz) { let m = mbNew('flame', 0, -4 - (dz === undefined ? 1.5 : dz)); return m; }, V = ind.map.volc[0], R = V.r * 0.3; fl.length = 0;
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 火苗仔：刀打不死、不掉东西、不弹字
+                let r = await run(`let m = flame(); ind.bag = { knife: 1 }; indSelect('knife'); indLookAt(0, -10); ind.mbSwing = 0; let a = mbAttack(); mbDamage(m, 99); return { a: a, dead: !!m.dead, hp: ind.base.surv.hp, g: ind.tripGround.length, fl: fl.join('|'), n: mbCount() };`);
+                if (!(r.a === true && !r.dead && r.g === 0 && r.fl === '' && r.n === 0)) bad.push('刀打火苗仔：不死、不掉东西、不弹字、不占怪的名额 ' + JSON.stringify(r));
+                // 拿没点着的火把右键：点着、点数 3→2、寿命 5→4；连点到 0 不能再点也不弹字；90 秒回 1 点
+                r = await run(`let m = flame(); ind.bag = { torch: 5 }; indSelect('torch'); let out = []; for (let i = 0; i < 4; i++) { ind.torchT = 0; out.push([lvTorchUse(), m.pts, m.life, ind.torchT > 0]); }
+                    let fl0 = fl.length; ind.torchT = 0; let left = ind.bag.torch; lvTorchUse(); let silent = fl.length === fl0 && ind.torchT === 0; let cols = [3, 2, 1, 0].map(function (p) { m.pts = p; mbFlameLook(m); return m.g.children[0].material.color.getHex(); });
+                    m.pts = 0; m.pt = 0; mbFlameTick(m, 89); let a = m.pts; mbFlameTick(m, 2); return { out: out, silent: silent, left: left, cols: cols, a: a, b: m.pts };`);
+                if (!(JSON.stringify(r.out) === '[[true,2,4,true],[true,1,3,true],[true,0,2,true],[true,0,2,false]]' && r.silent && r.left === 2 && new Set(r.cols).size === 4 && r.a === 0 && r.b === 1)) bad.push('火把点火：点数 3→0、0 点不能点也不弹字、颜色四种、90 秒回 1 点、点一次少一支火把 ' + JSON.stringify(r));
+                // 寿命 5 次后"燃尽了"消失
+                r = await run(`let m = flame(); ind.bag = { torch: 9 }; indSelect('torch'); for (let i = 0; i < 5; i++) { ind.torchT = 0; m.pts = 3; lvTorchUse(); } return { dead: !!m.dead, gone: !m.g, fl: fl.join('|') };`);
+                if (!(r.dead && r.gone && /燃尽了/.test(r.fl))) bad.push('用满 5 次燃尽了 ' + JSON.stringify(r));
+                // 岩浆边 3 米内寿命每 60 秒 +1，别处不回
+                r = await run(`let m = mbNew('flame', V.x + R + 1.5, V.z), o = mbNew('flame', 0, -9); m.life = 2; o.life = 2; for (let i = 0; i < 125; i++) { mbFlameTick(m, 1); mbFlameTick(o, 1); } return { near: m.life, far: o.life };`);
+                if (!(r.near === 4 && r.far === 2)) bad.push('岩浆边寿命每 60 秒 +1、别处不回 ' + JSON.stringify(r));
+                // 碰岩浆掉血（硬核 −30/s、悠闲 −10/s）
+                r = await run(`indTeleport(V.x, V.z); ind.hurt = null; lvTick(1); let h = 100 - ind.base.surv.hp; ind.base.surv.hp = 100; ind.base.rule = 'casual'; indTeleport(V.x, V.z); lvTick(1); let c = 100 - ind.base.surv.hp; ind.base.rule = 'hard'; ind.base.surv.hp = 100; indTeleport(V.x + R + 3, V.z); lvTick(1); return { h: h, c: c, out: 100 - ind.base.surv.hp };`);
+                if (!(Math.abs(r.h - 30) < 0.5 && Math.abs(r.c - 10) < 0.5 && r.out === 0)) bad.push('碰岩浆硬核 −30/s、悠闲 −10/s、离远不掉 ' + JSON.stringify(r));
+                // 扔进岩浆：木头→木炭、生肉→熟肉、别的没了
+                r = await run(`let G = ind.tripGround; ['wood', 'meat_raw', 'stone', 'wood'].forEach(function (k) { G.push({ k: k, x: V.x, z: V.z }); }); G.push({ k: 'wood', x: V.x + R + 2, z: V.z }); lvTick(0.1); let c = {}; ind.tripGround.forEach(function (g) { c[g.k] = (c[g.k] || 0) + 1; }); return c;`);
+                if (!(r.charcoal === 2 && r.meat_roast === 1 && !r.stone && r.wood === 1 && !r.meat_raw)) bad.push('扔木头出木炭、肉出熟肉、石头烧没、岩浆外的不变 ' + JSON.stringify(r));
+                // 桶对岩浆右键没反应
+                r = await run(`indTeleport(V.x + R + 1.5, V.z); indLookAt(V.x, V.z); ind.bag = { bucket: 1 }; indSelect('bucket'); let b = JSON.stringify(ind.bag); indUse(); return { same: JSON.stringify(ind.bag) === b };`);
+                if (!r.same) bad.push('桶对岩浆右键没反应 ' + JSON.stringify(r));
+                // 火把靠近岩浆右键点着，30% 烧焦（跑 400 次 ±10 个百分点）
+                r = await run(`indTeleport(V.x + R + 1.5, V.z); let burnt = 0, N = 400, lit = 0; for (let i = 0; i < N; i++) { ind.bag = { torch: 1 }; indSelect('torch'); ind.torchT = 0; lvTorchUse(); if (ind.torchT > 0) lit++; if ((ind.bag.charcoal || 0) > 0 && !ind.bag.torch) burnt++; } indTeleport(0, -4); ind.bag = { torch: 1 }; ind.torchT = 0; let far = lvTorchUse();
+                    return { p: burnt / N, lit: lit / N, far: far };`);
+                if (!(Math.abs(r.p - 0.3) < 0.1 && Math.abs(r.lit - 0.7) < 0.1 && r.far === false)) bad.push('岩浆点火把 30% 烧焦、离远不行 ' + JSON.stringify(r));
+                // 火山边刷火苗仔（同一时刻最多 1 只）、基地里不刷
+                r = await run(`indTeleport(V.x + R + 4, V.z); for (let i = 0; i < 4; i++) { mbFlameSpawn(); ind.t += 1000; } let inR = ind.map.volc.filter(function (v) { return Math.hypot(ind.p.x - v.x, ind.p.z - v.z) <= v.r * 1.6 + 40; }).length, n = ind.mobs.filter(function (m) { return m.ty === 'flame'; }).length, mx = inR; indGoBase(null); mbTick(1); return { n: n, mx: mx, base: (ind.mobs || []).length };`);
+                if (!(r.n >= 1 && r.n <= r.mx && r.base === 0)) bad.push('火山边刷 1 只火苗仔、基地不刷 ' + JSON.stringify(r));
+                // 地热发电机：离岩浆和水都在 3 米内 24 V，缺任何一个不发；配方
+                r = await J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; let B = ind.base, P = IND_BASE_ST.pool; B.off.pool = false; B.devs = []; B.wires = [];
+                    let g = { id: 1, ty: 'geo', x: P.x + P.r + 1, z: P.z, bats: 0, u: 0, on: true, ft: 20, st: {} }; B.devs.push(g); B.lava = [{ x: g.x + 2, z: g.z, r: 1 }]; let both = indSrcVolt(g);
+                    B.lava = [{ x: g.x + 20, z: g.z, r: 1 }]; let noLava = indSrcVolt(g); B.lava = [{ x: g.x + 2, z: g.z, r: 1 }]; B.off.pool = true; let noWater = indSrcVolt(g); B.off.pool = false; g.x = P.x + P.r + 8; B.lava = [{ x: g.x + 2, z: g.z, r: 1 }]; let far = indSrcVolt(g);
+                    let rc = IND_CRAFT.filter(function (x) { return x.out === 'dev_geo'; })[0]; B.lava = []; return { both: both, noLava: noLava, noWater: noWater, far: far, rc: !!rc && rc.in.dev_turbine === 1 && rc.in.steel === 8 && rc.in.wire === 10 }; })()`);
+                if (!(r.both === 24 && r.noLava === 0 && r.noWater === 0 && r.far === 0 && r.rc)) bad.push('地热发电机离岩浆和水 3 米内发 24 V、缺一个不发、配方 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND98 火苗仔不死有点数和寿命、岩浆烫死、扔东西、火把取火、地热发电机', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND99')) {
+            // IND99 成就 pic1（短路爆炸一次）：拿铜线点有电的电池组再点同一个 → 3 秒后爆炸，拿到只有图标没有字的成就；没电的点两下只是取消
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ach = {}; B.surv.hp = 100; B.devs = [{ id: 1, ty: 'bank', x: 30, z: 20, bats: 4, u: 720, on: true, ft: 20, st: {} }]; B.wires = []; ind.bag = { wire: 3 }; ind.wirePend = null; indPanelClose(); indTeleport(60, 60);
+                    let click = function () { return indDevAct(indDev(1)); };
+                    ${body} })()`);
+                let r = await run(`indSelect('wire'); click(); let a = ind.wirePend; click(); let sh = indDev(1).short; for (let i = 0; i < 25; i++) indElecTick(0.1), scTick(0.1); let mid = !!indDev(1); for (let i = 0; i < 10; i++) scTick(0.1); return { a: a, sh: sh, mid: mid, gone: !indDev(1), got: achGot('pic1'), wire: ind.bag.wire };`);
+                if (!(r.a === 1 && r.sh === 3 && r.mid === true && r.gone && r.got && r.wire === 2)) bad.push('点同一个电池组 3 秒后爆炸、拿到 pic1、花一根线 ' + JSON.stringify(r));
+                r = await run(`indDev(1).u = 0; indSelect('wire'); click(); click(); return { sh: indDev(1).short || 0, pend: ind.wirePend, wire: ind.bag.wire, alive: !!indDev(1) };`);
+                if (!(r.sh === 0 && r.pend === null && r.wire === 3 && r.alive)) bad.push('没电的电池组点两下只是取消 ' + JSON.stringify(r));
+                r = await run(`indAch('pic1'); achPanel(); let t = document.getElementById('ind-panel'); let svg = t.querySelectorAll('svg').length, tx = t.innerText; indPanelClose(); B.ach = {}; achPanel(); let t2 = document.getElementById('ind-panel').querySelectorAll('svg').length; indPanelClose(); return { svg: svg, tx: tx.replace(/\s+/g, ' '), t2: t2 };`);
+                if (!(r.svg === 1 && /已获得 1 \/ 9/.test(r.tx) && !/undefined/.test(r.tx) && r.t2 === 0)) bad.push('pic1 拿到后只有图标没有字、没拿到不出现 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND99 成就 pic1：电池组短路 3 秒爆炸、只有图标', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
@@ -12106,7 +12184,7 @@ async function enterExit(tab, key) {
             const bad = [];
             if (!r.n || r.n !== r.files || !r.ok || !r.order) bad.push('脚本地址 ' + JSON.stringify(r));
             const F = await openTab(chrome, url, { noLobby: true, failUrl: '?v=' });
-            const f = await F.eval(`(function(){ let d = document.getElementById('boot-fail'); return (d ? d.innerText.replace(/\\s+/g, ' ') : null) + ' ' + (typeof requestLobbyAccess); })()`);
+            const f = await F.eval(`(function(){ let d = document.getElementById('boot-fail'); return (d ? d.innerText.replace(/\s+/g, ' ') : null) + ' ' + (typeof requestLobbyAccess); })()`);
             if (!/重试/.test(f) || !/undefined$/.test(f)) bad.push('文件下载失败 ' + f);
             await F.close();
             await A.eval(`window.__spam = setInterval(function () { for (let i = 0; i < 5; i++) bc.postMessage({ type: 'HUB_ME', target: '*', sender: 'spam' + i, x: 0, z: 0 }); }, 5); true;`);

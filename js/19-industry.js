@@ -1369,7 +1369,7 @@
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') { indCropTick(dt); pdTick(dt); } clStep(dt, true, ind.where === 'base'); achTick(); trTick(dt); mbBodyTick(dt); fiTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') { indCropTick(dt); pdTick(dt); } clStep(dt, true, ind.where === 'base'); achTick(); scTick(dt); trTick(dt); mbBodyTick(dt); fiTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
             if (!ind || ind.over || ind.dead) return;
@@ -1754,6 +1754,7 @@
         // 右键：对着能搬的东西，按住 1 秒收起来，没按够就松开是原来的右键（吃喝、浇水、接水）；别的东西按下就是右键
         function indRightDown() {
             if (!ind || ind.over || ind.dead || ind.panel) return;
+            if (lvTorchUse()) return;   // 没点着的火把：靠近火苗仔、岩浆点着（19-industry-lava.js）
             if (mbShieldDown()) return;   // 选中盾：举盾，不拉风箱（任务 70）
             { let aa = indAim(); if (aa && aa.kind === 'animal' && (mbPetUse(aa.o, indSel()) || mbBark(aa.o))) return; }   // 右键狗猫：装刀盾、喂水，不然就叫一声
             if (fmPullDown(indAim())) return;   // 拉风箱、扇扇子（任务 44）：要在"按住收起炉子"前面
@@ -2479,7 +2480,7 @@
             if (k === 'wire') {
                 if (D.nowire) { indFlash(D.name + '不用接线'); return false; }
                 if (!ind.wirePend) { ind.wirePend = d.id; ind.devDirty = true; indFlash('选了' + D.name + '，再点另一个'); return true; }
-                if (ind.wirePend === d.id) { ind.wirePend = null; ind.devDirty = true; indFlash('取消了'); return true; }
+                if (ind.wirePend === d.id) { if (scShortTry(d)) return true; ind.wirePend = null; ind.devDirty = true; indFlash('取消了'); return true; }
                 let a = indDev(ind.wirePend); ind.wirePend = null; ind.devDirty = true;
                 if (!a) return false;
                 let src = D.src ? d : a, dev = D.src ? a : d;
