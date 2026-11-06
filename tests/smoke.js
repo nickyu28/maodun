@@ -11195,6 +11195,152 @@ async function enterExit(tab, key) {
             report('IND103 岩浆罐：装岩浆、喂火苗仔、基地地热发电机当燃料', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND104')) {
+            // IND104 户外设备块、可充电电池、风力发电机、风转盘、树苗、定位基站（任务 74 + 补充）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; B.blocks = []; B.devs = []; B.ground = []; ind.bag = {}; indPanelClose();
+                    let trip = function (seed) { indGoTrip(seed); ind.base.rule = 'hard'; ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = []; ind.nodes.forEach(function (o) { if (!o.pin) o.dead = true; }); ind.tdevs = ind.tdevs || []; fl.length = 0; };
+                    let dry = function (x0, z0, avoid, span) { span = span || 4; for (let k = 0; k < 600; k++) { let x = x0 + (k % 25) * 5, z = z0 + Math.floor(k / 25) * 5; if (Math.abs(x) > 240 || Math.abs(z) > 240) continue; let ok = true; for (let a = -span; a <= span && ok; a += 2) for (let b = -span; b <= span; b += 2) if (indWaterDepth(x + a, z + b) > 0.05 || indHeight(ind.map, x + a, z + b) < 0.2) { ok = false; break; } if (ok && (avoid || []).every(function (q) { return Math.hypot(q[0] - x, q[1] - z) > 16; })) return [x, z]; } return [x0, z0]; };
+                    let at = function (x, z) { indTeleport(x - 2, z); indLookAt(x, z); };   // 站在 (x-2, z) 朝东，设备放在 (x, z)
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 可充电电池、充电槽：风力发电机（基地 ×0.5）发着电每秒充 10 U，72 秒充满；放进去换出来；没发电不充；收起还电池
+                let r = await run(`let rc = IND_CRAFT.filter(function (x) { return x.out === 'battery_rc'; })[0]; let d = { id: ++B.dseq, ty: 'wind', x: 5, z: 5, on: true, st: {} }, g = { id: ++B.dseq, ty: 'geo', x: 9, z: 9, on: true, st: {} }; B.devs = [d, g];
+                    ind.bag = { battery_rc: 2 }; indSelect('battery_rc'); let put = odDevAct(d, 'battery_rc'); odDevAct(g, 'battery_rc'); let before = d.chg.u; odStep(30); let mid = d.chg.u; odStep(100); let full = d.chg.u, gu = g.chg.u;
+                    ind.bag = { battery_rc: 1 }; indSelect('battery_rc'); let sw = odDevAct(d, 'battery_rc'), got = ind.bag.battery_rc_full || 0, now = d.chg.u; let kept = []; odPick(d, function (k, n) { kept.push(k); });
+                    ind.bag = { battery_rc_full: 1 }; indSelect('battery_rc_full'); let bank = { id: ++B.dseq, ty: 'bank', x: 12, z: 12, bats: 0, u: 0, on: true, ft: 20, st: {} }; B.devs.push(bank); let ok = indBankPut(bank, 1, 'battery_rc_full'); 
+                    return { rc: !!rc && rc.in.battery_li === 1 && rc.in.ingot_ni === 1 && rc.in.wire === 2, put: put, before: before, mid: mid, full: full, gu: gu, sw: sw, got: got, now: now, kept: kept.join(), ok: ok, li: bank.li, u: bank.u, v: indBankV(bank) };`);
+                if (!(r.rc && r.put === true && r.before === 0 && Math.abs(r.mid - 300) < 1 && r.full === 720 && r.gu === 0 && r.sw === true && r.got === 1 && r.now === 0 && r.kept === 'battery_rc' && r.ok > 0 && r.li === true && r.u === 720 && r.v === 3)) bad.push('可充电电池：配方、充电槽（风力基地 ×0.5 每秒 10 U 充满 720、没发电不充）、换出来、收起还电池、装进电池组当锂电池 ' + JSON.stringify(r));
+                // 风力按风速：山地海边 ×1、沙漠 ×0.7、平原 ×0.5、森林 ×0.15
+                r = await J(`(function(){ indGoBase(null); let b = odWindF('mountain') + ',' + odWindF('beach') + ',' + odWindF('desert') + ',' + odWindF('plain') + ',' + odWindF('forest'); return { base: b, w: IND_DEVS.wind.volt, rc: IND_CRAFT.filter(function (x) { return x.out === 'dev_wind'; })[0].in }; })()`);
+                if (!(r.base === '0.5,0.5,0.5,0.5,0.5' && r.w === 12 && r.rc.steel === 6 && r.rc.wire === 12 && r.rc.coil === 2 && r.rc.blade === 1)) bad.push('风力发电机基地 ×0.5 12 V、配方 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoTrip(2024); let b = odWindF('mountain') + ',' + odWindF('beach') + ',' + odWindF('desert') + ',' + odWindF('plain') + ',' + odWindF('forest'); return b; })()`);
+                if (r !== '1,1,0.7,0.5,0.15') bad.push('户外风速 ×1／1／0.7／0.5／0.15 ' + JSON.stringify(r));
+                // 风转盘：不接线，旁边 2 米内的粉碎机磨粉（基地 ×0.5 慢一倍）、水泵通电；远的不动
+                r = await run(`let m = { id: ++B.dseq, ty: 'windmill', x: 10, z: 10, on: true, st: {} }, c = { id: ++B.dseq, ty: 'crusher', x: 11.5, z: 10, on: true, st: { wheat: 2 } }, c2 = { id: ++B.dseq, ty: 'crusher', x: 20, z: 10, on: true, st: { wheat: 2 } }, p = { id: ++B.dseq, ty: 'pump', x: 10, z: 11.5, on: true, st: {} }, p2 = { id: ++B.dseq, ty: 'pump', x: 25, z: 25, on: true, st: {} }; B.devs = [m, c, c2, p, p2]; B.wires = [];
+                    for (let i = 0; i < 12; i++) indElecTick(1); let early = c.st.flour || 0; for (let i = 0; i < 12; i++) indElecTick(1); return { early: early, late: c.st.flour || 0, far: c2.st.flour || 0, pump: !!p.pw, pump2: !!p2.pw, rc: IND_CRAFT.filter(function (x) { return x.out === 'dev_windmill'; }).length };`);
+                if (!(r.early === 0 && r.late === 2 && r.far === 0 && r.pump === true && r.pump2 === false && r.rc >= 1)) bad.push('风转盘带旁边的粉碎机（慢一倍）和水泵、远的不动、不接线 ' + JSON.stringify(r));
+                // 户外放设备钉一块：这趟地图不变，下次出门同一个坐标有这块；收起解除；最多 6 块
+                r = await run(`trip(2024); let P = dry(20, 30), x = P[0], z = P[1]; let h0 = indHeight(ind.map, x, z); ind.nodes.push({ key: 'wood', tree: 'oak', x: x + 1, z: z + 1, y: 0.5, n: 4, seed: IND_SEED_KINDS[0], dead: false }); ind.bag = { dev_wind: 1 }; indSelect('dev_wind'); at(x, z); let ok = odPlace('dev_wind');
+                    let blk = B.blocks[0], same = indHeight(ind.map, x, z) === h0, left = ind.bag.dev_wind || 0;
+                    odLeave(); let snap = blk.h[4], nodes = blk.nodes.length; trip(777); let h1 = indHeight(ind.map, x, z), tre = ind.nodes.filter(function (o) { return o.tree === 'oak' && Math.abs(o.x - x - 1) < 0.01 && !o.dead; }).length, dev = ind.tdevs.length, nat = (function () { let M2 = indMakeMap(777); return indHeight(M2, x, z); })();
+                    return { ok: ok, n: B.blocks.length, bn: blk.n, same: same, left: left, snap: snap, nodes: nodes, h0: h0, h1: h1, tre: tre, dev: dev, nat: nat, pins: !!ind.map.pins };`);
+                if (!(r.ok === true && r.n === 1 && r.bn === 3 && r.same && r.left === 0 && Math.abs(r.snap - r.h0) < 0.01 && r.nodes >= 1 && Math.abs(r.h1 - r.snap) < 0.02 && r.tre === 1 && r.dev === 1 && Math.abs(r.nat - r.h1) > 0.02 && r.pins)) bad.push('放设备钉 3×3：这趟不变、下次同坐标盖上（高度、树、设备） ' + JSON.stringify(r));
+                r = await run(`trip(2024); ind.bag = { dev_wind: 3, dev_windmill: 3, dev_geo: 2 }; let S = []; for (let i = 0; i < 8; i++) S.push(dry(-230 + i * 5, -200 + i * 40, S)); indSelect('dev_wind'); at(S[0][0], S[0][1]); odPlace('dev_wind'); at(S[1][0], S[1][1]); indSelect('dev_wind'); odPlace('dev_wind'); at(S[0][0], S[0][1] + 1); indSelect('dev_windmill'); odPlace('dev_windmill'); let n1 = B.blocks.length, d1 = B.blocks[0].devs.length;
+                    for (let i = 2; i < 6; i++) { at(S[i][0], S[i][1]); indSelect('dev_wind'); ind.bag.dev_wind = 1; odPlace('dev_wind'); } let n6 = B.blocks.length; at(S[6][0], S[6][1]); ind.bag = { dev_wind: 1 }; indSelect('dev_wind'); fl.length = 0; let seven = odPlace('dev_wind'); let msg = fl.join('|'), n7 = B.blocks.length;
+                    at(S[1][0], S[1][1]); ind.bag = {}; let pick = odUse(null, null); let after = B.blocks.length, bag = ind.bag.dev_wind || 0;
+                    return { n1: n1, d1: d1, n6: n6, seven: seven, msg: msg, n7: n7, pick: pick, after: after, bag: bag };`);
+                if (!(r.n1 === 2 && r.d1 === 2 && r.n6 === 6 && r.seven === false && /最多 6 块/.test(r.msg) && r.n7 === 6 && r.pick === true && r.after === 5 && r.bag === 1)) bad.push('设备在块里算进同一块、最多 6 块、收起解除钉住 ' + JSON.stringify(r));
+                // 地热发电机在户外：钉 5×5、岩浆和水边发电充电槽里的电池；岩浆记进块
+                r = await run(`trip(977); let V = ind.map.volc[0], R = V.r * 0.3; let x = Math.round(V.x + R + 1.5), z = Math.round(V.z); indTeleport(x - 2, z); indLookAt(x, z); ind.bag = { dev_geo: 1 }; indSelect('dev_geo'); let ok = odPlace('dev_geo'); let blk = B.blocks[0];
+                    let t = ind.tdevs[0]; t.ref.chg = { u: 0 }; let wet = odGeoOn(t); let od = indWaterDepth; window.indWaterDepth = function () { return 1; }; let wet2 = odGeoOn(t); odTick(1.5); odTick(1.5); let u = t.ref.chg.u; window.indWaterDepth = od;
+                    return { ok: ok, n: blk && blk.n, lava: blk && blk.lava.length, wet: wet, wet2: wet2, u: u };`);
+                if (!(r.ok === true && r.n === 5 && r.lava >= 1 && r.wet === false && r.wet2 === true && r.u >= 20)) bad.push('户外地热发电机钉 5×5、记下岩浆、岩浆加水边才发电充槽 ' + JSON.stringify(r));
+                // 定位基站：4 台摆成正方形钉住 n×n（n = 3、9），长方形不钉；没电不盖；第 7 块被拒；拿掉取消；没钉住的离开回背包
+                r = await run(`trip(2024); ind.bag = { dev_anchor: 20 }; let place = function (x, z) { indTeleport(x - 2, z); indLookAt(x, z); indSelect('dev_anchor'); return odPlace('dev_anchor'); };
+                    let A = dry(-100, -100, [], 6), Bq = dry(-100, 60, [A], 8), C = dry(60, -100, [A, Bq], 12), a0 = A[0], a1 = A[1], b0 = Bq[0], b1 = Bq[1], c0 = C[0], c1 = C[1];
+                    place(a0, a1); place(a0 + 2, a1); place(a0, a1 + 2); let before = B.blocks.length; place(a0 + 2, a1 + 2); let sq3 = B.blocks.length, n3 = B.blocks[0] && B.blocks[0].n, anch = B.blocks[0] && B.blocks[0].anch.length;
+                    place(b0, b1); place(b0 + 5, b1); place(b0, b1 + 3); place(b0 + 5, b1 + 3); let rect = B.blocks.length;
+                    place(c0, c1); place(c0 + 8, c1); place(c0, c1 + 8); place(c0 + 8, c1 + 8); let n9 = B.blocks[1] && B.blocks[1].n, c9 = B.blocks.length;
+                    return { before: before, sq3: sq3, n3: n3, anch: anch, rect: rect, n9: n9, c9: c9, left: ind.bag.dev_anchor, free: ind.tdevs.filter(function (t) { return !t.b; }).length };`);
+                if (!(r.before === 0 && r.sq3 === 1 && r.n3 === 3 && r.anch === 4 && r.rect === 1 && r.n9 === 9 && r.c9 === 2 && r.free === 4 && r.left === 8)) bad.push('4 台基站摆正方形钉 n×n（3、9），长方形不钉 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND104 户外设备块（钉块、下次生效、6 块、基站）、可充电电池、风力发电机、风转盘', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND105')) {
+            // IND105 树苗和基站电量（任务 74 补充）：砍树 15% 掉树苗；哪里都能种不弹字；3 个游戏日长成；块里的存档下次还在、块外没了；椰子不渴时种；基站没电这趟不盖；有电盖上；收起基站整块取消
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; B.blocks = []; B.devs = []; ind.bag = {}; indPanelClose(); B.clock = IND_DAY * 2;
+                    let trip = function (seed) { indGoTrip(seed); ind.base.rule = 'hard'; ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = []; ind.nodes.forEach(function (o) { if (!o.pin) o.dead = true; }); fl.length = 0; };
+                    let dry = function (x0, z0, avoid, span) { span = span || 4; for (let k = 0; k < 600; k++) { let x = x0 + (k % 25) * 5, z = z0 + Math.floor(k / 25) * 5; if (Math.abs(x) > 240 || Math.abs(z) > 240) continue; let ok = true; for (let a = -span; a <= span && ok; a += 2) for (let b = -span; b <= span; b += 2) if (indWaterDepth(x + a, z + b) > 0.05 || indHeight(ind.map, x + a, z + b) < 0.2) { ok = false; break; } if (ok && (avoid || []).every(function (q) { return Math.hypot(q[0] - x, q[1] - z) > 16; })) return [x, z]; } return [x0, z0]; };
+                    let at = function (x, z) { indTeleport(x - 2, z); indLookAt(x, z); };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                // 砍树 15% 掉树苗
+                let r = await run(`trip(2024); let N = 600, got = { oak: 0, pine: 0, rubber: 0, palm: 0 }; ['oak', 'pine', 'rubber', 'palm'].forEach(function (t) { for (let i = 0; i < N; i++) { ind.bag = {}; odSapDrop({ tree: t }); let k = Object.keys(ind.bag).filter(function (q) { return /^sapling_/.test(q); })[0]; if (k) got[t]++; } });
+                    return { oak: got.oak / N, pine: got.pine / N, rubber: got.rubber / N, palm: got.palm };`);
+                if (!(Math.abs(r.oak - 0.15) < 0.06 && Math.abs(r.pine - 0.15) < 0.06 && Math.abs(r.rubber - 0.15) < 0.06 && r.palm === 0)) bad.push('砍普通树、松树、橡胶树 15% 掉树苗 ' + JSON.stringify(r));
+                // 种：块里块外都成功、不弹字；3 个游戏日长成；橡胶树苗长成橡胶树能割胶；椰子不渴时种、渴了喝
+                r = await run(`trip(2024); ind.bag = { sapling_oak: 1, sapling_rubber: 1, coconut: 2 }; ind.base.surv.water = 100; let b = { x: 30, z: 30, n: 3, bm: 'plain', h: [0,0,0,0,0,0,0,0,0], lava: [], nodes: [], devs: [{ ty: 'windmill', dx: 0, dz: 0 }], anch: null }; B.blocks.push(b); ind.odLive.push(b);
+                    let Q = dry(30, 30, [], 6), R2 = dry(-100, -100, [Q]), R3 = dry(100, 100, [Q, R2]); b.x = Q[0]; b.z = Q[1]; at(Q[0], Q[1]); indSelect('sapling_oak'); let p1 = odUse('sapling_oak', null); at(R2[0], R2[1]); indSelect('sapling_rubber'); let p2 = odUse('sapling_rubber', null); at(R3[0], R3[1]); indSelect('coconut'); let p3 = odUse('coconut', null); ind.base.surv.water = 20; let p4 = odUse('coconut', null);
+                    let saps = ind.nodes.filter(function (o) { return o.sap && !o.dead; }); let kinds = saps.map(function (o) { return o.sap; }).sort().join(), pinned = saps.filter(function (o) { return o.pin; }).length, msgs = fl.length;
+                    B.clock += IND_DAY * 2.9; odSapGrow(); let still = ind.nodes.filter(function (o) { return o.sap && !o.dead; }).length; B.clock += IND_DAY * 0.2; odSapGrow(); let trees = ind.nodes.filter(function (o) { return o.tree && !o.dead; }).map(function (o) { return o.tree + ':' + o.key; }).sort().join();
+                    let rub = ind.nodes.filter(function (o) { return o.tree === 'rubber' && !o.dead; })[0]; ind.bag = { knife: 1 }; indSelect('knife'); indTeleport(rub.x - 1, rub.z); let tap = trTap({ kind: 'node', o: rub });
+                    odLeave(); let saved = b.nodes.filter(function (o) { return o.tree === 'oak'; }).length; trip(555); let back = ind.nodes.filter(function (o) { return o.tree === 'oak' && !o.dead; }).length, outside = ind.nodes.filter(function (o) { return o.tree === 'rubber' && !o.dead; }).length;
+                    return { p: [p1, p2, p3, p4], kinds: kinds, pinned: pinned, msgs: msgs, still: still, trees: trees, tap: tap, saved: saved, back: back, outside: outside, water: ind.base.surv.water };`);
+                if (!(r.p.join() === 'true,true,true,false' && r.kinds === 'oak,palm,rubber' && r.pinned === 1 && r.msgs === 0 && r.still === 3 && /oak:wood/.test(r.trees) && /rubber:wood/.test(r.trees) && /palm:wood/.test(r.trees) && r.tap === true && r.saved === 1 && r.back === 1 && r.outside === 0)) bad.push('树苗：哪里都能种不弹字、3 个游戏日长成、橡胶树能割胶、块里的下次还在块外的没了、椰子不渴才种 ' + JSON.stringify(r));
+                // 基站电量：没电这趟不盖（树没了）；放有电的电池按游戏时间每秒耗 0.05 U；收起一台整块取消
+                r = await run(`trip(2024); ind.bag = { dev_anchor: 4, battery_rc_full: 4 }; let place = function (x, z) { indTeleport(x - 2, z); indLookAt(x, z); indSelect('dev_anchor'); return odPlace('dev_anchor'); };
+                    let W = dry(50, 50, [], 6), w0 = W[0], w1 = W[1]; ind.nodes.push({ key: 'wood', tree: 'oak', x: w0 + 1, z: w1 + 1, y: 0.5, n: 4, seed: IND_SEED_KINDS[0], dead: false }); place(w0, w1); place(w0 + 2, w1); place(w0, w1 + 2); place(w0 + 2, w1 + 2); let blk = B.blocks[0]; let eff0 = odEff(blk.anch[0]);
+                    blk.anch.forEach(function (a) { a.chg = { u: 720 }; a.t = B.clock; }); let eff1 = odEff(blk.anch[0]); B.clock += 7200; let eff2 = odEff(blk.anch[0]); odLeave(); trip(321); let on = !!ind.map.pins, trees = ind.nodes.filter(function (o) { return o.tree === 'oak' && !o.dead; }).length;
+                    odLeave(); B.clock += 14400 - 7200 + 10; trip(322); let off = !!ind.map.pins, lost = blk.nodes.length;
+                    blk.anch.forEach(function (a) { a.chg = { u: 720 }; a.t = B.clock; }); trip(323); let back = !!ind.map.pins; let had = B.blocks.length; odPickUp(ind.tdevs[0]); let gone = B.blocks.length, free = ind.tdevs.filter(function (q) { return !q.b; }).length;
+                    return { eff0: eff0, eff1: eff1, eff2: eff2, on: on, trees: trees, off: off, lost: lost, back: back, had: had, gone: gone, free: free };`);
+                if (!(r.eff0 === 0 && r.eff1 === 720 && Math.abs(r.eff2 - 360) < 0.5 && r.on === true && r.trees === 1 && r.off === false && r.lost === 0 && r.back === true && r.had === 1 && r.gone === 0 && r.free === 3)) bad.push('基站：没电不盖（块里的树没了）、有电按游戏时间每秒耗 0.05、装回有电恢复、收起一台整块取消 ' + JSON.stringify(r));
+                // 存档整理：块、基站电量、树苗
+                r = await J(`(function(){ let b = { blocks: [{ x: 1, z: 2, n: 3, h: [1,2,3,4,5,6,7,8,9], bm: 'plain', nodes: [{ key: 'sapling', sap: 'oak', x: 1, z: 1, born: 5, n: 1 }, { key: 'bogus', x: 0, z: 0 }], devs: [{ ty: 'wind', dx: 0, dz: 0, chg: { u: 999 } }, { ty: 'nope', dx: 0, dz: 0 }], anch: null }, { x: 1, z: 2, n: 4, h: [1] }, { x: 0, z: 0, n: 3, h: [0,0,0,0,0,0,0,0,0], anch: [{ x: 1, z: 1, chg: { u: 5 }, t: 3 }, { x: 2, z: 1 }, { x: 1, z: 2 }, { x: 2, z: 2 }] }], devs: [{ ty: 'wind', chg: { u: -3 } }, { ty: 'bank', chg: { u: 5 } }] }; odFixBase(b);
+                    return { n: b.blocks.length, nodes: b.blocks[0].nodes.length, devs: b.blocks[0].devs.length, u: b.blocks[0].devs[0].chg.u, an: b.blocks[1].anch.length, au: b.blocks[1].anch[0].chg.u, au2: b.blocks[1].anch[1].chg, d0: b.devs[0].chg.u, d1: 'chg' in b.devs[1] }; })()`);
+                if (!(r.n === 2 && r.nodes === 1 && r.devs === 1 && r.u === 720 && r.an === 4 && r.au === 5 && r.au2 === null && r.d0 === 0 && r.d1 === false)) bad.push('读档整理块、基站、充电槽 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND105 树苗（15% 掉、哪里都能种、3 天长成、块里存档）、基站电量（没电不盖、收起取消）', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND106')) {
+            // IND106 矿石分布和 TNT（任务 75）：地面约 30%、其余在矿洞和裂纹岩；裂纹岩 3～6 块；TNT 配方出 3 个；炸裂纹岩掉各种矿、火药炸不动；炸树出木头、炸设备毁掉掉东西、炸玩家 5 米内 −50；基地空地炸出水池
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); IND_MB_AUTO = false; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let S = 0, C = 0, K = 0, cr = [], caves = [], plain = 0, maps = 20;
+                    for (let s = 1; s <= maps; s++) { indGoTrip(s * 1237); ind.base.rule = 'hard'; S += ind.nodes.filter(function (o) { return !o.dead && OR_ORE[o.key] && o.out; }).length; let k = ind.nodes.filter(function (o) { return o.crack; }).length; cr.push(k); K += k * 4.5; caves.push(ind.caves.length);
+                        ind.caves.forEach(function (c) { if (c.bm !== 'mountain' && c.bm !== 'ancient') plain++; cvBuild(c); cvFill(c); C += ind.nodes.filter(function (o) { return o.cave === c.i && OR_ORE[o.key]; }).length; ind.nodes = ind.nodes.filter(function (o) { return o.cave === undefined; }); }); }
+                    return { ratio: S / (S + C + K), S: S / maps, C: C / maps, K: K / maps, crMin: Math.min.apply(null, cr), crMax: Math.max.apply(null, cr), cvMin: Math.min.apply(null, caves), cvMax: Math.max.apply(null, caves), plain: plain }; })()`);
+                if (!(r.ratio > 0.22 && r.ratio < 0.38 && r.crMin >= 3 && r.crMax <= 6 && r.cvMin >= 2 && r.cvMax <= 5 && r.plain >= 1)) bad.push('矿 30% ± 8% 在地面、裂纹岩 3～6 块、洞口 2～4 个加平原偶尔 1 个 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoTrip(2024); ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.mobs.forEach(mbDrop); ind.mobs = []; ind.mbSpawn = 1e9; ind.nodes.forEach(function (o) { o.dead = true; }); ind.tripGround = []; indTeleport(0, 0);
+                    let rec = IND_RECIPES.filter(function (q) { return q.out.tnt === 3; })[0];
+                    let crack = { key: 'rock_crack', rock: true, crack: true, x: 12, z: 0, y: 0.5, n: 1, seed: IND_SEED_KINDS[0], dead: false }, hard = { key: 'rock_hard', rock: true, hard: true, x: 0, z: 12, y: 0.5, n: 1, seed: IND_SEED_KINDS[0], dead: false }, tree = { key: 'wood', tree: 'oak', x: -12, z: 0, y: 0.5, n: 4, seed: IND_SEED_KINDS[0], dead: false }, far = { key: 'wood', tree: 'oak', x: -30, z: 0, y: 0.5, n: 4, seed: IND_SEED_KINDS[0], dead: false };
+                    ind.nodes.push(crack, hard, tree, far);
+                    ind.bag = { gunpowder: 2 }; ind.fuses = []; let fz = rkFuse(crack); let fused = (ind.fuses || []).length; ind.fuses = [];
+                    let blast = function (x, z) { ind.tnts = []; ind.tnts.push({ x: x, z: z, t: 0.1, w: 'trip' }); orTntTick(0.2); };
+                    blast(12, 0.5); let ores = ind.tripGround.filter(function (g) { return OR_ALL.indexOf(g.k) >= 0; }).length, crackGone = crack.dead, kinds = ind.tripGround.length;
+                    ind.tripGround = []; blast(-12, 0.5); let wood = ind.tripGround.filter(function (g) { return g.k === 'wood'; }).length, treeGone = tree.dead, farOk = !far.dead;
+                    let hp0 = ind.base.surv.hp; blast(0, 0); let hit = hp0 - ind.base.surv.hp;
+                    ind.base.surv.hp = 100; blast(40, 40); let miss = 100 - ind.base.surv.hp; ind.bag = { tnt: 1 }; let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.tnts = []; let pl = orTntPlace(); blazeFlash = bf;
+                    return { rec: !!rec && rec.in.oil === 1 && rec.in.b_hno3 === 2 && rec.in.b_h2so4 === 1 && rec.minT === 80 && rec.out.bottle === 3, last: IND_RECIPES.indexOf(rec) === IND_RECIPES.length - 1, fz: fz, fused: fused, ores: ores, crackGone: crackGone, wood: wood, treeGone: treeGone, farOk: farOk, hit: hit, miss: miss, pl: pl, fl: fl.join('|'), n: ind.tnts.length, hardGone: hard.dead }; })()`);
+                if (!(r.rec && r.last && r.crackGone && r.ores >= 3 && r.ores <= 6 && r.treeGone && r.wood === 8 && r.farOk && r.hit === 50 && r.miss === 0 && r.pl && /退远点/.test(r.fl) && r.n === 1)) bad.push('TNT 配方出 3 个、炸裂纹岩掉 3～6 个矿、炸树木头 ×2、5 米内 −50、远的不受伤、放下说退远点 ' + JSON.stringify(r));
+                if (r.fz !== false && r.fz !== true) bad.push('火药对裂纹岩 ' + JSON.stringify(r));
+                // 火药炸不动裂纹岩（rkFuse 只认硬岩）；TNT 炸硬岩（掉锂锗镓）
+                r = await J(`(function(){ indGoTrip(2024); ind.base.rule = 'hard'; ind.nodes.forEach(function (o) { o.dead = true; }); ind.tripGround = []; indTeleport(0, 0); let crack = { key: 'rock_crack', rock: true, crack: true, x: 3, z: 0, y: 0.5, n: 1, seed: IND_SEED_KINDS[0], dead: false }; ind.nodes.push(crack); ind.bag = { gunpowder: 2 }; indSelect('gunpowder'); indLookAt(3, 0); let a = indAim(); ind.fuses = []; indUse(); let fused = (ind.fuses || []).length, left = ind.bag.gunpowder;
+                    let hard = { key: 'rock_hard', rock: true, hard: true, x: 20, z: 0, y: 0.5, n: 1, seed: IND_SEED_KINDS[0], dead: false }; ind.nodes.push(hard); ind.tnts = [{ x: 20, z: 0, t: 0.1, w: 'trip' }]; ind.tripGround = []; orTntTick(0.2); return { fused: fused, left: left, crackAlive: !crack.dead, hardGone: hard.dead, drops: ind.tripGround.length }; })()`);
+                if (!(r.fused === 0 && r.left === 2 && r.crackAlive && r.hardGone && r.drops >= 3)) bad.push('火药炸不动裂纹岩、TNT 炸硬岩出矿 ' + JSON.stringify(r));
+                // 基地：TNT 炸设备毁掉里面的东西掉地上、空地炸出一格水池、不炸远的
+                r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.devs = [{ id: 1, ty: 'lamp', x: 12, z: 12, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 2, ty: 'crusher', x: 30, z: 12, bats: 0, u: 0, on: true, ft: 20, st: { wheat: 3 } }, { id: 3, ty: 'crusher', x: 12.5, z: 12.5, bats: 0, u: 0, on: true, ft: 20, st: { wheat: 4 } }]; B.wires = []; B.pond = []; B.surv.hp = 100; indTeleport(-20, 15);
+                    ind.tnts = [{ x: 12, z: 12, t: 0.1, w: 'base' }]; orTntTick(0.2); let left = B.devs.map(function (d) { return d.id; }).join(), wheat = B.ground.filter(function (g) { return g.k === 'wheat'; }).length, cell = !!pdCellAt(12, 12); return { left: left, wheat: wheat, cell: cell, hp: B.surv.hp }; })()`);
+                if (!(r.left === '2' && r.wheat === 4 && r.cell && r.hp === 100)) bad.push('基地 TNT：炸设备掉东西、空地炸出水池、远的不动 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND106 矿石分布（地面约 30%、洞里、裂纹岩）和 TNT', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

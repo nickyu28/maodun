@@ -24,6 +24,7 @@
                 let i = ind.caves.length;
                 ind.caves.push({ i: i, x: x, z: z, y: indHeight(M, x, z), bm: bm, cx: CV.x0, cz: (i - 2) * CV.gapZ, built: false, gas: false });
             }
+            if (typeof orExtraCave === 'function') orExtraCave(M, r);   // 平原森林沙漠偶尔多一个洞口（19-industry-ore.js）
             ind.caves.forEach(cvDrawMouth);
         }
         function cvDrawMouth(c) {
@@ -56,6 +57,7 @@
                 let n = 2 + Math.floor(indRand() * 2), p0 = pt(15);
                 for (let i = 0; i < n; i++) { let m = 10 + Math.floor(indRand() * 21); ind.nodes.push({ key: k, cave: c.i, out: true, x: p0.x + (indRand() * 2 - 1) * 3, z: p0.z + (indRand() * 2 - 1) * 3, y: CV.floor, n: m, n0: m, seed: IND_SEED_KINDS[0], dead: false }); }
             });
+            orCaveOre(c);   // 洞里的矿点（19-industry-ore.js）
             c.gas = indRand() < CV.gasP;
             if (c.gas) { let p = pt(40); ind.nodes.push({ key: 'vent_ng', cave: c.i, x: p.x, z: p.z, y: CV.floor, n: 1, seed: IND_SEED_KINDS[0], dead: false, until: 1e12 }); }
             ind.nodeDirty = true;

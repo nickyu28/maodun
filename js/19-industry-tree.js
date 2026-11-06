@@ -33,6 +33,7 @@
                 o.rs--; indBoxAdd('resin', 1); ind.hudSig = ''; return true;
             }
             if (o.lx === undefined) o.lx = TR.latex;
+            if (o.pin && o.lx < TR.latex && ind.t - (o.lr || 0) >= TR.resinT) { o.lx++; o.lr = ind.t; }   // 钉住的块里的橡胶树：割完 300 秒长回 1 份（任务 74）
             if (o.lx < 1) { indFlash('这棵橡胶树割完了'); return true; }
             if (ind.tap && ind.tap.o === o) return true;
             ind.tap = { o: o, t: 0 }; return true;
@@ -43,14 +44,14 @@
             if (!trHaveKnife()) { ind.tap = null; indFlash('割胶停了：手上要拿小刀或斧子'); return; }
             if (Math.hypot(ind.p.x - P.o.x, ind.p.z - P.o.z) > TR.tapR) { ind.tap = null; indFlash('离树太远，割胶停了'); return; }
             P.t += dt; if (P.t < TR.tap) return;
-            ind.tap = null; P.o.lx--; let r = indBoxAdd('latex', 1); if (P.o.lx < 1) indFlash('这棵割完了'); ind.hudSig = '';
+            ind.tap = null; P.o.lx--; P.o.lr = ind.t; let r = indBoxAdd('latex', 1); if (P.o.lx < 1) indFlash('这棵割完了'); ind.hudSig = '';
         }
         // 空手左键摇椰子树：掉 1～2 个椰子，一棵一趟一次；手上拿着斧子、小刀、稿子就是砍树，不摇
         function trShake(o) {
             if (!ind || ind.where !== 'trip' || !o || o.tree !== 'palm' || o.dead) return false;
             let k = indSel(); if (k === 'axe' || k === 'knife' || (k && IND_ITEMS[k] && IND_ITEMS[k].tool)) return false;
-            if (o.sh) { return true; }
-            o.sh = 1; let n = 1 + Math.floor(indRand() * 2), r = indBoxAdd('coconut', n);
+            if (o.sh && !(o.pin && ind.t - o.sh >= TR.resinT)) { indFlash('这棵树上的椰子已经摇下来了'); return true; }   // 钉住的块里的椰子树 300 秒再长
+            o.sh = ind.t + 1; let n = 1 + Math.floor(indRand() * 2), r = indBoxAdd('coconut', n);
             ind.hudSig = ''; return true;
         }
         const wdNodeHint0 = wdNodeHint;
@@ -59,6 +60,6 @@
             if (!o.tree) return h;
             if (o.tree === 'pine') return h + '<br><small>右键：割松脂（还有 ' + trResinLeft(o) + ' 份，要小刀或斧子）</small>';
             if (o.tree === 'rubber') return h + '<br><small>右键：割胶（还有 ' + (o.lx === undefined ? TR.latex : o.lx) + ' 份，要小刀或斧子）</small>';
-            if (o.tree === 'palm') return h + '<br><small>空手左键：摇椰子' + (o.sh ? '（摇过了）' : '') + '</small>';
+            if (o.tree === 'palm') return h + '<br><small>空手左键：摇椰子' + (o.sh && !(o.pin && ind.t - o.sh >= TR.resinT) ? '（摇过了）' : '') + '</small>';
             return h;
         };

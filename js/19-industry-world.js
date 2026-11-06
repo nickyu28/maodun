@@ -100,7 +100,7 @@
         function wdChop(o) {
             if (indHard() && !tlCanChop()) { indFlash('空手砍不动，得有斧子或小刀'); return false; }   // 硬核砍树要工具（任务 2.7）
             let tk = wdChopTool();
-            return wdChStart({ kind: 'chop', o: o, need: tk.need, label: '砍树', done: function () { let d0 = o.dead, n0 = o.n; indGather(o); if (o.dead !== d0 || o.n !== n0) tlUse(tk.k); } });   // 砍倒一棵，工具耐久 −1
+            return wdChStart({ kind: 'chop', o: o, need: tk.need, label: '砍树', done: function () { let d0 = o.dead, n0 = o.n; indGather(o); if (o.dead !== d0 || o.n !== n0) { tlUse(tk.k); odSapDrop(o); } } });   // 砍倒一棵，工具耐久 −1
         }
         // 要花几秒的合成（敲尖石片）：站着别动，材料到时间才扣，动了中断不丢
         function wdCraftWait(i, r) {
@@ -191,6 +191,7 @@
         function wdNodeHint(o) {
             let nd = IND_NODES[o.key];
             if (o.key === 'oil') return ckOilHint(o);
+            if (o.crack) return '裂纹岩<br><small>挖不动，得用 TNT 炸</small>';
             if (o.hard) return '硬岩<br><small>太硬，得炸：拿 2 份火药右键放下，退远点</small>';
             if (o.key === 'vent_ng') return '天然气喷口<br><small>拿空钢瓶右键装一瓶；别点火' + (o.until ? '（还冒 ' + Math.max(0, Math.round(o.until - ind.t)) + ' 秒）' : '') + '</small>';
             if (o.tree) return WD_TREE_NAME[o.tree] + '（' + o.n + ' 木头）<br><small>' + (indHard() && !tlCanChop() ? '空手砍不动，得有斧子或小刀' : '左键：砍（' + wdChopTool().need + ' 秒，站着别动）') + '</small>';
@@ -238,7 +239,7 @@
                 if (o.dead || !see(o)) return;
                 if (o.tree) { let T = WD_TREE[o.tree]; set(W.trunk, c.t, o.x, o.y + T.th / 2, o.z, T.tw, T.th, T.tw, 0, 0x6d4c41); set(W.crown, c.t, o.x, o.y + T.cy, o.z, T.cs[0], T.cs[1], T.cs[2], i, T.col); c.t++; }
                 else if (o.key === 'cactus') { set(W.trunk, c.t, o.x, o.y + 0.85, o.z, 0.5, 1.7, 0.5, 0, 0x2e7d32); set(W.crown, c.t, o.x, o.y + 1.8, o.z, 0.45, 0.35, 0.45, i, 0x43a047); c.t++; }
-                else if (o.rock) { set(W.rock, c.r, o.x, o.y + 0.5, o.z, 1.3, 1.0, 1.3, i, o.black ? 0x2b2522 : o.hard ? 0x37474f : 0x7a7a7a); c.r++; }
+                else if (o.rock) { set(W.rock, c.r, o.x, o.y + 0.5, o.z, 1.3, 1.0, 1.3, i, o.black ? 0x2b2522 : o.crack ? 0x8d6e63 : o.hard ? 0x37474f : 0x7a7a7a); c.r++; }
                 else if (o.out) {
                     let f = Math.max(0.05, o.n / (o.n0 || 20)), sink = (1 - f) * 0.3;   // 挖得越多越矮
                     set(W.rock, c.r, o.x, o.y + 0.35 - sink, o.z, 1.5, 0.85, 1.5, i, 0x6d6d6d); c.r++;

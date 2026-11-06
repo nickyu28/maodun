@@ -8,11 +8,11 @@
         Object.assign(IND_ITEMS_RAW, {
             fishing_rod: { name: '钓竿', col: 0x8d6e63, use: '站在河边海边右键，站着等鱼咬钩' },
             fish_net: { name: '渔网', col: 0xcfd8dc, use: '右键放进水里，60 秒后再右键收网' },
-            fish_live: { name: '活鱼', col: 0x4dd0e1, use: '拿着右键自己挖的池子放进去养；放在背包里 10 分钟就死了' },
-            fish_raw: { name: '生鱼', col: 0x90a4ae, eat: { f: 5, ache: 0.5 }, use: '灶台烤成烤鱼' },
-            fish_cooked: { name: '烤鱼', col: 0xff8a65, eat: { f: 40 }, use: '饱食 +40' }
+            fish_live: { name: '活鱼', col: 0x4dd0e1, later: '钓竿、渔网才有，体检看不到', use: '拿着右键自己挖的池子放进去养；放在背包里 10 分钟就死了' },
+            fish_raw: { name: '生鱼', col: 0x90a4ae, later: '钓鱼、捞鱼才有，体检看不到', eat: { f: 5, ache: 0.5 }, use: '灶台烤成烤鱼' },
+            fish_cooked: { name: '烤鱼', col: 0xff8a65, later: '生鱼烤的，体检看不到', eat: { f: 40 }, use: '饱食 +40' }
         });
-        IND_CRAFT.push({ out: 'fishing_rod', in: { wood: 2, rope: 2 } }, { out: 'fish_net', in: { rope: 6 } });
+        IND_CRAFT.push({ out: 'fishing_rod', in: { wood: 2, rope: 2 }, hard: true }, { out: 'fish_net', in: { rope: 6 }, hard: true }, { out: 'fishing_rod', in: { wood: 2, yarn: 2 }, casual: true }, { out: 'fish_net', in: { yarn: 6 }, casual: true });   // 悠闲没有草绳，用毛线
         IND_RECIPES.push({ in: { fish_raw: 1 }, out: { fish_cooked: 1 }, minT: 180, time: 10, burnT: 400 });
         // ── 原水池 ──
         function plCap() { return indHard() ? FH.poolHard : FH.poolCasual; }

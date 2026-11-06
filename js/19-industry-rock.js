@@ -46,7 +46,7 @@
         function rkBlast(f) {
             let o = f.o; if (o.dead) return;
             o.dead = true; ind.nodeDirty = true;
-            if (Math.hypot(ind.p.x - o.x, ind.p.z - o.z) <= RK.near && ind.where === 'trip') indHurt(35, 'boom', '硬岩爆破，离太近了', true);
+            if (!ind.tntBlast && Math.hypot(ind.p.x - o.x, ind.p.z - o.z) <= RK.near && ind.where === 'trip') indHurt(35, 'boom', '硬岩爆破，离太近了', true);
             let n = 3 + Math.floor(indRand() * 4), W = [['ore_li', 5], ['ore_ge', 3], ['ore_ga', 1]], tot = 9, G = ind.tripGround = ind.tripGround || [];
             for (let i = 0; i < n; i++) {
                 let p = indRand() * tot, k = 'ore_li'; for (let j = 0; j < W.length; j++) { p -= W[j][1]; if (p <= 0) { k = W[j][0]; break; } }

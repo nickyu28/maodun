@@ -191,6 +191,7 @@
             if (typeof pdFixBase === 'function') pdFixBase(b);
             if (typeof fhFixBase === 'function') fhFixBase(b);
             if (typeof hmFixBase === 'function') hmFixBase(b);
+            if (typeof odFixBase === 'function') odFixBase(b);
             let f = b.fx; if (!f || typeof f !== 'object') { delete b.fx; return; }
             b.fx = { speed: indNum(f.speed, 0, 0, PX.speedT), weak: indNum(f.weak, 0, 0, PX.weakT), heal: indNum(f.heal, 0, 0, PX.healT), healLeft: indNum(f.healLeft, 0, 0, PX.healAmt) };
         }

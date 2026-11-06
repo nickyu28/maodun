@@ -455,6 +455,7 @@
         function indMoist(M, x, z) { return indFbm(x / 90, z / 90, M.seed + 101); }
         function indBiome(M, x, z) {
             if (x > IND_MAP + 50) return cvBiome(x, z);   // 矿洞跟洞口一样
+            if (M.pins) { let pb = odPinBiome(M, x, z); if (pb) return pb; }
             for (let i = 0; i < M.volc.length; i++) { let v = M.volc[i]; if (Math.hypot(x - v.x, z - v.z) < v.r) return 'volcano'; }
             let e = indElev(M, x, z), m = indMoist(M, x, z), rr = Math.hypot(x, z) / IND_MAP;
             if (Math.hypot(x, z) < 14) return 'plain';
@@ -473,7 +474,7 @@
                 let v = M.volc[i], d = Math.hypot(x - v.x, z - v.z);
                 if (d < v.r * 1.6) { let t = 1 - d / (v.r * 1.6); h += t * t * 22 - (d < v.r * 0.3 ? (1 - d / (v.r * 0.3)) * 8 : 0); }
             }
-            return Math.max(-3, h);
+            return M.pins ? odPinMix(M, x, z, Math.max(-3, h)) : Math.max(-3, h);   // 钉住的块（19-industry-outdoor.js）
         }
         const IND_WATER_Y = -1.2;
 
@@ -1127,6 +1128,7 @@
         const IND_FURN_R = { stove: 1.5, bed: 2.0, bench: 1.4, pool: 2.4, chest: 1.2, furnace: 1.2, kiln: 2.1, stone: 1.5 };
         function indApplyPos(b) { ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { let p = b.pos && b.pos[k]; IND_BASE_ST[k].x = p ? p.x : IND_ST_DEF[k].x; IND_BASE_ST[k].z = p ? p.z : IND_ST_DEF[k].z; }); }
         function indGoBase(fromTrip) {
+            odLeave();   // 户外的块：把树石矿记下来，没钉住的基站回背包
             let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && !a.petRef && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];   // 跟出去的宠物本来就是基地的（任务 70）
             ind.wild = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.cave = null; ind.caves = []; mbReset();
             indClearWorld();
@@ -1186,7 +1188,7 @@
                     B.animals.forEach(function (a) { a.food = Math.max(0, a.food - IND_ANIMAL_HUNGER * (o.animal === undefined ? 1 : o.animal) * h); });
                     indElecTick(h); indStoveTick(h);
                     if (o.bombs) nkBombTick(h);
-                    rcAdvance(h, ff); clStep(h, o.spBag !== false, true); pdTick(h);
+                    rcAdvance(h, ff); clStep(h, o.spBag !== false, true); pdTick(h); odStep(h);
                     if (!ind || ind.over) return;
                 }
             } finally { if (o.quiet) indFlash = oldFlash; if (ind) { B.clock = end; ind.sleeping = false; ind.catching = false; } }
@@ -1208,7 +1210,7 @@
             if (ind.base.rule && typeof ind.base.away !== 'number') ind.base.away = ind.base.clock;   // 记下出门时刻，回家补算（任务 3）
             indClearWorld(); mbReset();
             ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
-            let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed);
+            let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed); odApplyMap(M);   // 钉住的块盖上去（19-industry-outdoor.js）
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 30, IND_VIEW.day);
             wdTerrain(M);   // 地形分成 10 × 10 块，视野外的块不画（19-industry-world.js）
             let wat = new THREE.Mesh(indGeo(new THREE.PlaneGeometry(IND_MAP * 2, IND_MAP * 2)), indMat(new THREE.MeshLambertMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.75 })));
@@ -1228,6 +1230,7 @@
                 let nd = IND_NODES[key];
                 if (IND_OUTCROP[key]) {   // 矿是露头：抽到矿有 1/6 的机会在这里刷 1～2 个露头（4 米内），每个能挖 10～30 份
                     if (r() > 1 / 6) continue;
+                    if (!orKeep(key, x, z, casual)) continue;   // 矿只留 30% 在地面（19-industry-ore.js）
                     let want = 1 + Math.floor(r() * 2), got = 0;
                     for (let t = 0; t < 30 && got < want; t++) {
                         let a = r() * Math.PI * 2, d = got ? 2 + r() * 2 : 0, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d, ph = indHeight(M, px, pz);
@@ -1253,7 +1256,7 @@
                 else if (key === 'stone') node.rock = true;   // 大石头
                 ind.nodes.push(node);
             }
-            wdExtraNodes(M, casual); if (!casual) rkGen(M); if (!casual) cvGen(M); else { ind.caves = []; ind.cave = null; }   // 矿洞洞口（19-industry-cave.js，任务 66）   // 硬岩（19-industry-rock.js）   // 河边的黏土和锡砂、火山周围的黑石头
+            wdExtraNodes(M, casual); if (!casual) { rkGen(M); orCrackGen(M); } odApplyNodes(M); if (!casual) cvGen(M); else { ind.caves = []; ind.cave = null; }   // 矿洞洞口（19-industry-cave.js，任务 66）   // 硬岩（19-industry-rock.js）   // 河边的黏土和锡砂、火山周围的黑石头
             ind.nodeMesh = indInst(new THREE.DodecahedronGeometry(0.7, 0), ind.nodes.length || 1); ind.nodeDirty = true; wdMakeMeshes(); wdScatter(M);
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             // 野生动物：平原有羊和牛，森林有狗和猫
@@ -1370,7 +1373,7 @@
             if (ind.dead) return;   // 死亡画面：游戏暂停，点"回基地"才继续
             ind.t += dt;
             let live = !!ind.base.rule;   // 还没选规则时时间不走
-            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') { indCropTick(dt); pdTick(dt); } clStep(dt, true, ind.where === 'base'); achTick(); scTick(dt); trTick(dt); fhTripTick(dt); mbBodyTick(dt); fiTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
+            if (live) { ind.base.clock += dt; indBodyTick(dt); indSurvTick(dt); if (ind.where === 'base') { indCropTick(dt); pdTick(dt); odStep(dt); } clStep(dt, true, ind.where === 'base'); achTick(); scTick(dt); trTick(dt); fhTripTick(dt); odTick(dt); orTntTick(dt); mbBodyTick(dt); fiTick(dt); }   // 出门时家里不在这里跑，回家补算（任务 3）
             indFireTick(dt); indAnimalTick(dt, live);
             indHotTick(dt);
             if (!ind || ind.over || ind.dead) return;
@@ -1728,6 +1731,8 @@
             }
             if (a && a.kind === 'raft') return indRaftToggle(a.o);
             if (a && a.kind === 'bomb') return nkBombAct(a.o);
+            if (odAct()) return true;   // 拿着可充电电池左键户外设备：放进充电槽
+            if (a && a.kind === 'node' && a.o.sap) return odSapTake(a.o);
             if (a && a.kind === 'node' && a.o.tree === 'palm' && trShake(a.o)) return true;   // 空手摇椰子（19-industry-tree.js）
             if (a && a.kind === 'node' && a.o.tree) return wdChop(a.o);
             if (a && a.kind === 'node') return indGather(a.o);
@@ -1791,12 +1796,14 @@
             if (ind.over || ind.dead || ind.panel) return;
             let k = indSel(), a = indAim();
             if (k && IND_ITEMS[k].veh) return rdToggle(k);   // 右键：上车／下车
+            if (k === 'tnt' && orTntPlace()) return true;   // TNT：右键放下（19-industry-ore.js）
+            if (odUse(k, a)) return true;   // 户外：放设备钉一块、种树苗、空手收起（19-industry-outdoor.js）
             if (ind.ride && !rdOneHand(k, a)) { indFlash('骑着没法用'); return false; }
             if (k && IND_ITEMS[k].potion) return pwDrink(k);   // 右键喝药
             if (k === 'gunpowder' && a && a.kind === 'node' && a.o.hard) return rkFuse(a.o);   // 火药对着硬岩：点引线
             if (k === 'cyl' && a && a.kind === 'node' && a.o.key === 'vent_ng') return rkFillVent(a.o);   // 空钢瓶对着喷口：装天然气
             if (k === 'torch') return cvLightTorch();   // 右键点火把（任务 66）
-            if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
+            if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li' || k === 'battery_rc_full')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
             if (k && stkTryStack(k, a)) return true;   // 拿着同种设备右键已经放下的那台：叠上去（任务 68）
             if (fhRod(k) || fhNet(k)) return true;   // 钓竿、渔网
             if (ind.where === 'base' && hmUse(k, a)) return true;   // 石头右键栅栏扩展家园、石墙石地板放下／收起（19-industry-home.js）
@@ -1873,6 +1880,7 @@
         function indGather(o) {
             if (o.key === 'oil') { indFlash('得拿桶来装：拿空桶对着油点右键'); return false; }
             if (o.hard) { indFlash('太硬，得炸（2 份火药，右键放下）'); return false; }
+            if (o.crack) { indFlash('裂纹岩，挖不动，得用 TNT'); return false; }
             if (o.key === 'vent_ng') { indFlash('拿空钢瓶对着喷口右键装天然气，别点火'); return false; }
             let nd = IND_NODES[o.key], tool = indTool();
             if (tool < nd.tool) { indFlash(indName(o.key) + '要' + IND_TOOL_NAME[nd.tool] + '才挖得动'); return false; }
@@ -2047,7 +2055,8 @@
                 else { d.burn = IND_BURN_T; d.pw = false; indFlash(msg.replace('炸了', '冒烟了，3 秒后烧坏')); ind.devDirty = true; }
             });
             if (!ind || ind.over || ind.where !== 'base') return;
-            B.devs.forEach(function (d) { let h = dt * pwAccelMultDev(d); if (d.ty === 'el') indElTick(d, h); else if (d.ty === 'comp') indCompTick(d, h); else if (d.ty === 'press') indPressTick(d, h); else if (IND_DEV_TICK[d.ty]) IND_DEV_TICK[d.ty](d, h); });
+            odWindmill();   // 风转盘带动旁边的粉碎机、水泵
+            B.devs.forEach(function (d) { let h = dt * pwAccelMultDev(d) * (d.wf || 1); if (d.ty === 'el') indElTick(d, h); else if (d.ty === 'comp') indCompTick(d, h); else if (d.ty === 'press') indPressTick(d, h); else if (IND_DEV_TICK[d.ty]) IND_DEV_TICK[d.ty](d, h); });
             if (!ind || ind.over || ind.where !== 'base') return;
             if (B.devs.some(function (d) { return d.ty === 'pump' && d.pw; })) {
                 let end = (Math.floor(B.clock / IND_DAY) + 1) * IND_DAY;
@@ -2119,6 +2128,7 @@
         function indPlaceDev(k) {
             if (ind.where !== 'base') { indFlash('设备只能放在基地里'); return false; }
             if (ind.base.devs.length >= IND_DEV_CAP) { indFlash('设备太多了'); return false; }
+            if (IND_ITEMS[k].dev === 'anchor') { indFlash('只能放在出门的地图上'); return false; }
             if (!rcPlaceOk(IND_ITEMS[k].dev)) return false;   // 电路上限：40 个芯片、400 个元件
             let f = indFace(), x = ind.p.x + f.x * 1.6, z = ind.p.z + f.z * 1.6;
             x = Math.max(IND_BASE.x0 + 0.8, Math.min(IND_BASE.x1 - 0.8, x)); z = Math.max(IND_BASE.z0 + 0.8, Math.min(IND_BASE.z1 - 0.8, z));
@@ -2414,7 +2424,7 @@
             if (d.st) Object.keys(d.st).forEach(function (k) { put(k, d.st[k]); });   // 电解槽里的东西放回仓库箱（放不下进背包，再放不下掉在地上，不会没）
             if (d.rods) d.rods.forEach(function (r) { put(nkRodKeyOf(r), 1); });   // 反应堆里的燃料棒
             if (d.cy) put(d.cy, 1);
-            rcPickHook(d, put); if (d.ty === 'fridge' && d.items) Object.keys(d.items).forEach(function (k) { put(k, d.items[k]); });   // 电路元件：信号线退回、芯片里的元件退回
+            rcPickHook(d, put); odPick(d, put); if (d.ty === 'fridge' && d.items) Object.keys(d.items).forEach(function (k) { put(k, d.items[k]); });   // 电路元件：信号线退回、芯片里的元件退回
             if (d.ty === 'gen' && d.wt > 0) put(indFilledKey('water_raw', d.wm || 'wood'), 1);   // 蒸汽发电机水箱里没用完的水还回成一桶
             let N = tot.box + tot.bag + tot.ground;
             ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
@@ -2450,7 +2460,7 @@
             return hit;
         }
         function indBankPut(d, n, key) {
-            key = key || 'battery'; let cellU = IND_ITEMS[key].cellU || IND_BAT_U, isLi = key === 'battery_li';
+            key = key || 'battery'; let cellU = IND_ITEMS[key].cellU || IND_BAT_U, isLi = key === 'battery_li' || key === 'battery_rc_full';
             if (d.bats > 0 && !!d.li !== isLi) { indFlash('一个电池组只能装一种电池（' + (d.li ? '这个是锂电池组' : '这个装的是普通／镍电池') + '）'); return 0; }
             let done = 0, why = '', repl = 0, add = 0;
             while (done < n && ind.bag[key] > 0) {
@@ -2477,10 +2487,11 @@
                 '<div style="margin-top:6px;font-size:12px;color:#888;">先替换用完的电池，满电了才加节；加节会超过接着的用电器额定就不装</div>' +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
-        function indBankPutBtn(id, n) { let d = indDev(id); if (!d) return; n = Math.max(0, Math.floor(+n || 0)); if (n > 0) indBankPut(d, n, indSel() === 'battery_ni' || indSel() === 'battery_li' ? indSel() : ind.bag.battery ? 'battery' : ind.bag.battery_ni ? 'battery_ni' : ind.bag.battery_li ? 'battery_li' : 'battery'); }
+        function indBankPutBtn(id, n) { let d = indDev(id); if (!d) return; n = Math.max(0, Math.floor(+n || 0)); if (n > 0) indBankPut(d, n, indSel() === 'battery_ni' || indSel() === 'battery_li' || indSel() === 'battery_rc_full' ? indSel() : ind.bag.battery ? 'battery' : ind.bag.battery_ni ? 'battery_ni' : ind.bag.battery_li ? 'battery_li' : 'battery'); }
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
         function indDevAct(d) {
             let k = indSel(), D = IND_DEVS[d.ty];
+            { let r = odDevAct(d, k); if (r !== undefined) return r; }
             { let r = lvDevAct(d, k); if (r !== undefined) return r; }
             { let r = clDevAct(d); if (r !== undefined) return r; }   // 冰箱（19-industry-cold.js）
             { let r = rcDevAct(d, k); if (r !== undefined) return r; }   // 电路元件（19-industry-circuit.js）
@@ -2504,7 +2515,7 @@
             }
             if (d.ty === 'xfmr') { if (k !== 'wire') return pwXfmrCycle(d); }
             if (d.ty === 'gen') return rlGenAct(d, k);
-            if (d.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li')) { return indBankPut(d, 1, k) > 0; }
+            if (d.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li' || k === 'battery_rc_full')) { return indBankPut(d, 1, k) > 0; }
             if (d.ty === 'el') { indPanelEl(d.id); return true; }
             if (d.ty === 'comp') { indPanelComp(d.id); return true; }
             if (d.ty === 'press') { indPanelPress(d.id); return true; }

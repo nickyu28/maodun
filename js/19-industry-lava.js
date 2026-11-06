@@ -10,7 +10,7 @@
         IND_CRAFT.push({ out: 'dev_geo', in: { dev_turbine: 1, steel: 8, wire: 10 }, hard: true });
         // 岩浆池列表：远征里是火山口，基地里是 ind.base.lava
         function lvPools() {
-            if (ind.where === 'trip' && ind.map && ind.map.volc && !ind.cave) return ind.map.volc.map(function (v) { return { x: v.x, z: v.z, r: v.r * LV.rK }; });
+            if (ind.where === 'trip' && ind.map && ind.map.volc && !ind.cave) return ind.map.volc.map(function (v) { return { x: v.x, z: v.z, r: v.r * LV.rK }; }).concat(ind.map.pinLava || []);
             if (ind.where === 'base') return (ind.base.lava || []);
             return [];
         }
@@ -18,8 +18,8 @@
         function lvBuild() {
             if (ind.lvMap === ind.map) return; ind.lvMap = ind.map;
             if (ind.where !== 'trip' || !ind.map || !ind.map.volc || ind.cave) return;
-            ind.map.volc.forEach(function (v) {
-                let r = v.r * LV.rK, m = new THREE.Mesh(indGeo(new THREE.CircleGeometry(r, 24)), indMat(new THREE.MeshBasicMaterial({ color: 0xff3d00 })));
+            lvPools().forEach(function (v) {
+                let r = v.r, m = new THREE.Mesh(indGeo(new THREE.CircleGeometry(r, 24)), indMat(new THREE.MeshBasicMaterial({ color: 0xff3d00 })));
                 m.rotation.x = -Math.PI / 2; m.position.set(v.x, indHeight(ind.map, v.x, v.z) + 0.08, v.z); indAdd(m);
             });
         }
@@ -43,7 +43,7 @@
         // 放进基地的地热发电机当燃料（旁边 3 米内要有水），一罐发 24 V、持续 3 个游戏日，烧完还空罐
         Object.assign(IND_ITEMS_RAW, {
             lava_tank: { name: '岩浆罐（空）', col: 0x78909c, use: '对着岩浆右键装满' },
-            lava_tank_full: { name: '岩浆罐（满）', col: 0xff5722, use: '拿在手上发烫。对着火苗仔右键喂它，寿命 +1；放进基地的地热发电机当燃料，发 3 个游戏日的电' }
+            lava_tank_full: { name: '岩浆罐（满）', col: 0xff5722, later: '对着岩浆装，体检看不到', use: '拿在手上发烫。对着火苗仔右键喂它，寿命 +1；放进基地的地热发电机当燃料，发 3 个游戏日的电' }
         });
         IND_CRAFT.push({ out: 'lava_tank', in: { diamond: 4, steel: 8, brick_fire: 12 }, hard: true });
         const LV_FUEL = 3 * IND_DAY;
