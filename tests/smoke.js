@@ -10987,7 +10987,7 @@ async function enterExit(tab, key) {
                 if (!(Math.abs(r.h - 30) < 0.5 && Math.abs(r.c - 10) < 0.5 && r.out === 0)) bad.push('碰岩浆硬核 −30/s、悠闲 −10/s、离远不掉 ' + JSON.stringify(r));
                 // 扔进岩浆：木头→木炭、生肉→熟肉、别的没了
                 r = await run(`let G = ind.tripGround; ['wood', 'meat_raw', 'stone', 'wood'].forEach(function (k) { G.push({ k: k, x: V.x, z: V.z }); }); G.push({ k: 'wood', x: V.x + R + 2, z: V.z }); lvTick(0.1); let c = {}; ind.tripGround.forEach(function (g) { c[g.k] = (c[g.k] || 0) + 1; }); return c;`);
-                if (!(r.charcoal === 2 && r.meat_roast === 1 && !r.stone && r.wood === 1 && !r.meat_raw)) bad.push('扔木头出木炭、肉出熟肉、石头烧没、岩浆外的不变 ' + JSON.stringify(r));
+                if (!(!r.charcoal && !r.meat_roast && !r.stone && r.wood === 1 && !r.meat_raw)) bad.push('扔进岩浆的东西一律消失、没有产出、岩浆外的不变 ' + JSON.stringify(r));
                 // 桶对岩浆右键没反应
                 r = await run(`indTeleport(V.x + R + 1.5, V.z); indLookAt(V.x, V.z); ind.bag = { bucket: 1 }; indSelect('bucket'); let b = JSON.stringify(ind.bag); indUse(); return { same: JSON.stringify(ind.bag) === b };`);
                 if (!r.same) bad.push('桶对岩浆右键没反应 ' + JSON.stringify(r));
@@ -11163,6 +11163,36 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND102 耐火砖：耐火黏土在古老岩层和山地河边、1500°C 40 秒烧成、耐火砖槽接铁钢', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND103')) {
+            // IND103 岩浆罐和基地地热（任务 73）：空罐对着岩浆装满；满罐拿手上体温 +0.05/s；喂火苗仔寿命 +1 还空罐；满罐装进基地地热发电机（水边）发 24 V 3 个游戏日、没水不发、烧完还空罐；配方
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); IND_MB_AUTO = true; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoTrip(977); ind.base.rule = 'hard'; ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = []; ind.bag = {}; ind.tripGround = []; indTeleport(0, -4); let V = ind.map.volc[0], R = V.r * 0.3;
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`indTeleport(V.x + R + 1.5, V.z); ind.bag = { lava_tank: 1 }; indSelect('lava_tank'); let a = lvTankUse(), b = JSON.stringify(ind.bag); indTeleport(0, -4); ind.bag = { lava_tank: 1 }; indSelect('lava_tank'); let far = lvTankUse();
+                    ind.bag = { lava_tank_full: 1 }; indSelect('lava_tank_full'); ind.base.surv.temp = 37; lvHeldTick(10); let warm = ind.base.surv.temp - 37; let f = mbNew('flame', 0, -5.5); f.life = 3; let fed = lvTankUse(), life = f.life, bag = JSON.stringify(ind.bag); f.life = 5; ind.bag = { lava_tank_full: 1 }; indSelect('lava_tank_full'); lvTankUse(); let cap = f.life, kept = ind.bag.lava_tank_full;
+                    let rc = IND_CRAFT.filter(function (x) { return x.out === 'lava_tank'; })[0];
+                    return { a: a, b: b, far: far, warm: warm, fed: fed, life: life, bag: bag, cap: cap, kept: kept, rc: !!rc && rc.in.diamond === 4 && rc.in.steel === 8 && rc.in.brick_fire === 12 };`);
+                if (!(r.a === true && r.b === '{"lava_tank_full":1}' && r.far === false && Math.abs(r.warm - 0.5) < 0.01 && r.fed === true && r.life === 4 && r.bag === '{"lava_tank":1}' && r.cap === 5 && r.kept === 1 && r.rc)) bad.push('空罐装岩浆、满罐发烫、喂火苗仔 +1 还空罐、配方 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); let B = ind.base, P = IND_BASE_ST.pool; B.rule = 'hard'; B.off.pool = false; B.devs = []; B.lava = []; ind.bag = { lava_tank_full: 1 }; indSelect('lava_tank_full');
+                    let g = { id: 1, ty: 'geo', x: P.x + P.r + 1, z: P.z, bats: 0, u: 0, on: true, ft: 20, st: {} }; B.devs.push(g); let before = indSrcVolt(g);
+                    let act = indDevAct(g), v1 = indSrcVolt(g), left = ind.bag.lava_tank_full || 0, lava = g.lava; let again = (ind.bag = { lava_tank_full: 1 }, indSelect('lava_tank_full'), indDevAct(g)), kept = ind.bag.lava_tank_full;
+                    IND_DEV_TICK.geo(g, 3500); let mid = indSrcVolt(g), mlava = g.lava; IND_DEV_TICK.geo(g, 200); let after = indSrcVolt(g), empty = ind.bag.lava_tank || 0;
+                    ind.bag = { lava_tank_full: 1 }; indSelect('lava_tank_full'); indDevAct(g); B.off.pool = true; let dry = indSrcVolt(g); IND_DEV_TICK.geo(g, 100); let kept2 = g.lava;
+                    let fx = { lava: 99999 }; IND_DEV_FIX.geo(fx);
+                    return { before: before, act: act, v1: v1, left: left, lava: lava, kept: kept, mid: mid, mlava: mlava, after: after, empty: empty, dry: dry, kept2: kept2, fx: fx.lava }; })()`);
+                if (!(r.before === 0 && r.v1 === 24 && r.left === 0 && r.lava === 3600 && r.kept === 1 && r.mid === 24 && r.mlava === 100 && r.after === 0 && r.empty === 1 && r.dry === 0 && r.kept2 === 3600 && r.fx === 3600)) bad.push('基地地热装满罐 24 V、3 个游戏日、烧完还空罐、没水不发不耗 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND103 岩浆罐：装岩浆、喂火苗仔、基地地热发电机当燃料', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {

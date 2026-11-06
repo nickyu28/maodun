@@ -1757,6 +1757,7 @@
         // 右键：对着能搬的东西，按住 1 秒收起来，没按够就松开是原来的右键（吃喝、浇水、接水）；别的东西按下就是右键
         function indRightDown() {
             if (!ind || ind.over || ind.dead || ind.panel) return;
+            if (lvTankUse()) return;   // 岩浆罐：装满、喂火苗仔（19-industry-lava.js）
             if (lvTorchUse()) return;   // 没点着的火把：靠近火苗仔、岩浆点着（19-industry-lava.js）
             if (mbShieldDown()) return;   // 选中盾：举盾，不拉风箱（任务 70）
             { let aa = indAim(); if (aa && aa.kind === 'animal' && (mbPetUse(aa.o, indSel()) || mbBark(aa.o))) return; }   // 右键狗猫：装刀盾、喂水，不然就叫一声
@@ -2480,6 +2481,7 @@
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
         function indDevAct(d) {
             let k = indSel(), D = IND_DEVS[d.ty];
+            { let r = lvDevAct(d, k); if (r !== undefined) return r; }
             { let r = clDevAct(d); if (r !== undefined) return r; }   // 冰箱（19-industry-cold.js）
             { let r = rcDevAct(d, k); if (r !== undefined) return r; }   // 电路元件（19-industry-circuit.js）
             { let r = rlDevAct(d, k); if (r !== undefined) return r; }   // 管道、水塔（19-industry-real.js）
