@@ -79,7 +79,9 @@
         }
         // 洞里能看多远：自然光（只看离洞口多深、白天黑夜）和身上的光取大的
         function cvNatR(depth) { let day = 1 - indDark(); if (day <= 0) return 0; let v = depth <= CV.lit ? CV.natR : depth >= CV.dim ? 0 : CV.natR * (CV.dim - depth) / (CV.dim - CV.lit); return v * day; }
-        function cvBulbOn() { return ind.base.wear.head === 'bulb' && (ind.base.bulbU === undefined || ind.base.bulbU > 0); }
+        function cvBulbIs() { return ind.base.wear.head === 'bulb' || ind.base.wear.head === 'bulb_ar'; }   // 氩气灯泡（19-industry-asu.js）耗电减半
+        function cvBulbDraw() { return CV.bulbDraw * (ind.base.wear.head === 'bulb_ar' ? 0.5 : 1); }
+        function cvBulbOn() { return cvBulbIs() && (ind.base.bulbU === undefined || ind.base.bulbU > 0); }
         function cvLightR() { return Math.max(ind.torchT > 0 ? CV.torchR : 0, cvBulbOn() ? CV.bulbR : 0); }
         function cvViewR() { if (!ind.cave) return null; return Math.max(cvLightR(), cvNatR(cvDepth(ind.cave, ind.p.x, ind.p.z))); }
         function cvRender(nightEl) {
@@ -110,9 +112,9 @@
             if (ind.where !== 'trip') { ind.cave = null; return; }
             let B = ind.base;
             if (ind.cave) {
-                if (B.wear.head === 'bulb') {
+                if (cvBulbIs()) {
                     if (!(B.bulbU >= 0)) B.bulbU = CV.bulbU;
-                    B.bulbU = Math.max(0, B.bulbU - CV.bulbDraw * dt);
+                    B.bulbU = Math.max(0, B.bulbU - cvBulbDraw() * dt);
                     if (B.bulbU <= 0) { B.wear.head = 'bulb_dead'; B.bulbU = CV.bulbU; indFlash('灯泡没电了'); }
                 }
                 cvGasCheck(); if (!ind || ind.dead) return;
@@ -125,7 +127,7 @@
         }
         function cvHint() {
             if (!ind.cave) return '';
-            let v = cvViewR(); return '矿洞里　' + (v > 0.5 ? '看得见 ' + Math.round(v) + ' 米' : '一片漆黑') + (ind.torchT > 0 ? '　火把还剩 ' + Math.ceil(ind.torchT) + ' 秒' : '') + (ind.base.wear.head === 'bulb' ? '　灯泡电量 ' + Math.ceil(ind.base.bulbU >= 0 ? ind.base.bulbU : CV.bulbU) + ' U' : '');
+            let v = cvViewR(); return '矿洞里　' + (v > 0.5 ? '看得见 ' + Math.round(v) + ' 米' : '一片漆黑') + (ind.torchT > 0 ? '　火把还剩 ' + Math.ceil(ind.torchT) + ' 秒' : '') + (cvBulbIs() ? '　灯泡电量 ' + Math.ceil(ind.base.bulbU >= 0 ? ind.base.bulbU : CV.bulbU) + ' U' : '');
         }
         function cvFixBase(b) { if (b.bulbU !== undefined) b.bulbU = indNum(b.bulbU, CV.bulbU, 0, CV.bulbU); }
         function cvBookLines() {

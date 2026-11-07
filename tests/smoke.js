@@ -11640,6 +11640,47 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND115 冰淇淋和冰棍：只有硬核、没盐没冰做不了、搅 20 秒、还空桶、吃了降温、冷藏箱冰箱保鲜', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND116')) {
+            // IND116 空气分离塔（任务 81）：没电不出气；通电出气、空瓶变气体瓶；跑 1000 瓶氮氧占绝大多数、氩氖氪都出得来；拿到对应瓶子元素表点亮（氮 7、氖 10、氩 18、氪 36）；带保护气炼钢 20 秒；氮气灭火；氩气灯泡耗电减半；老存档读档不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; B.devs = []; B.wires = []; B.cookers = []; B.fires = []; B.elems = {}; ind.bag = {}; ind.ch = null; indPanelClose();
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`let rc = IND_CRAFT.filter(function (q) { return q.out === 'dev_asu'; })[0]; let d = { id: ++B.dseq, ty: 'asu', x: 5, z: 5, on: true, pw: false, bats: 0, u: 0, st: { bottle: 3 } }; B.devs = [d];
+                    IND_DEV_TICK.asu(d, 100); let off = d.st.bottle; d.pw = true; IND_DEV_TICK.asu(d, 19); let mid = d.st.bottle; IND_DEV_TICK.asu(d, 1.5); let gas = Object.keys(d.st).filter(function (k) { return k !== 'bottle'; });
+                    return { rc: !!rc && rc.in.steel === 10 && rc.in.dev_comp === 1 && rc.in.motor === 1 && rc.in.wire === 10 && rc.in.glass_plate === 2 && rc.hard === true, off: off, mid: mid, left: d.st.bottle, gas: gas.length, name: IND_ITEMS.dev_asu.use };`);
+                if (!(r.rc && r.off === 3 && r.mid === 3 && r.left === 2 && r.gas === 1 && /低温精馏/.test(r.name))) bad.push('配方、没电不出气、通电 20 秒出一瓶气空瓶少一个、说明写低温精馏 ' + JSON.stringify(r));
+                r = await run(`let seed = 12345, rnd = function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }, c = {}; for (let i = 0; i < 1000; i++) { let g = asuGas(rnd); c[g] = (c[g] || 0) + 1; }
+                    let all = JSON.stringify(IND_ITEMS_RAW.b_ne) + JSON.stringify(IND_ITEMS_RAW.b_kr) + JSON.stringify(IND_ITEMS_RAW.dev_asu) + JSON.stringify(IND_ITEMS_RAW.b_n2) + JSON.stringify(IND_ITEMS_RAW.b_ar);
+                    return { c: c, text: /保底|必出/.test(all), ne: IND_ITEMS.b_ne.use, kr: IND_ITEMS.b_kr.use };`);
+                if (!((r.c.b_n2 + r.c.b_o2) >= 850 && r.c.b_n2 > r.c.b_o2 && r.c.b_ar >= 1 && r.c.b_ne >= 1 && r.c.b_kr >= 1 && !r.text && r.ne === '微量气体' && r.kr === '微量气体')) bad.push('1000 瓶氮氧占绝大多数、氩氖氪都出得来、说明不写保底、氖氪写微量气体 ' + JSON.stringify(r));
+                r = await run(`let bank = { id: ++B.dseq, ty: 'bank', x: 0, z: 0, bats: 16, u: 16 * IND_BAT_U, on: true, ft: 20, st: {} }, d = { id: ++B.dseq, ty: 'asu', x: 3, z: 0, on: true, bats: 0, u: 0, st: { bottle: 2 } }; B.devs = [bank, d]; B.wires = [[bank.id, d.id]]; let u0 = bank.u;
+                    for (let i = 0; i < 25; i++) indElecTick(1); let a = { pw: d.pw, bottle: d.st.bottle || 0, gas: Object.keys(d.st).filter(function (k) { return k !== 'bottle'; }).reduce(function (t, k) { return t + d.st[k]; }, 0), used: u0 - bank.u };
+                    bank.bats = 3; bank.u = 3 * IND_BAT_U; let dd = { id: ++B.dseq, ty: 'asu', x: 6, z: 0, on: true, bats: 0, u: 0, st: { bottle: 1 } }; B.devs.push(dd); B.wires.push([bank.id, dd.id]); for (let i = 0; i < 25; i++) indElecTick(1); a.low = dd.st.bottle || 0; return a;`);
+                if (!(r.pw === true && r.bottle === 1 && r.gas === 1 && r.used > 0 && r.low === 1)) bad.push('接 24 V 电池组自己出气并耗电、电压不够不工作 ' + JSON.stringify(r));
+                r = await run(`let tip = []; ['b_n2', 'b_ne', 'b_ar', 'b_kr'].forEach(function (k) { indBagAdd(k, 1); }); return { e: [7, 10, 18, 36].map(function (z) { return !!B.elems[z]; }), names: [7, 10, 18, 36].map(indElemName).join(), tips: fl.filter(function (t) { return /元素表点亮了/.test(t); }).length };`);
+                if (!(r.e.join() === 'true,true,true,true' && r.names === '氮,氖,氩,氪' && r.tips === 4)) bad.push('拿到氮氖氩氪元素表点亮 ' + JSON.stringify(r));
+                const sm = async (items, secs) => { await T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: ${JSON.stringify(items)}, fuel: 9000, fire: 4, bellows: true, blow: 1e6, temp: 1700, spout: [], spoutTy: 'brick' }); ind.cookId = 'stove'; indAdvance(${secs}); true;`); return J(`{ out: ind.base.stove.out, items: ind.base.stove.items }`); };
+                const sa = await sm({ ingot_fe: 1, charcoal: 1, b_n2: 1 }, 24), sb = await sm({ ingot_fe: 1, charcoal: 1 }, 24), sc = await sm({ ingot_fe: 1, coal: 1, b_ar: 1 }, 24);
+                r = { sa: sa, sb: sb, sc: sc };
+                if (!(sa.out.hot_steel === 1 && sa.out.bottle === 1 && !sb.out.hot_steel && sc.out.hot_steel === 1 && sc.out.bottle === 1)) bad.push('带氮气／氩气炼钢 24 秒出钢还空瓶、没带 24 秒还没好 ' + JSON.stringify(r));
+                r = await run(`indBagAdd('b_n2', 1); let f = { x: 3, z: 3, fuel: 80 }; B.fires = [f]; let a = asuFire('b_n2', { kind: 'fire', o: f }); let wrong = asuFire('b_ar', { kind: 'fire', o: f });
+                    ind.bag = { bulb_dead: 1, battery_li: 1, b_ar: 1 }; let i = IND_CRAFT.findIndex(function (q) { return q.out === 'bulb_ar'; }); indCraft(i); let made = JSON.stringify(Object.keys(ind.bag).sort()); B.wear.head = 'bulb_ar'; let dr = cvBulbDraw(); B.wear.head = 'bulb'; let dr1 = cvBulbDraw();
+                    return { a: a, fuel: f.fuel, bottle: ind.bag.bottle, wrong: wrong, made: made, dr: dr, dr1: dr1 };`);
+                if (!(r.a === true && r.fuel === 0 && r.wrong === false && r.made === '["bottle","bulb_ar"]' && Math.abs(r.dr * 2 - r.dr1) < 1e-9)) bad.push('氮气对着篝火灭火还空瓶、氩气灯泡耗电减半 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', devs: [{ id: 1, ty: 'asu', x: 5, z: 5, on: true, st: { bottle: 2, b_n2: 1 } }], elems: { 7: 1 } }); return { n: b.devs.length, st: JSON.stringify(b.devs[0].st), e: b.elems[7] }; })()`);
+                if (!(r.n === 1 && r.e === 1)) bad.push('老存档读档不报错 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND116 空气分离塔：没电不出气、通电出气、成分、元素表、保护气炼钢、灭火、氩气灯泡', bad.length === 0, bad.join(' / '));
+        }
+
 
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；

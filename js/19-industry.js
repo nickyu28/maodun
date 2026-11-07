@@ -1805,6 +1805,7 @@
             if (k && IND_ITEMS[k].potion) return pwDrink(k);   // 右键喝药
             if (k === 'gunpowder' && a && a.kind === 'node' && a.o.hard) return rkFuse(a.o);   // 火药对着硬岩：点引线
             if (k === 'cyl' && a && a.kind === 'node' && a.o.key === 'vent_ng') return rkFillVent(a.o);   // 空钢瓶对着喷口：装天然气
+            if (k === 'b_n2' && asuFire(k, a)) return true;   // 氮气瓶对着篝火：灭火（19-industry-asu.js）
             if (k === 'torch') return cvLightTorch();   // 右键点火把（任务 66）
             if (a && a.kind === 'dev' && a.o.ty === 'bank' && (k === 'battery' || k === 'battery_ni' || k === 'battery_li' || k === 'battery_rc_full')) { indPanelBank(a.o.id); return true; }   // 拿着电池右键电池组：弹框选放几个
             if (k && stkTryStack(k, a)) return true;   // 拿着同种设备右键已经放下的那台：叠上去（任务 68）
