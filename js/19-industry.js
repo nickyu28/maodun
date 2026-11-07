@@ -423,6 +423,11 @@
         // 元素表：拿到这些东西就点亮对应的元素（原子序数）
         const IND_ELEM_OF = { b_h2: 1, charcoal: 6, coal: 6, char: 6, b_o2: 8, sodium: 11, sulfur: 16, b_cl2: 17, diamond: 6, ingot_fe: 26, ingot_cu: 29, ingot_zn: 30, ingot_sn: 50 };
         const IND_ELEM_NAME = ['', '氢', '氦', '锂', '铍', '硼', '碳', '氮', '氧', '氟', '氖', '钠', '镁', '铝', '硅', '磷', '硫', '氯', '氩', '钾', '钙', '钪', '钛', '钒', '铬', '锰', '铁', '钴', '镍', '铜', '锌', '镓', '锗', '砷', '硒', '溴', '氪'];
+        // 36 号以后只写游戏里拿得到的：锡 50、铅 82、钚 94（物品点亮元素表用 IND_ELEM_OF，每个号码都得有名字，冒烟 IND111 查）
+        IND_ELEM_NAME[50] = '锡'; IND_ELEM_NAME[82] = '铅'; IND_ELEM_NAME[94] = '钚';
+        const IND_ELEM_BASE = 36;   // 元素表的基本格子 1～36，再加上面这几个
+        function indElemName(z) { return IND_ELEM_NAME[z] || ('第 ' + z + ' 号'); }
+        function indElemList() { let L = []; for (let z = 1; z < IND_ELEM_NAME.length; z++) if (z <= IND_ELEM_BASE || IND_ELEM_NAME[z]) L.push(z); return L; }
         const IND_BURN_S = 8;   // 超过烧焦温度累计 8 秒就烧成焦炭
 
         // ── 随机数和噪声（同一个种子生成同一张图）──
@@ -663,7 +668,7 @@
         // 不认识的物品 key 跳过（任务 61）
         function indSlots() { let L = []; Object.keys(ind.bag).forEach(function (k) { if (!IND_ITEMS[k]) return; let c = ind.bag[k]; while (c > 0) { L.push({ k: k, n: Math.min(IND_STACK, c) }); c -= IND_STACK; } }); return L; }
         function indBagAdd(k, n) {
-            if (IND_ELEM_OF[k] && ind.base && !ind.base.elems[IND_ELEM_OF[k]]) { ind.base.elems[IND_ELEM_OF[k]] = 1; indFlash('元素表点亮了：' + IND_ELEM_NAME[IND_ELEM_OF[k]]); }
+            if (IND_ELEM_OF[k] && ind.base && !ind.base.elems[IND_ELEM_OF[k]]) { ind.base.elems[IND_ELEM_OF[k]] = 1; indFlash('元素表点亮了：' + indElemName(IND_ELEM_OF[k])); }
             let B = ind.bag, take = indFits(B, indBagSlots(), k, n);
             if (take > 0) B[k] = (B[k] || 0) + take;
             return take;
@@ -2586,7 +2591,7 @@
                 if (k === 'bucket') { for (let j = 0; j < r.out[k]; j++) { let key = mats[bi] ? indEmptyKey(mats[bi]) : k; bi++; d.st[key] = (d.st[key] || 0) + 1; } return; }
                 d.st[k] = (d.st[k] || 0) + r.out[k];
             });   // 电解槽里不上火：桶原样还回来
-            Object.keys(r.out).forEach(function (k) { if (IND_ELEM_OF[k] && !ind.base.elems[IND_ELEM_OF[k]]) { ind.base.elems[IND_ELEM_OF[k]] = 1; indFlash('元素表点亮了：' + IND_ELEM_NAME[IND_ELEM_OF[k]]); } });
+            Object.keys(r.out).forEach(function (k) { if (IND_ELEM_OF[k] && !ind.base.elems[IND_ELEM_OF[k]]) { ind.base.elems[IND_ELEM_OF[k]] = 1; indFlash('元素表点亮了：' + indElemName(IND_ELEM_OF[k])); } });
             if (ind.panel === 'el') ind.panelDirty = true;
             indSave();
         }
@@ -2644,7 +2649,7 @@
             let need = 5;
             IND_CARBON.forEach(function (k) { let t = Math.min(need, d.st[k] || 0); if (t > 0) { d.st[k] -= t; need -= t; if (d.st[k] <= 0) delete d.st[k]; } });
             d.st.diamond = (d.st.diamond || 0) + 1;
-            if (!ind.base.elems[IND_ELEM_OF.diamond]) { ind.base.elems[IND_ELEM_OF.diamond] = 1; indFlash('元素表点亮了：' + IND_ELEM_NAME[IND_ELEM_OF.diamond]); }
+            if (!ind.base.elems[IND_ELEM_OF.diamond]) { ind.base.elems[IND_ELEM_OF.diamond] = 1; indFlash('元素表点亮了：' + indElemName(IND_ELEM_OF.diamond)); }
             indFlash('出了一颗钻石'); if (ind.panel === 'press') ind.panelDirty = true;
             indSave();
         }
@@ -2777,8 +2782,8 @@
         }
         function indPanelElems() {
             if (!ind) return;
-            let E = ind.base.elems, N = IND_ELEM_NAME.length - 1, n = Object.keys(E).filter(function (z) { return +z <= N; }).length, cells = '';   // 表里只有 1～36 号
-            for (let z = 1; z < IND_ELEM_NAME.length; z++) cells += '<span style="display:inline-block;width:36px;margin:2px;padding:3px 0;text-align:center;border-radius:5px;font-size:12px;' + (E[z] ? 'background:#ffca28;color:#222;font-weight:bold;' : 'background:#eee;color:#bbb;') + '">' + z + '<br>' + IND_ELEM_NAME[z] + '</span>';
+            let E = ind.base.elems, L = indElemList(), N = L.length, n = L.filter(function (z) { return E[z]; }).length, cells = '';   // 1～36 号，再加锡、铅、钚（拿得到的）
+            L.forEach(function (z) { cells += '<span style="display:inline-block;width:36px;margin:2px;padding:3px 0;text-align:center;border-radius:5px;font-size:12px;' + (E[z] ? 'background:#ffca28;color:#222;font-weight:bold;' : 'background:#eee;color:#bbb;') + '">' + z + '<br>' + indElemName(z) + '</span>'; });
             indPanelShow('elems', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">元素表　' + n + ' / ' + N + '</div><div>' + cells + '</div><div style="margin-top:6px;color:#888;font-size:13px;">拿到一种元素的纯东西就点亮一格（比如铁锭、氢气瓶）</div>' +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }

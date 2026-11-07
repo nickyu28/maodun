@@ -186,14 +186,16 @@
         }
         function odNear(x, z) { let best = null, bd = OD.near; (ind.tdevs || []).forEach(function (t) { let d = Math.hypot(t.x - x, t.z - z); if (d < bd) { bd = d; best = t; } }); return best; }
         // 收起：块解除（基站：整块取消，别的三台变成没钉住的）
-        function odPickUp(t) {
+        function odPickUp(t, boom) {   // boom 为真：被炸毁（设备没了，槽里的电池掉在地上），块照样解除
             let B = ind.base, b = t.b;
             if (b) {
                 if (t.ty === 'anchor') { b.anch.forEach(function (a) { ind.tdevs.forEach(function (o) { if (o.ref === a) o.b = null; }); }); B.blocks = odBlocks().filter(function (x) { return x !== b; }); }
                 else { b.devs = b.devs.filter(function (d) { return d !== t.ref; }); if (!b.devs.length && !b.anch) B.blocks = odBlocks().filter(function (x) { return x !== b; }); }
             }
             ind.tdevs = ind.tdevs.filter(function (o) { return o !== t; });
-            indBoxAdd('dev_' + t.ty, 1); if (t.ref.chg) indBoxAdd(odCellKey(odEff(t.ref)), 1);
+            if (boom) {
+                if (t.ref.chg) { (ind.tripGround = ind.tripGround || []).push({ k: odCellKey(odEff(t.ref)), x: t.x, z: t.z }); ind.itemDirty = true; }
+            } else { indBoxAdd('dev_' + t.ty, 1); if (t.ref.chg) indBoxAdd(odCellKey(odEff(t.ref)), 1); }
             ind.odDirty = true; indSave(); return true;
         }
         // 右键（远征里）：放设备、种树苗、空手收起；左键：拿着可充电电池放进槽

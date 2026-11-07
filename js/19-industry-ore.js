@@ -74,7 +74,7 @@
                 ind.tntBlast = false;
                 (ind.mobs || []).forEach(function (m) { if (!m.dead && Math.hypot(m.x - x, m.z - z) <= R) mbDamage(m, 5); });
                 orKillAnimals(x, z, R);   // 野生动物炸死，掉的跟打死的一样
-                (ind.tdevs || []).slice().forEach(function (t) { if (Math.hypot(t.x - x, t.z - z) <= R) { odPickUp(t); } });
+                (ind.tdevs || []).slice().forEach(function (t) { if (Math.hypot(t.x - x, t.z - z) <= R) { odPickUp(t, true); } });   // 炸毁：设备没了，里面的东西掉地上，设备块解除（任务 75）
                 if (typeof nkTripItemsSync === 'function') nkTripItemsSync();
                 indBoomFx(x, z);
             } else {

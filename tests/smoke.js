@@ -6044,7 +6044,7 @@ async function enterExit(tab, key) {
                 if (!(hp < 85 && hp > 83)) bad.push('氯气没按每秒 8 扣血 ' + hp);
                 // 元素表
                 await T.eval(`indPanelElems(); true;`);
-                if (!(await T.eval(`/元素表　\\d+ \\/ 36/.test(document.getElementById('ind-panel').innerText) && Object.keys(ind.base.elems).length >= 4`))) bad.push('元素表不对 ' + await T.eval(`JSON.stringify(ind.base.elems)`));
+                if (!(await T.eval(`/元素表　\\d+ \\/ 39/.test(document.getElementById('ind-panel').innerText) && Object.keys(ind.base.elems).length >= 4`))) bad.push('元素表不对 ' + await T.eval(`JSON.stringify(ind.base.elems)`));
                 await T.eval(`indPanelClose(); indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
                 const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ e: Object.keys(b.elems).length, ver: b.ver, el: (b.devs.filter(function (d) { return d.ty === 'el'; })[0] || {}).st })); }); })`));
                 if (sv.e < 4 || sv.ver < 7 || sv.el) bad.push('存档读回来不对 ' + JSON.stringify(sv));
@@ -9479,8 +9479,8 @@ async function enterExit(tab, key) {
                 if (r.hot.hot_si) bad.push('1600°C（鼓风）不该出硅 ' + JSON.stringify(r));
                 r = await cook({ sand: 6, charcoal: 3 }, 3, 1800, 41, true);
                 if (r.hot.hot_si !== 3 || r.hot.glass_plate) bad.push('沙子多的时候先做硅（大窑一次 3 份） ' + JSON.stringify(r));
-                const el = await J(`(function(){ ind.bag = {}; delete ind.base.elems[14]; indBagAdd('ingot_si', 1); indPanelElems(); let t = document.getElementById('ind-panel').innerText; indPanelClose(); return { lit: !!ind.base.elems[14], title: /元素表　\\d+ \\/ 36/.test(t), cool: IND_ITEMS_RAW.hot_si.hot, use: IND_ITEMS.ingot_si.use }; })()`);
-                if (!(el.lit && el.title && el.cool === 'ingot_si' && /太阳能板/.test(el.use) && /芯片/.test(el.use))) bad.push('元素表硅、标题 / 36、凉了是硅锭、说明写用途 ' + JSON.stringify(el));
+                const el = await J(`(function(){ ind.bag = {}; delete ind.base.elems[14]; indBagAdd('ingot_si', 1); indPanelElems(); let t = document.getElementById('ind-panel').innerText; indPanelClose(); return { lit: !!ind.base.elems[14], title: /元素表　\\d+ \\/ 39/.test(t), cool: IND_ITEMS_RAW.hot_si.hot, use: IND_ITEMS.ingot_si.use }; })()`);
+                if (!(el.lit && el.title && el.cool === 'ingot_si' && /太阳能板/.test(el.use) && /芯片/.test(el.use))) bad.push('元素表硅、标题 / 39（1～36 加锡铅钚）、凉了是硅锭、说明写用途 ' + JSON.stringify(el));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -11549,6 +11549,58 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND112 拆东西按耐久还材料：公式、确认窗写个数、逐件算再加总、坏的拆出 0', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND111')) {
+            // IND111 元素表（测试员实测：拿到锡锭弹"元素表点亮了：undefined"）：IND_ELEM_OF 里每个原子序数都有名字；拿到锡锭提示里没有 undefined；锡在元素表里点亮；老存档的 elems 不受影响
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let miss = [], nums = {}; Object.keys(IND_ELEM_OF).forEach(function (k) { let z = IND_ELEM_OF[k]; nums[z] = 1; if (!IND_ELEM_NAME[z]) miss.push(k + ':' + z); }); return { miss: miss, n: Object.keys(nums).length, sn: IND_ELEM_NAME[50], pb: IND_ELEM_NAME[82], pu: IND_ELEM_NAME[94], list: indElemList().length }; })()`);
+                if (!(r.miss.length === 0 && r.n >= 10 && r.sn === '锡' && r.pb === '铅' && r.pu === '钚' && r.list === 39)) bad.push('IND_ELEM_OF 里每个原子序数都有名字、元素表多锡铅钚三格 ' + JSON.stringify(r));
+                r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; ind.base.elems = {}; ind.bag = {}; indBagAdd('ingot_sn', 1); indBagAdd('ingot_pb', 1); indBagAdd('plutonium', 1);
+                    let tip = fl.filter(function (t) { return /元素表点亮了/.test(t); }); indPanelElems(); let txt = document.getElementById('ind-panel').innerText;
+                    return { tip: tip, lit: [!!ind.base.elems[50], !!ind.base.elems[82], !!ind.base.elems[94]], head: (/元素表　(\\d+) \\/ (\\d+)/.exec(txt) || []).slice(1).join('/'), undef: /undefined/.test(txt) }; } finally { blazeFlash = bf; indPanelClose(); } })()`);
+                if (!(r.tip.length === 3 && r.tip.some((t) => /锡/.test(t)) && !r.tip.some((t) => /undefined/.test(t)) && r.lit.join() === 'true,true,true' && r.head === '3/39' && !r.undef)) bad.push('拿到锡锭提示里有锡没有 undefined、元素表里锡点亮、3 / 39 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', elems: { 1: 1, 26: 1, 50: 1, 40: 1, 119: 1, 0: 1 } }); let ok; try { ind.base.elems = b.elems; indPanelElems(); let t = document.getElementById('ind-panel').innerText; indPanelClose(); ok = /元素表　3 \\/ 39/.test(t); } catch (x) { ok = String(x); } return { e: Object.keys(b.elems).sort(function (p, q) { return p - q; }).join(), ok: ok }; })()`);
+                if (!(r.e === '1,26,40,50' && r.ok === true)) bad.push('老存档 elems 不受影响、读档不报错、面板只数画出来的格子 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND111 元素表：每个原子序数有名字、锡不弹 undefined、锡铅钚能点亮', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND112')) {
+            // IND112 TNT 炸户外设备（任务 75 文档）：设备炸毁（不回背包），里面的东西（充电槽的电池）掉地上，设备块解除；基站被炸整块解除；范围外的不动
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.blocks = []; indGoTrip(2024); B.rule = 'hard'; ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = []; ind.nodes.forEach(function (o) { o.dead = true; }); ind.tripGround = []; ind.bag = {}; ind.base.surv.hp = 100; indTeleport(-40, 0);
+                    let mk = function (ty, x, z, blk) { let rec = { ty: ty, dx: 0, dz: 0, chg: { u: 720 } }; blk.devs.push(rec); ind.tdevs.push({ ty: ty, x: x, z: z, y: 0.5, ref: rec, b: blk }); return rec; };
+                    let b1 = { x: 0, z: 0, n: 3, bm: 'plain', h: new Array(9).fill(0), lava: [], nodes: [], devs: [], anch: null }, b2 = { x: 60, z: 0, n: 3, bm: 'plain', h: new Array(9).fill(0), lava: [], nodes: [], devs: [], anch: null };
+                    B.blocks.push(b1, b2); mk('wind', 0, 0, b1); mk('wind', 60, 0, b2); ind.odLive = [b1, b2];
+                    ind.tnts = [{ x: 1, z: 0, t: 0.1, w: 'trip' }]; orTntTick(0.2);
+                    let g = {}; ind.tripGround.forEach(function (q) { g[q.k] = (g[q.k] || 0) + 1; });
+                    return { devs: ind.tdevs.length, blocks: B.blocks.length, left: B.blocks[0] === b2, bag: JSON.stringify(ind.bag), bat: g.battery_rc_full || 0, near: ind.tdevs[0] && ind.tdevs[0].x }; })()`);
+                if (!(r.devs === 1 && r.blocks === 1 && r.left && r.bag === '{}' && r.bat === 1 && r.near === 60)) bad.push('TNT 炸户外设备：炸毁不回背包、电池掉地上、块解除、范围外的不动 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base; B.blocks = []; ind.tdevs = []; ind.tripGround = []; ind.bag = {}; indTeleport(-40, 0);
+                    let as = [[100, 100], [108, 100], [100, 108], [108, 108]].map(function (p) { return { x: p[0], z: p[1], chg: { u: 720 }, t: B.clock || 0 }; }), blk = { x: 104, z: 104, n: 9, bm: 'plain', h: new Array(81).fill(0), lava: [], nodes: [], devs: [], anch: as }; B.blocks.push(blk); ind.odLive = [blk];
+                    as.forEach(function (a) { ind.tdevs.push({ ty: 'anchor', x: a.x, z: a.z, y: 0.5, ref: a, b: blk }); });
+                    ind.tnts = [{ x: 100, z: 100, t: 0.1, w: 'trip' }]; orTntTick(0.2);
+                    return { blocks: B.blocks.length, devs: ind.tdevs.length, free: ind.tdevs.filter(function (t) { return !t.b; }).length, bag: JSON.stringify(ind.bag) }; })()`);
+                if (!(r.blocks === 0 && r.devs === 3 && r.free === 3 && r.bag === '{}')) bad.push('TNT 炸一台基站：整块解除、别的三台变成没钉住的 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND112 TNT 炸户外设备：炸毁、掉东西、设备块解除', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
