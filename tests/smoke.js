@@ -11603,6 +11603,44 @@ async function enterExit(tab, key) {
             report('IND114 TNT 炸户外设备：炸毁、掉东西、设备块解除', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND115')) {
+            // IND115 冰淇淋和冰棍（任务 80）：只有硬核；没盐没冰做不了；站着搅 20 秒／做 10 秒（动了中断）；做完还空桶；吃了体温降（最低 37）、饱食涨；冷藏箱有冰不坏冰没了接着坏；冰箱通电不坏断电坏；1 个游戏日坏成腐烂的食物
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; B.chests = []; B.devs = []; ind.bag = {}; ind.ch = null; indPanelClose();
+                    let rec = function (o) { return IND_CRAFT.findIndex(function (q) { return q.out === o; }); };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`let a = IND_CRAFT[rec('ice_cream')], b = IND_CRAFT[rec('popsicle')]; let hard = [indCraftShow(a), indCraftShow(b)]; B.rule = 'casual'; let cas = [indCraftShow(a), indCraftShow(b)]; B.rule = 'hard';
+                    ind.bag = { milk: 1, sugar: 1, ice: 2 }; let noSalt = indCraftCan(a); ind.bag = { milk: 1, sugar: 1, salt: 1, ice: 1 }; let noIce = indCraftCan(a); ind.bag = { sugar: 1, water_boiled: 1, wood: 1, salt: 1 }; let noIce2 = indCraftCan(b); ind.bag = { sugar: 1, water_boiled: 1, wood: 1, ice: 1 }; let noSalt2 = indCraftCan(b);
+                    return { hard: hard, cas: cas, noSalt: noSalt, noIce: noIce, noIce2: noIce2, noSalt2: noSalt2, a: JSON.stringify(a.in) + a.n + a.time + JSON.stringify(a.back), b: JSON.stringify(b.in) + b.n + b.time + JSON.stringify(b.back) };`);
+                if (!(r.hard.join() === 'true,true' && r.cas.join() === 'false,false' && !r.noSalt && !r.noIce && !r.noIce2 && !r.noSalt2 && r.a === '{"milk":1,"sugar":1,"ice":2,"salt":1}220{"bucket":1}' && r.b === '{"sugar":1,"water_boiled":1,"wood":1,"ice":1,"salt":1}310{"bucket":1}')) bad.push('配方只有硬核有、没盐没冰做不了、数量和时间 ' + JSON.stringify(r));
+                r = await run(`let ia = rec('ice_cream'), ib = rec('popsicle'); indTeleport(0, 0); ind.bag = { milk: 1, sugar: 1, ice: 2, salt: 1 }; indCraft(ia); let started = ind.ch && ind.ch.kind === 'craft' ? ind.ch.need : 0, early = JSON.stringify(ind.bag); indTeleport(3, 3); wdChTick(0.1); let cut = !ind.ch, kept = JSON.stringify(ind.bag) === early;
+                    indTeleport(0, 0); indCraft(ia); let c = ind.ch; if (c) { c.t = 19.9; wdChTick(0.2); } let done = JSON.stringify(Object.keys(ind.bag).sort()) + ind.bag.ice_cream + ind.bag.bucket;
+                    ind.bag = { sugar: 1, water_boiled: 1, wood: 1, ice: 1, salt: 1 }; indCraft(ib); let nb = ind.ch ? ind.ch.need : 0; ind.ch.t = 9.9; wdChTick(0.2); let done2 = JSON.stringify(Object.keys(ind.bag).sort()) + ind.bag.popsicle + ind.bag.bucket;
+                    return { started: started, cut: cut, kept: kept, done: done, nb: nb, done2: done2 };`);
+                if (!(r.started === 20 && r.cut && r.kept && r.done === '["bucket","ice_cream"]21' && r.nb === 10 && r.done2 === '["bucket","popsicle"]31')) bad.push('冰淇淋搅 20 秒（动了中断不扣料）、冰棍 10 秒、做完还空桶 ' + JSON.stringify(r));
+                r = await run(`let S = B.surv; S.temp = 39; S.food = 50; S.water = 50; ind.bag = { ice_cream: 1, popsicle: 1, ice: 1 }; indEat('ice_cream'); let t1 = S.temp, f1 = S.food; S.temp = 39; S.food = 50; indEat('popsicle'); let t2 = S.temp, f2 = S.food, w2 = S.water; S.temp = 39; indEat('ice'); let t3 = S.temp;
+                    S.temp = 37.4; ind.bag = { ice_cream: 1 }; indEat('ice_cream'); let low = S.temp; return { t1: t1, f1: f1, t2: t2, f2: f2, w2: w2, t3: t3, low: low };`);
+                if (!(Math.abs(r.t1 - 37.5) < 1e-6 && r.f1 === 70 && Math.abs(r.t2 - 37) < 1e-6 && r.f2 === 58 && r.w2 === 58 && Math.abs(r.t3 - 37.5) < 1e-6 && r.low === 37 && (39 - r.t2) <= 2 * (39 - r.t3))) bad.push('吃冰淇淋饱食 +20 体温 −1.5、冰棍饱食 +8 口渴 +8 体温 −1.5（喝水体温>38 再 −0.5，所以冰棍共 −2、冰块 −1.5）、最低 37、降温不超过冰块的两倍 ' + JSON.stringify(r));
+                r = await run(`let c = { id: 90, x: 0, z: 0, big: false, cold: true, iceT: 0, age: {}, items: { ice_cream: 2, popsicle: 2, ice: 2 } }, p = { id: 91, x: 4, z: 4, big: false, items: { ice_cream: 1 }, age: {} }; B.chests = [c, p];
+                    let adv = function (n) { for (let i = 0; i < n / 10; i++) clStep(10, false, true); }; adv(1500); let a = { ic: c.items.ice_cream || 0, pop: c.items.popsicle || 0, plain: p.items.rotfood || 0 }; adv(1500); adv(1500); let b = { ic: c.items.ice_cream || 0, rot: c.items.rotfood || 0 };
+                    ind.bag = { ice_cream: 1, popsicle: 1 }; B.clAge = {}; clStep(1100, true, false); let fresh = (ind.bag.ice_cream || 0) + (ind.bag.popsicle || 0); clStep(200, true, false); let gone = (ind.bag.ice_cream || 0) + (ind.bag.popsicle || 0), rot = ind.bag.rotfood || 0;
+                    return { a: a, b: b, fresh: fresh, gone: gone, rot: rot };`);
+                if (!(r.a.ic === 2 && r.a.pop === 2 && r.a.plain === 1 && r.b.ic === 0 && r.b.rot === 4 && r.fresh === 2 && r.gone === 0 && r.rot === 2)) bad.push('冷藏箱有冰不坏、冰没了接着坏、普通箱和背包 1 个游戏日坏成腐烂的食物 ' + JSON.stringify(r));
+                r = await run(`let d = { id: ++B.dseq, ty: 'fridge', x: 5, z: 5, on: true, pw: true, items: { ice_cream: 2, popsicle: 1 }, age: {} }, e = { id: ++B.dseq, ty: 'fridge', x: 8, z: 5, on: true, pw: false, items: { ice_cream: 2, popsicle: 1 }, age: {} }; B.devs = [d, e]; clStep(6000, false, true);
+                    return { a: (d.items.ice_cream || 0) + (d.items.popsicle || 0), ar: d.items.rotfood || 0, b: (e.items.ice_cream || 0) + (e.items.popsicle || 0), br: e.items.rotfood || 0, rotEat: IND_ITEMS.rotfood.eat.sick };`);
+                if (!(r.a === 3 && r.ar === 0 && r.b === 0 && r.br === 3)) bad.push('冰箱通电不坏、断电接着坏 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND115 冰淇淋和冰棍：只有硬核、没盐没冰做不了、搅 20 秒、还空桶、吃了降温、冷藏箱冰箱保鲜', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND12')) {
             // IND12 作者玩出来的 bug：工作台能做桶（3 木头）和剪刀（2 石头 + 1 木头）；悠闲点"升级成硬核"→确认窗→确认才升（取消不变、冶炼配方马上出现）；
             // 左键按准星：拿稿子对着资源点，旁边有羊也是挖矿；拿小麦对着羊是喂；拿稿子对着羊什么都不消耗；拿剪刀才剪毛；射线没碰到时 30° 外的动物不会被选中

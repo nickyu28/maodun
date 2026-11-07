@@ -1871,7 +1871,7 @@
             if (e.w) { S.water = Math.max(0, Math.min(100, S.water + e.w)); if (e.w > 0 && !e.hot && S.temp > 38) S.temp = Math.max(37, S.temp - 0.5); }
             if (e.back) indBagAdd(e.back, 1);
             let warm = false;
-            if (e.cool && S.temp > 37) S.temp = Math.max(37, S.temp - 1);   // 冰块：体温 −1°C，最低 37
+            if (e.cool && S.temp > 37) S.temp = Math.max(37, S.temp - e.cool);   // 冰块 −1°C、冰淇淋冰棍 −1.5°C，最低 37
             if (e.hot && S.temp < 37) { S.temp = Math.min(37, S.temp + IND_HOT_SOUP); warm = true; }   // 热汤：体温立刻 +1.5°C，最多到 37
             let sick = e.sick && indRand() < e.sick;
             if (sick) ind.sickT = IND_SURV.sick;
@@ -2868,7 +2868,7 @@
             if (r.gh) { ind.base.gh = true; if (ind.where === 'base') indBuildGh(); indFlash('暖棚盖好了，棚里的作物不管季节都长'); }
             else if (r.glass) { ind.base.glass = true; if (ind.where === 'base') indBuildGh(); indFlash('玻璃暖棚盖好了，棚子变大了'); }
             else if (r.pot) { ind.base.pot = true; indFlash('黄铜大锅装好了，灶台做吃的一炉最多 ' + IND_BATCH_POT + ' 份'); }
-            else { indBagAdd(r.out, r.n || 1); indFlash('做好了：' + indName(r.out) + (r.n ? '×' + r.n : '')); }
+            else { indBagAdd(r.out, r.n || 1); if (r.back) Object.keys(r.back).forEach(function (k) { indBagAdd(k, r.back[k]); }); indFlash('做好了：' + indName(r.out) + (r.n ? '×' + r.n : '')); }   // back：还回来的东西（空桶）
             indSave(); if (ind.panel === 'bench') indPanelBench();
             return true;
         }

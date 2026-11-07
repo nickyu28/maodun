@@ -7,11 +7,14 @@
         const CL_LIFE = { meat_raw: 1, meat_roast: 2, meat_soup: 2, bake_potato: 2, bake_corn: 2, tomato_soup: 2, radish_soup: 2, cabbage_stew: 2, pumpkin_pie: 2, cactus_roast: 2, bread: 3, milk: 2,
             tomato: 4, cabbage: 4, radish: 4, potato: 4, corn: 4, pumpkin: 4, cactus: 4, cactus_peeled: 4 };
         Object.keys(CL_LIFE).forEach(function (k) { CL_LIFE[k] *= CL.day; });
+        CL_LIFE.ice_cream = CL.day; CL_LIFE.popsicle = CL.day;   // 冰淇淋、冰棍 1 个游戏日（任务 80），坏了变腐烂的食物
         CL_LIFE.ice = CL.ice; CL_LIFE.fish_live = 600; CL_LIFE.fish_raw = CL.day;   // 活鱼在背包里 10 分钟死成生鱼；生鱼 1 天坏
         const CL_TO = { fish_live: 'fish_raw' };
         Object.assign(IND_ITEMS_RAW, {
             ice: { name: '冰块', col: 0xb3e5fc, eat: { w: 5, cool: 1 }, use: '拿着右键吃一块：体温 −1°C、口渴 +5。放进冷藏箱保鲜。放在身上和普通箱子里 10 分钟就化了' },
             rotfood: { name: '腐烂的食物', col: 0x6d4c41, eat: { f: 5, sick: 1 }, use: '吃了拉肚子。撒在农田里当肥料' },
+            ice_cream: { name: '冰淇淋', col: 0xfff3e0, eat: { f: 20, cool: 1.5 }, use: '冰凉凉的甜食' },
+            popsicle: { name: '冰棍', col: 0x81d4fa, eat: { f: 8, w: 8, cool: 1.5 }, use: '解渴解暑' },
             b_freon: { name: '氟利昂瓶', col: 0xb3e5fc, use: '冰箱要用（制冷剂）' },
             chest_cold: { name: '冷藏箱', col: 0x90caf9, furn: 'chest', cold: true, use: '箱子里放冰块，每块撑一个游戏日，有冰的时候里面的食物不变质' },
             dev_fridge: { name: '冰箱', col: 0xeceff1, dev: 'fridge', use: '30 格，接上 24 V 通电就不变质；里面放一桶生水，60 秒出 4 块冰' }

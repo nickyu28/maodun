@@ -18,3 +18,8 @@
             });
             Object.assign(IND_ITEMS_RAW, add);
         })();
+        // 任务 80：冰淇淋（牛奶桶 + 糖 + 冰 2 + 盐，站着搅 20 秒）、冰棍（糖 + 开水桶 + 木头 + 冰 + 盐，10 秒），只有硬核（冰只有硬核有）；做完还空桶。配方表只能往后加，所以放在最后加载的文件里
+        IND_CRAFT.push(
+            { out: 'ice_cream', n: 2, in: { milk: 1, sugar: 1, ice: 2, salt: 1 }, back: { bucket: 1 }, time: 20, label: '搅冰淇淋', hard: true },
+            { out: 'popsicle', n: 3, in: { sugar: 1, water_boiled: 1, wood: 1, ice: 1, salt: 1 }, back: { bucket: 1 }, time: 10, label: '做冰棍', hard: true }
+        );
