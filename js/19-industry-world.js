@@ -127,6 +127,7 @@
         // 对着地面挖：空手 3 秒、稿子 1 秒，每次 1 份；平原森林泥土、海边沙漠沙子、山地古老岩层火山石头（要石稿，火山偶尔 1 份硫），地上留一个小坑
         const WD_DIG = { plain: 'dirt', forest: 'dirt', beach: 'sand', desert: 'sand', mountain: 'stone', ancient: 'stone', volcano: 'stone' };
         function wdDig() {
+            if (ind.map && ind.map.moon) return moonDig();   // 月球挖月壤（19-industry-moon.js）
             let f = indFace(), x = ind.p.x + f.x * 1.8, z = ind.p.z + f.z * 1.8, h = indHeight(ind.map, x, z);
             if (h < IND_WATER_Y + 0.25) { indFlash('水里挖不了'); return false; }
             let bm = indBiome(ind.map, x, z), k = WD_DIG[bm];

@@ -11680,6 +11680,51 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND116 空气分离塔：没电不出气、通电出气、成分、元素表、保护气炼钢、灭火、氩气灯泡', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND117')) {
+            // IND117 月球地图（任务 82）：同种子生成两次完全一样；地貌个数／尺寸在范围内；平地 ≥12 块坡度 ≤5° 且 2 块离水冰坑 150 米内；每种矿 ≥3 倍所需；挖露头 → 存档 → 重进，剩余不变不回补；月壤一格挖光；老存档读档不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let a = mnHash(moonGen()), b = mnHash(moonFresh()), c = mnHash(moonFresh()); let r1 = Math.random; let n = 0; Math.random = function () { n++; return r1(); }; moonFresh(); Math.random = r1; return { same: a === b && b === c, n: n, P: !!IND_PLANETS.moon && IND_PLANETS.moon.gravity === 1.62 && IND_PLANETS.moon.air.o2 === false && IND_PLANETS.moon.size === 600 && Object.keys(IND_PLANETS.moon.res).length === 7 }; })()`);
+                if (!(r.same && r.n === 0 && r.P)) bad.push('同种子生成三次一样、不用 Math.random、星球参数在数据表里 ' + JSON.stringify(r));
+                r = await J(`(function(){ let MG = moonGen(), L = function (rl) { return (rl.pts.length - 1) * 8; };
+                    let reg = { mare: 0, high: 0, mid: 0 }; for (let x = -295; x <= 295; x += 10) for (let z = -295; z <= 295; z += 10) reg[mnRegion(MG, x, z)]++; let tot = reg.mare + reg.high + reg.mid;
+                    let mH = 0, mN = 0, hH = 0, hN = 0; for (let x = -295; x <= 295; x += 10) for (let z = -230; z <= 230; z += 10) { let rg = mnRegion(MG, x, z); if (rg === 'mare') { mH += mnRaw(MG, x, z); mN++; } else if (rg === 'high') { hH += mnRaw(MG, x, z); hN++; } }
+                    let flatOk = 0, nearIce = 0; MG.flats.forEach(function (f) { let mx = -1e9, mn = 1e9, sl = 0; for (let x = f.x - 35; x <= f.x + 32.5; x += 2.5) for (let z = f.z - 27.5; z <= f.z + 25; z += 2.5) { let h = moonHeight(MG, x, z); mx = Math.max(mx, h); mn = Math.min(mn, h); sl = Math.max(sl, Math.abs(moonHeight(MG, x + 2.5, z) - h) / 2.5, Math.abs(moonHeight(MG, x, z + 2.5) - h) / 2.5); } if (Math.atan(sl) * 180 / Math.PI <= 5) flatOk++; let ice = MG.res.filter(function (o) { return o.key === 'ice' && Math.hypot(o.x - f.x, o.z - f.z) <= 150; }).length; if (ice > 0) nearIce++; });
+                    return { cr: MG.craters.length, crR: MG.craters.every(function (c) { return c.r >= 8 && c.r <= 60; }), rl: MG.rills.length, rlOk: MG.rills.every(function (q) { return q.w >= 4 && q.w <= 8 && q.d >= 3 && q.d <= 6 && L(q) >= 80 && L(q) <= 250; }), pits: MG.pits.length, pitOk: MG.pits.every(function (q) { return q.z >= 240 && q.r >= 6 && q.r <= 15 && q.depth === 8; }), sky: MG.sky.length, skyOk: MG.sky.every(function (q) { return q.r >= 9 && q.r <= 11; }), mare: reg.mare / tot, high: reg.high / tot, dh: hH / hN - mH / mN, flats: MG.flats.length, flatOk: flatOk, nearIce: nearIce, size: MG.flats.every(function (f) { return f.w >= 70 && f.d >= 55; }) }; })()`);
+                if (!(r.cr >= 25 && r.cr <= 35 && r.crR && r.rl >= 3 && r.rl <= 5 && r.rlOk && r.pits >= 6 && r.pits <= 10 && r.pitOk && r.sky >= 2 && r.sky <= 3 && r.skyOk && r.mare > 0.33 && r.mare < 0.47 && r.high > 0.33 && r.high < 0.47 && r.dh >= 8 && r.flats >= 12 && r.flatOk === r.flats && r.nearIce >= 2 && r.size)) bad.push('地貌个数和尺寸、平地坡度、水冰坑旁边的平地 ' + JSON.stringify(r));
+                r = await J(`(function(){ let C = moonCover(), MG = moonGen(), bad = []; Object.keys(C).forEach(function (k) { if (C[k][0] < 3 * C[k][1]) bad.push(k + ':' + C[k]); });
+                    let ids = {}; let dup = MG.res.some(function (o, i) { return o.id !== i || o.n <= 0; });
+                    let ice = MG.res.filter(function (o) { return o.key === 'ice'; }).every(function (o) { return MG.pits.some(function (p) { return Math.hypot(o.x - p.x, o.z - p.z) <= p.r; }); });
+                    let kr = MG.res.filter(function (o) { return o.key === 'kreep'; }), ol = MG.res.filter(function (o) { return o.key === 'olivine'; });
+                    let kOk = kr.length >= 4 && kr.length <= 6 && kr.every(function (o) { return o.x < -100 && o.z > 50; });
+                    let mf = MG.craters.filter(function (c) { return c.r >= 30; }).every(function (c) { let n = MG.res.filter(function (o) { return o.key === 'meteor_fe' && Math.hypot(o.x - c.x, o.z - c.z) < c.r * 0.4; }).length; return n >= 1 && n <= 3; });
+                    let keys = ['ilmenite', 'anorthosite', 'olivine', 'kreep', 'meteor_fe', 'troilite', 'ice'].every(function (k) { return MG.res.some(function (o) { return o.key === k; }); });
+                    let items = ['ilmenite', 'anorthosite', 'olivine', 'kreep', 'meteor_fe', 'troilite', 'regolith'].every(function (k) { return !!IND_ITEMS[k] && !!IND_ITEMS[k].later; });
+                    return { bad: bad, dup: dup, ice: ice, kOk: kOk, ol: ol.length > 0, mf: mf, keys: keys, items: items, nres: MG.res.length }; })()`);
+                if (!(r.bad.length === 0 && !r.dup && r.ice && r.kOk && r.ol && r.mf && r.keys && r.items)) bad.push('每种矿 ≥3 倍所需、编号稳定、水冰只在极地坑里、KREEP 的位置和个数、陨石铁在坑底、新物品登记 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; ind.base.moon = undefined; delete ind.base.moon; let ok = indMoonEnter(); let first = ind.nodes.filter(function (o) { return o.key === 'ilmenite'; })[0], id = first.moonId, n0 = first.n; ind.p.x = first.x + 1.2; ind.p.z = first.z; ind.p.y = indHeight(ind.map, ind.p.x, ind.p.z); indBagAdd('pick_stone', 1); ind.sel = 'pick_stone';
+                    for (let i = 0; i < 3; i++) indGather(first); let left = first.n, dug = JSON.stringify(ind.base.moon.dug), untouched = ind.nodes.length;
+                    let saved = JSON.parse(JSON.stringify(ind.base)); indMoonLeave(); ind.base = indFixBase(saved); indMoonEnter(); let again = ind.nodes.filter(function (o) { return o.moonId === id; })[0];
+                    let big = ind.nodes.filter(function (o) { return o.key === 'ice'; }).length;
+                    return { ok: ok, n0: n0, left: left, dug: dug, again: again && again.n, count: ind.nodes.length, untouched: untouched, ice: big, where: ind.where, hasMoon: !!ind.map.moon, other: JSON.stringify(ind.base.moon.dug) }; })()`);
+                if (!(r.ok && r.left < r.n0 && r.again === r.left && r.count === r.untouched && JSON.parse(r.dug).length === 1 && r.other === r.dug && r.hasMoon && r.where === 'trip' && r.ice > 0)) bad.push('挖露头 → 存档 → 重进剩余不变、只存动过的 ' + JSON.stringify(r));
+                r = await J(`(function(){ let id = ind.nodes.filter(function (o) { return o.key === 'ilmenite'; })[0].moonId, M = ind.base.moon; M.dug = [[id, 0]]; indMoonLeave(); indMoonEnter(); let gone = !ind.nodes.some(function (o) { return o.moonId === id; });
+                    let st = mnState(); let f = indFace(), x = ind.p.x + f.x * 1.8, z = ind.p.z + f.z * 1.8, c = mnCell(x, z); st.cells = [[c, 1]]; ind.bag = {}; let ok1 = moonDig(); indAdvance(5); let got = ind.bag.regolith || 0, left = mnCellLeft(st, c);
+                    let ok2 = moonDig(); indAdvance(5); return { gone: gone, ok1: ok1, got: got, left: left, ok2: ok2, still: ind.bag.regolith || 0, cell: JSON.stringify(st.cells) }; })()`);
+                if (!(r.gone && r.ok1 && r.got === 1 && r.left === 0 && r.ok2 === false && r.still === 1)) bad.push('挖光的露头不回补、月壤一格挖完那格没了 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); let b1 = indFixBase({ ver: 12, rule: 'hard' }), b2 = indFixBase({ ver: 12, rule: 'hard', moon: 5 }), b3 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, dug: [[3, 2], 'x', [3, 9]], cells: [[7, 4]] } }); indGoBase(null); ind.base.rule = 'casual'; let r = indMoonEnter(); return { a: b1.moon === undefined, b: b2.moon === undefined, c: JSON.stringify(b3.moon), r: r }; })()`);
+                if (!(r.a && r.b && r.c === '{"seed":20261107,"dug":[[3,2]],"cells":[[7,4]]}' && r.r === false)) bad.push('老存档没有 moon／乱写的 moon 不报错、悠闲进不了 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND117 月球地图：同种子一样、地貌个数、平地、矿量 ≥3 倍、挖了存档不回补、月壤、老存档', bad.length === 0, bad.join(' / '));
+        }
+
 
 
         if (want('IND12')) {

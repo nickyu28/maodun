@@ -459,6 +459,7 @@
         function indElev(M, x, z) { return indFbm(x / 70, z / 70, M.seed); }
         function indMoist(M, x, z) { return indFbm(x / 90, z / 90, M.seed + 101); }
         function indBiome(M, x, z) {
+            if (M.moon) return moonBiome(M.moon, x, z);   // 月球（19-industry-moon.js）
             if (x > IND_MAP + 50) return cvBiome(x, z);   // 矿洞跟洞口一样
             if (M.pins) { let pb = odPinBiome(M, x, z); if (pb) return pb; }
             for (let i = 0; i < M.volc.length; i++) { let v = M.volc[i]; if (Math.hypot(x - v.x, z - v.z) < v.r) return 'volcano'; }
@@ -471,6 +472,7 @@
             return 'plain';
         }
         function indHeight(M, x, z) {
+            if (M.moon) return moonHeight(M.moon, x, z);   // 月球（19-industry-moon.js）
             if (x > IND_MAP + 50) return CV.floor;   // 地图外面是矿洞（19-industry-cave.js，任务 66），地面平的
             let e0 = indElev(M, x, z), h = e0 * 9 + Math.max(0, e0 - 0.32) * 26;   // 山地更陡
             if (M.riv) h = wdRiverCarve(M, x, z, h);   // 河（19-industry-world.js）

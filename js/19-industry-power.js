@@ -190,6 +190,7 @@
             if (typeof rpFixBase === 'function') rpFixBase(b);
             if (typeof fiFixBase === 'function') fiFixBase(b);
             if (typeof pdFixBase === 'function') pdFixBase(b);
+            if (typeof mnFixBase === 'function') mnFixBase(b);
             if (typeof fhFixBase === 'function') fhFixBase(b);
             if (typeof hmFixBase === 'function') hmFixBase(b);
             if (typeof odFixBase === 'function') odFixBase(b);
