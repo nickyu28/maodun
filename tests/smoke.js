@@ -11724,6 +11724,38 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND117 月球地图：同种子一样、地貌个数、平地、矿量 ≥3 倍、挖了存档不回补、月壤、老存档', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND118')) {
+            // IND118 月球选落点（任务 83）：不行的地方标红确认按钮点不动；行的地方存档、重进还在；已经选过再选一律拒绝；落点矩形里的地面一样高；画图不读资源点；附近有水冰才写；老存档读档不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; delete ind.base.moon; let MG = moonGen(), c = MG.craters[0], p = MG.pits[0], rd = MG.rills[0].pts[5], r0 = MN_READS;
+                    let opened = indMoonPick(), out = { opened: opened, shown: !!document.getElementById('ind-moonpick') };
+                    let t = function (x, z) { let q = mpSelect(x, z); return { ok: q.ok, why: q.why.join(), btn: document.getElementById('mp-ok').disabled, info: document.getElementById('mp-info').textContent }; };
+                    out.crater = t(Math.round(c.x), Math.round(c.z)); out.pit = t(Math.round(p.x), Math.round(p.z)); out.rill = t(Math.round(rd[0]), Math.round(rd[1])); out.edge = t(285, 0); out.steep = null;
+                    out.conf = mpConfirm(); out.site = !!ind.base.moon.site; out.reads = MN_READS - r0; return out; })()`);
+                if (!(r.opened && r.shown && !r.crater.ok && /撞击坑/.test(r.crater.why) && r.crater.btn && !r.pit.ok && /极地坑/.test(r.pit.why) && r.pit.btn && !r.rill.ok && r.rill.btn && !r.edge.ok && /30 米/.test(r.edge.why) && r.edge.btn && r.conf === false && !r.site && r.reads === 0 && /不行/.test(r.crater.info))) bad.push('撞击坑、极地坑、月溪、离边近都标红且确认点不动；画图和选点不读资源点 ' + JSON.stringify(r));
+                r = await J(`(function(){ let MG = moonGen(), good = MG.flats.filter(function (f) { return mpCheck(MG, f.x, f.z).ok; }), nearIce = good.filter(function (f) { return mpCheck(MG, f.x, f.z).ice; })[0], farIce = good.filter(function (f) { return !mpCheck(MG, f.x, f.z).ice; })[0];
+                    let a = mpSelect(nearIce.x, nearIce.z), ta = document.getElementById('mp-info').textContent, b = mpSelect(farIce.x, farIce.z), tb = document.getElementById('mp-info').textContent;
+                    return { n: good.length, a: a.ok, ta: ta, tb: tb, hasA: /附近 150 米有水冰/.test(ta), hasB: /水冰/.test(tb), bo: b.ok, btn: document.getElementById('mp-ok').disabled, x: farIce.x, z: farIce.z, name: b.name }; })()`);
+                if (!(r.n >= 3 && r.a && r.hasA && r.bo && !r.hasB && !r.btn && /月海|丘陵|高地/.test(r.name))) bad.push('能选的地方绿、写地貌名海拔坡度、附近有水冰才写 ' + JSON.stringify(r));
+                r = await J(`(function(){ let MG0 = moonGen(), found = null; for (let x = -250; x <= 250 && !found; x += 5) for (let z = -220; z <= 220 && !found; z += 5) { if (!mpCheck(MG0, x, z).ok) continue; let mn = 1e9, mx = -1e9; for (let i = -30; i <= 30; i += 7.5) for (let j = -22.5; j <= 22.5; j += 7.5) { let h = moonHeight(MG0, x + i, z + j); mn = Math.min(mn, h); mx = Math.max(mx, h); } if (mx - mn > 0.25) found = { x: x, z: z, d: mx - mn }; } mpSelect(found.x, found.z); let sel = MP_STATE.sel, ok = mpConfirm(), modal = !document.getElementById('sys-modal').classList.contains('hidden'), x = sel.x, z = sel.z; let fin = mpFinal(x, z); let st = ind.base.moon, h0 = st.flat.h, hs = [], MG = moonGen();
+                    for (let i = -30; i <= 30; i += 7.5) for (let j = -22.5; j <= 22.5; j += 7.5) hs.push(moonHeight(MG, x + i, z + j));
+                    let other = MG0.flats.filter(function (f) { return Math.hypot(f.x - x, f.z - z) > 120 && mpCheck(MG0, f.x, f.z).ok; })[0], again = indMoonPick(); MP_STATE = { sel: null }; let fin2 = mpFinal(other.x, other.z), nomove = JSON.stringify(ind.base.moon.site), saved = JSON.parse(JSON.stringify(ind.base)); indGoBase(null); ind.base = indFixBase(saved); let back = ind.base.moon.site; indMoonEnter(); let hs2 = []; for (let i = -30; i <= 30; i += 7.5) for (let j = -22.5; j <= 22.5; j += 7.5) hs2.push(indHeight(ind.map, x + i, z + j));
+                    return { ok: ok, modal: modal, fin: fin, site: JSON.stringify(st.site), back: JSON.stringify(back), h0: h0, flat: hs.every(function (v) { return Math.abs(v - h0) < 0.02; }), flat2: hs2.every(function (v) { return Math.abs(v - h0) < 0.02; }), again: again, fin2: fin2, d: found.d, nomove: nomove, gone: !document.getElementById('ind-moonpick'), x: x, z: z }; })()`);
+                if (!(r.ok && r.modal && r.fin === true && r.site === JSON.stringify({ x: r.x, z: r.z }) && r.back === r.site && r.flat && r.flat2 && r.again === false && r.fin2 === false && r.nomove === r.site && r.d > 0.25 && r.gone)) bad.push('确认弹一句话、存档读档重进落点还在、矩形里一样高、再选一律拒绝 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b1 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, dug: [], cells: [], site: { x: 5, z: 5 } } }), b2 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, dug: [], cells: [], site: { x: 'a', z: 5 }, flat: { h: 3 } } }), b3 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, dug: [], cells: [], site: { x: 5, z: 5 }, flat: { h: 22.5 } } }); return { a: b1.moon.site === undefined, b: b2.moon.site === undefined, c: JSON.stringify(b3.moon.site) + JSON.stringify(b3.moon.flat) }; })()`);
+                if (!(r.a && r.b && r.c === '{"x":5,"z":5}{"h":22.5}')) bad.push('落点缺压平高度／乱写的丢掉、完整的保留 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND118 月球选落点：不行标红确认点不动、行的存档重进还在、再选拒绝、压平、不读资源点', bad.length === 0, bad.join(' / '));
+        }
+
 
 
 
