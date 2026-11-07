@@ -423,7 +423,7 @@
         // 元素表：拿到这些东西就点亮对应的元素（原子序数）
         const IND_ELEM_OF = { b_h2: 1, charcoal: 6, coal: 6, char: 6, b_o2: 8, sodium: 11, sulfur: 16, b_cl2: 17, diamond: 6, ingot_fe: 26, ingot_cu: 29, ingot_zn: 30, ingot_sn: 50 };
         const IND_ELEM_NAME = ['', '氢', '氦', '锂', '铍', '硼', '碳', '氮', '氧', '氟', '氖', '钠', '镁', '铝', '硅', '磷', '硫', '氯', '氩', '钾', '钙', '钪', '钛', '钒', '铬', '锰', '铁', '钴', '镍', '铜', '锌', '镓', '锗', '砷', '硒', '溴', '氪'];
-        // 36 号以后只写游戏里拿得到的：锡 50、铅 82、钚 94（物品点亮元素表用 IND_ELEM_OF，每个号码都得有名字，冒烟 IND111 查）
+        // 36 号以后只写游戏里拿得到的：锡 50、铅 82、钚 94（物品点亮元素表用 IND_ELEM_OF，每个号码都得有名字，冒烟 IND113 查）
         IND_ELEM_NAME[50] = '锡'; IND_ELEM_NAME[82] = '铅'; IND_ELEM_NAME[94] = '钚';
         const IND_ELEM_BASE = 36;   // 元素表的基本格子 1～36，再加上面这几个
         function indElemName(z) { return IND_ELEM_NAME[z] || ('第 ' + z + ' 号'); }

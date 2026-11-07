@@ -11551,8 +11551,8 @@ async function enterExit(tab, key) {
             report('IND112 拆东西按耐久还材料：公式、确认窗写个数、逐件算再加总、坏的拆出 0', bad.length === 0, bad.join(' / '));
         }
 
-        if (want('IND111')) {
-            // IND111 元素表（测试员实测：拿到锡锭弹"元素表点亮了：undefined"）：IND_ELEM_OF 里每个原子序数都有名字；拿到锡锭提示里没有 undefined；锡在元素表里点亮；老存档的 elems 不受影响
+        if (want('IND113')) {
+            // IND113 元素表（测试员实测：拿到锡锭弹"元素表点亮了：undefined"）：IND_ELEM_OF 里每个原子序数都有名字；拿到锡锭提示里没有 undefined；锡在元素表里点亮；老存档的 elems 不受影响
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -11571,11 +11571,11 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND111 元素表：每个原子序数有名字、锡不弹 undefined、锡铅钚能点亮', bad.length === 0, bad.join(' / '));
+            report('IND113 元素表：每个原子序数有名字、锡不弹 undefined、锡铅钚能点亮', bad.length === 0, bad.join(' / '));
         }
 
-        if (want('IND112')) {
-            // IND112 TNT 炸户外设备（任务 75 文档）：设备炸毁（不回背包），里面的东西（充电槽的电池）掉地上，设备块解除；基站被炸整块解除；范围外的不动
+        if (want('IND114')) {
+            // IND114 TNT 炸户外设备（任务 75 文档）：设备炸毁（不回背包），里面的东西（充电槽的电池）掉地上，设备块解除；基站被炸整块解除；范围外的不动
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -11600,7 +11600,7 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND112 TNT 炸户外设备：炸毁、掉东西、设备块解除', bad.length === 0, bad.join(' / '));
+            report('IND114 TNT 炸户外设备：炸毁、掉东西、设备块解除', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND12')) {
