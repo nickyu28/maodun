@@ -3764,7 +3764,7 @@ async function enterExit(tab, key) {
             if (!(await until(T, `(function(){ if (nm.me.item) return true; if (nm.items[0]) nm.me.p.set(nm.items[0].x, 0, nm.items[0].z); return false; })()`, 60000))) bad.push('走过去没自动捡 ' + await T.eval(`JSON.stringify({ item: nm.me.item, n: nm.items.length, out: nm.me.out, ph: nm.phase || null })`));
             else if (!(await T.eval(`nm.items.length < ${n0} || nm.items.length <= 1`))) bad.push('捡了道具还在场上');
             // AI 也会捡
-            await T.eval(`(function(){ let it = nm.items[0]; nm.actors[1].p.set(it.x, 0, it.z); window.__k2 = it.kind; })(); true;`);
+            await T.eval(`(function(){ if (!nm.items.length) sumoAddItem(nm, 'itest2', 'banana', 0, 0); let it = nm.items[0]; nm.actors[1].p.set(it.x, 0, it.z); window.__k2 = it.kind; })(); true;`);   // 场上的道具可能已被收缩的台面收走或被我捡光，没有就补一个
             if (!(await until(T, `nm.actors[1].item === window.__k2`))) bad.push('AI 没捡到道具');
             // 逐个用
             await T.eval(`nm.me.item = 'hammer'; keys['q'] = true; true;`);
