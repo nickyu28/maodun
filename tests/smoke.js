@@ -12675,6 +12675,36 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND140 背包满了：准星提示红字不写左键挖、地上东西同样、弹字停 1.5 秒不被盖、剩 2 格变橙', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND141')) {
+            // IND141 蒸汽发电机贴着炉子装（任务 106）：拿着对炉子右键装上（在炉子背面）；中火以上有水发 12 V、小火不发；一个炉子只能贴一台；收起退水；老存档地上的 5 米内还能发、6 米不发；老存档读档不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; indPanelClose(); B.devs = []; B.wires = []; B.pipes = [];
+                    let St = IND_BASE_ST.stove; B.off.stove = false; B.stove = Object.assign(ckNewState(), { spout: [], fuel: 9999, fire: 2, temp: 600 }); let c = indCookById('stove');
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`ind.bag = { dev_gen: 2 }; indSelect('dev_gen'); indTeleport(St.x, St.z + 2.6); indLookAt(St.x, St.z); let a = indAim(); indUse(); let d = B.devs[0];
+                    let one = { aim: a && a.kind, n: B.devs.length, cook: d && d.cook, dz: d && d.z - St.z, dx: d && d.x - St.x, left: ind.bag.dev_gen };
+                    indUse(); let two = { n: B.devs.length, left: ind.bag.dev_gen, fl: fl.join('|') };
+                    let wk = indFilledKey('water_raw', 'wood'); ind.bag = {}; ind.bag[wk] = 1; indSelect(wk); rlGenAct(d, wk); let v2 = indSrcVolt(d); B.stove.fire = 1; let v1 = indSrcVolt(d); B.stove.fire = 3; let v3 = indSrcVolt(d);
+                    let save = indFixBase(JSON.parse(JSON.stringify(B))).devs[0].cook;
+                    ind.bag = {}; indPickDev(d); return { one: one, two: two, v2: v2, v1: v1, v3: v3, save: save, gone: B.devs.length, back: ind.bag[wk] || 0, gen: ind.bag.dev_gen || 0 };`);
+                if (!(r.one.aim === 'stove' && r.one.n === 1 && r.one.cook === 'stove' && r.one.dz < -1.5 && Math.abs(r.one.dx) < 0.01 && r.one.left === 1)) bad.push('对炉子右键贴在背面 ' + JSON.stringify(r.one));
+                if (!(r.two.n === 1 && r.two.left === 1 && /已经贴了/.test(r.two.fl))) bad.push('一个炉子只能贴一台 ' + JSON.stringify(r.two));
+                if (!(r.v2 === 12 && r.v1 === 0 && r.v3 === 12 && r.save === 'stove')) bad.push('中火以上有水发 12 V、小火不发、存档带着 ' + JSON.stringify(r));
+                if (!(r.gone === 0 && r.back === 1 && r.gen === 1)) bad.push('收起退水 ' + JSON.stringify(r));
+                r = await run(`B.devs.push({ id: 901, ty: 'gen', x: St.x + 4.5, z: St.z, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 100, wm: 'wood' }, { id: 902, ty: 'gen', x: St.x + 6.2, z: St.z, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 100, wm: 'wood' });
+                    let fixed = indFixBase(JSON.parse(JSON.stringify(B))).devs.filter(function (d) { return d.ty === 'gen'; }).length; return { a: indSrcVolt(B.devs[0]), b: indSrcVolt(B.devs[1]), fixed: fixed };`);
+                if (!(r.a === 12 && r.b === 0 && r.fixed === 2)) bad.push('老存档地上的：5 米内发、6 米不发、读档不报错 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND141 蒸汽发电机贴着炉子：右键装上、一炉一台、中火有水 12 V、收起退水、地上的 5 米', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式

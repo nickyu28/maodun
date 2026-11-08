@@ -194,7 +194,7 @@
             tongs: { name: '钳子', col: 0x795548, use: '拿烫锭' },
             pick_bronze: { name: '青铜稿', col: 0xb87333, tool: 2 }, pick_iron: { name: '铁稿', col: 0x616161, tool: 3, bonus: 1 }, pick_steel: { name: '钢稿', col: 0x90a4ae, tool: 4 },
             battery: { name: '电池', col: 0x43a047, use: '装进电池组' }, wire: { name: '铜线', col: 0xff7043, use: '接线' },
-            dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '蒸汽发电机', col: 0x546e7a, dev: 'gen', use: '要水、要炉子：放在点着的炉子（中火以上）3 米内，拿一桶生水左键装进水箱，一桶发 12 V 两分钟' },
+            dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '蒸汽发电机', col: 0x546e7a, dev: 'gen', use: '要水要炉子：拿着对炉子右键贴上去（一个炉子一台），炉子中火以上、水箱有水就发电；拿一桶生水左键装进水箱，一桶发 12 V 两分钟' },
             dev_el: { name: '电解槽', col: 0x00838f, dev: 'el' },
             ash: { name: '草木灰', col: 0x9e9e9e, use: '当肥料' }, bottle: { name: '玻璃瓶', col: 0xb3e5fc },
             b_h2: { name: '氢气瓶', col: 0xf8bbd0, gas: 'h2', use: '压进钢瓶' }, b_o2: { name: '氧气瓶', col: 0x90caf9, gas: 'o2' }, b_cl2: { name: '氯气瓶', col: 0xc6ff00, gas: 'cl2', use: '压进钢瓶' },
@@ -1869,6 +1869,7 @@
             if (ind.where === 'base' && !a && pdUse(k)) return true;   // 对着自己挖的水池：接水、倒水、喝、铺、盖、填回
             if (a && a.kind === 'dev' && !(k && IND_ITEMS[k].dev)) return indPickDev(a.o);
             if (!k) return indSip(a);
+            if (k === 'dev_gen' && rlGenAttach(a)) return true;   // 蒸汽发电机对着炉子：贴上去（任务 106）
             if (IND_ITEMS[k].dev) return indPlaceDev(k);
             if (k === 'dirt') return indPlaceTile();
             if (IND_ITEMS[k].furn) return indPlaceFurn(k);

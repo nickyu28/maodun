@@ -140,7 +140,7 @@
         // 任务 114：风箱改成一下一下点右键拉。烧着的炉子装了风箱：短按右键一下炉温 +10°C，最高 1600°C，每下吃 2 体力，两下之间不设间隔。
         // 长按 1 秒还是收起炉子（短按、长按在 indRightUp 里分开）。停手后按 FM_PUMP.decay 每秒往当前火候的目标温度掉。
         const FM_PUMP = { dT: 10, max: 1600, stam: 2, decay: 5 };
-        function fmPumpCook(a) { let c = fmCookOfAim(a); return c && c.C.bellows && c.C.fire > 0 ? c : null; }
+        function fmPumpCook(a) { if (indSel() === 'dev_gen') return null; let c = fmCookOfAim(a); return c && c.C.bellows && c.C.fire > 0 ? c : null; }
         function fmPumpHint(a) {   // 准星提示（任务 114）：烧着的炉子装了风箱写"右键：拉风箱"，没装写"要装风箱"（硬核才有风箱）
             let c = fmCookOfAim(a); if (!c || !indHard() || !(c.C.fire > 0) || fmHasBlower(c)) return '';
             return c.C.bellows ? '　右键：拉风箱 +10°C' : '　拉风箱要装风箱';

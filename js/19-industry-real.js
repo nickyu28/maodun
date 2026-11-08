@@ -41,9 +41,24 @@
 
         // 任务 55：蒸汽发电机（原来的 dev_gen）。水箱装一桶生水（空桶还你）；3 米内有点着的炉子（中火以上）而且水箱有水才发 12 V，一桶撑 120 秒。
         // 用的是炉子多出来的热，炉子不降温。没水或没炉子就停。拿起时没用完的水还回成一桶（indPickDev）。老档的发电机水箱是空的
-        const RL_GEN = { tank: 120 };
-        IND_DEV_FIX.gen = function (d) { d.wt = indNum(d.wt, 0, 0, RL_GEN.tank); d.wm = IND_MATS[d.wm] ? d.wm : 'wood'; };
-        function rlGenHot(d) { return indHeatNear(d.x, d.z, IND_GEN_R).fire >= 2; }
+        const RL_GEN = { tank: 120, r: 5, gap: 0.9 };   // r：放在地上的老发电机找炉子的范围（任务 106 从 3 米放大到 5 米）
+        IND_DEV_FIX.gen = function (d) { d.wt = indNum(d.wt, 0, 0, RL_GEN.tank); d.wm = IND_MATS[d.wm] ? d.wm : 'wood'; if (!(d.cook === 'stove' || typeof d.cook === 'number')) delete d.cook; };
+        // 任务 106：拿着蒸汽发电机对炉子右键，贴在炉子背面（出料槽在右、漏斗在左，发电机在后面，不抢位置）；一个炉子贴一台。贴着的看这个炉子的火，放在地上的看 5 米内
+        function rlGenCook(d) { return d.cook !== undefined && d.cook !== null ? indCookById(d.cook) : null; }
+        function rlGenHot(d) { let c = rlGenCook(d); if (c) return c.C.fire >= 2; return indHeatNear(d.x, d.z, RL_GEN.r).fire >= 2; }
+        function rlGenPos(c) { return { x: c.x, z: c.z - IND_COOK[c.ty].r - RL_GEN.gap }; }
+        function rlGenAttach(a) {
+            let c = ckCookOfAim(a); if (!c) return false;
+            if (ind.where !== 'base') return false;
+            if (ind.base.devs.some(function (d) { return d.ty === 'gen' && d.cook === c.id; })) { indFlash(IND_COOK[c.ty].name + '已经贴了一台蒸汽发电机'); return true; }
+            if (ind.base.devs.length >= IND_DEV_CAP) { indFlash('设备太多了'); return true; }
+            let p = rlGenPos(c);
+            indBagDel('dev_gen', 1);
+            ind.base.devs.push({ id: ++ind.base.dseq, ty: 'gen', x: p.x, z: p.z, bats: 0, u: 0, on: true, ft: 20, st: {}, cook: c.id, wt: 0, wm: 'wood' });
+            ind.devDirty = true; indSave();
+            indFlash('蒸汽发电机贴在' + IND_COOK[c.ty].name + '上了：拿一桶生水左键装水，炉子中火以上就发电');
+            return true;
+        }
         function rlGenOn(d) { return d.wt > 0 && rlGenHot(d); }
         IND_DEV_TICK.gen = function (d, dt) {
             if (!rlGenOn(d)) return;
@@ -53,7 +68,8 @@
         function rlGenInfo(d) {
             let D = IND_DEVS.gen, w = d.wt > 0 ? '水箱剩 ' + Math.ceil(d.wt) + ' 秒' : rlPipesOf(d.id).some(function (p) { return p[1] === d.id; }) ? '水塔没水了' : '水箱空了，拿一桶生水左键装点水';
             if (rlGenOn(d)) return D.name + ' 发电中 12 V　' + w;
-            return D.name + ' 没在发电　' + w + (rlGenHot(d) ? '' : '　3 米内要有点着的炉子（中火以上）');
+            let c = rlGenCook(d);
+            return D.name + (c ? '（贴在' + IND_COOK[c.ty].name + '上）' : '') + ' 没在发电　' + w + (rlGenHot(d) ? '' : c ? '　' + IND_COOK[c.ty].name + '要中火以上' : '　对着炉子右键贴上去，或者放在点着的炉子（中火以上）5 米内');
         }
         function rlGenAct(d, k) {
             let c = indContOf(k);
