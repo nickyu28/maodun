@@ -9236,7 +9236,7 @@ async function enterExit(tab, key) {
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const pos = (seed) => J(`(function(){ ind.base.rule = 'hard'; indGoTrip(${seed}); return ind.nodes.filter(function (n) { return n.key === 'rock_hard'; }).map(function (n) { return [Math.round(n.x * 10), Math.round(n.z * 10)]; }); })()`);
                 const a1 = await pos(4242), a2 = await pos(4242), b = await pos(9191);
-                if (!(a1.length >= 2 && a1.length <= 4 && JSON.stringify(a1) === JSON.stringify(a2) && JSON.stringify(a1) !== JSON.stringify(b))) bad.push('硬岩 2～4 块、同种子位置一样、换种子不同 ' + JSON.stringify([a1, b]));
+                if (!(a1.length >= 6 && a1.length <= 12 && JSON.stringify(a1) === JSON.stringify(a2) && JSON.stringify(a1) !== JSON.stringify(b))) bad.push('硬岩 6～12 块（原来 2～4 块 × 3）、同种子位置一样、换种子不同 ' + JSON.stringify([a1, b]));
                 // 挖提示太硬；火药爆破
                 const bl = await J(`(function(){ indGoTrip(4242); ind.base.rule = 'hard'; let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.surv.hp = 100; ind.rng = function () { return 0.1; };
                     let o = ind.nodes.filter(function (n) { return n.key === 'rock_hard'; })[0]; indTeleport(o.x - 12, o.z); ind.bag = {}; let g = indGather(o); let msg1 = fl[fl.length - 1];
@@ -9987,8 +9987,8 @@ async function enterExit(tab, key) {
                 if (!(r && r[0] === 33 && r[1] === 17 && r[2] === 'numeric')) bad.push('填 17 点放：背包少 17、灶台多 17 ' + JSON.stringify(r));
                 r = await J(`(function(){ let e = ${box('sand')}; e.value = '999'; e.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return [ind.bag.sand || 0, ind.base.stove.items.sand]; })()`);
                 if (!(r[0] === 0 && r[1] === 50)) bad.push('填 999 回车：有多少放多少 ' + JSON.stringify(r));
-                r = await J(`(function(){ let out = []; ['0', '', '-3', 'ab'].forEach(function (v) { __fl.length = 0; let e = ${box('stone')}; e.value = v; e.nextElementSibling.click(); out.push(__fl.slice(-1)[0] + '|' + ind.bag.stone); }); return out; })()`);
-                if (!r.every(function (x) { return x === '填个数字|5'; })) bad.push('填 0／空／负数／字母：提示填个数字、不放 ' + JSON.stringify(r));
+                r = await J(`(function(){ let out = []; ['0', '-3', 'ab'].forEach(function (v) { __fl.length = 0; let e = ${box('stone')}; e.value = v; e.nextElementSibling.click(); out.push(__fl.slice(-1)[0] + '|' + ind.bag.stone); }); return out; })()`);
+                if (!r.every(function (x) { return x === '填个数字|5'; })) bad.push('填 0／负数／字母：提示填个数字、不放（空 = 默认全放，任务 93） ' + JSON.stringify(r));
                 // 自动刷新：打了一半的数字和光标还在
                 r = await J(`(function(){ let e = ${box('stone')}; e.focus(); e.value = '123'; e.setSelectionRange(1, 1); indPanelStove(); let e2 = ${box('stone')}; return [e2 === e, e2.value, document.activeElement === e2, e2.selectionStart]; })()`);
                 if (!(r[1] === '123' && r[2] === true && r[3] === 1)) bad.push('刷新后框里的数字和光标要在 ' + JSON.stringify(r));
@@ -10091,7 +10091,7 @@ async function enterExit(tab, key) {
                     indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_tower'); indUse(); let a = fl[fl.length - 1]; indSelect('dev_lamp'); indTeleport(-22, 10); indLookAt(-22, 5); indUse(); let b = fl[fl.length - 1], lamp = B.devs.some(function (d) { return d.ty === 'lamp'; });
                     B.devs = [{ id: 7, ty: 'solar', x: 0, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {} }, { id: 8, ty: 'gen', x: 3, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 0 }, { id: 9, ty: 'tower', x: 6, z: 0, bats: 0, u: 0, on: true, ft: 20, st: {}, wu: 0 }]; B.pipes = [[9, 8, 2]];
                     let solar = indDevInfo(B.devs[0]), gen = indDevInfo(B.devs[1]);
-                    ind.bag = { dev_crank: 1, dev_lamp: 1, battery: 2, rod_spent: 1, stone: 3 }; B.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'kiln', x: 20, z: 12 })]; ind.cookId = 5; let html = indStoveHtml(); let putBtn = function (k) { return html.indexOf("indStovePut('" + k + "'") >= 0; };
+                    ind.bag = { dev_crank: 1, dev_lamp: 1, battery: 2, rod_spent: 1, stone: 3 }; B.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'kiln', x: 20, z: 12 })]; ind.cookId = 5; let html = indStoveHtml(); let putBtn = function (k) { return html.indexOf("indPutN('stove',0,'" + k + "'") >= 0; };
                     indStovePut('dev_crank', 1); let into = B.cookers[0].items.dev_crank || 0; blazeFlash = bf;
                     return { a: a, b: b, lamp: lamp, solar: solar, gen: gen, crankBtn: putBtn('dev_crank'), lampBtn: putBtn('dev_lamp'), batBtn: putBtn('battery'), rodBtn: putBtn('rod_spent'), stoneBtn: putBtn('stone'), into: into }; })()`);
                 if (/接上电/.test(b5.a)) bad.push('放水塔别提示接电 ' + b5.a);
