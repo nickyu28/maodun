@@ -168,4 +168,13 @@
             if (b.duraHalf && typeof b.duraHalf === 'object') Object.keys(b.duraHalf).forEach(function (k) { if (!okK(k)) return; let n = Math.min(99, b.duraHalf[k] | 0); for (let i = 0; i < n; i++) (Q[k] = Q[k] || []).push(1); });
             delete b.duraHalf;
             b.repQ = Q; b.repCur = C;
+            // 任务 87：青铜／铁／钢／钻石工具耐久调高了。老存档里正在用的那一把、宠物手上的刀，剩的耐久按新旧满耐久的比例换算（只换一次，duraV）
+            if (!(b.duraV >= 1)) {
+                let OLD = { bronze: 120, iron: 200, steel: 400, diamond: 1500 }, OLDK = { knife_bronze: 120, knife_iron: 200, knife_steel: 500, knife_diamond: 1500 };
+                let oldOf = function (k) { if (OLDK[k]) return OLDK[k]; let T = typeof TL_TOOL !== 'undefined' && TL_TOOL[k]; return T && !T.knife && OLD[T.tier] || 0; };
+                let ratio = function (k) { let T = mbDurTab(k), o = oldOf(k); return T && o ? T.dura / o : 1; };
+                if (b.dura && typeof b.dura === 'object') Object.keys(b.dura).forEach(function (k) { b.dura[k] = Math.max(1, Math.round(b.dura[k] * ratio(k))); });
+                (b.animals || []).forEach(function (a) { if (a && a.weapon && MB_KNIFE[a.weapon] && a.wd > 0) a.wd = Math.max(1, Math.round(a.wd * ratio(a.weapon))); });
+                b.duraV = 1;
+            }
         }
