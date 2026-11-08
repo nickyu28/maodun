@@ -11317,7 +11317,7 @@ async function enterExit(tab, key) {
                     for (let s = 1; s <= maps; s++) { indGoTrip(s * 1237); ind.base.rule = 'hard'; S += ind.nodes.filter(function (o) { return !o.dead && OR_ORE[o.key] && o.out; }).length; let k = ind.nodes.filter(function (o) { return o.crack; }).length; cr.push(k); K += k * 4.5; caves.push(ind.caves.length);
                         ind.caves.forEach(function (c) { if (c.bm !== 'mountain' && c.bm !== 'ancient') plain++; cvBuild(c); cvFill(c); C += ind.nodes.filter(function (o) { return o.cave === c.i && OR_ORE[o.key]; }).length; ind.nodes = ind.nodes.filter(function (o) { return o.cave === undefined; }); }); }
                     return { ratio: S / (S + C + K), S: S / maps, C: C / maps, K: K / maps, crMin: Math.min.apply(null, cr), crMax: Math.max.apply(null, cr), cvMin: Math.min.apply(null, caves), cvMax: Math.max.apply(null, caves), plain: plain }; })()`);
-                if (!(r.ratio > 0.22 && r.ratio < 0.38 && r.crMin >= 3 && r.crMax <= 6 && r.cvMin >= 2 && r.cvMax <= 5 && r.plain >= 1)) bad.push('矿 30% ± 8% 在地面、裂纹岩 3～6 块、洞口 2～4 个加平原偶尔 1 个 ' + JSON.stringify(r));
+                if (!(r.ratio > 0.35 && r.ratio < 0.65 && r.crMin >= 9 && r.crMax <= 18 && r.cvMin >= 6 && r.cvMax <= 13 && r.plain >= 1)) bad.push('矿地面 35%～65%（任务 96：早期矿约 70%、稀有的偏洞里）、裂纹岩 9～18 块、洞口 6～12 个加平原偶尔 1 个（任务 92 面积 ×3） ' + JSON.stringify(r));
                 r = await J(`(function(){ indGoTrip(2024); ind.base.rule = 'hard'; ind.base.surv.hp = 100; ind.mobs.forEach(mbDrop); ind.mobs = []; ind.mbSpawn = 1e9; ind.nodes.forEach(function (o) { o.dead = true; }); ind.tripGround = []; indTeleport(0, 0);
                     let rec = IND_RECIPES.filter(function (q) { return q.out.tnt === 3; })[0];
                     let crack = { key: 'rock_crack', rock: true, crack: true, x: 12, z: 0, y: 0.5, n: 1, seed: IND_SEED_KINDS[0], dead: false }, hard = { key: 'rock_hard', rock: true, hard: true, x: 0, z: 12, y: 0.5, n: 1, seed: IND_SEED_KINDS[0], dead: false }, tree = { key: 'wood', tree: 'oak', x: -12, z: 0, y: 0.5, n: 4, seed: IND_SEED_KINDS[0], dead: false }, far = { key: 'wood', tree: 'oak', x: -30, z: 0, y: 0.5, n: 4, seed: IND_SEED_KINDS[0], dead: false };
@@ -12320,7 +12320,7 @@ async function enterExit(tab, key) {
                     return { a: a, wa: wa, b: b, wb: wb, over: over, left: left, all: all, def: def, def2: def2, kept: kept, per: IND_ITEMS.wood.fuel }; })()`);
                 if (!(r.a === r.per && r.wa === 6 && r.b === r.per * 7 && r.wb === 0)) bad.push('加 1 加一块、全加整堆 ' + JSON.stringify(r));
                 if (!(r.over === 5 && r.left === 0 && r.all === 4 && r.def === '4' && r.def2 === '6' && r.kept === '2')) bad.push('n 超过持有取全部、全放整堆、默认值跟着持有数、自己改过的不被刷掉 ' + JSON.stringify(r));
-                r = await J(`(function(){ let B = ind.base; B.chests = [{ id: 1, x: 12, z: 12, big: true, items: { stone: 50 } }]; ind.boxId = 1; ind.bag = { wood: 9 }; ind.boxSel = { from: 'bag', i: 0 }; indPanelBox(1);
+                r = await J(`(function(){ let B = ind.base; B.chests = [{ id: 1, x: 12, z: 12, big: true, items: { stone: 50 } }]; ind.boxId = 1; ind.bag = { wood: 9 }; indSelClear(); indSelToggle('bag', 0); indPanelBox(1);
                     let o = ${ord}; let btns = o(document.getElementById('ind-panel')); let sel = btns.slice(btns.indexOf('放 1'));
                     indPutN('boxput', 0, 'wood', 4); let a = [ind.bag.wood, B.chests[0].items.wood]; indPutN('boxput', 0, 'wood', 'all'); let b = [ind.bag.wood || 0, B.chests[0].items.wood]; indPutN('box', 0, 'stone', 3); let c = [ind.bag.stone, B.chests[0].items.stone]; indPutN('box', 0, 'stone', 'all'); let d = [ind.bag.stone, B.chests[0].items.stone || 0];
                     ind.bag = { stone: 10 }; B.ground = []; indPutN('drop', 0, 'stone', 3); let g = [ind.bag.stone, B.ground.length]; return { sel: sel, a: a, b: b, c: c, d: d, g: g }; })()`);
@@ -12391,6 +12391,32 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND130 钢镐不能跳级：镐等级重排、镍矿要铁镐、铀矿要钢镐、钢镐头要镍', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND132')) {
+            // IND132 箱子多选（任务 93）：点格子选中、再点别的也选中、再点已选中的取消；选完"放进箱子"一次整堆放进去；放不下的留在背包并提示；从箱子"拿出来"同样多选；单选仍有 放 1／全放／放 n
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const click = (from, i) => `(function(){ indDragDown({ button: 0, clientX: 1, clientY: 1, pointerType: 'touch' }, '${from}', ${i}); window.dispatchEvent(new PointerEvent('pointerup', { clientX: 1, clientY: 1, button: 0, pointerType: 'touch', bubbles: true })); })()`;
+                let r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.chests = [{ id: 1, x: 12, z: 12, big: true, items: {} }]; ind.boxId = 1; ind.bag = { wood: 5, stone: 7, coal: 3, clay: 2 }; indPanelBox(1);
+                    ${click('bag', 0)}; ${click('bag', 2)}; ${click('bag', 1)}; let three = indSelSet('bag').slice(); ${click('bag', 2)}; let two = indSelSet('bag').slice(); ${click('bag', 2)};
+                    let hl = document.querySelectorAll('#ind-bag-zone .ind-slot[style*="rgb(237, 231, 246)"], #ind-bag-zone .ind-slot[style*="#ede7f6"]').length; let btn = document.getElementById('ind-box-selput').textContent;
+                    indBoxMoveMulti('bag'); return { three: three, two: two, hl: hl, btn: btn, box: JSON.stringify(B.chests[0].items), bag: JSON.stringify(ind.bag), sel: indSelSet('bag').length }; })()`);
+                if (!(r.three.join() === '0,2,1' && r.two.join() === '0,1' && r.btn.indexOf('3') >= 0 && r.hl === 3 && r.box === '{"wood":5,"stone":7,"coal":3}' && r.bag === '{"clay":2}' && r.sel === 0)) bad.push('选 3 格（点已选的取消再点回来）一次放进去，整堆 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base, c = B.chests[0]; c.items = { stone: 5, coal: 4, wood: 2 }; ind.bag = {}; for (let i = 0; i < indBagSlots() - 1; i++) ind.bag['pad' + i] = 1; indPanelBox(1);
+                    ${click('box', 0)}; ${click('box', 1)}; ${click('box', 2)}; fl = []; let bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; indBoxMoveMulti('box'); blazeFlash = bf;
+                    return { box: JSON.stringify(c.items), got: [ind.bag.stone || 0, ind.bag.coal || 0, ind.bag.wood || 0].join(), fl: fl.join('|') }; })()`.replace('fl = []; let bf','window.fl = []; let fl = window.fl; let bf'));
+                if (!(/放不下/.test(r.fl) && r.got.split(',').filter(function (x) { return x !== '0'; }).length === 1)) bad.push('背包只剩一格：只搬进去一格，其余留在箱子并提示 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base; B.chests[0].items = { stone: 50 }; ind.bag = { wood: 9 }; indPanelBox(1); ${click('bag', 0)}; let o = Array.prototype.map.call(document.querySelectorAll('#ind-panel button'), function (b) { return b.textContent; }).join('|'); return { o: o }; })()`);
+                if (!(r.o.indexOf('放 1|全放|放 n') >= 0 && r.o.indexOf('放进箱子') >= 0)) bad.push('只选一格时仍有 放 1、全放、放 n ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND132 箱子多选：点选、取消、一次整堆放进去拿出来、放不下留在原地并提示', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 

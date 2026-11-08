@@ -3151,7 +3151,7 @@
         // ── 面板：仓库箱、灶台 ──
         const IND_BTN = 'margin:3px;padding:7px 12px;border:none;border-radius:6px;background:#455a64;color:#fff;font-size:14px;cursor:pointer;';
         const IND_PANEL_CSS = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;background:#fff;border-radius:10px;padding:14px;width:min(92vw,440px);max-height:76vh;overflow:auto;font-family:"Microsoft YaHei",sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.3);';
-        function indPanelClose() { let p = document.getElementById('ind-panel'); if (p && p.parentNode) p.parentNode.removeChild(p); if (ind) { ind.panel = null; ind.cookId = null; ind.boxId = null; ind.panelKey = null; ind.boxSel = null; } indDragEnd(); }
+        function indPanelClose() { let p = document.getElementById('ind-panel'); if (p && p.parentNode) p.parentNode.removeChild(p); if (ind) { ind.panel = null; ind.cookId = null; ind.boxId = null; ind.panelKey = null; ind.boxSel = null; ind.boxMulti = { bag: [], box: [] }; } indDragEnd(); }
         // 面板换内容不回顶部（任务 14.1）：同一个面板刷新时记下自己和里面有滚动条的子元素的 scrollTop，换完还原；换了别的面板才回顶部
         function indPanelKey(kind) { return kind + '|' + (ind.boxId == null ? '' : ind.boxId) + '|' + (ind.cookId == null ? '' : ind.cookId); }
         function indPanelSet(p, html) {
@@ -3235,11 +3235,15 @@
         function indSlotsIn(B) { let L = []; Object.keys(B).forEach(function (k) { let c = B[k]; while (c > 0) { L.push({ k: k, n: Math.min(IND_STACK, c) }); c -= IND_STACK; } }); return L; }
         const IND_X_BTN = 'margin-left:4px;padding:1px 6px;border:none;border-radius:8px;background:#e53935;color:#fff;font-size:12px;cursor:pointer;';
         // 身上的格子（样子照屏幕下方的物品栏）；箱子面板和背包面板共用
+        // 箱子面板多选（任务 93）：点一格选中，再点别的格也选中，再点已选中的取消；两边（背包、箱子）各自记
+        function indSelSet(from) { let M = ind.boxMulti = ind.boxMulti || { bag: [], box: [] }; return M[from]; }
+        function indSelToggle(from, i) { let a = indSelSet(from), at = a.indexOf(i); if (at >= 0) a.splice(at, 1); else a.push(i); ind.boxSel = a.length ? { from: from, i: a[a.length - 1] } : null; }
+        function indSelClear() { ind.boxMulti = { bag: [], box: [] }; ind.boxSel = null; }
         function indBagChips(zone) {
             let SL = indSlots(), S = ind.boxSel;
             if (!SL.length) return '<div style="color:#999;padding:6px 0;">身上没东西</div>';
             return SL.map(function (it, i) {
-                let on = S && S.from === 'bag' && S.i === i, hot = IND_ITEMS[it.k].hot;
+                let on = indSelSet('bag').indexOf(i) >= 0, hot = IND_ITEMS[it.k].hot;
                 let pre = i === 0 ? '<div style="font-size:12px;color:#5e35b1;margin:2px 0;">快捷栏（1～9、0）' + (ind.panel === 'bag' ? '　点一格：换到手上那格' : '') + '</div>' : i === IND_HOTBAR ? '<div style="font-size:12px;color:#888;margin:6px 0 2px;">其余</div>' : '';
                 return pre + '<span class="ind-slot" data-from="bag" data-i="' + i + '" onpointerdown="indDragDown(event,\'bag\',' + i + ')" style="display:inline-block;margin:2px;padding:3px 6px;border-radius:10px;cursor:grab;font-size:13px;user-select:none;touch-action:manipulation;border:2px solid ' + (on ? '#5e35b1' : hot ? '#c62828' : '#cfd8dc') + ';background:' + (on ? '#ede7f6' : hot ? '#ffcdd2' : '#fff') + ';">' + (i < IND_HOTBAR ? '<b style="color:#5e35b1;margin-right:3px;">' + (i === 9 ? 0 : i + 1) + '</b>' : '') + indName(it.k) + '×' + it.n +
                     '<button class="ind-trash" style="' + IND_X_BTN + '" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indTrash(\'bag\',' + i + ')">销毁</button></span>';
@@ -3251,14 +3255,17 @@
             let cid = ind.boxId, c = indChestCur();
             if (!c) { indFlash('没有仓库箱'); return; }
             let box = c.items, SL = indSlotsIn(box), S = ind.boxSel;
-            if (S && (S.from === 'bag' ? !indSlots()[S.i] : !SL[S.i])) S = ind.boxSel = null;
+            { let BL = indSlots(); ['bag', 'box'].forEach(function (f) { let a = indSelSet(f), L = f === 'bag' ? BL : SL; ind.boxMulti[f] = a.filter(function (i) { return !!L[i]; }); }); S = ind.boxSel = ind.boxMulti.bag.length ? { from: 'bag', i: ind.boxMulti.bag[ind.boxMulti.bag.length - 1] } : ind.boxMulti.box.length ? { from: 'box', i: ind.boxMulti.box[ind.boxMulti.box.length - 1] } : null; }
             let rows = SL.length ? SL.map(function (it, i) {
-                let on = S && S.from === 'box' && S.i === i;
+                let on = indSelSet('box').indexOf(i) >= 0;
                 return '<div class="ind-slot" data-from="box" data-i="' + i + '" onpointerdown="indDragDown(event,\'box\',' + i + ')" style="cursor:grab;user-select:none;touch-action:manipulation;' + (on ? 'background:#ede7f6;outline:2px solid #5e35b1;' : '') + '">' +
                     indRow(indName(it.k) + ' × ' + it.n, indPutOpts('box', i, it.k, '拿', '全拿', '拿') + '<button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
             }).join('') : '<div style="color:#999;padding:8px 0;">空的</div>';
-            let selK = S ? (S.from === 'bag' ? (indSlots()[S.i] || {}).k : (SL[S.i] || {}).k) : null;
-            let selBtn = selK ? (S.from === 'bag' ? indPutOpts('boxput', 0, selK, '放', '全放', '放') : indPutOpts('box', 0, selK, '拿', '全拿', '拿')) : '';   // 选中的一格：放 1、全放、放 n
+            let nb = ind.boxMulti.bag.length, nx = ind.boxMulti.box.length, selBtn = '';
+            if (nb === 1) { let k1 = (indSlots()[ind.boxMulti.bag[0]] || {}).k; if (k1) selBtn += indPutOpts('boxput', 0, k1, '放', '全放', '放'); }   // 只选了一格：放 1、全放、放 n
+            if (nx === 1) { let k2 = (SL[ind.boxMulti.box[0]] || {}).k; if (k2) selBtn += indPutOpts('box', 0, k2, '拿', '全拿', '拿'); }
+            if (nb > 0) selBtn += '<button id="ind-box-selput" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveMulti(\'bag\')">放进箱子' + (nb > 1 ? '（选中 ' + nb + ' 格）' : '') + '</button>';
+            if (nx > 0) selBtn += '<button id="ind-box-seltake" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveMulti(\'box\')">拿出来' + (nx > 1 ? '（选中 ' + nx + ' 格）' : '') + '</button>';
             indPanelShow('box', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + (c.ty === 'fridge' ? '冰箱' + (c.pw ? '（通电）' : '（没电）') : c.cold ? '冷藏箱' + (c.iceT > 0 ? '（有冰）' : c.items.ice ? '' : '（没冰）') : '仓库箱') + (c.big ? '' : '　' + indSlotsOf(box) + ' / ' + IND_CHEST_SLOTS + ' 格') + '</div>' +
                 '<div id="ind-box-zone" style="min-height:40px;border-radius:6px;">' + rows + '</div>' +
                 '<div style="margin-top:8px;font-weight:bold;">身上　<small style="color:#888;font-weight:normal;">按住一格拖进箱子；点一下选中再点按钮也行</small></div>' +
@@ -3311,7 +3318,26 @@
                 if (indFits(ind.bag, indBagSlots(), it.k, it.n) < it.n) { indFlash('背包放不下了'); return false; }
                 clMv(c, it.k, false); indBagAdd(it.k, it.n); c.items[it.k] -= it.n; if (c.items[it.k] <= 0) delete c.items[it.k];
             }
-            ind.boxSel = null; indSave(); indPanelBox(); return true;
+            indSelClear(); indSave(); indPanelBox(); return true;
+        }
+        // 选中的几格一次整堆搬：放不下的留在原地，提示搬了几格、几格没搬（任务 93）
+        function indBoxMoveMulti(from) {
+            if (!ind || ind.where !== 'base') return false;
+            let c = indChestCur(); if (!c) return false;
+            let idx = indSelSet(from).slice(), L = from === 'bag' ? indSlots() : indSlotsIn(c.items), items = idx.map(function (i) { return L[i]; }).filter(Boolean), done = 0, left = 0;
+            items.forEach(function (it) {
+                if (from === 'bag') {
+                    let have = ind.bag[it.k] || 0, n = Math.min(it.n, have); if (!(n > 0)) return;
+                    let fit = indFits(c.items, indChestCap(c), it.k, n); if (fit <= 0) { left++; return; }
+                    clMv(c, it.k, true); indBagDel(it.k, fit); c.items[it.k] = (c.items[it.k] || 0) + fit; if (fit < n) left++; else done++;
+                } else {
+                    let have = c.items[it.k] || 0, n = Math.min(it.n, have); if (!(n > 0)) return;
+                    let fit = indFits(ind.bag, indBagSlots(), it.k, n); if (fit <= 0) { left++; return; }
+                    clMv(c, it.k, false); indBagAdd(it.k, fit); c.items[it.k] -= fit; if (c.items[it.k] <= 0) delete c.items[it.k]; if (fit < n) left++; else done++;
+                }
+            });
+            if (left > 0) indFlash((from === 'bag' ? '箱子' : '背包') + '放不下了：搬了 ' + done + ' 格，' + left + ' 格留在原地');
+            indSelClear(); indSave(); indPanelBox(); return done > 0;
         }
         function indBoxMoveSel() { let S = ind && ind.boxSel; if (S) indBoxMove(S.from, S.i); }
         // 鼠标拖：按住一格，半透明跟着走，松开在另一块里就搬过去；触屏只能点选
@@ -3345,7 +3371,7 @@
             indDragEnd();
             if (!on) {   // 没拖动：点选（触屏就靠这个）
                 if (ind && ind.panel === 'bag' && D.from === 'bag') { indBagToHand(D.i); return; }   // 背包面板：点一格换到手上那格（任务 17）
-                if (ind && ind.panel === 'box') { let S = ind.boxSel; ind.boxSel = S && S.from === D.from && S.i === D.i ? null : { from: D.from, i: D.i }; indPanelBox(); }
+                if (ind && ind.panel === 'box') { indSelToggle(D.from, D.i); indPanelBox(); }
                 return;
             }
             if (ind && ind.panel === 'bag' && D.from === 'bag') {   // 背包面板里拖到另一格：两格互换（任务 17）
@@ -3372,7 +3398,7 @@
             else { c = indChestCur(); if (!c) return false; it = indSlotsIn(c.items)[i]; if (!it) return false; c.items[it.k] -= it.n; if (c.items[it.k] <= 0) delete c.items[it.k]; }
             if (ind.hotT && !ind.bag[it.k]) delete ind.hotT[it.k];
             ind.undo = { where: where, cid: c ? c.id : null, k: it.k, n: it.n, until: Date.now() + IND_UNDO_MS };
-            ind.boxSel = null; ind.hudSig = ''; indSave(); indPanelRefresh(); indUndoBar();
+            indSelClear(); ind.hudSig = ''; indSave(); indPanelRefresh(); indUndoBar();
             return true;
         }
         function indTrashHand() { let SL = indSlots(), i = ind ? ind.selIdx : -1; if (!SL[i]) { indFlash('手上没东西'); return false; } return indTrash('bag', i); }
