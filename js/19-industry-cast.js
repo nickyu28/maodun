@@ -62,14 +62,18 @@
                 indFlash('黏土模具浇不了' + CT_METAL[P.m].n + '，裂了'); return;
             }
             let need = CT_SHAPE[M.s].need; if (!CT_PART_METAL[P.m] || P.n < need - (M.fill || 0)) return;
+            if (ctNeedNi(M, P) && !(S.items.ingot_ni > 0)) { if (!S.niWarn) { S.niWarn = 1; indFlash('钢镐头要加 1 份镍锭'); } return; }   // 任务 101：钢镐头要镍，镍要铁镐才挖得到，不能跳级
+            S.niWarn = 0;
             M.fill = (M.fill || 0) + CT.flow * dt;
             if (M.fill < need) return;
             P.n -= need; if (P.n <= 0) S.pool = null;
+            if (ctNeedNi(M, { m: P.m })) { S.items.ingot_ni--; if (S.items.ingot_ni <= 0) delete S.items.ingot_ni; }
             M.fill = 0; M.part = 'part_' + M.s + '_' + P.m; M.t = ckSpoutDef(S).cool;
             if (ind.panel === 'stove') ind.panelDirty = true;
         }
         // n 块烫锭落下来：槽接得住且还有地方就进槽，不然留在炉膛（规则同冶炼出来的烫锭，任务 94）
         function ctSolid(S, h, n) { for (let i = 0; i < n; i++) { if (ckSpoutTakes(S, h) && S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: h, t: ckSpoutDef(S).cool }); else S.out[h] = (S.out[h] || 0) + 1; } }
+        function ctNeedNi(M, P) { return M.s === 'pick' && P.m === 'steel'; }   // 钢镐头多要 1 份镍锭（放进炉膛，流满时用掉）
         // 槽里放模具就不接锭
         function ctSpoutBusy(S) { return !!S.mold; }
         // 左键出料槽：零件凉了就取出来，模具耐久 −1

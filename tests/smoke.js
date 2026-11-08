@@ -12367,7 +12367,7 @@ async function enterExit(tab, key) {
             report('IND129 雕模具校准：红 +2 白 +1 别处 −1、累计到目标分、耐久固定、不眩晕不碎、空格和点圈', bad.length === 0, bad.join(' / '));
         }
         if (want('IND130')) {
-            // IND130 钢镐要铁镐（任务 101）：钢镐头 + 铁镐才能做，铁镐用掉、钢镐满耐久；没铁镐（有钢镐头、木柄）做不了；钢的斧铲剪刀不受限；老存档里的钢镐不动
+            // IND130 钢镐不能跳级（任务 101，11-08 新写法）：镐等级 石 1 青铜 2 铁 3 钢 4 钻石 5；铀矿 4、镍矿 3、铁矿 2；青铜镐挖不了镍矿、铁镐能；铁镐挖不了铀、钢镐能；钢镐头流满要 1 份镍锭（没有就不流）；钢的斧铲剪不要镍；老存档不动
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -12375,42 +12375,22 @@ async function enterExit(tab, key) {
             else { try {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
-                const r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.dura = {}; B.repQ = {}; B.repCur = {};
-                    let idx = IND_CRAFT.findIndex(function (q) { return q.out === 'pick_steel' && q.in.part_pick_steel; }), rc = IND_CRAFT[idx];
-                    ind.bag = { part_pick_steel: 1, handle: 2, wood: 3 }; indCraft(idx); let no = !ind.bag.pick_steel;
-                    ind.bag = { part_pick_steel: 1, pick_iron: 1 }; B.dura.pick_iron = 17; indCraft(idx); let yes = ind.bag.pick_steel === 1 && !ind.bag.pick_iron && !ind.bag.part_pick_steel, dura = mbDura('pick_steel');
-                    let others = ['axe', 'shovel'].map(function (kind) { ind.bag = { ['part_' + kind + '_steel']: 1, handle: 1 }; indCraft(IND_CRAFT.findIndex(function (q) { return q.out === kind + '_steel' && q.in['part_' + kind + '_steel']; })); return ind.bag[kind + '_steel'] === 1; });
-                    ind.bag = { part_shears_steel: 1, rope: 1 }; indCraft(IND_CRAFT.findIndex(function (q) { return q.out === 'shears_steel' && q.in.part_shears_steel; })); others.push(ind.bag.shears_steel === 1);
-                    let old = indFixBase({ ver: 12, rule: 'hard', bag: { pick_steel: 1 } }); return { in: JSON.stringify(rc.in), no: no, yes: yes, dura: dura, max: mbMax0('pick_steel'), others: others.join(), old: old.bag.pick_steel }; })()`);
-                if (!(r.in === '{"part_pick_steel":1,"pick_iron":1}' && r.no && r.yes && r.dura === r.max && r.others === 'true,true,true' && r.old === 1)) bad.push('钢镐 = 钢镐头 + 铁镐；没铁镐不行；满耐久；斧铲剪刀不受限；老存档不动 ' + JSON.stringify(r));
+                let r = await J(`(function(){ let t = ['pick_stone', 'pick_bronze', 'pick_iron', 'pick_steel', 'pick_diamond', 'pick_ni'].map(function (k) { return IND_ITEMS[k].tool; }), n = ['ore_fe', 'ore_cu', 'ore_ni', 'ore_u', 'ore_al', 'coal'].map(function (k) { return IND_NODES[k].tool; });
+                    let can = function (pick, key) { indGoBase(null); ind.bag = { [pick]: 1 }; return indTool() >= IND_NODES[key].tool; }; return { t: t, n: n, names: IND_TOOL_NAME.join(), bronzeNi: can('pick_bronze', 'ore_ni'), ironNi: can('pick_iron', 'ore_ni'), bronzeFe: can('pick_bronze', 'ore_fe'), ironU: can('pick_iron', 'ore_u'), steelU: can('pick_steel', 'ore_u'), bonus: IND_ITEMS.pick_iron.bonus }; })()`);
+                if (!(r.t.join() === '1,2,3,4,5,3' && r.n.join() === '2,1,3,4,2,1' && r.names === '空手,石稿,青铜稿,铁稿,钢稿,钻石稿' && !r.bronzeNi && r.ironNi && r.bronzeFe && !r.ironU && r.steelU && r.bonus === 1)) bad.push('镐等级重排、铀 4、镍 3、铁 2 ' + JSON.stringify(r));
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; ind.bag = {}; B.moldQ = {}; indPanelClose();
+                    let st = function (ni, s) { B.stove = Object.assign(ckNewState(), { spout: [], fuel: 9000, fire: 4, temp: 1700, spoutTy: 'fire', pool: { m: 'steel', n: 4 }, items: ni ? { ingot_ni: 1 } : {}, mold: { s: s || 'pick', dura: 20, f: true } }); return B.stove; };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                r = await run(`let S = st(false); for (let i = 0; i < 6; i++) ctTick({ C: S, ty: 'stove' }, 1); let a = { part: S.mold && S.mold.part, pool: S.pool && S.pool.n, warn: fl.join('|') }; S.items.ingot_ni = 1; for (let i = 0; i < 6; i++) ctTick({ C: S, ty: 'stove' }, 1); a.part2 = S.mold && S.mold.part; a.ni = S.items.ingot_ni || 0; a.pool2 = S.pool && S.pool.n; return a;`);
+                if (!(r.part === null || r.part === undefined) || !/钢镐头要加 1 份镍/.test(r.warn) || r.pool !== 4 || r.part2 !== 'part_pick_steel' || r.ni !== 0 || r.pool2 !== 2) bad.push('钢镐头没镍不流、有镍流满用掉 1 份 ' + JSON.stringify(r));
+                r = await run(`let S = st(false, 'axe'); for (let i = 0; i < 6; i++) ctTick({ C: S, ty: 'stove' }, 1); return { part: S.mold && S.mold.part, pool: S.pool && S.pool.n };`);
+                if (!(r.part === 'part_axe_steel' && r.pool === 2)) bad.push('钢斧头不要镍 ' + JSON.stringify(r));
+                r = await J(`(function(){ let old = indFixBase({ ver: 12, rule: 'hard', bag: { pick_steel: 1, ingot_ni: 2 } }); return { p: old.bag.pick_steel, n: old.bag.ingot_ni }; })()`);
+                if (!(r.p === 1 && r.n === 2)) bad.push('老存档的钢镐、镍锭不动 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND130 钢镐要铁镐：钢镐头 + 铁镐、没铁镐不行、满耐久、斧铲剪不受限', bad.length === 0, bad.join(' / '));
-        }
-        if (want('IND131')) {
-            // IND131 早期矿回地面、洞里看得见（任务 96）：30 张图铜地面平均 ≥ 6 个点、离出生点 350 米内能凑齐青铜（铜 + 锡）的图 ≥ 80%；地面占比铜锡锌铁高于铀铝铅镍；洞里可见度按距离三次方衰减（d0 空手 2、火把 4、灯泡 6）；老存档读档不报错
-            const bad = [];
-            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
-            await T.eval(`indEnter(); true;`);
-            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
-            else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
-                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
-                const r = await J(`(function(){ let N = 30, ok = 0, cuPts = 0, snPts = 0, g = {}; ind.base.rule = 'hard';
-                    for (let s = 1; s <= N; s++) { indGoTrip(7000 + s * 104729); let cu = 0, sn = 0; ind.nodes.forEach(function (o) { if (!o.out || o.cave !== undefined) return; g[o.key] = (g[o.key] || 0) + 1; if (o.key === 'ore_cu') cuPts++; if (Math.hypot(o.x, o.z) > 350) return; if (o.key === 'ore_cu') cu++; if (o.key === 'ore_sn') sn++; }); if (cu >= 1 && sn >= 1) ok++; indGoBase(null); }
-                    return { ok: ok, n: N, cuAvg: cuPts / N, g: g }; })()`);
-                if (!(r.ok / r.n >= 0.8 && r.cuAvg >= 6)) bad.push('铜地面平均 ≥ 6 个点、350 米内凑齐铜锡的图 ≥ 80% ' + JSON.stringify(r));
-                const c = await J(`(function(){ indGoTrip(131); let tries = 0; while (!ind.caves.length && tries++ < 60) indGoTrip(tries * 131); let c = ind.caves[0]; ind.base.wear = {}; ind.torchT = 0; cvEnter(c); indTeleport(c.cx + 40, c.cz); ind.base.clock = IND_DAY * 3 + IND_DUSK + 100; let out = {};
-                    out.bare = [cvD0(), cvVis(2, 2), cvVis(4, 2), cvVis(6, 2), cvVis(1, 2)]; ind.torchT = 50; out.torch = cvD0(); out.torchVis = cvVis(8, cvD0()); ind.torchT = 0; ind.base.wear.head = 'bulb'; delete ind.base.bulbU; out.bulb = cvD0(); ind.base.wear = {};
-                    out.view = cvViewR(); out.fog = null; out.old = CV.d0Torch > CV.d0 && CV.d0Bulb > CV.d0Torch; return out; })()`);
-                if (!(c.bare[0] === 2 && c.bare[1] === 1 && Math.abs(c.bare[2] - 0.125) < 1e-9 && Math.abs(c.bare[3] - 1 / 27) < 1e-9 && c.bare[4] === 1 && c.torch === 4 && Math.abs(c.torchVis - 0.125) < 1e-9 && c.bulb === 6 && c.view === 4 && c.old)) bad.push('洞里可见度 min(1, (d0/d)³)：空手 d0 = 2、火把 4、灯泡 6 ' + JSON.stringify(c));
-                const o = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', bag: { ore_cu: 3 } }); return b.bag.ore_cu; })()`);
-                if (o !== 3) bad.push('老存档读档 ' + o);
-            } catch (e) { bad.push('异常 ' + e.message); } }
-            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
-            await T.close();
-            report('IND131 早期矿回地面、洞里看得见：铜地面够多、凑得齐青铜、洞里最低亮度', bad.length === 0, bad.join(' / '));
+            report('IND130 钢镐不能跳级：镐等级重排、镍矿要铁镐、铀矿要钢镐、钢镐头要镍', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 

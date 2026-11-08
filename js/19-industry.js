@@ -192,7 +192,7 @@
             hot_sn: { name: '锡锭（烫）', col: 0xff8a65, hot: 'ingot_sn', needTool: 'tongs' }, hot_bronze: { name: '青铜锭（烫）', col: 0xff7043, hot: 'bronze', needTool: 'tongs' },
             hot_brass: { name: '黄铜锭（烫）', col: 0xffab00, hot: 'brass', needTool: 'tongs' }, hot_steel: { name: '钢锭（烫）', col: 0xff6d00, hot: 'steel', needTool: 'tongs' },
             tongs: { name: '钳子', col: 0x795548, use: '拿烫锭' },
-            pick_bronze: { name: '青铜稿', col: 0xb87333, tool: 2 }, pick_iron: { name: '铁稿', col: 0x616161, tool: 2, bonus: 1 }, pick_steel: { name: '钢稿', col: 0x90a4ae, tool: 3 },
+            pick_bronze: { name: '青铜稿', col: 0xb87333, tool: 2 }, pick_iron: { name: '铁稿', col: 0x616161, tool: 3, bonus: 1 }, pick_steel: { name: '钢稿', col: 0x90a4ae, tool: 4 },
             battery: { name: '电池', col: 0x43a047, use: '装进电池组' }, wire: { name: '铜线', col: 0xff7043, use: '接线' },
             dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '蒸汽发电机', col: 0x546e7a, dev: 'gen', use: '要水、要炉子：放在点着的炉子（中火以上）3 米内，拿一桶生水左键装进水箱，一桶发 12 V 两分钟' },
             dev_el: { name: '电解槽', col: 0x00838f, dev: 'el' },
@@ -216,7 +216,7 @@
         IND_ITEMS_RAW.dev_comp = { name: '压缩机', col: 0x6d4c41, dev: 'comp' };
         IND_ITEMS_RAW.dev_press = { name: '压力机', col: 0x37474f, dev: 'press' };
         IND_ITEMS_RAW.diamond = { name: '钻石', col: 0xb9f6ca };
-        IND_ITEMS_RAW.pick_diamond = { name: '钻石稿', col: 0x80deea, tool: 4, bonus: 2 };   // 钻石稿：采一次多拿 2 个
+        IND_ITEMS_RAW.pick_diamond = { name: '钻石稿', col: 0x80deea, tool: 5, bonus: 2 };   // 钻石稿：采一次多拿 2 个（任务 101：镐的等级 石 1、青铜 2、铁 3、钢 4、钻石 5）
         // 搬起来带着东西的家具（装着东西的箱子、灶台、小熔炉、大窑）是一个个独一无二的物品：inst:编号，内容记在存档的 carried 里
         let IND_CTX_BASE = null;   // 读档整理时临时用来认 inst 物品
         function indCarried(k) {
@@ -272,7 +272,7 @@
             salt: { give: [4, 8], tool: 0 }, coal: { give: [1, 3], tool: 1 }, ore_sn: { give: [1, 2], tool: 1 }, oil: { give: [1, 1], tool: 0 },
             sand_sn: { give: [1, 1], tool: 0, out: 'ore_sn', name: '锡砂' },   // 海边的锡砂：空手捡，每次 1 个锡矿
             ore_cu: { give: [1, 2], tool: 1 }, ore_zn: { give: [1, 2], tool: 1 }, ore_fe: { give: [1, 2], tool: 2 },
-            sulfur: { give: [1, 3], tool: 1 }, ore_u: { give: [1, 1], tool: 3 }, seeds: { give: [2, 3], tool: 0 }
+            sulfur: { give: [1, 3], tool: 1 }, ore_u: { give: [1, 1], tool: 4 }, seeds: { give: [2, 3], tool: 0 }
         };
         const IND_NODE_COL = { seeds: 0x7cb342, sand_sn: 0xb0bec5 };
         IND_NODES.magnet = { give: [1, 2], tool: 0 };
@@ -281,7 +281,7 @@
         const IND_ORE_NODES = {};   // 还成片刷的（一处 3～6 个小点）：硝石   // 这几种矿成片刷：一处 3～6 个点挤在 6 米内
         // 悠闲世界的远征只刷这些（没有矿，没有科技原料）
         const IND_CASUAL_RES = { dirt: 1, wood: 1, stone: 1, sand: 1, clay: 1, salt: 1, seeds: 1, cactus: 1, magnet: 1 };
-        const IND_TOOL_NAME = ['空手', '石稿', '青铜稿', '钢稿', '钻石稿'];
+        const IND_TOOL_NAME = ['空手', '石稿', '青铜稿', '铁稿', '钢稿', '钻石稿'];
         // 地貌：名字、地面颜色、会刷什么资源（权重）
         const IND_BIOMES = {
             plain: { name: '平原', col: 0x9ccc65, res: { clay: 3, stone: 2, wood: 1, seeds: 2 } },

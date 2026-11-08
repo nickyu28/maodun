@@ -100,11 +100,11 @@
             hot_ni: { name: '镍锭（烫）', col: 0xff7043, hot: 'ingot_ni', needTool: 'tongs' },
             ingot_ni: { name: '镍锭', col: 0xb0bec5, use: '做镍电池（电量两倍）、镍稿（采矿多拿 1 个）' },
             battery_ni: { name: '镍电池', col: 0x26a69a, cellU: 360, use: '装进电池组，一节 360 U（普通电池的两倍），电压还是 1.5 V' },
-            pick_ni: { name: '镍稿', col: 0x78909c, tool: 2, bonus: 1, use: '跟铁稿一样：采矿一次多拿 1 个' },
+            pick_ni: { name: '镍稿', col: 0x78909c, tool: 3, bonus: 1, use: '跟铁稿一样：采矿一次多拿 1 个' },
             pack_al: { name: '铝架背包', col: 0xb0bec5, wear: 'back', slots: 24, warm: 0, use: '戴在背上，背包 +24 格（共 48 格）；脱下前多出来的格子要先清空' }
         });
         IND_ELEM_OF.ingot_al = 13; IND_ELEM_OF.ingot_ni = 28;
-        Object.assign(IND_NODES, { ore_al: { give: [1, 2], tool: 2 }, ore_ni: { give: [1, 2], tool: 1 } });
+        Object.assign(IND_NODES, { ore_al: { give: [1, 2], tool: 2 }, ore_ni: { give: [1, 2], tool: 3 } });
         IND_OUTCROP.ore_al = 1; IND_OUTCROP.ore_ni = 1;
         IND_BIOMES.mountain.res.ore_al = 2; IND_BIOMES.mountain.res.ore_ni = 3;
         CK_MELT.hot_ni = 1455;
