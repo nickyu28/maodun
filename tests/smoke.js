@@ -7799,22 +7799,22 @@ async function enterExit(tab, key) {
                 if (!(await T.eval(`ind.bag.wood === 3`))) bad.push('拿着稿子砍树 3 秒 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 // ── 大石头：要石稿，出 3～5 石头 ──
                 await T.eval(`ind.bag = {}; ind.nodes.push({ key: 'stone', rock: true, x: 0, z: -9, y: 0, n: 4, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; window.__fl = []; indAction(); true;`);
-                if (!(await T.eval(`!ind.bag.stone && __fl.some(function (t) { return /石稿/.test(t); })`))) bad.push('大石头没有稿子敲不动 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
+                if (!(await T.eval(`!ind.bag.stone && !__fl.some(function (t) { return /石稿/.test(t); })`))) bad.push('大石头没有稿子敲不动（任务 105 起不弹字） ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
                 await T.eval(`indBagAdd('pick_stone', 1); indAction(); true;`);
                 if (!(await T.eval(`ind.bag.stone === 4`))) bad.push('拿稿子敲大石头出 3～5 石头 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 const nd = await J(`[IND_NODES.stone.give, IND_NODES.stone.tool, IND_NODES.wood.give]`);
                 if (JSON.stringify(nd) !== '[[3,5],1,[3,6]]') bad.push('石头 3～5 要石稿、树 3～6 ' + JSON.stringify(nd));
-                // ── 矿脉露头：一次 1 份，10～30 份，越挖越矮，挖完变空坑 ──
+                // ── 矿脉露头：一次 4 个（任务 98），越挖越矮，挖完变空坑 ──
                 await T.eval(`ind.bag = { pick_stone: 1 }; ind.nodes.push({ key: 'ore_cu', out: true, x: 0, z: -9, y: 0, n: 12, n0: 12, seed: 'seed_wheat', dead: false }); ind.nodeView = null; ind.nodeDirty = true; true;`);
                 const sc0 = await J(`(function(){ indSyncNodes(); let m = new THREE.Matrix4(); ind.wd.ore.getMatrixAt(ind.wd.ore.count - 1, m); return m.elements[5]; })()`);
-                await T.eval(`indLookAt(0, -9); for (let i = 0; i < 6; i++) indAction(); true;`);
+                await T.eval(`indLookAt(0, -9); for (let i = 0; i < 2; i++) indAction(); true;`);
                 const sc1 = await J(`(function(){ indSyncNodes(); let m = new THREE.Matrix4(); ind.wd.ore.getMatrixAt(ind.wd.ore.count - 1, m); return m.elements[5]; })()`);
-                if (!(await T.eval(`ind.bag.ore_cu === 6`)) || !(sc1 < sc0)) bad.push('露头一次 1 份，越挖越矮 ' + JSON.stringify([sc0, sc1, await T.eval(`JSON.stringify(ind.bag)`)]));
-                if (!/剩 6 份/.test(await T.eval(`wdNodeHint(ind.nodes[ind.nodes.length - 1]).replace(/<[^>]+>/g, '')`))) bad.push('提示写剩几份');
-                await T.eval(`for (let i = 0; i < 6; i++) indAction(); true;`);
-                if (!(await T.eval(`ind.bag.ore_cu === 12 && ind.nodes[ind.nodes.length - 1].dead && ind.pits.some(function (p) { return Math.abs(p.x) < 0.1 && Math.abs(p.z + 9) < 0.1 && p.d === 6; })`))) bad.push('挖完变空坑 ' + await T.eval(`JSON.stringify([ind.bag, ind.pits])`));
+                if (!(await T.eval(`ind.bag.ore_cu === 8`)) || !(sc1 < sc0)) bad.push('露头一次 4 个（任务 98），越挖越矮 ' + JSON.stringify([sc0, sc1, await T.eval(`JSON.stringify(ind.bag)`)]));
+                if (!/还剩 1 份/.test(await T.eval(`wdNodeHint(ind.nodes[ind.nodes.length - 1]).replace(/<[^>]+>/g, '')`))) bad.push('提示写还剩几份（还能挖几次）');
+                await T.eval(`indAction(); true;`);
+                if (!(await T.eval(`ind.bag.ore_cu === 12 && ind.nodes[ind.nodes.length - 1].dead && ind.pits.some(function (p) { return Math.abs(p.x) < 0.1 && Math.abs(p.z + 9) < 0.1 && p.d >= 1; })`))) bad.push('挖完变空坑 ' + await T.eval(`JSON.stringify([ind.bag, ind.pits])`));
                 await T.eval(`ind.bag = { pick_iron: 1 }; ind.nodes.push({ key: 'ore_cu', out: true, x: 0, z: -9, y: 0, n: 12, n0: 12, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
-                if (!(await T.eval(`ind.bag.ore_cu === 2`))) bad.push('铁稿 +1：一次 2 份 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if (!(await T.eval(`ind.bag.ore_cu === 5`))) bad.push('铁稿 +1：一次 5 个 ' + await T.eval(`JSON.stringify([ind.bag, indAim() && indAim().kind, indAim() && indAim().o.key, __fl.slice(-3), ind.ch && ind.ch.kind])`));
                 // ── 河：每张图 1～3 条，从高处流进海里，宽 4～8 米，浅水为主；河边有黏土、锡砂；河里接的是生水 ──
                 const rv = await J(`(function(){ let bad = [], n = 0, banks = 0, shallow = 0, all = 0; for (let s = 1; s <= 40; s++) { let M = indMakeMap(s * 613); let R = M.rivers; n += R.length; if (R.length < 3 || R.length > 9) bad.push('条数 ' + s + ':' + R.length); R.forEach(function (rv) { let a = rv.pts[0], b = rv.pts[rv.pts.length - 1]; if (indElev(M, a[0], a[1]) < 0.2) bad.push('不是从高处起头'); if (indHeight(M, b[0], b[1]) >= IND_WATER_Y) bad.push('没流进海里'); if (rv.w < 4 || rv.w > 8) bad.push('宽 ' + rv.w); for (let i = 1; i < rv.pts.length - 1; i += 3) { let p = rv.pts[i]; all++; let dep = IND_WATER_Y - indHeight(M, p[0], p[1]); if (dep <= 0) bad.push('河中间不是水 ' + s); } }); } return { bad: bad.slice(0, 5), avg: n / 40 }; })()`);
                 if (rv.bad.length) bad.push('河 ' + JSON.stringify(rv));
@@ -12882,6 +12882,35 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND147 连线：连自己允许、电池组短路、信号线自环、Esc／按钮／点空地取消不耗线不暂停', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND148')) {
+            // IND148 准星和顶部信息（任务 105）：屏幕正中一直有准星（电脑、触屏）；对准东西信息在屏幕顶部：名字最大、能做的东西（主线排前、最多 4 个、没见过写"？"）、要什么镐、还剩几份；
+            // 设备写状态、动物写饱食、床的操作提示合在顶部；面板开着不显示；镐不够挖：什么也拿不到、不弹字、不扣耐久
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const top = `(function(){ ind.hudSig = ''; indHudUpdate(); let h = document.getElementById('ind-hint'); let r = h.getBoundingClientRect(); let d = h.querySelector('div'); return { html: h.innerHTML, text: h.textContent, top: r.top, shown: h.style.display !== 'none', big: d ? parseFloat(d.style.fontSize) : 0, first: d ? d.textContent : '' }; })()`;
+                let r = await J(`(function(){ let c = document.getElementById('ind-cross'), b = c.getBoundingClientRect(); let pc = { x: b.left + b.width / 2 - innerWidth / 2, y: b.top + b.height / 2 - innerHeight / 2, shown: c.style.display !== 'none' };
+                    let old = gState.control; gState.control = 'pad'; indHudUpdate(); let b2 = c.getBoundingClientRect(); let pad = { x: b2.left + b2.width / 2 - innerWidth / 2, shown: c.style.display !== 'none' && b2.width > 0 }; gState.control = old; return { pc: pc, pad: pad }; })()`);
+                if (!(Math.abs(r.pc.x) < 2 && Math.abs(r.pc.y) < 2 && r.pc.shown && Math.abs(r.pad.x) < 2 && r.pad.shown)) bad.push('准星在屏幕正中（电脑、触屏） ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoTrip(5151); ind.mbSpawn = 1e9; ind.tripGround = []; ind.base.seenK = { ingot_cu: 1 }; ind.base.box = {}; ind.base.chests.forEach(function (c) { c.items = {}; }); let o = { key: 'ore_cu', out: true, x: 4, z: 4, y: indGround(4, 4), n: 24, n0: 24, seed: IND_SEED_KINDS[0], dead: false }; ind.nodes.push(o);
+                    ind.bag = { pick_stone: 1 }; indTeleport(4, 5.3); indLookAt(4, 4); let a = indAim(); let t = ${top}; return { aim: a && a.o === o, t: t }; })()`);
+                if (!(r.aim && r.t.shown && r.t.top < 80 && /铜/.test(r.t.first) && r.t.big >= 20 && /还剩 6 份/.test(r.t.text) && /能做：铜锭/.test(r.t.text) && /左键：挖/.test(r.t.text))) bad.push('矿：顶部名字最大、还剩份数、能做的东西主线（铜锭）排前、操作合在一起 ' + JSON.stringify(r));
+                r = await J(`(function(){ let o = { key: 'ore_ni', out: true, x: 8, z: 4, y: indGround(8, 4), n: 12, n0: 12, seed: IND_SEED_KINDS[0], dead: false }; ind.nodes.push(o); ind.bag = { pick_stone: 1 }; ind.base.dura = {}; indTeleport(8, 5.3); indLookAt(8, 4); let t = ${top};
+                    let fl = [], bf = blazeFlash; blazeFlash = function (x) { fl.push(x); }; let d0 = mbDura('pick_stone'); indAction(); blazeFlash = bf; return { t: t, n: o.n, ni: ind.bag.ore_ni || 0, fl: fl.join('|'), worn: d0 - mbDura('pick_stone') }; })()`);
+                if (!(/要铁稿或更好/.test(r.t.text) && /？/.test(r.t.text) && r.n === 12 && r.ni === 0 && r.fl === '' && r.worn === 0)) bad.push('镐不够：顶部写要什么镐、没见过的产物写？；挖了拿不到、不弹字、不扣耐久 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); ind.bag = {}; let S = IND_BASE_ST.bed; ind.base.off.bed = false; indTeleport(S.x, S.z + 3.6); indLookAt(S.x, S.z + 1.6); let a = indAim(); let t = ${top}; indPanelBag(); let t2 = ${top}; indPanelClose(); return { a: a && a.kind, t: t, hid: !t2.shown, cross: document.getElementById('ind-cross').style.display }; })()`);
+                if (!(r.a === 'bed' && /床/.test(r.t.first) && /左键：睡觉/.test(r.t.text) && r.hid)) bad.push('床的操作提示合在顶部；面板开着不显示 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base; B.animals = B.animals || []; let an = { k: 'sheep', x: -10, z: 14, food: 63, woolAt: B.clock + 100, milkAt: B.clock }; B.animals.push(an); ind.animalDirty = true; indTeleport(-10, 15.2); indLookAt(-10, 14); let a = indAim(); let t = ${top}; B.animals = B.animals.filter(function (x) { return x !== an; }); return { a: a && a.kind, t: t }; })()`);
+                if (!(r.a === 'animal' && /饱食 63/.test(r.t.text))) bad.push('动物写饱食 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND148 准星和顶部信息：准星正中、名字最大、能做的东西主线排前、要什么镐、还剩份数、饱食、操作合并、面板开着不显示、挖不动不弹字', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 

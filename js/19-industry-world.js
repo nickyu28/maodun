@@ -131,7 +131,7 @@
             let f = indFace(), x = ind.p.x + f.x * 1.8, z = ind.p.z + f.z * 1.8, h = indHeight(ind.map, x, z);
             if (h < IND_WATER_Y + 0.25) { indFlash('水里挖不了'); return false; }
             let bm = indBiome(ind.map, x, z), k = WD_DIG[bm];
-            if (k === 'stone' && indTool() < 1) { indFlash('挖石头要石稿'); return false; }
+            if (k === 'stone' && indTool() < 1) return false;   // 任务 105：挖不动不弹字
             let tk = tlDigTool(k === 'stone');   // 铲子 1 秒 × 倍数，镐 1 秒，空手 3 秒（19-industry-tool.js）
             return wdChStart({ kind: 'dig', need: tk.need, label: '挖地', done: function () { tlUse(tk.k);
                 let item = k;

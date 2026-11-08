@@ -673,7 +673,7 @@
         function indBagAdd(k, n) {
             if (IND_ELEM_OF[k] && ind.base && !ind.base.elems[IND_ELEM_OF[k]]) { ind.base.elems[IND_ELEM_OF[k]] = 1; indFlash('元素表点亮了：' + indElemName(IND_ELEM_OF[k])); }
             let B = ind.bag, take = indFits(B, indBagSlots(), k, n);
-            if (take > 0) B[k] = (B[k] || 0) + take;
+            if (take > 0) { B[k] = (B[k] || 0) + take; if (ind.base) (ind.base.seenK = ind.base.seenK || {})[k] = 1; }   // 见过的东西（任务 105：准星信息里没见过的产物写"？"）
             return take;
         }
         function indBagDel(k, n) { let B = ind.bag; if (!B[k]) return 0; let t = Math.min(n, B[k]); B[k] -= t; if (B[k] <= 0) delete B[k]; return t; }
@@ -950,6 +950,33 @@
                 if (full || indFlash.fullUntil > now) { let el = document.getElementById('blaze-flash'); clearTimeout(blazeFlash._t); clearTimeout(indFlash._hide); indFlash._hide = setTimeout(function () { if (el) el.style.opacity = '0'; }, Math.max(1100, indFlash.fullUntil - now)); }
                 else clearTimeout(indFlash._hide);
             } catch (e) { }
+        }
+        // ── 任务 105：准星对着的东西，信息显示在屏幕顶部：名字（最大）、能做出的东西（主线的排前面，最多 4 个，没见过的写"？"）、要什么镐、还剩几份、状态、饱食；最后一行是操作 ──
+        const IND_MAINLINE = ['ingot_cu', 'bronze', 'ingot_fe', 'steel', 'brick_fire', 'ingot_al', 'dev_el', 'dev_asu'];   // 到火箭那条路上的（docs/achievements.md 主线、docs/rocket-steps.md）
+        function indSeen(k) { let B = ind.base; return !!((B.seenK && B.seenK[k]) || ind.bag[k] || (B.box && B.box[k]) || (B.chests || []).some(function (c) { return c.items && c.items[k]; })); }
+        function indMakes(k) {
+            let out = [];
+            IND_RECIPES.forEach(function (r) { if (r.in[k] && (!r.hard || indHard())) Object.keys(r.out).forEach(function (o) { if (o !== k && out.indexOf(o) < 0 && IND_ITEMS[o]) out.push(o); }); });
+            IND_CRAFT.forEach(function (r) { if (r.in[k] && r.out && IND_ITEMS[r.out] && indCraftShow(r) && out.indexOf(r.out) < 0 && r.out !== k) out.push(r.out); });
+            return out.map(function (o, i) { return { k: o, m: IND_MAINLINE.indexOf(indCool(o)), i: i }; }).sort(function (a, b) { return (a.m < 0 ? 99 : a.m) - (b.m < 0 ? 99 : b.m) || a.i - b.i; }).map(function (x) { return x.k; });
+        }
+        function indTopExtra(a) {
+            if (!a || !a.o) return [];
+            let k = null, X = [];
+            if (a.kind === 'item') k = a.o.k;
+            else if (a.kind === 'node') { let nd = IND_NODES[a.o.key]; if (!nd) return X; k = a.o.tree ? 'wood' : a.o.key === 'seeds' ? a.o.seed : (nd.out || a.o.key); if (!a.o.tree && nd.tool >= 1 && !a.o.hard && !a.o.crack) X.push((indTool() >= nd.tool ? '' : '<b style="color:#ffab91">') + '要' + IND_TOOL_NAME[nd.tool] + '或更好' + (indTool() >= nd.tool ? '' : '</b>')); }
+            if (k && IND_ITEMS[k]) { let M = indMakes(k); if (M.length) X.unshift('能做：' + M.slice(0, 4).map(function (o) { return indSeen(o) || IND_MAINLINE.indexOf(indCool(o)) >= 0 && indSeen(indCool(o)) ? indName(o) : '？'; }).join('、') + (M.length > 4 ? '…' : '')); }
+            return X;
+        }
+        function indTopHtml(a, hint) {
+            if (!hint) return '';
+            let i = hint.indexOf('<br>'), head = i >= 0 ? hint.slice(0, i) : hint, ops = i >= 0 ? hint.slice(i + 4) : '';
+            if (/^<small>/.test(head)) { ops = hint; head = ''; }
+            ops = ops.replace(/<small>要[^<]*(稿|镐)<\/small>/g, '');   // 要什么镐写在信息那一行
+            let name = head, rest = '';
+            if (a && head && head.charAt(0) !== '<') { let m = head.match(/^([^　 （(：]+)(.*)$/); if (m) { name = m[1]; rest = m[2].replace(/^[　 ]+/, ''); } }
+            let info = [rest].concat(a ? indTopExtra(a) : []).filter(function (x) { return x; }).join('　');
+            return (name ? '<div style="font-size:21px;font-weight:bold;">' + name + '</div>' : '') + (info ? '<div style="font-size:14px;">' + info + '</div>' : '') + (ops ? '<div style="font-size:13px;opacity:.95;">' + ops + '</div>' : '');
         }
         // 背包放不下这次采到的东西（任务 110）：准星提示改成红字"背包满了"
         function indNodeFull(o) {
@@ -1951,7 +1978,7 @@
             if (o.crack) { indFlash('裂纹岩，挖不动，得用 TNT'); return false; }
             if (o.key === 'vent_ng') { indFlash('拿空钢瓶对着喷口右键装天然气，别点火'); return false; }
             let nd = IND_NODES[o.key], tool = indTool();
-            if (tool < nd.tool) { indFlash(indName(o.key) + '要' + IND_TOOL_NAME[nd.tool] + '才挖得动'); return false; }
+            if (tool < nd.tool) return false;   // 任务 105：挖不动不弹字，什么也拿不到、不扣耐久（要什么镐写在准星信息里）
             let key = o.key === 'seeds' ? o.seed : (nd.out || o.key);
             if (nd.thorn && wdThorn()) return true;   // 空手摘仙人掌被扎
             let amt = o.out ? Math.min(o.n, IND_DIG_N + indToolBonus(nd.tool)) : (o.tree ? Math.round(o.n * wdChopTool().mult) : o.n) + indToolBonus(nd.tool);   // 铁稿 +1、钻石稿 +2：采一次多拿几个；露头一次只出 1 份
@@ -3645,7 +3672,8 @@
                 '<div style="position:absolute;left:8px;top:8px;"><div id="ind-status" style="background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
                 '<div id="ind-wear" style="margin-top:4px;background:rgba(255,255,255,.92);padding:4px 10px;border-radius:8px;font-size:13px;pointer-events:auto;"></div></div>' +
                 '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-bag" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-map" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) wdMapToggle()">地图</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-ach" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="achPanel()">成就</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
-                '<div id="ind-hint" style="position:absolute;left:50%;bottom:150px;transform:translateX(-50%);color:#fff;padding:4px 12px;font-size:20px;font-weight:bold;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;"></div>' +
+                '<div id="ind-hint" style="position:fixed;left:50%;top:6px;transform:translateX(-50%);max-width:70vw;color:#fff;padding:3px 12px;font-size:15px;line-height:1.35;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;background:rgba(0,0,0,.28);border-radius:8px;pointer-events:none;z-index:6;"></div>' +
+                '<div id="ind-cross" style="position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.7);pointer-events:none;z-index:6;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
                 '<div id="ind-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div>' +
@@ -3756,12 +3784,13 @@
             else if (sel === 'wire' && R.wirePend) hint = '<small>再点另一个设备接线</small>';
             let wr = ['body', 'head', 'neck', 'foot', 'back'].filter(function (sl) { return R.base.wear[sl]; }).map(function (sl) { return '<span onclick="indTakeOff(\'' + sl + '\')" style="cursor:pointer;margin-right:6px;border-bottom:1px dashed #999;">' + indName(R.base.wear[sl]) + '</span>'; }).join('');
             wr = '穿着：' + (wr || '<span style="color:#999">什么都没穿</span>') + (wr ? '<small style="color:#999">（点一下脱下）</small>' : '');
-            let sig = st + '|' + bag + '|' + hint + '|' + wr;
+            let sig = st + '|' + bag + '|' + hint + '|' + wr + '|' + (R.panel ? 1 : 0);
             if (sig === R.hudSig) return; R.hudSig = sig;
             let we = document.getElementById('ind-wear'); if (we) we.innerHTML = wr;
             let s = document.getElementById('ind-status'); if (s) s.innerHTML = st;
             let b = document.getElementById('ind-bag'); if (b) b.innerHTML = bag;
-            let h = document.getElementById('ind-hint'); if (h) h.innerHTML = hint;
+            let h = document.getElementById('ind-hint'); if (h) { h.innerHTML = indTopHtml(a, hint); h.style.display = hint && !R.panel ? '' : 'none'; }   // 任务 105：准星信息在屏幕顶部，面板开着不显示
+            let cr = document.getElementById('ind-cross'); if (cr) cr.style.display = R.panel ? 'none' : '';
         }
 
         // ── 大厅入口（运行时插按钮、包一层选模式和开始游戏；原函数照样调用）──
