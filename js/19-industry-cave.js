@@ -5,7 +5,7 @@
 // 光源只照自己身边一圈：火把 8 米（木 1 + 煤或木炭 1 → 2 根，右键点一根，烧 90 秒），灯泡 12 米（戴在头上，一节锂电池 720 U，洞里每秒 0.4 U，没电就黑）。
 // 40% 的洞深处有天然气喷口（瓦斯）：拿着点着的火把走到洞口 15 米以里会爆炸；灯泡没有明火不炸。
 // 洞里硬岩（炸出锂锗镓）、萤石、方铅矿比地面多、更集中。悠闲没有矿洞（里面的东西都是硬核的）。
-        const CV = { x0: IND_MAP + 200, gapZ: 120, w: 15, len: 70, floor: 0.5, mouthR: 1.8, exitR: 2.2, lit: 8, dim: 15, natR: 30, d0: 2, d0Torch: 4, d0Bulb: 6, torch: 90, torchR: 8, bulbR: 12, bulbU: 720, bulbDraw: 0.4, gasP: 0.4, gasD: 15, gasR: 4, gasHp: 60 };
+        const CV = { x0: IND_MAP + 200, gapZ: 120, w: 15, len: 70, floor: 0.5, mouthR: 1.8, exitR: 2.2, lit: 8, dim: 15, natR: 30, d0: 2, d0Torch: 4, d0Bulb: 6, torch: 90, torchR: 8, bulbR: 12, bulbU: 720, bulbDraw: 0.4, gasP: 0.4, gasD: 15, gasR: 4, gasHp: 60, cool: 2, back: 3, backMove: 0.3 };
         Object.assign(IND_ITEMS_RAW, {
             torch: { name: '火把', col: 0xff8f00, use: '右键点一根，烧 90 秒，照亮身边 8 米。洞里有瓦斯别点' },
             bulb: { name: '灯泡', col: 0xfff59d, wear: 'head', warm: 0, use: '戴在头上，矿洞里照亮身边 12 米；用一节锂电池，没电就黑，没有明火' },
@@ -66,14 +66,14 @@
             if (ind.ride && typeof rdDismount === 'function') rdDismount('进洞了，下车');
             cvBuild(c); cvFill(c);
             ind.cave = c; ind.caveFrom = { x: ind.p.x, z: ind.p.z };
-            ind.p.x = c.cx + 3; ind.p.z = c.cz; ind.p.y = CV.floor; ind.p.vy = 0; ind.caveArm = false;
+            ind.p.x = c.cx + 3; ind.p.z = c.cz; ind.p.y = CV.floor; ind.p.vy = 0; ind.caveArm = true; ind.cvBack = null;   // 任务 112：一进洞就能出去（以前要先往里走 3.7 米，掉头直接走回洞口没反应）
             scene.background = new THREE.Color(0x000000); if (scene.fog) scene.fog.color.setHex(0x000000);
             if (c.gas) indFlash('有股怪味');
         }
         function cvLeave() {
             let c = ind.cave; if (!c) return;
             ind.cave = null; ind.nodes = ind.nodes.filter(function (o) { return o.cave === undefined; }); ind.nodeDirty = true;
-            ind.p.x = c.x; ind.p.z = c.z - 2.5; ind.p.y = indHeight(ind.map, ind.p.x, ind.p.z); ind.p.vy = 0;
+            ind.p.x = c.x; ind.p.z = c.z - 2.5; ind.p.y = indHeight(ind.map, ind.p.x, ind.p.z); ind.p.vy = 0; ind.cvBack = null; ind.caveCool = CV.cool;   // 出洞后 2 秒内不会又进去
             scene.background = new THREE.Color(0xbfe3ff); if (scene.fog) scene.fog.color.setHex(0xbfe3ff);
             
         }
@@ -121,16 +121,29 @@
                     if (B.bulbU <= 0) { B.wear.head = 'bulb_dead'; B.bulbU = CV.bulbU; indFlash('灯泡没电了'); }
                 }
                 cvGasCheck(); if (!ind || ind.dead) return;
+                if (cvBackTick(dt)) return;
                 let d = Math.hypot(ind.p.x - (ind.cave.cx - 0.5), ind.p.z - ind.cave.cz);
                 if (d > CV.exitR + 1.5) ind.caveArm = true;
                 if (ind.caveArm && d <= CV.exitR) cvLeave();
                 return;
             }
+            if (ind.caveCool > 0) { ind.caveCool -= dt; return; }
             (ind.caves || []).forEach(function (c) { if (!ind.cave && Math.hypot(ind.p.x - c.x, ind.p.z - c.z) <= CV.mouthR) cvEnter(c); });
+        }
+        // 保险（任务 112）：洞里点"回到洞口"（HUD 按钮、暂停菜单里也有），站着别动 3 秒传回洞外；动了就取消
+        function cvBackStart() {
+            if (!ind || !ind.cave || ind.dead) return false;
+            ind.cvBack = { t: 0, x: ind.p.x, z: ind.p.z }; indFlash('站着别动，' + CV.back + ' 秒后回到洞口'); return true;
+        }
+        function cvBackTick(dt) {
+            let b = ind.cvBack; if (!b) return false;
+            if (Math.hypot(ind.p.x - b.x, ind.p.z - b.z) > CV.backMove) { ind.cvBack = null; indFlash('动了，没回去'); return false; }
+            b.t += dt; if (b.t < CV.back) return false;
+            cvLeave(); indFlash('回到洞口了'); return true;
         }
         function cvHint() {
             if (!ind.cave) return '';
-            let v = cvViewR(); return '矿洞里　' + (v > 2 * CV.d0 + 0.5 ? '看得清 ' + Math.round(v) + ' 米' : '很暗，只看得见身边') + (ind.torchT > 0 ? '　火把还剩 ' + Math.ceil(ind.torchT) + ' 秒' : '') + (cvBulbIs() ? '　灯泡电量 ' + Math.ceil(ind.base.bulbU >= 0 ? ind.base.bulbU : CV.bulbU) + ' U' : '');
+            let v = cvViewR(); return (ind.cvBack ? '<b>回洞口 ' + Math.ceil(CV.back - ind.cvBack.t) + '…</b>　' : '') + '矿洞里　' + (v > 2 * CV.d0 + 0.5 ? '看得清 ' + Math.round(v) + ' 米' : '很暗，只看得见身边') + (ind.torchT > 0 ? '　火把还剩 ' + Math.ceil(ind.torchT) + ' 秒' : '') + (cvBulbIs() ? '　灯泡电量 ' + Math.ceil(ind.base.bulbU >= 0 ? ind.base.bulbU : CV.bulbU) + ' U' : '');
         }
         function cvFixBase(b) { if (b.bulbU !== undefined) b.bulbU = indNum(b.bulbU, CV.bulbU, 0, CV.bulbU); }
         function cvBookLines() {

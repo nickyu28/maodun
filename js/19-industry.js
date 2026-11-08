@@ -1335,7 +1335,7 @@
             d.style.cssText = 'position:fixed;inset:0;z-index:130;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;';
             d.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 40px;text-align:center;"><div style="font-size:30px;font-weight:bold;color:#222;">已暂停</div>' +
                 '<div style="margin-top:20px;"><button id="ind-pause-go" style="' + IND_BTN + 'background:#2e7d32;font-size:20px;padding:12px 26px;" onclick="indResume()">继续</button>' +
-                '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button></div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续</div></div>';
+                '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button>' + (ind.cave ? '<button id="ind-pause-cvback" style="' + IND_BTN + 'background:#5d4037;font-size:20px;padding:12px 26px;" onclick="indResume(); cvBackStart()">回到洞口</button>' : '') + '</div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续</div></div>';
             document.body.appendChild(d);
         }
         function indResume() {
@@ -1992,7 +1992,7 @@
             indFlash('一觉睡到' + indClockTxt() + (done ? '，做好了 ' + done + ' 样' : '') + (boomed ? '，炸了 ' + boomed + ' 个设备' : '') + (melt ? '，反应堆熔毁了！' : ''));
             return true;
         }
-        // Q：在基地里把选中的东西放在脚边（永久保存）；远征里放下就是扔掉
+        // Q：把选中的东西放在脚边。基地里永久保存；远征里这一趟一直在（走开再回来还在、能捡），撤离后留在外面
         function indDrop() {
             if (!ind || ind.paused) return;
             if (ind.over || ind.panel) return;
@@ -2002,7 +2002,10 @@
             if (IND_ITEMS[k].gas) { let f = indFace(); indReleaseGas(k, ind.p.x + f.x, ind.p.z + f.z); return; }
             if (IND_ITEMS[k].poison) { let f = indFace(); nkReleasePoison(k, ind.p.x + f.x, ind.p.z + f.z); return; }
             if (IND_ITEMS[k].cyl && indCylN(IND_ITEMS[k].cyl) > 0) { let f = indFace(); indReleaseCyl(k, ind.p.x + f.x, ind.p.z + f.z); return; }
-            if (ind.where === 'trip') { indBagDel(k, 1); indFlash('扔掉了 1 个' + indName(k)); return; }
+            if (ind.where === 'trip') {   // 任务 111：远征里也放在脚边（以前是直接删掉，东西就没了）；这一趟里看得见、捡得起，撤离回基地不带回去
+                if ((ind.tripGround || []).length >= IND_ITEM_CAP) { indFlash('地上放太多了'); return; }
+                indBagDel(k, 1); indDropAtFeet(k, 1); indFlash('放下了 1 个' + indName(k)); return;
+            }
             if (ind.base.ground.length >= IND_ITEM_CAP) { indFlash('地上放太多了'); return; }
             indBagDel(k, 1);
             let a = ind.base.ground.length * 2.399, rr = 0.25 * Math.sqrt(ind.base.ground.length % 12), f = indFace();
@@ -3233,7 +3236,7 @@
         function indDropN(k, n) {
             if (!ind || ind.over || !IND_ITEMS[k] || IND_ITEMS[k].dev || IND_ITEMS[k].gas || IND_ITEMS[k].poison || (IND_ITEMS[k].cyl && indCylN(IND_ITEMS[k].cyl) > 0)) return false;
             n = Math.min(n, ind.bag[k] || 0); if (!(n > 0)) return false;
-            if (ind.where === 'trip') { indBagDel(k, n); indFlash('扔掉了 ' + n + ' 个' + indName(k)); }
+            if (ind.where === 'trip') { let room = IND_ITEM_CAP - (ind.tripGround || []).length; if (room <= 0) { indFlash('地上放太多了'); return false; } n = Math.min(n, room); indBagDel(k, n); indDropAtFeet(k, n); indFlash('放下了 ' + n + ' 个' + indName(k)); }   // 任务 111：远征里也放在地上，不再删掉
             else { let room = IND_ITEM_CAP - ind.base.ground.length; if (room <= 0) { indFlash('地上放太多了'); return false; } n = Math.min(n, room); indBagDel(k, n); indDropAtFeet(k, n); indFlash('扔了 ' + n + ' 个' + indName(k)); }
             indSave(); if (ind.panel === 'bag') indPanelBag(); return true;
         }
@@ -3598,7 +3601,7 @@
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
                 '<div id="ind-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div>' +
-                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onclick="indAction()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水 (R)</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下 (Q)</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子 (V)</button>' +
+                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onclick="indAction()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水 (R)</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下 (Q)</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子 (V)</button><button id="ind-btn-cvback" style="' + IND_BTN + 'display:none;background:#5d4037;" onclick="cvBackStart()">回到洞口</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'jump\',true)" ontouchend="indHold(\'jump\',false)" onmousedown="indHold(\'jump\',true)" onmouseup="indHold(\'jump\',false)">跳</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'run\',true)" ontouchend="indHold(\'run\',false)" onmousedown="indHold(\'run\',true)" onmouseup="indHold(\'run\',false)">跑</button></div></div>';
             document.body.appendChild(d);
@@ -3615,6 +3618,7 @@
             if ((R.panel === 'comp' || R.panel === 'press') && (R.panelDirty || tick)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, R.panel === 'comp' ? indCompHtml(d) : indPressHtml(d)); R.panelDirty = false; } }
             wdCompassTick(); if (R.panel === 'map') wdMapDraw();   // 指南针、地图（19-industry-world.js）
             let kb2 = document.getElementById('ind-btn-kick'); if (kb2) kb2.style.display = R.base.rule === 'hard' && R.where === 'base' ? '' : 'none';
+            let cb2 = document.getElementById('ind-btn-cvback'); if (cb2) cb2.style.display = R.cave ? '' : 'none';   // 洞里才有（任务 112）
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
             let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + indSeasonTxt() + '　' + rule + '<br>';

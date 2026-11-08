@@ -12547,6 +12547,67 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND136 进游戏就死：存档快死进来有 60 秒出生保护、过了照常、死了存档重置', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND137')) {
+            // IND137 远征里丢的东西不会消失（任务 111）：Q 丢一个、放 n 个都进 tripGround、画出来；走开 30 米、过 5 秒再回来还在、准星选得中、能捡、总数守恒；深水里丢的浮在水面也能捡；撤离回基地不带回去
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indGoTrip(4321); ind.mbSpawn = 1e9; ind.tripGround = []; ind.itemDirty = true; ind.bag = { wood: 5, ingot_cu: 2, coconut: 1, pick_stone: 1 }; indTeleport(3, 3); indLookAt(3, -3);
+                    let tot = function () { let n = 0; Object.keys(ind.bag).forEach(function (k) { n += ind.bag[k]; }); return n + ind.tripGround.length; }, t0 = tot();
+                    indSelect('ingot_cu'); indDrop(); indSelect('coconut'); indDrop(); indSelect('pick_stone'); indDrop(); indDropN('wood', 3);
+                    let g1 = ind.tripGround.map(function (g) { return g.k; }).sort().join(), t1 = tot(); indAdvance(0.1); let drawn = ind.itemMesh ? ind.itemMesh.count : -1;
+                    indTeleport(33, 3); indAdvance(5); indTeleport(3, 3); indLookAt(3, -3); indAdvance(0.1); let g2 = ind.tripGround.length;
+                    let picks = 0; for (let i = 0; i < 10 && ind.tripGround.length; i++) { let o = ind.tripGround[0]; indTeleport(o.x, o.z + 1.2); indLookAt(o.x, o.z); let a = indAim(); if (a && a.kind === 'item') { indAction(); picks++; } }
+                    return { t0: t0, t1: t1, g1: g1, drawn: drawn, g2: g2, picks: picks, left: ind.tripGround.length, t2: tot(), bag: ind.bag }; })()`);
+                if (!(r.g1 === 'coconut,ingot_cu,pick_stone,wood,wood,wood' && r.t1 === r.t0 && r.drawn === 6 && r.g2 === 6 && r.picks === 6 && r.left === 0 && r.t2 === r.t0)) bad.push('丢下、走开再回来还在、画出来、选得中、捡得回来、总数守恒 ' + JSON.stringify(r));
+                r = await J(`(function(){ let M = ind.map, p = null; for (let i = 0; i < 4000 && !p; i++) { let x = (i % 80) * 6 - 240, z = Math.floor(i / 80) * 6 - 150; if (indWaterDepth(x, z) > 1) p = { x: x, z: z }; }
+                    if (!p) return { none: true }; ind.bag = { wood: 1 }; indTeleport(p.x, p.z); indLookAt(p.x, p.z - 5); indSelect('wood'); indDrop(); let g = ind.tripGround[ind.tripGround.length - 1];
+                    let y = indGround(g.x, g.z); indTeleport(g.x, g.z + 1.2); indLookAt(g.x, g.z); let a = indAim(); if (a && a.kind === 'item') indAction(); return { n: ind.tripGround.length, y: y, wood: ind.bag.wood || 0 }; })()`);
+                if (!r.none && !(r.n === 0 && r.y >= -1.21 && r.wood === 1)) bad.push('深水里丢的浮在水面、捡得回来 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.bag = { wood: 2 }; indSelect('wood'); indDrop(); indGoBase(true); return { g: ind.base.ground.filter(function (x) { return x.k === 'wood'; }).length, trip: (ind.tripGround || []).length }; })()`);
+                if (!(r.trip === 0)) bad.push('撤离后远征地上的东西不带回基地 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND137 远征里丢的东西：放在地上、走开再回来还在、捡得回来、总数守恒、深水浮着', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND138')) {
+            // IND138 矿洞出得去（任务 112）：① 几百次进洞，出口 8 米内没有硬岩、裂纹岩、喷口，进洞点到出口一路没有东西；② 进洞直接掉头走向出口一次就出去（不用先往里走）；
+            // ③ 洞里点"回到洞口"站 3 秒回到洞外，中途动了取消；HUD 和暂停菜单里有这个按钮，洞外没有；④ 出洞后 2 秒内站回洞口不会又进去
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { ind.base.rule = 'hard'; let s = 1; for (; s < 60; s++) { indGoTrip(s * 131); if (ind.caves.length) break; } ind.mbSpawn = 1e9; ind.bag = {}; ind.base.wear = {}; ind.torchT = 0; ind.base.surv.hp = 100; ind.k = {};
+                    let c = ind.caves[0];
+                    ${body} } finally { blazeFlash = bf; ind.k = {}; } })()`);
+                let r = await run(`let badN = 0, n = 0; for (let i = 0; i < 300; i++) { cvEnter(c); ind.nodes.filter(function (o) { return o.cave === c.i; }).forEach(function (o) { n++; if (o.x - c.cx < 8) badN++; }); cvLeave(); } return { badN: badN, n: n };`);
+                if (!(r.n > 300 && r.badN === 0)) bad.push('出口 8 米内、进洞点到出口一路没有东西（300 次） ' + JSON.stringify(r));
+                r = await run(`let fails = 0; for (let i = 0; i < 100; i++) { ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); if (ind.cave !== c) { fails += 100; break; } indLookAt(c.cx - 10, c.cz + (i % 7 - 3) * 0.2); ind.k = { w: true }; for (let j = 0; j < 40 && ind.cave; j++) indAdvance(0.05); ind.k = {}; if (ind.cave) { fails++; cvLeave(); } }
+                    return { fails: fails };`);
+                if (r.fails !== 0) bad.push('进洞直接掉头走回洞口，100 次都一次出去 ' + JSON.stringify(r));
+                r = await run(`ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); indTeleport(c.cx + 30, c.cz + 5); indHudUpdate(); let btnIn = document.getElementById('ind-btn-cvback').style.display !== 'none';
+                    indPause(); let pauseBtn = !!document.getElementById('ind-pause-cvback'); document.getElementById('ind-pause-cvback').click(); let paused = !!ind.paused;
+                    indAdvance(1.5); let mid = !!ind.cave; indAdvance(1.6); let out = !ind.cave && Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < 4; indHudUpdate(); let btnOut = document.getElementById('ind-btn-cvback').style.display !== 'none';
+                    indPause(); let pauseOut = !!document.getElementById('ind-pause-cvback'); indResume();
+                    return { btnIn: btnIn, pauseBtn: pauseBtn, paused: paused, mid: mid, out: out, btnOut: btnOut, pauseOut: pauseOut };`);
+                if (!(r.btnIn && r.pauseBtn && !r.paused && r.mid && r.out && !r.btnOut && !r.pauseOut)) bad.push('点"回到洞口"站 3 秒回洞外；按钮只在洞里有 ' + JSON.stringify(r));
+                r = await run(`ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); indTeleport(c.cx + 30, c.cz + 5); cvBackStart(); indAdvance(1); ind.p.x += 1; indAdvance(3); return { still: ind.cave === c, cancel: /动了/.test(fl.join('|')) };`);
+                if (!(r.still && r.cancel)) bad.push('中途动了取消 ' + JSON.stringify(r));
+                r = await run(`ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); indTeleport(c.cx - 0.5, c.cz); cvTick(0.05); let out = !ind.cave; indAdvance(0.5); indTeleport(c.x, c.z); cvTick(0.05); let re = !!ind.cave; return { out: out, re: re };`);
+                if (!(r.out && !r.re)) bad.push('出洞后马上站回洞口不会又进去 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND138 矿洞出得去：出口附近没东西挡、进洞直接走回去就出、回到洞口按钮 3 秒、动了取消、出洞不马上又进', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
