@@ -12851,6 +12851,38 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND146 工作台能做的排前面带勾、背包变了跟着变、下标不动', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND147')) {
+            // IND147 连线连自己、Esc 取消（任务 104）：铜线点一个设备再点它自己：允许、不报"不能"、不耗线；电池组连自己还是短路；信号线可以自己接自己；
+            // 点了第一个之后按 Esc 取消、不耗线、不弹暂停；点空地也取消；HUD 有"取消连线"按钮，点它也取消；老存档读档不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; indPanelClose(); B.devs = []; B.wires = []; B.sig = []; ind.wirePend = null; ind.sigPend = null; ind.paused = false;
+                    let dev = function (ty, x) { let d = { id: ++B.dseq, ty: ty, x: x, z: 12, bats: 0, u: 0, on: true, ft: 20, st: {} }; B.devs.push(d); return d; };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`let a = dev('el', -6); ind.bag = { wire: 3 }; indSelect('wire'); indDevAct(a); let p1 = ind.wirePend; indDevAct(a); return { p1: p1 === a.id, pend: ind.wirePend, wire: ind.bag.wire, wires: B.wires.length, fl: fl.join('|') };`);
+                if (!(r.p1 && !r.pend && r.wire === 3 && r.wires === 0 && !/不能/.test(r.fl))) bad.push('连自己允许、不报错、不耗线 ' + JSON.stringify(r));
+                r = await run(`let b = dev('bank', -4); b.bats = 4; b.u = 100; ind.bag = { wire: 3 }; indSelect('wire'); indDevAct(b); indDevAct(b); return { short: b.short, wire: ind.bag.wire };`);
+                if (!(r.short > 0 && r.wire === 2)) bad.push('电池组连自己还是短路 ' + JSON.stringify(r));
+                r = await run(`let a = dev('el', -6), b2 = dev('bank', -2); b2.bats = 4; b2.u = 100; ind.bag = { wire: 3 }; indSelect('wire'); indDevAct(a); indHudUpdate(); let btn = document.getElementById('ind-btn-unwire').style.display !== 'none';
+                    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); let esc = { pend: ind.wirePend, paused: !!ind.paused, wire: ind.bag.wire };
+                    indDevAct(a); document.getElementById('ind-btn-unwire').click(); let viaBtn = ind.wirePend;
+                    indDevAct(a); indTeleport(-30, 30); indLookAt(-30, 40); let aim = indAim(); indAction(); let viaEmpty = ind.wirePend;
+                    indHudUpdate(); let btnOff = document.getElementById('ind-btn-unwire').style.display === 'none';
+                    indDevAct(a); indDevAct(b2); return { btn: btn, esc: esc, viaBtn: viaBtn, aim: aim && aim.kind, viaEmpty: viaEmpty, btnOff: btnOff, wires: B.wires.length, wire: ind.bag.wire };`);
+                if (!(r.btn && !r.esc.pend && !r.esc.paused && r.esc.wire === 3 && !r.viaBtn && !r.aim && !r.viaEmpty && r.btnOff && r.wires === 1 && r.wire === 2)) bad.push('Esc／按钮／点空地取消、不耗线、不暂停；之后照常能连 ' + JSON.stringify(r));
+                r = await run(`let L = Object.keys(RC_KINDS).filter(function (k) { return RC_KINDS[k].ins > 0 && RC_KINDS[k].outs > 0 && k !== 'cchip' && k !== 'cdelay'; })[0]; let g = dev(L, 0); ind.bag = { sigwire: 2 }; indSelect('sigwire'); rcSigClick(g); rcSigClick(g); return { L: L, sig: JSON.stringify(B.sig), fl: fl.join('|') };`);
+                const s2 = await J(`(function(){ let g = ind.base.devs[ind.base.devs.length - 1]; return { ok: ind.base.sig.length === 1 && ind.base.sig[0][0] === g.id && ind.base.sig[0][2] === g.id }; })()`);
+                if (!s2.ok || /不能/.test(r.fl)) bad.push('信号线可以自己接自己 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND147 连线：连自己允许、电池组短路、信号线自环、Esc／按钮／点空地取消不耗线不暂停', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式

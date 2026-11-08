@@ -936,6 +936,11 @@
         let ind = null;
         document.addEventListener('visibilitychange', function () { if (document.hidden && ind && !ind.over && !ind.loading) indSave(); });   // 切走或关页面前存一次
         // 任务 110："背包满了"停 2.5 秒，期间别的提示接在它后面，不把它盖掉
+        // 任务 104：点了第一个设备之后取消连线（不耗线）。Esc、点空地、HUD 上"取消连线"按钮
+        function indCancelWire() {
+            if (!ind || !(ind.wirePend || ind.sigPend)) return false;
+            ind.wirePend = null; ind.sigPend = null; ind.devDirty = true; indFlash('取消连线'); return true;
+        }
         function indFlash(t) {
             try {
                 let full = /^背包满了/.test(String(t)), now = performance.now();
@@ -1780,6 +1785,7 @@
             if (indSel() === 'bell') return indRing();
             if (indSel() === 'bellows') return indInstallBellows(indAim());
             let a = indAim();
+            if (!a && (ind.wirePend || ind.sigPend)) return indCancelWire();   // 任务 104：连线状态下点空地＝取消（触屏也能用）
             if (a && a.kind === 'animal' && indToolish(indSel()) && tlKind(indSel()) !== 'shears') {   // 稿子、铜线、钳子对着动物：找别的目标，没有就只看状态
                 let b = indAim(true);
                 if (b) a = b;
@@ -2568,7 +2574,7 @@
             if (k === 'wire') {
                 if (D.nowire) { indFlash(D.name + '不用接线'); return false; }
                 if (!ind.wirePend) { ind.wirePend = d.id; ind.devDirty = true; indFlash('选了' + D.name + '，再点另一个'); return true; }
-                if (ind.wirePend === d.id) { if (scShortTry(d)) return true; ind.wirePend = null; ind.devDirty = true; return true; }
+                if (ind.wirePend === d.id) { if (scShortTry(d)) return true; ind.wirePend = null; ind.devDirty = true; indFlash('自己连自己：接上了，没有效果'); return true; }   // 任务 104：连自己允许（电池组连自己是短路），别的不耗线
                 let a = indDev(ind.wirePend); ind.wirePend = null; ind.devDirty = true;
                 if (!a) return false;
                 let src = D.src ? d : a, dev = D.src ? a : d;
@@ -3606,7 +3612,7 @@
             if (k === ' ') { ind.k.jump = true; e.preventDefault(); return; }
             if (k === 'shift') { ind.k.run = true; return; }
             if (e.repeat) return;
-            if (k === 'escape') { if (ind.panel) indPanelClose(); return; }
+            if (k === 'escape') { if (indCancelWire()) return; if (ind.panel) indPanelClose(); return; }   // 任务 104：连线状态下 Esc 先取消连线
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）
             if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); indTrashHand(); return; }   // Ctrl+Q：销毁手上那一格（5 秒能撤销）
@@ -3643,7 +3649,7 @@
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
                 '<div id="ind-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div>' +
-                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onclick="indAction()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水 (R)</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下 (Q)</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子 (V)</button><button id="ind-btn-cvback" style="' + IND_BTN + 'display:none;background:#5d4037;" onclick="cvBackStart()">回到洞口</button>' +
+                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onclick="indAction()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水 (R)</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下 (Q)</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子 (V)</button><button id="ind-btn-cvback" style="' + IND_BTN + 'display:none;background:#5d4037;" onclick="cvBackStart()">回到洞口</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线 (Esc)</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'jump\',true)" ontouchend="indHold(\'jump\',false)" onmousedown="indHold(\'jump\',true)" onmouseup="indHold(\'jump\',false)">跳</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'run\',true)" ontouchend="indHold(\'run\',false)" onmousedown="indHold(\'run\',true)" onmouseup="indHold(\'run\',false)">跑</button></div></div>';
             document.body.appendChild(d);
@@ -3661,6 +3667,7 @@
             wdCompassTick(); if (R.panel === 'map') wdMapDraw();   // 指南针、地图（19-industry-world.js）
             let kb2 = document.getElementById('ind-btn-kick'); if (kb2) kb2.style.display = R.base.rule === 'hard' && R.where === 'base' ? '' : 'none';
             if (R.panel === 'bench') { let sig = JSON.stringify(R.bag); if (sig !== R.benchSig) { R.benchSig = sig; indPanelBench(); } }   // 任务 103：背包变了，工作台的排序跟着变
+            { let uw = document.getElementById('ind-btn-unwire'); if (uw) uw.style.display = R.wirePend || R.sigPend ? '' : 'none'; }
             let cb2 = document.getElementById('ind-btn-cvback'); if (cb2) cb2.style.display = R.cave ? '' : 'none';   // 洞里才有（任务 112）
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';

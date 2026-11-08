@@ -93,7 +93,6 @@
                 ind.sigPend = { id: d.id, port: d.ty === 'cchip' && ind.sigPort && ind.sigPort.id === d.id && ind.sigPort.kind === 'out' ? ind.sigPort.port : 0 }; ind.devDirty = true; return true;
             }
             let P = ind.sigPend; ind.sigPend = null; ind.devDirty = true;
-            if (P.id === d.id) { indFlash('不能自己连自己'); return false; }
             let src = indDev(P.id); if (!src) return false;
             if (!K.ins) { indFlash(K.name + '没有输入口'); return false; }
             if (B.sig.length >= RC.maxSig) { indFlash('电路太多了'); return false; }
