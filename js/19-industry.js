@@ -2954,12 +2954,16 @@
         }
         function indPanelBench() {
             if (!ind) return;
-            let rows = IND_CRAFT.map(function (r, i) {
+            // 任务 103：材料够、能马上做的排前面，带绿勾；两组里各自保持原来的顺序（只改显示顺序，IND_CRAFT 的下标不动）
+            let order = IND_CRAFT.map(function (r, i) { return i; }), canOf = IND_CRAFT.map(function (r) { return indCraftShow(r) && indCraftCan(r); });
+            order = order.filter(function (i) { return canOf[i]; }).concat(order.filter(function (i) { return !canOf[i]; }));
+            let rows = order.map(function (i) {
+                let r = IND_CRAFT[i];
                 if (!indCraftShow(r)) return '';
-                let nm = r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.glass ? r.name + (ind.base.glass ? '（已经盖了）' : '') : r.pot ? r.name + (ind.base.pot ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : '');
+                let nm = (canOf[i] ? '<b class="ind-can" style="color:#2e7d32;">✓</b> ' : '') + (r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.glass ? r.name + (ind.base.glass ? '（已经盖了）' : '') : r.pot ? r.name + (ind.base.pot ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : ''));
                 let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + (r.out && IND_ITEMS[r.out] ? '　→ ' + indName(r.out) + ' ×' + (r.n || 1) : '');
                 let can = indCraftCan(r), once = r.gh || r.glass || r.pot;   // 盖暖棚、装大锅只能一次
-                return indRow(nm + '<br><small style="color:#888">' + need + '</small>', '<span style="white-space:nowrap;"><button style="' + IND_BTN + (can ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>' + (once ? '' : '<button style="' + IND_BTN + (can ? 'background:#1b5e20;' : 'background:#bbb;') + '" onclick="indCraftMax(' + i + ')">做最多</button>') + '</span>');
+                return indRow('<span data-ci="' + i + '" style="' + (can ? '' : 'color:#999;') + '">' + nm + '</span><br><small style="color:#888">' + need + '</small>', '<span style="white-space:nowrap;"><button style="' + IND_BTN + (can ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>' + (once ? '' : '<button style="' + IND_BTN + (can ? 'background:#1b5e20;' : 'background:#bbb;') + '" onclick="indCraftMax(' + i + ')">做最多</button>') + '</span>');
             }).join('');
             indPanelShow('bench', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">工作台</div><div style="color:#888;margin-bottom:4px;">用身上的原料做</div>' + rows +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
@@ -3656,6 +3660,7 @@
             if ((R.panel === 'comp' || R.panel === 'press') && (R.panelDirty || tick)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, R.panel === 'comp' ? indCompHtml(d) : indPressHtml(d)); R.panelDirty = false; } }
             wdCompassTick(); if (R.panel === 'map') wdMapDraw();   // 指南针、地图（19-industry-world.js）
             let kb2 = document.getElementById('ind-btn-kick'); if (kb2) kb2.style.display = R.base.rule === 'hard' && R.where === 'base' ? '' : 'none';
+            if (R.panel === 'bench') { let sig = JSON.stringify(R.bag); if (sig !== R.benchSig) { R.benchSig = sig; indPanelBench(); } }   // 任务 103：背包变了，工作台的排序跟着变
             let cb2 = document.getElementById('ind-btn-cvback'); if (cb2) cb2.style.display = R.cave ? '' : 'none';   // 洞里才有（任务 112）
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';

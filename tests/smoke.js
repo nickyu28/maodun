@@ -12828,6 +12828,29 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND145 堆叠石炉怎么分：同一个 3k、平均烧 n×k÷a、自定义按座数、单座不变、燃料各自烧、面板按钮', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND146')) {
+            // IND146 工作台里能做的排前面、带绿勾（任务 103）：材料够的在最前、有勾、两组里保持原顺序；背包变了排序跟着变；IND_CRAFT 下标没变（按钮 onclick 还是原下标）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const snap = `(function(){ let L = Array.prototype.map.call(document.querySelectorAll('#ind-panel [data-ci]'), function (e) { return { i: +e.getAttribute('data-ci'), can: !!e.querySelector('.ind-can') }; }); return L; })()`;
+                let r = await J(`(function(){ indGoBase(null); ind.bag = { wood: 30, rope: 10, grass: 20, stone: 20 }; let sig0 = JSON.stringify(IND_CRAFT.map(function (q) { return q.out; })); indPanelBench(); let L = ${snap};
+                    let firstNo = L.findIndex(function (x) { return !x.can; }), lastYes = L.map(function (x) { return x.can; }).lastIndexOf(true);
+                    let truth = L.every(function (x) { return x.can === indCraftCan(IND_CRAFT[x.i]); }), ordA = L.filter(function (x) { return x.can; }).map(function (x) { return x.i; }), ordB = L.filter(function (x) { return !x.can; }).map(function (x) { return x.i; });
+                    let sorted = function (a) { return a.every(function (v, j) { return j === 0 || a[j - 1] < v; }); };
+                    ind.bag = { clay: 5 }; ind.hudSig = ''; indHudUpdate(); let L2 = ${snap};
+                    return { n: L.length, yes: ordA.length, firstNo: firstNo, lastYes: lastYes, truth: truth, sa: sorted(ordA), sb: sorted(ordB), same: sig0 === JSON.stringify(IND_CRAFT.map(function (q) { return q.out; })), changed: JSON.stringify(L2.slice(0, 3)) !== JSON.stringify(L.slice(0, 3)), truth2: L2.every(function (x) { return x.can === indCraftCan(IND_CRAFT[x.i]); }) }; })()`);
+                if (!(r.yes >= 2 && r.n > r.yes && r.lastYes < r.firstNo && r.truth && r.sa && r.sb && r.same)) bad.push('能做的排前面带勾、两组各自原顺序、配方表下标没变 ' + JSON.stringify(r));
+                if (!(r.changed && r.truth2)) bad.push('背包变了排序跟着变 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND146 工作台能做的排前面带勾、背包变了跟着变、下标不动', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
