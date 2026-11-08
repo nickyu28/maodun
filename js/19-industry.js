@@ -50,7 +50,7 @@
         const IND_SEASON_DAYS = 3;
         const IND_SEASONS = [{ name: '春', t: 18 }, { name: '夏', t: 28 }, { name: '秋', t: 15 }, { name: '冬', t: -5 }];
         // 体温：等效气温 = 气温 + 衣服保暖 × 2.5；低于 15°C 慢慢变冷、高于 30°C 慢慢变热，每差 1 度每秒变 0.0015°C；不冷不热时每秒回 37°C 0.02
-        const IND_BODY = { warmMul: 2.5, cold: 15, hot: 30, rate: 0.0015, back: 0.02, chill: 35, freeze: 33, sweat: 39, boil: 41, fireR: 4, fireHeat: 20, waterCold: 10 };
+        const IND_BODY = { warmMul: 2.5, cold: 15, hot: 30, rate: 0.0015, back: 0.02, chill: 35, freeze: 33, sweat: 39, boil: 41, fireR: 4, fireHeat: 20, waterCold: 10, waterCool: 0.1, waterMin: 36 };
         const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 4 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, regen: 0.3, starveHp: 1, thirstHp: 2 };
 
         // ── 物品 ──
@@ -758,11 +758,22 @@
         }
         function indHeavy() { let f = 1; Object.keys(ind.base.wear).forEach(function (sl) { f *= IND_ITEMS[ind.base.wear[sl]].heavy || 1; }); return f; }   // 防爆服 ×0.6
         function indWarmth() { let w = 0; Object.keys(ind.base.wear).forEach(function (sl) { w += IND_ITEMS[ind.base.wear[sl]].warm || 0; }); return w; }
+        // 站在水里：基地的水池（2×2）、自己挖的有水的池子格、井，或者出门地图的浅水（深水游泳不算）
+        function indInPondWater() {
+            let x = ind.p.x, z = ind.p.z;
+            if (ind.where === 'trip') { let d = indWaterDepth(x, z); return d > IND_WATER.wet && d < IND_WATER.shallow; }
+            if (ind.where !== 'base') return false;
+            let P = IND_BASE_ST.pool, B = ind.base;
+            if (!B.off.pool && Math.abs(x - P.x) <= 1 && Math.abs(z - P.z) <= 1 && plW() > 0) return true;
+            if (pdCells().some(function (c) { return c.w > 0.05 && Math.abs(x - c.i) <= 0.5 && Math.abs(z - c.j) <= 0.5; })) return true;
+            return wlList().some(function (w) { return Math.abs(x - w.i) <= 0.5 && Math.abs(z - w.j) <= 0.5; });
+        }
         function indBodyTick(dt) {
             let S = ind.base.surv, B = IND_BODY, eff = indAirTemp() + indWarmth() * B.warmMul;
             if (eff < B.cold) S.temp -= (B.cold - eff) * B.rate * dt;
             else if (eff > B.hot) S.temp += (eff - B.hot) * B.rate * dt;
             else { let bk = B.back * (S.temp > 39 ? 3 : 1) * dt; S.temp += Math.max(-bk, Math.min(bk, 37 - S.temp)); }
+            if (indInPondWater() && S.temp > IND_BODY.waterMin) S.temp = Math.max(IND_BODY.waterMin, S.temp - IND_BODY.waterCool * dt);   // 站在池子、井、浅水里体温每秒 −0.1°C，最低 36（任务 90）
             S.temp = Math.max(25, Math.min(ind.cave && typeof MB !== 'undefined' ? Math.max(38, MB.caveTempMax) : 45, S.temp));   // 任务 84：洞里体温最高 38
             if (S.temp > 38.5 && !ind.heatHint) { ind.heatHint = true; indFlash('太热了，离窑远点，喝点水'); } else if (S.temp < 38) ind.heatHint = false;
         }
@@ -1218,7 +1229,7 @@
             let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed); odApplyMap(M);   // 钉住的块盖上去（19-industry-outdoor.js）
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 30, IND_VIEW.day);
             wdTerrain(M);   // 地形分成 10 × 10 块，视野外的块不画（19-industry-world.js）
-            let wat = new THREE.Mesh(indGeo(new THREE.PlaneGeometry(IND_MAP * 2, IND_MAP * 2)), indMat(new THREE.MeshLambertMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.75 })));
+            let wat = new THREE.Mesh(indGeo(new THREE.PlaneGeometry(IND_MAP * 2, IND_MAP * 2)), indMat(new THREE.MeshLambertMaterial({ color: 0x1565c0, transparent: true, opacity: 0.8 })));   // 海水深蓝；淡水（池子、井）浅蓝
             wat.rotation.x = -Math.PI / 2; wat.position.y = IND_WATER_Y; indAdd(wat);
             // 资源点：按地貌的权重挑；悠闲世界只刷 IND_CASUAL_RES 里的
             let r = indRng(M.seed ^ 0x9e3779b9), casual = ind.base.rule === 'casual';
@@ -1418,6 +1429,7 @@
             S.water = Math.max(0, S.water - Q.water * (ind.sickT > 0 ? Q.sickWater : 1) * indHeatThirst(S.temp) * dt);
             let em = (ind.running ? Q.runEnergy : 1) * (ind.where === 'trip' && indIsNight() ? Q.nightOut : 1);
             S.energy = Math.max(0, S.energy - Q.energy * em * dt);
+            if (S.water < 10 && !ind.thirstHint) { ind.thirstHint = true; indFlash('快渴死了'); } else if (S.water >= 20) ind.thirstHint = false;   // 任务 90：口渴 < 10 提示一次，回到 20 以上才能再提示
             if (indSel() === 'dry_ice') S.temp = Math.max(25, S.temp - IND_DRY_COLD * dt);   // 干冰拿在手上，体温每秒 −0.05°C
             if (indHard()) {
                 let cold = S.temp < IND_BODY.freeze ? 1 : 0;
@@ -2367,8 +2379,7 @@
             else if (f.ty === 'bed') { m.push(indBox(2.2, 0.5, 3.2, 0x5c6bc0, x, 0.25, z)); m.push(indSign('床', x, 1.8, z, 2, 0.5)); }
             else if (f.ty === 'bench') { m.push(indBox(2.4, 1.0, 1.4, 0xa1887f, x, 0.5, z)); m.push(indSign('工作台', x, 2.2, z, 2.4, 0.6)); }
             else if (f.ty === 'pool') {
-                let r = IND_BASE_ST.pool.r, pool = new THREE.Mesh(indGeo(new THREE.CylinderGeometry(r, r, 0.15, 24)), indMat(new THREE.MeshLambertMaterial({ color: 0x29b6f6 })));
-                pool.position.set(x, 0.08, z); m.push(indAdd(pool)); m.push(indSign('水池', x, 1.6, z, 1.8, 0.45));
+                m.push(indBox(2, 0.15, 2, 0x81d4fa, x, 0.08, z)); m.push(indSign('水池', x, 1.6, z, 1.8, 0.45));   // 2×2 方形，淡水浅蓝（任务 90）
             } else { let D = IND_COOK[f.ty]; m.push(indBox(D.size[0], D.size[1], D.size[2], D.col, x, D.size[1] / 2, z)); m.push(indSign(D.name, x, D.size[1] + 0.8, z, 2.4, 0.6)); }
             if (IND_COOK[f.ty] && f.C && ckSpoutOn(f.C)) {   // 炉子外面的出料槽（悠闲自带、硬核装砖槽／铁槽）：冶炼出来的烫锭进这里
                 let sp = indSpoutPos({ ty: f.ty, x: x, z: z }), SD = ckSpoutDef(f.C), brick = f.C.spoutTy === 'brick';
