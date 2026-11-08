@@ -10830,7 +10830,7 @@ async function enterExit(tab, key) {
                     ${body} } finally { blazeFlash = bf; } })()`);
                 // 雕：12 刀，中间按偏一次 → 命中率 12/13 → 耐久 29；黏土扣 2
                 let r = await run(`ind.bag = { knife: 1, clay: 3 }; indSelect('knife'); indUse(); let p = ind.panel; ctCarveStart('axe'); let C = ind.carve;
-                    for (let i = 0; i < 12; i++) { C.t0 = ind.t - 0.6; ctHit(); if (i === 3) { C.t0 = ind.t; ctHit(); } }
+                    for (let i = 0; i < 12; i++) { C.t0 = ind.t - CALIB.sweep * 0.5; ctHit(); if (i === 3) { C.t0 = ind.t; ctHit(); ind.stunUntil = 0; } }
                     return { p: p, raw: ind.bag.mold_axe_raw || 0, clay: ind.bag.clay, q: ind.base.moldQ.axe, carve: !!ind.carve, bar: !!document.getElementById('ind-carve') };`);
                 if (!(r.p === 'carve' && r.raw === 1 && r.clay === 1 && r.q && r.q[0] === 29 && !r.carve && !r.bar)) bad.push('雕模具 12 刀、命中率定耐久、扣 2 黏土 ' + JSON.stringify(r));
                 // 烧硬 600°C 30 秒；化锭 10 秒 1 份；放进槽流满出烫斧头；凉了取、耐久 −1；槽里有模具不接锭
@@ -11448,7 +11448,7 @@ async function enterExit(tab, key) {
                     ${body} })()`);
                 // 雕耐火砖模具：2 耐火砖 + 小刀，雕够刀数得耐火砖生模具；黏土不够也能雕
                 let r = await run(`ind.bag = { brick_fire: 2, knife: 1 }; indSelect('knife'); let menu = ctCarveMenu(); let txt = document.getElementById('ind-panel').innerText; ctCarveStart('knife', 1); let cuts = CT_SHAPE.knife.cuts;
-                    for (let i = 0; i < 400 && ind.carve; i++) { ind.t = ind.carve.t0 + 0.6 + 2.4 * i; ctHit(); } return { menu: menu, both: /耐火砖/.test(txt), raw: ind.bag.mold_knife_f_raw || 0, brick: ind.bag.brick_fire || 0, q: ind.base.moldQ.knife_f && ind.base.moldQ.knife_f[0] };`);
+                    for (let i = 0; i < 400 && ind.carve; i++) { ind.t = ind.carve.t0 + CALIB.sweep * 0.5 + CALIB.sweep * i; ctHit(); } return { menu: menu, both: /耐火砖/.test(txt), raw: ind.bag.mold_knife_f_raw || 0, brick: ind.bag.brick_fire || 0, q: ind.base.moldQ.knife_f && ind.base.moldQ.knife_f[0] };`);
                 if (!(r.menu && r.both && r.raw === 1 && r.brick === 0 && r.q >= 15 && r.q <= 30)) bad.push('雕耐火砖模具 ' + JSON.stringify(r));
                 // 烧硬：1400°C 不行，1600°C 60 秒变熟模具；配方在表末尾之后
                 r = await run(`let c = cook('kiln'); c.fire = 4; c.blow = 999; c.fuel = 1e5; c.items = { mold_axe_f_raw: 1 }; tick(c, 70, 1400); let lo = c.out.mold_axe_f || 0; c.items = { mold_axe_f_raw: 1 }; c.out = {}; c.cook = null; tick(c, 50, 1600); let mid = c.out.mold_axe_f || 0; tick(c, 20, 1600); let hi = c.out.mold_axe_f || 0;
@@ -12334,6 +12334,41 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND128 选项格式统一：放 1、全放、放 n（自定义最后）、加 1、全加、加 n、默认值是持有数', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND129')) {
+            // IND129 雕模具改校准（任务 95）：指针转圈用大厅／惊魂夜共用的 calibZoneAt；红区按空格算一刀、白区擦边也算（质量 0.6）、灰区眩晕 2 秒不能动不能再按；连续失败 3 次生模具碎黏土不退；命中率定耐久；点圈（触屏）也行
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; ind.bag = { knife: 1, clay: 9, brick_fire: 4 }; ind.base.moldQ = {}; ind.carve = null; ind.stunUntil = 0; indPanelClose(); indSelect('knife');
+                    let at = function (pos) { ind.carve.t0 = ind.t - CALIB.sweep * pos; }; ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`ctCarveStart('knife'); let C = ind.carve, n = CT_SHAPE.knife.cuts; let z = [0.5, 0.3, 0.1, 0.9].map(function (p) { at(p); return calibZoneAt(ctPos()); });
+                    for (let i = 0; i < n - 1; i++) { at(0.5); ctHit(); } let mid = C.hit; at(0.3); ctHit(); let done = !ind.carve; return { z: z, mid: mid, done: done, raw: ind.bag.mold_knife_raw, clay: ind.bag.clay, q: ind.base.moldQ.knife && ind.base.moldQ.knife[0] };`);
+                const q = Math.round(15 + 15 * (7 + 0.6) / 8);
+                if (!(r.z.join() === 'red,white,gray,gray' && r.mid === 7 && r.done && r.raw === 1 && r.clay === 7 && r.q === q)) bad.push('红区白区灰区、7 刀 + 白区擦边 1 刀完成、质量 ' + q + '、扣 2 黏土 ' + JSON.stringify(r));
+                r = await run(`ctCarveStart('axe'); let C = ind.carve; at(0.05); ctHit(); let st = ctStunned(), f1 = C.fails; let hitsBefore = C.hit; at(0.5); ctHit(); let ignored = C.hit === hitsBefore; ind.t += CALIB.stun + 0.1; at(0.5); ctHit(); let after = C.hit;
+                    let pos0 = { x: ind.p.x, z: ind.p.z }; ind.k.w = true; ind.stunUntil = ind.t + 2; indMove(0.5); let moved = Math.hypot(ind.p.x - pos0.x, ind.p.z - pos0.z); ind.k.w = false; ind.stunUntil = 0; return { st: st, f1: f1, ignored: ignored, after: after, moved: moved, fl: fl.join('|') };`);
+                if (!(r.st && r.f1 === 1 && r.ignored && r.after === 1 && r.moved < 0.01 && /眩晕/.test(r.fl))) bad.push('失败眩晕 2 秒：不能再按、不能动，过了能按 ' + JSON.stringify(r));
+                r = await run(`ctCarveStart('axe'); at(0.05); ctHit(); ind.t += 2.1; at(0.1); ctHit(); ind.t += 2.1; let c1 = !!ind.carve; at(0.95); ctHit(); return { c1: c1, gone: !ind.carve, clay: ind.bag.clay, raw: ind.bag.mold_axe_raw || 0, fl: fl.join('|') };`);
+                if (!(r.c1 && r.gone && r.clay === 7 && r.raw === 0 && /碎了/.test(r.fl))) bad.push('连续失败 3 次模具碎、黏土没了（9 → 7）、没有生模具 ' + JSON.stringify(r));
+                r = await run(`ctCarveStart('axe'); let C = ind.carve; at(0.05); ctHit(); ind.t += 2.1; at(0.5); ctHit(); ind.t += 2.1; at(0.05); ctHit(); ind.t += 2.1; at(0.5); ctHit(); return { fails: C.fails, hit: C.hit, still: !!ind.carve };`);
+                if (!(r.fails === 0 && r.hit === 2 && r.still)) bad.push('中间命中一次，连续失败重新数 ' + JSON.stringify(r));
+                r = await run(`ctCarveStart('knife', 1); let n = CT_SHAPE.knife.cuts; for (let i = 0; i < n; i++) { at(0.5); ctHit(); } return { f: ind.bag.mold_knife_f_raw || 0, brick: ind.bag.brick_fire, q: ind.base.moldQ.knife_f && ind.base.moldQ.knife_f[0] };`);
+                if (!(r.f === 1 && r.brick === 2 && r.q === 30)) bad.push('耐火砖的雕：全红区耐久 30 ' + JSON.stringify(r));
+                await T.eval(`indGoBase(null); ind.bag = { knife: 1, clay: 9 }; ind.carve = null; ind.stunUntil = 0; indSelect('knife'); ctCarveStart('knife'); ind.t0x = ind.carve.t0; ind.carve.t0 = ind.t - CALIB.sweep * 0.5; true;`);
+                await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })); true;`);
+                const sp = await T.eval(`ind.carve ? ind.carve.hit : -1`);
+                await T.eval(`ind.carve.t0 = ind.t - CALIB.sweep * 0.5; document.getElementById('ind-carve-d').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); true;`);
+                const tap = await T.eval(`ind.carve ? ind.carve.hit : -1`);
+                if (!(sp === 1 && tap === 2)) bad.push('空格、点圈都算一刀 ' + sp + ' ' + tap);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND129 雕模具校准：红白灰区、眩晕不能动、连续失败 3 次碎、命中率定耐久、空格和点圈', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 

@@ -1525,7 +1525,7 @@
             if (ch) ind.cropDirty = true;
         }
         function indMove(dt) {
-            let R = ind, k = R.k, blocked = !!R.panel;
+            let R = ind, k = R.k, blocked = !!R.panel || (typeof ctStunned === 'function' && ctStunned());   // 校准失败眩晕：站着不能动（任务 95）
             let cd = new THREE.Vector3(); camera.getWorldDirection(cd); cd.y = 0;
             if (cd.lengthSq() < 1e-6) cd.set(0, 0, -1); cd.normalize();
             let fwd = blocked ? 0 : (k.w ? 1 : 0) - (k.s ? 1 : 0), strafe = blocked ? 0 : (k.d ? 1 : 0) - (k.a ? 1 : 0);
@@ -1734,6 +1734,7 @@
         function indToolish(k) { return !!k && (!!IND_ITEMS[k].tool || k === 'wire' || k === 'tongs' || tlKind(k) === 'shears'); }
         // 左键：采集、拿、收菜、打开；对着空的农田格子、手里拿着种子：种下
         function indAction() {
+            if (typeof ctStunned === 'function' && ctStunned()) return;   // 眩晕中不能用东西
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             if (ind.ch) { ind.ch = null; indFlash('停了'); return false; }
@@ -1811,6 +1812,7 @@
         }
         // 右键：吃喝、浇水、接水
         function indUse() {
+            if (typeof ctStunned === 'function' && ctStunned()) return;
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             let k = indSel(), a = indAim();
@@ -3509,6 +3511,7 @@
             let k = (e.key || '').toLowerCase();
             if (ind.paused) { if (!e.repeat && (k === 'p' || k === 'escape')) indResume(); e.preventDefault(); return; }
             if (k === 'p' && !e.repeat && !ind.panel) { indPause(); return; }
+            if (k === ' ' && ind.carve && !ind.panel) { e.preventDefault(); if (!e.repeat) ctHit(); return; }   // 雕模具：红区按空格（任务 95）
             if (IND_KEYMAP[k]) { ind.k[IND_KEYMAP[k]] = true; e.preventDefault(); return; }
             if (k === ' ') { ind.k.jump = true; e.preventDefault(); return; }
             if (k === 'shift') { ind.k.run = true; return; }
@@ -3518,7 +3521,6 @@
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）
             if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); indTrashHand(); return; }   // Ctrl+Q：销毁手上那一格（5 秒能撤销）
             if ((k === 'b' || k === 'e') && (!ind.panel || ind.panel === 'bag')) { if (ind.panel) indPanelClose(); else indPanelBag(); return; }   // E 和 B 开同一个背包面板（任务 17）
-            if (k === 'x' && ind.carve && !ind.panel) { ctHit(); return; }   // 雕模具：光标在亮区里按 X
             if (ind.panel) return;
             if (k === 'q' || k === 'g') indDrop(); else if (k === 'f') indAction(); else if (k === 'r') indUse();   // E 不再是左键动作（任务 17）
             else if (/^[0-9]$/.test(k)) ind.selIdx = k === '0' ? 9 : +k - 1;   // 快捷栏 1～9、0 是第 10 格
