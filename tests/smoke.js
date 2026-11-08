@@ -5876,8 +5876,8 @@ async function enterExit(tab, key) {
                 if (!/铁矿×1 \+ 木炭×1 → 铁锭（烫）×1/.test(bk) || !/铁稿/.test(bk) || /小麦种子/.test(bk)) bad.push('配方查询搜"铁"不对 ' + bk.slice(0, 200));
                 await T.eval(`indPanelClose(); true;`);
                 // 锡和青铜（A：铁矿要青铜稿，不再卡死）：锡只刷在山地、石稿挖；锡矿 232°C 15 秒出烫锡锭；3 铜锭 + 1 锡锭 950°C 30 秒出 4 青铜锭；青铜稿等级 2 挖铁矿；铁稿多拿 1 个
-                const tin = JSON.parse(await T.eval(`JSON.stringify({ where: Object.keys(IND_BIOMES).filter(function (b) { return IND_BIOMES[b].res.ore_sn; }), tool: IND_NODES.ore_sn.tool, give: IND_NODES.ore_sn.give, names: IND_TOOL_NAME.slice(0, 4), fe: IND_NODES.ore_fe.tool })`));
-                if (tin.where.join() !== 'mountain' || tin.tool !== 1 || tin.give.join() !== '1,2' || tin.names.join() !== '空手,石稿,青铜稿,钢稿' || tin.fe !== 2) bad.push('锡矿资源点不对 ' + JSON.stringify(tin));
+                const tin = JSON.parse(await T.eval(`JSON.stringify({ where: Object.keys(IND_BIOMES).filter(function (b) { return IND_BIOMES[b].res.ore_sn; }), tool: IND_NODES.ore_sn.tool, give: IND_NODES.ore_sn.give, names: IND_TOOL_NAME.slice(0, 5), fe: IND_NODES.ore_fe.tool })`));
+                if (tin.where.join() !== 'mountain' || tin.tool !== 1 || tin.give.join() !== '1,2' || tin.names.join() !== '空手,石稿,青铜稿,铁稿,钢稿' || tin.fe !== 2) bad.push('锡矿资源点不对 ' + JSON.stringify(tin));
                 await T.eval(`ind.base.stove = { items: { ore_sn: 1, charcoal: 1 }, out: {}, fuel: 3000, fire: 2, temp: 600, cook: null }; indAdvance(30); true;`);
                 if (await T.eval(`indOutCount(ind.base.stove, 'hot_sn') > 0`)) bad.push('中火 600°C（不到 1200°C）也炼出锡锭');
                 await T.eval(`ind.base.stove = { items: { ore_sn: 1, charcoal: 1 }, out: {}, fuel: 3000, fire: 3, temp: 1200, cook: null }; indAdvance(14); true;`);
@@ -6564,7 +6564,7 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.bag = {}; indBagAdd('steel', 4); indBagAdd('wire', 2); indCraft(${ci('dev_press')}); true;`);
                 if (!(await T.eval(`ind.bag.dev_press === 1 && !ind.bag.steel && !ind.bag.wire`))) bad.push('做不出压力机 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 await T.eval(`ind.bag = {}; indBagAdd('diamond', 2); indBagAdd('steel', 2); indBagAdd('wood', 1); indCraft(${ci('pick_diamond')}); true;`);
-                if (!(await T.eval(`ind.bag.pick_diamond === 1 && indTool() === 4 && !!ind.base.elems[6]`))) bad.push('做不出钻石稿 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                if (!(await T.eval(`ind.bag.pick_diamond === 1 && indTool() === 5 && !!ind.base.elems[6]`))) bad.push('做不出钻石稿 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 // 压缩机：8 节电池 12 V
                 const place = (k, x, z) => T.eval(`(function(){ indBagAdd('${k}', 1); indTeleport(${x}, ${z}); indLookAt(${x}, ${z} - 5); indSelect('${k}'); indUse(); return ind.base.devs[ind.base.devs.length - 1].id; })()`);
                 const click = (id, k) => T.eval(`(function(){ let d = indDev(${id}); indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); if ('${k}') indSelect('${k}'); indAction(); indPanelClose(); return true; })()`);

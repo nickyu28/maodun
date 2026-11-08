@@ -456,7 +456,7 @@
             wdMakeRivers(M);   // 河：1～3 条，从山地流到海边（19-industry-world.js）
             return M;
         }
-        function indElev(M, x, z) { return indFbm(x / (70 * IND_ZOOM), z / (70 * IND_ZOOM), M.seed); }
+        function indElev(M, x, z) { let d = Math.hypot(x, z) / 160; return indFbm(x / (70 * IND_ZOOM), z / (70 * IND_ZOOM), M.seed) + (d < 1 ? 0.55 * (1 - d) : 0); }   // 出生点周围 160 米抬高一点：群系放大以后别让出生点被海围住（任务 92）
         function indMoist(M, x, z) { return indFbm(x / (90 * IND_ZOOM), z / (90 * IND_ZOOM), M.seed + 101); }
         function indBiome(M, x, z) {
             if (M.moon) return moonBiome(M.moon, x, z);   // 月球（19-industry-moon.js）
