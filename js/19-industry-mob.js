@@ -15,7 +15,7 @@
 //  装了盾的宠物，被蹭时按概率这一下不掉保湿度、自己打怪时按概率不掉饱食（木 50%、青铜 65%、铁 80%、钢和钻石 90%），用上一次盾耐久 −1。
 // 点一只驯服的狗（左键或右键）它大叫一声"汪！"（1.5 秒），12 米内别的狗 0.2～0.5 秒后跟着叫；一只狗 3 秒内最多叫一次。猫点一下"喵"。声音用 WebAudio 合成（IND_BARK_SRC 填了就用录音）。
         const IND_BARK_SRC = '', IND_MEOW_SRC = '';   // 以后想换真录音：填音频地址
-        const MB = { cap: 5, cell: 30, respawn: 180, see: 10, lose: 15, near: 1.3, spawnT: 2, r0: 16, r1: 28, far: 45, swing: 0.6, reach: 2.6, petR: 8, petHit: 1, petMax: 5,
+        const MB = { cap: 5, boarMax: 2, slimeMax: 3, slimeCave: 4, flameCave: 2, beeGroup: 2, beeMax: 4, caveTempMax: 38, cell: 30, respawn: 180, see: 10, lose: 15, near: 1.3, spawnT: 2, r0: 16, r1: 28, far: 45, swing: 0.6, reach: 2.6, petR: 8, petHit: 1, petMax: 5,
             petFood: 1 / 60, petHyd: 1 / 90, barkT: 1.5, barkCd: 3, barkR: 12, glueR: 1, glueT: 60, glueSlow: 0.3, poisonHits: 10, poisonT: 5, eatPoisonT: 10 };
         const MB_T = {
             slime: { name: '史莱姆', hp: [3, 2, 1], dmg: [4, 3, 2], pet: [8, 6, 4], sp: 7 / 3, r: [0.75, 0.55, 0.38], cd: 1.5 },
@@ -23,7 +23,7 @@
             cloud: { name: '云团', hp: 1, cool: 0.3, pet: 0, sp: 1.8, r: 0.6, cd: 1.5, fly: 1.7 },
             flame: { name: '火苗仔', hp: 1, warm: 0.5, pet: 0, sp: 2, r: 0.4, cd: 1.5, fly: 0.7 },
             cactus: { name: '刺球', hp: 3, dmg: 5, pet: 4, sp: 1.6, r: 0.5, wind: 0.8, dash: 8, rest: 2 },
-            boar: { name: '小野猪', hp: 5, dmg: 8, pet: 6, sp: 2.4, r: 0.6, wind: 1, dash: 12, dashLen: 5, rest: 2, knock: 2 },
+            boar: { name: '小野猪', hp: 5, dmg: 5, pet: 6, sp: 2.4, r: 0.6, wind: 1, dash: 12, dashLen: 5, rest: 2, knock: 2 },
             bee: { name: '小蜜蜂', hp: 1, dmg: 2, pet: 2, sp: 3.5, r: 0.3, cd: 0.6, fly: 1.3, away: 2 }
         };
         // 冒烟测试开的页面网址带 ?notut=1：别的检查要在远征里待很久，怪会自己刷出来把人打死，所以测试页默认不自己刷（IND91 打开）。玩家的网址没有这个
@@ -169,7 +169,11 @@
             let dead = ind.mbDead || {}, key = mbCellKey(x, z); if (dead[key] !== undefined && ind.t - dead[key] < MB.respawn) return null;
             let L = mbKinds(indBiome(ind.map, x, z), cave); if (!L.length) return null;
             let kind = L[Math.floor(indRand() * L.length)];
-            if (kind === 'bee') { let k = Math.min(3, MB.cap - n), out = []; for (let i = 0; i < k; i++) out.push(mbNew('bee', x + i * 0.8, z + (i % 2) * 0.7)); return out[0]; }
+            let cnt = function (ty) { return (ind.mobs || []).filter(function (m) { return m.ty === ty && !m.child && !m.dead; }).length; };
+            if (kind === 'boar' && cnt('boar') >= MB.boarMax) return null;   // 任务 84：野猪同时最多 2 只、史莱姆夜里 3 只洞里 4 只、洞里火苗仔 2 只、蜜蜂 4 只
+            if (kind.indexOf('slime') === 0 && cnt('slime') >= (cave ? MB.slimeCave : MB.slimeMax)) return null;
+            if (kind === 'flame' && cave && cnt('flame') >= MB.flameCave) return null;
+            if (kind === 'bee') { let k = Math.min(MB.beeGroup, MB.cap - n, MB.beeMax - cnt('bee')), out = []; if (k <= 0) return null; for (let i = 0; i < k; i++) out.push(mbNew('bee', x + i * 0.8, z + (i % 2) * 0.7)); return out[0]; }
             return mbNew(kind, x, z);
         }
         // ── 打人、打宠物 ──
@@ -180,7 +184,7 @@
             if (mbBlocking() && mbFront(m.x, m.z)) { let S = MB_SHIELD[ind.mbBlock.k]; cut = S.cut; if (mbWear(ind.mbBlock.k)) ind.mbBlock.t = 0; }
             if (T.cool || T.warm) {   // 云团、火苗仔：不掉血，只改体温
                 if (cut >= 1) return 0;
-                let S = ind.base.surv; S.temp += (T.warm || -T.cool) * (1 - cut); return 0;
+                let S = ind.base.surv; S.temp += (T.warm || -T.cool) * (1 - cut); if (ind.cave && S.temp > MB.caveTempMax) S.temp = MB.caveTempMax; return 0;   // 洞里火苗仔烤不到 38°C 以上
             }
             let n = dmg * (indHard() ? 1 : 0.5) * (1 - cut); if (!(n > 0)) return 0;
             if (!indHard()) n = Math.min(n, Math.max(0, ind.base.surv.hp - 1));   // 悠闲不会被打死
