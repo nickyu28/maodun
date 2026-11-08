@@ -12485,6 +12485,68 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND134 风箱右键拉：一下 +10°C、连点都算、封顶 1600、停手慢慢掉回火候、灭着没风箱不拉、长按收起、体力 −2、老存档', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND135')) {
+            // IND135 取暖（任务 116，硬核）：气温 10°C、体温 33，站在烧着的篝火 2 米内，20 秒内 ≥ 35；火边体温低于 33 不掉血；离火 10 米不涨；篝火没柴不涨；基地灶台 3 米内同样；
+            // 降到 35 弹"冷，找火取暖"、到 33 弹"快冻死了"；没柴的篝火准星写"没柴了，左键加木头"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash, at = indAirTemp; blazeFlash = function (t) { fl.push(t); }; window.indAirTemp = function () { return 10; }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; indPanelClose(); ind.bag = {}; ind.guardT = 0;
+                    let S = B.surv; S.hp = 60; S.food = 80; S.water = 80; S.energy = 80; S.temp = 33; B.fires = [{ x: 0, z: 14, fuel: 9999 }]; B.wear = {}; B.stove = Object.assign(ckNewState(), { spout: [], fuel: 0, fire: 0, temp: 20 }); ind.fireDirty = true;
+                    ${body} } finally { blazeFlash = bf; window.indAirTemp = at; } })()`);
+                let r = await run(`indTeleport(0, 12); indAdvance(20); return { t: S.temp, hp: S.hp };`);
+                if (!(r.t >= 35 && r.hp >= 60)) bad.push('篝火 2 米内 20 秒体温从 33 回到 35 以上 ' + JSON.stringify(r));
+                r = await run(`S.temp = 31; indTeleport(0, 12); indAdvance(5); return { hp: S.hp, t: S.temp };`);
+                if (!(r.hp >= 60)) bad.push('火边体温 31 不掉血 ' + JSON.stringify(r));
+                r = await run(`S.temp = 31; indTeleport(0, 4); indAdvance(5); return { hp: S.hp };`);
+                if (!(r.hp < 57)) bad.push('（对照）离火 10 米体温 31 照样掉血 ' + JSON.stringify(r));
+                r = await run(`indTeleport(0, 4); indAdvance(20); return { t: S.temp };`);
+                if (!(r.t <= 33)) bad.push('离火 10 米不涨 ' + JSON.stringify(r));
+                r = await run(`B.fires[0].fuel = 0; indTeleport(0, 12); indAdvance(20); return { t: S.temp };`);
+                if (!(r.t <= 33)) bad.push('篝火没柴不涨 ' + JSON.stringify(r));
+                r = await run(`B.fires = []; let St = IND_BASE_ST.stove; B.off.stove = false; B.stove.fuel = 9999; B.stove.fire = 2; B.stove.temp = 600; indTeleport(St.x, St.z + 3); indAdvance(20); return { t: S.temp };`);
+                if (!(r.t >= 35)) bad.push('基地灶台 3 米内同样回温 ' + JSON.stringify(r));
+                r = await run(`B.fires = []; S.temp = 35.02; ind.coldWarn = 0; indTeleport(0, 4); for (let i = 0; i < 40; i++) indAdvance(1); let a = fl.slice(); S.temp = 33.01; indAdvance(5); return { a: a.join('|'), b: fl.join('|') };`);
+                if (!(/冷，找火取暖/.test(r.a) && /快冻死了/.test(r.b))) bad.push('降到 35、33 各提示一次 ' + JSON.stringify(r));
+                r = await run(`B.fires[0].fuel = 0; ind.fireDirty = true; indTeleport(0, 12.6); indLookAt(0, 14); indAdvance(0.3); let a = indAim(); return { k: a && a.kind, h: document.getElementById('ind-hint') ? document.getElementById('ind-hint').innerHTML : '' };`);
+                if (!(r.k === 'fire' && /没柴了，左键加木头/.test(r.h))) bad.push('没柴的篝火准星提示 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND135 取暖：火边 20 秒回到 35、火边不冻伤掉血、离火和没柴不涨、灶台同样、35／33 预警、没柴篝火提示', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND136')) {
+            // IND136 进游戏就死（任务 117）：存档里血 5、饱食 0、体温 30，重新进来 60 秒内不死、饱食不扣；之后照常；死了存档重置成能活的值
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const reenter = async () => { await until(T, `IND_SAVING === 0`, 8000); await T.eval(`indEnter(); true;`); return await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000); };
+                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.hp = 5; S.food = 0; S.water = 50; S.temp = 30; indSave(); true;`);
+                await until(T, `IND_SAVING === 0`, 8000);
+                await T.eval(`indExit(); true;`);
+                if (!(await reenter())) bad.push('退出后进不去');
+                else {
+                    let r = await J(`(function(){ let g = ind.guardT, S = ind.base.surv, hp0 = S.hp; indHudUpdate(); let hud = document.getElementById('ind-hud').innerHTML.indexOf('出生保护') >= 0; for (let i = 0; i < 55; i++) indAdvance(1); return { g: g, dead: !!ind.dead, hp0: hp0, hp: S.hp, food: S.food, hud: hud }; })()`);
+                    if (!(r.g > 59 && !r.dead && r.hp0 > 0 && r.hp0 < 20 && r.hp === r.hp0 && r.food === 0 && r.hud)) bad.push('出生保护 60 秒不死、饱食不扣 ' + JSON.stringify(r));
+                    r = await J(`(function(){ for (let i = 0; i < 20; i++) indAdvance(1); let d = ind.dead && ind.dead.cause; let S = ind.base.surv; return { dead: d, hp: S.hp, food: S.food, water: S.water, temp: S.temp }; })()`);
+                    if (!(r.dead && r.hp === 100 && r.food >= 50 && r.water >= 50 && r.temp === 37)) bad.push('保护过了照常会死；死了重置成能活的值 ' + JSON.stringify(r));
+                    await T.eval(`indRespawn(); true;`);
+                    await T.eval(`indExit(); true;`);
+                    if (!(await reenter())) bad.push('死后退出再进进不去');
+                    else { r = await J(`({ g: ind.guardT || 0, hp: ind.base.surv.hp, food: ind.base.surv.food })`); if (!(r.g === 0 && r.hp === 100 && r.food >= 49.9)) bad.push('死后存档进来正常、不用保护 ' + JSON.stringify(r)); }
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND136 进游戏就死：存档快死进来有 60 秒出生保护、过了照常、死了存档重置', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式

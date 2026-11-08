@@ -757,6 +757,14 @@
             }
             return t;
         }
+        // 取暖范围（任务 116）：烧着的篝火 4 米内；基地里点着的灶台／小熔炉／石炉 4 米内、大窑 5 米内
+        const IND_WARM = { back: 0.15 };
+        function indNearHeat() {
+            if (!ind || !ind.p) return false;
+            if (indFires().some(function (f) { return f.fuel > 0 && Math.hypot(ind.p.x - f.x, ind.p.z - f.z) < IND_BODY.fireR; })) return true;
+            if (ind.where !== 'base') return false;
+            return indCooks().some(function (c) { return c.C.fire > 0 && c.C.temp > 100 && Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < IND_BODY.fireR + (c.ty === 'kiln' ? 1 : 0); });
+        }
         function indHeavy() { let f = 1; Object.keys(ind.base.wear).forEach(function (sl) { f *= IND_ITEMS[ind.base.wear[sl]].heavy || 1; }); return f; }   // 防爆服 ×0.6
         function indWarmth() { let w = 0; Object.keys(ind.base.wear).forEach(function (sl) { w += IND_ITEMS[ind.base.wear[sl]].warm || 0; }); return w; }
         // 站在水里：基地的水池（2×2）、自己挖的有水的池子格、井，或者出门地图的浅水（深水游泳不算）
@@ -774,6 +782,10 @@
             if (eff < B.cold) S.temp -= (B.cold - eff) * B.rate * dt;
             else if (eff > B.hot) S.temp += (eff - B.hot) * B.rate * dt;
             else { let bk = B.back * (S.temp > 39 ? 3 : 1) * dt; S.temp += Math.max(-bk, Math.min(bk, 37 - S.temp)); }
+            if (indNearHeat() && S.temp < 37) S.temp = Math.min(37, S.temp + IND_WARM.back * dt);   // 任务 116：站在烧着的火边，体温每秒多回 0.15°C
+            if (S.temp < B.chill && (ind.coldWarn || 0) < 1) { ind.coldWarn = 1; indFlash('冷，找火取暖'); }   // 任务 116：掉血前预警
+            if (S.temp < B.freeze && (ind.coldWarn || 0) < 2) { ind.coldWarn = 2; indFlash('快冻死了'); }
+            if (S.temp >= B.chill + 0.5) ind.coldWarn = 0;
             if (indInPondWater() && S.temp > IND_BODY.waterMin) S.temp = Math.max(IND_BODY.waterMin, S.temp - IND_BODY.waterCool * dt);   // 站在池子、井、浅水里体温每秒 −0.1°C，最低 36（任务 90）
             S.temp = Math.max(25, Math.min(ind.cave && typeof MB !== 'undefined' ? Math.max(38, MB.caveTempMax) : 45, S.temp));   // 任务 84：洞里体温最高 38
             if (S.temp > 38.5 && !ind.heatHint) { ind.heatHint = true; indFlash('太热了，离窑远点，喝点水'); } else if (S.temp < 38) ind.heatHint = false;
@@ -924,6 +936,7 @@
         let ind = null;
         document.addEventListener('visibilitychange', function () { if (document.hidden && ind && !ind.over && !ind.loading) indSave(); });   // 切走或关页面前存一次
         function indFlash(t) { try { blazeFlash(t); } catch (e) { } }
+        const IND_GUARD = 60;
         function indEnter() {
             if (!indVisible() || ind) return;
             ind = { loading: true };
@@ -941,6 +954,7 @@
                 where: 'base', map: null, nodes: [], exits: [], exitT: 0, k: {}, p: { x: 0, y: 0, z: 0, vy: 0 }, stam: 100, sickT: 0, saveT: 10,
                 objs: [], geos: [], mats: [], hudT: 0, hudSig: '', panel: null, oldBg: scene.background, oldFog: scene.fog, itemMesh: null, nodeMesh: null, cropMesh: null
             };
+            { let S0 = base.surv; if (S0 && (S0.hp < 20 || S0.food <= 0 || S0.water <= 0 || S0.temp < IND_BODY.freeze)) ind.guardT = IND_GUARD; }   // 任务 117：进来就快死了，给 60 秒出生保护
             indApplyPos(base);
             indBuildPlayer();
             indGoBase(null);
@@ -1426,6 +1440,7 @@
         function indSurvTick(dt) {
             let S = ind.base.surv, Q = IND_SURV;
             if (ind.sickT > 0) ind.sickT -= dt;
+            if (ind.guardT > 0) { ind.guardT = Math.max(0, ind.guardT - dt); return; }   // 出生保护（任务 117）：进游戏时快死了，前 60 秒不掉血、不扣饱食口渴
             S.food = Math.max(0, S.food - Q.food * dt);
             S.water = Math.max(0, S.water - Q.water * (ind.sickT > 0 ? Q.sickWater : 1) * indHeatThirst(S.temp) * dt);
             let em = (ind.running ? Q.runEnergy : 1) * (ind.where === 'trip' && indIsNight() ? Q.nightOut : 1);
@@ -1433,7 +1448,7 @@
             if (S.water < 10 && !ind.thirstHint) { ind.thirstHint = true; indFlash('快渴死了'); } else if (S.water >= 20) ind.thirstHint = false;   // 任务 90：口渴 < 10 提示一次，回到 20 以上才能再提示
             if (indSel() === 'dry_ice') S.temp = Math.max(25, S.temp - IND_DRY_COLD * dt);   // 干冰拿在手上，体温每秒 −0.05°C
             if (indHard()) {
-                let cold = S.temp < IND_BODY.freeze ? 1 : 0;
+                let cold = S.temp < IND_BODY.freeze && !indNearHeat() ? 1 : 0;   // 任务 116：站在火边不再冻伤掉血
                 if (S.temp >= IND_BODY.boil) indAch('roast');   // 任务 89：体温 ≥ 41°C 算中暑；热只让口渴掉得快，不直接扣血
                 let dmg = (S.food <= 0 ? Q.starveHp : 0) + (S.water <= 0 ? Q.thirstHp : 0) + cold;
                 if (dmg > 0) {
@@ -1454,6 +1469,7 @@
         const IND_HURT = { starve: { die: '饿死', tag: '饥饿' }, thirst: { die: '渴死', tag: '口渴' }, cold: { die: '冻死', tag: '冻伤' }, heat: { die: '热死', tag: '中暑' }, burn: { die: '烫伤', tag: '烫伤' }, gas: { die: '中毒', tag: '中毒' }, boom: { die: '爆炸', tag: '爆炸' }, rad: { die: '辐射', tag: '辐射' }, thorn: { die: '仙人掌扎的', tag: '扎伤' }, kick: { die: '踹了烫炉子', tag: '烫脚' } };
         function indHurt(n, key, detail, instant) {
             if (!ind || ind.over || ind.dead || !(n > 0)) return false;
+            if (ind.guardT > 0) return false;   // 出生保护（任务 117）：前 60 秒不掉血
             let S = ind.base.surv, R = ind.hurt = ind.hurt || { rec: [], acc: {}, ft: {} };
             S.hp -= n; ind.redT = 1; ind.lastHurt = IND_HURT[key].die; achHurt(key);
             R.rec.push({ t: ind.t, key: key, n: n, detail: detail || '' });
@@ -1496,7 +1512,7 @@
             if (!ind || ind.over || ind.dead) return;
             let lost = Object.keys(ind.bag).length + Object.keys(ind.base.wear).length;
             ind.bag = {}; ind.base.wear = {}; ind.hotT = {};
-            let S = ind.base.surv; S.hp = 100; S.temp = 37; S.food = Math.max(S.food, 40); S.water = Math.max(S.water, 40); S.energy = Math.max(S.energy, 50);
+            let S = ind.base.surv; S.hp = 100; S.temp = 37; S.food = Math.max(S.food, 50); S.water = Math.max(S.water, 50); S.energy = Math.max(S.energy, 50);   // 任务 117：死了重置到能活的值（存档里也是这些）
             ind.dead = { cause: cause, detail: detail || '', lost: lost };
             ind.rh = null; ind.hurt = null; ind.redT = 0; if (ind.panel) indPanelClose();
             if (document.pointerLockElement) document.exitPointerLock();
@@ -3605,6 +3621,8 @@
             st += (indHard() ? (S.hp < 30 ? '<span class="ind-low">' + indBar('血', S.hp, '#e53935') + '</span>' : indBar('血', S.hp, '#e53935')) : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047') + (R.where === 'trip' && R.deepSt && !R.onRaft ? '<b style="color:#0277bd">游泳中，不能跑</b>' : '');
             let tc = S.temp < indChillT() ? '#1565c0' : S.temp > indSweatT() ? '#c62828' : '#2e7d32';
             st += '<br>体温 <b style="color:' + tc + '">' + S.temp.toFixed(1) + '°C</b>　气温 ' + Math.round(indAirTemp()) + '°C　保暖 ' + indWarmth();
+            if (indNearHeat() && S.temp < 37) st += '　<b style="color:#e65100">取暖中</b>';
+            if (R.guardT > 0) st += '<br><b style="color:#2e7d32">出生保护 ' + Math.ceil(R.guardT) + ' 秒：先去吃喝、取暖</b>';
             if (S.temp < indChillT()) st += '　<b style="color:#1565c0">冷得发抖</b>'; else if (S.temp > indSweatT()) st += '　<b style="color:#c62828">热得冒汗</b>';
             if (indHard() && S.hp < 30 && R.hurt) {
                 let tags = {}; R.hurt.rec.forEach(function (r) { if (R.t - r.t <= 1.5) tags[IND_HURT[r.key].tag] = 1; });
@@ -3643,7 +3661,7 @@
             else if (a && a.kind === 'bomb') hint = a.o.t >= 0 ? '原子弹：' + Math.ceil(a.o.t) + ' 秒后爆炸，半径 40 米<br><small>左键：拆掉</small>' : '原子弹<br><small>左键：启动（30 秒后爆炸，半径 40 米）　长按右键：收起</small>';
             else if (a && a.kind === 'item') hint = indName(a.o.k) + '<br><small>左键：拿</small>';
             else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水') + (a.o.fert ? '　施过肥了' : '')) + '<br><small>' + (ripe ? '左键：收' : '拿着水右键：浇水　拿草木灰或硝石右键：施肥') + '</small>'; }
-            else if (a && a.kind === 'fire') hint = '篝火' + (a.o.fuel > 0 ? ' 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒' : '（灭了）') + '<br><small>拿着木头，左键：加柴</small>';
+            else if (a && a.kind === 'fire') hint = a.o.fuel > 0 ? '篝火 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒<br><small>拿着木头，左键：加柴</small>' : '篝火<br><small style="color:#ff8a65">没柴了，左键加木头</small>';   // 任务 116
             else if (a && a.kind === 'door') hint = IND_HOUSE[a.o.ty].name + '的门（' + (a.o.open ? '开着' : '关着') + '）<br><small>左键：' + (a.o.open ? '关门' : '开门') + '　长按右键：收起房子</small>';
             else if (a && a.kind === 'house') hint = IND_HOUSE[a.o.ty].name + '<br><small>' + (indHouseHas(a.o) ? '里面有东西，先搬出来才能收' : '长按右键：收起') + '</small>';
             else if (a && a.kind === 'bench') hint = '工作台<br><small>左键：打开　长按右键：收起</small>';
