@@ -37,10 +37,10 @@
         const MB_KNIFE = {
             knife_wood: { dmg: 1, dura: 40, name: '木刀', col: 0xa1887f, in: { wood: 3 }, back: ['wood', 1] },
             knife: { dmg: 2, dura: 60, back: ['stone', 1] },
-            knife_bronze: { dmg: 3, dura: 120, name: '青铜刀', col: 0xb87333, in: { bronze: 2, wood: 1 }, back: ['bronze', 1], hard: true },
-            knife_iron: { dmg: 4, dura: 200, name: '铁刀', col: 0x757575, in: { ingot_fe: 2, wood: 1 }, back: ['ingot_fe', 1], hard: true },
-            knife_steel: { dmg: 6, dura: 500, name: '钢刀', col: 0x90a4ae, in: { steel: 2, wood: 1 }, back: ['steel', 1], hard: true },
-            knife_diamond: { dmg: 8, dura: 1500, name: '钻石刀', col: 0x80deea, in: { diamond: 2, steel: 1, wood: 1 }, back: ['diamond', 1], hard: true }
+            knife_bronze: { dmg: 3, dura: 300, name: '青铜刀', col: 0xb87333, in: { bronze: 2, wood: 1 }, back: ['bronze', 1], hard: true },
+            knife_iron: { dmg: 4, dura: 600, name: '铁刀', col: 0x757575, in: { ingot_fe: 2, wood: 1 }, back: ['ingot_fe', 1], hard: true },
+            knife_steel: { dmg: 6, dura: 1500, name: '钢刀', col: 0x90a4ae, in: { steel: 2, wood: 1 }, back: ['steel', 1], hard: true },
+            knife_diamond: { dmg: 8, dura: 5000, name: '钻石刀', col: 0x80deea, in: { diamond: 2, steel: 1, wood: 1 }, back: ['diamond', 1], hard: true }
         };
         const MB_SHIELD = {
             shield_wood: { cut: 0.5, up: 0.45, cd: 8, dura: 20, pet: 0.5, name: '木盾', col: 0x8d6e63, in: { wood: 4, rope: 1 }, inCasual: { wood: 5 }, back: ['wood', 2] },   // 悠闲没有草绳：木 5
