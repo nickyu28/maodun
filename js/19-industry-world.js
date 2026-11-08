@@ -199,7 +199,7 @@
             if (o.tree) return WD_TREE_NAME[o.tree] + '（' + o.n + ' 木头）<br><small>' + (indHard() && !tlCanChop() ? '空手砍不动，得有斧子或小刀' : '左键：砍（' + wdChopTool().need + ' 秒，站着别动）') + '</small>';
             if (o.key === 'cactus') return '仙人掌：有刺<br><small>左键：采集（拿剪刀或稿子不扎手）</small>';
             if (o.rock) return (o.black ? '黑石头' : '大石头') + ' ×' + o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：敲' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
-            if (o.out) return indName(o.key) + '矿脉　剩 ' + o.n + ' 份<br><small>' + (indTool() >= nd.tool ? '左键：挖（一次 1 份）' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
+            if (o.out) return indName(o.key) + '矿脉　还剩 ' + indDigLeft(o) + ' 份<br><small>' + (indTool() >= nd.tool ? '左键：挖（一次 ' + (IND_DIG_N + indToolBonus(nd.tool)) + ' 个）' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
             let nm = o.key === 'seeds' ? '野生' + indName(o.seed) : (nd.name || indName(o.key));
             return nm + ' ×' + o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
         }

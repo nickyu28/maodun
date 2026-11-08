@@ -12127,7 +12127,7 @@ async function enterExit(tab, key) {
             report('IND121 中暑只加速口渴：倍数、不掉血、口渴 0 才掉、成就', bad.length === 0, bad.join(' / '));
         }
         if (want('IND122')) {
-            // IND122 工具耐久调高（任务 87）：青铜 300、铁 600、钢 1500、钻石 5000（斧镐铲剪刀刀同比例）、木石不动、钢 > 铁 > 青铜；修的上限、拆的份数跟新满耐久；老存档剩的耐久按比例换一次
+            // IND122 工具耐久调高（任务 87）：青铜 300、铁 600、钢 1500、钻石 5000（斧铲剪刀刀同比例；镐按任务 98 减半 150／300／750／2500）、木石不动、钢 > 铁 > 青铜；修的上限、拆的份数跟新满耐久；老存档剩的耐久按比例换一次
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -12138,15 +12138,15 @@ async function enterExit(tab, key) {
                 let r = await J(`(function(){ let out = {}; ['axe', 'pick', 'shovel', 'shears', 'knife'].forEach(function (kind) { out[kind] = ['stone', 'bronze', 'iron', 'steel', 'diamond'].map(function (t) { let k = kind === 'knife' ? (t === 'stone' ? 'knife' : 'knife_' + t) : kind === 'axe' && t === 'stone' ? 'axe' : kind === 'shears' && t === 'stone' ? 'shears' : kind + '_' + t; return TL_TOOL[k] ? TL_TOOL[k].dura : null; }); });
                     out.wood = TL_TIER.wood.dura; out.use2 = IND_ITEMS.axe_iron.use; return out; })()`);
                 const ok = (a, b) => [a[1], a[2], a[3]].join() === b.join();
-                if (!(r.pick[0] === 40 && r.pick.slice(1).join() === '300,600,1500,5000' && ok(r.axe, [300, 600, 1500]) && ok(r.shovel, [300, 600, 1500]) && ok(r.shears, [300, 600, 1500]) && ok(r.knife, [300, 600, 1500]) && r.knife[4] === 5000 && r.wood === 40 && /耐久 600/.test(r.use2))) bad.push('各档耐久 ' + JSON.stringify(r));
+                if (!(r.pick[0] === 40 && r.pick.slice(1).join() === '150,300,750,2500' && ok(r.axe, [300, 600, 1500]) && ok(r.shovel, [300, 600, 1500]) && ok(r.shears, [300, 600, 1500]) && ok(r.knife, [300, 600, 1500]) && r.knife[4] === 5000 && r.wood === 40 && /耐久 600/.test(r.use2))) bad.push('各档耐久 ' + JSON.stringify(r));
                 r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.dura = {}; B.repQ = {}; B.repCur = {}; ind.bag = { pick_iron: 1 }; let m0 = mbMax0('pick_iron'); let d = mbDura('pick_iron'); mbWear('pick_iron'); let after = B.dura.pick_iron;
                     return { m0: m0, d: d, after: after, v: B.duraV }; })()`);
-                if (!(r.m0 === 600 && r.d === 600 && r.after === 599 && r.v === 1)) bad.push('新号满耐久 ' + JSON.stringify(r));
+                if (!(r.m0 === 300 && r.d === 300 && r.after === 299 && r.v === 2)) bad.push('新号满耐久（任务 98 起镐减半） ' + JSON.stringify(r));
                 r = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', dura: { pick_iron: 100, pick_bronze: 60, knife_steel: 250, pick_stone: 20 }, animals: [{ id: 1, k: 'dog', x: 0, z: 0, weapon: 'knife_iron', wd: 100 }] }); let b2 = indFixBase(JSON.parse(JSON.stringify(b)));
                     return { d: b.dura, w: (b.animals[0] || {}).wd, v: b.duraV, again: JSON.stringify(b2.dura) === JSON.stringify(b.dura) }; })()`);
-                if (!(r.d.pick_iron === 300 && r.d.pick_bronze === 150 && r.d.knife_steel === 750 && r.d.pick_stone === 20 && r.w === 300 && r.v === 1 && r.again)) bad.push('老存档按比例换算一次 ' + JSON.stringify(r));
+                if (!(r.d.pick_iron === 150 && r.d.pick_bronze === 75 && r.d.knife_steel === 750 && r.d.pick_stone === 20 && r.w === 300 && r.v === 2 && r.again)) bad.push('老存档按比例换算一次 ' + JSON.stringify(r));
                 r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.dura = {}; B.repQ = {}; B.repCur = {}; let cap = rpCap(mbMax0('pick_steel'), 1), cap2 = rpCap(mbMax0('pick_steel'), 2); return { cap: cap, cap2: cap2, m: mbMax0('pick_steel'), iron: mbMax0('pick_iron'), br: mbMax0('pick_bronze') }; })()`);
-                if (!(r.m === 1500 && r.cap === 1350 && r.cap2 === 1200 && r.m > r.iron && r.iron > r.br)) bad.push('修的上限跟新满耐久、钢 > 铁 > 青铜 ' + JSON.stringify(r));
+                if (!(r.m === 750 && r.cap === 675 && r.cap2 === 600 && r.m > r.iron && r.iron > r.br)) bad.push('修的上限跟新满耐久、钢 > 铁 > 青铜 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -12760,6 +12760,29 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND143 右键摇椰子：空手右键摇、左键没反应、斧子左键砍、摇过提示、准星写右键', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND144')) {
+            // IND144 挖矿一次 4 个（任务 98）：24 个的露头石稿挖 6 次每次 4 个、露头写"还剩 6 份"、总量不变；铁稿一次 5 个（+1 按次数加）；耐久按次数扣 1；老存档（duraV 1）镐剩的耐久减半一次
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indGoTrip(3141); ind.mbSpawn = 1e9; let B = ind.base; B.dura = {}; B.repQ = {}; B.repCur = {}; let o = { key: 'ore_cu', out: true, x: 3, z: 3, y: indGround(3, 3), n: 24, n0: 24, seed: IND_SEED_KINDS[0], dead: false }; ind.nodes.push(o);
+                    ind.bag = { pick_stone: 1 }; let h = wdNodeHint(o), got = [], d0 = mbDura('pick_stone'); for (let i = 0; i < 10 && !o.dead; i++) { let b = ind.bag.ore_cu || 0; indGather(o); got.push((ind.bag.ore_cu || 0) - b); }
+                    let worn = d0 - mbDura('pick_stone');
+                    let o2 = { key: 'ore_cu', out: true, x: 5, z: 3, y: 0, n: 24, n0: 24, seed: IND_SEED_KINDS[0], dead: false }; ind.nodes.push(o2); ind.bag = { pick_iron: 1 }; let h2 = wdNodeHint(o2); indGather(o2);
+                    return { h: h, got: got, total: ind.bag ? got.reduce(function (a, b) { return a + b; }, 0) : 0, worn: worn, h2: h2, iron: ind.bag.ore_cu, left2: o2.n }; })()`);
+                if (!(/还剩 6 份/.test(r.h) && /一次 4 个/.test(r.h) && r.got.join() === '4,4,4,4,4,4' && r.total === 24 && r.worn === 6)) bad.push('24 个的露头挖 6 次、每次 4 个、写还剩 6 份、耐久扣 6 ' + JSON.stringify(r));
+                if (!(r.iron === 5 && r.left2 === 19 && /一次 5 个/.test(r.h2) && /还剩 5 份/.test(r.h2))) bad.push('铁稿一次 5 个（按次数 +1） ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', duraV: 1, dura: { pick_iron: 500, axe_iron: 500, pick_stone: 30 } }); let b2 = indFixBase(JSON.parse(JSON.stringify(b))); return { d: b.dura, v: b.duraV, again: JSON.stringify(b2.dura) === JSON.stringify(b.dura) }; })()`);
+                if (!(r.d.pick_iron === 250 && r.d.axe_iron === 500 && r.d.pick_stone === 30 && r.v === 2 && r.again)) bad.push('老存档镐剩的耐久减半一次、别的不动 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND144 挖矿一次 4 个：还剩 N 份、总量不变、铁稿 +1、耐久按次数、老存档镐减半', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 

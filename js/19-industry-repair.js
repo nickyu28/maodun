@@ -175,6 +175,10 @@
                 let ratio = function (k) { let T = mbDurTab(k), o = oldOf(k); return T && o ? T.dura / o : 1; };
                 if (b.dura && typeof b.dura === 'object') Object.keys(b.dura).forEach(function (k) { b.dura[k] = Math.max(1, Math.round(b.dura[k] * ratio(k))); });
                 (b.animals || []).forEach(function (a) { if (a && a.weapon && MB_KNIFE[a.weapon] && a.wd > 0) a.wd = Math.max(1, Math.round(a.wd * ratio(a.weapon))); });
-                b.duraV = 1;
+                b.duraV = 2;   // 上面按现在的满耐久换算，已经包含任务 98 的镐减半
+            } else if (b.duraV < 2) {   // 任务 98：青铜／铁／钢／钻石镐满耐久减半，剩的耐久跟着减半（只换一次）
+                let half = function (k) { let T = typeof TL_TOOL !== 'undefined' && TL_TOOL[k]; return !!(T && T.kind === 'pick' && TL_PICK_HALF[T.tier]); };
+                if (b.dura && typeof b.dura === 'object') Object.keys(b.dura).forEach(function (k) { if (half(k)) b.dura[k] = Math.max(1, Math.round(b.dura[k] / 2)); });
+                b.duraV = 2;
             }
         }

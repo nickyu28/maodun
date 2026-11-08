@@ -501,7 +501,7 @@
         const IND_V12_GIFT = { compass: 1 };   // 存档版本 12：新号送一个指南针，老档读档时补一个
         const IND_V9_GIFT = { shears: 1 };   // 存档版本 9：新号送一把剪刀，老档读档时补一把
         function indNewBase() {
-            return { ver: IND_SAVE_VER, duraV: 1, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
+            return { ver: IND_SAVE_VER, duraV: 2, rule: null, box: JSON.parse(JSON.stringify(IND_START_BOX)), ground: [], crops: [], trips: 0, clock: 60,
                 surv: { hp: 100, food: 80, water: 80, energy: 100, temp: 37 }, wear: {}, gh: false, glass: false, pot: false, cookers: [], cseq: 0, cid: 1, pos: {}, off: {}, carried: {}, chests: null, tiles: [], houses: [], rad: [], bombs: [], fires: [], animals: [], devs: [], wires: [], pipes: [], dseq: 0, elems: {}, sawGoal: false, stove: { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null } };
         }
         function indNum(v, d, lo, hi) { v = +v; if (!isFinite(v)) v = d; return Math.max(lo, Math.min(hi, v)); }
@@ -1936,6 +1936,9 @@
             indFlash((ache ? '肚子疼，' : '') + (e.w && !e.f ? '喝了' : '吃了') + indName(k) + (e.w < 0 ? '，越喝越渴' : '') + (warm ? '，身上暖和了' : '') + (sick ? '，肚子不舒服' : ''));
             return true;
         }
+        // 任务 98：露头挖一次出 4 个（铁稿 +1、钻石稿 +2，按次数加），露头的量不变，所以点的次数是原来的 1/4；露头上写"还剩 N 份"（N = 还能挖几次）
+        const IND_DIG_N = 4;
+        function indDigLeft(o) { let nd = IND_NODES[o.key]; return Math.ceil(o.n / (IND_DIG_N + (nd ? indToolBonus(nd.tool) : 0))); }
         function indGather(o) {
             if (o.key === 'oil') { indFlash('得拿桶来装：拿空桶对着油点右键'); return false; }
             if (o.hard) { indFlash('太硬，得炸（2 份火药，右键放下）'); return false; }
@@ -1945,7 +1948,7 @@
             if (tool < nd.tool) { indFlash(indName(o.key) + '要' + IND_TOOL_NAME[nd.tool] + '才挖得动'); return false; }
             let key = o.key === 'seeds' ? o.seed : (nd.out || o.key);
             if (nd.thorn && wdThorn()) return true;   // 空手摘仙人掌被扎
-            let amt = o.out ? Math.min(o.n, 1 + indToolBonus(nd.tool)) : (o.tree ? Math.round(o.n * wdChopTool().mult) : o.n) + indToolBonus(nd.tool);   // 铁稿 +1、钻石稿 +2：采一次多拿几个；露头一次只出 1 份
+            let amt = o.out ? Math.min(o.n, IND_DIG_N + indToolBonus(nd.tool)) : (o.tree ? Math.round(o.n * wdChopTool().mult) : o.n) + indToolBonus(nd.tool);   // 铁稿 +1、钻石稿 +2：采一次多拿几个；露头一次只出 1 份
             let got = indBagAdd(key, amt);
             if (got <= 0) { indFlash('背包满了'); return false; }
             o.n -= got; ind.nodeDirty = true; if (o.n <= 0) { o.dead = true; wdNodeGone(o); }
