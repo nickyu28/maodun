@@ -11,14 +11,14 @@
 ## 二、角色和会话
 | 谁 | 管什么 | 会话（send_message 用） | 夜班 |
 |---|---|---|---|
-| Code1 | 主游戏 + 测试 + 重玩验收；清单 docs/queue-code1.md | "猫盾"，session_012GqRevda9WmL8rPSVcUu5V | **已关**（trig_01RMATYdMMSuijPUJ4Wh3YT6，11-08 为省用量关的；周四刷新后问 Marty 再开） |
-| Code2 | 猫盾工业 + 实验室；清单 docs/queue-code2.md | "猫盾工业"，session_01V89eT14a1jz1NxvPtuipH4 | 开着（trig_01FvDsZAjtwhNHKrS2GTdVND，北京 01:46） |
+| Code1 | 主游戏 + 测试 + 重玩验收；清单 docs/queue-code1.md | "code1猫盾"，session_01ESXCnpBss1Yohjk9C2Ewey（11-08 新开，旧的 session_012GqRevda9WmL8rPSVcUu5V 不再用） | **已关**（trig_01RMATYdMMSuijPUJ4Wh3YT6，11-08 为省用量关的；周四刷新后问 Marty 再开） |
+| Code2 | 猫盾工业 + 实验室；清单 docs/queue-code2.md | "code2猫盾工业"，session_01ESXCnobWdg9DPTcTvRxC9t（11-08 新开，旧的 session_01V89eT14a1jz1NxvPtuipH4 不再用，Marty 11-08 说先用新的） | 开着（trig_01FvDsZAjtwhNHKrS2GTdVND，北京 01:46） |
 | 测试员 | 只玩、查、报告，不改代码；报告在 docs/playtest-2026-11-06.md | "猫盾游戏测试"，session_01ESXCnsAAkA51os8fzPqjwy | 无，三轮做完，空闲 |
 分支 industry 不要碰。Code2 的文件（js/19-industry*.js、js/18-lab.js、docs/industry*.md、docs/lab-spec.md、docs/chem.md、tests/smoke.js 里 IND 和 LB 开头的检查）协调者不改，除非 Marty 点名某个文件某几行。
 
 ## 三、用量（最重要的新规矩）
 - Marty 要求**每周用量留 5% 不动**。我们看不到用量，只能让 Marty 报。
-- **11-08 下午：已用 83%，下周四（11 月 12 日）北京时间 14:00 刷新**。实际可用约 12%。
+- **11-08 下午：已用 83%（Marty 11-08 确认，三件待定事项按我的建议默认），下周四（11 月 12 日）北京时间 14:00 刷新**。实际可用约 12%。
 - 规则：Marty 报到已用 ≥ 90%，关掉 Code2 夜班，只回答他点名的事；≥ 95% 只回答问题。刷新后问他要不要开 Code1 夜班。
 - 协调者自己省着用：提醒间隔拉长、不空转轮询、指令一次发全。
 - 周一早上让 Marty 报用量，估算 Code2 一晚吃多少。
