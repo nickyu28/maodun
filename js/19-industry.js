@@ -1415,18 +1415,18 @@
             let S = ind.base.surv, Q = IND_SURV;
             if (ind.sickT > 0) ind.sickT -= dt;
             S.food = Math.max(0, S.food - Q.food * dt);
-            S.water = Math.max(0, S.water - Q.water * (ind.sickT > 0 ? Q.sickWater : 1) * (S.temp > indSweatT() ? 2 : 1) * dt);
+            S.water = Math.max(0, S.water - Q.water * (ind.sickT > 0 ? Q.sickWater : 1) * indHeatThirst(S.temp) * dt);
             let em = (ind.running ? Q.runEnergy : 1) * (ind.where === 'trip' && indIsNight() ? Q.nightOut : 1);
             S.energy = Math.max(0, S.energy - Q.energy * em * dt);
             if (indSel() === 'dry_ice') S.temp = Math.max(25, S.temp - IND_DRY_COLD * dt);   // 干冰拿在手上，体温每秒 −0.05°C
             if (indHard()) {
-                let cold = S.temp < IND_BODY.freeze ? 1 : 0, hot = S.temp > IND_BODY.boil ? 1 : 0;
-                let dmg = (S.food <= 0 ? Q.starveHp : 0) + (S.water <= 0 ? Q.thirstHp : 0) + cold + hot;
+                let cold = S.temp < IND_BODY.freeze ? 1 : 0;
+                if (S.temp >= IND_BODY.boil) indAch('roast');   // 任务 89：体温 ≥ 41°C 算中暑；热只让口渴掉得快，不直接扣血
+                let dmg = (S.food <= 0 ? Q.starveHp : 0) + (S.water <= 0 ? Q.thirstHp : 0) + cold;
                 if (dmg > 0) {
                     if (S.food <= 0 && indHurt(Q.starveHp * dt, 'starve', '饱食到 0')) return;
                     if (S.water <= 0 && indHurt(Q.thirstHp * dt, 'thirst', '口渴到 0')) return;
                     if (cold && indHurt(dt, 'cold', '体温 ' + S.temp.toFixed(1) + '°C')) return;
-                    if (hot && indHurt(dt, 'heat', '体温 ' + S.temp.toFixed(1) + '°C')) return;
                 }
                 else if (S.food > 30 && S.water > 30 && !ind.radHurt) S.hp = Math.min(100, S.hp + Q.regen * dt);   // 受辐射的时候不自己恢复
             }
@@ -1434,6 +1434,7 @@
         function indSlow() { let S = ind.base.surv; return S.food <= 0 || S.water <= 0 || S.energy <= 0; }
         // 鞋的第二个用途（任务 43）：草鞋透气，"热"阈值 +2；皮鞋保暖，"冷"阈值 −2
         function indChillT() { let w = ind.base.wear.foot; return IND_BODY.chill - (w && IND_ITEMS[w].chillCut || 0); }
+        function indHeatThirst(t) { let w = ind.base.wear.foot, add = w && IND_ITEMS[w].sweatAdd || 0; return 1 + Math.max(0, t - 37 - add) * 0.5; }   // 任务 89：超过 37°C 每度口渴多掉 0.5 倍（草鞋少算 2 度）
         function indSweatT() { let w = ind.base.wear.foot; return IND_BODY.sweat + (w && IND_ITEMS[w].sweatAdd || 0); }
         function indShiver() { return ind.base.surv.temp < indChillT(); }
         // ── 受伤和死亡：所有掉血都走 indHurt，记下来源（死因、飘字、血条旁的字都用它） ──

@@ -12106,6 +12106,30 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND120 猫盾工业触屏摇杆：摇杆出来、拖动人会动、松手停、退出收起', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND121')) {
+            // IND121 中暑只加速口渴（任务 89）：体温 41°C 站 60 秒不掉血、口渴掉 3 倍；38／39／45 是 1.5／2／5 倍；口渴 0 才掉血；体温 ≥ 41 拿成就；热死死因表还在
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ach = {}; B.wear.foot = null; let S = B.surv, out = {};
+                    let drop = function (t, secs) { S.temp = t; S.water = 100; S.food = 100; S.hp = 100; ind.sickT = 0; for (let i = 0; i < secs; i++) { S.temp = t; indSurvTick(1); } return { w: 100 - S.water, hp: S.hp }; };
+                    let base = drop(37, 60); out.base = base.w; [38, 39, 41, 45].forEach(function (t) { let d = drop(t, 60); out['m' + t] = d.w / base.w; out['hp' + t] = d.hp; });
+                    out.got = !!B.ach.roast; B.ach = {}; drop(40, 5); out.no40 = !B.ach.roast; drop(41, 2); out.got41 = !!B.ach.roast;
+                    S.temp = 41; S.water = 0; S.hp = 100; indSurvTick(1); out.thirstHp = S.hp; out.die = IND_HURT.heat.die; return out; })()`);
+                const near = (a, b) => Math.abs(a - b) < 0.02;
+                if (!(r.base > 0 && near(r.m38, 1.5) && near(r.m39, 2) && near(r.m41, 3) && near(r.m45, 5))) bad.push('口渴倍数 ' + JSON.stringify(r));
+                if (!(r.hp38 === 100 && r.hp39 === 100 && r.hp41 === 100 && r.hp45 === 100)) bad.push('体温高不该掉血 ' + JSON.stringify(r));
+                if (!(r.got && r.no40 && r.got41)) bad.push('体温 41 才拿成就 ' + JSON.stringify(r));
+                if (!(r.thirstHp < 100 && r.die === '热死')) bad.push('口渴 0 掉血、死因表还在 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND121 中暑只加速口渴：倍数、不掉血、口渴 0 才掉、成就', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
