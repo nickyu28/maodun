@@ -12077,6 +12077,35 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND119 铁锭和槽：四种炉子炼铁锭都取得出来、配方没有循环、面板写锭留在炉膛', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND120')) {
+            // IND120 猫盾工业触屏摇杆（任务 88）：触屏设备进猫盾工业摇杆出来、拖动人会动、松手停；退出后摇杆收起
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1', mobile: true }); await T.eval(`${HIDE} gState.control = 'pad'; true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); indPanelClose(); indGoBase(null); ${HIDE} true;`);
+                if (!(await until(T, `document.getElementById('joystick-left').style.display === 'flex'`, 3000))) bad.push('摇杆没出来');
+                else {
+                    await W(700);
+                    const rc = JSON.parse(await T.eval(`JSON.stringify(document.getElementById('joystick-left').getBoundingClientRect())`));
+                    const cx = rc.left + rc.width / 2, cy = rc.top + rc.height / 2;
+                    const pos = () => T.eval(`ind.p.x + ',' + ind.p.z`);
+                    const p0 = await pos();
+                    const tp = (type, p) => T.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p[0], y: p[1], id: 1 }] : [] });
+                    await tp('touchStart', [cx, cy]); await tp('touchMove', [cx, cy - 50]); await W(800);
+                    const p1 = await pos(); const dbg = await T.eval(`JSON.stringify({ at: (function(){ let e = document.elementFromPoint(${cx}, ${cy}); return e ? e.id + '/' + e.className : null; })(), rc: [${cx},${cy}], t: tMove, panel: ind.panel, paused: ind.paused, dead: ind.dead, ctl: gState.control, k: ind.k, fr: !!ind.raf, ride: !!ind.ride })`); await tp('touchEnd', null); await W(300);
+                    const p2 = await pos(); await W(500); const p3 = await pos();
+                    if (p0 === p1) bad.push('拖动摇杆人没动 ' + p0 + ' ' + p1 + ' ' + dbg);
+                    if (p2 !== p3) bad.push('松手后还在动 ' + p2 + ' ' + p3);
+                }
+                await T.eval(`indExit(true); true;`);
+                if (!(await until(T, `!ind && document.getElementById('joystick-left').style.display === 'flex' && typeof hub !== 'undefined' && !!hub`, 4000))) bad.push('退出后摇杆状态跟大厅不一致');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND120 猫盾工业触屏摇杆：摇杆出来、拖动人会动、松手停、退出收起', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
