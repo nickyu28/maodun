@@ -3083,6 +3083,7 @@
                 });
                 if (boomR) { if (ind.panel === 'stove') ind.panelDirty = true; indBoom(c.x, c.z, boomR, '钢瓶炸了'); return; }
             }
+            if (typeof stkLaneOn === 'function' && stkLaneOn(c)) { stkLaneTick(c, dt, Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20)); indCookBadge(c); return; }   // 堆叠石炉平均烧、自定义（任务 99，19-industry-stack.js）
             if (!S.cook) {
                 let pool = ckPool(S), i = indCookFind(pool, K, Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20), S.items);
                 if (i >= 0 && S.temp >= IND_RECIPES[i].minT) S.cook = { i: i, t: 0, burn: 0, n: indBatchN(IND_RECIPES[i], pool, K) };
@@ -3096,27 +3097,34 @@
             if (r.burnT && S.temp > r.burnT) S.cook.burn += dt;
             if (S.cook.t >= r.time || S.cook.burn >= IND_BURN_S) {
                 let burnt = S.cook.burn >= IND_BURN_S;
-                let hotN = 0; if (!burnt) Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot && ckSpoutTakes(S, k)) hotN += r.out[k] * n; });   // 只算进得了出料槽的（没装槽、槽耐温不够的留在炉膛）
-                if (hotN && S.spout.length + hotN > IND_SPOUT_CAP) { S.cook.full = true; if (ind.panel === 'stove') ind.panelDirty = true; indCookBadge(c); return; }   // 出料槽满了，先停着不出料
-                S.cook.full = false;
-                ckPullOut(S, r, n);
-                let mats = indConsume(S.items, r, n), res = indCookResult(r, n, mats, burnt), out = res.out;   // 桶按用的材质还回去，陶罐有 1/10 碎掉
-                Object.keys(out).forEach(function (k) {
-                    if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) { for (let i = 0; i < out[k]; i++) { if (ckSpoutTakes(S, k)) S.spout.push({ k: k, t: ckSpoutDef(S).cool }); else S.out[k] = (S.out[k] || 0) + 1; } }   // 烫锭进出料槽；没槽或槽耐温不够就留在炉膛里
-                    else S.out[k] = (S.out[k] || 0) + out[k];
-                });
-                if (res.broke && !ind.sleeping) indFlash('陶罐碎了' + (res.broke > 1 ? '（' + res.broke + ' 个）' : ''));
+                if (!indCookOut(c, r, n, burnt)) { S.cook.full = true; if (ind.panel === 'stove') ind.panelDirty = true; indCookBadge(c); return; }   // 出料槽满了，先停着不出料
                 S.cook = null;
-                if (ind.panel === 'stove') ind.panelDirty = true;
-                if (ind.sleeping) ind.doneCount = (ind.doneCount || 0) + 1;
-                if (!ind.sleeping) indFlash(burnt ? '烧焦了！' + (n > 1 ? '整炉 ' + n + ' 份都焦了' : '') : '做好了：' + indOutTxt(r, n));
             }
             indCookBadge(c);
+        }
+        // 一批做好：出料（烫锭进出料槽、别的进"做好的"）。出料槽放不下返回 false（先停着）。堆叠石炉的分开烧（任务 99）也用它
+        function indCookOut(c, r, n, burnt) {
+            let S = c.C;
+            let hotN = 0; if (!burnt) Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot && ckSpoutTakes(S, k)) hotN += r.out[k] * n; });   // 只算进得了出料槽的（没装槽、槽耐温不够的留在炉膛）
+            if (hotN && S.spout.length + hotN > IND_SPOUT_CAP) return false;
+            if (S.cook) S.cook.full = false;
+            ckPullOut(S, r, n);
+            let mats = indConsume(S.items, r, n), res = indCookResult(r, n, mats, burnt), out = res.out;   // 桶按用的材质还回去，陶罐有 1/10 碎掉
+            Object.keys(out).forEach(function (k) {
+                if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) { for (let i = 0; i < out[k]; i++) { if (ckSpoutTakes(S, k)) S.spout.push({ k: k, t: ckSpoutDef(S).cool }); else S.out[k] = (S.out[k] || 0) + 1; } }   // 烫锭进出料槽；没槽或槽耐温不够就留在炉膛里
+                else S.out[k] = (S.out[k] || 0) + out[k];
+            });
+            if (res.broke && !ind.sleeping) indFlash('陶罐碎了' + (res.broke > 1 ? '（' + res.broke + ' 个）' : ''));
+            if (ind.panel === 'stove') ind.panelDirty = true;
+            if (ind.sleeping) ind.doneCount = (ind.doneCount || 0) + 1;
+            if (!ind.sleeping) indFlash(burnt ? '烧焦了！' + (n > 1 ? '整炉 ' + n + ' 份都焦了' : '') : '做好了：' + indOutTxt(r, n));
+            return true;
         }
         function indCookBadge(c) {
             if (ind.where !== 'base' || ind.catching) return;
             let S = c.C, txt = '';
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; txt = indOutTxt(r, S.cook.n || 1) + '　' + Math.min(99, Math.floor(S.cook.t / r.time * 100)) + '%'; }
+            else if (S.lanes && S.lanes.length && stkLaneOn(c)) txt = S.lanes.map(function (l) { return indOutTxt(IND_RECIPES[l.i], l.n) + ' ' + Math.min(99, Math.floor(l.t / IND_RECIPES[l.i].time * 100)) + '%'; }).join('　');   // 任务 99
             else if (indHard() && rlNeedReducer(S)) txt = '要加木炭／煤／焦炭';
             indBadge('cook' + c.id, c.x, c.ty === 'kiln' ? 3.6 : 3.1, c.z, txt);
             let sp = indSpoutPos(c), t2 = S.spout.length ? indSpoutTxt(c) : (S.cook && S.cook.full ? '出料槽满了' : '');
@@ -3507,7 +3515,7 @@
         }
         function indStoveHtml() {
             let c = indCookCur(), S = c.C, D = IND_COOK[c.ty], F = indFireDef(c.ty, S.fire);
-            let sn = stkN(S), st = fiPanelLine(S) + (sn > 1 ? '<b>×' + sn + '（' + sn + ' 台叠在一起）</b><br>' : '') + '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + (sn > 1 ? '　每秒烧 ×' + sn : '') + '<br>';
+            let sn = stkN(S), st = fiPanelLine(S) + stkModeHtml(c) + (sn > 1 ? '<b>×' + sn + '（' + sn + ' 台叠在一起）</b><br>' : '') + '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + (sn > 1 ? '　每秒烧 ×' + sn : '') + '<br>';
             if (S.fire === 4 && !S.blow && !fmBlowerOn(c)) st += '<br><span style="color:#888">鼓风要装电动鼓风机　实际：大火</span>';
             if (S.bellows) st += '<span style="color:#888">装了风箱：烧着时对着炉子右键拉风箱，每下 +10°C（最高 1600°C）</span><br>';
             { let eta = indHeatEta(c); if (eta) st += '<br><span style="color:#888">现在 ' + Math.round(S.temp) + '°C，升到 ' + eta.t + '°C 约要 ' + eta.s + ' 秒</span>'; }   // 升温估计（任务 71）

@@ -159,3 +159,81 @@
                 }
             });
         }
+
+        // ══ 任务 99：叠在一起的石炉（灶台叠石炉也算）选怎么分配：烧同一个 / 平均烧 / 自定义 ══
+        // 一座石炉的烧制速度是 k。n 座烧同一个：k × n（就是原来的叠法：一炉份数 ×n、时间不变）。
+        // 平均烧 a 个不同的东西：每个 n × k ÷ a（每样各自一炉，份数按一座算，进度每秒走 n ÷ a 秒）。自定义：每样自己占几座（合起来 n 座），速度 = 座数 × k。
+        // 燃料每座照旧各自烧（叠了 n 座每秒烧 ×n），温度、燃烧规则不动。单座不受影响。
+        const STK_MODE = { same: '烧同一个', avg: '平均烧', custom: '自定义' };
+        function stkLaneTy(c) { return c && (c.ty === 'stone' || c.ty === 'stove'); }
+        function stkLaneOn(c) { let S = c.C; return stkLaneTy(c) && stkN(S) >= 2 && (S.mode === 'avg' || S.mode === 'custom'); }
+        // 现在原料够、能分开烧的几样东西（配方下标，最多 8 样）
+        function stkLaneList(c, target) {
+            let S = c.C, K1 = indCookK(c.ty, {}), cp = JSON.parse(JSON.stringify(S.items)), L = [];
+            for (let t = 0; t < 8; t++) {
+                let i = indCookFind(cp, K1, target, cp); if (i < 0 || L.indexOf(i) >= 0) break;
+                L.push(i); Object.keys(IND_RECIPES[i].in).forEach(function (k) { if (cp[k] > 0) { cp[k] -= IND_RECIPES[i].in[k]; if (cp[k] <= 0) delete cp[k]; } });
+            }
+            return L;
+        }
+        // 每样分到几座（可以是小数）
+        function stkLaneShares(c, target) {
+            let S = c.C, n = stkN(S), out = {};
+            if (S.mode === 'custom') {
+                let A = S.alloc || {}, L = stkLaneList(c, target);
+                L.forEach(function (i) { if (A[i] > 0) out[i] = A[i]; });
+                return out;
+            }
+            let L = stkLaneList(c, target); L.forEach(function (i) { out[i] = n / L.length; });
+            return out;
+        }
+        function stkLaneTick(c, dt, target) {
+            let S = c.C, K1 = indCookK(c.ty, {}), sh = stkLaneShares(c, target), lanes = S.lanes = Array.isArray(S.lanes) ? S.lanes : [];
+            S.cook = null;
+            S.lanes = lanes = lanes.filter(function (l) { return sh[l.i] > 0; });   // 不再分到座数的那样停了（材料还在炉子里）
+            Object.keys(sh).forEach(function (i) {
+                i = +i; let r = IND_RECIPES[i]; if (lanes.some(function (l) { return l.i === i; })) return;
+                if (S.temp < r.minT) return;
+                lanes.push({ i: i, t: 0, burn: 0, n: Math.max(1, indBatchN(r, ckPool(S), K1)) });
+            });
+            for (let j = lanes.length - 1; j >= 0; j--) {
+                let l = lanes[j], r = IND_RECIPES[l.i], pool = ckPool(S);
+                l.s = sh[l.i];
+                if (Object.keys(r.in).some(function (k) { return indHave(pool, k) < r.in[k] * l.n; })) { lanes.splice(j, 1); continue; }
+                if (S.temp >= r.minT) l.t += dt * l.s;
+                if (r.burnT && S.temp > r.burnT) l.burn += dt;
+                if (l.t >= r.time || l.burn >= IND_BURN_S) {
+                    if (!indCookOut(c, r, l.n, l.burn >= IND_BURN_S)) { l.full = true; continue; }
+                    lanes.splice(j, 1);
+                }
+            }
+        }
+        function stkSetMode(m) {
+            let c = indCookCur(); if (!c || !STK_MODE[m]) return;
+            let S = c.C; S.mode = m; S.lanes = []; if (m !== 'custom') delete S.alloc;
+            if (m === 'custom' && !S.alloc) S.alloc = {};
+            indSave(); indPanelStove();
+        }
+        function stkAlloc(i, d) {
+            let c = indCookCur(); if (!c) return; let S = c.C, A = S.alloc = S.alloc || {}, n = stkN(S);
+            let used = Object.keys(A).reduce(function (t, k) { return t + (A[k] || 0); }, 0);
+            if (d > 0 && used >= n) { indFlash('一共只有 ' + n + ' 座'); return; }
+            A[i] = Math.max(0, (A[i] || 0) + d); if (!A[i]) delete A[i];
+            indSave(); indPanelStove();
+        }
+        // 面板上那一块（只给叠了 2 座以上的石炉、灶台）
+        function stkModeHtml(c) {
+            let S = c.C, n = stkN(S); if (!stkLaneTy(c) || n < 2) return '';
+            let m = S.mode === 'avg' || S.mode === 'custom' ? S.mode : 'same';
+            let h = '<div style="margin:6px 0;">怎么分：' + ['same', 'avg', 'custom'].map(function (k) { return '<button id="stk-mode-' + k + '" style="' + IND_BTN + (m === k ? 'background:#5e35b1;' : '') + '" onclick="stkSetMode(\'' + k + '\')">' + STK_MODE[k] + '</button>'; }).join('') + '</div>';
+            let target = Math.max(indFireDef(c.ty, S.fire).t, 20), L = stkLaneList(c, target);
+            if (m === 'same') return h + '<div style="font-size:13px;color:#888;">' + n + ' 座一起烧同一样：一炉 ' + n + ' 倍的份数</div>';
+            if (m === 'avg') return h + '<div style="font-size:13px;color:#888;">' + (L.length ? L.length + ' 样一起烧，每样 ' + Math.round(n / L.length * 100) / 100 + ' 座的速度' : '放几样不同的东西进去，平分 ' + n + ' 座') + '</div>' + stkLaneTxt(S);
+            let A = S.alloc || {}, used = Object.keys(A).reduce(function (t, k) { return t + (A[k] || 0); }, 0);
+            h += '<div style="font-size:13px;color:#888;">每样占几座（一共 ' + n + ' 座，还剩 ' + (n - used) + ' 座）</div>';
+            L.forEach(function (i) { h += indRow(indOutTxt(IND_RECIPES[i], 1), '<button style="' + IND_BTN + '" onclick="stkAlloc(' + i + ', -1)">−</button> ' + (A[i] || 0) + ' 座 <button id="stk-alloc-' + i + '" style="' + IND_BTN + '" onclick="stkAlloc(' + i + ', 1)">＋</button>'); });
+            return h + stkLaneTxt(S);
+        }
+        function stkLaneTxt(S) {
+            return (S.lanes || []).map(function (l) { let r = IND_RECIPES[l.i]; return '<div style="font-size:13px;">正在做：' + indOutTxt(r, l.n) + ' ' + Math.floor(l.t / r.time * 100) + '%' + (l.full ? '（出料槽满了）' : '') + '</div>'; }).join('');
+        }

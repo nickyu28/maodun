@@ -12784,6 +12784,50 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND144 挖矿一次 4 个：还剩 N 份、总量不变、铁稿 +1、耐久按次数、老存档镐减半', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND145')) {
+            // IND145 叠在一起的石炉怎么分（任务 99）：n = 3 烧同一个 3k（一炉 3 倍份数、时间不变）；平均烧 a = 2 每样 1.5k、a = 3 每样 k、a = 4 每样 0.75k；自定义 2 + 1 座 = 2k、k；单座不变；燃料各自照烧（×3）；做完出料；面板三个按钮
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; B.cookers = []; indPanelClose(); ind.bag = {};
+                    let mk = function (n) { let c = Object.assign({ id: ++B.cseq, ty: 'stone', x: 6, z: 6 }, ckNewState(), { spout: [], spoutTy: 'brick', fuel: 9999, fire: 2, temp: 600, n: n }); B.cookers.push(c); return indCooks().filter(function (x) { return x.id === c.id; })[0]; };
+                    let K1 = indCookK('stone', {}), used = {}, R = [];
+                    IND_RECIPES.forEach(function (r, i) { if (R.length >= 4 || r.minT > 600 || r.minT < 50 || r.time < 20 || r.cls === 'smelt' || r.burnT || !indBatchCap(K1, r)) return; let ks = Object.keys(r.in); if (ks.some(function (k) { return used[k] || !IND_ITEMS_RAW[k] || IND_ITEMS_RAW[k].cont || /water|bucket|jar|bottle|cyl/.test(k); })) return; ks.forEach(function (k) { used[k] = 1; }); R.push(i); });
+                    let fill = function (c, list, times) { c.C.items = {}; list.forEach(function (i) { Object.keys(IND_RECIPES[i].in).forEach(function (k) { c.C.items[k] = (c.C.items[k] || 0) + IND_RECIPES[i].in[k] * (times || 1); }); }); };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`if (R.length < 4) return { few: R };
+                    let rate = function (n, mode, list, alloc) { let c = mk(n); c.C.mode = mode; if (alloc) c.C.alloc = alloc; fill(c, list); indCookTick(c, 0.01); let L0 = JSON.parse(JSON.stringify(c.C.lanes || [])); indCookTick(c, 2); let out = {}; (c.C.lanes || []).forEach(function (l) { out[l.i] = Math.round((l.t - (L0.filter(function (q) { return q.i === l.i; })[0] || { t: 0 }).t) / 2 * 1000) / 1000; }); return out; };
+                    let a2 = rate(3, 'avg', R.slice(0, 2)), a3 = rate(3, 'avg', R.slice(0, 3)), a4 = rate(3, 'avg', R.slice(0, 4)), cu = rate(3, 'custom', R.slice(0, 2), { [R[0]]: 2, [R[1]]: 1 });
+                    let s = mk(3); s.C.mode = 'same'; fill(s, [R[0]], 3); indCookTick(s, 0.01); let same = { n: s.C.cook && s.C.cook.n, lanes: (s.C.lanes || []).length };
+                    let one = mk(1); one.C.mode = 'avg'; fill(one, R.slice(0, 2)); indCookTick(one, 0.01); let single = { cook: !!one.C.cook, lanes: (one.C.lanes || []).length, on: stkLaneOn(one) };
+                    let f3 = mk(3); f3.C.mode = 'avg'; fill(f3, R.slice(0, 2)); let fu0 = f3.C.fuel; indCookTick(f3, 1); let f1 = mk(1); let fu1 = f1.C.fuel; indCookTick(f1, 1);
+                    return { R: R, a2: a2, a3: a3, a4: a4, cu: cu, same: same, single: single, fuel3: fu0 - f3.C.fuel, fuel1: fu1 - f1.C.fuel };`);
+                if (r.few) bad.push('找不到 4 个不同原料的石炉配方 ' + JSON.stringify(r));
+                else {
+                    const all = (o, v, n) => Object.keys(o).length === n && Object.keys(o).every((k) => Math.abs(o[k] - v) < 0.01);
+                    if (!all(r.a2, 1.5, 2)) bad.push('平均烧 a = 2 每样 1.5k ' + JSON.stringify(r.a2));
+                    if (!all(r.a3, 1, 3)) bad.push('平均烧 a = 3 每样 k ' + JSON.stringify(r.a3));
+                    if (!all(r.a4, 0.75, 4)) bad.push('平均烧 a = 4 每样 0.75k ' + JSON.stringify(r.a4));
+                    if (!(Math.abs(r.cu[r.R[0]] - 2) < 0.01 && Math.abs(r.cu[r.R[1]] - 1) < 0.01)) bad.push('自定义 2 + 1 座：2k、k ' + JSON.stringify(r.cu));
+                    if (!(r.same.n >= 3 && r.same.lanes === 0)) bad.push('烧同一个：一炉 3 倍份数（3k） ' + JSON.stringify(r.same));
+                    if (!(r.single.cook && r.single.lanes === 0 && !r.single.on)) bad.push('单座不受影响 ' + JSON.stringify(r.single));
+                    if (!(Math.abs(r.fuel3 - 3 * r.fuel1) < 1e-6 && r.fuel1 > 0)) bad.push('燃料各自照烧（×3） ' + JSON.stringify(r));
+                }
+                r = await run(`let c = mk(3); c.C.mode = 'avg'; fill(c, R.slice(0, 2)); let t0 = Math.max(IND_RECIPES[R[0]].time, IND_RECIPES[R[1]].time); for (let i = 0; i < Math.ceil(t0 / 1.5) + 2; i++) indCookTick(c, 1);
+                    let outs = Object.keys(c.C.out).length + c.C.spout.length; ind.cookId = c.id; indPanelStove(c.id); let btns = ['same', 'avg', 'custom'].map(function (k) { return !!document.getElementById('stk-mode-' + k); });
+                    document.getElementById('stk-mode-custom').click(); let mode = c.C.mode; return { outs: outs, left: Object.keys(c.C.items).length, btns: btns, mode: mode };`);
+                if (!(r.outs >= 2 && r.left === 0 && r.btns.join() === 'true,true,true' && r.mode === 'custom')) bad.push('平均烧做完出料、面板三个按钮能切 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', cookers: [{ id: 3, ty: 'stone', x: 5, z: 5, n: 3, items: {}, out: {}, fuel: 10, fire: 0, temp: 20, cook: null, mode: 'avg', lanes: [{ i: 0, t: 5, burn: 0, n: 1 }] }] }); return { ok: b.cookers.length === 1 }; })()`);
+                if (!r.ok) bad.push('老存档读档 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND145 堆叠石炉怎么分：同一个 3k、平均烧 n×k÷a、自定义按座数、单座不变、燃料各自烧、面板按钮', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
