@@ -41,7 +41,7 @@
         const IND_T = { extract: 3, pickR: 2.6, gateR: 2.2, exitR: 3, speed: 7, run: 1.6 };
         const IND_BASE = { x: 30, z: 22.5, x0: -30, x1: 30, z0: -22.5, z1: 22.5 };          // 基地半宽、半深（60 × 45 米）
         const IND_FIELD = { x0: -28, x1: -6, z0: -18, z1: 18, tile: 2 };   // 农田（基地左边），2 米一格
-        const IND_MAP = 300;                          // 远征地图半宽（600 × 600 米）
+        const IND_MAP = 520, IND_K = 3, IND_ZOOM = Math.sqrt(3);   // 远征地图半宽（1040 × 1040 米，任务 92：面积约 3 倍）；数量 × IND_K，群系噪声放大 IND_ZOOM 倍（群系面积约 3 倍）
         const IND_BAG_SLOTS = 24, IND_STACK = 99, IND_CHEST_SLOTS = 30;        // 背包 24 格，每格最多 99 个，同一种能占多格；新做的箱子 30 格，原来那个仓库箱不限
         const IND_EYE = 1.8;
         const IND_CAM = { back: 4.4, up: 1.2 };
@@ -451,13 +451,13 @@
         // 一张远征地图：种子 → 地形高度、地貌、火山位置
         function indMakeMap(seed) {
             let r = indRng(seed), M = { seed: seed, volc: [] };
-            let nv = 2 + Math.floor(r() * 3);
+            let nv = IND_K * (2 + Math.floor(r() * 3));
             for (let i = 0; i < nv; i++) { let a = r() * Math.PI * 2, d = IND_MAP * (0.62 + r() * 0.25); M.volc.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 16 + r() * 6 }); }
             wdMakeRivers(M);   // 河：1～3 条，从山地流到海边（19-industry-world.js）
             return M;
         }
-        function indElev(M, x, z) { return indFbm(x / 70, z / 70, M.seed); }
-        function indMoist(M, x, z) { return indFbm(x / 90, z / 90, M.seed + 101); }
+        function indElev(M, x, z) { return indFbm(x / (70 * IND_ZOOM), z / (70 * IND_ZOOM), M.seed); }
+        function indMoist(M, x, z) { return indFbm(x / (90 * IND_ZOOM), z / (90 * IND_ZOOM), M.seed + 101); }
         function indBiome(M, x, z) {
             if (M.moon) return moonBiome(M.moon, x, z);   // 月球（19-industry-moon.js）
             if (x > IND_MAP + 50) return cvBiome(x, z);   // 矿洞跟洞口一样
@@ -1221,7 +1221,7 @@
         }
 
         // 远征：地形（一个网格，颜色按地貌）、水面、资源点（一个 InstancedMesh）、两个撤离点
-        const IND_SEG = 240, IND_NODE_N = 1680, IND_WILD_N = 56;   // 地图 600 × 600：资源点和动物按面积（原来 300 × 300 的 4 倍）
+        const IND_SEG = 420, IND_NODE_N = 1680 * IND_K, IND_WILD_N = 56 * IND_K;   // 地图 1040 × 1040：资源点和动物按面积（原来 600 × 600 的 3 倍）
         const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin', 'seed_cotton', 'seed_cabbage', 'seed_radish'];
         function indGoTrip(seed) {
             if (ind.base.rule && typeof ind.base.away !== 'number') ind.base.away = ind.base.clock;   // 记下出门时刻，回家补算（任务 3）
@@ -1278,7 +1278,7 @@
             ind.fireMesh = indInst(new THREE.ConeGeometry(0.45, 0.9, 7), 30); ind.fireDirty = true;
             // 野生动物：平原有羊和牛，森林有狗和猫
             ind.wild = [];
-            for (let i = 0, tries = 0; ind.wild.length < IND_WILD_N && tries < 1600; tries++) {
+            for (let i = 0, tries = 0; ind.wild.length < IND_WILD_N && tries < 1600 * IND_K; tries++) {
                 let x = (r() * 2 - 1) * (IND_MAP - 10), z = (r() * 2 - 1) * (IND_MAP - 10), bm = indBiome(M, x, z);
                 if (Math.hypot(x, z) < 12 || indHeight(M, x, z) < -0.8) continue;
                 let ks = Object.keys(IND_ANIMALS).filter(function (k) { return IND_ANIMALS[k].biome.indexOf(bm) >= 0; });
@@ -1289,7 +1289,7 @@
             ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 120);
             // 撤离点：4 个。1 个就在出生点脚下（走开一次才生效，不然一出生就回家了），另外 3 个每趟随机散在地图里（离出生点和彼此都 ≥ 150 米，找不到就一点点放宽）
             ind.exits = [{ x: 0, z: -4, name: '撤离点', armed: false }];
-            for (let tries = 0, minD = 150; ind.exits.length < 4 && tries < 2000; tries++) {
+            for (let tries = 0, minD = 260; ind.exits.length < 4 && tries < 2000; tries++) {
                 if (tries && tries % 300 === 0) minD = Math.max(60, minD - 20);
                 let x = (r() * 2 - 1) * (IND_MAP - 20), z = (r() * 2 - 1) * (IND_MAP - 20);
                 if (indHeight(M, x, z) < -0.3 || ind.exits.some(function (e) { return Math.hypot(e.x - x, e.z - z) < minD; })) continue;

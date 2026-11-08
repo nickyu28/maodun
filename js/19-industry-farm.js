@@ -3,7 +3,7 @@
         //  基地里成年的羊、牛，远征里的野兔、野鹿能宰：拿着工具对着它按住右键 1 秒（基地里再确认一次）。狗和猫永远不能宰。
         //  不流血、不倒地：冒一团烟就没了，原地掉东西。野兔、野鹿见人会跑，野鹿要打 3 下。
         // ══════════════════════════════════════════════════════════
-        const FM = { hold: 1, fleeR: 4, fleeT: 1.5, restT: 2.5, fleeSp: 4, wildN: 10, reach: 4 };
+        const FM = { hold: 1, fleeR: 4, fleeT: 1.5, restT: 2.5, fleeSp: 4, wildN: 10 * IND_K, reach: 4 };
         Object.assign(IND_ITEMS_RAW, {
             meat_raw: { name: '生肉', col: 0xe57373, eat: { f: 5, ache: 0.5 }, use: '烤成烤肉、煮肉汤；狗和猫爱吃（生吃一半可能肚子疼）' },
             meat_roast: { name: '烤肉', col: 0x8d4b2a, eat: { f: 55, w: -5 } },
@@ -28,7 +28,7 @@
         // 远征图上撒野兔、野鹿（自己一个随机数，不改原来的动物和撤离点）
         function fmSpawnWild(M) {
             let r = indRng((M.seed ^ 0x2545f491) >>> 0), ks = ['rabbit', 'rabbit', 'deer'];
-            for (let n = 0, t = 0; n < FM.wildN && t < 400; t++) {
+            for (let n = 0, t = 0; n < FM.wildN && t < 400 * IND_K; t++) {
                 let x = (r() * 2 - 1) * (IND_MAP - 10), z = (r() * 2 - 1) * (IND_MAP - 10), k = ks[Math.floor(r() * ks.length)];
                 if (Math.hypot(x, z) < 12 || indHeight(M, x, z) < -0.8 || IND_ANIMALS[k].spawn.indexOf(indBiome(M, x, z)) < 0) continue;
                 ind.wild.push({ k: k, x: x, z: z, fed: 0, follow: false, hp: IND_ANIMALS[k].hp }); n++;

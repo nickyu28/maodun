@@ -29,8 +29,8 @@
         const RK = { blast: 3, fuse: 3, near: 4, powder: 2, ventChance: 0.15, ventT: 120, ventFireR: 4, ventBoomR: 8 };
         // 生成：每张远征图 2～4 块硬岩，位置按地图种子（indGoTrip 里 wdExtraNodes 后面调用）
         function rkGen(M) {
-            let r = indRng((M.seed ^ 0x5bd1e995) >>> 0), want = 2 + Math.floor(r() * 3), got = 0;
-            for (let t = 0; t < 200 && got < want; t++) {
+            let r = indRng((M.seed ^ 0x5bd1e995) >>> 0), want = IND_K * (2 + Math.floor(r() * 3)), got = 0;
+            for (let t = 0; t < 200 * IND_K && got < want; t++) {
                 let x = (r() * 2 - 1) * (IND_MAP - 8), z = (r() * 2 - 1) * (IND_MAP - 8), h = indHeight(M, x, z);
                 if (h < 0.3 || Math.hypot(x, z) < 25) continue;
                 ind.nodes.push({ key: 'rock_hard', rock: true, hard: true, x: x, z: z, y: h, n: 1, seed: IND_SEED_KINDS[0], dead: false }); got++;

@@ -15,8 +15,8 @@
         function orKeep(key, x, z, casual) { return casual || !OR_ORE[key] || indHash(Math.floor(x), Math.floor(z), 7777) < OR.surf; }
         // 裂纹岩：每张图 3～6 块，位置按地图种子
         function orCrackGen(M) {
-            let r = indRng((M.seed ^ 0x3b9aca07) >>> 0), want = OR.crackN[0] + Math.floor(r() * (OR.crackN[1] - OR.crackN[0] + 1)), got = 0;
-            for (let t = 0; t < 300 && got < want; t++) {
+            let r = indRng((M.seed ^ 0x3b9aca07) >>> 0), want = IND_K * (OR.crackN[0] + Math.floor(r() * (OR.crackN[1] - OR.crackN[0] + 1))), got = 0;
+            for (let t = 0; t < 300 * IND_K && got < want; t++) {
                 let x = (r() * 2 - 1) * (IND_MAP - 8), z = (r() * 2 - 1) * (IND_MAP - 8), h = indHeight(M, x, z);
                 if (h < 0.3 || Math.hypot(x, z) < 25) continue;
                 ind.nodes.push({ key: 'rock_crack', rock: true, crack: true, x: x, z: z, y: h, n: 1, seed: IND_SEED_KINDS[0], dead: false }); got++;

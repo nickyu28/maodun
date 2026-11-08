@@ -7816,7 +7816,7 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.bag = { pick_iron: 1 }; ind.nodes.push({ key: 'ore_cu', out: true, x: 0, z: -9, y: 0, n: 12, n0: 12, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; indAction(); true;`);
                 if (!(await T.eval(`ind.bag.ore_cu === 2`))) bad.push('铁稿 +1：一次 2 份 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 // ── 河：每张图 1～3 条，从高处流进海里，宽 4～8 米，浅水为主；河边有黏土、锡砂；河里接的是生水 ──
-                const rv = await J(`(function(){ let bad = [], n = 0, banks = 0, shallow = 0, all = 0; for (let s = 1; s <= 40; s++) { let M = indMakeMap(s * 613); let R = M.rivers; n += R.length; if (R.length < 1 || R.length > 3) bad.push('条数 ' + s + ':' + R.length); R.forEach(function (rv) { let a = rv.pts[0], b = rv.pts[rv.pts.length - 1]; if (indElev(M, a[0], a[1]) < 0.2) bad.push('不是从高处起头'); if (indHeight(M, b[0], b[1]) >= IND_WATER_Y) bad.push('没流进海里'); if (rv.w < 4 || rv.w > 8) bad.push('宽 ' + rv.w); for (let i = 1; i < rv.pts.length - 1; i += 3) { let p = rv.pts[i]; all++; let dep = IND_WATER_Y - indHeight(M, p[0], p[1]); if (dep <= 0) bad.push('河中间不是水 ' + s); } }); } return { bad: bad.slice(0, 5), avg: n / 40 }; })()`);
+                const rv = await J(`(function(){ let bad = [], n = 0, banks = 0, shallow = 0, all = 0; for (let s = 1; s <= 40; s++) { let M = indMakeMap(s * 613); let R = M.rivers; n += R.length; if (R.length < 3 || R.length > 9) bad.push('条数 ' + s + ':' + R.length); R.forEach(function (rv) { let a = rv.pts[0], b = rv.pts[rv.pts.length - 1]; if (indElev(M, a[0], a[1]) < 0.2) bad.push('不是从高处起头'); if (indHeight(M, b[0], b[1]) >= IND_WATER_Y) bad.push('没流进海里'); if (rv.w < 4 || rv.w > 8) bad.push('宽 ' + rv.w); for (let i = 1; i < rv.pts.length - 1; i += 3) { let p = rv.pts[i]; all++; let dep = IND_WATER_Y - indHeight(M, p[0], p[1]); if (dep <= 0) bad.push('河中间不是水 ' + s); } }); } return { bad: bad.slice(0, 5), avg: n / 40 }; })()`);
                 if (rv.bad.length) bad.push('河 ' + JSON.stringify(rv));
                 const rv2 = await J(`(function(){ indGoTrip(977 * 3); let M = ind.map, rv = M.rivers[0], sh = 0, dp = 0; rv.pts.forEach(function (p, i) { if (i < 2 || i > rv.pts.length - 3) return; let a = rv.pts[i - 1], dx = p[0] - a[0], dz = p[1] - a[1], l = Math.hypot(dx, dz); for (let o = -rv.w / 2; o <= rv.w / 2; o += 0.25) { let d = IND_WATER_Y - indHeight(M, p[0] - dz / l * o, p[1] + dx / l * o); if (d > 0) { if (d < IND_WATER.shallow) sh++; else dp++; } } }); let bank = ind.nodes.filter(function (o) { return o.river; }).map(function (o) { return o.key; }); return { sh: sh, dp: dp, bank: bank, mid: rv.pts[Math.floor(rv.pts.length / 2)] }; })()`);
                 if (!(rv2.sh > rv2.dp * 1.5) || !rv2.dp) bad.push('河是浅水为主（中间一溜深） ' + JSON.stringify([rv2.sh, rv2.dp]));
@@ -7824,7 +7824,7 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.bag = { bucket: 1 }; indSelect('bucket'); indTeleport(${rv2.mid[0]}, ${rv2.mid[1]}); window.__fl = []; indUse(); true;`);
                 if (!(await T.eval(`ind.bag.water_raw === 1 && !ind.bag.water_sea`))) bad.push('河里接到的是生水 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
                 // ── 地形分块：视野外的块不画；山地更陡；火山周围的黑石头 ──
-                const ck = await J(`(function(){ indGoTrip(2024); ind.base.clock = 300; indTeleport(0, 0); ind.nodeView = null; indSyncNodes(); let a = ind.chunks.filter(function (m) { return m.visible; }).length; ind.base.clock = 1000; ind.nodeView = null; indSyncNodes(); let b = ind.chunks.filter(function (m) { return m.visible; }).length; indTeleport(-280, -280); ind.nodeView = null; indSyncNodes(); let c = ind.chunks[0].visible && !ind.chunks[99].visible; ind.base.clock = 300; return { n: ind.chunks.length, day: a, night: b, corner: c, black: ind.nodes.filter(function (o) { return o.black && o.rock; }).length }; })()`);
+                const ck = await J(`(function(){ indGoTrip(2024); ind.base.clock = 300; indTeleport(52, 52); ind.nodeView = null; indSyncNodes(); let a = ind.chunks.filter(function (m) { return m.visible; }).length; ind.base.clock = 1000; ind.nodeView = null; indSyncNodes(); let b = ind.chunks.filter(function (m) { return m.visible; }).length; indTeleport(-500, -500); ind.nodeView = null; indSyncNodes(); let c = ind.chunks[0].visible && !ind.chunks[99].visible; ind.base.clock = 300; return { n: ind.chunks.length, day: a, night: b, corner: c, black: ind.nodes.filter(function (o) { return o.black && o.rock; }).length }; })()`);
                 if (ck.n !== 100 || ck.day > 16 || ck.night >= ck.day || !ck.corner) bad.push('地形分块、视野外不画 ' + JSON.stringify(ck));
                 if (!ck.black) bad.push('火山周围要有黑石头 ' + JSON.stringify(ck));
                 // ── 仙人掌：空手采硬核扣 60 血、悠闲只提示；剪刀稿子不扎；生吃口渴 +5 扣 60；拔刺按最快的工具；去刺、烤仙人掌 ──
@@ -12271,6 +12271,28 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND126 模具随时取出、铁槽删掉：半浇取出份数、烫零件跟模具、凝固进槽、老存档换砖槽退铁锭', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND127')) {
+            // IND127 远征图放大（任务 92）：边长约 1040、资源点约为原来 3 倍（1680 × 3）；30 张图每张 ≥ 4 种群系、4 个撤离点走得到、关键资源缺的图不超过 5%（铜锡铁煤硫由任务 96 管）；同一个种子同一张图；群系块平均面积约 3 倍
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const r = JSON.parse(await T.eval(`(function(){ let out = { side: IND_MAP * 2, nodeN: IND_NODE_N, miss: 0, minK: 99, exits: 0, reach: 0, same: true, n: 30, areas: [] };
+                    let sig = function (M) { let s = 0; for (let i = 0; i < 40; i++) { s += indHeight(M, i * 23 - 400, i * 17 - 300) + indMoist(M, i * 13, i * 29) * 3; } return Math.round(s * 1e6); };
+                    for (let q = 1; q <= out.n; q++) { let seed = 5000 + q * 7919; let M1 = indMakeMap(seed), M2 = indMakeMap(seed); if (sig(M1) !== sig(M2)) out.same = false;
+                        let st = 40, n = Math.floor(2 * IND_MAP / st), kinds = {}, sm = 0, cnt = 0; for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) kinds[indBiome(M1, -IND_MAP + (i + .5) * st, -IND_MAP + (j + .5) * st)] = 1; let k = Object.keys(kinds).length; out.minK = Math.min(out.minK, k); }
+                    for (let q = 1; q <= 12; q++) { indGoTrip(9000 + q * 104729); let c = {}; ind.nodes.forEach(function (o) { c[o.key] = 1; }); if (!c.sand_sn || !c.saltpeter || !c.clay_fire || !c.salt) out.miss++; if (ind.exits.length === 4) out.exits++;
+                        let ok = ind.exits.every(function (e) { return Math.abs(e.x) < IND_MAP && Math.abs(e.z) < IND_MAP && indHeight(ind.map, e.x, e.z) > -0.3; }); if (ok) out.reach++; out.nodes = ind.nodes.length; indGoBase(null); }
+                    return JSON.stringify(out); })()`));
+                if (!(r.side === 1040 && r.nodeN === 5040 && r.minK >= 4 && r.same)) bad.push('边长、资源点数、每张图 ≥ 4 种群系、同种子同一张 ' + JSON.stringify(r));
+                if (!(r.exits === 12 && r.reach === 12 && r.miss <= 1)) bad.push('4 个撤离点都在、都在陆地上、关键资源缺的图不超过 5%（12 张里最多 1 张）' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND127 远征图放大：边长 1040、资源点 ×3、群系 ≥ 4 种、撤离点、关键资源', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 

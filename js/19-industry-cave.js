@@ -16,8 +16,8 @@
         // 远征图生成时（indGoTrip）：在山地、古老岩层里找 2～4 个洞口。用自己的随机数，不打乱别的东西
         function cvGen(M) {
             ind.caves = []; ind.cave = null;
-            let r = indRng((M.seed ^ 0x2c1b3c6d) >>> 0), want = 2 + Math.floor(r() * 3);
-            for (let t = 0; t < 3000 && ind.caves.length < want; t++) {
+            let r = indRng((M.seed ^ 0x2c1b3c6d) >>> 0), want = IND_K * (2 + Math.floor(r() * 3));
+            for (let t = 0; t < 3000 * IND_K && ind.caves.length < want; t++) {
                 let x = (r() * 2 - 1) * (IND_MAP - 20), z = (r() * 2 - 1) * (IND_MAP - 20), bm = indBiome(M, x, z);
                 if (bm !== 'mountain' && bm !== 'ancient') continue;
                 if (ind.caves.some(function (c) { return Math.hypot(c.x - x, c.z - z) < 60; })) continue;
