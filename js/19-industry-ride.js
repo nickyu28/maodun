@@ -99,7 +99,7 @@
             let ty = IND_ITEMS[k].veh, c = rdCar();
             let body = ty === 'bike' ? '<div style="line-height:1.7;">2 × 冲刺速度，脚踏吃体力（没体力只有走路速度）。<br>撞树、石头、水就停；骑着只能做单手的事。</div>' :
                 '<div style="line-height:1.7;">电池槽：' + c.bats + ' 节　' + indBankV(c).toFixed(1) + ' V　电量 ' + Math.ceil(c.u) + ' / ' + c.um + '<br>' + (rdCarOk() ? '能开：3 × 冲刺速度，行驶每秒耗 ' + RD.draw + ' U' : '<span style="color:#c62828">' + rdCarWhy() + '</span>') + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节' + (ind.bag.battery_ni ? '，镍电池 ' + ind.bag.battery_ni : '') + (ind.bag.battery_li ? '，锂电池 ' + ind.bag.battery_li : '') + '</div>' +
-                '<div style="margin-top:6px;"><button style="' + IND_BTN + '" onclick="rdPutCells(1)">放 1 节</button><button style="' + IND_BTN + '" onclick="rdPutCells(99)">放全部</button></div>' +
+                '<div style="margin-top:6px;"><button style="' + IND_BTN + '" onclick="rdPutCells(1)">放 1 节</button><button style="' + IND_BTN + '" onclick="rdPutCells(99)">全放</button></div>' +
                 '<div style="margin-top:6px;">自动驾驶：' + (c.auto ? '装着（开着车按 M 点地图设目的地）' : '没装') + '<button style="' + IND_BTN + '" onclick="rdAutoToggle()">' + (c.auto ? '拆下来' : '装芯片') + '</button></div>';
             indPanelShow('veh', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + IND_ITEMS[k].name + '</div>' + body + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }

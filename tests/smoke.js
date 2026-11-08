@@ -8476,8 +8476,9 @@ async function enterExit(tab, key) {
                 // 点选再按按钮（触屏）
                 await T.eval(`(function(){ let el = document.querySelector('#ind-bag-zone .ind-slot[data-i="0"]'); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: 1, clientY: 1, button: 0, pointerType: 'touch', bubbles: true })); window.dispatchEvent(new PointerEvent('pointerup', { clientX: 1, clientY: 1, button: 0, pointerType: 'touch', bubbles: true })); return true; })()`);
                 const k0 = await T.eval(`ind.boxSel && indSlots()[ind.boxSel.i].k`);
-                if (!(await T.eval(`!!document.getElementById('ind-box-selput')`))) bad.push('点一格该选中、出"放进箱子"');
-                else { await T.eval(`document.getElementById('ind-box-selput').click(); true;`); if (!(await T.eval(`ind.bag['${k0}'] === undefined && indChestCur().items['${k0}'] > 0`))) bad.push('点选后"放进箱子"没放'); }
+                const allBtn = `Array.prototype.filter.call(document.querySelectorAll('#ind-panel button'), function (b) { return b.textContent === '全放'; })[0]`;
+                if (!(await T.eval(`!!${allBtn}`))) bad.push('点一格该选中、出"全放"');
+                else { await T.eval(`${allBtn}.click(); true;`); if (!(await T.eval(`ind.bag['${k0}'] === undefined && indChestCur().items['${k0}'] > 0`))) bad.push('点选后"全放"没放'); }
                 // 箱子满了：拖不进、背包不变
                 await T.eval(`(function(){ let c = indChestCur(), ks = Object.keys(IND_ITEMS).filter(function (k) { return ['wood','stone','coal','salt','clay'].indexOf(k) < 0; }).slice(0, ${30}); c.items = {}; ks.forEach(function (k) { c.items[k] = 1; }); indPanelBox(); return true; })()`);
                 const before = await J(`ind.bag`);
@@ -12293,6 +12294,46 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND127 远征图放大：边长 1040、资源点 ×3、群系 ≥ 4 种、撤离点、关键资源', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND128')) {
+            // IND128 选项格式统一（任务 93）：炉子放入、箱子放入拿出、加燃料、扔：顺序是 X 1、全 X、X n（自定义在最后）；全加整堆；n 超过持有取全部；自定义默认是持有数
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const ord = `(function(row){ return Array.prototype.map.call(row.querySelectorAll('button, input.ind-num'), function (e) { return e.tagName === 'INPUT' ? 'IN:' + e.value : e.textContent; }).join('|'); })`;
+                let r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; ind.bag = { wood: 7, stone: 3 }; ind.cookId = 'stove'; B.stove = Object.assign(ckNewState(), { spoutTy: 'brick' }); indPanelStove();
+                    let rows = Array.prototype.filter.call(document.querySelectorAll('#ind-panel > div'), function (d) { return /^木头 × 7/.test(d.textContent); }); let o = ${ord}; let row = rows.length ? rows[rows.length - 1] : null;
+                    let stoneRow = Array.prototype.filter.call(document.querySelectorAll('#ind-panel > div'), function (d) { return /^石头 × 3/.test(d.textContent); }).pop();
+                    return { wood: row ? o(row) : null, stone: stoneRow ? o(stoneRow) : null }; })()`);
+                if (!(r.stone && /^放 1\|全放\|放 n\|IN:3$|^放 1\|全放\|IN:3\|放 n$/.test(r.stone.replace(/\|放 n/, '|放 n')) )) { /* 下面按位置严格判 */ }
+                const pos = (txt, a) => a.map((w) => txt.indexOf(w));
+                const okOrder = (txt, words) => { const p = pos(txt, words); return p.every((v, i) => v >= 0 && (i === 0 || v > p[i - 1])); };
+                if (!(r.wood && okOrder(r.wood, ['放 1', '全放', 'IN:7', '放 n']) && okOrder(r.wood, ['加 1', '全加', '加 n']) && r.wood.indexOf('加 1') > r.wood.indexOf('放 n'))) bad.push('炉子里放：放 1、全放、自定义最后（默认 7），加燃料：加 1、全加、加 n ' + JSON.stringify(r.wood));
+                if (!(r.stone && okOrder(r.stone, ['放 1', '全放', 'IN:3', '放 n']) && r.stone.indexOf('加 1') < 0)) bad.push('不是燃料的没有加燃料 ' + JSON.stringify(r.stone));
+                r = await J(`(function(){ let B = ind.base; ind.bag = { wood: 7 }; ind.cookId = 'stove'; B.stove.fuel = 0; indPutN('fuel', 0, 'wood', 1); let a = B.stove.fuel, wa = ind.bag.wood; indPutN('fuel', 0, 'wood', 'all'); let b = B.stove.fuel, wb = ind.bag.wood || 0;
+                    ind.bag = { wood: 5 }; B.stove.items = {}; indPutN('stove', 0, 'wood', 99); let over = B.stove.items.wood, left = ind.bag.wood || 0; ind.bag = { stone: 4 }; B.stove.items = {}; indPutN('stove', 0, 'stone', 'all'); let all = B.stove.items.stone;
+                    ind.bag = { stone: 4 }; indPanelStove(); let inp = document.querySelector('#ind-panel input.ind-num'); let def = inp && inp.value; ind.bag.stone = 6; indPanelStove(); inp = document.querySelector('#ind-panel input.ind-num'); let def2 = inp && inp.value; inp.value = '2'; indPanelStove(); inp = document.querySelector('#ind-panel input.ind-num'); let kept = inp && inp.value;
+                    return { a: a, wa: wa, b: b, wb: wb, over: over, left: left, all: all, def: def, def2: def2, kept: kept, per: IND_ITEMS.wood.fuel }; })()`);
+                if (!(r.a === r.per && r.wa === 6 && r.b === r.per * 7 && r.wb === 0)) bad.push('加 1 加一块、全加整堆 ' + JSON.stringify(r));
+                if (!(r.over === 5 && r.left === 0 && r.all === 4 && r.def === '4' && r.def2 === '6' && r.kept === '2')) bad.push('n 超过持有取全部、全放整堆、默认值跟着持有数、自己改过的不被刷掉 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base; B.chests = [{ id: 1, x: 12, z: 12, big: true, items: { stone: 50 } }]; ind.boxId = 1; ind.bag = { wood: 9 }; ind.boxSel = { from: 'bag', i: 0 }; indPanelBox(1);
+                    let o = ${ord}; let btns = o(document.getElementById('ind-panel')); let sel = btns.slice(btns.indexOf('放 1'));
+                    indPutN('boxput', 0, 'wood', 4); let a = [ind.bag.wood, B.chests[0].items.wood]; indPutN('boxput', 0, 'wood', 'all'); let b = [ind.bag.wood || 0, B.chests[0].items.wood]; indPutN('box', 0, 'stone', 3); let c = [ind.bag.stone, B.chests[0].items.stone]; indPutN('box', 0, 'stone', 'all'); let d = [ind.bag.stone, B.chests[0].items.stone || 0];
+                    ind.bag = { stone: 10 }; B.ground = []; indPutN('drop', 0, 'stone', 3); let g = [ind.bag.stone, B.ground.length]; return { sel: sel, a: a, b: b, c: c, d: d, g: g }; })()`);
+                if (!(okOrder(r.sel, ['放 1', '全放', 'IN:9', '放 n']))) bad.push('箱子里选中一格：放 1、全放、放 n ' + JSON.stringify(r.sel));
+                if (!(r.a.join() === '5,4' && r.b.join() === '0,9' && r.c.join() === '3,47' && r.d.join() === '50,0' && r.g.join() === '7,3')) bad.push('放进箱子 4、全放、拿 3、全拿、扔 3 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base; B.chests = [{ id: 1, x: 12, z: 12, big: true, items: { stone: 50 } }]; ind.boxId = 1; ind.bag = {}; indPanelBox(1); let o = ${ord}; let row = Array.prototype.filter.call(document.querySelectorAll('#ind-panel .ind-slot'), function (d) { return /石头 × 50/.test(d.textContent); })[0]; return { row: row ? o(row) : null }; })()`);
+                if (!(r.row && okOrder(r.row.replace('销毁', ''), ['拿 1', '全拿', 'IN:50', '拿 n']))) bad.push('箱子每行：拿 1、全拿、拿 n ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', bag: { wood: 3 } }); return { w: b.bag.wood }; })()`);
+                if (r.w !== 3) bad.push('老存档读档 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND128 选项格式统一：放 1、全放、放 n（自定义最后）、加 1、全加、加 n、默认值是持有数', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 

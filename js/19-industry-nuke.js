@@ -170,7 +170,7 @@
         function nkDevItems(d) { return Object.keys(d.st).map(function (k) { return indName(k) + '×' + d.st[k]; }).join('、') || '空'; }
         function nkPutRows(d, filter) {
             return Object.keys(ind.bag).filter(filter).map(function (k) {
-                return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',1)">放 1</button>' + indNumBox('dev', d.id, k, '放') + '<button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',2)">放 2</button>');
+                return indRow(indName(k) + ' × ' + ind.bag[k], indPutOpts('dev', d.id, k, '放', '全放', '放'));
             }).join('');
         }
         const NK_FOOT = function (d) { return '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indDevTake(' + d.id + ')">全部拿出来</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>'; };

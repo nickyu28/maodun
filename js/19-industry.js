@@ -2501,11 +2501,12 @@
             ind.panelEl = id;
             indPanelShow('bank', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">电池组</div>' +
                 '<div style="line-height:1.7;">' + d.bats + ' 节　' + indBankV(d).toFixed(1) + ' V　电量 ' + Math.ceil(d.u) + ' / ' + indBankMax(d) + (d.grp ? '　<b>一组 ' + (d.grp.length + 1) + ' 个，总电量 ' + Math.ceil(stkBankU(d)) + ' / ' + stkBankMax(d) + '</b>（左键看每一个）' : '') + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节' + (ind.bag.battery_ni ? '，镍电池 ' + ind.bag.battery_ni + ' 节' : '') + (ind.bag.battery_li ? '，锂电池 ' + ind.bag.battery_li + ' 节' : '') + (d.li ? '　（锂电池组，只能装锂电池，最多 128 节）' : '') + '</div>' +
-                '<div style="margin-top:8px;"><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',1)">放 1</button><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',999)">放全部</button>' +
-                '<input id="ind-bank-n" type="number" min="1" value="5" style="width:64px;padding:6px;font-size:15px;margin:3px;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indBankPutBtn(' + id + ',+document.getElementById(\'ind-bank-n\').value)">放这么多</button></div>' +
+                '<div style="margin-top:8px;"><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',1)">放 1</button><button style="' + IND_BTN + '" onclick="indBankPutBtn(' + id + ',999)">全放</button>' +
+                '<input id="ind-bank-n" data-def="' + indBankHave() + '" value="' + indBankHave() + '" type="text" inputmode="numeric" style="width:64px;padding:6px;font-size:15px;margin:3px;" onfocus="this.select()"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indBankPutBtn(' + id + ',+document.getElementById(\'ind-bank-n\').value)">放 n</button></div>' +
                 '<div style="margin-top:6px;font-size:12px;color:#888;">先替换用完的电池，满电了才加节；加节会超过接着的用电器额定就不装</div>' +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
+        function indBankHave() { let k = indSel(); return k && /^battery/.test(k) && ind.bag[k] ? ind.bag[k] : (ind.bag.battery || 0); }   // 放 n 的默认数：手上的电池，没拿就是普通电池（任务 93）
         function indBankPutBtn(id, n) { let d = indDev(id); if (!d) return; n = Math.max(0, Math.floor(+n || 0)); if (n > 0) indBankPut(d, n, indSel() === 'battery_ni' || indSel() === 'battery_li' || indSel() === 'battery_rc_full' ? indSel() : ind.bag.battery ? 'battery' : ind.bag.battery_ni ? 'battery_ni' : ind.bag.battery_li ? 'battery_li' : 'battery'); }
         // 左键对着设备：拿铜线就接线；电池组拿电池就装；用电器就开关
         function indDevAct(d) {
@@ -2628,7 +2629,7 @@
             let i = indElRecipe(d, V);
             let st = '电压 <b>' + V.toFixed(1) + ' V</b>（额定 12 V）' + (i >= 0 && d.pw ? '　正在' + IND_EL_RECIPES[i].name + ' ' + Math.floor((d.et || 0) / IND_EL_TIME * 100) + '%' : '');
             let has = Object.keys(d.st).map(function (k) { return indName(k) + '×' + d.st[k]; }).join('、') || '空';
-            let put = Object.keys(ind.bag).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indElPut(' + d.id + ',\'' + k + '\')">放 1</button>' + indNumBox('el', d.id, k, '放')); }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
+            let put = Object.keys(ind.bag).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], indPutOpts('el', d.id, k, '放', '全放', '放')); }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
             let how = IND_EL_RECIPES.filter(function (r) { return !r.hard || indHard(); }).map(function (r) { return r.name + '：' + Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + '，' + r.minV + ' V 以上' + (r.molten ? '，灶台 ' + r.molten + '°C 以上 3 米内' : ''); }).join('<br>');
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">电解槽</div><div style="line-height:1.7;">' + st + '</div><div style="margin-top:4px;">里面：' + has + '</div>' +
                 '<div style="margin-top:6px;color:#888;font-size:13px;line-height:1.6;">' + how + '</div>' +
@@ -2695,7 +2696,7 @@
             let st = '电压 <b>' + V.toFixed(1) + ' V</b>（额定 12 V）' + (d.pw ? '　正在压 ' + Math.floor((d.ct || 0) / IND_COMP_TIME * 100) + '%' : '');
             let has = Object.keys(d.st).map(function (k) { return indName(k) + '×' + d.st[k]; }).join('、') || '空';
             let put = Object.keys(ind.bag).filter(function (k) { return IND_ITEMS[k].gas || IND_ITEMS[k].cyl; }).map(function (k) {
-                return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',1)">放 1</button>' + indNumBox('dev', d.id, k, '放'));
+                return indRow(indName(k) + ' × ' + ind.bag[k], indPutOpts('dev', d.id, k, '放', '全放', '放'));
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没有气瓶和钢瓶</div>';
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">压缩机</div><div style="line-height:1.7;">' + st + '</div>' +
                 '<div style="margin-top:4px;">钢瓶：' + (g ? indCylName(g) : '没放') + '<br>气瓶：' + has + '</div>' +
@@ -2709,7 +2710,7 @@
             let st = '电压 <b>' + V.toFixed(1) + ' V</b>（额定 24 V）　旁边灶台 ' + (near ? Math.round(H.temp) + '°C' : '没有（3 米内）') + '<br>压力 <b>' + P + '</b> / ' + IND_PRESS_MAXP + ' 个大气压' + (d.pw ? '　' + Math.floor((d.pt || 0) / IND_PRESS_TIME * 100) + '%' : '');
             let has = Object.keys(d.st).map(function (k) { return indName(k) + '×' + d.st[k]; }).join('、') || '空';
             let put = Object.keys(ind.bag).filter(function (k) { return IND_CARBON.indexOf(k) >= 0; }).map(function (k) {
-                return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',1)">放 1</button>' + indNumBox('dev', d.id, k, '放') + '<button style="' + IND_BTN + '" onclick="indDevPut(' + d.id + ',\'' + k + '\',5)">放 5</button>');
+                return indRow(indName(k) + ' × ' + ind.bag[k], indPutOpts('dev', d.id, k, '放', '全放', '放'));
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没有碳（木炭、煤、焦炭）</div>';
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">压力机</div><div style="line-height:1.7;">' + st + '</div>' +
                 '<div style="margin-top:4px;">里面：' + has + '</div>' +
@@ -3158,37 +3159,64 @@
             for (let i = 0; i < all.length; i++) if (all[i].scrollTop > 0) keep.push({ i: i, t: all[i].scrollTop });
             // 填数字的框（任务 18）：刷新时打了一半的数字、光标都留着
             let vals = {}, act = document.activeElement, focus = act && act.id && p.contains(act) && act.tagName === 'INPUT' ? { id: act.id, a: act.selectionStart, b: act.selectionEnd } : null;
-            p.querySelectorAll('input[id]').forEach(function (e) { vals[e.id] = e.value; });
+            p.querySelectorAll('input[id]').forEach(function (e) { if (e.getAttribute('data-def') === null || e.value !== e.getAttribute('data-def')) vals[e.id] = e.value; });   // 没改过的数量框用新的默认值（任务 93）
             p.innerHTML = html;
             all = p.querySelectorAll('*');
             keep.forEach(function (o) { let e = o.i < 0 ? p : all[o.i]; if (e) e.scrollTop = o.t; });
             Object.keys(vals).forEach(function (id) { let e = document.getElementById(id); if (e && p.contains(e)) e.value = vals[id]; });
             if (focus) { let e = document.getElementById(focus.id); if (e) { e.focus(); try { e.setSelectionRange(focus.a, focus.b); } catch (x) { } } }
         }
-        // 放东西、拿东西的"填数字"（任务 18）：每行"放 1"和"放全部"中间一个框 + 按钮，回车也行
+        // 放东西、拿东西、加燃料、扔东西的统一格式（任务 93）：1 个、全部（选中的那一种整堆）、自定义（最后；默认是现在有的数，超过取全部），回车也行
         function indNumId(kind, id, k) { return 'ind-n-' + kind + '-' + id + '-' + k; }
+        function indNumHave(kind, id, k) { if (kind === 'box') { let c = indChestCur(); return c && c.items[k] || 0; } return ind.bag[k] || 0; }
         function indNumBox(kind, id, k, verb) {
-            let nid = indNumId(kind, id, k), go = 'indNumGo(\'' + kind + '\',' + JSON.stringify(id).replace(/"/g, '&quot;') + ',\'' + k + '\')';
-            return '<input id="' + nid + '" class="ind-num" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="几个" style="width:46px;padding:5px 4px;margin:3px 1px 3px 3px;font-size:14px;border:1px solid #bbb;border-radius:6px;" onpointerdown="event.stopPropagation()" onkeydown="if (event.key === \'Enter\') { event.preventDefault(); ' + go + '; }">' +
-                '<button style="' + IND_BTN + 'margin-left:1px;" onpointerdown="event.stopPropagation()" onclick="' + go + '">' + verb + '</button>';
+            let nid = indNumId(kind, id, k), go = 'indNumGo(\'' + kind + '\',' + JSON.stringify(id).replace(/"/g, '&quot;') + ',\'' + k + '\')', have = indNumHave(kind, id, k);
+            return '<input id="' + nid + '" class="ind-num" data-def="' + have + '" value="' + have + '" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="几个" style="width:46px;padding:5px 4px;margin:3px 1px 3px 3px;font-size:14px;border:1px solid #bbb;border-radius:6px;" onpointerdown="event.stopPropagation()" onfocus="this.select()" onkeydown="if (event.key === \'Enter\') { event.preventDefault(); ' + go + '; }">' +
+                '<button style="' + IND_BTN + 'margin-left:1px;" onpointerdown="event.stopPropagation()" onclick="' + go + '">' + verb + ' n</button>';
+        }
+        // 一行的三个选项：X 1、全 X、X n（自定义放最后）
+        function indPutOpts(kind, id, k, v1, vAll, vN) {
+            let q = JSON.stringify(id).replace(/"/g, '&quot;'), go = function (n) { return 'indPutN(\'' + kind + '\',' + q + ',\'' + k + '\',' + n + ')'; };
+            return '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="' + go(1) + '">' + v1 + ' 1</button><button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="' + go("'all'") + '">' + vAll + '</button>' + indNumBox(kind, id, k, vN);
         }
         function indNumGo(kind, id, k) {
             if (!ind) return false;
-            let el = document.getElementById(indNumId(kind, id, k)), raw = el ? String(el.value).trim() : '', n = /^\d+$/.test(raw) ? parseInt(raw, 10) : 0;
-            if (!(n > 0)) { indFlash('填个数字'); return false; }
-            if (el) el.value = '';
+            let el = document.getElementById(indNumId(kind, id, k)), raw = el ? String(el.value).trim() : '';
+            if (raw === '') return indPutN(kind, id, k, 'all');
+            if (!/^\d+$/.test(raw)) { indFlash('填个数字'); return false; }
+            let n = parseInt(raw, 10); if (!(n > 0)) { indFlash('填个数字'); return false; }
+            return indPutN(kind, id, k, n);
+        }
+        function indPutN(kind, id, k, n) {
+            if (!ind) return false;
+            let have = indNumHave(kind, id, k); if (!(have > 0)) return false;
+            n = n === 'all' ? have : Math.min(n, have);
             if (kind === 'box') {
                 let c = indChestCur(); if (!c || !c.items[k]) return false;
-                let want = Math.min(n, c.items[k]), t = indBagAdd(k, want); if (t > 0) clMv(c, k, false);
-                if (t < want) indFlash(t > 0 ? '背包满了，只拿了 ' + t + ' 个' : '背包满了');
+                let t = indBagAdd(k, n); if (t > 0) clMv(c, k, false);
+                if (t < n) indFlash(t > 0 ? '背包满了，只拿了 ' + t + ' 个' : '背包满了');
                 c.items[k] -= t; if (c.items[k] <= 0) delete c.items[k];
                 indSave(); if (ind.panel === 'box') indPanelBox(); return t > 0;
             }
-            let have = ind.bag[k] || 0; if (!have) return false; n = Math.min(n, have);
+            if (kind === 'boxput') {
+                let c = indChestCur(); if (!c || ind.where !== 'base') return false;
+                let fit = indFits(c.items, indChestCap(c), k, n); if (fit < n) indFlash('箱子放不下了'); n = fit; if (!(n > 0)) return false;
+                clMv(c, k, true); indBagDel(k, n); c.items[k] = (c.items[k] || 0) + n; indSave(); if (ind.panel === 'box') indPanelBox(); return true;
+            }
             if (kind === 'stove') { indStovePut(k, n); return true; }
             if (kind === 'el') { for (let i = 0; i < n && ind.bag[k]; i++) indElPut(id, k); return true; }
             if (kind === 'dev') { indDevPut(id, k, n); return true; }
+            if (kind === 'fuel') { for (let i = 0; i < n && ind.bag[k]; i++) { let b0 = ind.bag[k]; indStoveFuel(k); if (ind.bag[k] === b0) break; } return true; }
+            if (kind === 'drop') { return indDropN(k, n); }
             return false;
+        }
+        // 从背包扔 n 个到地上（设备、气体、钢瓶这些有自己的放法，不走这里）
+        function indDropN(k, n) {
+            if (!ind || ind.over || !IND_ITEMS[k] || IND_ITEMS[k].dev || IND_ITEMS[k].gas || IND_ITEMS[k].poison || (IND_ITEMS[k].cyl && indCylN(IND_ITEMS[k].cyl) > 0)) return false;
+            n = Math.min(n, ind.bag[k] || 0); if (!(n > 0)) return false;
+            if (ind.where === 'trip') { indBagDel(k, n); indFlash('扔掉了 ' + n + ' 个' + indName(k)); }
+            else { let room = IND_ITEM_CAP - ind.base.ground.length; if (room <= 0) { indFlash('地上放太多了'); return false; } n = Math.min(n, room); indBagDel(k, n); indDropAtFeet(k, n); indFlash('扔了 ' + n + ' 个' + indName(k)); }
+            indSave(); if (ind.panel === 'bag') indPanelBag(); return true;
         }
         function indPanelShow(kind, html) {
             if (!ind) return;
@@ -3227,9 +3255,10 @@
             let rows = SL.length ? SL.map(function (it, i) {
                 let on = S && S.from === 'box' && S.i === i;
                 return '<div class="ind-slot" data-from="box" data-i="' + i + '" onpointerdown="indDragDown(event,\'box\',' + i + ')" style="cursor:grab;user-select:none;touch-action:manipulation;' + (on ? 'background:#ede7f6;outline:2px solid #5e35b1;' : '') + '">' +
-                    indRow(indName(it.k) + ' × ' + it.n, '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',1)">拿 1</button>' + indNumBox('box', i, it.k, '拿') + '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="indBoxTake(\'' + it.k + '\',' + IND_STACK + ')">全拿</button><button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
+                    indRow(indName(it.k) + ' × ' + it.n, indPutOpts('box', i, it.k, '拿', '全拿', '拿') + '<button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
             }).join('') : '<div style="color:#999;padding:8px 0;">空的</div>';
-            let selBtn = S ? (S.from === 'bag' ? '<button id="ind-box-selput" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveSel()">放进箱子</button>' : '<button id="ind-box-seltake" style="' + IND_BTN + 'background:#5e35b1;" onclick="indBoxMoveSel()">拿回来</button>') : '';
+            let selK = S ? (S.from === 'bag' ? (indSlots()[S.i] || {}).k : (SL[S.i] || {}).k) : null;
+            let selBtn = selK ? (S.from === 'bag' ? indPutOpts('boxput', 0, selK, '放', '全放', '放') : indPutOpts('box', 0, selK, '拿', '全拿', '拿')) : '';   // 选中的一格：放 1、全放、放 n
             indPanelShow('box', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + (c.ty === 'fridge' ? '冰箱' + (c.pw ? '（通电）' : '（没电）') : c.cold ? '冷藏箱' + (c.iceT > 0 ? '（有冰）' : c.items.ice ? '' : '（没冰）') : '仓库箱') + (c.big ? '' : '　' + indSlotsOf(box) + ' / ' + IND_CHEST_SLOTS + ' 格') + '</div>' +
                 '<div id="ind-box-zone" style="min-height:40px;border-radius:6px;">' + rows + '</div>' +
                 '<div style="margin-top:8px;font-weight:bold;">身上　<small style="color:#888;font-weight:normal;">按住一格拖进箱子；点一下选中再点按钮也行</small></div>' +
@@ -3241,7 +3270,7 @@
         function indPanelBag() {
             if (!ind) return;
             indPanelShow('bag', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">背包　' + indSlots().length + ' / ' + indBagSlots() + ' 格</div><div id="ind-bag-zone">' + indBagChips() + '</div>' +
-                '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+                (function () { let hk = indSel(); return hk && IND_ITEMS[hk] && !IND_ITEMS[hk].dev && !IND_ITEMS[hk].gas ? '<div style="margin-top:6px;">手上：' + indName(hk) + '　' + indPutOpts('drop', 0, hk, '扔', '全扔', '扔') + '</div>' : ''; })() + '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
         // 背包格子换位置（任务 17）：背包存的是"种类 → 数量"，格子按种类放进来的先后排，所以换两格 = 换两种东西在里面的先后（存档格式不变）
         function indBagSwap(i, j) {
@@ -3421,8 +3450,8 @@
             { let pool = ckPool(S), K0 = indCookK(c.ty, S), ri = S.cook ? S.cook.i : indCookFind(pool, K0, undefined, S.items);   // 这次出多少（任务 36）：现在放进去的东西能做几份，连空瓶空桶一起写
               if (ri >= 0) { let r0 = IND_RECIPES[ri], n0 = S.cook ? (S.cook.n || 1) : indBatchN(r0, pool, K0); st += '<br>这次出：<b>' + indOutAll(r0, n0) + '</b>' + (n0 > 1 ? '（' + n0 + ' 份）' : '') + (!S.cook && S.temp < r0.minT ? '<br><span style="color:#c62828">温度不够：要 ' + r0.minT + '°C，现在 ' + Math.round(S.temp) + '°C' + (r0.minT > 1200 ? '（要鼓风或者电炉）' : '') + '</span>' : ''); } }
             let put = Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k); }).map(function (k) {
-                let b = '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',1)">放 1</button>' + indNumBox('stove', 0, k, '放') + '<button style="' + IND_BTN + '" onclick="indStovePut(\'' + k + '\',' + ind.bag[k] + ')">全放</button>';
-                if (IND_ITEMS[k].fuel && !(indHard() && indContOf(k) && indContOf(k).base === 'oil')) b += '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="indStoveFuel(\'' + k + '\')">' + (indContOf(k) ? '倒进炉子' : '当柴烧') + '</button>';
+                let b = indPutOpts('stove', 0, k, '放', '全放', '放');
+                if (IND_ITEMS[k].fuel && !(indHard() && indContOf(k) && indContOf(k).base === 'oil')) b += '<br>' + indPutOpts('fuel', 0, k, indContOf(k) ? '倒' : '加', indContOf(k) ? '全倒' : '全加', indContOf(k) ? '倒' : '加');   // 燃料：加 1、全加、加 n
                 return indRow(indName(k) + ' × ' + ind.bag[k], b);
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + D.name + '</div><div style="line-height:1.7;">' + st + '</div><div>' + fire + '</div>' +
