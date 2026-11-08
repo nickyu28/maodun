@@ -524,6 +524,7 @@
         // 读档整理：先认搬着的家具（carried），再按它整理别的
         function indFixBase(b) {
             if (!b || typeof b !== 'object') b = indNewBase();
+            if (typeof ckPreFix === 'function') ckPreFix(b);   // 任务 94：铁槽换成砖槽、退铁锭
             if (!b.carried || typeof b.carried !== 'object' || Array.isArray(b.carried)) b.carried = {};
             Object.keys(b.carried).forEach(function (id) {
                 let c = b.carried[id];
@@ -2280,7 +2281,7 @@
             if (a.kind === 'tile') return { ty: 'tile', o: a.o };
             if (a.kind === 'door' || a.kind === 'house') return { ty: 'house', o: a.o };
             if (a.kind === 'bomb') return { ty: 'bomb', o: a.o };
-            if (a.kind === 'spout' && a.o.C.spoutTy && a.o.C.spoutTy !== 'auto') return { ty: 'spoutblk', o: a.o.C, cid: a.o.id };   // 装上的砖槽、铁槽、漏斗长按右键收起（里面空的才行）
+            if (a.kind === 'spout' && a.o.C.spoutTy && a.o.C.spoutTy !== 'auto') return { ty: 'spoutblk', o: a.o.C, cid: a.o.id };   // 装上的砖槽、耐火砖槽、漏斗长按右键收起（里面空的才行）
             if (a.kind === 'funnel') return { ty: 'funnelblk', o: a.o.C, cid: a.o.id };
             if (a.kind === 'stove' || a.kind === 'bed' || a.kind === 'bench') return { ty: a.kind, o: null };   // 水池不能搬
             return null;

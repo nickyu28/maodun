@@ -1,10 +1,9 @@
 // 猫盾工业 · 炉子的进出口：进料漏斗、出料槽（砖槽、铁槽）、桶装石油、踹炉子
 // 接在 19-industry.js 后面，用它里面的函数和表。硬核：漏斗和出料槽要合成、桶不能直接放进炉子、可以踹炉子；悠闲保持简单（出料槽自动带、拿油桶对着炉子右键就倒进去、没有踹）。
-        // 炉子状态里多两个字段：spoutTy 出料槽（'auto' 悠闲自动带的、'brick' 砖槽、'iron' 铁槽、null 没装；没这个字段的老对象当 'auto'）、funnel 进料漏斗（null 或 { ty, oil }）
+        // 炉子状态里多两个字段：spoutTy 出料槽（'auto' 悠闲自动带的、'brick' 砖槽、'fire' 耐火砖槽、null 没装；没这个字段的老对象当 'auto'）、funnel 进料漏斗（null 或 { ty, oil }）
         const CK_SPOUT = {
             auto: { name: '出料槽', cool: 30, maxT: 1e9 },
-            brick: { name: '砖槽', cool: 60, maxT: 1200 },
-            iron: { name: '铁槽', cool: 20, maxT: 1400 }
+            brick: { name: '砖槽', cool: 60, maxT: 1200 }
         };
         const CK_FUNNEL = { brick: { name: '砖漏斗' }, iron: { name: '铁漏斗' } };
         const CK_MELT = { hot_cu: 1085, hot_zn: 420, hot_sn: 232, hot_bronze: 950, hot_brass: 950, hot_pb: 327, hot_fe: 1538, hot_steel: 1550 };   // 烫锭的熔点：超过槽耐温的进不了槽，留在炉膛里
@@ -12,12 +11,11 @@
 
         Object.assign(IND_ITEMS_RAW, {
             spout_brick: { name: '砖槽', col: 0xbf5b3a, attach: 'spout', spoutTy: 'brick', use: '装在炉子旁，接铜、青铜、黄铜、锌、锡、铅，耐 1200°C，锭 60 秒凉' },
-            spout_iron: { name: '铁槽', col: 0x78909c, attach: 'spout', spoutTy: 'iron', use: '装在炉子旁，接铜、青铜、黄铜、锌、锡、铅，耐 1400°C，锭 20 秒凉，接不住铁和钢' },
             funnel_brick: { name: '砖漏斗', col: 0xa1887f, attach: 'funnel', funnelTy: 'brick', use: '装在炉子旁，倒进去的油慢慢流进炉子' },
             funnel_iron: { name: '铁漏斗', col: 0x90a4ae, attach: 'funnel', funnelTy: 'iron', use: '装在炉子旁，倒进去的油慢慢流进炉子' }
         });
         IND_CRAFT.push(
-            { out: 'spout_brick', in: { brick: 4 }, hard: true }, { out: 'spout_iron', in: { ingot_fe: 3 }, hard: true },
+            { out: 'spout_brick', in: { brick: 4 }, hard: true },
             { out: 'funnel_brick', in: { brick: 3 }, hard: true }, { out: 'funnel_iron', in: { ingot_fe: 2 }, hard: true }
         );
 
@@ -47,6 +45,18 @@
         }
 
         // ── 读档整理（indFixCook 调）──
+        // 任务 94：铁槽删了。老存档里装着的换成砖槽（槽里的锭不丢）并退 3 个铁锭，背包／箱子／地上的铁槽物品换成 3 个铁锭。在 indFixBase 一开头调（后面会把不认识的物品清掉）
+        function ckPreFix(b) {
+            let refund = 0, conv = function (o) { if (o && o.spout_iron > 0) { refund += 3 * Math.floor(o.spout_iron); delete o.spout_iron; } }, st = function (S) { if (S && typeof S === 'object' && S.spoutTy === 'iron') { S.spoutTy = 'brick'; refund += 3; } };
+            conv(b.bag); conv(b.box); if (Array.isArray(b.chests)) b.chests.forEach(function (c) { if (c) conv(c.items); });
+            if (Array.isArray(b.ground)) b.ground = b.ground.filter(function (g) { if (g && g.k === 'spout_iron') { refund += 3; return false; } return true; });
+            st(b.stove); if (Array.isArray(b.cookers)) b.cookers.forEach(st);
+            if (b.carried && typeof b.carried === 'object') Object.keys(b.carried).forEach(function (id) { let c = b.carried[id]; if (c) { st(c.st); conv(c.items); } });
+            if (refund > 0) {
+                let big = Array.isArray(b.chests) ? (b.chests.filter(function (c) { return c && c.big && c.items; })[0] || b.chests.filter(function (c) { return c && c.items; })[0]) : null, T = big ? big.items : (b.box = b.box && typeof b.box === 'object' ? b.box : {});
+                T.ingot_fe = (T.ingot_fe || 0) + refund;
+            }
+        }
         function ckFix(S, b) {
             if (typeof ctFix === 'function') ctFix(S);   // 熔池、槽里的模具（铸造）
             if (!(S.spoutTy === null || CK_SPOUT[S.spoutTy])) S.spoutTy = undefined;

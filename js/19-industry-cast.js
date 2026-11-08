@@ -42,8 +42,8 @@
         function ctTick(c, dt) {
             if (!indHard()) return;
             let S = c.C, P = S.pool;
-            if (P && P.n > 0 && S.temp < CT_METAL[P.m].melt) {   // 凉到熔点以下：凝成烫锭留在炉膛
-                let h = CT_METAL[P.m].hot; S.out[h] = (S.out[h] || 0) + P.n; S.pool = null; P = null; S.flowT = 0;
+            if (P && P.n > 0 && S.temp < CT_METAL[P.m].melt) {   // 凉到熔点以下：凝成烫锭（槽接得住进槽，不然留在炉膛）
+                ctSolid(S, CT_METAL[P.m].hot, P.n); S.pool = null; P = null; S.flowT = 0;
                 if (ind.panel === 'stove') ind.panelDirty = true;
             }
             let U = !S.cook ? ctMeltUnit(S) : null, m = U && U.m;   // 锭化 1 份；坏了的金属工具化几份（任务 78，19-industry-repair.js）
@@ -68,6 +68,8 @@
             M.fill = 0; M.part = 'part_' + M.s + '_' + P.m; M.t = ckSpoutDef(S).cool;
             if (ind.panel === 'stove') ind.panelDirty = true;
         }
+        // n 块烫锭落下来：槽接得住且还有地方就进槽，不然留在炉膛（规则同冶炼出来的烫锭，任务 94）
+        function ctSolid(S, h, n) { for (let i = 0; i < n; i++) { if (ckSpoutTakes(S, h) && S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: h, t: ckSpoutDef(S).cool }); else S.out[h] = (S.out[h] || 0) + 1; } }
         // 槽里放模具就不接锭
         function ctSpoutBusy(S) { return !!S.mold; }
         // 左键出料槽：零件凉了就取出来，模具耐久 −1
@@ -91,14 +93,23 @@
         }
         function ctMoldOut() {
             let c = indCookCur(), S = c.C, M = S.mold; if (!M) return;
-            if (M.part || M.fill > 0) { indFlash('里面有东西，先取零件'); return; }
-            if (indBagAdd('mold_' + M.s + (M.f ? '_f' : ''), 1) <= 0) { indFlash('背包满了'); return; }
-            let Q = ind.base.moldQ = ind.base.moldQ || {}, qk = M.s + (M.f ? '_f' : ''); (Q[qk] = Q[qk] || []).unshift(M.dura); S.mold = null; indSave(); indPanelStove();
+            // 任何时候都能取出来（任务 94）：烫零件跟着模具一起出来（烫手要钳子）；浇到一半，已经流进去的份数凝成烫锭，没流的留在熔池，模具耐久不扣
+            if (M.part && M.t > 0 && !ind.bag.tongs) { indFlash('里面的零件还烫，得有钳子'); return; }
+            let mk = 'mold_' + M.s + (M.f ? '_f' : '');
+            if (indBagAdd(mk, 1) <= 0) { indFlash('背包满了'); return; }
+            let Q = ind.base.moldQ = ind.base.moldQ || {}, qk = M.s + (M.f ? '_f' : '');
+            if (M.part) { if (indBagAdd(M.part, 1) <= 0) { indBagDel(mk, 1); indFlash('背包满了'); return; } M.dura--; if (M.dura > 0) (Q[qk] = Q[qk] || []).unshift(M.dura); else indFlash('模具用到头，碎了'); if (M.dura <= 0) indBagDel(mk, 1); }
+            else {
+                let P = S.pool, got = Math.floor(M.fill || 0); S.mold = null;   // 模具先拿掉，凝成的锭才进得了槽
+                if (got > 0 && P && CT_METAL[P.m]) { got = Math.min(got, P.n); P.n -= got; if (P.n <= 0) S.pool = null; ctSolid(S, CT_METAL[P.m].hot, got); }
+                (Q[qk] = Q[qk] || []).unshift(M.dura);
+            }
+            S.mold = null; indSave(); indPanelStove();
         }
         function ctHtml(c) {
             if (!indHard()) return '';
             let S = c.C, P = S.pool, M = S.mold, h = '<br>熔池：' + (P ? CT_METAL[P.m].n + ' ' + P.n + ' / ' + ctCap(c) + ' 份' : '空') + (S.meltT > 0 ? '　化锭 ' + Math.floor(S.meltT / CT.meltT * 100) + '%' : '');
-            if (M) h += '<br>模具：' + (M.f ? '耐火砖' : '') + CT_SHAPE[M.s].n + '（还能用 ' + M.dura + ' 次）' + (M.part ? '　' + indName(M.part) + (M.t > 0 ? ' 烫，还要 ' + Math.ceil(M.t) + ' 秒' : ' 凉了，左键出料槽取') : M.fill > 0 ? '　在流 ' + Math.floor(M.fill / CT_SHAPE[M.s].need * 100) + '%' : P && !CT_PART_METAL[P.m] ? '　<span style="color:#c62828">' + CT_METAL[P.m].n + '铸不了零件</span>' : '') + (!M.part && !(M.fill > 0) ? '　<button style="' + IND_BTN + '" onclick="ctMoldOut()">取下模具</button>' : '');
+            if (M) h += '<br>模具：' + (M.f ? '耐火砖' : '') + CT_SHAPE[M.s].n + '（还能用 ' + M.dura + ' 次）' + (M.part ? '　' + indName(M.part) + (M.t > 0 ? ' 烫，还要 ' + Math.ceil(M.t) + ' 秒' : ' 凉了，左键出料槽取') : M.fill > 0 ? '　在流 ' + Math.floor(M.fill / CT_SHAPE[M.s].need * 100) + '%' : P && !CT_PART_METAL[P.m] ? '　<span style="color:#c62828">' + CT_METAL[P.m].n + '铸不了零件</span>' : '') + '　<button style="' + IND_BTN + '" onclick="ctMoldOut()">取下模具</button>';
             let ms = Object.keys(ind.bag).filter(function (k) { return /^mold_[a-z]+(_f)?$/.test(k) && CT_SHAPE[k.slice(5).replace(/_f$/, '')]; });
             if (!M && ms.length) h += '<br>' + ms.map(function (k) { return '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="ctMoldPut(\'' + k + '\')">' + indName(k) + ' 放进出料槽</button>'; }).join('');
             return h;
