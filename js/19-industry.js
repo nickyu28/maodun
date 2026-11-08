@@ -763,7 +763,7 @@
             if (eff < B.cold) S.temp -= (B.cold - eff) * B.rate * dt;
             else if (eff > B.hot) S.temp += (eff - B.hot) * B.rate * dt;
             else { let bk = B.back * (S.temp > 39 ? 3 : 1) * dt; S.temp += Math.max(-bk, Math.min(bk, 37 - S.temp)); }
-            S.temp = Math.max(25, Math.min(45, S.temp));
+            S.temp = Math.max(25, Math.min(ind.cave && typeof MB !== 'undefined' ? Math.max(38, MB.caveTempMax) : 45, S.temp));   // 任务 84：洞里体温最高 38
             if (S.temp > 38.5 && !ind.heatHint) { ind.heatHint = true; indFlash('太热了，离窑远点，喝点水'); } else if (S.temp < 38) ind.heatHint = false;
         }
         // 基地外面的草地按季节换颜色（冬天是雪）

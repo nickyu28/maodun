@@ -10698,7 +10698,7 @@ async function enterExit(tab, key) {
                     let q = mob('boar'); mbHit(q, { me: true }); let st = 100 - ind.base.surv.hp; mbBlockTick(1); let again = mbShieldDown(), t2 = ind.mbBlock.t, fl1 = fl.join('|');
                     ind.mbBlock = null; indSelect('shield_wood'); mbShieldDown(); ind.base.surv.hp = 100; mbHit(q, { me: true }); let wd = 100 - ind.base.surv.hp; indSelect('shield_wood');
                     return { up: up, cd: cd, mv: mv, st: st, t2: t2, cool: /冷却/.test(fl1), wd: wd, wup: MB_SHIELD.shield_wood.up, wcd: MB_SHIELD.shield_wood.cd };`);
-                if (!(r.up === 0.75 && Math.abs(r.cd - 5.75) < 1e-9 && r.mv === 0.6 && r.st === 0 && r.t2 === 0 && r.cool && r.wd === 4 && r.wup === 0.45 && r.wcd === 8)) bad.push('盾按档挡、持续冷却、冷却里点不了、走路 ×0.6 ' + JSON.stringify(r));
+                if (!(r.up === 0.75 && Math.abs(r.cd - 5.75) < 1e-9 && r.mv === 0.6 && r.st === 0 && r.t2 === 0 && r.cool && r.wd === 2.5 && r.wup === 0.45 && r.wcd === 8)) bad.push('盾按档挡、持续冷却、冷却里点不了、走路 ×0.6 ' + JSON.stringify(r));
                 r = await run(`indGoBase(null); ind.bag = { shield_wood: 1, wood: 1 }; indSelect('shield_wood'); ind.mbBlock = null; let a = mbShieldDown(); indSelect('wood'); let b = mbShieldDown(); return { a: a, b: b };`);
                 if (!(r.a === true && r.b === false)) bad.push('选中盾举盾、选中别的不举（才能拉风箱） ' + JSON.stringify(r));
                 // 刺球：前摇 0.8 秒再撞 −5；小野猪刨地 1 秒再冲 −8 击退，举钢盾挡住
@@ -10706,7 +10706,7 @@ async function enterExit(tab, key) {
                     ind.base.surv.hp = 100; indTeleport(0, -4); let b = mob('boar', 3); mbTick(0.05); let bw = b.st; for (let i = 0; i < 9; i++) mbTick(0.1); let be = b.st, z0 = ind.p.z; for (let i = 0; i < 30 && b.st !== 'rest'; i++) mbTick(0.05); let bh = 100 - ind.base.surv.hp, kn = Math.abs(ind.p.z - z0); mbDrop(b); b.dead = true; mbTick(0.01);
                     ind.base.surv.hp = 100; indTeleport(0, -4); indLookAt(0, -10); ind.bag = { shield_steel: 1 }; indSelect('shield_steel'); ind.mbBlock = null; let b2 = mob('boar', 3); mbTick(0.05); for (let i = 0; i < 10; i++) mbTick(0.1); mbShieldDown(); for (let i = 0; i < 14 && b2.st !== 'rest'; i++) mbTick(0.05);
                     return { w: w, early: early, ch: ch, bw: bw, be: be, bh: bh, kn: kn, blocked: 100 - ind.base.surv.hp };`);
-                if (!(r.w === 'wind' && r.early === 'wind' && r.ch === 5 && r.bw === 'wind' && r.be === 'wind' && r.bh === 8 && r.kn >= 1.5 && r.blocked === 0)) bad.push('刺球前摇 0.8 撞 5、小野猪刨地 1 秒冲 8 击退、举盾挡 ' + JSON.stringify(r));
+                if (!(r.w === 'wind' && r.early === 'wind' && r.ch === 5 && r.bw === 'wind' && r.be === 'wind' && r.bh === 5 && r.kn >= 1.5 && r.blocked === 0)) bad.push('刺球前摇 0.8 撞 5、小野猪刨地 1 秒冲 8 击退、举盾挡 ' + JSON.stringify(r));
                 // 小蘑菇蹭一下 3 血；云团体温 −0.3、火苗仔 +0.5 都不掉血；毒蘑菇 15%；吃毒蘑菇中毒；云絮吃了饱食 +3 体温 −0.5；火苗仔不掉火种
                 r = await run(`trip(); mbHit(mob('mush'), { me: true }); let mu = 100 - ind.base.surv.hp; ind.base.surv.hp = 100; ind.base.surv.temp = 37; mbHit(mob('cloud'), { me: true }); let ct = ind.base.surv.temp; mbHit(mob('flame'), { me: true }); let ft = ind.base.surv.temp;
                     let bad = 0, N = 400; for (let i = 0; i < N; i++) { ind.tripGround = []; let m = mob('mush'); m.dead = false; mbDamage(m, 9); if (ind.tripGround.some(function (g) { return g.k === 'shroom_bad'; })) bad++; }
@@ -10721,7 +10721,7 @@ async function enterExit(tab, key) {
                 // 蜜蜂 3 只一群、晚上没有；小蜜蜂蜇 2 血然后飞开
                 r = await run(`trip(); day(); ind.mbDead = {}; let got = 0; for (let t = 0; t < 400 && !got; t++) { ind.mobs.forEach(mbDrop); ind.mobs = []; let m = mbSpawnTry(); if (m && m.ty === 'bee') got = ind.mobs.filter(function (x) { return x.ty === 'bee'; }).length; }
                     ind.mobs.forEach(mbDrop); ind.mobs = []; let b = mob('bee', 0.5); mbTick(0.05); let st = b.st, hp = 100 - ind.base.surv.hp; return { got: got, st: st, hp: hp };`);
-                if (!(r.got === 3 && r.st === 'away' && r.hp === 2)) bad.push('蜜蜂 3 只一群、蜇 2 血飞开 ' + JSON.stringify(r));
+                if (!(r.got === 2 && r.st === 'away' && r.hp === 2)) bad.push('蜜蜂 2 只一群、蜇 2 血飞开 ' + JSON.stringify(r));
                 // 胶水：2 黏液 → 1 胶水；修断刀要胶水 + 1 铁锭，修过 1 次上限 90%（任务 78）；胶水滩让怪慢 70%
                 r = await run(`trip(); let g = IND_RECIPES.filter(function (q) { return q.out.glue; })[0]; ind.bag = { broken_knife_iron: 1, glue: 2, ingot_fe: 1 }; let i = IND_CRAFT.findIndex(function (q) { return q.fix && q.out === 'knife_iron'; }); indCraft(i); indSelect('knife_iron'); let d = mbDura('knife_iron');
                     indSelect('glue'); indUse(); let pd = ind.glue && ind.glue[0]; let m = mob('slime:green', 8); m.x = pd.x; m.z = pd.z; m.aggro = true; let x0 = m.z; mbTick(0.5); let slow = Math.abs(m.z - x0); let m2 = mob('slime:green', 8); m2.x = 5; m2.aggro = true; let z2 = m2.z; mbTick(0.5); let fast = Math.abs(m2.z - z2) + Math.abs(m2.x - 5);
@@ -12155,6 +12155,28 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND122 工具耐久：各档新数、钢铁青铜不倒挂、老存档换算一次、修的上限', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND123')) {
+            // IND123 怪调轻调少（任务 84）：野猪单次 5、同时 2；夜里史莱姆 3、洞里 4；洞里火苗仔 2、洞里体温最高 38；蜜蜂一群 2、同时 4；老存档读档不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ indGoTrip(2024); let k0 = mbKinds, out = {}, cnt = function (ty) { return ind.mobs.filter(function (m) { return m.ty === ty && !m.dead; }).length; };
+                    let fill = function (kinds, cave) { ind.mobs.forEach(mbDrop); ind.mobs = []; ind.mbDead = {}; ind.cave = cave ? { cx: 0, cz: 0, bm: 'x' } : null; mbKinds = function () { return kinds; }; for (let i = 0; i < 600; i++) mbSpawnTry(); mbKinds = k0; };
+                    out.dmg = MB_T.boar.dmg;
+                    fill(['boar']); out.boar = cnt('boar'); fill(['slime:green']); out.slime = cnt('slime'); fill(['slime:blue'], true); out.slimeCave = cnt('slime'); fill(['flame'], true); out.flame = cnt('flame');
+                    fill(['bee']); out.bee = cnt('bee'); ind.mobs.forEach(mbDrop); ind.mobs = []; ind.mbDead = {}; ind.cave = null; mbKinds = function () { return ['bee']; }; for (let i = 0; i < 200 && !cnt('bee'); i++) mbSpawnTry(); out.group = cnt('bee'); mbKinds = k0;
+                    ind.cave = { cx: 0, cz: 0, bm: 'x' }; let S = ind.base.surv; S.temp = 37; for (let i = 0; i < 60; i++) mbHitPlayer({ ty: 'flame', x: 0, z: 0 }, 0, 'x'); out.temp = S.temp; S.temp = 44; indBodyTick(1); out.body = S.temp; ind.cave = null;
+                    let b = indFixBase({ ver: 12, rule: 'hard', animals: [{ id: 1, k: 'dog', x: 0, z: 0 }] }); out.old = !!b; return out; })()`);
+                if (!(r.dmg === 5 && r.boar === 2 && r.slime === 3 && r.slimeCave === 4 && r.flame === 2 && r.bee === 4 && r.group === 2 && r.temp <= 38 && r.temp > 37 && r.body <= 38 && r.old)) bad.push('怪的上限 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND123 怪调轻调少：野猪 5 血 2 只、史莱姆 3／4 只、洞里火苗仔 2 只体温 38、蜜蜂一群 2 只', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 
