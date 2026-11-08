@@ -12,7 +12,7 @@
 | 谁 | 管什么 | 会话（send_message 用） | 夜班 |
 |---|---|---|---|
 | Code1 | 主游戏 + 测试 + 重玩验收；清单 docs/queue-code1.md | "code1猫盾"，session_01ESXCnpBss1Yohjk9C2Ewey（11-08 新开，旧的 session_012GqRevda9WmL8rPSVcUu5V 不再用） | **已关**（trig_01RMATYdMMSuijPUJ4Wh3YT6，11-08 为省用量关的；周四刷新后问 Marty 再开） |
-| Code2 | 猫盾工业 + 实验室；清单 docs/queue-code2.md | "code2猫盾工业"，session_01ESXCnobWdg9DPTcTvRxC9t（11-08 新开，旧的 session_01V89eT14a1jz1NxvPtuipH4 不再用，Marty 11-08 说先用新的） | 开着（trig_01FvDsZAjtwhNHKrS2GTdVND，北京 01:46） |
+| Code2 | 猫盾工业 + 实验室；清单 docs/queue-code2.md | "code2猫盾工业"，session_01ESXCnobWdg9DPTcTvRxC9t（11-08 新开，旧的 session_01V89eT14a1jz1NxvPtuipH4 不再用，Marty 11-08 说先用新的） | **11-08 查到两个夜班触发器都是关的**（trig_01FvDsZAjtwhNHKrS2GTdVND 北京 01:46、trig_01RMATYdMMSuijPUJ4Wh3YT6 01:31）；它们每次起全新会话，不绑旧会话；要开先问 Marty |
 | 测试员 | 只玩、查、报告，不改代码；报告在 docs/playtest-2026-11-06.md | "猫盾游戏测试"，session_01ESXCnsAAkA51os8fzPqjwy | 无，三轮做完，空闲 |
 分支 industry 不要碰。Code2 的文件（js/19-industry*.js、js/18-lab.js、docs/industry*.md、docs/lab-spec.md、docs/chem.md、tests/smoke.js 里 IND 和 LB 开头的检查）协调者不改，除非 Marty 点名某个文件某几行。
 
