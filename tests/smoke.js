@@ -12178,6 +12178,36 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND123 怪调轻调少：野猪 5 血 2 只、史莱姆 3／4 只、洞里火苗仔 2 只体温 38、蜜蜂一群 2 只', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND124')) {
+            // IND124 白天温顺的小史莱姆（任务 86）：白天森林／水边刷，沙漠山地不刷，夜里消失；不主动攻击（站旁边 30 秒不掉血）；打了才蹭；同时最多 2 只、算进合计 5 只；打死掉 1 黏液；基地不刷
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ indGoTrip(2024); let out = {}, nt = indIsNight, k0 = mbKinds; indIsNight = function () { return false; };
+                    let has = function (bm, x, z) { return mbKinds(bm, null, x, z).indexOf('slime:tame') >= 0; };
+                    out.forest = has('forest', 0, 0); out.beach = has('beach', 0, 0); out.desert = has('desert', 0, 0); out.mountain = has('mountain', 0, 0); out.cave = mbKinds('mountain', { bm: 'x' }, 0, 0).indexOf('slime:tame') >= 0;
+                    indIsNight = function () { return true; }; out.night = has('forest', 0, 0); indIsNight = function () { return false; };
+                    ind.mobs.forEach(mbDrop); ind.mobs = []; ind.mbDead = {}; ind.cave = null; mbKinds = function () { return ['slime:tame']; }; for (let i = 0; i < 600; i++) mbSpawnTry(); mbKinds = k0;
+                    out.n = ind.mobs.length; let m = ind.mobs[0]; out.sz = m && m.sz; out.hp = m && m.hp; out.tame = m && m.tame; out.alpha = m && m.g && m.g.children[0].material.opacity < 1;
+                    ind.mobs.forEach(mbDrop); ind.mobs = []; ind.mbDead = {}; for (let i = 0; i < 4; i++) mbNew('boar', 40 + i, 40); mbKinds = function () { return ['slime:tame']; }; for (let i = 0; i < 600; i++) mbSpawnTry(); mbKinds = k0; out.shared = ind.mobs.length;
+                    ind.mobs.forEach(mbDrop); ind.mobs = []; let s = mbNew('slime:tame', ind.p.x + 1.2, ind.p.z); ind.base.surv.hp = 100; for (let i = 0; i < 300; i++) mbTick(0.1); out.hp30 = ind.base.surv.hp; out.aggro = !!s.aggro; out.dist = Math.hypot(s.x - ind.p.x, s.z - ind.p.z);
+                    ind.mobs.forEach(mbDrop); ind.mobs = []; s = mbNew('slime:tame', ind.p.x + 1.2, ind.p.z); ind.tripGround = []; mbDamage(s, 1); out.hit = !!s.aggro; out.goo = ind.tripGround.filter(function (g) { return g.k === 'goo'; }).length; out.dead = s.dead;
+                    ind.mobs.forEach(mbDrop); ind.mobs = []; s = mbNew('slime:tame', ind.p.x + 5, ind.p.z); indIsNight = function () { return true; }; mbTick(0.1); out.gone = s.dead; indIsNight = nt;
+                    indGoBase(null); out.base = (ind.mobs || []).length; return out; })()`);
+                if (!(r.forest && r.beach && !r.desert && !r.mountain && !r.cave && !r.night)) bad.push('哪儿刷 ' + JSON.stringify(r));
+                if (!(r.n === 2 && r.sz === 2 && r.hp === 1 && r.tame && r.alpha)) bad.push('同时 2 只、小号血 1、半透明 ' + JSON.stringify(r));
+                if (!(r.shared <= 5 && r.shared === 1 + 4)) bad.push('算进合计 5 只 ' + JSON.stringify(r));
+                if (!(r.hp30 === 100 && !r.aggro)) bad.push('站旁边 30 秒不掉血不主动蹭 ' + JSON.stringify(r));
+                if (!(r.hit && r.goo === 1 && r.dead && r.gone && r.base === 0)) bad.push('打了才蹭、掉 1 黏液、夜里消失、基地没有 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND124 白天温顺小史莱姆：湿的地方白天刷、不主动蹭、打了才蹭、同时 2 只、掉 1 黏液、夜里消失', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
