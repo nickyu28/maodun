@@ -1525,7 +1525,7 @@
             if (ch) ind.cropDirty = true;
         }
         function indMove(dt) {
-            let R = ind, k = R.k, blocked = !!R.panel || (typeof ctStunned === 'function' && ctStunned());   // 校准失败眩晕：站着不能动（任务 95）
+            let R = ind, k = R.k, blocked = !!R.panel;
             let cd = new THREE.Vector3(); camera.getWorldDirection(cd); cd.y = 0;
             if (cd.lengthSq() < 1e-6) cd.set(0, 0, -1); cd.normalize();
             let fwd = blocked ? 0 : (k.w ? 1 : 0) - (k.s ? 1 : 0), strafe = blocked ? 0 : (k.d ? 1 : 0) - (k.a ? 1 : 0);
@@ -1734,7 +1734,6 @@
         function indToolish(k) { return !!k && (!!IND_ITEMS[k].tool || k === 'wire' || k === 'tongs' || tlKind(k) === 'shears'); }
         // 左键：采集、拿、收菜、打开；对着空的农田格子、手里拿着种子：种下
         function indAction() {
-            if (typeof ctStunned === 'function' && ctStunned()) return;   // 眩晕中不能用东西
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             if (ind.ch) { ind.ch = null; indFlash('停了'); return false; }
@@ -1812,7 +1811,6 @@
         }
         // 右键：吃喝、浇水、接水
         function indUse() {
-            if (typeof ctStunned === 'function' && ctStunned()) return;
             if (!ind || ind.paused) return;
             if (ind.over || ind.dead || ind.panel) return;
             let k = indSel(), a = indAim();

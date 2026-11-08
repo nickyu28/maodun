@@ -7,7 +7,7 @@
 // 黏土模具只浇得了熔点低的（≤ 1100°C）：浇铁、钢会裂（耐火砖模具等"耐火砖"那条做了再加）。
 // 零件现在只有青铜的（作者：铜不单独做工具；铁和钢要耐火砖模具）：小刀刃、斧头、镐头、铲头、剪刀片。工作台 头 + 木柄 → 青铜的工具（剪刀片 + 草绳）；木头 1 → 木柄 2。
 // 青铜的工具不再能在工作台直接用锭做（原来那几条配方留着、标 off 不显示，下标不变）。铁、钢的工具还在工作台做，等耐火砖。
-        const CT = { meltT: 10, cap: 8, capKiln: 16, flow: 1, clayMax: 1100, fireMax: 1700, failMax: 3, q0: 15, q1: 15 };
+        const CT = { meltT: 10, cap: 8, capKiln: 16, flow: 1, clayMax: 1100, fireMax: 1700, qFixed: 20, q0: 15, q1: 15 };
         const CT_METAL = { ingot_cu: { n: '铜', melt: 1085, hot: 'hot_cu' }, ingot_sn: { n: '锡', melt: 232, hot: 'hot_sn' }, ingot_zn: { n: '锌', melt: 420, hot: 'hot_zn' }, ingot_pb: { n: '铅', melt: 327, hot: 'hot_pb' },
             bronze: { n: '青铜', melt: 950, hot: 'hot_bronze' }, brass: { n: '黄铜', melt: 930, hot: 'hot_brass' }, ingot_fe: { n: '铁', melt: 1538, hot: 'hot_fe' }, steel: { n: '钢', melt: 1550, hot: 'hot_steel' } };
         const CT_SHAPE = { knife: { n: '小刀刃', need: 1, cuts: 8, tool: 'knife_' }, axe: { n: '斧头', need: 2, cuts: 12, tool: 'axe_' }, pick: { n: '镐头', need: 2, cuts: 12, tool: 'pick_' }, shovel: { n: '铲头', need: 2, cuts: 10, tool: 'shovel_' }, shears: { n: '剪刀片', need: 2, cuts: 14, tool: 'shears_' } };
@@ -125,38 +125,31 @@
             }).join('') + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
             return true;
         }
-        // 雕模具 = 校准小游戏（任务 95）：用惊魂夜／大厅练习共用的 calibZoneAt、CALIB（js/02-lobby.js），不复制：圈上一根指针转（CALIB.sweep 秒一圈），
-        // 红区按空格（触屏点圈或"刻"）算命中，白区算擦边（也算一刀，质量折半以上），灰区偏了：眩晕 CALIB.stun 秒，连续失败 3 次生模具碎、黏土或耐火砖不退。
-        // 命中率 = 质量总和 / 按的次数，照旧决定耐久（15 + 15 × 命中率）。
-        const CT_Q = { red: 1, white: 0.6 };
+        // 雕模具 = 校准小游戏（任务 95，作者 11-08 定的计分）：用惊魂夜／大厅练习共用的 calibZoneAt、CALIB（js/02-lobby.js），不复制：圈上一根指针转（CALIB.sweep 秒一圈），
+        // 红区按中 +2 分、白区 +1 分、别处 −1 分（总分最低 0）；不按没有任何惩罚，没有眩晕，不会碎。总分累计到目标分（= 原来的刀数）就得到生模具。
+        // 耐久固定 CT.qFixed（作者：耐久永远固定，以后可能接回来）；红区比例照旧记在 C.red／C.tries 里，留着别删。
+        const CT_PTS = { red: 2, white: 1 };
         function ctCarveStart(s, f) {
             if (!CT_SHAPE[s]) return;
-            ind.carve = { s: s, hit: 0, score: 0, tries: 0, fails: 0, t0: ind.t, f: !!f }; indPanelClose(); ctBar();
+            ind.carve = { s: s, score: 0, red: 0, tries: 0, t0: ind.t, f: !!f }; indPanelClose(); ctBar();
         }
         function ctPos() { return (((ind.t - ind.carve.t0) / CALIB.sweep) % 1 + 1) % 1; }
-        function ctStunned() { return !!ind && ind.t < (ind.stunUntil || 0); }
         function ctHit() {
             let C = ind.carve; if (!C) return false;
-            if (ctStunned()) return true;
             if (tlKind(indSel()) !== 'knife') { indFlash('拿上小刀接着雕'); return true; }
             let mat = C.f ? 'brick_fire' : 'clay';
             if ((ind.bag[mat] || 0) < 2) { ind.carve = null; ctBar(); indFlash((C.f ? '耐火砖' : '黏土') + '不够了，不雕了'); return true; }
             C.tries++;
             let zone = calibZoneAt(ctPos());
-            if (!CT_Q[zone]) {   // 偏了：眩晕；连续失败 3 次模具碎
-                C.fails++; ind.stunUntil = ind.t + CALIB.stun;
-                if (C.fails >= CT.failMax) { indBagDel(mat, 2); ind.carve = null; ctBar(); indFlash('模具碎了，' + (C.f ? '耐火砖' : '黏土') + '没了'); indSave(); return true; }
-                indFlash('偏了，眩晕 ' + CALIB.stun + ' 秒'); ctBar(); return true;
-            }
-            C.fails = 0; C.hit++; C.score += CT_Q[zone];
-            if (C.hit < CT_SHAPE[C.s].cuts) { ctBar(); return true; }
-            let q = Math.min(CT.q0 + CT.q1, Math.max(CT.q0, Math.round(CT.q0 + CT.q1 * C.score / C.tries)));
+            if (zone === 'red') C.red++;
+            C.score = Math.max(0, C.score + (CT_PTS[zone] || -1));
+            if (C.score < CT_SHAPE[C.s].cuts) { ctBar(); return true; }
             let rk = 'mold_' + C.s + (C.f ? '_f' : '') + '_raw'; indBagDel(mat, 2); indBagAdd(rk, 1);
-            let qk = C.s + (C.f ? '_f' : ''), Q = ind.base.moldQ = ind.base.moldQ || {}; (Q[qk] = Q[qk] || []).push(q);
-            indFlash('雕好了' + indName(rk) + '（烧硬以后能用 ' + q + ' 次）'); ind.carve = null; ctBar(); indSave();
+            let qk = C.s + (C.f ? '_f' : ''), Q = ind.base.moldQ = ind.base.moldQ || {}; (Q[qk] = Q[qk] || []).push(CT.qFixed);
+            indFlash('雕好了' + indName(rk) + '（烧硬以后能用 ' + CT.qFixed + ' 次）'); ind.carve = null; ctBar(); indSave();
             return true;
         }
-        // 圈：灰白红三段（取自 CALIB.zones），一根指针转；眩晕时圈变灰
+        // 圈：灰白红三段（取自 CALIB.zones），一根指针转
         function ctBar() {
             let e = document.getElementById('ind-carve');
             if (!ind || !ind.carve) { if (e && e.parentNode) e.parentNode.removeChild(e); return; }
@@ -170,10 +163,9 @@
                     '<button style="padding:5px 18px;border:none;border-radius:6px;background:#6d4c41;color:#fff;font-size:15px;" onpointerdown="event.preventDefault();ctHit();">刻</button>';
                 document.body.appendChild(e);
             }
-            let cc = document.getElementById('ind-carve-c'), tt = document.getElementById('ind-carve-t'), dd = document.getElementById('ind-carve-d');
+            let cc = document.getElementById('ind-carve-c'), tt = document.getElementById('ind-carve-t');
             if (cc) cc.style.transform = 'rotate(' + ctPos() * 360 + 'deg)';
-            if (dd) dd.style.opacity = ctStunned() ? 0.4 : 1;
-            if (tt) tt.textContent = '雕' + (C.f ? '耐火砖' : '') + CT_SHAPE[C.s].n + '模具 ' + C.hit + ' / ' + CT_SHAPE[C.s].cuts + (tlKind(indSel()) !== 'knife' ? '　拿上小刀' : ctStunned() ? '　眩晕' : '　红区按空格') + (C.fails ? '　失败 ' + C.fails + ' / ' + CT.failMax : '');
+            if (tt) tt.textContent = '雕' + (C.f ? '耐火砖' : '') + CT_SHAPE[C.s].n + '模具 ' + C.score + ' / ' + CT_SHAPE[C.s].cuts + (tlKind(indSel()) !== 'knife' ? '　拿上小刀' : '　红区按空格');
         }
         function ctFix(S) {
             if (S.pool && !(S.pool && CT_METAL[S.pool.m] && S.pool.n > 0)) S.pool = null; else if (S.pool) S.pool = { m: S.pool.m, n: indNum(S.pool.n, 1, 1, CT.capKiln) | 0 };

@@ -10577,16 +10577,16 @@ async function enterExit(tab, key) {
                 r = await run(`day(); indTeleport(c.x, c.z); cvTick(0.1); let inn = ind.cave === c, gone = Math.hypot(ind.p.x - c.x, ind.p.z - c.z) > 100;
                     let v5 = at(5), v8 = at(8), v12 = at(12), v20 = at(20); night(); let n2 = at(2); day();
                     at(10); cvTick(0.1); indTeleport(c.cx - 0.5, c.cz); cvTick(0.1); return { inn: inn, gone: gone, v5: v5, v8: v8, v12: v12, v20: v20, n2: n2, out: !ind.cave, back: Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < 4 };`);
-                if (!(r.inn && r.gone && r.v5 >= 8 && r.v8 >= 8 && r.v12 > 0 && r.v12 < r.v8 && r.v20 === 6 && r.n2 === 6 && r.out && r.back)) bad.push('进洞、白天 8 米内看得见、超 15 米只剩身边 6 米、夜里洞口也只剩 6 米、走回洞口出洞 ' + JSON.stringify(r));
+                if (!(r.inn && r.gone && r.v5 >= 8 && r.v8 >= 8 && r.v12 > 0 && r.v12 < r.v8 && r.v20 === 4 && r.n2 === 4 && r.out && r.back)) bad.push('进洞、白天 8 米内看得见、超 15 米只剩身边 4 米、夜里洞口也只剩 4 米、走回洞口出洞 ' + JSON.stringify(r));
                 // 火把：木 1 + 煤 1 → 2 根；点一根 8 米、烧 90 秒后熄
                 r = await run(`let rc = IND_CRAFT.filter(function (q) { return q.out === 'torch'; }); cvEnter(c); c.gas = false; night(); at(30); ind.bag = { torch: 2 }; indSelect('torch'); indUse();
                     let a = cvViewR(), left = ind.bag.torch; for (let i = 0; i < 89; i++) cvTick(1); let b = cvViewR(); cvTick(1.1); return { rc: rc.length, n: rc[0] && rc[0].n, coal: !!rc[0] && rc[0].in.wood === 1 && rc[0].in.coal === 1, a: a, left: left, b: b, c: cvViewR(), fl: fl.join('|') };`);
-                if (!(r.rc === 2 && r.n === 2 && r.coal && r.a === 8 && r.left === 1 && r.b === 8 && r.c === 6 && /烧完了/.test(r.fl))) bad.push('火把 2 根、8 米、烧 90 秒熄 ' + JSON.stringify(r));
+                if (!(r.rc === 2 && r.n === 2 && r.coal && r.a === 8 && r.left === 1 && r.b === 8 && r.c === 4 && /烧完了/.test(r.fl))) bad.push('火把 2 根、8 米、烧 90 秒熄 ' + JSON.stringify(r));
                 // 灯泡：戴头上 12 米；没电变"没电的灯泡"、黑；工作台的电灯配方原地变成灯泡（铜线 2 + 玻璃板 1 + 锂电池 1）
                 r = await run(`cvEnter(c); c.gas = false; night(); at(30); ind.bag = { bulb: 1 }; indSelect('bulb'); indUse(); let a = cvViewR(); cvTick(1); let u = ind.base.bulbU; ind.base.bulbU = 0.2; cvTick(1);
                     let i = IND_CRAFT.findIndex(function (q) { return q.out === 'bulb' && q.in.wire === 2; }), q = IND_CRAFT[i] || { in: {} };
                     return { a: a, u: u, head: ind.base.wear.head, b: cvViewR(), lampOut: IND_CRAFT.some(function (q) { return q.out === 'dev_lamp'; }), rec: q.in.glass_plate === 1 && q.in.battery_li === 1, early: i >= 0 && i < IND_CRAFT.length - 10, fix: IND_CRAFT.some(function (q) { return q.out === 'bulb' && q.in.bulb_dead === 1 && q.in.battery_li === 1; }) };`);
-                if (!(r.a === 12 && r.u > 719 && r.u < 720 && r.head === 'bulb_dead' && r.b === 6 && !r.lampOut && r.rec && r.early && r.fix)) bad.push('灯泡 12 米、没电变黑、配方原地改 ' + JSON.stringify(r));
+                if (!(r.a === 12 && r.u > 719 && r.u < 720 && r.head === 'bulb_dead' && r.b === 4 && !r.lampOut && r.rec && r.early && r.fix)) bad.push('灯泡 12 米、没电变黑、配方原地改 ' + JSON.stringify(r));
                 // 瓦斯：点着火把走进 15 米以里炸；戴灯泡不炸
                 r = await run(`cvEnter(c); c.gas = true; ind.lastBoom = null; day(); at(5); ind.bag = { torch: 1 }; indSelect('torch'); indUse(); cvTick(0.1); let a = { boom: !!ind.lastBoom, hp: ind.base.surv.hp };
                     at(25); cvTick(0.1); let b = { boom: !!ind.lastBoom, hp: ind.base.surv.hp, torch: ind.torchT, gas: c.gas };
@@ -10832,7 +10832,7 @@ async function enterExit(tab, key) {
                 let r = await run(`ind.bag = { knife: 1, clay: 3 }; indSelect('knife'); indUse(); let p = ind.panel; ctCarveStart('axe'); let C = ind.carve;
                     for (let i = 0; i < 12; i++) { C.t0 = ind.t - CALIB.sweep * 0.5; ctHit(); if (i === 3) { C.t0 = ind.t; ctHit(); ind.stunUntil = 0; } }
                     return { p: p, raw: ind.bag.mold_axe_raw || 0, clay: ind.bag.clay, q: ind.base.moldQ.axe, carve: !!ind.carve, bar: !!document.getElementById('ind-carve') };`);
-                if (!(r.p === 'carve' && r.raw === 1 && r.clay === 1 && r.q && r.q[0] === 29 && !r.carve && !r.bar)) bad.push('雕模具 12 刀、命中率定耐久、扣 2 黏土 ' + JSON.stringify(r));
+                if (!(r.p === 'carve' && r.raw === 1 && r.clay === 1 && r.q && r.q[0] === 20 && !r.carve && !r.bar)) bad.push('雕模具累计到目标分、耐久固定 20、扣 2 黏土 ' + JSON.stringify(r));
                 // 烧硬 600°C 30 秒；化锭 10 秒 1 份；放进槽流满出烫斧头；凉了取、耐久 −1；槽里有模具不接锭
                 r = await run(`ind.base.moldQ = { axe: [29] }; let c = cook('stone'); c.items = { mold_axe_raw: 1 }; c.fire = 2; c.temp = 650; tick(c, 31); let fired = c.out.mold_axe || 0;
                     c.out = {}; ind.bag = { mold_axe: 1 }; c.items = { bronze: 3 }; c.fire = 3; c.temp = 1200; tick(c, 9); let p9 = c.pool ? c.pool.n : 0; tick(c, 21.5); let p30 = c.pool ? c.pool.n : 0;
@@ -12336,7 +12336,7 @@ async function enterExit(tab, key) {
             report('IND128 选项格式统一：放 1、全放、放 n（自定义最后）、加 1、全加、加 n、默认值是持有数', bad.length === 0, bad.join(' / '));
         }
         if (want('IND129')) {
-            // IND129 雕模具改校准（任务 95）：指针转圈用大厅／惊魂夜共用的 calibZoneAt；红区按空格算一刀、白区擦边也算（质量 0.6）、灰区眩晕 2 秒不能动不能再按；连续失败 3 次生模具碎黏土不退；命中率定耐久；点圈（触屏）也行
+            // IND129 雕模具改校准（任务 95，11-08 新计分）：红区 +2、白区 +1、别处 −1（总分最低 0）；不按不扣分；累计到目标分得生模具；耐久固定 20；没有眩晕、不会碎；空格和点圈都算一下
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -12344,31 +12344,27 @@ async function enterExit(tab, key) {
             else { try {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
-                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; ind.bag = { knife: 1, clay: 9, brick_fire: 4 }; ind.base.moldQ = {}; ind.carve = null; ind.stunUntil = 0; indPanelClose(); indSelect('knife');
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; ind.bag = { knife: 1, clay: 9, brick_fire: 4 }; ind.base.moldQ = {}; ind.carve = null; indPanelClose(); indSelect('knife');
                     let at = function (pos) { ind.carve.t0 = ind.t - CALIB.sweep * pos; }; ${body} } finally { blazeFlash = bf; } })()`);
-                let r = await run(`ctCarveStart('knife'); let C = ind.carve, n = CT_SHAPE.knife.cuts; let z = [0.5, 0.3, 0.1, 0.9].map(function (p) { at(p); return calibZoneAt(ctPos()); });
-                    for (let i = 0; i < n - 1; i++) { at(0.5); ctHit(); } let mid = C.hit; at(0.3); ctHit(); let done = !ind.carve; return { z: z, mid: mid, done: done, raw: ind.bag.mold_knife_raw, clay: ind.bag.clay, q: ind.base.moldQ.knife && ind.base.moldQ.knife[0] };`);
-                const q = Math.round(15 + 15 * (7 + 0.6) / 8);
-                if (!(r.z.join() === 'red,white,gray,gray' && r.mid === 7 && r.done && r.raw === 1 && r.clay === 7 && r.q === q)) bad.push('红区白区灰区、7 刀 + 白区擦边 1 刀完成、质量 ' + q + '、扣 2 黏土 ' + JSON.stringify(r));
-                r = await run(`ctCarveStart('axe'); let C = ind.carve; at(0.05); ctHit(); let st = ctStunned(), f1 = C.fails; let hitsBefore = C.hit; at(0.5); ctHit(); let ignored = C.hit === hitsBefore; ind.t += CALIB.stun + 0.1; at(0.5); ctHit(); let after = C.hit;
-                    let pos0 = { x: ind.p.x, z: ind.p.z }; ind.k.w = true; ind.stunUntil = ind.t + 2; indMove(0.5); let moved = Math.hypot(ind.p.x - pos0.x, ind.p.z - pos0.z); ind.k.w = false; ind.stunUntil = 0; return { st: st, f1: f1, ignored: ignored, after: after, moved: moved, fl: fl.join('|') };`);
-                if (!(r.st && r.f1 === 1 && r.ignored && r.after === 1 && r.moved < 0.01 && /眩晕/.test(r.fl))) bad.push('失败眩晕 2 秒：不能再按、不能动，过了能按 ' + JSON.stringify(r));
-                r = await run(`ctCarveStart('axe'); at(0.05); ctHit(); ind.t += 2.1; at(0.1); ctHit(); ind.t += 2.1; let c1 = !!ind.carve; at(0.95); ctHit(); return { c1: c1, gone: !ind.carve, clay: ind.bag.clay, raw: ind.bag.mold_axe_raw || 0, fl: fl.join('|') };`);
-                if (!(r.c1 && r.gone && r.clay === 7 && r.raw === 0 && /碎了/.test(r.fl))) bad.push('连续失败 3 次模具碎、黏土没了（9 → 7）、没有生模具 ' + JSON.stringify(r));
-                r = await run(`ctCarveStart('axe'); let C = ind.carve; at(0.05); ctHit(); ind.t += 2.1; at(0.5); ctHit(); ind.t += 2.1; at(0.05); ctHit(); ind.t += 2.1; at(0.5); ctHit(); return { fails: C.fails, hit: C.hit, still: !!ind.carve };`);
-                if (!(r.fails === 0 && r.hit === 2 && r.still)) bad.push('中间命中一次，连续失败重新数 ' + JSON.stringify(r));
-                r = await run(`ctCarveStart('knife', 1); let n = CT_SHAPE.knife.cuts; for (let i = 0; i < n; i++) { at(0.5); ctHit(); } return { f: ind.bag.mold_knife_f_raw || 0, brick: ind.bag.brick_fire, q: ind.base.moldQ.knife_f && ind.base.moldQ.knife_f[0] };`);
-                if (!(r.f === 1 && r.brick === 2 && r.q === 30)) bad.push('耐火砖的雕：全红区耐久 30 ' + JSON.stringify(r));
-                await T.eval(`indGoBase(null); ind.bag = { knife: 1, clay: 9 }; ind.carve = null; ind.stunUntil = 0; indSelect('knife'); ctCarveStart('knife'); ind.t0x = ind.carve.t0; ind.carve.t0 = ind.t - CALIB.sweep * 0.5; true;`);
+                let r = await run(`ctCarveStart('knife'); let C = ind.carve; let z = [0.5, 0.3, 0.1, 0.9].map(function (p) { at(p); return calibZoneAt(ctPos()); });
+                    at(0.5); ctHit(); let a = C.score; at(0.3); ctHit(); let b = C.score; at(0.1); ctHit(); let c = C.score; at(0.1); ctHit(); ctHit(); let floor = C.score; ind.t += 50; let idle = C.score; return { z: z, a: a, b: b, c: c, floor: floor, idle: idle, still: !!ind.carve, fl: fl.join('|') };`);
+                if (!(r.z.join() === 'red,white,gray,gray' && r.a === 2 && r.b === 3 && r.c === 2 && r.floor === 0 && r.idle === 0 && r.still && !/眩晕/.test(r.fl))) bad.push('红 +2、白 +1、别处 −1、最低 0、不按不扣、没有眩晕 ' + JSON.stringify(r));
+                r = await run(`ctCarveStart('knife'); let n = CT_SHAPE.knife.cuts, presses = 0; while (ind.carve && presses < 50) { at(0.5); ctHit(); presses++; } return { presses: presses, raw: ind.bag.mold_knife_raw, clay: ind.bag.clay, q: ind.base.moldQ.knife, n: n };`);
+                if (!(r.presses === r.n / 2 && r.raw === 1 && r.clay === 7 && JSON.stringify(r.q) === '[20]')) bad.push('全红区 ' + (r.n / 2) + ' 下得生模具、扣 2 黏土、耐久固定 20 ' + JSON.stringify(r));
+                r = await run(`ctCarveStart('axe'); let C = ind.carve; for (let i = 0; i < 6; i++) { at(0.05); ctHit(); } at(0.3); ctHit(); at(0.3); ctHit(); at(0.5); ctHit(); return { still: !!ind.carve, score: C.score, clay: ind.bag.clay, red: C.red, tries: C.tries };`);
+                if (!(r.still && r.score === 4 && r.clay === 9 && r.red === 1 && r.tries === 9)) bad.push('连续偏了也不碎不扣黏土，红区比例照旧记 ' + JSON.stringify(r));
+                r = await run(`ctCarveStart('knife', 1); let n = CT_SHAPE.knife.cuts; for (let i = 0; i < n / 2; i++) { at(0.5); ctHit(); } return { f: ind.bag.mold_knife_f_raw || 0, brick: ind.bag.brick_fire, q: ind.base.moldQ.knife_f && ind.base.moldQ.knife_f[0] };`);
+                if (!(r.f === 1 && r.brick === 2 && r.q === 20)) bad.push('耐火砖的雕 ' + JSON.stringify(r));
+                await T.eval(`indGoBase(null); ind.bag = { knife: 1, clay: 9 }; ind.carve = null; indSelect('knife'); ctCarveStart('knife'); ind.carve.t0 = ind.t - CALIB.sweep * 0.5; true;`);
                 await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })); true;`);
-                const sp = await T.eval(`ind.carve ? ind.carve.hit : -1`);
+                const sp = await T.eval(`ind.carve ? ind.carve.score : -1`);
                 await T.eval(`ind.carve.t0 = ind.t - CALIB.sweep * 0.5; document.getElementById('ind-carve-d').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); true;`);
-                const tap = await T.eval(`ind.carve ? ind.carve.hit : -1`);
-                if (!(sp === 1 && tap === 2)) bad.push('空格、点圈都算一刀 ' + sp + ' ' + tap);
+                const tap = await T.eval(`ind.carve ? ind.carve.score : -1`);
+                if (!(sp === 2 && tap === 4)) bad.push('空格、点圈都算一下 ' + sp + ' ' + tap);
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND129 雕模具校准：红白灰区、眩晕不能动、连续失败 3 次碎、命中率定耐久、空格和点圈', bad.length === 0, bad.join(' / '));
+            report('IND129 雕模具校准：红 +2 白 +1 别处 −1、累计到目标分、耐久固定、不眩晕不碎、空格和点圈', bad.length === 0, bad.join(' / '));
         }
         if (want('IND130')) {
             // IND130 钢镐要铁镐（任务 101）：钢镐头 + 铁镐才能做，铁镐用掉、钢镐满耐久；没铁镐（有钢镐头、木柄）做不了；钢的斧铲剪刀不受限；老存档里的钢镐不动
@@ -12393,7 +12389,7 @@ async function enterExit(tab, key) {
             report('IND130 钢镐要铁镐：钢镐头 + 铁镐、没铁镐不行、满耐久、斧铲剪不受限', bad.length === 0, bad.join(' / '));
         }
         if (want('IND131')) {
-            // IND131 早期矿回地面、洞里看得见（任务 96）：30 张图铜地面平均 ≥ 6 个点、离出生点 350 米内能凑齐青铜（铜 + 锡）的图 ≥ 80%；地面占比铜锡锌铁高于铀铝铅镍；洞里最低亮度 6 米（白天晚上、深处都有）；老存档读档不报错
+            // IND131 早期矿回地面、洞里看得见（任务 96）：30 张图铜地面平均 ≥ 6 个点、离出生点 350 米内能凑齐青铜（铜 + 锡）的图 ≥ 80%；地面占比铜锡锌铁高于铀铝铅镍；洞里可见度按距离三次方衰减（d0 空手 2、火把 4、灯泡 6）；老存档读档不报错
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -12405,8 +12401,10 @@ async function enterExit(tab, key) {
                     for (let s = 1; s <= N; s++) { indGoTrip(7000 + s * 104729); let cu = 0, sn = 0; ind.nodes.forEach(function (o) { if (!o.out || o.cave !== undefined) return; g[o.key] = (g[o.key] || 0) + 1; if (o.key === 'ore_cu') cuPts++; if (Math.hypot(o.x, o.z) > 350) return; if (o.key === 'ore_cu') cu++; if (o.key === 'ore_sn') sn++; }); if (cu >= 1 && sn >= 1) ok++; indGoBase(null); }
                     return { ok: ok, n: N, cuAvg: cuPts / N, g: g }; })()`);
                 if (!(r.ok / r.n >= 0.8 && r.cuAvg >= 6)) bad.push('铜地面平均 ≥ 6 个点、350 米内凑齐铜锡的图 ≥ 80% ' + JSON.stringify(r));
-                const c = await J(`(function(){ indGoTrip(131); let tries = 0; while (!ind.caves.length && tries++ < 60) indGoTrip(tries * 131); let c = ind.caves[0]; ind.base.wear = {}; ind.torchT = 0; cvEnter(c); let out = {}; [0, 12, 30, 60].forEach(function (d) { indTeleport(c.cx + d, c.cz); ind.base.clock = IND_DAY * 3 + 300; out['d' + d] = cvViewR(); ind.base.clock = IND_DAY * 3 + IND_DUSK + 100; out['n' + d] = cvViewR(); }); out.min = CV.minR; return out; })()`);
-                if (!(c.min === 6 && Object.keys(c).filter(function (k) { return k !== 'min'; }).every(function (k) { return c[k] >= 6; }))) bad.push('洞里最低亮度 6 米（深处、夜里也是） ' + JSON.stringify(c));
+                const c = await J(`(function(){ indGoTrip(131); let tries = 0; while (!ind.caves.length && tries++ < 60) indGoTrip(tries * 131); let c = ind.caves[0]; ind.base.wear = {}; ind.torchT = 0; cvEnter(c); indTeleport(c.cx + 40, c.cz); ind.base.clock = IND_DAY * 3 + IND_DUSK + 100; let out = {};
+                    out.bare = [cvD0(), cvVis(2, 2), cvVis(4, 2), cvVis(6, 2), cvVis(1, 2)]; ind.torchT = 50; out.torch = cvD0(); out.torchVis = cvVis(8, cvD0()); ind.torchT = 0; ind.base.wear.head = 'bulb'; delete ind.base.bulbU; out.bulb = cvD0(); ind.base.wear = {};
+                    out.view = cvViewR(); out.fog = null; out.old = CV.d0Torch > CV.d0 && CV.d0Bulb > CV.d0Torch; return out; })()`);
+                if (!(c.bare[0] === 2 && c.bare[1] === 1 && Math.abs(c.bare[2] - 0.125) < 1e-9 && Math.abs(c.bare[3] - 1 / 27) < 1e-9 && c.bare[4] === 1 && c.torch === 4 && Math.abs(c.torchVis - 0.125) < 1e-9 && c.bulb === 6 && c.view === 4 && c.old)) bad.push('洞里可见度 min(1, (d0/d)³)：空手 d0 = 2、火把 4、灯泡 6 ' + JSON.stringify(c));
                 const o = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', bag: { ore_cu: 3 } }); return b.bag.ore_cu; })()`);
                 if (o !== 3) bad.push('老存档读档 ' + o);
             } catch (e) { bad.push('异常 ' + e.message); } }
