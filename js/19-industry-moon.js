@@ -183,7 +183,7 @@
             let MG = moonGen(), S = mnState(); mnSyncSite();
             if (ind.base.rule && typeof ind.base.away !== 'number') ind.base.away = ind.base.clock;
             indClearWorld();
-            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null; ind.cave = null; ind.caves = []; mbReset();
+            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null; ind.cave = null; ind.caves = []; mbReset();
             let M = ind.map = { seed: MG.seed, volc: [], rivers: [], moon: MG };
             ind.tdevs = []; ind.odLive = []; ind.odObjs = [];
             scene.background = new THREE.Color(0x03030a); scene.fog = new THREE.Fog(0x03030a, 80, 420);

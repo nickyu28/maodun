@@ -8494,7 +8494,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('IND36')) {
-            // IND36 水里移速和体力（任务 12）：岸边陆地 1 倍；浅水能跑、走跑都 ×0.85、体力只在跑时掉；深水游泳 0.6 倍不能跑、动才掉体力、站着不掉、3 秒后回；
+            // IND36 水里移速和体力（任务 12；深水按任务 107 改）：岸边陆地 1 倍；浅水能跑、走跑都 ×0.85、体力只在跑时掉；深水能跑、走跑都 ×0.7、体力跟地面一样、没体力也 ×0.7；
             // 0.55／0.65 附近来回不乱跳（进深水 ≥ 0.6、出深水 ≤ 0.5）；深水 HUD 写"游泳中，不能跑"；木筏照旧 2 倍；老存档
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
@@ -8522,17 +8522,15 @@ async function enterExit(tab, key) {
                     if (!(near(m['岸边'].走[0], 1) && near(m['岸边'].跑[0], RUN))) bad.push('岸边陆地该是 1 倍、能跑 ' + JSON.stringify(m['岸边']));
                     if (!(near(m['浅水'].走[0], 0.85) && m['浅水'].跑[2] && near(m['浅水'].跑[0], 0.85 * RUN))) bad.push('浅水该 0.85 倍、能跑（跑也 ×0.85） ' + JSON.stringify(m['浅水']));
                     if (!(m['浅水'].走[1] >= 0 && m['浅水'].跑[1] < 0)) bad.push('浅水体力只在跑的时候掉 ' + JSON.stringify(m['浅水']));
-                    if (!(near(m['深水'].走[0], 0.6) && near(m['深水'].跑[0], 0.6) && !m['深水'].跑[2])) bad.push('深水该 0.6 倍、不能跑 ' + JSON.stringify(m['深水']));
-                    if (!(m['深水'].走[1] < 0 && m['深水'].站[1] === 0)) bad.push('深水动才掉体力、站着不掉 ' + JSON.stringify(m['深水']));
-                    // 站 3 秒后开始回（每秒 8）
-                    const rec = await J(`(function(){ let R = ind; R.p.x = ${pts.deep[0]}; R.p.z = ${pts.deep[1]}; R.stam = 40; R.k = {}; R.deepSt = false; R.stillT = 0; for (let i = 0; i < 25; i++) indMove(0.1); let a = R.stam; for (let i = 0; i < 15; i++) indMove(0.1); return [a, R.stam]; })()`);
-                    if (!(rec[0] === 40 && Math.abs(rec[1] - 40 - 8 * 1) < 1)) bad.push('深水站着 3 秒内不变、3 秒后每秒回 8 ' + JSON.stringify(rec));
-                    // 没体力 0.3 倍
+                    // 任务 107 起：深水能跑、走跑都 ×0.7、体力跟地面一样（走不耗、跑才耗、站着照地面回）
+                    if (!(near(m['深水'].走[0], 0.7) && near(m['深水'].跑[0], 0.7 * RUN) && m['深水'].跑[2])) bad.push('深水该 0.7 倍、能跑（跑也 ×0.7） ' + JSON.stringify(m['深水']));
+                    if (!(m['深水'].走[1] >= 0 && m['深水'].站[1] >= 0 && m['深水'].跑[1] < 0 && near(m['深水'].走[1], m['岸边'].走[1]) && near(m['深水'].跑[1], m['岸边'].跑[1]))) bad.push('深水体力跟地面一样：走、站不掉，跑才掉 ' + JSON.stringify(m));
+                    // 没体力也是 0.7 倍
                     const tired = await step(pts.deep, false, true, 0);
-                    if (!near(tired[0], 0.3)) bad.push('深水没体力该 0.3 倍 ' + JSON.stringify(tired));
+                    if (!near(tired[0], 0.7)) bad.push('深水没体力也是 0.7 倍 ' + JSON.stringify(tired));
                     // HUD
                     await T.eval(`ind.p.x = ${pts.deep[0]}; ind.p.z = ${pts.deep[1]}; ind.deepSt = false; ind.stam = 50; ind.k = {}; indMove(0.01); ind.hudSig = ''; indHudUpdate(); true;`);
-                    if (!(await T.eval(`/游泳中，不能跑/.test(document.getElementById('ind-status').textContent)`))) bad.push('深水 HUD 该写"游泳中，不能跑"');
+                    if (!(await T.eval(`/游泳中/.test(document.getElementById('ind-status').textContent) && !/不能跑/.test(document.getElementById('ind-status').textContent)`))) bad.push('深水 HUD 该写"游泳中"（能跑了，不写不能跑）');
                     await T.eval(`ind.p.x = ${pts.shallow[0]}; ind.p.z = ${pts.shallow[1]}; ind.k = {}; indMove(0.01); ind.hudSig = ''; indHudUpdate(); true;`);
                     if (!(await T.eval(`!/游泳中/.test(document.getElementById('ind-status').textContent)`))) bad.push('浅水不该写游泳中');
                     // 滞回：0.55 → 0.65 → 0.55 → 0.45
@@ -8546,7 +8544,7 @@ async function enterExit(tab, key) {
                 if (!(await T.eval(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); delete b.surv.stam; indFixBase(b); return true; })()`))) bad.push('老存档整理报错');
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
-            report('IND36 水里：岸边 1 倍、浅水 0.85 能跑、深水游泳不能跑动才掉体力、滞回、HUD 写游泳中', bad.length === 0, bad.join(' / '));
+            report('IND36 水里：岸边 1 倍、浅水 0.85 能跑、深水 0.7 能跑体力跟地面一样、滞回、HUD 写游泳中', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND37')) {
@@ -12704,6 +12702,39 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND141 蒸汽发电机贴着炉子：右键装上、一炉一台、中火有水 12 V、收起退水、地上的 5 米', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND142')) {
+            // IND142 外面能放工作台、能随手合成工作台（任务 108）：背包里没工作台时背包面板"随手合成"能做出来（硬核木 6 + 草绳 2、悠闲木 6 + 石头 2）；远征图里放下、左键打开、做一件东西、长按右键收回；
+            // 放进深水、压在别的东西上被拒；基地里已经有工作台再放被拒、旧的收起放下照旧
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indGoTrip(1357); ind.mbSpawn = 1e9; ind.bag = { wood: 8, rope: 3, grass: 4 }; indPanelBag(); let i = IND_CRAFT.findIndex(function (q) { return q.out === 'furn_bench' && q.hard; }); let btn = document.getElementById('ind-hand-' + i); if (btn) btn.click();
+                    return { btn: !!btn, bench: ind.bag.furn_bench || 0, wood: ind.bag.wood, rope: ind.bag.rope, casual: JSON.stringify((IND_CRAFT.find(function (q) { return q.out === 'furn_bench' && q.casual; }) || {}).in) }; })()`);
+                if (!(r.btn && r.bench === 1 && r.wood === 2 && r.rope === 1 && r.casual === '{"wood":6,"stone":2}')) bad.push('背包里随手合成工作台 ' + JSON.stringify(r));
+                r = await J(`(function(){ indPanelClose(); ind.tripGround = []; let p = null; for (let i = 0; i < 400 && !p; i++) { let x = (i % 20) * 3 - 30, z = Math.floor(i / 20) * 3 - 30; if (indWaterDepth(x, z) === 0 && indWaterDepth(x, z - 2.2) === 0 && !ind.nodes.some(function (o) { return !o.dead && Math.hypot(o.x - x, o.z - z + 2.2) < 3; })) p = { x: x, z: z }; }
+                    let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; indTeleport(p.x, p.z); indLookAt(p.x, p.z - 5); indSelect('furn_bench'); let sel = indSel(); indUse(); blazeFlash = bf; let n = (ind.tripBench || []).length, b = ind.tripBench[0]; if (!b) return { none: true, sel: sel, fl: fl.join('|'), p: p };
+                    indTeleport(b.x, b.z + 1.6); indLookAt(b.x, b.z); let a = indAim(); indAction(); let panel = ind.panel;
+                    ind.bag = Object.assign(ind.bag, { stone: 2 }); let ci = IND_CRAFT.findIndex(function (q) { return q.out === 'sharp_flint'; }); ind.craftNow = true; let made = indCraft(ci); ind.craftNow = false; indPanelClose();
+                    indRightDown(); for (let i = 0; i < 25; i++) indAdvance(0.05); indRightUp(); return { n: n, aim: a && a.kind, panel: panel, made: made, flint: ind.bag.sharp_flint || 0, left: ind.tripBench.length, back: ind.bag.furn_bench || 0 }; })()`);
+                if (!(r.n === 1 && r.aim === 'bench' && r.panel === 'bench' && r.made && r.flint >= 1 && r.left === 0 && r.back === 1)) bad.push('远征里放下、左键打开、做东西、长按收回 ' + JSON.stringify(r));
+                r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let p = null; for (let i = 0; i < 8000 && !p; i++) { let x = (i % 100) * 5 - 250, z = Math.floor(i / 100) * 5 - 200; if (indWaterDepth(x, z - 2.2) > 1) p = { x: x, z: z }; }
+                    let deep = null; if (p) { indTeleport(p.x, p.z); indLookAt(p.x, p.z - 5); ind.onRaft = null; indSelect('furn_bench'); indUse(); deep = (ind.tripBench || []).length; }
+                    let o = ind.nodes.filter(function (q) { return !q.dead && !q.cave && indWaterDepth(q.x, q.z) === 0; })[0]; indTeleport(o.x, o.z + 2.2); indLookAt(o.x, o.z); indSelect('furn_bench'); indUse(); let onNode = ind.tripBench.length;
+                    blazeFlash = bf; return { deep: deep, onNode: onNode, bag: ind.bag.furn_bench, fl: fl.join('|') }; })()`);
+                if (!((r.deep === null || r.deep === 0) && r.onNode === 0 && r.bag === 1 && /深水/.test(r.fl) && /放不下/.test(r.fl))) bad.push('深水、压在东西上放不了 ' + JSON.stringify(r));
+                r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; indGoBase(null); let B = ind.base; B.off.bench = false; ind.bag = { furn_bench: 1 }; indSelect('furn_bench'); indTeleport(0, 8); indLookAt(0, 3); indUse(); let a = ind.bag.furn_bench || 0;
+                    let S = IND_BASE_ST.bench; indTeleport(S.x, S.z + 2.4); indLookAt(S.x, S.z + 0.8); indRightDown(); for (let i = 0; i < 25; i++) indAdvance(0.05); indRightUp(); let off = !!B.off.bench, b2 = ind.bag.furn_bench;
+                    indTeleport(0, 8); indLookAt(0, 3); indSelect('furn_bench'); indUse(); blazeFlash = bf; return { a: a, off: off, b2: b2, on: !B.off.bench, b3: ind.bag.furn_bench || 0, fl: fl.join('|') }; })()`);
+                if (!(r.a === 1 && /已经有一个工作台/.test(r.fl) && r.off && r.b2 === 2 && r.on && r.b3 === 1)) bad.push('基地：已有工作台再放被拒；旧的收起放下照旧 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND142 外面的工作台：背包随手合成、远征放下打开做东西收回、深水和压东西拒绝、基地照旧', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 

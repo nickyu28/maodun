@@ -379,3 +379,37 @@
                 }
             });
         }
+
+        // ══ 任务 108：外面也能放工作台，背包里随手合成工作台 ══
+        // 随手合成（背包面板里，不用工作台）：工作台 = 木头 6 + 草绳 2（硬核）／木头 6 + 石头 2（悠闲没有草绳）。
+        // 远征图里拿着工作台右键放在面前（不能进深水、不能压在别的东西上），左键打开跟基地的一样用，长按右键 1 秒收回。这一趟结束没收回的留在外面（不进存档）。
+        IND_CRAFT.push({ out: 'furn_bench', in: { wood: 6, rope: 2 }, hard: true, hand: true }, { out: 'furn_bench', in: { wood: 6, stone: 2 }, casual: true, hand: true });
+        IND_ITEMS_RAW.furn_bench.use = '右键放下，左键打开做东西。远征里也能放（长按右键收回）';
+        function wdHandCraftHtml() {
+            let rows = IND_CRAFT.map(function (r, i) {
+                if (!r.hand || !indCraftShow(r)) return '';
+                let can = indCraftCan(r), need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ');
+                return indRow(indName(r.out) + '<br><small style="color:#888">' + need + '</small>', '<button id="ind-hand-' + i + '" style="' + IND_BTN + (can ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>');
+            }).join('');
+            return rows ? '<div style="margin-top:8px;font-weight:bold;">随手合成（不用工作台）</div>' + rows : '';
+        }
+        function wdBenchPlace() {
+            let f = indFace(), x = ind.p.x + f.x * 2.2, z = ind.p.z + f.z * 2.2, L = ind.tripBench = ind.tripBench || [];
+            if (ind.cave || ind.onRaft) { indFlash('这里放不下工作台'); return false; }
+            if (indWaterDepth(x, z) >= IND_WATER.shallow) { indFlash('深水里放不了工作台'); return false; }
+            let busy = ind.nodes.some(function (o) { return !o.dead && Math.hypot(o.x - x, o.z - z) < 1.6; }) || L.some(function (b) { return Math.hypot(b.x - x, b.z - z) < 2; }) ||
+                (ind.rafts || []).some(function (o) { return Math.hypot(o.x - x, o.z - z) < 2; }) || indFires().some(function (o) { return Math.hypot(o.x - x, o.z - z) < 1.6; }) ||
+                (ind.caves || []).some(function (c) { return Math.hypot(c.x - x, c.z - z) < 3; }) || (ind.exits || []).some(function (e) { return Math.hypot(e.x - x, e.z - z) < 2; });
+            if (busy) { indFlash('这里有东西，放不下，换个空地'); return false; }
+            indBagDel('furn_bench', 1);
+            let y = indGround(x, z), b = { x: x, z: z, mesh: [indBox(1.6, 0.12, 0.9, 0xa1887f, x, y + 0.9, z), indBox(1.4, 0.85, 0.7, 0x8d6e63, x, y + 0.42, z)] };
+            L.push(b); indFlash('放好了工作台：左键打开，长按右键收回');
+            return true;
+        }
+        function wdBenchPick(b) {
+            if (indFits(ind.bag, indBagSlots(), 'furn_bench', 1) < 1) { indFlash('背包满了'); return false; }
+            ind.tripBench = (ind.tripBench || []).filter(function (x) { return x !== b; });
+            (b.mesh || []).forEach(function (m) { m.visible = false; });
+            indBagAdd('furn_bench', 1); indFlash('收回了工作台');
+            return true;
+        }

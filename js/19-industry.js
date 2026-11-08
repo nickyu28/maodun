@@ -1178,7 +1178,7 @@
         function indGoBase(fromTrip) {
             odLeave();   // 户外的块：把树石矿记下来，没钉住的基站回背包
             let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && !a.petRef && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];   // 跟出去的宠物本来就是基地的（任务 70）
-            ind.wild = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.cave = null; ind.caves = []; mbReset();
+            ind.wild = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.cave = null; ind.caves = []; mbReset();
             indClearWorld();
             ind.where = 'base'; ind.map = null; ind.exitT = 0;
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
@@ -1257,7 +1257,7 @@
         function indGoTrip(seed) {
             if (ind.base.rule && typeof ind.base.away !== 'number') ind.base.away = ind.base.clock;   // 记下出门时刻，回家补算（任务 3）
             indClearWorld(); mbReset();
-            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
+            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
             let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed); odApplyMap(M);   // 钉住的块盖上去（19-industry-outdoor.js）
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 30, IND_VIEW.day);
             wdTerrain(M);   // 地形分成 10 × 10 块，视野外的块不画（19-industry-world.js）
@@ -1374,7 +1374,7 @@
         function indAtWater() { return indInWater() || (ind.where === 'trip' && indHeight(ind.map, ind.p.x, ind.p.z) < IND_WATER_Y + 0.2); }
         // 水深：水面比脚下地面高多少（陆地 0）。浅水 < 0.6 米能跑、走跑都 ×0.85、体力照常（跑才掉）；
         // 深水游泳 0.6 倍速不能跑，动的时候体力每秒掉 5，站着不掉、停 3 秒后每秒回 8，没体力 0.3 倍速；进深水 ≥ 0.6、出深水 ≤ 0.5（滞回，不来回抖）；木筏上 2 倍速
-        const IND_WATER = { wet: 0.05, shallow: 0.6, deepOut: 0.5, shallowSp: 0.85, deepSp: 0.6, tiredSp: 0.3, stamDrain: 5, stamRegen: 8, stillT: 3, raftSp: 2 };
+        const IND_WATER = { wet: 0.05, shallow: 0.6, deepOut: 0.5, shallowSp: 0.85, deepSp: 0.7, tiredSp: 0.3, stamDrain: 5, stamRegen: 8, stillT: 3, raftSp: 2 };
         function indWaterDepth(x, z) { return ind.where === 'trip' ? Math.max(0, IND_WATER_Y - indHeight(ind.map, x, z)) : 0; }
         function indDeep() {
             if (ind.onRaft || ind.where !== 'trip') { ind.deepSt = false; return false; }
@@ -1384,7 +1384,7 @@
         }
         function indWaterSpeed() {
             if (ind.onRaft) return IND_WATER.raftSp;
-            if (indDeep()) return ind.stam > 0 ? IND_WATER.deepSp : IND_WATER.tiredSp;
+            if (indDeep()) return IND_WATER.deepSp;   // 任务 107：深水走跑都 ×0.7，体力 0 也一样
             if (!indInWater()) return 1;
             return IND_WATER.shallowSp;
         }
@@ -1565,13 +1565,10 @@
             if (!blocked && !fwd && !strafe && gState.control === 'pad') { fwd = -tMove.y; strafe = tMove.x; }
             let mx = cd.x * fwd - cd.z * strafe, mz = cd.z * fwd + cd.x * strafe, moving = !!(mx || mz);
             if (R.ride && R.ride.dest) { let ap = rdAuto(moving); if (ap) { mx = ap.x; mz = ap.z; moving = true; } }   // 自动驾驶（任务 50）
-            let S = R.base.surv, deep = R.where === 'trip' && indDeep(), canRun = k.run && moving && R.stam > 0 && S.energy > 0 && !deep && !R.onRaft;
+            let S = R.base.surv, deep = R.where === 'trip' && indDeep(), canRun = k.run && moving && R.stam > 0 && S.energy > 0 && !R.onRaft;   // 任务 107：深水里也能跑；游泳的体力跟地面一样（走不耗、跑才耗），只是速度 ×0.7
             if (R.ride && deep) rdDismount('掉进深水，下车了');   // 骑进深水掉下车（任务 46）
             R.running = canRun;
-            if (deep) {   // 游泳：动才掉体力；站着不掉，停 3 秒后开始回
-                if (moving) { R.stillT = 0; R.stam = Math.max(0, R.stam - IND_WATER.stamDrain * dt); }
-                else { R.stillT = (R.stillT || 0) + dt; if (R.stillT >= IND_WATER.stillT) R.stam = Math.min(100, R.stam + IND_WATER.stamRegen * dt); }
-            } else if (R.ride && R.ride.ty === 'bike') { R.stillT = 0; R.stam = moving ? Math.max(0, R.stam - RD.pedal * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }   // 脚踏吃体力
+            if (R.ride && R.ride.ty === 'bike') { R.stillT = 0; R.stam = moving ? Math.max(0, R.stam - RD.pedal * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }   // 脚踏吃体力
             else if (R.effort > 0) { R.stillT = 0; R.stam = Math.max(0, R.stam - R.effort * dt); }   // 拉风箱、扇扇子吃体力（任务 44）
             else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }
             let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1) * pwMoveMul() * mbMoveMul();   // 举着盾 ×0.6   // 鞋和药的跑速加成，合起来不超过 ×2.0（19-industry-power.js）
@@ -1674,6 +1671,7 @@
                 R.nodes.forEach(function (o) { if (!o.dead) consider(o, o.x, o.z, 'node', 0.8); });
                 if (!R.onRaft) (R.rafts || []).forEach(function (o) { consider(o, o.x, o.z, 'raft', 1.3, 0.8); });
                 (R.tripGround || []).forEach(function (o) { consider(o, o.x, o.z, 'item', 0.5); });
+                (R.tripBench || []).forEach(function (o) { consider(o, o.x, o.z, 'bench', 1.2); });   // 外面放的工作台（任务 108）
             } else {
                 R.base.ground.forEach(function (o) { consider(o, o.x, o.z, 'item', 0.5); });
                 R.base.crops.forEach(function (c) { consider(c, c.x, c.z, 'crop', 0.6); });
@@ -2326,10 +2324,11 @@
             if (a.kind === 'bomb') return { ty: 'bomb', o: a.o };
             if (a.kind === 'spout' && a.o.C.spoutTy && a.o.C.spoutTy !== 'auto') return { ty: 'spoutblk', o: a.o.C, cid: a.o.id };   // 装上的砖槽、耐火砖槽、漏斗长按右键收起（里面空的才行）
             if (a.kind === 'funnel') return { ty: 'funnelblk', o: a.o.C, cid: a.o.id };
+            if (a.kind === 'bench' && ind.where === 'trip') return { ty: 'tripbench', o: a.o };   // 外面放的工作台（任务 108）
             if (a.kind === 'stove' || a.kind === 'bed' || a.kind === 'bench') return { ty: a.kind, o: null };   // 水池不能搬
             return null;
         }
-        function indFurnName(ty, o) { return ty === 'spoutblk' ? '出料槽' : ty === 'funnelblk' ? '进料漏斗' : ty === 'bomb' ? '原子弹' : ty === 'house' ? (o ? IND_HOUSE[o.ty].name : '房子') : ty === 'tile' ? '农田' : ty === 'chest' ? '仓库箱' : ty === 'bed' ? '床' : ty === 'bench' ? '工作台' : ty === 'pool' ? '水池' : IND_COOK[ty].name; }
+        function indFurnName(ty, o) { return ty === 'tripbench' ? '工作台' : ty === 'spoutblk' ? '出料槽' : ty === 'funnelblk' ? '进料漏斗' : ty === 'bomb' ? '原子弹' : ty === 'house' ? (o ? IND_HOUSE[o.ty].name : '房子') : ty === 'tile' ? '农田' : ty === 'chest' ? '仓库箱' : ty === 'bed' ? '床' : ty === 'bench' ? '工作台' : ty === 'pool' ? '水池' : IND_COOK[ty].name; }
         function indFurnHot(ty, o) { let S = ty === 'stove' ? ind.base.stove : o; if (S && !Array.isArray(S.spout)) S.spout = []; return !!S && (S.fire > 0 || !!S.cook || S.temp > 60 || S.spout.some(function (e) { return e.t > 0; })); }   // 出料槽里还有烫的也算
         // 收不起来的原因（空串＝能收）：火没关、正在烧配方、还没凉到 60°C 以下（写出现在多少度、大约还要几秒）、出料槽里还有没凉的锭
         function indFurnCoolSecs(ty, S) { let K = IND_COOK[ty], rate = Math.min(K ? K.rate : 10, 10); return Math.max(0, Math.ceil((S.temp - 60) / rate)); }
@@ -2347,6 +2346,7 @@
             if (ty === 'house') return indPickHouse(f.o);
             if (ty === 'bomb') return nkPickBomb(f.o);
             if (ty === 'spoutblk' || ty === 'funnelblk') return ckPickPart(f);
+            if (ty === 'tripbench') return wdBenchPick(f.o);   // 任务 108
             if (ty === 'tile') {   // 空农田收回：还 1 份泥土
                 if (indCropAt(f.o.x, f.o.z)) { indFlash('上面种着东西'); return false; }
                 if (indFits(ind.bag, indBagSlots(), 'dirt', 1) < 1) { indFlash('背包满了'); return false; }
@@ -2373,8 +2373,10 @@
             return true;
         }
         function indPlaceFurn(k) {
+            if (k === 'furn_bench' && ind.where === 'trip') return wdBenchPlace();   // 外面也能放工作台（任务 108，19-industry-world.js）
             if (ind.where !== 'base') { indFlash('只能放在基地里'); return false; }
             let B = ind.base, d = IND_ITEMS[k], ty = d.furn, pay = d.inst ? B.carried[k.slice(5)] : null, r = IND_FURN_R[ty];
+            if (ty === 'bench' && !B.off.bench) { indFlash('基地里已经有一个工作台了'); return false; }   // 任务 108：做出来的工作台在基地里只能顶替收起来的那个
             if (ty === 'chest' && B.chests.length >= 20) { indFlash('箱子太多了'); return false; }
             if (IND_COOK[ty] && ty !== 'stove' && B.cookers.length >= indCookCap()) { indFlash('炉子太多了'); return false; }
             let f = indFace(), x = ind.p.x + f.x * (r + 1.2), z = ind.p.z + f.z * (r + 1.2);
@@ -2929,7 +2931,7 @@
             else if (r.glass) { ind.base.glass = true; if (ind.where === 'base') indBuildGh(); indFlash('玻璃暖棚盖好了，棚子变大了'); }
             else if (r.pot) { ind.base.pot = true; indFlash('黄铜大锅装好了，灶台做吃的一炉最多 ' + IND_BATCH_POT + ' 份'); }
             else { indBagAdd(r.out, r.n || 1); if (r.back) Object.keys(r.back).forEach(function (k) { indBagAdd(k, r.back[k]); }); indFlash('做好了：' + indName(r.out) + (r.n ? '×' + r.n : '')); }   // back：还回来的东西（空桶）
-            indSave(); if (ind.panel === 'bench') indPanelBench();
+            indSave(); if (ind.panel === 'bench') indPanelBench(); else if (ind.panel === 'bag') indPanelBag();
             return true;
         }
         // 做最多：身上的原料够几次就做几次（背包放不下就停）
@@ -3322,7 +3324,7 @@
         function indPanelBag() {
             if (!ind) return;
             indPanelShow('bag', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">背包　' + indSlots().length + ' / ' + indBagSlots() + ' 格</div><div id="ind-bag-zone">' + indBagChips() + '</div>' +
-                (function () { let hk = indSel(); return hk && IND_ITEMS[hk] && !IND_ITEMS[hk].dev && !IND_ITEMS[hk].gas ? '<div style="margin-top:6px;">手上：' + indName(hk) + '　' + indPutOpts('drop', 0, hk, '扔', '全扔', '扔') + '</div>' : ''; })() + '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+                (function () { let hk = indSel(); return hk && IND_ITEMS[hk] && !IND_ITEMS[hk].dev && !IND_ITEMS[hk].gas ? '<div style="margin-top:6px;">手上：' + indName(hk) + '　' + indPutOpts('drop', 0, hk, '扔', '全扔', '扔') + '</div>' : ''; })() + '' + wdHandCraftHtml() + '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
         // 背包格子换位置（任务 17）：背包存的是"种类 → 数量"，格子按种类放进来的先后排，所以换两格 = 换两种东西在里面的先后（存档格式不变）
         function indBagSwap(i, j) {
@@ -3646,7 +3648,7 @@
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
             let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + indSeasonTxt() + '　' + rule + '<br>';
-            st += (indHard() ? (S.hp < 30 ? '<span class="ind-low">' + indBar('血', S.hp, '#e53935') + '</span>' : indBar('血', S.hp, '#e53935')) : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047') + (R.where === 'trip' && R.deepSt && !R.onRaft ? '<b style="color:#0277bd">游泳中，不能跑</b>' : '');
+            st += (indHard() ? (S.hp < 30 ? '<span class="ind-low">' + indBar('血', S.hp, '#e53935') + '</span>' : indBar('血', S.hp, '#e53935')) : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047') + (R.where === 'trip' && R.deepSt && !R.onRaft ? '<b style="color:#0277bd">游泳中</b>' : '');
             let tc = S.temp < indChillT() ? '#1565c0' : S.temp > indSweatT() ? '#c62828' : '#2e7d32';
             st += '<br>体温 <b style="color:' + tc + '">' + S.temp.toFixed(1) + '°C</b>　气温 ' + Math.round(indAirTemp()) + '°C　保暖 ' + indWarmth();
             if (indNearHeat() && S.temp < 37) st += '　<b style="color:#e65100">取暖中</b>';
