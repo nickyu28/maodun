@@ -6302,7 +6302,7 @@ async function enterExit(tab, key) {
                 f = await getC(K);
                 if (hn(f, 'hot_cu') !== 6 || f.items.ore_cu !== 2) bad.push('大窑冶炼应该一次 6 份 ' + JSON.stringify(f));
                 // "灶台 3 米内"的判定：发电机在小熔炉旁边、熔炉中火以上才发电；熔融盐电解旁边的大窑够热
-                await T.eval(`(function(){ let c = ind.base.cookers[0]; ind.base.devs = [{ id: 701, ty: 'gen', x: c.x + 2, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 120 }]; c.fire = 0; c.fuel = 0; })(); true;`);
+                await T.eval(`(function(){ let c = ind.base.cookers[0]; ind.base.devs = [{ id: 701, ty: 'gen', x: c.x + 2, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 120 }]; c.fire = 0; c.fuel = 0; ind.base.cookers.forEach(function (o) { if (o !== c && Math.hypot(o.x - c.x - 2, o.z - c.z) <= 6.5) { o.fire = 0; o.fuel = 0; } }); if (Math.hypot(IND_BASE_ST.stove.x - c.x - 2, IND_BASE_ST.stove.z - c.z) <= 6.5) { ind.base.stove.fire = 0; ind.base.stove.fuel = 0; } })(); true;`);   // 任务 106 起地上的发电机找 5 米内的炉子：旁边别的炉子先灭掉
                 if (await T.eval(`indSrcVolt(indDev(701))`) !== 0) bad.push('熔炉没点着发电机也发电');
                 await T.eval(`(function(){ let c = ind.base.cookers[0]; c.fire = 2; c.fuel = 3000; })(); true;`);
                 if (await T.eval(`indSrcVolt(indDev(701))`) !== 12) bad.push('小熔炉旁边的发电机不发电');
@@ -7298,11 +7298,11 @@ async function enterExit(tab, key) {
                 r = await run('function () { return -1.5; }', { run: true }, 1);
                 if (!near(r.dx, 7 * 1.6 * 0.85)) bad.push('浅水能跑（0.85 × 跑步） ' + JSON.stringify(r));
                 r = await run('function () { return -2.2; }', {}, 1);
-                if (!near(r.dx, 4.2) || !near(-r.stam, 5)) bad.push('深水应该 0.6 倍速（4.2）、体力每秒掉 5 ' + JSON.stringify(r));
+                if (!near(r.dx, 4.9) || r.stam < 0) bad.push('深水应该 0.7 倍速（4.9）、走路不掉体力（任务 107） ' + JSON.stringify(r));
                 r = await run('function () { return -2.2; }', { run: true }, 1);
-                if (!near(r.dx, 4.2)) bad.push('深水不能跑 ' + JSON.stringify(r));
+                if (!near(r.dx, 7 * 1.6 * 0.7) || !(r.stam < 0)) bad.push('深水能跑（0.7 × 跑步，跑才掉体力，任务 107） ' + JSON.stringify(r));
                 r = await run('function () { return -2.2; }', { stam: 0 }, 1);
-                if (!near(r.dx, 2.1)) bad.push('深水没体力应该 0.3 倍速（2.1） ' + JSON.stringify(r));
+                if (!near(r.dx, 4.9)) bad.push('深水没体力也是 0.7 倍速（4.9，任务 107） ' + JSON.stringify(r));
                 // 下水降温照旧
                 await T.eval(`window.__hf = function () { return -2.2; }; indTeleport(0, 0); true;`);
                 const tWater = await T.eval(`indAirTemp()`);
