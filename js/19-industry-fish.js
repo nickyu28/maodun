@@ -1,10 +1,10 @@
 // 猫盾工业：原水池有限、水井、养鱼（docs/water-fish.md 分步第 2～5 步剩下的）。放在 19-industry-lava.js 后面。
-// 原水池（出生点那个）：存量开局 40 桶（悠闲 80），不漏，算 4 格蒸发；接水 1 桶、喝一口 0.1 桶、基地里每只动物每 10 分钟喝 0.2 桶；旁边（水池边 2 米内）有井就由井补水。老存档给满。
+// 原水池（出生点那个）：2×2 方形、存量开局 40 桶（悠闲 80），不漏、不蒸发，是一口井：每游戏小时 +1 桶补到满（任务 90）；接水 1 桶、喝一口 0.1 桶、基地里每只动物每 10 分钟喝 0.2 桶；旁边（水池边 2 米内）有井就由井补水。老存档给满。
 // 水井：拿铲子对着自己挖的空池格左键，同一格连挖 5 次（每次 6 秒 × 铲子档）出水，这格变成井：每分钟出 1 桶（旁边有通电的水泵 2 米内 ×3），先流进四邻的池子格，没有就存在井里（最多 10 桶），空桶右键接。最多 2 口。
 // 鱼：钓竿（木 2 + 草绳 2）站在河边海边右键，站着 10～30 秒咬钩；渔网（草绳 6）右键放水里，60 秒后再右键收，0～2 条。活鱼在背包里 10 分钟死成生鱼。
 //  拿活鱼右键自己挖的池子放进去（每条要 2 桶水）；小麦、白菜、萝卜右键池子投食槽（最多 20 份）；每条鱼每 5 分钟吃 1 份；吃着的小鱼 600 秒长大，2 条大鱼 + 有吃的每 900 秒多 1 条；
 //  鱼数超过水量 ÷ 2 就缺氧，每分钟 20% 死一条（补算按期望，悠闲不死）；水漏干鱼全死。空手左键池子捞一条（先大的）得生鱼，灶台烤成烤鱼（饱食 +40）。
-        const FH = { poolHard: 40, poolCasual: 80, poolCells: 4, animalDrink: 0.2 / 600, wellDig: 6, wellN: 5, wellMax: 2, wellRate: 1 / 60, wellPump: 3, wellStore: 10, perFish: 2, food: 20, eat: 300, grow: 600, breed: 900, hypo: 0.2 / 60, rodMin: 10, rodMax: 30, net: 60, liveT: 600 };
+        const FH = { poolHard: 40, poolCasual: 80, poolCells: 4, animalDrink: 0.2 / 600, wellDig: 6, wellN: 5, wellMax: 60, wellHour: IND_DAY / 24, poolRegen: 1, wellRegen: 0.5, wellPump: 3, wellStore: 10, perFish: 2, food: 20, eat: 300, grow: 600, breed: 900, hypo: 0.2 / 60, rodMin: 10, rodMax: 30, net: 60, liveT: 600 };
         Object.assign(IND_ITEMS_RAW, {
             fishing_rod: { name: '钓竿', col: 0x8d6e63, use: '站在河边海边右键，站着等鱼咬钩' },
             fish_net: { name: '渔网', col: 0xcfd8dc, use: '右键放进水里，60 秒后再右键收网' },
@@ -17,6 +17,7 @@
         // ── 原水池 ──
         function plCap() { return indHard() ? FH.poolHard : FH.poolCasual; }
         function plW() { let B = ind.base; if (!(B.poolW >= 0)) B.poolW = plCap(); return B.poolW; }
+        function plRegen(dt) { let B = ind.base; plW(); B.poolW = Math.min(plCap(), B.poolW + FH.poolRegen / FH.wellHour * dt); }   // 初始井每游戏小时 +1 桶
         function plTake(n) {
             if (plW() < n - 1e-9) { indFlash('池子里没水了'); return false; }
             ind.base.poolW = Math.max(0, ind.base.poolW - n); return true;
@@ -28,18 +29,14 @@
         // 铲子对着已经挖好的池子格再往下挖：连挖 5 次出水
         function wlDeepen(c) {
             let sh = indSel(); if (tlKind(sh) !== 'shovel') return false;
-            if (wlList().length >= FH.wellMax) { indFlash('最多 ' + FH.wellMax + ' 口井'); return true; }
-            return wdChStart({ kind: 'well', need: FH.wellDig * tlMul(sh), label: '挖井', done: function () {
+            return wdChStart({ kind: 'well', need: FH.wellDig * FH.wellN * tlMul(sh), label: '凿井', done: function () {   // 站着一口气凿 30 秒（× 铲子档），中途动了就重来
                 if (!pdCellAt(c.i, c.j)) return;
-                let D = ind.base.wellDig = ind.base.wellDig || {}, key = c.i + ',' + c.j;
-                if (D.k !== key) { D.k = key; D.n = 0; }
-                D.n++; tlUse(sh); let S = ind.base.surv; S.energy = Math.max(0, S.energy - PD.energy);
-                if (D.n < FH.wellN) return;
+                tlUse(sh); let S = ind.base.surv; S.energy = Math.max(0, S.energy - PD.energy * FH.wellN);
                 delete ind.base.wellDig; let w = c.w || 0, G = pdGroup(c), rest = G.filter(function (x) { return x !== c; });
                 if (c.f && rest.length) { rest[0].f = fhMerge(rest[0].f, c.f); }
                 ind.base.pond = pdCells().filter(function (x) { return x !== c; });
                 if (rest.length) { rest[0].w = (rest[0].w || 0) + w; pdLevel(pdGroup(rest[0])); }
-                wlList().push({ i: c.i, j: c.j, w: 0 }); indFlash('挖出水了，是一口井'); ind.pdDirty = true; indSave();
+                wlList().push({ i: c.i, j: c.j, w: 0 }); indFlash('凿出水了，是一口井'); ind.pdDirty = true; indSave();
             } });
         }
         function wlUse(k) {
@@ -50,7 +47,7 @@
         function wlTick(dt) {
             wlList().forEach(function (w) {
                 let pump = ind.base.devs.some(function (d) { return d.ty === 'pump' && d.pw && Math.hypot(d.x - w.i, d.z - w.j) <= 2; });
-                let add = FH.wellRate * (pump ? FH.wellPump : 1) * dt, to = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return pdCellAt(w.i + d[0], w.j + d[1]); }).filter(function (c) { return c && !(c.lid); })[0];
+                let add = FH.wellRegen / FH.wellHour * (pump ? FH.wellPump : 1) * dt, to = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return pdCellAt(w.i + d[0], w.j + d[1]); }).filter(function (c) { return c && !(c.lid); })[0];
                 if (!to) { let P = IND_BASE_ST.pool; if (!ind.base.off.pool && Math.hypot(w.i - P.x, w.j - P.z) <= P.r + 2) { let room = plCap() - plW(); let g = Math.min(add, Math.max(0, room)); ind.base.poolW += g; add -= g; } }
                 if (to) { let G = pdGroup(to), room = G.length * PD.cap - pdWater(G); if (room > 0) { let g = Math.min(add, room); to.w = (to.w || 0) + g; add -= g; } }
                 w.w = Math.min(FH.wellStore, w.w + add);
@@ -132,7 +129,7 @@
             if (Math.hypot(ind.p.x - F.x, ind.p.z - F.z) > 0.4) { ind.fishing = null; indFlash('动了，鱼跑了'); return; }
             F.t += dt; if (F.t >= F.need) { ind.fishing = null; indBoxAdd('fish_live', 1); }
         }
-        function fhTickAll(dt) { wlTick(dt); fhTick(dt); if (ind.where === 'base') { let B = ind.base; plW(); let night = indIsNight(), m = indHard() ? 1 : 0.5; B.poolW = Math.max(0, B.poolW - (FH.poolCells * (night ? PD.evapNight : PD.evapDay) + B.animals.length * FH.animalDrink) * m * dt); } }
+        function fhTickAll(dt) { wlTick(dt); fhTick(dt); if (ind.where === 'base') { let B = ind.base; plW(); let m = indHard() ? 1 : 0.5; B.poolW = Math.max(0, B.poolW - B.animals.length * FH.animalDrink * m * dt); if (!B.off.pool) plRegen(dt); } }
         function fhFixBase(b) {
             b.poolW = b.poolW >= 0 ? indNum(b.poolW, FH.poolHard, 0, FH.poolCasual) : undefined; if (b.poolW === undefined) delete b.poolW;
             b.wells = (Array.isArray(b.wells) ? b.wells : []).filter(function (w) { return w && isFinite(w.i) && isFinite(w.j); }).slice(0, FH.wellMax).map(function (w) { return { i: w.i | 0, j: w.j | 0, w: indNum(w.w, 0, 0, FH.wellStore) }; });
