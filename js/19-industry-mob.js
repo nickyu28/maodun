@@ -15,7 +15,7 @@
 //  装了盾的宠物，被蹭时按概率这一下不掉保湿度、自己打怪时按概率不掉饱食（木 50%、青铜 65%、铁 80%、钢和钻石 90%），用上一次盾耐久 −1。
 // 点一只驯服的狗（左键或右键）它大叫一声"汪！"（1.5 秒），12 米内别的狗 0.2～0.5 秒后跟着叫；一只狗 3 秒内最多叫一次。猫点一下"喵"。声音用 WebAudio 合成（IND_BARK_SRC 填了就用录音）。
         const IND_BARK_SRC = '', IND_MEOW_SRC = '';   // 以后想换真录音：填音频地址
-        const MB = { cap: 5, boarMax: 2, slimeMax: 3, slimeCave: 4, flameCave: 2, beeGroup: 2, beeMax: 4, caveTempMax: 38, cell: 30, respawn: 180, see: 10, lose: 15, near: 1.3, spawnT: 2, r0: 16, r1: 28, far: 45, swing: 0.6, reach: 2.6, petR: 8, petHit: 1, petMax: 5,
+        const MB = { cap: 5, boarMax: 2, slimeMax: 3, slimeCave: 4, flameCave: 2, tameMax: 2, tameWater: 6, beeGroup: 2, beeMax: 4, caveTempMax: 38, cell: 30, respawn: 180, see: 10, lose: 15, near: 1.3, spawnT: 2, r0: 16, r1: 28, far: 45, swing: 0.6, reach: 2.6, petR: 8, petHit: 1, petMax: 5,
             petFood: 1 / 60, petHyd: 1 / 90, barkT: 1.5, barkCd: 3, barkR: 12, glueR: 1, glueT: 60, glueSlow: 0.3, poisonHits: 10, poisonT: 5, eatPoisonT: 10 };
         const MB_T = {
             slime: { name: '史莱姆', hp: [3, 2, 1], dmg: [4, 3, 2], pet: [8, 6, 4], sp: 7 / 3, r: [0.75, 0.55, 0.38], cd: 1.5 },
@@ -28,7 +28,7 @@
         };
         // 冒烟测试开的页面网址带 ?notut=1：别的检查要在远征里待很久，怪会自己刷出来把人打死，所以测试页默认不自己刷（IND91 打开）。玩家的网址没有这个
         let IND_MB_AUTO = !/[?&]notut\b/.test(location.search);
-        const MB_SLIME_COL = { green: 0x3ddc84, blue: 0x42a5f5, pink: 0xf48fb1 };
+        const MB_SLIME_COL = { green: 0x3ddc84, blue: 0x42a5f5, pink: 0xf48fb1, tame: 0xc8f7dc };
         Object.assign(IND_HURT, {
             mob_slime: { die: '被史莱姆蹭死了', tag: '史莱姆' }, mob_mush: { die: '被小蘑菇撞死了', tag: '小蘑菇' }, mob_cactus: { die: '被刺球撞死了', tag: '刺球' },
             mob_boar: { die: '被小野猪撞死了', tag: '小野猪' }, mob_bee: { die: '被小蜜蜂蜇死了', tag: '小蜜蜂' }, shroom: { die: '吃了毒蘑菇', tag: '中毒' }, mob_poison: { die: '中毒', tag: '中毒' }
@@ -129,7 +129,7 @@
             let part = function (geo, col, x, y, z, sx, sy, sz, basic) { let p = new THREE.Mesh(geo, mbMat(col, basic)); p.position.set(x, y, z); p.scale.set(sx, sy, sz); g.add(p); return p; };
             let eyes = function (y, z, s) { [-1, 1].forEach(function (k) { part(G.s, 0xffffff, k * 0.28 * s, y, z, 0.17 * s, 0.17 * s, 0.1 * s, true); part(G.s, 0x111111, k * 0.28 * s, y - 0.02 * s, z + 0.08 * s, 0.09 * s, 0.09 * s, 0.05 * s, true); }); };
             let r = T.r instanceof Array ? T.r[m.sz] : T.r;
-            if (m.ty === 'slime') { part(G.s, m.col, 0, r * 0.8, 0, r, r * 0.8, r); eyes(r * 0.95, r * 0.85, r / 0.75 * 1.2); }
+            if (m.ty === 'slime') { let sb = part(G.s, m.col, 0, r * 0.8, 0, r, r * 0.8, r); if (m.tame) sb.material = indMat(new THREE.MeshLambertMaterial({ color: m.col, transparent: true, opacity: 0.65 })); eyes(r * 0.95, r * 0.85, r / 0.75 * 1.2); }
             else if (m.ty === 'mush') { part(G.y, 0xfff8e1, 0, 0.25, 0, 0.22, 0.5, 0.22); part(G.s, 0xe53935, 0, 0.55, 0, 0.5, 0.3, 0.5); part(G.s, 0xffffff, 0.2, 0.75, 0.15, 0.08, 0.05, 0.08, true); eyes(0.3, 0.2, 0.8); }
             else if (m.ty === 'cloud') { part(G.s, 0xffffff, 0, 0, 0, 0.5, 0.35, 0.4); part(G.s, 0xffffff, -0.4, -0.05, 0, 0.32, 0.25, 0.3); part(G.s, 0xffffff, 0.4, -0.05, 0, 0.32, 0.25, 0.3); [-1, 1].forEach(function (k) { part(G.s, 0xf8bbd0, k * 0.3, -0.1, 0.33, 0.09, 0.06, 0.03, true); }); eyes(0.05, 0.36, 0.9); }
             else if (m.ty === 'flame') { part(G.c, 0xff9800, 0, 0.35, 0, 0.35, 0.8, 0.35); part(G.s, 0xffeb3b, 0, 0.05, 0, 0.36, 0.3, 0.36, true); eyes(0.15, 0.3, 0.8); }
@@ -140,7 +140,8 @@
         }
         function mbDrop(m) { if (m.g) { scene.remove(m.g); m.g = null; } }
         // ── 刷怪：哪儿刷什么 ──
-        function mbKinds(bm, cave) {
+        function mbNearWater(x, z) { for (let i = 0; i < 8; i++) { let a = i * Math.PI / 4; if (indHeight(ind.map, x + Math.cos(a) * MB.tameWater, z + Math.sin(a) * MB.tameWater) < IND_WATER_Y + 0.3) return true; } return indHeight(ind.map, x, z) < IND_WATER_Y + 0.3; }
+        function mbKinds(bm, cave, x, z) {
             let night = indIsNight(), L = [];
             if (cave) { L.push(cave.bm === 'ancient' ? 'slime:pink' : 'slime:blue', 'flame'); if (cave.bm === 'ancient') L.push('mush'); return L; }
             if ((bm === 'plain' || bm === 'forest') && night) L.push('slime:green');
@@ -149,11 +150,13 @@
             if (bm === 'desert') L.push('cactus');
             if (bm === 'forest' || bm === 'plain') L.push('boar');
             if (bm === 'plain' && !night) L.push('bee');
+            if (!night && x !== undefined && (bm === 'forest' || bm === 'beach' || (bm === 'plain' && mbNearWater(x, z)))) L.push('slime:tame');   // 任务 86：白天湿的地方有温顺的小史莱姆
             return L;
         }
         function mbCellKey(x, z) { return Math.floor(x / MB.cell) + ',' + Math.floor(z / MB.cell); }
         function mbNew(kind, x, z, o) {
             let p = kind.split(':'), ty = p[0], T = MB_T[ty], m = { ty: ty, x: x, z: z, sz: 0, child: false, hp: 0, cd: 0, st: '', stT: 0, shake: 0, ry: 0 };
+            if (p[1] === 'tame') { m.tame = true; m.sz = 2; }
             if (o) Object.assign(m, o);
             m.hp = T.hp instanceof Array ? T.hp[m.sz] : T.hp;
             if (ty === 'flame') { m.pts = 3; m.pt = 0; m.life = 5; m.lt = 0; }   // 点数最高 3（每 90 秒回 1）、寿命 5 次（任务 70 补充 4、5）
@@ -167,11 +170,12 @@
             if (cave) { x = cave.cx + 15 + indRand() * (CV.len - 18); z = cave.cz + (indRand() * 2 - 1) * (CV.w - 2); if (Math.hypot(x - ind.p.x, z - ind.p.z) < 8) return null; }
             else { let a = indRand() * Math.PI * 2, d = MB.r0 + indRand() * (MB.r1 - MB.r0); x = ind.p.x + Math.cos(a) * d; z = ind.p.z + Math.sin(a) * d; if (Math.abs(x) > IND_MAP - 4 || Math.abs(z) > IND_MAP - 4 || indHeight(ind.map, x, z) < IND_WATER_Y + 0.3) return null; }
             let dead = ind.mbDead || {}, key = mbCellKey(x, z); if (dead[key] !== undefined && ind.t - dead[key] < MB.respawn) return null;
-            let L = mbKinds(indBiome(ind.map, x, z), cave); if (!L.length) return null;
+            let L = mbKinds(indBiome(ind.map, x, z), cave, x, z); if (!L.length) return null;
             let kind = L[Math.floor(indRand() * L.length)];
-            let cnt = function (ty) { return (ind.mobs || []).filter(function (m) { return m.ty === ty && !m.child && !m.dead; }).length; };
+            let cnt = function (ty) { return (ind.mobs || []).filter(function (m) { return m.ty === ty && !m.child && !m.dead && !m.tame; }).length; };
             if (kind === 'boar' && cnt('boar') >= MB.boarMax) return null;   // 任务 84：野猪同时最多 2 只、史莱姆夜里 3 只洞里 4 只、洞里火苗仔 2 只、蜜蜂 4 只
-            if (kind.indexOf('slime') === 0 && cnt('slime') >= (cave ? MB.slimeCave : MB.slimeMax)) return null;
+            if (kind === 'slime:tame' && (ind.mobs || []).filter(function (m) { return m.tame && !m.dead; }).length >= MB.tameMax) return null;
+            if (kind.indexOf('slime') === 0 && kind !== 'slime:tame' && cnt('slime') >= (cave ? MB.slimeCave : MB.slimeMax)) return null;
             if (kind === 'flame' && cave && cnt('flame') >= MB.flameCave) return null;
             if (kind === 'bee') { let k = Math.min(MB.beeGroup, MB.cap - n, MB.beeMax - cnt('bee')), out = []; if (k <= 0) return null; for (let i = 0; i < k; i++) out.push(mbNew('bee', x + i * 0.8, z + (i % 2) * 0.7)); return out[0]; }
             return mbNew(kind, x, z);
@@ -213,9 +217,10 @@
                 m.cd = Math.max(0, m.cd - dt); m.shake = Math.max(0, m.shake - dt);
                 if (m.poison > 0) { m.poison -= dt; m.pt = (m.pt || 0) + dt; if (m.pt >= 1) { m.pt -= 1; mbDamage(m, 1, true); } }
                 if (m.dead) return;
+                if (m.tame && indIsNight()) { m.dead = true; mbDrop(m); return; }   // 夜里温顺的小史莱姆消失
                 if (m.ty === 'flame') { mbFlameTick(m, dt); if (m.dead) return; }
                 let best = null, bd = 1e9; tg.forEach(function (t) { let d = Math.hypot(t.x - m.x, t.z - m.z); if (d < bd) { bd = d; best = t; } });
-                if (!m.aggro && bd <= MB.see) m.aggro = true; else if (m.aggro && bd > MB.lose) m.aggro = false;
+                if (!m.aggro && !m.tame && bd <= MB.see) m.aggro = true; else if (m.aggro && bd > MB.lose) m.aggro = false;
                 let slow = (ind.glue || []).some(function (g) { return Math.hypot(g.x - m.x, g.z - m.z) <= MB.glueR; }) ? MB.glueSlow : 1;
                 let mv = function (tx, tz, sp) { let dx = tx - m.x, dz = tz - m.z, d = Math.hypot(dx, dz); if (d < 0.05) return; let s = Math.min(d, sp * slow * dt); m.x += dx / d * s; m.z += dz / d * s; m.ry = Math.atan2(dx, dz); };
                 if (m.st === 'rest' || m.st === 'away') { m.stT -= dt; if (m.st === 'away' && best) mv(m.x + (m.x - best.x), m.z + (m.z - best.z), T.sp); if (m.stT <= 0) m.st = ''; return; }
@@ -274,6 +279,7 @@
         function mbDamage(m, n, poison) {
             if (m.dead) return;
             if (m.ty === 'flame') { m.shake = 0.3; return; }   // 火苗仔打不死，只抖一下
+            if (m.tame) m.aggro = true;   // 温顺的被打了才会蹭
             m.hp -= n; m.shake = 0.3;
             if (m.hp > 0) return;
             m.dead = true; mbDrop(m);
@@ -281,7 +287,7 @@
             (ind.mbDead = ind.mbDead || {})[mbCellKey(m.x, m.z)] = ind.t;
             let G = ind.tripGround = ind.tripGround || [], put = function (k, n) { for (let i = 0; i < n; i++) G.push({ k: k, x: m.x + (indRand() - 0.5), z: m.z + (indRand() - 0.5) }); };
             let r = function (a, b) { return a + Math.floor(indRand() * (b - a + 1)); };
-            if (m.ty === 'slime') put('goo', r(0, 2));
+            if (m.ty === 'slime') put('goo', m.tame ? 1 : r(0, 2));
             else if (m.ty === 'mush') { put('shroom', r(0, 2)); if (indRand() < 0.15) put('shroom_bad', 1); }
             else if (m.ty === 'cloud') put('fluff', r(0, 1));
             else if (m.ty === 'cactus') put('cactus', 1);
