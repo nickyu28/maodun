@@ -12048,6 +12048,35 @@ async function enterExit(tab, key) {
             report('H10 信号接收器蓝线：5 张图各 80 次能找到能走到、点不进墙、换层更新、重算不涨、诅咒藏起来', bad.length === 0 && A.errors.length === before, bad.length ? bad.join(' / ') + A.errors.slice(before, before + 2).join(' / ') : out.join(' | '));
         }
 
+        if (want('IND119')) {
+            // IND119 铁锭和槽（任务 85）：硬核无槽／砖槽／铁槽／耐火砖槽四种炉子炼铁，锭都留在炉膛或进槽、炉火灭了能直接取；从零做第一个铁锭、第一个铁槽没有循环；面板写铁锭留在炉膛里
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                for (const sp of ['null', "'brick'", "'iron'", "'fire'"]) {
+                    const r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; ind.bag = {}; indPanelClose();
+                        B.stove = Object.assign(ckNewState(), { items: { ore_fe: 1, charcoal: 1 }, fuel: 9000, fire: 4, bellows: true, blow: 1e6, temp: 1700, spout: [], spoutTy: ${sp} }); ind.cookId = 'stove'; indAdvance(40);
+                        let S = B.stove, hot = (S.out.hot_fe || 0) + S.spout.filter(function (e) { return e.k === 'hot_fe'; }).length, ing = (S.out.ingot_fe || 0) + S.spout.filter(function (e) { return e.k === 'ingot_fe'; }).length;
+                        S.fire = 0; S.fuel = 0; S.temp = 100; indAdvance(130); indStoveTakeAll(); let took = ind.bag.ingot_fe || 0;
+                        if (!took) { let c = indCookCur(); S.spout.forEach(function (e) { e.t = 0; }); indSpoutTake(c); took = ind.bag.ingot_fe || 0; }
+                        return { made: hot + ing, took: took, left: JSON.stringify(S.out) + JSON.stringify(S.spout) }; })()`);
+                    if (!(r.made === 1 && r.took === 1)) bad.push('spoutTy=' + sp + ' 炼出铁锭取不出来 ' + JSON.stringify(r));
+                }
+                let r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; ind.bag = {}; B.stove = Object.assign(ckNewState(), { spoutTy: 'iron' }); ind.cookId = 'stove'; let S = B.stove;
+                    S.out = { hot_fe: 1 }; indPanelStove(); let t = document.getElementById('ind-panel') ? document.getElementById('ind-panel').textContent : '';
+                    let sp = IND_ITEMS.spout_iron.use + IND_ITEMS.spout_brick.use, mk = IND_CRAFT.filter(function (q) { return q.out === 'spout_iron'; })[0];
+                    return { t: t, sp: sp, need: Object.keys(mk.in).join(), tongs: JSON.stringify(IND_CRAFT.filter(function (q) { return q.out === 'tongs'; })[0].in) }; })()`);
+                if (!(/ingot_fe/.test(r.need) && !/steel/.test(r.need) && !/ingot_fe|iron|spout/.test(r.tongs))) bad.push('配方绕回 ' + JSON.stringify(r));
+                if (!/槽接不住，留在炉膛里/.test(r.t)) bad.push('面板没写铁锭留在炉膛里 ' + r.t.slice(0, 200));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND119 铁锭和槽：四种炉子炼铁锭都取得出来、配方没有循环、面板写锭留在炉膛', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
