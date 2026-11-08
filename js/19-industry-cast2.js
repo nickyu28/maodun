@@ -13,7 +13,7 @@
                 Object.keys(TIER).forEach(function (m) {
                     let k = 'part_' + s + '_' + m;
                     add[k] = { name: CT_METAL[m].n + S.n, col: m === 'steel' ? 0x90a4ae : 0x757575, use: '工作台装成' + CT_METAL[m].n + '的工具' };
-                    IND_CRAFT.push({ out: S.tool + TIER[m], in: s === 'shears' ? { [k]: 1, rope: 1 } : { [k]: 1, handle: 1 }, hard: true });
+                    IND_CRAFT.push({ out: S.tool + TIER[m], in: s === 'shears' ? { [k]: 1, rope: 1 } : s === 'pick' && m === 'steel' ? { [k]: 1, pick_iron: 1 } : { [k]: 1, handle: 1 }, hard: true });   // 任务 101：钢镐 = 钢镐头 + 铁镐（换头，铁镐用掉），不能跳级
                 });
             });
             Object.assign(IND_ITEMS_RAW, add);

@@ -12370,6 +12370,28 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND129 雕模具校准：红白灰区、眩晕不能动、连续失败 3 次碎、命中率定耐久、空格和点圈', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND130')) {
+            // IND130 钢镐要铁镐（任务 101）：钢镐头 + 铁镐才能做，铁镐用掉、钢镐满耐久；没铁镐（有钢镐头、木柄）做不了；钢的斧铲剪刀不受限；老存档里的钢镐不动
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.dura = {}; B.repQ = {}; B.repCur = {};
+                    let idx = IND_CRAFT.findIndex(function (q) { return q.out === 'pick_steel' && q.in.part_pick_steel; }), rc = IND_CRAFT[idx];
+                    ind.bag = { part_pick_steel: 1, handle: 2, wood: 3 }; indCraft(idx); let no = !ind.bag.pick_steel;
+                    ind.bag = { part_pick_steel: 1, pick_iron: 1 }; B.dura.pick_iron = 17; indCraft(idx); let yes = ind.bag.pick_steel === 1 && !ind.bag.pick_iron && !ind.bag.part_pick_steel, dura = mbDura('pick_steel');
+                    let others = ['axe', 'shovel'].map(function (kind) { ind.bag = { ['part_' + kind + '_steel']: 1, handle: 1 }; indCraft(IND_CRAFT.findIndex(function (q) { return q.out === kind + '_steel' && q.in['part_' + kind + '_steel']; })); return ind.bag[kind + '_steel'] === 1; });
+                    ind.bag = { part_shears_steel: 1, rope: 1 }; indCraft(IND_CRAFT.findIndex(function (q) { return q.out === 'shears_steel' && q.in.part_shears_steel; })); others.push(ind.bag.shears_steel === 1);
+                    let old = indFixBase({ ver: 12, rule: 'hard', bag: { pick_steel: 1 } }); return { in: JSON.stringify(rc.in), no: no, yes: yes, dura: dura, max: mbMax0('pick_steel'), others: others.join(), old: old.bag.pick_steel }; })()`);
+                if (!(r.in === '{"part_pick_steel":1,"pick_iron":1}' && r.no && r.yes && r.dura === r.max && r.others === 'true,true,true' && r.old === 1)) bad.push('钢镐 = 钢镐头 + 铁镐；没铁镐不行；满耐久；斧铲剪刀不受限；老存档不动 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND130 钢镐要铁镐：钢镐头 + 铁镐、没铁镐不行、满耐久、斧铲剪不受限', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
