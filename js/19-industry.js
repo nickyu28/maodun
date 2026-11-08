@@ -1701,7 +1701,7 @@
             if (c.C.bellows) { indFlash(IND_COOK[c.ty].name + '已经装了风箱'); return false; }
             if (fmHasBlower(c)) { indFlash(IND_COOK[c.ty].name + '旁边有电动鼓风机了，风箱和鼓风机只能装一个'); return false; }
             indBagDel('bellows', 1); c.C.bellows = true; indSave();
-            indFlash('风箱装好了，' + IND_COOK[c.ty].name + '多了一档「鼓风」：开着鼓风，站在旁边按住右键拉');
+            indFlash('风箱装好了：' + IND_COOK[c.ty].name + '烧着时对着它点右键拉，每下 +10°C');
             return true;
         }
         // 铃铛：拿着左键摇，30 米内跟着你的动物、基地里的动物都走到你身边
@@ -1787,7 +1787,7 @@
             { let aa = indAim(); if (aa && aa.kind === 'animal' && (mbPetUse(aa.o, indSel()) || mbBark(aa.o))) return; }   // 右键狗猫：装刀盾、喂水，不然就叫一声
             if (fmPullDown(indAim())) return;   // 拉风箱、扇扇子（任务 44）：要在"按住收起炉子"前面
             let f = ind.ride ? null : indFurnOf(indAim());   // 骑着不能搬东西
-            if (f) { ind.rh = { f: f, t: 0, done: false }; return; }
+            if (f) { ind.rh = { f: f, t: 0, done: false, pump: fmPumpCook(indAim()) }; return; }   // 装了风箱的烧着的炉子：短按是拉风箱（任务 114），长按还是收起
             if (!ind.ride && pwCrankDown(indAim())) return;   // 手摇发电机：按住右键摇（19-industry-power.js）
             if (indSel() === 'cactus') { wdPeelStart(); return; }   // 选中仙人掌点一下右键开始拔刺（R 键是生吃）
             if (trTap(indAim())) return;   // 松树割松脂、橡胶树割胶（19-industry-tree.js）
@@ -1800,6 +1800,7 @@
             if (ind && ind.ch && ind.ch.right) { let quick = ind.ch.t < 0.25; ind.ch = null; if (quick) indUse(); return; }
             if (!ind || !ind.rh) return;
             let rh = ind.rh; ind.rh = null;
+            if (!rh.done && rh.pump && fmPump(rh.pump)) return;   // 短按：拉一下风箱
             if (!rh.done) indUse();
         }
         function indRightHoldTick(dt) {
@@ -3022,7 +3023,9 @@
                 if (S.fuel <= 0) { S.fuel = 0; S.fire = 0; if (ind.panel === 'stove') ind.panelDirty = true; }
             }
             let target = Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20);
-            if (S.temp < target) S.temp = Math.min(target, S.temp + K.rate * dt); else S.temp = Math.max(target, S.temp - (S.fire > 0 ? K.rate : Math.min(K.rate, 10)) * dt);
+            if (S.temp < target) S.temp = Math.min(target, S.temp + K.rate * dt); else S.temp = Math.max(target, S.temp - (S.fire > 0 ? (S.bellows && S.pumpT !== undefined ? FM_PUMP.decay : K.rate) : Math.min(K.rate, 10)) * dt);   // 风箱拉上去的温度慢慢掉回火候（任务 114）
+            if (S.pumpT !== undefined && S.temp <= target) delete S.pumpT;
+            if (S.flare > 0) S.flare = Math.max(0, S.flare - dt);
             if (ind.where === 'base') {   // 钢瓶放在炉子上就是炉子的温度：压力超过 100 个大气压，或者氢气氧气混装超过 500°C，就炸
                 let boomR = 0;
                 Object.keys(S.items).forEach(function (k) {
@@ -3456,14 +3459,16 @@
         }
         function indStoveHtml() {
             let c = indCookCur(), S = c.C, D = IND_COOK[c.ty], F = indFireDef(c.ty, S.fire);
-            let sn = stkN(S), st = (sn > 1 ? '<b>×' + sn + '（' + sn + ' 台叠在一起）</b><br>' : '') + '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + (sn > 1 ? '　每秒烧 ×' + sn : '') + '<br>';
-            if (S.fire === 4 && !S.blow && !fmBlowerOn(c)) st += '<br><span style="color:#888">鼓风要有人拉风箱，或者装电动鼓风机　实际：大火</span>';
+            let sn = stkN(S), st = fiPanelLine(S) + (sn > 1 ? '<b>×' + sn + '（' + sn + ' 台叠在一起）</b><br>' : '') + '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + (sn > 1 ? '　每秒烧 ×' + sn : '') + '<br>';
+            if (S.fire === 4 && !S.blow && !fmBlowerOn(c)) st += '<br><span style="color:#888">鼓风要装电动鼓风机　实际：大火</span>';
+            if (S.bellows) st += '<span style="color:#888">装了风箱：烧着时对着炉子右键拉风箱，每下 +10°C（最高 1600°C）</span><br>';
             { let eta = indHeatEta(c); if (eta) st += '<br><span style="color:#888">现在 ' + Math.round(S.temp) + '°C，升到 ' + eta.t + '°C 约要 ' + eta.s + ' 秒</span>'; }   // 升温估计（任务 71）
             if (S.cook) { let r = IND_RECIPES[S.cook.i]; st += '正在做：' + indOutTxt(r, S.cook.n || 1) + (S.cook.n > 1 ? '（' + S.cook.n + ' 份）' : '') + ' ' + Math.floor(S.cook.t / r.time * 100) + '%'; }
             else st += '<span style="color:#888">原料放够、温度到了就自己开始做' + (D.only ? '（只做冶炼）' : '') + '</span>';
             if (!S.cook && indHard() && rlNeedReducer(S)) st += '<br><b style="color:#c62828">炼矿要加木炭、煤或焦炭（每份矿 1 份）</b>';
-            let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !S.bellows && !fmHasBlower(c)) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
-            if (fiOn() && !(S.fire > 0)) fire = '<div style="color:#c62828;font-size:13px;">先点火</div><span style="opacity:.4;pointer-events:none;">' + fire + '</span>';   // 硬核灭着：火候按钮灰的
+            // 鼓风档只给电动鼓风机（风箱改成右键拉，任务 114；老存档开着鼓风档的照样显示）
+            let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !fmHasBlower(c) && !(S.bellows && S.fire === 4)) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
+            if (fiOn() && !(S.fire > 0)) fire = '<div style="color:#c62828;font-size:13px;">灭了，要先点火</div><span style="opacity:.4;pointer-events:none;">' + fire + '</span>';   // 硬核灭着：火候按钮灰的，"点火"按钮在面板顶上（任务 113）
             fire += '<button id="ind-stove-off" style="' + IND_BTN + 'background:#455a64;" onclick="indStoveFire(0)">熄火并降温</button>' + (S.temp > 60 ? '<div style="font-size:13px;color:#888;">降到 60°C 还要约 ' + indFurnCoolSecs(c.ty, S) + ' 秒（收起要 60°C 以下）</div>' : '');
             let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k] && IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
             let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';
@@ -3645,7 +3650,7 @@
             else if (a && a.kind === 'tile') hint = '空农田<br><small>拿种子，左键：种　长按右键：收回</small>';
             else if (a && a.kind === 'funnel') hint = CK_FUNNEL[a.o.C.funnel.ty].name + '　油 ' + Math.round(a.o.C.funnel.oil) + ' / ' + CK.funnelCap + '<br><small>拿装了油的桶右键：倒进去　长按右键：收起（空的才行）</small>';
             else if (a && a.kind === 'spout') hint = ckSpoutDef(a.o.C).name + ' ' + (a.o.C.spout.length ? indSpoutTxt(a.o) : '空') + '<br><small>左键：取出（烫的要钳子）　拿水桶右键：浇凉</small>';
-            else if (a && a.kind === 'cook') hint = IND_COOK[a.o.ty].name + ' ' + Math.round(a.o.temp) + '°C' + (a.o.temp > 60 && !a.o.fire ? '　降到 60°C 还要约 ' + indFurnCoolSecs(a.o.ty, a.o) + ' 秒' : '') + '<br><small>左键：打开</small>';
+            else if (a && a.kind === 'cook') hint = IND_COOK[a.o.ty].name + ' ' + Math.round(a.o.temp) + '°C' + (a.o.temp > 60 && !a.o.fire ? '　降到 60°C 还要约 ' + indFurnCoolSecs(a.o.ty, a.o) + ' 秒' : '') + '<br><small>左键：打开' + fmPumpHint(a) + '</small>';
             else if (a && a.kind === 'dev') { let D = IND_DEVS[a.o.ty]; hint = indDevInfo(a.o) + '<br><small>' + (sel === 'wire' ? '左键：接线　' : sel === 'pipe' ? '左键：接管道（先水源再目的地）　' : a.o.ty === 'bank' ? '拿电池左键：装一节　右键：选放几个　' : (!D.src && !D.nowire && !D.always) ? '左键：开关　' : '') + '右键：收起</small>'; }
             else if (a && a.kind === 'animal') {
                 let o = a.o, D = IND_ANIMALS[o.k];
@@ -3653,7 +3658,7 @@
                 else hint = D.name + indAnimalState(o) + '　饱食 ' + Math.round(o.food) + (o.k === 'sheep' ? '　' + (R.base.clock >= o.woolAt ? '能剪毛了' : '毛还要 ' + Math.ceil(o.woolAt - R.base.clock) + ' 秒') : o.k === 'cow' ? '　' + (R.base.clock >= o.milkAt ? '能挤奶了' : '奶还要 ' + Math.ceil(o.milkAt - R.base.clock) + ' 秒') : '') + '<br><small>左键：' + (o.k === 'sheep' ? '喂／拿剪刀剪毛' : o.k === 'cow' ? '喂／拿空桶挤奶' : '喂') + '</small>';
             }
             else if (a && a.kind === 'chest') hint = '仓库箱' + (a.o.big ? '' : '（' + indSlotsOf(a.o.items) + '/' + IND_CHEST_SLOTS + ' 格）') + '<br><small>左键：打开　长按右键：收起</small>';
-            else if (a && a.kind === 'stove') hint = '灶台 ' + Math.round(R.base.stove.temp) + '°C<br><small>左键：打开</small>';
+            else if (a && a.kind === 'stove') hint = '灶台 ' + Math.round(R.base.stove.temp) + '°C<br><small>左键：打开' + fmPumpHint(a) + '</small>';
             else if (a && a.kind === 'bed') hint = '床<br><small>左键：睡觉（夜里或累了）</small>';
             else if (a && a.kind === 'pool') hint = '水池　' + (Math.round(plW() * 10) / 10) + ' / ' + plCap() + ' 桶';
             else if (R.where === 'base' && sel && IND_ITEMS[sel].seed && indInField(R.p.x + indFace().x * 1.4, R.p.z + indFace().z * 1.4)) hint = '左键：种' + indName(sel);

@@ -119,7 +119,7 @@
         // 扇子：手里拿着按住右键。对着点着的炉子（3 米内）扇，目标 1400°C；不对着炉子是扇自己，体温往 37°C 拉（每秒 0.3°C）。没体力就停
         const FM_PULL = { near: 3, grace: 0.3, bellows: 3, fanCook: 4, fanSelf: 2, fanT: 1400, selfRate: 0.3 };
         Object.assign(IND_ITEMS_RAW, { fan: { name: '扇子', col: 0xdce775, use: '按住右键扇：对着点着的炉子扇到 1400°C；不对着炉子是扇自己，热了凉快、冷了也往舒服拉（吃体力）' } });
-        IND_ITEMS_RAW.bellows.use = '装在炉子上多一档「鼓风」，要人站在旁边按住右键拉才到 1600°C，松手掉回大火（吃体力）';
+        IND_ITEMS_RAW.bellows.use = '装在炉子上。炉子烧着时对着它点右键拉一下，炉温 +10°C，最高 1600°C（每下吃 2 体力）';
         IND_CRAFT.push({ out: 'fan', in: { grass: 6, rope: 2, wood: 1 }, hard: true });
         function fmBlowerOn(c) { return typeof fmBlowerPw === 'function' && fmBlowerPw(c); }   // 电动鼓风机（任务 51）
         // 这一帧炉子实际按哪档烧：鼓风档没人拉、也没电动鼓风机，就按大火；扇子扇着的炉子目标 1400
@@ -135,8 +135,24 @@
         function fmPullDown(a) {
             let k = indSel(), c = fmCookOfAim(a);
             if (k === 'fan') { ind.pull = { c: c && c.C.fire > 0 ? c.id : null, fan: true, t: 0 }; return true; }
-            if (c && c.C.bellows && c.C.fire === 4) { ind.pull = { c: c.id, fan: false, t: 0 }; return true; }
             return false;
+        }
+        // 任务 114：风箱改成一下一下点右键拉。烧着的炉子装了风箱：短按右键一下炉温 +10°C，最高 1600°C，每下吃 2 体力，两下之间不设间隔。
+        // 长按 1 秒还是收起炉子（短按、长按在 indRightUp 里分开）。停手后按 FM_PUMP.decay 每秒往当前火候的目标温度掉。
+        const FM_PUMP = { dT: 10, max: 1600, stam: 2, decay: 5 };
+        function fmPumpCook(a) { let c = fmCookOfAim(a); return c && c.C.bellows && c.C.fire > 0 ? c : null; }
+        function fmPumpHint(a) {   // 准星提示（任务 114）：烧着的炉子装了风箱写"右键：拉风箱"，没装写"要装风箱"（硬核才有风箱）
+            let c = fmCookOfAim(a); if (!c || !indHard() || !(c.C.fire > 0) || fmHasBlower(c)) return '';
+            return c.C.bellows ? '　右键：拉风箱 +10°C' : '　拉风箱要装风箱';
+        }
+        function fmPump(c) {
+            if (!c || !c.C.bellows || !(c.C.fire > 0)) return false;
+            if (ind.stam < FM_PUMP.stam) { indFlash('没力气了'); return true; }
+            let S = c.C; ind.stam = Math.max(0, ind.stam - FM_PUMP.stam);
+            if (S.temp < FM_PUMP.max) S.temp = Math.min(FM_PUMP.max, S.temp + FM_PUMP.dT);
+            S.pumpT = ind.t; S.flare = 0.25;   // 炉口火苗亮一下（有就画）
+            if (ind.panel === 'stove') ind.panelDirty = true;
+            return true;
         }
         function fmPullUp() { if (!ind || !ind.pull) return false; ind.pull = null; ind.effort = 0; return true; }
         function fmPullTick(dt) {

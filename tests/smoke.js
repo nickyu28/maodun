@@ -9761,11 +9761,9 @@ async function enterExit(tab, key) {
                 await T.eval(setup + '; true;');
                 let r = await J(`(function(){ ind.bag = {}; indAdvance(10); return ind.base.stove.temp; })()`);
                 if (!(r <= 1200.5)) bad.push('不拉风箱上不去 1600（应该停在大火 1200） ' + r);
-                // 按住右键拉（一帧一帧走，跟真的按着一样）
-                r = await J(`(function(){ let a = indAim(); indRightDown(); let s0 = ind.stam; for (let i = 0; i < 100; i++) indAdvance(0.05); let t1 = ind.base.stove.temp, s1 = ind.stam; indRightUp(); for (let i = 0; i < 200; i++) indAdvance(0.05); return { aim: a && a.kind, t1: t1, s0: s0, s1: s1, t2: ind.base.stove.temp, pull: !!ind.pull }; })()`);
-                if (!(r.aim === 'stove' && r.t1 > 1390 && r.t1 <= 1600)) bad.push('按住右键拉风箱温度往 1600 升（5 秒 +250） ' + JSON.stringify(r));
-                if (!(r.s1 < r.s0 - 10)) bad.push('拉风箱掉体力 ' + JSON.stringify(r));
-                if (!(r.t2 <= 1200.5 && !r.pull)) bad.push('松手掉回大火 ' + JSON.stringify(r));
+                // 任务 114 起风箱改成点右键拉一下 +10°C（细节在 IND134）：这里只看点一下涨、体力掉
+                r = await J(`(function(){ let a = indAim(); let t0 = ind.base.stove.temp, s0 = ind.stam; indRightDown(); indRightUp(); return { aim: a && a.kind, t0: t0, t1: ind.base.stove.temp, s0: s0, s1: ind.stam }; })()`);
+                if (!(r.aim === 'stove' && Math.abs(r.t1 - r.t0 - 10) < 0.01 && Math.abs(r.s0 - r.s1 - 2) < 0.01)) bad.push('点一下右键拉风箱 +10°C、吃 2 体力 ' + JSON.stringify(r));
                 // 扇子：对着大火的炉子扇，到 1400 不到 1600
                 await T.eval(setup + '; ind.base.stove.fire = 3; true;');
                 r = await J(`(function(){ ind.bag = { fan: 1 }; indSelect('fan'); indRightDown(); let s0 = ind.stam; for (let i = 0; i < 300; i++) { ind.stam = Math.max(ind.stam, 50); indAdvance(0.05); } let t = ind.base.stove.temp; indRightUp(); return { t: t, fanned: !!ind.base.stove.fan || t > 1200 }; })()`);
@@ -9776,13 +9774,13 @@ async function enterExit(tab, key) {
                 // 配方：风箱要皮（或人造革），扇子
                 const rc = await J(`[IND_CRAFT.filter(function (x) { return x.out === 'bellows'; }).map(function (x) { return x.in; }), IND_CRAFT.find(function (x) { return x.out === 'fan'; }).in]`);
                 if (!(rc[0].length === 2 && rc[0][0].hide === 2 && rc[0][1].pleather === 2 && !rc[0][0].steel && JSON.stringify(rc[1]) === JSON.stringify({ grass: 6, rope: 2, wood: 1 }))) bad.push('风箱（皮／人造革）和扇子的配方 ' + JSON.stringify(rc));
-                // 老档：装了风箱、鼓风档的炉子读档不报错，还是鼓风档（要人拉）
+                // 老档：装了风箱、鼓风档的炉子读档不报错（照常读，按大火烧，任务 114）
                 r = await J(`(function(){ let b = indFixBase({ ver: 11, rule: 'hard', stove: { items: {}, out: {}, fuel: 50, fire: 4, bellows: true, temp: 1500 } }); return [b.stove.fire, b.stove.bellows]; })()`);
                 if (r.join() !== '4,true') bad.push('老档风箱 ' + r.join());
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND69 风箱要人拉：不拉停在大火、按住右键拉到 1600、松手掉回、拉掉体力、扇子扇炉子 1400、扇自己体温往 37、配方要皮', bad.length === 0, bad.join(' / '));
+            report('IND69 风箱要人拉：不拉停在大火、点右键拉 +10、拉掉体力、扇子扇炉子 1400、扇自己体温往 37、配方要皮', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND70')) {
@@ -10868,8 +10866,8 @@ async function enterExit(tab, key) {
                     ${body} } finally { blazeFlash = bf; } })()`);
                 // 灭着的点不着、面板写先点火；火种点着（小火）、用掉；然后按钮能调；没柴先放柴
                 let r = await run(`indStoveFire(3); let f0 = B.stove.fire, html = indStoveHtml(); ind.bag = { ember: 1 }; indSelect('ember'); let lit = fiLightCook(st); let f1 = B.stove.fire; indStoveFire(3); let f3 = B.stove.fire;
-                    B.stove = ckNewState(); B.stove.fuel = 0; ind.bag = { match: 2 }; indSelect('match'); fiLightCook(st); return { f0: f0, html: /先点火/.test(html), lit: lit, f1: f1, f3: f3, ember: ind.bag.ember || 0, nofuel: B.stove.fire, match: ind.bag.match, fl: fl.join('|') };`);
-                if (!(r.f0 === 0 && r.html && r.lit === true && r.f1 === 1 && r.f3 === 3 && r.ember === 0 && r.nofuel === 0 && r.match === 2 && /先放柴/.test(r.fl) && /先点火/.test(r.fl))) bad.push('灭着点不着、火种点着、没柴先放柴 ' + JSON.stringify(r));
+                    B.stove = ckNewState(); B.stove.fuel = 0; ind.bag = { match: 2 }; indSelect('match'); let nf = fiLightCook(st); return { f0: f0, html: /先点火/.test(html), lit: lit, f1: f1, f3: f3, ember: ind.bag.ember || 0, nofuel: B.stove.fire, nf: nf, match: ind.bag.match, fl: fl.join('|') };`);
+                if (!(r.f0 === 0 && r.html && r.lit === true && r.f1 === 1 && r.f3 === 3 && r.ember === 0 && r.nofuel === 0 && r.nf === false && r.match === 2 && /先点火/.test(r.fl))) bad.push('灭着点不着、火种点着、没柴不吃左键（任务 113 起照样开面板） ' + JSON.stringify(r));
                 // 火柴一根一次；打火机没油点不着、拿石油桶加满 50 次；打火石要铁锭和引火物、90%（200 次 ±15%）
                 r = await run(`ind.bag = { match: 2 }; indSelect('match'); fiLightCook(st); let m = { fire: B.stove.fire, left: ind.bag.match };
                     B.stove = ckNewState(); B.stove.fuel = 300; ind.bag = { lighter: 1, oil: 1 }; indSelect('lighter'); fiLightCook(st); let l0 = B.stove.fire; indUse(); let n = ind.base.lighterN; fiLightCook(st); let l1 = B.stove.fire;
@@ -12417,6 +12415,75 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND132 箱子多选：点选、取消、一次整堆放进去拿出来、放不下留在原地并提示', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND133')) {
+            // IND133 炉子降温时左键能开面板、中途重新点火（任务 113，硬核）：灭着降到 300°C、拿火柴没柴，左键开面板写"没柴，点不着"；有柴左键点着，从 300 往上走、正在烧的进度不清零；
+            // 面板里"点火"按钮（用背包里的火源）；60°C 以下照样当冷炉点；没拿火源左键也开面板；悠闲不受影响
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); IND_FIRE_FREE = false; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; indPanelClose(); ind.torchT = 0; B.lighterN = 0; B.emberAt = [];
+                    let St = IND_BASE_ST.stove; B.off.stove = false; B.stove = Object.assign(ckNewState(), { spout: [], fuel: 0, fire: 0, temp: 300 }); indTeleport(St.x, St.z + 2.6); indLookAt(St.x, St.z); ind.cookId = 'stove';
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`ind.bag = { match: 1 }; indSelect('match'); let aim = indAim(); indAction(); let p = ind.panel, html = document.getElementById('ind-panel') ? document.getElementById('ind-panel').innerHTML : ''; return { aim: aim && aim.kind, p: p, nofuel: /没柴，点不着/.test(html), m: ind.bag.match, fire: B.stove.fire, fl: fl.join('|') };`);
+                if (!(r.aim === 'stove' && r.p === 'stove' && r.nofuel && r.m === 1 && r.fire === 0 && !/先放柴/.test(r.fl))) bad.push('降温 300°C、拿火柴没柴：左键开面板写"没柴，点不着"、不用掉火柴 ' + JSON.stringify(r));
+                r = await run(`let ri = IND_RECIPES.findIndex(function (x) { return x.minT > 0 && x.minT <= 280 && x.time > 5 && Object.keys(x.in).every(function (k) { return IND_ITEMS_RAW[k] && !IND_ITEMS_RAW[k].cont; }); });
+                    let rr = IND_RECIPES[ri]; B.stove.items = Object.assign({}, rr.in); B.stove.fuel = 300; B.stove.cook = { i: ri, t: 2, burn: 0, n: 1 };
+                    ind.bag = { match: 1 }; indSelect('match'); indAction(); let lit = { fire: B.stove.fire, t: B.stove.temp, ck: B.stove.cook && B.stove.cook.t, p: ind.panel, m: ind.bag.match || 0 };
+                    indAdvance(1); return { ri: ri, lit: lit, t1: B.stove.temp, ck1: B.stove.cook && B.stove.cook.t };`);
+                if (!(r.ri >= 0 && r.lit.fire >= 2 && r.lit.t === 300 && r.lit.ck === 2 && r.lit.m === 0 && !r.lit.p && r.t1 > 330 && r.ck1 > 2.5)) bad.push('有柴左键点着：从 300°C 往上走、进度不清零 ' + JSON.stringify(r));
+                r = await run(`B.stove.fuel = 300; ind.bag = { stone: 1, match: 1 }; indSelect('stone'); indAction(); let p = ind.panel; let btn = document.getElementById('ind-stove-light'), gray = /灭了，要先点火/.test(document.getElementById('ind-panel').innerHTML);
+                    if (btn) btn.click(); return { p: p, btn: !!btn, gray: gray, fire: B.stove.fire, m: ind.bag.match || 0, t: B.stove.temp };`);
+                if (!(r.p === 'stove' && r.btn && r.gray && r.fire >= 2 && r.m === 0 && r.t === 300)) bad.push('没拿火源左键也开面板、面板"点火"按钮用背包里的火柴点着 ' + JSON.stringify(r));
+                r = await run(`B.stove.fuel = 300; ind.bag = { stone: 1 }; indSelect('stone'); indPanelStove('stove'); fiPanelLight(); return { fire: B.stove.fire, fl: fl.join('|') };`);
+                if (!(r.fire === 0 && /火种、火柴/.test(r.fl))) bad.push('背包里没火源点不着并提示 ' + JSON.stringify(r));
+                r = await run(`B.stove.fuel = 300; B.stove.temp = 40; ind.bag = { match: 1 }; indSelect('match'); indAction(); return { fire: B.stove.fire, p: ind.panel };`);
+                if (!(r.fire === 1 && !r.p)) bad.push('60°C 以下当冷炉：拿火柴左键点着小火 ' + JSON.stringify(r));
+                r = await run(`B.rule = 'casual'; B.stove.fuel = 300; ind.bag = { match: 1 }; indSelect('match'); indAction(); let p = ind.panel; B.rule = 'hard'; return { p: p, fire: B.stove.fire };`);
+                if (!(r.p === 'stove' && r.fire === 0)) bad.push('悠闲左键开面板照旧 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND133 炉子降温时左键能开面板、没柴不吃左键、中途重新点火从当前温度往上走、面板点火按钮', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND134')) {
+            // IND134 风箱改右键拉（任务 114，硬核）：装风箱的中火炉子 600°C 点一下 610；连点 10 下 +100；点到 1600 不再涨；停手掉回中火 600；灭着、没装风箱右键不变；
+            // 长按 1 秒收起、不拉；每下 −2 体力、体力不够拉不动；老存档 fire === 4 读档不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; indPanelClose(); ind.bag = {}; ind.rh = null; ind.pull = null;
+                    let St = IND_BASE_ST.stove; B.off.stove = false; B.stove = Object.assign(ckNewState(), { spout: [], fuel: 99999, fire: 2, temp: 600, bellows: true }); indTeleport(St.x, St.z + 2.6); indLookAt(St.x, St.z); ind.stam = 100;
+                    let click = function () { indRightDown(); indRightUp(); };
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`click(); let one = B.stove.temp, s1 = ind.stam; for (let i = 0; i < 10; i++) click(); return { one: one, s1: s1, ten: B.stove.temp, s: ind.stam, hint: document.getElementById('ind-hint') ? document.getElementById('ind-hint').innerHTML : '' };`);
+                if (!(r.one === 610 && r.s1 === 98 && r.ten === 710 && r.s === 78)) bad.push('点一下 +10°C、−2 体力，连点 10 下 +100 ' + JSON.stringify(r));
+                r = await run(`B.stove.temp = 1580; for (let i = 0; i < 5; i++) { ind.stam = 100; click(); } let top = B.stove.temp; for (let i = 0; i < 400; i++) indAdvance(0.5); return { top: top, back: B.stove.temp, carried: !B.off.stove };`);
+                if (!(r.top === 1600 && Math.abs(r.back - 600) < 1)) bad.push('到 1600 不再涨，停手掉回中火 600 ' + JSON.stringify(r));
+                r = await run(`click(); let a = B.stove.temp; indAdvance(1); let b = B.stove.temp; return { a: a, b: b };`);
+                if (!(r.a === 610 && r.b > 600 && r.b < 610)) bad.push('拉上去的温度慢慢掉（不是一下掉回） ' + JSON.stringify(r));
+                r = await run(`B.stove.fire = 0; B.stove.temp = 500; click(); let off = B.stove.temp; B.stove.fire = 2; B.stove.temp = 600; B.stove.bellows = false; click(); return { off: off, nob: B.stove.temp, s: ind.stam };`);
+                if (!(r.off === 500 && r.nob === 600 && r.s === 100)) bad.push('灭着、没装风箱右键不拉 ' + JSON.stringify(r));
+                r = await run(`ind.stam = 1; click(); return { t: B.stove.temp, fl: fl.join('|') };`);
+                if (!(r.t === 600 && /没力气/.test(r.fl))) bad.push('体力不够拉不动 ' + JSON.stringify(r));
+                r = await run(`B.stove.fire = 0; B.stove.temp = 20; indRightDown(); for (let i = 0; i < 25; i++) indAdvance(0.05); indRightUp(); return { off: !!B.off.stove, t: B.stove.temp, s: ind.stam, bag: ind.bag.stove || 0 };`);
+                if (!(r.off && r.t <= 20.5)) bad.push('长按右键 1 秒还是收起 ' + JSON.stringify(r));
+                r = await run(`indRightDown(); for (let i = 0; i < 25; i++) indAdvance(0.05); indRightUp(); return { t: B.stove.temp, off: !!B.off.stove };`);
+                if (!(r.t < 605)) bad.push('长按（烧着收不了）不算拉一下 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = indFixBase({ ver: 11, rule: 'hard', stove: { items: {}, out: {}, fuel: 50, fire: 4, bellows: true, temp: 1500 } }); return [b.stove.fire, b.stove.bellows]; })()`);
+                if (r.join() !== '4,true') bad.push('老存档鼓风档读档 ' + r.join());
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND134 风箱右键拉：一下 +10°C、连点都算、封顶 1600、停手慢慢掉回火候、灭着没风箱不拉、长按收起、体力 −2、老存档', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 

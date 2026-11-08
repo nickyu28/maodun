@@ -41,10 +41,44 @@
             let k = indSel(), S = c.C;
             if (S.fire > 0) { if (k === 'torch' && !(ind.torchT > 0)) { indBagDel('torch', 1); ind.torchT = CV.torch; return true; } return false; }
             if (['ember', 'match', 'lighter', 'torch', 'flint'].indexOf(k) < 0) return false;
-            if (!(S.fuel > 0)) { indFlash('先放柴'); return true; }
+            if (!(S.fuel > 0)) return false;   // 任务 113：没柴不吃这次左键，照样开面板（面板顶上写"没柴，点不着"）
             let r = fiUseSource(k); if (r !== true) { if (r === false) return false; return true; }
-            S.fire = 1; S.lit = true; indSave(); ind.hudSig = '';
+            fiIgnite(c); indSave(); ind.hudSig = '';
             return true;
+        }
+        // 点着（任务 113）：降温中途再点，从现在的温度接着往上走——挑目标温度高过现在温度的最小一档（最多大火），正在烧的东西进度不动
+        function fiIgnite(c) {
+            let S = c.C, lv = 1;
+            while (lv < 3 && indFireDef(c.ty, lv).t <= S.temp) lv++;
+            S.fire = lv; S.lit = true;
+        }
+        // 面板里的"点火"按钮（任务 113）：背包里有火种、火柴、打火机（有油）、点着的火把、打火石（带铁锭和引火物）任一就行，用掉一次；要有柴
+        function fiPanelSources() {
+            let o = [];
+            if (ind.bag.ember > 0) o.push('ember');
+            if (ind.bag.match > 0) o.push('match');
+            if (ind.bag.lighter > 0 && ind.base.lighterN > 0) o.push('lighter');
+            if (ind.torchT > 0) o.push('torch');
+            if (ind.bag.flint > 0 && ind.bag.ingot_fe > 0 && fiTinder()) o.push('flint');
+            return o;
+        }
+        function fiPanelLight() {
+            if (!ind || !fiOn()) return;
+            let c = indCookCur(); if (!c) return; let S = c.C;
+            if (S.fire > 0) return;
+            if (!(S.fuel > 0)) { indFlash('没柴，点不着'); return; }
+            let src = fiPanelSources()[0];
+            if (!src) { indFlash('要火种、火柴、打火机或点着的火把'); return; }
+            let r = fiUseSource(src);
+            if (r === true) { fiIgnite(c); indSave(); ind.hudSig = ''; }
+            indPanelStove();
+        }
+        // 面板顶上那一行（任务 113）：灭着时写清楚怎么办
+        function fiPanelLine(S) {
+            if (!fiOn() || S.fire > 0) return '';
+            let btn = '<button id="ind-stove-light" style="' + IND_BTN + 'background:#e65100;" onclick="fiPanelLight()">点火</button>';
+            if (!(S.fuel > 0)) return '<div style="color:#c62828;font-weight:bold;">没柴，点不着</div>';
+            return '<div style="color:#c62828;">灭了，要先点火 ' + btn + '</div>';
         }
         // 面板的火候按钮：灭着的时候点不着
         function fiStoveBlocked(S, lv) { return fiOn() && lv > 0 && !(S.fire > 0); }
