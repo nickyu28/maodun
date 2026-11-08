@@ -11026,8 +11026,8 @@ async function enterExit(tab, key) {
                 if (!(r.a === 1 && r.sh === 3 && r.mid === true && r.gone && r.got && r.wire === 2)) bad.push('点同一个电池组 3 秒后爆炸、拿到 pic1、花一根线 ' + JSON.stringify(r));
                 r = await run(`indDev(1).u = 0; indSelect('wire'); click(); click(); return { sh: indDev(1).short || 0, pend: ind.wirePend, wire: ind.bag.wire, alive: !!indDev(1) };`);
                 if (!(r.sh === 0 && r.pend === null && r.wire === 3 && r.alive)) bad.push('没电的电池组点两下只是取消 ' + JSON.stringify(r));
-                r = await run(`indAch('pic1'); achPanel(); let t = document.getElementById('ind-panel'); let svg = t.querySelectorAll('svg').length, tx = t.innerText; indPanelClose(); B.ach = {}; achPanel(); let t2 = document.getElementById('ind-panel').querySelectorAll('svg').length; indPanelClose(); return { svg: svg, tx: tx.replace(/\s+/g, ' '), t2: t2 };`);
-                if (!(r.svg === 1 && /已获得 1 \/ 9/.test(r.tx) && !/undefined/.test(r.tx) && r.t2 === 0)) bad.push('pic1 拿到后只有图标没有字、没拿到不出现 ' + JSON.stringify(r));
+                r = await run(`indAch('pic1'); achPanel(); let t = document.getElementById('ind-panel'); let nd = t.querySelector('[data-ach="pic1"]'), svg = nd ? nd.querySelectorAll('svg').length : 0, tx = t.innerText, tot = ACH.filter(function (a) { return !a.hide; }).length + 1; indPanelClose(); B.ach = {}; achPanel(); let t2 = !!document.getElementById('ind-panel').querySelector('[data-ach="pic1"]'); indPanelClose(); return { svg: svg, tx: tx.replace(/\s+/g, ' '), tot: tot, t2: t2 };`);
+                if (!(r.svg === 1 && r.tx.indexOf('已获得 1 / ' + r.tot) >= 0 && /"燃"起来了/.test(r.tx) && !/undefined/.test(r.tx) && r.t2 === false)) bad.push('pic1 拿到后有图标、名字"燃"起来了（任务 102 改名），没拿到不出现 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -12911,6 +12911,37 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND148 准星和顶部信息：准星正中、名字最大、能做的东西主线排前、要什么镐、还剩份数、饱食、操作合并、面板开着不显示、挖不动不弹字', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND149')) {
+            // IND149 成就关系图（任务 102）：有线；隐藏的在连着的没拿到时不出现、拿到后出现"？？"、自己拿到写名字；先拿隐藏的也行；没连线的隐藏照旧拿到才出现；
+            // 新成就逐个触发（冰箱、冰淇淋或冰棍、粉碎机、离心机、黄饼、3 个黄饼、主线钢锭铝锭电解槽空气分离塔）；主线连成一条链；老存档已有冰箱（放好的设备）读档后补发；总数算法
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ach = {}; B.devs = []; ind.bag = {}; (B.chests || []).forEach(function (c) { c.items = {}; }); indPanelClose();
+                    let P = function () { achPanel(); let p = document.getElementById('ind-panel'), o = {}; p.querySelectorAll('.ach-node').forEach(function (e) { o[e.getAttribute('data-ach')] = e.textContent; }); let L = Array.prototype.map.call(p.querySelectorAll('svg.ach-lines line'), function (l) { return l.getAttribute('data-a') + '-' + l.getAttribute('data-b'); }); let c = (/已获得 (\\d+) \\/ (\\d+)/.exec(p.innerText) || []).slice(1).join('/'); indPanelClose(); return { n: o, L: L, c: c }; };
+                    let tick = function () { ind.achT = 0; achTick(); };
+                    ${body} })()`);
+                let r = await run(`let p0 = P(); indAch('fridge'); let p1 = P(); indAch('ice3'); let p2 = P(); B.ach = { cake3: 1 }; let p3 = P(); let tot = ACH.filter(function (a) { return !a.hide; }).length;
+                    return { ice0: p0.n.ice3 === undefined, q: p1.n.ice3, named: p2.n.ice3, lines: p1.L, c0: p0.c, c2: p2.c, c3: p3.c, cake3: p3.n.cake3, cake: p3.n.cake, line3: p3.L.indexOf('cake3-cake') >= 0, tot: tot, p6767: p1.n.p6767 === undefined };`);
+                if (!(r.ice0 && /？？/.test(r.q || '') && /冰冰冰/.test(r.named || '') && r.lines.indexOf('ice3-fridge') >= 0 && r.lines.indexOf('icecream-fridge') >= 0 && r.p6767)) bad.push('隐藏的：连着的没拿到不出现、拿到后？？、自己拿到写名字；没连线的隐藏不出现 ' + JSON.stringify(r));
+                if (!(/饼饼饼/.test(r.cake3 || '') && /能吃吗/.test(r.cake || '') && r.line3 && r.c0 === '0/' + r.tot && r.c2 === '2/' + (r.tot + 1) && r.c3 === '1/' + (r.tot + 1))) bad.push('先拿到隐藏的也行、线画出来、总数算法 ' + JSON.stringify(r));
+                r = await run(`let got = {}; let chk = function (id) { tick(); got[id] = achGot(id); };
+                    ind.bag = { dev_fridge: 1 }; chk('fridge'); ind.bag = { popsicle: 1 }; chk('icecream'); ind.bag = { dev_crusher: 1 }; chk('crusher'); ind.bag = { dev_centrifuge: 1 }; chk('gyro');
+                    ind.bag = { yellowcake: 2 }; tick(); let c3a = achGot('cake3'); got.cake = achGot('cake'); ind.bag = { yellowcake: 3 }; chk('cake3');
+                    ind.bag = { steel: 1 }; chk('m_steel'); ind.bag = { ingot_al: 1 }; chk('m_al'); ind.bag = { dev_el: 1 }; chk('m_el'); ind.bag = { dev_asu: 1 }; chk('m_asu');
+                    let p = P(); return { got: got, c3a: c3a, chain: ['m_steel-m_al', 'm_al-m_el', 'm_el-m_asu'].every(function (x) { return p.L.indexOf(x) >= 0; }), pic: ACH_BY.pic1.name };`);
+                if (!(Object.keys(r.got).every(function (k) { return r.got[k]; }) && Object.keys(r.got).length === 10 && r.c3a === false && r.chain && r.pic === '"燃"起来了')) bad.push('新成就逐个触发、主线一条链、pic1 改名 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); let b = indFixBase({ ver: 12, rule: 'hard', ach: { iron: 5 }, devs: [{ id: 7, ty: 'fridge', x: 5, z: 5, bats: 0, u: 0, on: true, ft: 20, st: {} }] }); ind.base = b; ind.bag = {}; ind.achT = 0; achTick(); return { fridge: achGot('fridge'), iron: achGot('iron') }; })()`);
+                if (!(r.fridge && r.iron)) bad.push('老存档已经放了冰箱，读档后补发"这里是冬天" ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND149 成就关系图：有线、隐藏的？？规则、新成就逐个触发、主线一条链、老存档补发、总数算法', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 
