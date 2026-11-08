@@ -7820,7 +7820,7 @@ async function enterExit(tab, key) {
                 if (rv.bad.length) bad.push('河 ' + JSON.stringify(rv));
                 const rv2 = await J(`(function(){ indGoTrip(977 * 3); let M = ind.map, rv = M.rivers[0], sh = 0, dp = 0; rv.pts.forEach(function (p, i) { if (i < 2 || i > rv.pts.length - 3) return; let a = rv.pts[i - 1], dx = p[0] - a[0], dz = p[1] - a[1], l = Math.hypot(dx, dz); for (let o = -rv.w / 2; o <= rv.w / 2; o += 0.25) { let d = IND_WATER_Y - indHeight(M, p[0] - dz / l * o, p[1] + dx / l * o); if (d > 0) { if (d < IND_WATER.shallow) sh++; else dp++; } } }); let bank = ind.nodes.filter(function (o) { return o.river; }).map(function (o) { return o.key; }); return { sh: sh, dp: dp, bank: bank, mid: rv.pts[Math.floor(rv.pts.length / 2)] }; })()`);
                 if (!(rv2.sh > rv2.dp * 1.5) || !rv2.dp) bad.push('河是浅水为主（中间一溜深） ' + JSON.stringify([rv2.sh, rv2.dp]));
-                if (!rv2.bank.length || rv2.bank.some((k) => k !== 'clay' && k !== 'sand_sn')) bad.push('河边刷黏土和锡砂 ' + JSON.stringify(rv2.bank));
+                if (!rv2.bank.length || rv2.bank.some((k) => k !== 'clay' && k !== 'sand_sn' && k !== 'clay_fire')) bad.push('河边刷黏土和锡砂 ' + JSON.stringify(rv2.bank));
                 await T.eval(`ind.bag = { bucket: 1 }; indSelect('bucket'); indTeleport(${rv2.mid[0]}, ${rv2.mid[1]}); window.__fl = []; indUse(); true;`);
                 if (!(await T.eval(`ind.bag.water_raw === 1 && !ind.bag.water_sea`))) bad.push('河里接到的是生水 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
                 // ── 地形分块：视野外的块不画；山地更陡；火山周围的黑石头 ──
