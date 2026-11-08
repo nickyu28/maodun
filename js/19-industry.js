@@ -1246,7 +1246,7 @@
                 if (!key) continue;
                 let nd = IND_NODES[key];
                 if (IND_OUTCROP[key]) {   // 矿是露头：抽到矿有 1/6 的机会在这里刷 1～2 个露头（4 米内），每个能挖 10～30 份
-                    if (r() > 1 / 6) continue;
+                    if (r() > (!casual && OR_EARLY[key] ? OR.early : 1 / 6)) continue;
                     if (!orKeep(key, x, z, casual)) continue;   // 矿只留 30% 在地面（19-industry-ore.js）
                     let want = 1 + Math.floor(r() * 2), got = 0;
                     for (let t = 0; t < 30 && got < want; t++) {

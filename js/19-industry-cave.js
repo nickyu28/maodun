@@ -5,7 +5,7 @@
 // 光源只照自己身边一圈：火把 8 米（木 1 + 煤或木炭 1 → 2 根，右键点一根，烧 90 秒），灯泡 12 米（戴在头上，一节锂电池 720 U，洞里每秒 0.4 U，没电就黑）。
 // 40% 的洞深处有天然气喷口（瓦斯）：拿着点着的火把走到洞口 15 米以里会爆炸；灯泡没有明火不炸。
 // 洞里硬岩（炸出锂锗镓）、萤石、方铅矿比地面多、更集中。悠闲没有矿洞（里面的东西都是硬核的）。
-        const CV = { x0: IND_MAP + 200, gapZ: 120, w: 15, len: 70, floor: 0.5, mouthR: 1.8, exitR: 2.2, lit: 8, dim: 15, natR: 30, torch: 90, torchR: 8, bulbR: 12, bulbU: 720, bulbDraw: 0.4, gasP: 0.4, gasD: 15, gasR: 4, gasHp: 60 };
+        const CV = { x0: IND_MAP + 200, gapZ: 120, w: 15, len: 70, floor: 0.5, mouthR: 1.8, exitR: 2.2, lit: 8, dim: 15, natR: 30, minR: 6, torch: 90, torchR: 8, bulbR: 12, bulbU: 720, bulbDraw: 0.4, gasP: 0.4, gasD: 15, gasR: 4, gasHp: 60 };
         Object.assign(IND_ITEMS_RAW, {
             torch: { name: '火把', col: 0xff8f00, use: '右键点一根，烧 90 秒，照亮身边 8 米。洞里有瓦斯别点' },
             bulb: { name: '灯泡', col: 0xfff59d, wear: 'head', warm: 0, use: '戴在头上，矿洞里照亮身边 12 米；用一节锂电池，没电就黑，没有明火' },
@@ -83,11 +83,11 @@
         function cvBulbDraw() { return CV.bulbDraw * (ind.base.wear.head === 'bulb_ar' ? 0.5 : 1); }
         function cvBulbOn() { return cvBulbIs() && (ind.base.bulbU === undefined || ind.base.bulbU > 0); }
         function cvLightR() { return Math.max(ind.torchT > 0 ? CV.torchR : 0, cvBulbOn() ? CV.bulbR : 0); }
-        function cvViewR() { if (!ind.cave) return null; return Math.max(cvLightR(), cvNatR(cvDepth(ind.cave, ind.p.x, ind.p.z))); }
+        function cvViewR() { if (!ind.cave) return null; return Math.max(CV.minR, cvLightR(), cvNatR(cvDepth(ind.cave, ind.p.x, ind.p.z))); }   // 洞里最低亮度：身边 6 米总看得见轮廓（任务 96）
         function cvRender(nightEl) {
             let v = cvViewR(), cam = IND_CAM.back;
             if (scene.fog) { scene.fog.near = v > 0 ? cam + v * 0.4 : 0.1; scene.fog.far = v > 0 ? cam + v : 0.2; }
-            if (nightEl) nightEl.style.opacity = (v > 0 ? 0.15 * (1 - v / CV.natR) : 0.93).toFixed(3);
+            if (nightEl) nightEl.style.opacity = (v > CV.minR + 0.01 ? 0.15 * (1 - v / CV.natR) : 0.6).toFixed(3);
         }
         function cvClamp(p) {
             let c = ind.cave;
@@ -127,12 +127,12 @@
         }
         function cvHint() {
             if (!ind.cave) return '';
-            let v = cvViewR(); return '矿洞里　' + (v > 0.5 ? '看得见 ' + Math.round(v) + ' 米' : '一片漆黑') + (ind.torchT > 0 ? '　火把还剩 ' + Math.ceil(ind.torchT) + ' 秒' : '') + (cvBulbIs() ? '　灯泡电量 ' + Math.ceil(ind.base.bulbU >= 0 ? ind.base.bulbU : CV.bulbU) + ' U' : '');
+            let v = cvViewR(); return '矿洞里　' + (v > CV.minR + 0.5 ? '看得见 ' + Math.round(v) + ' 米' : '很暗，只看得见身边') + (ind.torchT > 0 ? '　火把还剩 ' + Math.ceil(ind.torchT) + ' 秒' : '') + (cvBulbIs() ? '　灯泡电量 ' + Math.ceil(ind.base.bulbU >= 0 ? ind.base.bulbU : CV.bulbU) + ' U' : '');
         }
         function cvFixBase(b) { if (b.bulbU !== undefined) b.bulbU = indNum(b.bulbU, CV.bulbU, 0, CV.bulbU); }
         function cvBookLines() {
             if (!indHard()) return [];
-            return [{ ins: ['torch', 'bulb'], outs: ['rock_hard', 'fluorite', 'ore_pb', 'vent_ng'], name: '矿洞', txt: '山地、古老岩层里有洞口，走进去。洞里黑：白天洞口 ' + CV.lit + ' 米内看得见，超过 ' + CV.dim + ' 米全黑，夜里全黑。火把照 ' + CV.torchR + ' 米烧 ' + CV.torch + ' 秒，灯泡照 ' + CV.bulbR + ' 米。里面硬岩、萤石、方铅矿多；有怪味的洞别点火把（瓦斯）', where: '硬核远征，走回洞口出来' },
+            return [{ ins: ['torch', 'bulb'], outs: ['rock_hard', 'fluorite', 'ore_pb', 'vent_ng'], name: '矿洞', txt: '山地、古老岩层里有洞口，走进去。洞里黑：白天洞口 ' + CV.lit + ' 米内看得见，超过 ' + CV.dim + ' 米、夜里只看得见身边 ' + CV.minR + ' 米。火把照 ' + CV.torchR + ' 米烧 ' + CV.torch + ' 秒，灯泡照 ' + CV.bulbR + ' 米。里面硬岩、萤石、方铅矿多；有怪味的洞别点火把（瓦斯）', where: '硬核远征，走回洞口出来' },
                 { ins: ['torch'], outs: [], name: '火把', txt: '右键点一根：照亮身边 ' + CV.torchR + ' 米，烧 ' + CV.torch + ' 秒', where: '手上' },
                 { ins: ['bulb'], outs: ['bulb_dead'], name: '灯泡', txt: '戴在头上：矿洞里照亮身边 ' + CV.bulbR + ' 米，一节锂电池 ' + CV.bulbU + ' U，洞里每秒 ' + CV.bulbDraw + ' U，没电变成没电的灯泡', where: '头上' }];
         }

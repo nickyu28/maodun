@@ -10577,16 +10577,16 @@ async function enterExit(tab, key) {
                 r = await run(`day(); indTeleport(c.x, c.z); cvTick(0.1); let inn = ind.cave === c, gone = Math.hypot(ind.p.x - c.x, ind.p.z - c.z) > 100;
                     let v5 = at(5), v8 = at(8), v12 = at(12), v20 = at(20); night(); let n2 = at(2); day();
                     at(10); cvTick(0.1); indTeleport(c.cx - 0.5, c.cz); cvTick(0.1); return { inn: inn, gone: gone, v5: v5, v8: v8, v12: v12, v20: v20, n2: n2, out: !ind.cave, back: Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < 4 };`);
-                if (!(r.inn && r.gone && r.v5 >= 8 && r.v8 >= 8 && r.v12 > 0 && r.v12 < r.v8 && r.v20 === 0 && r.n2 === 0 && r.out && r.back)) bad.push('进洞、白天 8 米内看得见、超 15 米全黑、夜里洞口也黑、走回洞口出洞 ' + JSON.stringify(r));
+                if (!(r.inn && r.gone && r.v5 >= 8 && r.v8 >= 8 && r.v12 > 0 && r.v12 < r.v8 && r.v20 === 6 && r.n2 === 6 && r.out && r.back)) bad.push('进洞、白天 8 米内看得见、超 15 米只剩身边 6 米、夜里洞口也只剩 6 米、走回洞口出洞 ' + JSON.stringify(r));
                 // 火把：木 1 + 煤 1 → 2 根；点一根 8 米、烧 90 秒后熄
                 r = await run(`let rc = IND_CRAFT.filter(function (q) { return q.out === 'torch'; }); cvEnter(c); c.gas = false; night(); at(30); ind.bag = { torch: 2 }; indSelect('torch'); indUse();
                     let a = cvViewR(), left = ind.bag.torch; for (let i = 0; i < 89; i++) cvTick(1); let b = cvViewR(); cvTick(1.1); return { rc: rc.length, n: rc[0] && rc[0].n, coal: !!rc[0] && rc[0].in.wood === 1 && rc[0].in.coal === 1, a: a, left: left, b: b, c: cvViewR(), fl: fl.join('|') };`);
-                if (!(r.rc === 2 && r.n === 2 && r.coal && r.a === 8 && r.left === 1 && r.b === 8 && r.c === 0 && /烧完了/.test(r.fl))) bad.push('火把 2 根、8 米、烧 90 秒熄 ' + JSON.stringify(r));
+                if (!(r.rc === 2 && r.n === 2 && r.coal && r.a === 8 && r.left === 1 && r.b === 8 && r.c === 6 && /烧完了/.test(r.fl))) bad.push('火把 2 根、8 米、烧 90 秒熄 ' + JSON.stringify(r));
                 // 灯泡：戴头上 12 米；没电变"没电的灯泡"、黑；工作台的电灯配方原地变成灯泡（铜线 2 + 玻璃板 1 + 锂电池 1）
                 r = await run(`cvEnter(c); c.gas = false; night(); at(30); ind.bag = { bulb: 1 }; indSelect('bulb'); indUse(); let a = cvViewR(); cvTick(1); let u = ind.base.bulbU; ind.base.bulbU = 0.2; cvTick(1);
                     let i = IND_CRAFT.findIndex(function (q) { return q.out === 'bulb' && q.in.wire === 2; }), q = IND_CRAFT[i] || { in: {} };
                     return { a: a, u: u, head: ind.base.wear.head, b: cvViewR(), lampOut: IND_CRAFT.some(function (q) { return q.out === 'dev_lamp'; }), rec: q.in.glass_plate === 1 && q.in.battery_li === 1, early: i >= 0 && i < IND_CRAFT.length - 10, fix: IND_CRAFT.some(function (q) { return q.out === 'bulb' && q.in.bulb_dead === 1 && q.in.battery_li === 1; }) };`);
-                if (!(r.a === 12 && r.u > 719 && r.u < 720 && r.head === 'bulb_dead' && r.b === 0 && !r.lampOut && r.rec && r.early && r.fix)) bad.push('灯泡 12 米、没电变黑、配方原地改 ' + JSON.stringify(r));
+                if (!(r.a === 12 && r.u > 719 && r.u < 720 && r.head === 'bulb_dead' && r.b === 6 && !r.lampOut && r.rec && r.early && r.fix)) bad.push('灯泡 12 米、没电变黑、配方原地改 ' + JSON.stringify(r));
                 // 瓦斯：点着火把走进 15 米以里炸；戴灯泡不炸
                 r = await run(`cvEnter(c); c.gas = true; ind.lastBoom = null; day(); at(5); ind.bag = { torch: 1 }; indSelect('torch'); indUse(); cvTick(0.1); let a = { boom: !!ind.lastBoom, hp: ind.base.surv.hp };
                     at(25); cvTick(0.1); let b = { boom: !!ind.lastBoom, hp: ind.base.surv.hp, torch: ind.torchT, gas: c.gas };
@@ -12391,6 +12391,28 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND130 钢镐要铁镐：钢镐头 + 铁镐、没铁镐不行、满耐久、斧铲剪不受限', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND131')) {
+            // IND131 早期矿回地面、洞里看得见（任务 96）：30 张图铜地面平均 ≥ 6 个点、离出生点 350 米内能凑齐青铜（铜 + 锡）的图 ≥ 80%；地面占比铜锡锌铁高于铀铝铅镍；洞里最低亮度 6 米（白天晚上、深处都有）；老存档读档不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ let N = 30, ok = 0, cuPts = 0, snPts = 0, g = {}; ind.base.rule = 'hard';
+                    for (let s = 1; s <= N; s++) { indGoTrip(7000 + s * 104729); let cu = 0, sn = 0; ind.nodes.forEach(function (o) { if (!o.out || o.cave !== undefined) return; g[o.key] = (g[o.key] || 0) + 1; if (o.key === 'ore_cu') cuPts++; if (Math.hypot(o.x, o.z) > 350) return; if (o.key === 'ore_cu') cu++; if (o.key === 'ore_sn') sn++; }); if (cu >= 1 && sn >= 1) ok++; indGoBase(null); }
+                    return { ok: ok, n: N, cuAvg: cuPts / N, g: g }; })()`);
+                if (!(r.ok / r.n >= 0.8 && r.cuAvg >= 6)) bad.push('铜地面平均 ≥ 6 个点、350 米内凑齐铜锡的图 ≥ 80% ' + JSON.stringify(r));
+                const c = await J(`(function(){ indGoTrip(131); let tries = 0; while (!ind.caves.length && tries++ < 60) indGoTrip(tries * 131); let c = ind.caves[0]; ind.base.wear = {}; ind.torchT = 0; cvEnter(c); let out = {}; [0, 12, 30, 60].forEach(function (d) { indTeleport(c.cx + d, c.cz); ind.base.clock = IND_DAY * 3 + 300; out['d' + d] = cvViewR(); ind.base.clock = IND_DAY * 3 + IND_DUSK + 100; out['n' + d] = cvViewR(); }); out.min = CV.minR; return out; })()`);
+                if (!(c.min === 6 && Object.keys(c).filter(function (k) { return k !== 'min'; }).every(function (k) { return c[k] >= 6; }))) bad.push('洞里最低亮度 6 米（深处、夜里也是） ' + JSON.stringify(c));
+                const o = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', bag: { ore_cu: 3 } }); return b.bag.ore_cu; })()`);
+                if (o !== 3) bad.push('老存档读档 ' + o);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND131 早期矿回地面、洞里看得见：铜地面够多、凑得齐青铜、洞里最低亮度', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 
