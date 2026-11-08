@@ -12608,6 +12608,73 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND138 矿洞出得去：出口附近没东西挡、进洞直接走回去就出、回到洞口按钮 3 秒、动了取消、出洞不马上又进', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND139')) {
+            // IND139 拿得起出料槽里的东西（任务 115）：三种槽（出料槽、砖槽、耐火砖槽）× 各种锭：凉了的左键取进背包；烫的没钳子取不出并提示，有钳子能取；
+            // 从炉子正面斜着对准槽也选得中槽（不是开炉子面板）；槽里有模具和锭时先取锭；面板里有"取出槽里的"按钮
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; indPanelClose(); ind.bag = {};
+                    let St = IND_BASE_ST.stove; B.off.stove = false; B.stove = Object.assign(ckNewState(), { spout: [], fuel: 0, fire: 0, temp: 20, spoutTy: 'brick' }); ind.cookId = 'stove'; let c = indCookById('stove'), sp = indSpoutPos(c);
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`let hots = Object.keys(IND_ITEMS_RAW).filter(function (k) { return IND_ITEMS_RAW[k].hot && /^hot_/.test(k); }), res = [];
+                    ['auto', 'brick', 'fire'].forEach(function (ty) { hots.forEach(function (k) { B.stove.spoutTy = ty; B.stove.spout = [{ k: k, t: 0 }]; ind.bag = {}; indPanelClose(); indTeleport(sp.x, sp.z + 1.6); indLookAt(sp.x, sp.z); let a = indAim(); indAction(); let cool = IND_ITEMS_RAW[k].hot; if (!(a && a.kind === 'spout' && ind.bag[cool] === 1 && !B.stove.spout.length && !ind.panel)) res.push(ty + ':' + k + ':' + (a && a.kind) + ':' + JSON.stringify(ind.bag)); }); });
+                    return { n: hots.length, bad: res.slice(0, 6) };`);
+                if (!(r.n >= 8 && r.bad.length === 0)) bad.push('三种槽 × 各种锭，凉了左键取进背包 ' + JSON.stringify(r));
+                r = await run(`B.stove.spout = [{ k: 'hot_fe', t: 40 }]; indTeleport(sp.x, sp.z + 1.6); indLookAt(sp.x, sp.z); indAction(); let a = { bag: JSON.stringify(ind.bag), left: B.stove.spout.length, fl: fl.join('|') };
+                    ind.bag = { tongs: 1 }; indAction(); return { a: a, hot: ind.bag.hot_fe || 0, left: B.stove.spout.length };`);
+                if (!(r.a.bag === '{}' && r.a.left === 1 && /烫/.test(r.a.fl) && r.hot === 1 && r.left === 0)) bad.push('烫的没钳子取不出并提示、有钳子能取 ' + JSON.stringify(r));
+                r = await run(`let out = []; [[St.x + 0.6, St.z + 1.8], [St.x + 1.0, St.z + 1.4], [St.x + 0.6, St.z + 2.4], [St.x + 1.2, St.z + 2.2], [St.x + 3.6, St.z + 1.2], [St.x + 2.4, St.z + 2.2]].forEach(function (p) { B.stove.spout = [{ k: 'hot_cu', t: 0 }]; indTeleport(p[0], p[1]); indLookAt(sp.x, sp.z); let a = indAim(); out.push(a ? a.kind : 'none'); }); return { out: out };`);
+                if (!(r.out.every(function (k) { return k === 'spout'; }))) bad.push('从炉子前面斜着对准槽，选中的是槽 ' + JSON.stringify(r));
+                r = await run(`B.stove.spout = [{ k: 'hot_cu', t: 0 }]; B.stove.mold = { s: 'axe', dura: 5, part: 'part_axe_bronze', t: 20 }; indTeleport(sp.x, sp.z + 1.6); indLookAt(sp.x, sp.z); indAction(); let a = { cu: ind.bag.ingot_cu || 0, part: ind.bag.part_axe_bronze || 0, ok: !!IND_ITEMS.part_axe_bronze };
+                    indAction(); return { a: a, fl: fl.join('|') };`);
+                if (!(r.a.cu === 1 && r.a.part === 0 && r.a.ok)) bad.push('槽里有烫零件和锭：先取锭 ' + JSON.stringify(r));
+                r = await run(`B.stove.spout = [{ k: 'hot_zn', t: 0 }]; indPanelStove('stove'); let btn = document.getElementById('ind-spout-take'); if (btn) btn.click(); return { btn: !!btn, zn: ind.bag.ingot_zn || 0 };`);
+                if (!(r.btn && r.zn === 1)) bad.push('面板里"取出槽里的"按钮 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND139 出料槽：三种槽各种锭凉了能取、烫的要钳子、斜着对准也选得中槽、有模具先取锭、面板能取', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND140')) {
+            // IND140 背包满了看得见（任务 110）：背包塞满，对着矿露头准星提示是红字"背包满了"不是"左键：挖"、左键弹"背包满了"；腾出一格恢复"左键：挖"；
+            // 地上的东西同样；"背包满了"停够 1.5 秒、后面的提示不把它盖掉；只剩 ≤ 2 格时底部那行变橙色
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indGoTrip(2468); ind.mbSpawn = 1e9; let o = ind.nodes.filter(function (n) { return n.out && !n.dead && !n.cave && IND_NODES[n.key].tool <= 1 && Math.hypot(n.x, n.z) < 300; })[0]; if (!o) return { none: true };
+                    let fill = Object.keys(IND_ITEMS_RAW).filter(function (k) { return k !== o.key && k !== 'pick_stone' && IND_ITEMS[k] && !IND_ITEMS[k].hot && !IND_ITEMS[k].dev && !IND_ITEMS[k].veh; }).slice(0, indBagSlots() - 1);
+                    ind.bag = { pick_stone: 1 }; fill.forEach(function (k) { ind.bag[k] = 1; }); indSelect('pick_stone'); indTeleport(o.x, o.z + 1.4); indLookAt(o.x, o.z);
+                    let a = indAim(); indHudUpdate(); let h = document.getElementById('ind-hint') ? document.getElementById('ind-hint').innerHTML : '', foot = document.getElementById('ind-bag-free'); foot = foot ? foot.outerHTML : '';
+                    let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; indAction(); blazeFlash = bf; let n1 = ind.bag[o.key] || 0;
+                    delete ind.bag[fill[0]]; indHudUpdate(); let h2 = document.getElementById('ind-hint').innerHTML, foot2 = document.getElementById('ind-bag-free'); foot2 = foot2 ? foot2.outerHTML : '';
+                    delete ind.bag[fill[1]]; delete ind.bag[fill[2]]; delete ind.bag[fill[3]]; indHudUpdate(); let foot3 = document.getElementById('ind-bag-free'); foot3 = foot3 ? foot3.outerHTML : '';
+                    return { aim: a && a.kind === 'node' && a.o === o, h: h, foot: foot, fl: fl.join('|'), n1: n1, h2: h2, foot2: foot2, foot3: foot3 }; })()`);
+                if (r.none) bad.push('图上找不到石稿能挖的露头');
+                else {
+                    if (!(r.aim && /背包满了/.test(r.h) && !/左键：挖/.test(r.h) && /背包满了/.test(r.fl) && r.n1 === 0)) bad.push('背包满了：提示红字、左键弹字、挖不到 ' + JSON.stringify(r).slice(0, 400));
+                    if (!(/左键：挖/.test(r.h2) && !/背包满了/.test(r.h2))) bad.push('腾出一格恢复"左键：挖" ' + r.h2);
+                    if (!(/e53935/.test(r.foot) && /ef6c00/.test(r.foot2) && /只剩 1 格/.test(r.foot2) && !/ef6c00|e53935/.test(r.foot3))) bad.push('底部：满了红、剩 ≤ 2 格橙、多了不提示 ' + JSON.stringify([r.foot, r.foot2, r.foot3]));
+                }
+                r = await J(`(function(){ ind.tripGround = [{ k: 'stone', x: 5, z: 5 }]; ind.itemDirty = true; let fill = Object.keys(IND_ITEMS_RAW).filter(function (k) { return k !== 'stone' && IND_ITEMS[k] && !IND_ITEMS[k].hot && !IND_ITEMS[k].dev && !IND_ITEMS[k].veh; }).slice(0, indBagSlots());
+                    ind.bag = {}; fill.forEach(function (k) { ind.bag[k] = 1; }); indTeleport(5, 6.2); indLookAt(5, 5); indHudUpdate(); return { h: document.getElementById('ind-hint').innerHTML }; })()`);
+                if (!(/背包满了/.test(r.h) && !/左键：拿/.test(r.h))) bad.push('地上的东西：背包满了提示红字 ' + JSON.stringify(r));
+                r = JSON.parse(await T.eval(`new Promise(function (res) { let t0 = performance.now(); indFlash('背包满了'); indFlash('别的事'); let t1 = document.getElementById('blaze-flash').innerText, left = indFlash.fullUntil - performance.now();
+                    setTimeout(function () { res(JSON.stringify({ t1: t1, left: left, el: performance.now() - t0, op: document.getElementById('blaze-flash').style.opacity })); }, 1600); })`));
+                if (!(/背包满了/.test(r.t1) && /别的事/.test(r.t1) && r.left >= 1900 && (r.el > 2300 || r.op === '1'))) bad.push('"背包满了"停够 1.5 秒、不被后面的盖掉 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND140 背包满了：准星提示红字不写左键挖、地上东西同样、弹字停 1.5 秒不被盖、剩 2 格变橙', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
