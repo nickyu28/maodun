@@ -1788,7 +1788,7 @@
             if (a && a.kind === 'bomb') return nkBombAct(a.o);
             if (odAct()) return true;   // 拿着可充电电池左键户外设备：放进充电槽
             if (a && a.kind === 'node' && a.o.sap) return odSapTake(a.o);
-            if (a && a.kind === 'node' && a.o.tree === 'palm' && trShake(a.o)) return true;   // 空手摇椰子（19-industry-tree.js）
+            if (a && a.kind === 'node' && a.o.tree === 'palm' && trShakeHand(indSel())) return false;   // 任务 109：摇椰子改成右键，空手左键椰子树没反应
             if (a && a.kind === 'node' && a.o.tree) return wdChop(a.o);
             if (a && a.kind === 'node') return indGather(a.o);
             if (a && a.kind === 'item' && indSel() === 'wire' && IND_ITEMS[a.o.k] && IND_ITEMS[a.o.k].dev) { indFlash('这是掉在地上的' + indName(a.o.k) + '，不是放好的设备。要放好，拿着它按右键'); return false; }   // 拿铜线左键点到地上的设备物品，别当成收起来（任务 13）
@@ -1826,6 +1826,7 @@
             if (f) { ind.rh = { f: f, t: 0, done: false, pump: fmPumpCook(indAim()) }; return; }   // 装了风箱的烧着的炉子：短按是拉风箱（任务 114），长按还是收起
             if (!ind.ride && pwCrankDown(indAim())) return;   // 手摇发电机：按住右键摇（19-industry-power.js）
             if (indSel() === 'cactus') { wdPeelStart(); return; }   // 选中仙人掌点一下右键开始拔刺（R 键是生吃）
+            { let pa = indAim(); if (pa && pa.kind === 'node' && pa.o.tree === 'palm' && trShake(pa.o)) return; }   // 空手右键摇椰子（任务 109，19-industry-tree.js）
             if (trTap(indAim())) return;   // 松树割松脂、橡胶树割胶（19-industry-tree.js）
             if (fmKillStart(indAim())) return;   // 拿着工具对着动物按住右键 1 秒：宰（19-industry-farm.js）
             indUse();

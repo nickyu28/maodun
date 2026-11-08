@@ -46,10 +46,12 @@
             P.t += dt; if (P.t < TR.tap) return;
             ind.tap = null; P.o.lx--; P.o.lr = ind.t; let r = indBoxAdd('latex', 1); if (P.o.lx < 1) indFlash('这棵割完了'); ind.hudSig = '';
         }
-        // 空手左键摇椰子树：掉 1～2 个椰子，一棵一趟一次；手上拿着斧子、小刀、稿子就是砍树，不摇
+        // 空手右键摇椰子树（任务 109，跟割松脂、割胶一样用右键）：掉 1～2 个椰子，一棵一趟一次。
+        // "空手"：手上没东西，或者拿的东西没有自己的右键用法（不是工具、不是吃喝的、不是种子）；拿着椰子右键还是喝或种
+        function trShakeHand(k) { let d = k && IND_ITEMS[k]; return !d || !(d.tool || tlKind(k) || d.eat || d.drink || d.seed || d.potion || d.dev || d.furn || d.cook || d.veh || k === 'coconut' || k === 'torch'); }
         function trShake(o) {
             if (!ind || ind.where !== 'trip' || !o || o.tree !== 'palm' || o.dead) return false;
-            let k = indSel(); if (k === 'axe' || k === 'knife' || (k && IND_ITEMS[k] && IND_ITEMS[k].tool)) return false;
+            if (!trShakeHand(indSel())) return false;
             if (o.sh && !(o.pin && ind.t - o.sh >= TR.resinT)) { indFlash('这棵树上的椰子已经摇下来了'); return true; }   // 钉住的块里的椰子树 300 秒再长
             o.sh = ind.t + 1; let n = 1 + Math.floor(indRand() * 2), r = indBoxAdd('coconut', n);
             ind.hudSig = ''; return true;
@@ -60,6 +62,6 @@
             if (!o.tree) return h;
             if (o.tree === 'pine') return h + '<br><small>右键：割松脂（还有 ' + trResinLeft(o) + ' 份，要小刀或斧子）</small>';
             if (o.tree === 'rubber') return h + '<br><small>右键：割胶（还有 ' + (o.lx === undefined ? TR.latex : o.lx) + ' 份，要小刀或斧子）</small>';
-            if (o.tree === 'palm') return h + '<br><small>空手左键：摇椰子' + (o.sh && !(o.pin && ind.t - o.sh >= TR.resinT) ? '（摇过了）' : '') + '</small>';
+            if (o.tree === 'palm') return h + '<br><small>空手右键：摇椰子' + (o.sh && !(o.pin && ind.t - o.sh >= TR.resinT) ? '（摇过了）' : '') + '</small>';
             return h;
         };

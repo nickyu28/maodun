@@ -10537,8 +10537,8 @@ async function enterExit(tab, key) {
                     for (let k = 0; k < 3; k++) { trTap(aim(o)); trTick(8.1); } let c = ind.bag.latex || 0; let more = trTap(aim(o)); trTick(9); let d = ind.bag.latex;
                     let o2 = tree('rubber'); o2.x = 1; trTap(aim(o2)); trTick(3); indTeleport(10, 0); trTick(1); let cut = !ind.tap; trTick(9); return { a: a, b: b, c: c, d: d, cut: cut, left: o.lx, l2: ind.bag.latex, fl: fl.join('|') };`);
                 if (!(r.a === 0 && r.b === 1 && r.c === 4 && r.d === 4 && r.cut && r.left === 0 && /割完了/.test(r.fl))) bad.push('割胶 8 秒 1 份、一棵 4 份、走远断 ' + JSON.stringify(r));
-                // 椰子树：空手左键摇一次 1～2 个；拿着斧子是砍树不摇；喝了口渴 +15 剩椰壳
-                r = await run(`let o = tree('palm'); ind.bag = { axe: 1 }; indSelect('axe'); let a = trShake(o); ind.bag = {}; let b = trShake(o), n = ind.bag.coconut || 0; let c = trShake(o), n2 = ind.bag.coconut || 0; ind.base.surv.water = 50; indEat('coconut');
+                // 椰子树：空手摇一次 1～2 个（任务 109 起改成右键，见 IND143）；拿着斧子是砍树不摇；喝了口渴 +15 剩椰壳
+                r = await run(`let o = tree('palm'); ind.bag = { axe: 1 }; indSelect('axe'); let a = trShake(o); ind.bag = {}; let b = trShake(o), n = ind.bag.coconut || 0; let keep = ind.bag.coconut || 0; ind.bag = {}; let c = trShake(o), n2 = keep + (ind.bag.coconut || 0); ind.bag = { coconut: keep }; ind.base.surv.water = 50; indEat('coconut');
                     return { a: a, b: b, n: n, c: c, n2: n2, w: ind.base.surv.water, shell: ind.bag.coconut_shell || 0, left: ind.bag.coconut || 0 };`);
                 if (!(r.a === false && r.b === true && r.n >= 1 && r.n <= 2 && r.c === true && r.n2 === r.n && r.w === 65 && r.shell === 1 && r.left === r.n - 1)) bad.push('椰子树空手摇一次、拿斧子不摇、喝了 +15 剩椰壳 ' + JSON.stringify(r));
                 // 乳胶 2 + 硫 1 → 橡胶；硫只有硬核有，配方标 hard
@@ -12735,6 +12735,31 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND142 外面的工作台：背包随手合成、远征放下打开做东西收回、深水和压东西拒绝、基地照旧', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND143')) {
+            // IND143 右键摇椰子（任务 109）：空手右键对着椰子树，背包多 1～2 个椰子；空手左键没反应；拿着斧子左键还是砍；摇过再摇提示"已经摇下来了"；准星提示写"空手右键：摇椰子"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoTrip(2222); ind.mbSpawn = 1e9; ind.ch = null; let p = null;
+                    for (let i = 0; i < 400 && !p; i++) { let x = (i % 20) * 3 - 30, z = Math.floor(i / 20) * 3 - 30; if (indWaterDepth(x, z) === 0 && !ind.nodes.some(function (o) { return !o.dead && Math.hypot(o.x - x, o.z - z) < 4; })) p = { x: x, z: z }; }
+                    let o = { key: 'wood', tree: 'palm', x: p.x, z: p.z, y: indGround(p.x, p.z), n: 4, seed: 'seed_wheat', dead: false }; ind.nodes.push(o); ind.nodeDirty = true; indTeleport(p.x, p.z + 1.4); indLookAt(p.x, p.z);
+                    ${body} } finally { blazeFlash = bf; } })()`);
+                let r = await run(`ind.bag = {}; let a = indAim(); indAction(); let left = { co: ind.bag.coconut || 0, ch: !!ind.ch };
+                    indRightDown(); indRightUp(); let n = ind.bag.coconut || 0; indHudUpdate(); let h = document.getElementById('ind-hint').innerHTML; ind.bag = {}; indRightDown(); indRightUp(); let n2 = n + (ind.bag.coconut || 0);
+                    return { aim: a && a.kind === 'node' && a.o === o, left: left, n: n, n2: n2, h: h, fl: fl.join('|') };`);
+                if (!(r.aim && r.left.co === 0 && !r.left.ch && r.n >= 1 && r.n <= 2 && r.n2 === r.n && /已经摇下来了/.test(r.fl))) bad.push('空手左键没反应、右键摇下 1～2 个、再摇提示 ' + JSON.stringify(r));
+                if (!(/空手右键：摇椰子/.test(r.h) && !/左键：摇/.test(r.h))) bad.push('准星提示写"空手右键：摇椰子" ' + r.h);
+                r = await run(`ind.bag = { axe_bronze: 1 }; if (!IND_ITEMS.axe_bronze) ind.bag = { axe: 1 }; indSelect(Object.keys(ind.bag)[0]); indAction(); return { ch: ind.ch ? ind.ch.kind : null, co: ind.bag.coconut || 0 };`);
+                if (!(r.ch === 'chop' && r.co === 0)) bad.push('拿着斧子左键还是砍 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND143 右键摇椰子：空手右键摇、左键没反应、斧子左键砍、摇过提示、准星写右键', bad.length === 0, bad.join(' / '));
         }
         if (ONLY) throw new Error('ONLY_DONE');
 
