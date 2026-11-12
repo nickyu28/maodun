@@ -28,7 +28,40 @@ const EXPECT_GEOMETRY_LEAK = false;   // D1 做完了：几何体/贴图不增�
 // 快速档：SMOKE_ONLY=正则 只跑名字对得上的那几项检查（其余整个跳过），比如 SMOKE_ONLY='N21|R1'；总会先跑两项启动检查（电脑、触屏设备）。
 // 全量：不设 SMOKE_ONLY。每个提交跑快速档，一批做完、推送前跑一次全量（CLAUDE.md 里有写）。
 const ONLY = process.env.SMOKE_ONLY ? new RegExp(process.env.SMOKE_ONLY) : null;
-const want = (n) => !ONLY || ONLY.test(n);
+// 分片（CI 用，CI1）：SMOKE_SHARD=i/N（i 从 1 数）把 want() 那一批检查分成 N 份并行跑，每份各开一个 Chrome。只是运行器的筛选，检查本身一个没动：
+//   - 每项检查按名字分到哪一份：tests/smoke-weights.json 里有耗时的按耗时均衡分（贪心，最慢的先分给最闲的一份）；没记录的（新加的检查）按在文件里出现的顺序轮流分；
+//   - SHARD_EVERY 里的检查每份都跑（IND0 数据体检）；每份开头还跑两项启动检查（电脑、触屏设备）；
+//   - want() 之后那一大段（模式进出、规则按钮、……Z1，要共用同一个标签页按顺序跑）只在第 1 份跑；
+//   - SMOKE_TIMES=1 时结束前打印每项检查的耗时（TIME 行），用来更新 smoke-weights.json。
+const SHARD = (function () {
+    const m = /^(\d+)\/(\d+)$/.exec(process.env.SMOKE_SHARD || ''); if (!m) return null;
+    const i = +m[1], n = +m[2]; if (!(n >= 1 && i >= 1 && i <= n)) { console.log('SMOKE_SHARD 格式不对：' + process.env.SMOKE_SHARD); process.exit(2); }
+    return { i: i, n: n };
+})();
+const SHARD_EVERY = ['IND0'];
+const SHARD_WEIGHTS = (function () { try { return JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'smoke-weights.json'), 'utf8')); } catch (e) { return {}; } })();
+const SHARD_OF = {};   // 检查名 → 第几份（0 起）
+(function () {
+    if (!SHARD) return;
+    const load = new Array(SHARD.n).fill(0), names = Object.keys(SHARD_WEIGHTS).filter((k) => SHARD_EVERY.indexOf(k) < 0 && k !== '__tail__').sort((a, b) => SHARD_WEIGHTS[b] - SHARD_WEIGHTS[a] || (a < b ? -1 : 1));
+    load[0] += SHARD_WEIGHTS.__tail__ || 0;   // want() 之后那一大段只在第 1 份跑，先把它的耗时记在第 1 份头上
+    SHARD_EVERY.forEach((k) => { const w = SHARD_WEIGHTS[k] || 0; for (let j = 0; j < SHARD.n; j++) load[j] += w; });
+    names.forEach((k) => { let b = 0; for (let j = 1; j < SHARD.n; j++) if (load[j] < load[b]) b = j; SHARD_OF[k] = b; load[b] += SHARD_WEIGHTS[k]; });
+})();
+let shardSeq = 0;
+const WANT_TIMES = {}; let wantCur = null, wantAt = 0;   // 每个 want() 块跑了多久（到下一次 want() 为止）
+const want = (n) => {
+    const now = Date.now(); if (wantCur) WANT_TIMES[wantCur] = (now - wantAt) / 1000; wantCur = null;
+    const r = wantRaw(n); if (r) { wantCur = n; wantAt = now; } return r;
+};
+const wantRaw = (n) => {
+    if (SHARD) {
+        if (SHARD_EVERY.indexOf(n) >= 0) return !ONLY || ONLY.test(n);
+        const k = shardSeq++, mine = (n in SHARD_OF ? SHARD_OF[n] : k % SHARD.n) === SHARD.i - 1;
+        return mine && (!ONLY || ONLY.test(n));
+    }
+    return !ONLY || ONLY.test(n);
+};
 
 const ROOT = path.resolve(__dirname, '..');
 const W = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -43,9 +76,11 @@ async function frames(T, n) {
     return T.eval(`new Promise(function (res) { let k = 0, t = setTimeout(function () { res(false); }, 20000); (function f() { if (++k >= ${n}) { clearTimeout(t); res(true); } else requestAnimationFrame(f); })(); })`);
 }
 const results = [];
+const T_START = Date.now();
+let lastReportAt = Date.now();
 function report(name, ok, detail, xfail) {
     let tag = ok ? 'PASS' : (xfail ? 'XFAIL' : 'FAIL');
-    results.push({ name, tag });
+    results.push({ name, tag, secs: (Date.now() - lastReportAt) / 1000 }); lastReportAt = Date.now();
     console.log(tag.padEnd(5) + ' ' + name + (detail ? '  ' + detail : ''));
 }
 
@@ -151,6 +186,8 @@ async function openTab(chrome, url, opts) {
         send,
         async close() { try { ws.close(); } catch (e) { } await jget(chrome.port, '/json/close/' + info.id, 'PUT').catch(() => { }); }
     };
+    // 页面可能还没加载完（机器忙时 2.5 秒不够，分片并行时更容易遇到）：没进大厅的标签页也等页面脚本跑完再还给检查（故意让脚本下载失败／变慢的除外）
+    if (!(opts && (opts.failUrl || opts.delayUrl || opts.blockHosts))) { for (let i = 0; i < 200; i++) { if (await tab.eval(`typeof requestLobbyAccess === 'function'`).catch(() => false)) break; await W(100); } }
     if (opts && opts.noLobby) return tab;
     const pid = (opts && opts.name) || ('smoke' + Math.floor(Math.random() * 100000));
     // 页面可能还没加载完（机器忙时 2.5 秒不够）：等输入框和 requestLobbyAccess 都有了再填名字，不然会报 Cannot set properties of null
@@ -573,7 +610,7 @@ async function enterExit(tab, key) {
         // 2a. 新增的检查（每项自己开标签页，互不影响；SMOKE_ONLY 只跑这一段）
         // 快速档（T1）：只要设了 SMOKE_ONLY，就先固定跑两项启动检查——上面那项（电脑）和这项（触屏设备：0 报错、进大厅）——再跑跟改动相关的检查；
         // 不设 SMOKE_ONLY 是全量，触屏启动在后面的 B6 里测，这里不重复
-        if (ONLY) {
+        if (ONLY || SHARD) {
             const bad = [];
             const M = await openTab(chrome, url, { mobile: true });
             const s0 = JSON.parse(await M.eval(`JSON.stringify({ ctl: gState.control, lobby: !document.getElementById('screen-lobby').classList.contains('hidden'), id: gState.id })`));
@@ -12943,7 +12980,8 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND149 成就关系图：有线、隐藏的？？规则、新成就逐个触发、主线一条链、老存档补发、总数算法', bad.length === 0, bad.join(' / '));
         }
-        if (ONLY) throw new Error('ONLY_DONE');
+        if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
+        if (ONLY || (SHARD && SHARD.i !== 1)) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
         for (const key of Object.keys(MODES)) {
@@ -13972,6 +14010,10 @@ async function enterExit(tab, key) {
     } finally {
         try { chrome.proc.kill(); } catch (e) { }
         srv.close();
+    }
+    if (process.env.SMOKE_TIMES) {
+        Object.keys(WANT_TIMES).forEach((k) => console.log('TIME ' + WANT_TIMES[k].toFixed(1).padStart(7) + 's  ' + k));
+        console.log('TIME ' + (Date.now() - T_START) / 1000 + 's  TOTAL');
     }
     const fail = results.filter((r) => r.tag === 'FAIL').length;
     console.log('\n' + results.filter((r) => r.tag === 'PASS').length + ' 通过，' + fail + ' 失败，' + results.filter((r) => r.tag === 'XFAIL').length + ' 预期失败');

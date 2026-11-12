@@ -5,7 +5,8 @@
 # 手动触发（Actions 页 → Smoke test and deploy → Run workflow）：
 #   force 勾上 = 冒烟整个不跑，直接发布一次（测试本身出问题时用）；强制发布单独排队，新的来了取消旧的。
 #
-# 冒烟测试失败时：FAIL 行和最后 40 行写成标注（Actions 页面能直接看），完整日志在 artifact「smoke-logs」里。
+# 冒烟测试分成 6 份并行（CI1，tests/smoke.js 的 SMOKE_SHARD），每份各开一个 Chrome；deploy 要等 6 份都过。
+# 冒烟测试失败时：FAIL 行和最后 40 行写成标注（标题带分片号，Actions 页面能直接看），完整日志在 artifact「smoke-logs-分片号」里。
 # Chrome 没起来（还没跑到任何检查）自动重试一次，检查没过不重试。见 tests/ci-smoke.sh。
 #
 # 冒烟测试里"几何体/贴图不增长"那一项（D1）已经是必须通过的。
@@ -39,7 +40,12 @@ jobs:
   smoke:
     # 强制发布：冒烟整个不跑，直接部署
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.force) }}
+    name: smoke ${{ matrix.shard }}/6
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false   # 一份挂了别取消别的份，一次看全
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -49,13 +55,15 @@ jobs:
         env:
           CHROME_PATH: /usr/bin/google-chrome
           SMOKE_LOG_DIR: smoke-logs
+          SMOKE_SHARD: ${{ matrix.shard }}/6
+          SMOKE_TIMES: '1'
         shell: bash
         run: tests/ci-smoke.sh
       - name: 上传冒烟测试日志
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-logs
+          name: smoke-logs-${{ matrix.shard }}
           path: smoke-logs/
           retention-days: 14
 
