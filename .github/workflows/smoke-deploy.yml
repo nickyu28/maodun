@@ -3,7 +3,7 @@
 # 推到 main：先跑冒烟测试，通过了才部署（Pages 的 Source 是「GitHub Actions」）。
 #
 # 手动触发（Actions 页 → Smoke test and deploy → Run workflow）：
-#   force 勾上 = 不管冒烟测试结果，强制发布一次（测试本身出问题时用）。
+#   force 勾上 = 冒烟整个不跑，直接发布一次（测试本身出问题时用）；强制发布单独排队，新的来了取消旧的。
 #
 # 冒烟测试失败时：FAIL 行和最后 40 行写成标注（Actions 页面能直接看），完整日志在 artifact「smoke-logs」里。
 # Chrome 没起来（还没跑到任何检查）自动重试一次，检查没过不重试。见 tests/ci-smoke.sh。
@@ -30,14 +30,16 @@ permissions:
   pages: write
   id-token: write
 
+# 强制发布单独一组：不排在别人的 50 分钟冒烟后面，新的强制发布来了取消旧的；普通推送照旧排队不取消
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.force && 'pages-force' || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
 
 jobs:
   smoke:
+    # 强制发布：冒烟整个不跑，直接部署
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.force) }}
     runs-on: ubuntu-latest
-    continue-on-error: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,7 +61,7 @@ jobs:
 
   deploy:
     needs: smoke
-    if: ${{ github.event_name != 'pull_request' && (needs.smoke.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.force)) }}
+    if: ${{ always() && github.event_name != 'pull_request' && (needs.smoke.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.force)) }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
