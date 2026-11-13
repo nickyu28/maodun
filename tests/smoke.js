@@ -5789,7 +5789,7 @@ async function enterExit(tab, key) {
                 const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ wear: b.wear, gh: b.gh, fires: b.fires.length, ver: b.ver })); }); })`));
                 if (sv.wear.neck !== 'scarf' || !sv.gh || sv.fires !== 1 || sv.ver < 3) bad.push('存档读回来不对 ' + JSON.stringify(sv));
                 // 硬核冻死：身上和穿着的都没了
-                await T.eval(`(function(){ indGoTrip(99); let S = ind.base.surv; S.temp = 32.5; S.hp = 2; indAdvance(3); })(); true;`);
+                await T.eval(`(function(){ indGoTrip(99); let S = ind.base.surv; S.temp = 32.5; S.hp = 1; indAdvance(6); })(); true;`);
                 if (!(await T.eval(`!!ind.dead && ind.dead.cause === '冻死'`))) bad.push('冻死应该停在死亡画面、死因冻死 ' + await T.eval(`JSON.stringify(ind.dead)`));
                 await T.eval(`indRespawn(); true;`);
                 const dd = JSON.parse(await T.eval(`JSON.stringify({ w: ind.where, wear: Object.keys(ind.base.wear).length, hp: ind.base.surv.hp, t: ind.base.surv.temp })`));
@@ -7249,10 +7249,10 @@ async function enterExit(tab, key) {
                 if (!d3 || d3.cause !== '爆炸' || !/氢气遇到火/.test(d3.detail) || !/2\.8 米/.test(d3.detail)) bad.push('炸死的死因不对 ' + JSON.stringify(d3));
                 await T.eval(`indRespawn(); true;`);
                 // ── 饿渴冻：死因写具体数 ──
-                await T.eval(`ind.base.surv.food = 0; ind.base.surv.water = 100; ind.base.surv.hp = 1; indAdvance(3); true;`);
+                await T.eval(`ind.base.surv.food = 0; ind.base.surv.water = 100; ind.base.surv.hp = 0.5; indAdvance(3); true;`);
                 const d4 = await J(`ind.dead`);
                 if (!d4 || d4.cause !== '饿死' || !/饱食到 0/.test(d4.detail)) bad.push('饿死的原因不对 ' + JSON.stringify(d4));
-                await T.eval(`indRespawn(); ind.base.surv.food = 100; ind.base.surv.temp = 31.5; ind.base.surv.hp = 1; indAdvance(3); true;`);
+                await T.eval(`indRespawn(); ind.base.surv.food = 100; ind.base.surv.temp = 31.5; ind.base.surv.hp = 0.5; indAdvance(3); true;`);
                 const d5 = await J(`ind.dead`);
                 if (!d5 || d5.cause !== '冻死' || !/体温 3[01]\.\d°C/.test(d5.detail)) bad.push('冻死的原因应该写体温 ' + JSON.stringify(d5));
                 await T.eval(`indRespawn(); true;`);
