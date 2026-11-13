@@ -181,4 +181,10 @@
                 if (b.dura && typeof b.dura === 'object') Object.keys(b.dura).forEach(function (k) { if (half(k)) b.dura[k] = Math.max(1, Math.round(b.dura[k] / 2)); });
                 b.duraV = 2;
             }
+            // 任务 129：工具耐久 ×3（石 40 → 120、青铜到钻石的镐 ×3，斧铲剪刀 ×1.5），剩的耐久按新旧满耐久的比例换算（只换一次）
+            if (b.duraV < 3) {
+                let OLD3 = { stone: 40, bronze: 300, iron: 600, steel: 1500, diamond: 5000 }, oldMax = function (k) { let T = typeof TL_TOOL !== 'undefined' && TL_TOOL[k]; if (!T || T.knife) return 0; let m = OLD3[T.tier]; if (!m) return 0; return T.kind === 'pick' && TL_PICK_HALF[T.tier] ? m / 2 : m; };
+                if (b.dura && typeof b.dura === 'object') Object.keys(b.dura).forEach(function (k) { let o = oldMax(k), T = mbDurTab(k); if (o && T) b.dura[k] = Math.max(1, Math.min(T.dura * 2, Math.round(b.dura[k] * T.dura / o))); });
+                b.duraV = 3;
+            }
         }
