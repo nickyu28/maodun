@@ -1208,6 +1208,7 @@
         const IND_FURN_R = { stove: 1.5, bed: 2.0, bench: 1.4, pool: 2.4, chest: 1.2, furnace: 1.2, kiln: 2.1, stone: 1.5 };
         function indApplyPos(b) { ['stove', 'bed', 'bench', 'pool'].forEach(function (k) { let p = b.pos && b.pos[k]; IND_BASE_ST[k].x = p ? p.x : IND_ST_DEF[k].x; IND_BASE_ST[k].z = p ? p.z : IND_ST_DEF[k].z; }); }
         function indGoBase(fromTrip) {
+            if (ind && ind.carve) ctCarveExit(true);
             odLeave();   // 户外的块：把树石矿记下来，没钉住的基站回背包
             let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && !a.petRef && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];   // 跟出去的宠物本来就是基地的（任务 70）
             ind.wild = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.cave = null; ind.caves = []; mbReset();
@@ -1287,6 +1288,7 @@
         const IND_SEG = 420, IND_NODE_N = 1680 * IND_K, IND_WILD_N = 56 * IND_K;   // 地图 1040 × 1040：资源点和动物按面积（原来 600 × 600 的 3 倍）
         const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin', 'seed_cotton', 'seed_cabbage', 'seed_radish'];
         function indGoTrip(seed) {
+            if (ind && ind.carve) ctCarveExit(true);
             if (ind.base.rule && typeof ind.base.away !== 'number') ind.base.away = ind.base.clock;   // 记下出门时刻，回家补算（任务 3）
             indClearWorld(); mbReset();
             ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
@@ -1376,6 +1378,7 @@
         // ── 主循环 ──
         // 暂停（P）：生存值、火、作物、动物、昼夜、毒气、辐射、反应堆、倒计时全停；继续时 ind.last 重置，不把暂停的时间补成一帧
         function indPause() {
+            if (ind && ind.carve) ctCarveExit(true);   // 暂停清掉雕模具（任务 138）
             if (!ind || ind.over || ind.loading || ind.dead || ind.paused) return;
             if (ind.panel) indPanelClose();
             ind.paused = true; ind.k = {};
@@ -1558,6 +1561,7 @@
         }
         // 死：身上的东西没了、状态恢复先存好，停在死亡画面（游戏暂停），点"回基地"才继续
         function indDie(cause, detail) {
+            if (ind && ind.carve) ctCarveExit(true);
             if (!ind || ind.over || ind.dead) return;
             let lost = Object.keys(ind.bag).length + Object.keys(ind.base.wear).length;
             ind.bag = {}; ind.base.wear = {}; ind.hotT = {};
@@ -3316,6 +3320,7 @@
         }
         function indPanelShow(kind, html) {
             if (!ind) return;
+            if (ind.carve) ctCarveExit(true);   // 开面板时雕模具退出
             let old = document.getElementById('ind-panel'), key = indPanelKey(kind);
             if (old && ind.panel === kind && ind.panelKey === key) { ind.panelDirty = false; indPanelSet(old, html); return; }
             indPanelClose(); if (!ind) return;
@@ -3639,7 +3644,7 @@
             if (k === ' ') { ind.k.jump = true; e.preventDefault(); return; }
             if (k === 'shift') { ind.k.run = true; return; }
             if (e.repeat) return;
-            if (k === 'escape') { if (indCancelWire()) return; if (ind.panel) indPanelClose(); return; }   // 任务 104：连线状态下 Esc 先取消连线
+            if (k === 'escape') { if (ind.carve && !ind.panel) { ctCarveExit(); return; } if (indCancelWire()) return; if (ind.panel) indPanelClose(); return; }   // 任务 138：Esc 退出雕模具   // 任务 104：连线状态下 Esc 先取消连线
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）
             if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); indTrashHand(); return; }   // Ctrl+Q：销毁手上那一格（5 秒能撤销）

@@ -137,6 +137,8 @@
             if (!CT_SHAPE[s]) return;
             ind.carve = { s: s, score: 0, red: 0, tries: 0, t0: ind.t, f: !!f }; indPanelClose(); ctBar();
         }
+        // 退出雕模具（任务 138）：什么都不扣（材料在雕好那一刻才扣），已攒的分数作废
+        function ctCarveExit(quiet) { if (!ind || !ind.carve) return false; ind.carve = null; ctBar(); if (!quiet) indFlash('不雕了'); return true; }
         function ctPos() { return (((ind.t - ind.carve.t0) / CALIB.sweep) % 1 + 1) % 1; }
         function ctHit() {
             let C = ind.carve; if (!C) return false;
@@ -158,13 +160,15 @@
             let e = document.getElementById('ind-carve');
             if (!ind || !ind.carve) { if (e && e.parentNode) e.parentNode.removeChild(e); return; }
             let C = ind.carve;
+            if (ind.where !== 'base' || ind.dead || ind.paused) { ind.carve = null; ctBar(); return; }
+            if (tlKind(indSel()) !== 'knife') { C.offT = C.offT === undefined ? ind.t : C.offT; if (ind.t - C.offT >= 3) { ctCarveExit(); return; } } else C.offT = undefined;   // 换成别的东西 3 秒后自动退出
             if (!e) {
                 let col = { gray: '#777', white: '#eceff1', red: '#e91e63' }, st = [];
                 CALIB.zones.forEach(function (z) { st.push(col[z[2]] + ' ' + z[0] * 360 + 'deg ' + z[1] * 360 + 'deg'); });
                 e = document.createElement('div'); e.id = 'ind-carve';
                 e.style.cssText = 'position:fixed;right:16px;bottom:90px;z-index:45;width:150px;background:rgba(0,0,0,.55);border-radius:10px;padding:8px;color:#fff;font:13px "Microsoft YaHei",sans-serif;text-align:center;';
                 e.innerHTML = '<div id="ind-carve-t"></div><div id="ind-carve-d" onpointerdown="event.preventDefault();ctHit();" style="position:relative;margin:6px auto;width:110px;height:110px;border-radius:50%;background:conic-gradient(' + st.join(',') + ');touch-action:manipulation;"><div style="position:absolute;left:14px;top:14px;right:14px;bottom:14px;border-radius:50%;background:#222;"></div><div id="ind-carve-c" style="position:absolute;left:53px;top:4px;width:4px;height:51px;background:#ffeb3b;transform-origin:50% 100%;border-radius:2px;"></div></div>' +
-                    '<button style="padding:5px 18px;border:none;border-radius:6px;background:#6d4c41;color:#fff;font-size:15px;" onpointerdown="event.preventDefault();ctHit();">刻</button>';
+                    '<button style="padding:5px 18px;border:none;border-radius:6px;background:#6d4c41;color:#fff;font-size:15px;" onpointerdown="event.preventDefault();ctHit();">刻</button> <button id="ind-carve-x" style="padding:5px 12px;border:none;border-radius:6px;background:#757575;color:#fff;font-size:15px;" onpointerdown="event.stopPropagation()" onclick="ctCarveExit()">不雕了</button>';
                 document.body.appendChild(e);
             }
             let cc = document.getElementById('ind-carve-c'), tt = document.getElementById('ind-carve-t');

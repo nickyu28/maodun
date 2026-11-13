@@ -13009,6 +13009,31 @@ async function enterExit(tab, key) {
             report('KB1 按键卡住：焦点在单选框上 E 照样开背包、窗口失焦松开 W、文字框里打字不触发', bad.length === 0, bad.join(' / '));
         }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
+        if (want('IND155')) {
+            // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ let out = {}; indGoBase(null); ind.base.rule = 'hard'; indPanelClose(); ind.paused = false;
+                    let start = function () { ind.bag = { knife: 1, clay: 5 }; indSelect('knife'); ctCarveStart('axe'); return !!ind.carve && !!document.getElementById('ind-carve'); };
+                    out.s1 = start(); indKeyDown({ key: 'Escape', target: document.body, preventDefault: function () { } }); out.esc = !ind.carve && !document.getElementById('ind-carve'); out.clay = ind.bag.clay;
+                    out.s2 = start(); out.btn = !!document.getElementById('ind-carve-x'); document.getElementById('ind-carve-x').click(); out.btnExit = !ind.carve && !document.getElementById('ind-carve');
+                    out.s3 = start(); ind.bag = { clay: 5, wood: 1 }; indSelect('wood'); ctBar(); let still = !!ind.carve; ind.t += 3.2; ctBar(); out.auto = still && !ind.carve; out.clay3 = ind.bag.clay;
+                    out.s4 = start(); indPause(); out.pause = !ind.carve; ind.paused = false;
+                    out.s5 = start(); indGoTrip(2024); out.trip = !ind.carve && !document.getElementById('ind-carve'); indGoBase(null); ind.base.rule = 'hard';
+                    out.s6 = start(); indPanelBook(''); out.panel = !ind.carve; indPanelClose();
+                    out.s7 = start(); indGoBase(null); out.base = !ind.carve; return out; })()`);
+                if (!(r.s1 && r.esc && r.clay === 5 && r.s2 && r.btn && r.btnExit && r.s3 && r.auto && r.clay3 === 5)) bad.push('Esc、"不雕了"按钮、换东西 3 秒自动退出，黏土都不变 ' + JSON.stringify(r));
+                if (!(r.s4 && r.pause && r.s5 && r.trip && r.s6 && r.panel && r.s7 && r.base)) bad.push('暂停、出门、开面板、回基地都清掉 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND155 雕模具能退出：Esc、按钮、换东西自动退出、暂停回基地出门开面板清掉、材料不扣', bad.length === 0, bad.join(' / '));
+        }
         if (ONLY || (SHARD && SHARD.i !== 1)) throw new Error('ONLY_DONE');
 
         // 2. 11 个模式
