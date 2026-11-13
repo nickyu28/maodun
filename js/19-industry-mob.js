@@ -335,16 +335,16 @@
             if ((mbIsKnife(k) || MB_SHIELD[k]) && ind.where === 'trip' && !a.petRef) { indFlash('先带回家再给它装'); return true; }
             if (mbIsKnife(k)) {
                 if (!p.weapon && mbPetCount(p) >= MB.petMax) { indFlash('最多 ' + MB.petMax + ' 只战斗的宠物'); return true; }
-                if (p.weapon) indBagAdd(p.weapon, 1);
+                if (p.weapon) indGive(p.weapon, 1);
                 indBagDel(k, 1); p.weapon = k; p.wd = MB_KNIFE[k].dura; mbPetAch(p); indSave(); return true;
             }
             if (MB_SHIELD[k]) {
-                if (p.shield) indBagAdd(p.shield, 1);
+                if (p.shield) indGive(p.shield, 1);
                 indBagDel(k, 1); p.shield = k; p.sd = MB_SHIELD[k].dura; mbPetAch(p); indSave(); return true;
             }
             let kc = indContOf(k);
             if ((p.k === 'dog' || p.k === 'cat') && kc && (kc.base === 'water_raw' || kc.base === 'water_boiled')) {
-                indBagDel(k, 1); indBagAdd(indEmptyKey(kc.mat), 1); p.hyd = 100; indSave(); return true;
+                indBagDel(k, 1); indGive(indEmptyKey(kc.mat), 1); p.hyd = 100; indSave(); return true;
             }
             return false;
         }

@@ -206,7 +206,7 @@
             }
             if (S.tool === 'erase') {
                 if (at < 0) return;
-                indBagAdd(RC_ITEM[c.els[at].k], 1); c.els.splice(at, 1);
+                indGive(RC_ITEM[c.els[at].k], 1); c.els.splice(at, 1);
                 c.w = c.w.filter(function (w) { return w[0] !== at && w[2] !== at; }).map(function (w) { return [w[0] > at && w[0] < 100 ? w[0] - 1 : w[0], w[1], w[2] > at && w[2] < 100 ? w[2] - 1 : w[2], w[3]]; });
                 indSave(); rcPanel(id); return;
             }

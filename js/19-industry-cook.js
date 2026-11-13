@@ -136,11 +136,11 @@
                 if (a.kind !== 'funnel') { indFlash(S.funnel ? '得用进料漏斗：对着炉子旁的漏斗倒' : '这个炉子旁边没有进料漏斗：工作台做一个（3 块砖或 2 个铁锭）装在炉子旁，再对着漏斗倒'); return false; }
                 if (!S.funnel) return false;
                 if (S.funnel.oil + CK.oilFuel > CK.funnelCap + 1e-6) { indFlash('漏斗装不下了，等它流一会儿'); return false; }
-                indBagDel(k, 1); indBagAdd(indEmptyKey(cc.mat), 1); S.funnel.oil += CK.oilFuel;
+                indBagDel(k, 1); indGive(indEmptyKey(cc.mat), 1); S.funnel.oil += CK.oilFuel;
                 indSave(); indFlash('倒进漏斗了：油会慢慢流进炉子，空桶还你');
                 return true;
             }
-            indBagDel(k, 1); indBagAdd(indEmptyKey(cc.mat), 1); S.fuel += CK.oilFuel;
+            indBagDel(k, 1); indGive(indEmptyKey(cc.mat), 1); S.fuel += CK.oilFuel;
             indSave(); if (ind.panel === 'stove') ind.panelDirty = true;
             indFlash('倒进炉子了，燃料 +' + CK.oilFuel + '，空桶还你');
             return true;
@@ -166,7 +166,7 @@
             if (ckOilStock(o) < 1) { indFlash(o.dry ? '干井：这个油点采完了，去别处找' : '油点空了，过一会儿会冒出来'); return false; }
             let m = indContOf(k).mat;
             if (o.n >= o.max) o.t0 = ind.t;
-            o.n--; o.got = (o.got || 0) + 1; indBagDel(k, 1); indBagAdd(indFilledKey('oil', m), 1);
+            o.n--; o.got = (o.got || 0) + 1; indBagDel(k, 1); indGive(indFilledKey('oil', m), 1);
             if (o.got >= CK.oilTotal) { o.dry = true; o.n = 0; }
             ind.nodeDirty = true; indFlash(o.dry ? '装了一桶石油，这个油点采完了（干井）' : '装了一桶石油（油点还剩 ' + o.n + ' 桶，一共还能出 ' + (CK.oilTotal - o.got) + ' 桶）');
             ckOilFirst();

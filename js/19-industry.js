@@ -699,6 +699,14 @@
             if (n > 0) { indDropAtFeet(k, n); r.ground = n; }
             return r;
         }
+        // 任务 141：给玩家东西、绝不让东西凭空没了。顺序：背包 → 仓库箱（只在基地）→ 脚边地上；返回给了几个（总是 n）。
+        // 用在"先从来源扣掉、再给玩家"的地方（桶装水、收家具、钻木取火……）；需要"装不下就不执行"的地方（采集、捡东西、合成、雕刻）先查再做，不走这里。
+        function indGive(k, n) {
+            if (!(n > 0)) return 0;
+            if (ind.where === 'base') { indBoxAdd(k, n); return n; }
+            let t = indBagAdd(k, n); if (t < n) indDropAtFeet(k, n - t);
+            return n;
+        }
         // 放不下的东西掉在脚边（不限 IND_ITEM_CAP：宁可地上多，也不能让东西凭空没了）
         function indDropAtFeet(k, n) {
             let G = ind.where === 'trip' ? (ind.tripGround || (ind.tripGround = [])) : ind.base.ground, f = indFace();
@@ -919,7 +927,7 @@
                 if (indIsBaby(a)) { indFlash('还小，挤不了奶'); return false; }
                 if (a.food < 30) { indFlash(D.name + '饿了，爱吃：' + indFoodTxt(a.k)); return false; }
                 if (clock < a.milkAt) { indFlash('牛奶还要等 ' + Math.ceil(a.milkAt - clock) + ' 秒'); return false; }
-                let mm = indContOf(k).mat; indBagDel(k, 1); indBagAdd(indFilledKey('milk', mm), 1); a.milkAt = clock + IND_MILK_EVERY; indSave(); indFlash('挤了一桶牛奶'); return true;
+                let mm = indContOf(k).mat; indBagDel(k, 1); indGive(indFilledKey('milk', mm), 1); a.milkAt = clock + IND_MILK_EVERY; indSave(); indFlash('挤了一桶牛奶'); return true;
             }
             if (a.k === 'sheep' && tlKind(k) === 'shears') {
                 if (indIsBaby(a)) { indFlash('还小，没有毛'); return false; }
@@ -1765,7 +1773,7 @@
         function indQuenchSpout(c, k) {
             if (!c.C.spout.some(function (e) { return e.t > 0; })) { indFlash('出料槽里没有烫的'); return false; }
             c.C.spout.forEach(function (e) { e.t = 0; });
-            indBagDel(k, 1); indBagAdd(indEmptyKey(indContOf(k).mat), 1); indSave();
+            indBagDel(k, 1); indGive(indEmptyKey(indContOf(k).mat), 1); indSave();
             indFlash('滋——出料槽里的锭都凉了');
             return true;
         }
@@ -1920,9 +1928,9 @@
             if (indIsEmptyCont(k)) {   // 空桶：水池接生水，海里接海水（桶是什么材质，水就装在什么材质里）；油点装一桶石油
                 let m = indContOf(k).mat;
                 if (a && a.kind === 'node' && a.o.key === 'oil') return ckFillOil(k, a.o);
-                if (a && a.kind === 'pool') { if (!plTake(1)) return true; let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); return true; }
-                if (indAtWater() && wdRiverNear(ind.map, ind.p.x, ind.p.z, 1)) { let w = indFilledKey('water_raw', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶河水（生水）'); return true; }
-                if (indAtWater()) { let w = indFilledKey('water_sea', m); indBagDel(k, 1); indBagAdd(w, 1); indFlash('接了一桶海水'); return true; }
+                if (a && a.kind === 'pool') { if (!plTake(1)) return true; let w = indFilledKey('water_raw', m); indBagDel(k, 1); indGive(w, 1); return true; }
+                if (indAtWater() && wdRiverNear(ind.map, ind.p.x, ind.p.z, 1)) { let w = indFilledKey('water_raw', m); indBagDel(k, 1); indGive(w, 1); indFlash('接了一桶河水（生水）'); return true; }
+                if (indAtWater()) { let w = indFilledKey('water_sea', m); indBagDel(k, 1); indGive(w, 1); indFlash('接了一桶海水'); return true; }
                 indFlash('到水池、河里或海边才能接水'); return false;
             }
             if (IND_FERTS[k] && a && a.kind === 'crop') return indFertilize(a.o, k);
@@ -1965,7 +1973,7 @@
             if (e.f) S.food = Math.max(0, Math.min(100, S.food + e.f));
             achEat(k); mbAte(k);
             if (e.w) { S.water = Math.max(0, Math.min(100, S.water + e.w)); if (e.w > 0 && !e.hot && S.temp > 38) S.temp = Math.max(37, S.temp - 0.5); }
-            if (e.back) indBagAdd(e.back, 1);
+            if (e.back) indGive(e.back, 1);
             let warm = false;
             if (e.cool && S.temp > 37) S.temp = Math.max(37, S.temp - e.cool);   // 冰块 −1°C、冰淇淋冰棍 −1.5°C，最低 37
             if (e.hot && S.temp < 37) { S.temp = Math.min(37, S.temp + IND_HOT_SOUP); warm = true; }   // 热汤：体温立刻 +1.5°C，最多到 37
@@ -2021,7 +2029,7 @@
             return true;
         }
         function indWater(c, k) {
-            indBagDel(k, 1); indBagAdd(indEmptyKey(indContOf(k).mat), 1);
+            indBagDel(k, 1); indGive(indEmptyKey(indContOf(k).mat), 1);
             let end = (Math.floor(ind.base.clock / IND_DAY) + 1) * IND_DAY, n = 0;
             ind.base.crops.forEach(function (o) { if (Math.hypot(o.x - c.x, o.z - c.z) <= 2.5) { o.wet = end; n++; } });
             ind.cropDirty = true; indSave();
@@ -2031,7 +2039,7 @@
         function indHarvest(c) {
             let C = IND_CROPS[c.k], y = indRoll(C.yield), s = indRoll(C.seeds);
             if (indBagAdd(c.k, y) <= 0) { indFlash('背包满了'); return false; }
-            if (s > 0) indBagAdd('seed_' + c.k, s);
+            if (s > 0) indGive('seed_' + c.k, s);
             c.times++; c.fert = false;   // 肥料收获后失效（番茄每结一次算一季）
             if (C.regrow && c.times < C.times) c.g = C.grow - C.regrow;   // 番茄：再长一阵还能结
             else { let i = ind.base.crops.indexOf(c); if (i >= 0) ind.base.crops.splice(i, 1); }
@@ -2342,7 +2350,7 @@
             if (indHouseHas(h) > 0) { indFlash('先把里面的东西搬出来'); return false; }
             if (indFits(ind.bag, indBagSlots(), k, 1) < 1) { indFlash('背包满了'); return false; }
             ind.base.houses = ind.base.houses.filter(function (x) { return x !== h; });
-            indBagAdd(k, 1); ind.furnDirty = true; indSave(); indFlash('收起了' + IND_HOUSE[h.ty].name);
+            indGive(k, 1); ind.furnDirty = true; indSave(); indFlash('收起了' + IND_HOUSE[h.ty].name);
             return true;
         }
         // 小熔炉、大窑：放在面前，不能压在别的东西上；左键打开
@@ -2394,7 +2402,7 @@
             if (ty === 'tile') {   // 空农田收回：还 1 份泥土
                 if (indCropAt(f.o.x, f.o.z)) { indFlash('上面种着东西'); return false; }
                 if (indFits(ind.bag, indBagSlots(), 'dirt', 1) < 1) { indFlash('背包满了'); return false; }
-                B.tiles = B.tiles.filter(function (t) { return t !== f.o; }); indBagAdd('dirt', 1); ind.tileDirty = true; indSave(); indFlash('收回了一格农田');
+                B.tiles = B.tiles.filter(function (t) { return t !== f.o; }); indGive('dirt', 1); ind.tileDirty = true; indSave(); indFlash('收回了一格农田');
                 return true;
             }
             if ((ty === 'stove' || IND_COOK[ty]) && stkN(ty === 'stove' ? B.stove : f.o) > 1) { indFlash('叠在一起的，左键点它选一台收'); return false; }   // 任务 68
@@ -2412,7 +2420,7 @@
             }
             let np = (ty === 'stove' || IND_COOK[ty]) ? rlPickPipes(ty === 'stove' ? 'kstove' : 'k' + f.o.id) : 0;   // 炉子接着的管道退段数（任务 58）
             let big = ty === 'chest' && f.o.big; B.box = (B.chests.filter(function (c) { return c.big; })[0] || { items: {} }).items;
-            indBagAdd(key, 1); ind.furnDirty = true; if (ind.panel) indPanelClose();
+            indGive(key, 1); ind.furnDirty = true; if (ind.panel) indPanelClose();
             indSave(); indFlash('收起了' + indFurnName(ty) + (big ? '（里面的东西一起）' : '') + (np > 0 ? '，还回了 ' + np + ' 段管道' : ''));
             return true;
         }
@@ -2816,7 +2824,7 @@
         }
         function indReleaseGas(k, x, z) {
             let g = IND_ITEMS[k].gas;
-            indBagDel(k, 1); indBagAdd('bottle', 1);
+            indBagDel(k, 1); indGive('bottle', 1);
             if (g === 'h2') {
                 if (indFireNear(x, z)) { if (ind.where === 'base') indBoom(x, z, 0, '氢气遇到火'); else indTripBoom(x, z, '氢气遇到火'); }
                 else indFlash('氢气飘走了');
@@ -2832,9 +2840,9 @@
         }
         // 钢瓶放气（Q）：液态二氧化碳放出来是干冰（每 10 份一块）；氢气碰火炸、氯气是毒气；钢瓶清空还给你
         function indReleaseCyl(k, x, z) {
-            let g = IND_ITEMS[k].cyl; indBagDel(k, 1); indBagAdd('cyl', 1);
+            let g = IND_ITEMS[k].cyl; indBagDel(k, 1); indGive('cyl', 1);
             if (indCylLiquid(g)) {
-                let m = Math.floor(g.co2 / 10); indBagAdd('dry_ice', m);
+                let m = Math.floor(g.co2 / 10); indGive('dry_ice', m);
                 indFlash('放气放出了干冰 ×' + m); return true;
             }
             if (g.h2 && indFireNear(x, z)) { if (ind.where === 'base') indBoom(x, z, 0, '氢气遇到火'); else indTripBoom(x, z, '氢气遇到火'); return true; }
@@ -2904,7 +2912,7 @@
                 hot = true;
                 if (ind.hotT[k] === undefined) ind.hotT[k] = IND_HOT_COOL;
                 ind.hotT[k] -= dt;
-                if (ind.hotT[k] <= 0) { let n = ind.bag[k]; delete ind.bag[k]; delete ind.hotT[k]; indBagAdd(c, n); }
+                if (ind.hotT[k] <= 0) { let n = ind.bag[k]; delete ind.bag[k]; delete ind.hotT[k]; indGive(c, n); }
             });
             Object.keys(ind.hotT).forEach(function (k) { if (!ind.bag[k]) delete ind.hotT[k]; });
             if (hot && indHard() && !ind.bag.tongs) indHurt(IND_HOT_DPS * dt, 'burn', indHotDetail());
@@ -2917,7 +2925,7 @@
         function indQuench(k) {
             let a = indAim();
             if (!((a && a.kind === 'pool') || indAtWater())) { indFlash(indName(k) + '：放凉要泡水，或者放地上等一会儿'); return false; }
-            let c = IND_ITEMS[k].hot, n = ind.bag[k]; delete ind.bag[k]; if (ind.hotT) delete ind.hotT[k]; indBagAdd(c, n);
+            let c = IND_ITEMS[k].hot, n = ind.bag[k]; delete ind.bag[k]; if (ind.hotT) delete ind.hotT[k]; indGive(c, n);
             indFlash('滋——' + indName(c) + '凉了'); return true;
         }
 
@@ -2931,7 +2939,7 @@
                 if (after > cap) { indFlash('先把多出来的格子清空'); return false; }
             }
             indBagDel(k, 1); ind.base.wear[sl] = k;
-            if (old) indBagAdd(old, 1);
+            if (old) indGive(old, 1);
             indSave(); indFlash('穿上了' + indName(k) + (IND_ITEMS[k].blast ? '：' + IND_ITEMS[k].use : ''));
             return true;
         }
@@ -2969,12 +2977,15 @@
                 let B = Object.assign({}, ind.bag);
                 Object.keys(r.in).forEach(function (k) { B[k] -= r.in[k]; if (B[k] <= 0) delete B[k]; });
                 if (indFits(B, indBagSlots(), r.out, r.n || 1) < (r.n || 1)) { indFlash('背包满了'); return false; }
+                B[r.out] = (B[r.out] || 0) + (r.n || 1);   // 任务 141：还回来的东西（空桶空瓶）也要放得下，不然整个不做
+                let okBack = Object.keys(r.back || {}).every(function (k) { if (indFits(B, indBagSlots(), k, r.back[k]) < r.back[k]) return false; B[k] = (B[k] || 0) + r.back[k]; return true; });
+                if (!okBack) { indFlash('背包满了'); return false; }
             }
             Object.keys(r.in).forEach(function (k) { indBagDel(k, r.in[k]); });
             if (r.gh) { ind.base.gh = true; if (ind.where === 'base') indBuildGh(); indFlash('暖棚盖好了，棚里的作物不管季节都长'); }
             else if (r.glass) { ind.base.glass = true; if (ind.where === 'base') indBuildGh(); indFlash('玻璃暖棚盖好了，棚子变大了'); }
             else if (r.pot) { ind.base.pot = true; indFlash('黄铜大锅装好了，灶台做吃的一炉最多 ' + IND_BATCH_POT + ' 份'); }
-            else { indBagAdd(r.out, r.n || 1); if (r.back) Object.keys(r.back).forEach(function (k) { indBagAdd(k, r.back[k]); }); indFlash('做好了：' + indName(r.out) + (r.n ? '×' + r.n : '')); }   // back：还回来的东西（空桶）
+            else { indGive(r.out, r.n || 1); if (r.back) Object.keys(r.back).forEach(function (k) { indGive(k, r.back[k]); }); indFlash('做好了：' + indName(r.out) + (r.n ? '×' + r.n : '')); }   // back：还回来的东西（空桶）
             indSave(); if (ind.panel === 'bench') indPanelBench(); else if (ind.panel === 'bag') indPanelBag();
             return true;
         }
@@ -3224,10 +3235,10 @@
             let cc = indContOf(k);
             if (cc && cc.base === 'oil') {   // 桶装的油：硬核得用进料漏斗；悠闲直接倒，空桶还你
                 if (indHard()) { indFlash('油桶得用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒'); return; }
-                indBagDel(k, 1); indBagAdd(indEmptyKey(cc.mat), 1); indCookCur().C.fuel += IND_ITEMS[k].fuel;
+                indBagDel(k, 1); indGive(indEmptyKey(cc.mat), 1); indCookCur().C.fuel += IND_ITEMS[k].fuel;
                 indSave(); indPanelStove(); return;
             }
-            indBagDel(k, 1); indCookCur().C.fuel += IND_ITEMS[k].fuel; if (IND_ITEMS[k].back) indBagAdd(IND_ITEMS[k].back, 1);   // 天然气烧完钢瓶还你
+            indBagDel(k, 1); indCookCur().C.fuel += IND_ITEMS[k].fuel; if (IND_ITEMS[k].back) indGive(IND_ITEMS[k].back, 1);   // 天然气烧完钢瓶还你
             indSave(); indPanelStove();
         }
         function indStoveFire(lv) {
@@ -3517,7 +3528,7 @@
             let U = ind && ind.undo; if (!U || Date.now() >= U.until) { indUndoBar(); return false; }
             if (U.where === 'bag') {
                 if (indFits(ind.bag, indBagSlots(), U.k, U.n) < U.n) { indFlash('放不下了'); return false; }
-                indBagAdd(U.k, U.n);
+                indGive(U.k, U.n);
             } else {
                 let c = ind.base.chests.filter(function (x) { return x.id === U.cid; })[0];
                 if (!c) { indFlash('箱子没了'); return false; }

@@ -62,7 +62,7 @@
         // 拿空钢瓶右键天然气喷口：装一瓶
         function rkFillVent(o) {
             if (!(ind.bag.cyl > 0)) return false;
-            indBagDel('cyl', 1); indBagAdd('gas_ng', 1); indFlash('装了一瓶天然气（喷口还在冒，别点火）'); return true;
+            indBagDel('cyl', 1); indGive('gas_ng', 1); indFlash('装了一瓶天然气（喷口还在冒，别点火）'); return true;
         }
         // 每帧（远征里）：引线倒数、喷口枯竭、喷口旁有火就爆炸
         function rkTick(dt) {

@@ -148,9 +148,12 @@
             C.tries++;
             let zone = calibZoneAt(ctPos());
             if (zone === 'red') C.red++;
-            C.score = Math.max(0, C.score + (CT_PTS[zone] || -1));
+            let nsc = Math.max(0, C.score + (CT_PTS[zone] || -1));
+            let rk = 'mold_' + C.s + (C.f ? '_f' : '') + '_raw';
+            if (nsc >= CT_SHAPE[C.s].cuts) { let B = Object.assign({}, ind.bag); B[mat] -= 2; if (B[mat] <= 0) delete B[mat]; if (indFits(B, indBagSlots(), rk, 1) < 1) { C.tries--; if (zone === 'red') C.red--; indFlash('背包满了，先腾个地方'); return true; } }   // 任务 141：生模具放不下就不收刀，黏土和模具都不丢
+            C.score = nsc;
             if (C.score < CT_SHAPE[C.s].cuts) { ctBar(); return true; }
-            let rk = 'mold_' + C.s + (C.f ? '_f' : '') + '_raw'; indBagDel(mat, 2); indBagAdd(rk, 1);
+            indBagDel(mat, 2); indGive(rk, 1);
             let qk = C.s + (C.f ? '_f' : ''), Q = ind.base.moldQ = ind.base.moldQ || {}; (Q[qk] = Q[qk] || []).push(CT.qFixed);
             indFlash('雕好了' + indName(rk) + '（烧硬以后能用 ' + CT.qFixed + ' 次）'); ind.carve = null; ctBar(); indSave();
             return true;

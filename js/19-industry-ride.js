@@ -137,7 +137,7 @@
         }
         function rdAutoToggle() {
             let c = rdCar();
-            if (c.auto) { c.auto = false; indBagAdd('chip_auto', 1); }
+            if (c.auto) { c.auto = false; indGive('chip_auto', 1); }
             else if (ind.bag.chip_auto > 0) { indBagDel('chip_auto', 1); c.auto = true; }
             else indFlash('背包里没有自动驾驶芯片');
             indSave(); if (ind.panel === 'veh') rdPanel();

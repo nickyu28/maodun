@@ -410,7 +410,7 @@
 
         // 二氧化硫瓶放掉：一团毒气云（规则同氯气）；瓶子还给你
         function nkReleasePoison(k, x, z) {
-            indBagDel(k, 1); indBagAdd('bottle', 1);
+            indBagDel(k, 1); indGive('bottle', 1);
             ind.clouds = ind.clouds || [];
             let m = new THREE.Mesh(indGeo(new THREE.SphereGeometry(IND_GAS.r, 12, 8)), indMat(new THREE.MeshBasicMaterial({ color: 0xfff176, transparent: true, opacity: 0.4, depthWrite: false })));
             m.position.set(x, 1, z); indAdd(m);

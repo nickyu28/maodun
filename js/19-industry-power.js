@@ -155,7 +155,7 @@
         function pwFx() { let B = ind.base; if (!B.fx) B.fx = {}; return B.fx; }
         function pwDrink(k) {
             let fx = pwFx(), kind = IND_ITEMS[k].potion;
-            indBagDel(k, 1); indBagAdd('bottle', 1);
+            indBagDel(k, 1); indGive('bottle', 1);
             if (kind === 'speed') { fx.speed = PX.speedT; fx.weak = 0; indFlash('喝了速度药：跑得快一半，采集也快，3 分钟'); }
             else {
                 fx.heal = PX.healT; fx.healLeft = PX.healAmt; ind.sickT = 0;

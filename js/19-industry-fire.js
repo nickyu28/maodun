@@ -104,14 +104,14 @@
                 if (!(ind.bag.wood_dry > 0) || !fiTinder()) { ind.drill = null; indFlash('干木头或引火物没了，停了'); }
                 else if (indSel() === 'wood_dry') {
                     D.t += dt;
-                    if (D.t >= FI.drill) { ind.drill = null; let t = fiTinder(); indBagDel('wood_dry', 1); indBagDel(t, 1); indBagAdd('ember', 1); fiEmberAdd(); indFlash('钻出火种了'); ind.hudSig = ''; }
+                    if (D.t >= FI.drill) { ind.drill = null; let t = fiTinder(); indBagDel('wood_dry', 1); indBagDel(t, 1); indGive('ember', 1); fiEmberAdd(); indFlash('钻出火种了'); ind.hudSig = ''; }
                 }
             }
             // 火种 60 秒灭
             let E = ind.base.emberAt = ind.base.emberAt || [];
             while (E.length < (ind.bag.ember || 0)) E.push(ind.t + FI.ember);   // 新捡到的（地上的、读档带着的）从现在算 60 秒
             if (E.length) {
-                while (E.length && E[0] <= ind.t) { E.shift(); if (ind.bag.ember > 0) { indBagDel('ember', 1); indBagAdd('ash', 1); indFlash('火种灭了'); } }
+                while (E.length && E[0] <= ind.t) { E.shift(); if (ind.bag.ember > 0) { indBagDel('ember', 1); indGive('ash', 1); indFlash('火种灭了'); } }
                 if ((ind.bag.ember || 0) < E.length) E.splice(0, E.length - (ind.bag.ember || 0));
             }
             // 地上的木头晾干（只在基地）
@@ -134,7 +134,7 @@
             let k = Object.keys(ind.bag).filter(function (x) { let c = indContOf(x); return c && c.base === 'oil' && ind.bag[x] > 0; })[0];
             if (!k) { indFlash('打火机还剩 ' + (ind.base.lighterN || 0) + ' 次'); return true; }
             if ((ind.base.lighterN || 0) >= FI.lighterN) { indFlash('打火机是满的（' + FI.lighterN + ' 次）'); return true; }
-            indBagDel(k, 1); indBagAdd(indEmptyKey(indContOf(k).mat), 1); ind.base.lighterN = FI.lighterN; indSave(); 
+            indBagDel(k, 1); indGive(indEmptyKey(indContOf(k).mat), 1); ind.base.lighterN = FI.lighterN; indSave(); 
             return true;
         }
         // 山地、古老岩层挖大石头 15% 多掉 1 个燧石
@@ -143,7 +143,7 @@
             indGather = function (o) {
                 let n0 = o && o.n, d0 = o && o.dead, rock = o && o.rock && !o.hard && o.key === 'stone' && ind.where === 'trip' && indHard(), bm = rock ? indBiome(ind.map, o.x, o.z) : '';
                 let r = g0.apply(this, arguments);
-                if (rock && (bm === 'mountain' || bm === 'ancient') && (o.n !== n0 || o.dead !== d0) && indRand() < FI.flintDrop) { indBagAdd('flint', 1); }
+                if (rock && (bm === 'mountain' || bm === 'ancient') && (o.n !== n0 || o.dead !== d0) && indRand() < FI.flintDrop) { indGive('flint', 1); }
                 return r;
             };
         })();

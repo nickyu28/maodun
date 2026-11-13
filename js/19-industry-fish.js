@@ -41,7 +41,7 @@
         }
         function wlUse(k) {
             let p = pdFront(), w = ind.where === 'base' ? wlAt(p.i, p.j) : null; if (!w) return false;
-            if (indIsEmptyCont(k)) { if (w.w < 1 - 1e-9) { indFlash('井里没水'); return true; } w.w -= 1; indBagDel(k, 1); indBagAdd(indFilledKey('water_raw', indContOf(k).mat), 1); return true; }
+            if (indIsEmptyCont(k)) { if (w.w < 1 - 1e-9) { indFlash('井里没水'); return true; } w.w -= 1; indBagDel(k, 1); indGive(indFilledKey('water_raw', indContOf(k).mat), 1); return true; }
             return false;
         }
         function wlTick(dt) {

@@ -43,7 +43,7 @@
             let G = pdGroup(c), w = pdWater(G), kc = k && indContOf(k);
             if (fhUse(k, c, G)) return true;
             if (k === 'pond_lid') { if (c.lid) { indFlash('这格已经盖了'); return true; } indBagDel(k, 1); c.lid = true; ind.pdDirty = true; indSave(); return true; }
-            if (c.lid && !(k && tlKind(k) === 'shovel')) { indBagAdd('pond_lid', 1); c.lid = false; ind.pdDirty = true; indSave(); return true; }
+            if (c.lid && !(k && tlKind(k) === 'shovel')) { indGive('pond_lid', 1); c.lid = false; ind.pdDirty = true; indSave(); return true; }
             if (k === 'clay' || k === 'brick') {
                 let need = k === 'clay' ? 2 : 1; if (c.l) { indFlash('这格已经铺了'); return true; }
                 if ((ind.bag[k] || 0) < need) { indFlash('铺一格要 ' + need + ' 份' + indName(k)); return true; }
@@ -52,18 +52,18 @@
             if (k && tlKind(k) === 'shovel') {
                 let soil = (ind.bag.dirt || 0) >= PD.fill ? 'dirt' : (ind.bag.sand || 0) >= PD.fill ? 'sand' : null;
                 if (!soil) { indFlash('填回一格要 ' + PD.fill + ' 份泥土或沙子'); return true; }
-                indBagDel(soil, PD.fill); let left = w - (c.w || 0); if (c.lid) indBagAdd('pond_lid', 1);
+                indBagDel(soil, PD.fill); let left = w - (c.w || 0); if (c.lid) indGive('pond_lid', 1);
                 ind.base.pond = pdCells().filter(function (x) { return x !== c; });
                 G.filter(function (x) { return x !== c; }).forEach(function (x) { x.w = 0; }); let rest = G.filter(function (x) { return x !== c; }); if (rest.length) { rest[0].w = left; pdLevel(pdGroup(rest[0])); }
                 ind.pdDirty = true; indSave(); return true;
             }
             if (indIsEmptyCont(k)) {
                 if (w < 1 - 1e-9) { indFlash('池子里没水了'); return true; }
-                G.forEach(function (x) { x.w -= 1 / G.length; }); indBagDel(k, 1); indBagAdd(indFilledKey('water_raw', kc.mat), 1); ind.pdDirty = true; return true;
+                G.forEach(function (x) { x.w -= 1 / G.length; }); indBagDel(k, 1); indGive(indFilledKey('water_raw', kc.mat), 1); ind.pdDirty = true; return true;
             }
             if (kc && (kc.base === 'water_raw' || kc.base === 'water_boiled' || kc.base === 'water_sea')) {
                 if (w > G.length * PD.cap - 1 + 1e-9) { indFlash('池子满了（' + G.length * PD.cap + ' 桶）'); return true; }
-                G.forEach(function (x) { x.w += 1 / G.length; }); indBagDel(k, 1); indBagAdd(indEmptyKey(kc.mat), 1); ind.pdDirty = true; return true;
+                G.forEach(function (x) { x.w += 1 / G.length; }); indBagDel(k, 1); indGive(indEmptyKey(kc.mat), 1); ind.pdDirty = true; return true;
             }
             if (!k) {
                 if (w < PD.sip) { indFlash('池子里没水了'); return true; }

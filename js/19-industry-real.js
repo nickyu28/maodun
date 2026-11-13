@@ -75,7 +75,7 @@
             let c = indContOf(k);
             if (c && !c.empty && c.base === 'water_raw') {
                 if (d.wt > 0) { indFlash('水箱还有水（剩 ' + Math.ceil(d.wt) + ' 秒），用完再装'); return false; }
-                indBagDel(k, 1); indBagAdd(indEmptyKey(c.mat), 1); d.wt = RL_GEN.tank; d.wm = c.mat; indSave();
+                indBagDel(k, 1); indGive(indEmptyKey(c.mat), 1); d.wt = RL_GEN.tank; d.wm = c.mat; indSave();
                 indFlash('水箱装满了（能发 ' + RL_GEN.tank + ' 秒电）'); return true;
             }
             if (c && !c.empty) { indFlash('水箱只装生水'); return false; }
@@ -160,30 +160,30 @@
             if (d.ty === 'tower') {
                 if (c && !c.empty && c.base === 'water_raw') {
                     if (d.wu > RL_PIPE.tower - 1) { indFlash('水塔满了'); return false; }
-                    indBagDel(k, 1); indBagAdd(indEmptyKey(c.mat), 1); d.wu = (d.wu || 0) + 1; indSave(); indFlash('倒进水塔一桶（' + Math.floor(d.wu) + ' / ' + RL_PIPE.tower + '）'); return true;
+                    indBagDel(k, 1); indGive(indEmptyKey(c.mat), 1); d.wu = (d.wu || 0) + 1; indSave(); indFlash('倒进水塔一桶（' + Math.floor(d.wu) + ' / ' + RL_PIPE.tower + '）'); return true;
                 }
                 indFlash(IND_DEVS.tower.name + '：水 ' + Math.floor(d.wu || 0) + ' / ' + RL_PIPE.tower + ' 桶（拿钢管接水泵和设备，拿一桶生水能倒进去）'); return false;
             }
             if (d.ty === 'oiltank') {
                 if (c && !c.empty && c.base === 'oil') {
                     if (d.oil > RL_PIPE.tank - 1) { indFlash('储油罐满了'); return false; }
-                    indBagDel(k, 1); indBagAdd(indEmptyKey(c.mat), 1); d.oil = (d.oil || 0) + 1; indSave(); indFlash('倒进储油罐一桶（' + Math.floor(d.oil) + ' / ' + RL_PIPE.tank + '）'); return true;
+                    indBagDel(k, 1); indGive(indEmptyKey(c.mat), 1); d.oil = (d.oil || 0) + 1; indSave(); indFlash('倒进储油罐一桶（' + Math.floor(d.oil) + ' / ' + RL_PIPE.tank + '）'); return true;
                 }
                 if (c && c.empty) {
                     if (!(d.oil >= 1)) { indFlash('储油罐里不够一桶'); return false; }
                     if (indFits(ind.bag, indBagSlots(), indFilledKey('oil', c.mat), 1) < 1 && ind.bag[k] > 1) { indFlash('背包满了'); return false; }
-                    indBagDel(k, 1); indBagAdd(indFilledKey('oil', c.mat), 1); d.oil -= 1; indSave(); indFlash('装出来一桶石油'); return true;
+                    indBagDel(k, 1); indGive(indFilledKey('oil', c.mat), 1); d.oil -= 1; indSave(); indFlash('装出来一桶石油'); return true;
                 }
                 indFlash(IND_DEV_INFO.oiltank(d) + '（拿油桶左键倒进去，拿空桶装出来）'); return false;
             }
             if (d.ty === 'gastank') {
                 if (k === 'gas_ng') {
                     if (d.gas > RL_PIPE.tank - 1) { indFlash('储气罐满了'); return false; }
-                    indBagDel(k, 1); indBagAdd('cyl', 1); d.gas = (d.gas || 0) + 1; indSave(); indFlash('灌进储气罐一瓶（' + Math.floor(d.gas) + ' / ' + RL_PIPE.tank + '），空钢瓶还你'); return true;
+                    indBagDel(k, 1); indGive('cyl', 1); d.gas = (d.gas || 0) + 1; indSave(); indFlash('灌进储气罐一瓶（' + Math.floor(d.gas) + ' / ' + RL_PIPE.tank + '），空钢瓶还你'); return true;
                 }
                 if (k === 'cyl') {
                     if (!(d.gas >= 1)) { indFlash('储气罐里不够一瓶'); return false; }
-                    indBagDel('cyl', 1); indBagAdd('gas_ng', 1); d.gas -= 1; indSave(); indFlash('装出来一瓶天然气'); return true;
+                    indBagDel('cyl', 1); indGive('gas_ng', 1); d.gas -= 1; indSave(); indFlash('装出来一瓶天然气'); return true;
                 }
                 indFlash(IND_DEV_INFO.gastank(d) + '（拿天然气钢瓶左键灌进去，拿空钢瓶装出来）'); return false;
             }

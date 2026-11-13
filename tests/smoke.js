@@ -13278,6 +13278,36 @@ async function enterExit(tab, key) {
             await T.close();
             report('ES2 面板关掉自动锁回鼠标：Esc 关就锁、被拒后点一下只锁不当点击、按键补锁、背包、触屏和本来没锁的不动', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND156')) {
+            // IND156 背包满了东西不能凭空没（任务 141）：背包塞满以后做东西（含还回来的空桶）、雕刻收刀、往池子里灌桶，前后背包 + 箱子 + 地上的总数对得上；放不下的合成整个拒绝、原料不扣；给东西溢出到箱子和地上
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; indPanelClose(); let out = {};
+                    let total = function () { let t = {}, add = function (o) { Object.keys(o).forEach(function (k) { t[k] = (t[k] || 0) + o[k]; }); }; add(ind.bag); B.chests.forEach(function (c) { add(c.items); }); B.ground.forEach(function (g) { t[g.k] = (t[g.k] || 0) + 1; }); return t; };
+                    let junk = Object.keys(IND_ITEMS).filter(function (k) { return !IND_ITEMS[k].tool && !IND_ITEMS[k].hot && !IND_ITEMS[k].dev && !/^cyl|@/.test(k) && !IND_ITEMS[k].wear; });
+                    let fill = function (keep) { ind.bag = Object.assign({}, keep); let i = 0; while (indSlotsOf(ind.bag) < indBagSlots() && i < junk.length) { if (!(junk[i] in ind.bag)) ind.bag[junk[i]] = 99; i++; } };
+                    B.chests.forEach(function (c) { c.items = {}; }); B.ground = [];
+                    let ri = IND_CRAFT.findIndex(function (q) { return q.out === 'bulb_ar'; }), rc = IND_CRAFT[ri]; fill(Object.assign({}, rc.in)); let bagBefore = JSON.stringify(ind.bag), t0 = JSON.stringify(total()), ok = indCraft(ri); out.craft = ok; out.craftSame = ok === false ? JSON.stringify(ind.bag) === bagBefore : true; out.craftTotal = ok === false ? JSON.stringify(total()) === t0 : (function () { let t = total(), want = JSON.parse(t0); Object.keys(rc.in).forEach(function (k) { want[k] -= rc.in[k]; }); want[rc.out] = (want[rc.out] || 0) + (rc.n || 1); Object.keys(rc.back || {}).forEach(function (k) { want[k] = (want[k] || 0) + rc.back[k]; }); return Object.keys(want).every(function (k) { return (t[k] || 0) === want[k]; }) && Object.keys(t).every(function (k) { return (want[k] || 0) === t[k]; }); })(); out.hasBack = !!rc.back;
+                    B.chests.forEach(function (c) { c.items = {}; }); B.ground = []; ind.bag = {}; fill({ knife: 1, clay: 2 }); indSelect('knife'); ctCarveStart('knife'); ind.carve.score = CT_SHAPE.knife.cuts - 1; ind.carve.t0 = ind.t - CALIB.sweep * 0.5; let t1 = JSON.stringify(total()); ctHit(); let t2 = total();
+                    out.carveClay = ind.bag.clay === 2 && !t2.mold_knife_raw ? 'kept' : (t2.mold_knife_raw === 1 && (t2.clay || 0) === 0 ? 'made' : 'lost'); out.carveLeft = !!ind.carve; ind.carve = null; ctBar();
+                    B.chests.forEach(function (c) { c.items = {}; }); B.ground = []; ind.bag = {}; fill({ bucket: 2 }); let t3 = total(), f0 = 0; Object.keys(t3).forEach(function (k) { if (/^bucket|^water_raw/.test(k)) f0 += t3[k]; });
+                    let p = pdFront(); B.pond = [{ i: p.i, j: p.j, w: 3 }]; ind.pdDirty = true; indSelect('bucket'); pdUse('bucket'); let t4 = total(), buckets = 0; Object.keys(t4).forEach(function (k) { if (/^bucket|^water_raw/.test(k)) buckets += t4[k]; }); out.fillTotal = buckets; out.fillBefore = f0; out.fillMoved = (f0 === buckets);
+                    B.chests.forEach(function (c) { c.items = {}; }); B.ground = []; ind.bag = {}; fill({}); let g0 = indSlotsOf(ind.bag); indGive('wood', 5); let t5 = total(); out.give = (t5.wood || 0) - 99 >= 0 ? 'ok' : 'lost'; out.giveTotal = (t5.wood || 0);
+                    return out; })()`);
+                if (!(r.craftSame && r.craftTotal)) bad.push('背包塞满做东西：放不下就整个拒绝、原料不扣 ' + JSON.stringify(r));
+                if (!(r.carveClay === 'kept' || r.carveClay === 'made')) bad.push('背包塞满雕刻：生模具放不下不收刀，黏土不丢 ' + JSON.stringify(r));
+                if (!(r.fillTotal === r.fillBefore && r.fillBefore >= 2)) bad.push('背包塞满灌水桶：桶和水桶总数不变 ' + JSON.stringify(r));
+                if (!(r.give === 'ok' && r.giveTotal >= 5)) bad.push('indGive 溢出到箱子和地上、总数守恒 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND156 背包满了东西不凭空没：做东西、雕刻、灌桶、溢出给东西，前后总数对得上', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

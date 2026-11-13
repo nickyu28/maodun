@@ -229,7 +229,7 @@
             P.tool = indSel() === 'cactus' ? null : indSel();
             P.p += dt / need;
             if (P.p < 1) return;
-            indBagDel('cactus', 1); indBagAdd('cactus_peeled', 1); tlUse(P.tool);   // 拔一个，工具耐久 −1
+            indBagDel('cactus', 1); indGive('cactus_peeled', 1); tlUse(P.tool);   // 拔一个，工具耐久 −1
             if (P.q > 0 && ind.bag.cactus > 0) { P.q--; P.p = 0; indFlash('拔好一个，接着拔下一个'); }
             else { ind.peel = null; indFlash('拔好了刺：去刺仙人掌'); }
         }
@@ -459,6 +459,6 @@
             if (indFits(ind.bag, indBagSlots(), 'furn_bench', 1) < 1) { indFlash('背包满了'); return false; }
             ind.tripBench = (ind.tripBench || []).filter(function (x) { return x !== b; });
             (b.mesh || []).forEach(function (m) { m.visible = false; });
-            indBagAdd('furn_bench', 1); indFlash('收回了工作台');
+            indGive('furn_bench', 1); indFlash('收回了工作台');
             return true;
         }
