@@ -284,13 +284,13 @@
         const IND_TOOL_NAME = ['空手', '石稿', '青铜稿', '铁稿', '钢稿', '钻石稿'];
         // 地貌：名字、地面颜色、会刷什么资源（权重）
         const IND_BIOMES = {
-            plain: { name: '平原', col: 0x9ccc65, res: { clay: 3, stone: 2, wood: 1, seeds: 2 } },
-            forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 2, seeds: 2 } },
+            plain: { name: '平原', col: 0x9ccc65, res: { clay: 3, stone: 2, wood: 1, seeds: 2, coal: 1 } },
+            forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 2, seeds: 2, coal: 1 } },
             beach: { name: '海边', col: 0xfff59d, res: { salt: 5, sand_sn: 1, wood: 1 } },
-            mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, wood: 2, ore_cu: 2, ore_zn: 2, ore_sn: 3, ore_fe: 2, coal: 2 } },
+            mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, wood: 2, ore_cu: 2, ore_zn: 2, ore_sn: 3, ore_fe: 2, coal: 3 } },
             desert: { name: '盐湖沙漠', col: 0xe6c27a, res: { salt: 5, oil: 1, cactus: 3 } },
             volcano: { name: '火山', col: 0x5d4037, res: { sulfur: 5, stone: 1 } },
-            ancient: { name: '古老岩层', col: 0x546e7a, res: { ore_u: 2, stone: 2, ore_fe: 1 } }
+            ancient: { name: '古老岩层', col: 0x546e7a, res: { ore_u: 2, stone: 2, ore_fe: 1, coal: 2 } }
         };
         IND_BIOMES.mountain.res.magnet = 1;
         // 作物：生长秒数（游戏时间，浇了水按全速，没浇水半速）、收获几个、留几个种子；番茄熟了以后还能再结
@@ -1315,7 +1315,7 @@
                     for (let t = 0; t < 30 && got < want; t++) {
                         let a = r() * Math.PI * 2, d = got ? 2 + r() * 2 : 0, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d, ph = indHeight(M, px, pz);
                         if (ph < -1.0 || Math.abs(px) > IND_MAP - 2 || Math.abs(pz) > IND_MAP - 2 || Math.hypot(px, pz) < 8) continue;
-                        let n = 10 + Math.floor(r() * 21);
+                        let n = (10 + Math.floor(r() * 21)) * (key === 'coal' ? 2 : 1);   // 任务 136：煤露头份数 ×2（20～60）
                         ind.nodes.push({ key: key, x: px, z: pz, y: ph, n: n, n0: n, out: true, seed: IND_SEED_KINDS[0], dead: false }); got++;
                     }
                     continue;
