@@ -1,8 +1,9 @@
 // 猫盾工业：月球 M2——选落点（任务 83）。放在 19-industry-moon.js 后面（最后一个）。调试入口：?hcdebug=1 下控制台 indMoonPick()；真入口以后接。只做单人。
+// 任务 127：坡度上限 5° → 10°（落点会压平，10° 压平最多削垫 5 米），坑沿判定 1.1 倍；界面一打开就用淡绿标出所有能选的位置；鼠标悬停就写不行的原因、高亮造成不行的东西。
 // 全屏俯视图画整张 600 × 600 米的图：月海深灰、高地浅灰、撞击坑环形阴影、月溪画线、极地水冰坑蓝白、熔岩管天窗黑点，带图例，淡淡的 40 米格线（以后插旗用）。**不画矿**：画图只读地形和地貌特征列表，
 // 不读资源点（moonRes 数着，画一遍应该是 0 次）。点一下选中心，画 60 × 45 米的矩形：绿 = 能选，红 = 不行（矩形里有撞击坑、月溪、极地坑、天窗，平均坡度 > 5°，离边不到 30 米）。
 // 确认（定下来就不能挪）后存 ind.base.moon.site = { x, z }，以后再选一律拒绝；矩形里的地面压平到落点高度，压平的高度跟 site 一起存档。
-        const MP = { w: 60, d: 45, edge: 30, slope: 5, near: 150, grid: 40, px: 2 };
+        const MP = { w: 60, d: 45, edge: 30, slope: 10, cell: 25, near: 150, grid: 40, px: 2 };
         function mpFlatH(MG, x, z) { return moonHeight(MG, x, z); }
         // 矩形里有没有撞击坑、月溪、极地坑、天窗；坡度；离边
         function mpCheck(MG, x, z) {
@@ -18,6 +19,16 @@
             let slope = tot / n; if (slope > MP.slope) why.push('坡度 ' + slope.toFixed(1) + '°');
             let bm = moonBiome(MG, x, z), ice = MG.pits.some(function (p) { return Math.hypot(p.x - x, p.z - z) <= MP.near; });
             return { ok: why.length === 0, why: why, slope: slope, alt: Math.round(moonHeight(MG, x, z) - MN.off), name: IND_BIOMES[bm].name, ice: ice };
+        }
+        // 造成"不行"的东西：矩形里的坑、极地坑、天窗、月溪的点（高亮用）
+        function mpCulprits(MG, x, z) {
+            let hw = MP.w / 2, hd = MP.d / 2, L = [];
+            let dr = function (c, r) { let dx = Math.max(Math.abs(x - c.x) - hw, 0), dz = Math.max(Math.abs(z - c.z) - hd, 0); return Math.hypot(dx, dz) < r; };
+            MG.craters.forEach(function (c) { if (dr(c, c.r * 1.1)) L.push({ x: c.x, z: c.z, r: c.r * 1.1 }); });
+            MG.pits.forEach(function (c) { if (dr(c, c.r)) L.push({ x: c.x, z: c.z, r: c.r }); });
+            MG.sky.forEach(function (c) { if (dr(c, c.r)) L.push({ x: c.x, z: c.z, r: c.r }); });
+            for (let i = -hw; i <= hw; i += 5) for (let j = -hd; j <= hd; j += 5) if (MG.rills.some(function (rl) { return mnRillDist(rl, x + i, z + j) < rl.w / 2 + 2 * rl.d; })) L.push({ x: x + i, z: z + j, r: 3 });
+            return L;
         }
         function mpDrawBase(g, MG) {
             let N = 600 / MP.px, img = g.createImageData(N, N), col = { moon_mare: [58, 63, 68], moon_mid: [125, 129, 133], moon_high: [176, 180, 184], moon_pole: [207, 216, 220] };
@@ -48,19 +59,29 @@
                 '<div style="margin-top:8px;"><button id="mp-ok" disabled style="' + IND_BTN + 'background:#2e7d32;font-size:18px;padding:10px 24px;opacity:.5;" onclick="mpConfirm()">定在这里</button><button id="mp-close" style="' + IND_BTN + 'font-size:18px;padding:10px 24px;" onclick="indMoonPickClose()">关上</button></div>';
             document.body.appendChild(d);
             let cv = document.getElementById('mp-canvas'), g = cv.getContext('2d'); mpDrawBase(g, MG);
-            MP_STATE = { base: g.getImageData(0, 0, N, N), sel: null };
+            let ok = 0, tot = 0; g.fillStyle = 'rgba(129,199,132,.38)';   // 淡绿：所有能选的位置（每 25 米一格）
+            for (let zz = -300 + MP.cell / 2; zz < 300; zz += MP.cell) for (let xx = -300 + MP.cell / 2; xx < 300; xx += MP.cell) { tot++; if (mpCheck(MG, xx, zz).ok) { ok++; g.fillRect((xx - MP.cell / 2 + 300) / MP.px, (zz - MP.cell / 2 + 300) / MP.px, MP.cell / MP.px, MP.cell / MP.px); } }
+            MP_STATE = { base: g.getImageData(0, 0, N, N), sel: null, okCells: ok, cells: tot };
+            cv.addEventListener('mousemove', function (e) { let r = cv.getBoundingClientRect(); mpShow(Math.round((e.clientX - r.left) / r.width * 600 - 300), Math.round((e.clientY - r.top) / r.height * 600 - 300)); });
+            cv.addEventListener('mouseleave', function () { if (MP_STATE && MP_STATE.sel) mpShow(MP_STATE.sel.x, MP_STATE.sel.z); else if (MP_STATE) { let g2 = cv.getContext('2d'); g2.putImageData(MP_STATE.base, 0, 0); } });
             cv.addEventListener('click', function (e) { let r = cv.getBoundingClientRect(); mpSelect(Math.round((e.clientX - r.left) / r.width * 600 - 300), Math.round((e.clientY - r.top) / r.height * 600 - 300)); });
             return true;
         }
         function indMoonPickClose() { let e = document.getElementById('ind-moonpick'); if (e && e.parentNode) e.parentNode.removeChild(e); MP_STATE = null; }
-        function mpSelect(x, z) {
+        // 画矩形、高亮造成不行的东西、写信息（悬停和点选都走这里）
+        function mpShow(x, z) {
             if (!MP_STATE) return null;
             let MG = moonGen(), c = mpCheck(MG, x, z), cv = document.getElementById('mp-canvas'), g = cv.getContext('2d'), s = 1 / MP.px;
             g.putImageData(MP_STATE.base, 0, 0);
             g.fillStyle = c.ok ? 'rgba(76,175,80,.45)' : 'rgba(244,67,54,.5)'; g.strokeStyle = c.ok ? '#76ff03' : '#ff5252'; g.lineWidth = 2;
             g.fillRect((x - MP.w / 2 + 300) * s, (z - MP.d / 2 + 300) * s, MP.w * s, MP.d * s); g.strokeRect((x - MP.w / 2 + 300) * s, (z - MP.d / 2 + 300) * s, MP.w * s, MP.d * s);
-            MP_STATE.sel = { x: x, z: z, ok: c.ok, c: c };
+            if (!c.ok) { g.strokeStyle = '#ffeb3b'; g.lineWidth = 3; mpCulprits(MG, x, z).forEach(function (o) { g.beginPath(); g.arc((o.x + 300) * s, (o.z + 300) * s, Math.max(3, o.r * s), 0, 7); g.stroke(); }); }
             document.getElementById('mp-info').innerHTML = c.name + '　海拔 ' + c.alt + ' 米　坡度 ' + c.slope.toFixed(1) + '°' + (c.ice ? '　附近 150 米有水冰' : '') + (c.ok ? '' : '　<span style="color:#ff8a80;">不行：' + c.why.join('、') + '</span>');
+            return c;
+        }
+        function mpSelect(x, z) {
+            if (!MP_STATE) return null;
+            let c = mpShow(x, z); MP_STATE.sel = { x: x, z: z, ok: c.ok, c: c };
             let b = document.getElementById('mp-ok'); b.disabled = !c.ok; b.style.opacity = c.ok ? '1' : '.5';
             return c;
         }

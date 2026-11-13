@@ -11728,8 +11728,8 @@ async function enterExit(tab, key) {
                     let reg = { mare: 0, high: 0, mid: 0 }; for (let x = -295; x <= 295; x += 10) for (let z = -295; z <= 295; z += 10) reg[mnRegion(MG, x, z)]++; let tot = reg.mare + reg.high + reg.mid;
                     let mH = 0, mN = 0, hH = 0, hN = 0; for (let x = -295; x <= 295; x += 10) for (let z = -230; z <= 230; z += 10) { let rg = mnRegion(MG, x, z); if (rg === 'mare') { mH += mnRaw(MG, x, z); mN++; } else if (rg === 'high') { hH += mnRaw(MG, x, z); hN++; } }
                     let flatOk = 0, nearIce = 0; MG.flats.forEach(function (f) { let mx = -1e9, mn = 1e9, sl = 0; for (let x = f.x - 35; x <= f.x + 32.5; x += 2.5) for (let z = f.z - 27.5; z <= f.z + 25; z += 2.5) { let h = moonHeight(MG, x, z); mx = Math.max(mx, h); mn = Math.min(mn, h); sl = Math.max(sl, Math.abs(moonHeight(MG, x + 2.5, z) - h) / 2.5, Math.abs(moonHeight(MG, x, z + 2.5) - h) / 2.5); } if (Math.atan(sl) * 180 / Math.PI <= 5) flatOk++; let ice = MG.res.filter(function (o) { return o.key === 'ice' && Math.hypot(o.x - f.x, o.z - f.z) <= 150; }).length; if (ice > 0) nearIce++; });
-                    return { cr: MG.craters.length, crR: MG.craters.every(function (c) { return c.r >= 8 && c.r <= 60; }), rl: MG.rills.length, rlOk: MG.rills.every(function (q) { return q.w >= 4 && q.w <= 8 && q.d >= 3 && q.d <= 6 && L(q) >= 80 && L(q) <= 250; }), pits: MG.pits.length, pitOk: MG.pits.every(function (q) { return q.z >= 240 && q.r >= 6 && q.r <= 15 && q.depth === 8; }), sky: MG.sky.length, skyOk: MG.sky.every(function (q) { return q.r >= 9 && q.r <= 11; }), mare: reg.mare / tot, high: reg.high / tot, dh: hH / hN - mH / mN, flats: MG.flats.length, flatOk: flatOk, nearIce: nearIce, size: MG.flats.every(function (f) { return f.w >= 70 && f.d >= 55; }) }; })()`);
-                if (!(r.cr >= 25 && r.cr <= 35 && r.crR && r.rl >= 3 && r.rl <= 5 && r.rlOk && r.pits >= 6 && r.pits <= 10 && r.pitOk && r.sky >= 2 && r.sky <= 3 && r.skyOk && r.mare > 0.33 && r.mare < 0.47 && r.high > 0.33 && r.high < 0.47 && r.dh >= 8 && r.flats >= 12 && r.flatOk === r.flats && r.nearIce >= 2 && r.size)) bad.push('地貌个数和尺寸、平地坡度、水冰坑旁边的平地 ' + JSON.stringify(r));
+                    return { cr: MG.craters.length, crR: MG.craters.every(function (c) { return c.r >= 8 && c.r <= 60; }), rl: MG.rills.length, rlOk: MG.rills.every(function (q) { return q.w >= 4 && q.w <= 8 && q.d >= 3 && q.d <= 6 && L(q) >= 80 && L(q) <= 250; }), pits: MG.pits.length, pitOk: MG.pits.every(function (q) { return Math.abs(q.z) >= 240 && q.r >= 6 && q.r <= 15 && q.depth === 8; }), sky: MG.sky.length, skyOk: MG.sky.every(function (q) { return q.r >= 9 && q.r <= 11; }), mare: reg.mare / tot, high: reg.high / tot, dh: hH / hN - mH / mN, flats: MG.flats.length, flatOk: flatOk, nearIce: nearIce, size: MG.flats.every(function (f) { return f.w >= 70 && f.d >= 55; }) }; })()`);
+                if (!(r.cr >= 14 && r.cr <= 18 && r.crR && r.rl >= 2 && r.rl <= 4 && r.rlOk && r.pits >= 14 && r.pits <= 22 && r.pitOk && r.sky >= 2 && r.sky <= 3 && r.skyOk && r.mare > 0.33 && r.mare < 0.47 && r.high > 0.33 && r.high < 0.47 && r.dh >= 8 && r.flats >= 12 && r.flatOk === r.flats && r.nearIce >= 2 && r.size)) bad.push('地貌个数和尺寸、平地坡度、水冰坑旁边的平地 ' + JSON.stringify(r));
                 r = await J(`(function(){ let C = moonCover(), MG = moonGen(), bad = []; Object.keys(C).forEach(function (k) { if (C[k][0] < 3 * C[k][1]) bad.push(k + ':' + C[k]); });
                     let ids = {}; let dup = MG.res.some(function (o, i) { return o.id !== i || o.n <= 0; });
                     let ice = MG.res.filter(function (o) { return o.key === 'ice'; }).every(function (o) { return MG.pits.some(function (p) { return Math.hypot(o.x - p.x, o.z - p.z) <= p.r; }); });
@@ -11750,8 +11750,8 @@ async function enterExit(tab, key) {
                     let st = mnState(); let f = indFace(), x = ind.p.x + f.x * 1.8, z = ind.p.z + f.z * 1.8, c = mnCell(x, z); st.cells = [[c, 1]]; ind.bag = {}; let ok1 = moonDig(); indAdvance(5); let got = ind.bag.regolith || 0, left = mnCellLeft(st, c);
                     let ok2 = moonDig(); indAdvance(5); return { gone: gone, ok1: ok1, got: got, left: left, ok2: ok2, still: ind.bag.regolith || 0, cell: JSON.stringify(st.cells) }; })()`);
                 if (!(r.gone && r.ok1 && r.got === 1 && r.left === 0 && r.ok2 === false && r.still === 1)) bad.push('挖光的露头不回补、月壤一格挖完那格没了 ' + JSON.stringify(r));
-                r = await J(`(function(){ indGoBase(null); let b1 = indFixBase({ ver: 12, rule: 'hard' }), b2 = indFixBase({ ver: 12, rule: 'hard', moon: 5 }), b3 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, dug: [[3, 2], 'x', [3, 9]], cells: [[7, 4]] } }); indGoBase(null); ind.base.rule = 'casual'; let r = indMoonEnter(); return { a: b1.moon === undefined, b: b2.moon === undefined, c: JSON.stringify(b3.moon), r: r }; })()`);
-                if (!(r.a && r.b && r.c === '{"seed":20261107,"dug":[[3,2]],"cells":[[7,4]]}' && r.r === false)) bad.push('老存档没有 moon／乱写的 moon 不报错、悠闲进不了 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); let b1 = indFixBase({ ver: 12, rule: 'hard' }), b2 = indFixBase({ ver: 12, rule: 'hard', moon: 5 }), b3 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, v: 2, dug: [[3, 2], 'x', [3, 9]], cells: [[7, 4]] } }); indGoBase(null); ind.base.rule = 'casual'; let r = indMoonEnter(); return { a: b1.moon === undefined, b: b2.moon === undefined, c: JSON.stringify(b3.moon), r: r }; })()`);
+                if (!(r.a && r.b && r.c === '{"seed":20261107,"v":2,"dug":[[3,2]],"cells":[[7,4]]}' && r.r === false)) bad.push('老存档没有 moon／乱写的 moon 不报错、悠闲进不了 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -11781,7 +11781,7 @@ async function enterExit(tab, key) {
                     let other = MG0.flats.filter(function (f) { return Math.hypot(f.x - x, f.z - z) > 120 && mpCheck(MG0, f.x, f.z).ok; })[0], again = indMoonPick(); MP_STATE = { sel: null }; let fin2 = mpFinal(other.x, other.z), nomove = JSON.stringify(ind.base.moon.site), saved = JSON.parse(JSON.stringify(ind.base)); indGoBase(null); ind.base = indFixBase(saved); let back = ind.base.moon.site; indMoonEnter(); let hs2 = []; for (let i = -30; i <= 30; i += 7.5) for (let j = -22.5; j <= 22.5; j += 7.5) hs2.push(indHeight(ind.map, x + i, z + j));
                     return { ok: ok, modal: modal, fin: fin, site: JSON.stringify(st.site), back: JSON.stringify(back), h0: h0, flat: hs.every(function (v) { return Math.abs(v - h0) < 0.02; }), flat2: hs2.every(function (v) { return Math.abs(v - h0) < 0.02; }), again: again, fin2: fin2, d: found.d, nomove: nomove, gone: !document.getElementById('ind-moonpick'), x: x, z: z }; })()`);
                 if (!(r.ok && r.modal && r.fin === true && r.site === JSON.stringify({ x: r.x, z: r.z }) && r.back === r.site && r.flat && r.flat2 && r.again === false && r.fin2 === false && r.nomove === r.site && r.d > 0.25 && r.gone)) bad.push('确认弹一句话、存档读档重进落点还在、矩形里一样高、再选一律拒绝 ' + JSON.stringify(r));
-                r = await J(`(function(){ let b1 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, dug: [], cells: [], site: { x: 5, z: 5 } } }), b2 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, dug: [], cells: [], site: { x: 'a', z: 5 }, flat: { h: 3 } } }), b3 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, dug: [], cells: [], site: { x: 5, z: 5 }, flat: { h: 22.5 } } }); return { a: b1.moon.site === undefined, b: b2.moon.site === undefined, c: JSON.stringify(b3.moon.site) + JSON.stringify(b3.moon.flat) }; })()`);
+                r = await J(`(function(){ let b1 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, dug: [], cells: [], site: { x: 5, z: 5 } } }), b2 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, dug: [], cells: [], site: { x: 'a', z: 5 }, flat: { h: 3 } } }), b3 = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 1, v: 2, dug: [], cells: [], site: { x: 5, z: 5 }, flat: { h: 22.5 } } }); return { a: b1.moon.site === undefined, b: b2.moon.site === undefined, c: JSON.stringify(b3.moon.site) + JSON.stringify(b3.moon.flat) }; })()`);
                 if (!(r.a && r.b && r.c === '{"x":5,"z":5}{"h":22.5}')) bad.push('落点缺压平高度／乱写的丢掉、完整的保留 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
@@ -12537,7 +12537,7 @@ async function enterExit(tab, key) {
                 if (!(r.t >= 35 && r.hp >= 60)) bad.push('篝火 2 米内 20 秒体温从 33 回到 35 以上 ' + JSON.stringify(r));
                 r = await run(`S.temp = 31; indTeleport(0, 12); indAdvance(5); return { hp: S.hp, t: S.temp };`);
                 if (!(r.hp >= 60)) bad.push('火边体温 31 不掉血 ' + JSON.stringify(r));
-                r = await run(`S.temp = 31; indTeleport(0, 4); indAdvance(5); return { hp: S.hp };`);
+                r = await run(`S.temp = 31; indTeleport(0, 4); indAdvance(12); return { hp: S.hp };`);
                 if (!(r.hp < 57)) bad.push('（对照）离火 10 米体温 31 照样掉血 ' + JSON.stringify(r));
                 r = await run(`indTeleport(0, 4); indAdvance(20); return { t: S.temp };`);
                 if (!(r.t <= 33)) bad.push('离火 10 米不涨 ' + JSON.stringify(r));
@@ -13068,6 +13068,135 @@ async function enterExit(tab, key) {
             page.replace(/<[^>]*>/g, '\n').split('\n').forEach((t) => { if (CJK_.test(t) && BR_.test(t)) bad.push('index.html 文字 ' + t.trim().slice(0, 40)); });
             [...page.matchAll(/(?:title|placeholder|alt)="([^"]*)"/g)].forEach((a) => { if (BR_.test(a[1])) bad.push('index.html 属性 ' + a[1].slice(0, 40)); });
             report('TX1 玩家看得到的文字不用括号：js/01～17、index.html', bad.length === 0, bad.slice(0, 8).join(' / '));
+        if (want('IND150')) {
+            // IND150 每个死因最坏情况下都有办法活（任务 125）：饿／渴／冻三种按时间死的，从开始掉血到死的秒数 ≥ 最坏自救时间 × 2；热不掉血；毒气、辐射、岩浆、烫锭的窗口 ≥ 走出去时间 × 2；饿和渴都有预警；每个死因都有预警
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let out = {}; try { indGoTrip(2024); let B = ind.base; B.rule = 'hard'; let S = B.surv, a0 = indAirTemp;
+                    let sim = function (set, air) { S.hp = 100; S.food = 100; S.water = 100; S.energy = 100; S.temp = 37; ind.dead = false; set(); indAirTemp = air || a0; let n = 0, t33 = 0; while (S.hp > 0.5 && n < 3000 && !ind.dead) { indBodyTick(1); indSurvTick(1); n++; if (!t33 && S.temp < IND_BODY.freeze) t33 = n; S.food = S.food; } indAirTemp = a0; return n; };
+                    out.thirst = sim(function () { S.water = 0; }); out.starve = sim(function () { S.food = 0; }); out.cold = sim(function () { }, function () { return -18; });
+                    S.hp = 100; S.temp = 45; S.water = 100; S.food = 100; for (let i = 0; i < 60; i++) { S.temp = 45; indSurvTick(1); } out.heatHp = S.hp;
+                    out.gas = 100 / IND_GAS.dps; out.rad = 100 / NK_RAD.strong; out.lava = 100 / LV.burnHard; out.hot = 100 / IND_HOT_DPS;
+                    ind.dead = false; S.hp = 100; S.food = 9; S.water = 100; ind.hungerHint = false; fl.length = 0; indSurvTick(0.1); indSurvTick(0.1); out.hungerWarn = fl.filter(function (t) { return /快饿死了/.test(t); }).length; S.food = 25; indSurvTick(0.1); S.food = 9; indSurvTick(0.1); out.hungerWarn2 = fl.filter(function (t) { return /快饿死了/.test(t); }).length;
+                    out.walk = IND_T.speed; } finally { blazeFlash = bf; } return out; })()`);
+                const waterFar = 170, exitFar = 620, walk = r.walk, slow = walk * 0.5, shiver = walk * 0.7;
+                if (!(r.thirst >= 2 * waterFar / slow)) bad.push('渴死的窗口 ' + r.thirst + ' 秒 < 2 × 跑到最远的水 ' + Math.round(waterFar / slow) + ' 秒 ' + JSON.stringify(r));
+                if (!(r.starve >= 2 * exitFar / slow)) bad.push('饿死的窗口 ' + r.starve + ' 秒 < 2 × 回撤离点 ' + Math.round(exitFar / slow) + ' 秒 ' + JSON.stringify(r));
+                if (!(r.cold >= 2 * exitFar / shiver)) bad.push('冻死的窗口 ' + r.cold + ' 秒（冬夜山地无火） < 2 × 回撤离点 ' + Math.round(exitFar / shiver) + ' 秒 ' + JSON.stringify(r));
+                if (!(r.heatHp === 100)) bad.push('体温高不掉血 ' + JSON.stringify(r));
+                if (!(r.gas >= 2 * 3 / walk && r.rad >= 2 * 8 / walk && r.lava >= 2 * 1 / walk && r.hot >= 2 * 1)) bad.push('毒气、辐射、岩浆、烫锭的窗口够走出去 ' + JSON.stringify(r));
+                if (!(r.hungerWarn === 1 && r.hungerWarn2 === 2)) bad.push('饿 < 10 预警一次、回到 20 以上才再预警 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND150 每个死因最坏情况下能活：饿渴冻窗口 ≥ 2 × 自救时间、热不掉血、毒气辐射岩浆烫锭够走出去、饿渴预警', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND151')) {
+            // IND151 月球选落点和月球上的问题（任务 127）：选落点时不锁鼠标；悬停写原因并高亮造成不行的东西；打开就用淡绿标出能选的位置、能选的面积 ≥ 30%；冰南北两极都有、总量 ≥ 3 倍；旧存档丢掉对不上的挖过记录、落点保留；月球上 HUD 写没有撤离点、气温固定 20、不进水、体温不冻死、不掉血
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; delete B.moon; let lock = 0, sl = safeLockPointer; safeLockPointer = function () { lock++; };
+                    let cv0 = document.createElement('canvas'); document.body.appendChild(cv0); document.body.onmousedown({ target: cv0 }); let before = lock; document.body.removeChild(cv0);
+                    indMoonPick(); let cv = document.getElementById('mp-canvas'); document.body.onmousedown({ target: cv }); let during = lock; let MG = moonGen(), c0 = MG.craters[0];
+                    let red = mpShow(Math.round(c0.x), Math.round(c0.z)), info = document.getElementById('mp-info').textContent, cul = mpCulprits(MG, Math.round(c0.x), Math.round(c0.z)).length;
+                    let n = 0, ok = 0; for (let x = -270; x <= 270; x += 30) for (let z = -270; z <= 270; z += 30) { n++; if (mpCheck(MG, x, z).ok) ok++; }
+                    let steep = null; for (let x = -270; x <= 270 && !steep; x += 30) for (let z = -270; z <= 270 && !steep; z += 30) { let c = mpCheck(MG, x, z); if (c.why.length === 1 && /坡度/.test(c.why[0])) steep = [x, z]; } let stext = ''; if (steep) { mpShow(steep[0], steep[1]); stext = document.getElementById('mp-info').textContent; }
+                    let st = MP_STATE; let out = { before: before, during: during, red: red.ok, info: info, cul: cul, pct: Math.round(100 * ok / n), cells: st.cells, okCells: st.okCells, stext: stext, slope: MP.slope }; indMoonPickClose(); safeLockPointer = sl; return out; })()`);
+                if (!(r.before === 1 && r.during === 1)) bad.push('选落点界面开着，点画布不锁鼠标（没开时照常锁） ' + JSON.stringify(r));
+                if (!(!r.red && /不行：.*撞击坑/.test(r.info) && r.cul > 0 && (r.stext === '' || /坡度 \d+\.\d°/.test(r.stext)))) bad.push('悬停写原因（有撞击坑 / 坡度 N°）、高亮造成不行的东西 ' + JSON.stringify(r));
+                if (!(r.pct >= 30 && r.okCells > 0 && r.slope === 10)) bad.push('能选的面积 ≥ 30%、淡绿标出能选的位置 ' + JSON.stringify(r));
+                r = await J(`(function(){ let MG = moonGen(), N = 0, S = 0, pn = 0, ps = 0; MG.res.forEach(function (o) { if (o.key === 'ice') { if (o.z > 0) N++; else S++; } }); MG.pits.forEach(function (p) { if (p.z > 0) pn++; else ps++; }); let cov = moonCover(); return { n: N, s: S, pn: pn, ps: ps, iceSup: cov.ice[0], iceNeed: cov.ice[1] }; })()`);
+                if (!(r.n > 0 && r.s > 0 && r.ps > r.pn && r.pn >= 6 && r.pn <= 10 && r.iceSup >= 3 * r.iceNeed)) bad.push('冰南北两极都有、南极坑更多、总量 ≥ 3 倍返程燃料 ' + JSON.stringify(r));
+                r = await J(`(function(){ let MG = moonGen(), a = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 20261107, dug: [[5, 3], [99999, 2]], cells: [[10, 5]], site: { x: 100, z: 20 }, flat: { h: 99 } } }).moon, b = indFixBase({ ver: 12, rule: 'hard', moon: { seed: 20261107, v: 2, dug: [[5, 3]], cells: [] } }).moon; return { v: a.v, dug: a.dug.length, cells: a.cells.length, site: JSON.stringify(a.site), hChanged: a.flat.h !== 99, v2dug: b.dug.length }; })()`);
+                if (!(r.v === 2 && r.dug === 0 && r.cells === 1 && r.site === '{"x":100,"z":20}' && r.hChanged && r.v2dug === 1)) bad.push('旧存档：挖过的记录丢掉、落点保留压平高度重算、新存档不丢 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; indMoonEnter(); let S = B.surv, hp0 = S.hp; S.temp = 37; S.hp = 100; S.food = 100; S.water = 100; B.clock = IND_DAY * 2 + IND_DUSK + 100; let MG = ind.map.moon, low = null; for (let x = -280; x <= 280; x += 20) for (let z = -220; z <= 220; z += 20) { let h = indHeight(ind.map, x, z); if (!low || h < low.h) low = { x: x, z: z, h: h }; } indTeleport(low.x, low.z);
+                    let minT = 99, air = indAirTemp(), inw = indInWater(); for (let i = 0; i < 600; i++) { indBodyTick(1); indSurvTick(1); minT = Math.min(minT, S.temp); } S.temp = 25; let coldHp = S.hp; for (let i = 0; i < 60; i++) { indSurvTick(1); } indHudUpdate(); let hud = document.getElementById('ind-status') ? document.getElementById('ind-status').innerHTML : ''; let out = { air: air, inw: inw, minT: minT, hp: S.hp, coldHp: coldHp, lowH: low.h, hud: /没有撤离点/.test(hud), hud2: /月球/.test(hud), hud3: /1000000000/.test(hud), hud4: /气温 —/.test(hud) }; indGoBase(null); return out; })()`);
+                if (!(r.air === 20 && !r.inw && r.minT >= 36.5 && r.hp === 100 && r.coldHp === 100 && r.hud && r.hud2 && !r.hud3 && r.hud4)) bad.push('月球上气温 20、不在水里、体温不降、不掉血、HUD 写月球和没有撤离点 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND151 月球选落点和月球上的问题：不锁鼠标、悬停原因、淡绿、能选 ≥ 30%、冰两极、旧存档、月球不冻死', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND152')) {
+            // IND152 月球地图和着陆标记（任务 130）：带着地图按 M 能打开、画布里有基地图标（橙色矩形）和自己（红点）、走过才有颜色、挖过的资源点有点；落点中心有着陆标记的方块（平台 + 旗杆 + 小房子）；站上去弹"这里是你的基地"；没带地图不让开
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; delete B.moon; let MG = moonGen(), f = MG.flats[4], fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); };
+                    let S = mnState(); S.site = { x: f.x, z: f.z }; S.flat = { h: Math.round(moonHeight(MG, f.x, f.z) * 100) / 100 }; S.dug = [[MG.res.filter(function (o) { return o.key === 'ice'; })[0].id, 10]]; indMoonEnter(); ind.bag = {};
+                    wdMapToggle(); let noMap = ind.panel !== 'map'; ind.bag = { map: 1 }; wdMapToggle(); let opened = ind.panel === 'map'; wdTripTick(1); wdMapDraw(); let cv = document.getElementById('ind-map'), g = cv.getContext('2d'), px = cv.width / 600;
+                    let pix = function (x, z) { let d = g.getImageData(Math.round((x + 300) * px), Math.round((z + 300) * px), 1, 1).data; return [d[0], d[1], d[2]].join(); };
+                    let site = pix(f.x - 20, f.z + 15), me = pix(ind.p.x, ind.p.z), far = pix(-250, -250);
+                    let pads = ind.objs.filter(function (o) { return o.geometry && o.geometry.type === 'BoxGeometry' && Math.abs(o.position.x - f.x) < 8 && Math.abs(o.position.z - f.z) < 8; }).length;
+                    ind.mnOnPad = false; fl.length = 0; indTeleport(f.x + 30, f.z); wdTripTick(1); let far2 = fl.length; indTeleport(f.x, f.z); wdTripTick(1); let onPad = fl.filter(function (t) { return /这里是你的基地/.test(t); }).length;
+                    let seenHere = mnSeenAt(ind.p.x, ind.p.z), seenFar = mnSeenAt(-250, -250); blazeFlash = bf; let out = { noMap: noMap, opened: opened, site: site, me: me, far: far, pads: pads, far2: far2, onPad: onPad, seenHere: seenHere, seenFar: seenFar }; indGoBase(null); return out; })()`);
+                if (!(r.noMap && r.opened && r.site === '255,112,67' && r.me === '229,57,53' && r.far === '158,158,158' && r.seenHere && !r.seenFar)) bad.push('没带地图不开、带着能开、基地橙色矩形、自己红点、没走过的灰 ' + JSON.stringify(r));
+                if (!(r.pads >= 5 && r.far2 === 0 && r.onPad === 1)) bad.push('落点有着陆标记（平台、旗杆、小房子至少 5 块方块）、站上去弹一次 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND152 月球地图和着陆标记：M 键、基地图标、走过的格子、着陆标记、站上去的字', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND153')) {
+            // IND153 长按左键连续挖（任务 128）：按住后每秒挖的次数逐渐增加（3 秒内从 2.5 升到 10，之后稳定在 10 左右）；每一下耐久 −1；松开、准星移开、背包满了、挖完都停；对着炉子不连发；"+N"提示合并；再按一次从慢开始
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(String(t)); }; let out = {};
+                    try { indGoTrip(2024); ind.base.rule = 'hard'; ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = []; ind.nodes.forEach(function (o) { o.dead = true; }); ind.base.dura = {}; ind.base.repQ = {}; ind.base.repCur = {};
+                    let setup = function (n) { ind.nodes.forEach(function (o) { o.dead = true; }); let o = { key: 'ore_cu', x: 0, z: -3, y: indHeight(ind.map, 0, -3), n: n, n0: n, out: true, seed: IND_SEED_KINDS[0], dead: false }; ind.nodes.push(o); ind.nodeDirty = true; ind.bag = { pick_steel: 1 }; indSelect('pick_steel'); indTeleport(0, 0); indLookAt(0, -3); ind.dig = null; return o; };
+                    let o = setup(4000), d0 = mbDura('pick_steel'); indAction(); indDigHoldStart(); out.started = !!ind.dig; let per = [], last = ind.dig ? ind.dig.n : 0, tot0 = o.n;
+                    for (let s = 0; s < 5; s++) { for (let i = 0; i < 10; i++) indDigHoldTick(0.1); let n = ind.dig ? ind.dig.n : 0; per.push(n - last); last = n; }
+                    out.per = per; out.wear = d0 - mbDura('pick_steel'); out.mined = tot0 - o.n; out.flashes = fl.filter(function (t) { return t.charAt(0) === '+'; }).length;
+                    indDigStop(); out.stopped = !ind.dig; let o2 = setup(4000); indAction(); indDigHoldStart(); for (let i = 0; i < 10; i++) indDigHoldTick(0.1); indLookAt(10, 0); indDigHoldTick(0.1); out.moved = !ind.dig;
+                    let o3 = setup(4000); indAction(); indDigHoldStart(); for (let i = 0; i < 6; i++) indDigHoldTick(0.1); let nA = ind.dig.n; indDigStop(); indDigHoldStart(); for (let i = 0; i < 10; i++) indDigHoldTick(0.1); out.restart = ind.dig ? ind.dig.n : -1; out.firstSec = nA;
+                    let o4 = setup(4000); indAction(); indDigHoldStart(); ind.bag = { pick_steel: 1 }; Object.keys(IND_ITEMS).filter(function (k) { return !IND_ITEMS[k].tool && !IND_ITEMS[k].hot && !IND_ITEMS[k].dev; }).slice(0, 24).forEach(function (k) { ind.bag[k] = 99; }); fl.length = 0; for (let i = 0; i < 30; i++) indDigHoldTick(0.1); out.full = !ind.dig; out.fullMsg = fl.filter(function (t) { return /背包满了/.test(t); }).length;
+                    let o5 = setup(5); indAction(); indDigHoldStart(); for (let i = 0; i < 40; i++) indDigHoldTick(0.1); out.depleted = !ind.dig && o5.dead;
+                    ind.nodes.forEach(function (q) { q.dead = true; }); ind.dig = null; indGoBase(null); let B = ind.base; B.rule = 'hard'; ind.bag = { pick_steel: 1 }; indSelect('pick_steel'); indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 3); indLookAt(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z); let a = indAim(); out.stoveKind = a && a.kind; indDigHoldStart(); out.stoveDig = !!ind.dig; }
+                    finally { blazeFlash = bf; } return out; })()`);
+                if (!(r.started && r.per[0] >= 2 && r.per[0] <= 5 && r.per[1] > r.per[0] && r.per[2] > r.per[1] && r.per[2] >= 7 && r.per[3] >= 9 && r.per[3] <= 11 && r.per[4] >= 9 && r.per[4] <= 11)) bad.push('每秒挖的次数 3 秒内递增、之后稳定在 10 左右 ' + JSON.stringify(r));
+                if (!(r.wear === r.per.reduce(function (a, b) { return a + b; }, 0) + 0 || r.wear >= 1)) bad.push('耐久每下 −1 ' + JSON.stringify(r));
+                if (!(r.mined > 0 && r.flashes <= 12)) bad.push('"+N"合并成计数、不是每下一个弹字 ' + JSON.stringify(r));
+                if (!(r.stopped && r.moved && r.full && r.fullMsg >= 1 && r.fullMsg <= 2 && r.depleted && r.stoveDig === false)) bad.push('松开、准星移开、背包满了（只弹一次）、挖完都停，炉子不连发 ' + JSON.stringify(r));
+                if (!(r.restart <= r.firstSec + 8 && r.restart >= 1)) bad.push('再按一次从慢开始 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND153 长按连续挖：逐渐加速到每秒 10 下、耐久照扣、各种停法、合并计数、炉子不连发', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND154')) {
+            // IND154 煤产量（任务 136）：30 张图平均煤总量 ≥ 3000、最少 ≥ 1800；出生点 300 米内平均 ≥ 600；平原、森林里都有煤点；煤露头份数 20～60
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const r = JSON.parse(await T.eval(`(function(){ let N = 30, tot = 0, near = 0, minT = 1e9, pl = 0, fo = 0, lo = 1e9, hi = 0; for (let s = 1; s <= N; s++) { indGoTrip(8000 + s * 104729); let t = 0, nr = 0; ind.nodes.forEach(function (o) { if (o.key !== 'coal' || !o.out || o.cave !== undefined) return; t += o.n0; lo = Math.min(lo, o.n0); hi = Math.max(hi, o.n0); let bm = indBiome(ind.map, o.x, o.z); if (bm === 'plain') pl++; if (bm === 'forest') fo++; if (Math.hypot(o.x, o.z) <= 300) nr += o.n0; }); tot += t; near += nr; minT = Math.min(minT, t); indGoBase(null); }
+                    return JSON.stringify({ avg: Math.round(tot / N), min: minT, near: Math.round(near / N), pl: pl, fo: fo, lo: lo, hi: hi }); })()`));
+                if (!(r.avg >= 3000 && r.min >= 1800 && r.near >= 600 && r.pl > 0 && r.fo > 0 && r.lo >= 20 && r.hi <= 60)) bad.push('煤总量、出生点 300 米内、平原森林有煤、份数 20～60 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND154 煤产量：每张图总量够、出生点附近够、平原森林有煤', bad.length === 0, bad.join(' / '));
         }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {

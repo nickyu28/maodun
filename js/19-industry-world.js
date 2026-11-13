@@ -18,6 +18,7 @@
         }
         // 每帧（远征里）：脚下的撤离点走开才生效；80 米内看见过的撤离点；走过的地方；指南针
         function wdTripTick(dt) {
+            if (ind.map && ind.map.moon) { mnTripTick(); return; }   // 月球：自己的走过的格子、着陆标记（19-industry-moon.js，任务 130）
             ind.exits.forEach(function (e) {
                 let d = Math.hypot(ind.p.x - e.x, ind.p.z - e.z);
                 if (e.armed === false && d > IND_T.exitR + 1) e.armed = true;
@@ -25,6 +26,53 @@
             });
             if (!ind.seen) wdTripInit();
             if (!ind.seenAt || Math.hypot(ind.p.x - ind.seenAt.x, ind.p.z - ind.seenAt.z) >= 3) { ind.seenAt = { x: ind.p.x, z: ind.p.z }; wdMark(30); fmMapSeeNodes(30); }
+        }
+        // ── 长按左键连续挖（任务 128）──
+        // 对着采集类的点（矿、石头、盐、黏土、冰……不是树、不是树胶、不是要等的）按住左键：从每秒 DIG.r0 下，DIG.ramp 秒线性加速到每秒 DIG.r1 下，之后保持；
+        // 每一下的效果跟手点一次完全一样（份数、耐久、体力照旧）。松开、挖完、背包满了、镐不够、准星移开、开面板、死了都停；再按一次重新从慢开始。
+        // 连挖时每次的"+N 某某"提示合并成一个计数，每 0.6 秒出一次。
+        const DIG = { r0: 2.5, r1: 10, ramp: 3, flushT: 0.6 };
+        function indDigRate(t) { return DIG.r0 + (DIG.r1 - DIG.r0) * Math.min(1, t / DIG.ramp); }
+        function indDigOk(a) {
+            if (!a || a.kind !== 'node' || !a.o || a.o.dead) return false;
+            let o = a.o, nd = IND_NODES[o.key]; if (!nd) return false;
+            if (o.tree || o.sap || o.hard || o.crack || o.key === 'oil' || o.key === 'vent_ng' || nd.thorn) return false;
+            return indTool() >= nd.tool;
+        }
+        function indDigHoldStart() {
+            if (!ind || ind.over || ind.dead || ind.panel || ind.paused) return;
+            let a = indAim(); if (!indDigOk(a)) return;
+            ind.dig = { o: a.o, t: 0, acc: 0, got: {}, flush: 0, n: 0 };
+        }
+        function indDigFlush() {
+            let D = ind && ind.dig; if (!D) return;
+            let ks = Object.keys(D.got); if (!ks.length) return;
+            indFlash(ks.map(function (k) { return '+' + D.got[k] + ' ' + k; }).join('　')); D.got = {};
+        }
+        function indDigStop() { if (!ind || !ind.dig) return; indDigFlush(); ind.dig = null; }
+        function indActDown() { if (!ind) return; ind.actSkip = true; indAction(); indDigHoldStart(); }
+        function indActClick() { if (!ind) return; if (ind.actSkip) { ind.actSkip = false; return; } indAction(); }
+        function indDigHoldTick(dt) {
+            let D = ind && ind.dig; if (!D) return;
+            if (ind.over || ind.dead || ind.panel || ind.paused || ind.ch) { indDigStop(); return; }
+            let a = indAim(); if (!a || a.o !== D.o || !indDigOk(a)) { indDigStop(); return; }
+            D.t += dt; D.acc += indDigRate(D.t) * dt; D.flush += dt;
+            let fl0 = indFlash, stop = false, guard = 0;
+            indFlash = function (t) {   // 连挖时的"+N 某某"合并成计数；别的提示（背包满了）照出，并停
+                let m = /^\+(\d+) (.+)$/.exec(String(t));
+                if (m) { D.got[m[2]] = (D.got[m[2]] || 0) + (+m[1]); return; }
+                if (/^背包满了/.test(String(t))) stop = true;
+                return fl0.apply(this, arguments);
+            };
+            try {
+                while (D.acc >= 1 && guard++ < 12 && !stop && !D.o.dead) {
+                    D.acc -= 1; let n0 = D.o.n, ok = indGather(D.o);
+                    if (ok === false || (D.o.n === n0 && !D.o.dead)) { stop = true; break; }
+                    D.n++;
+                }
+            } finally { indFlash = fl0; }
+            if (stop || D.o.dead || !ind.dig) { let was = ind.dig; indDigFlush(); if (was && ind.dig === was) ind.dig = null; return; }
+            if (D.flush >= DIG.flushT) { D.flush = 0; indDigFlush(); }
         }
         // 指南针：背包里有就在屏幕上方显示指向最近撤离点的箭头和距离
         function wdNearestExit() {
@@ -54,6 +102,7 @@
             wdMapDraw();
         }
         function wdMapDraw() {
+            if (ind.map && ind.map.moon) { mnMapDraw(); return; }
             let cv = document.getElementById('ind-map'); if (!cv || !ind.seen) return;
             let g = cv.getContext('2d'), px = cv.width / (IND_MAP * 2);
             g.fillStyle = '#9e9e9e'; g.fillRect(0, 0, cv.width, cv.height);

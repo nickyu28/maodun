@@ -51,7 +51,7 @@
         const IND_SEASONS = [{ name: '春', t: 18 }, { name: '夏', t: 28 }, { name: '秋', t: 15 }, { name: '冬', t: -5 }];
         // 体温：等效气温 = 气温 + 衣服保暖 × 2.5；低于 15°C 慢慢变冷、高于 30°C 慢慢变热，每差 1 度每秒变 0.0015°C；不冷不热时每秒回 37°C 0.02
         const IND_BODY = { warmMul: 2.5, cold: 15, hot: 30, rate: 0.0015, back: 0.02, chill: 35, freeze: 33, sweat: 39, boil: 41, fireR: 4, fireHeat: 20, waterCold: 10, waterCool: 0.1, waterMin: 36 };
-        const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 4 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, regen: 0.3, starveHp: 1, thirstHp: 2 };
+        const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 4 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, regen: 0.3, starveHp: 0.25, thirstHp: 1, coldHp: 0.5 };   // 任务 125：掉血速度按"最坏情况下跑到最近的水／撤离点的时间 × 2"定（饿 400 秒、渴 100 秒、冻 200 秒死）
 
         // ── 物品 ──
         // tool：稿子等级；eat：吃喝的效果 { f 饱食, w 口渴, sick 拉肚子概率, back 吃完还回来什么 }
@@ -284,7 +284,7 @@
         const IND_TOOL_NAME = ['空手', '石稿', '青铜稿', '铁稿', '钢稿', '钻石稿'];
         // 地貌：名字、地面颜色、会刷什么资源（权重）
         const IND_BIOMES = {
-            plain: { name: '平原', col: 0x9ccc65, res: { clay: 3, stone: 2, wood: 1, seeds: 2, coal: 1 } },
+            plain: { name: '平原', col: 0x9ccc65, res: { clay: 3, stone: 2, wood: 1, seeds: 2, coal: 2 } },
             forest: { name: '森林', col: 0x558b2f, res: { wood: 6, clay: 2, seeds: 2, coal: 1 } },
             beach: { name: '海边', col: 0xfff59d, res: { salt: 5, sand_sn: 1, wood: 1 } },
             mountain: { name: '山地', col: 0x8d8d8d, res: { stone: 3, wood: 2, ore_cu: 2, ore_zn: 2, ore_sn: 3, ore_fe: 2, coal: 3 } },
@@ -736,7 +736,9 @@
         // 火：基地的篝火存档，远征的篝火只在这一趟
         function indFires() { return ind.where === 'base' ? ind.base.fires : (ind.tripFires || []); }
         // 气温：季节 + 昼夜 + 地貌 + 火 + 下水
+        function indOnMoon() { return !!(ind && ind.map && ind.map.moon && ind.where === 'trip'); }   // 月球（任务 127）：没有生存系统，气温固定 20°C、没有水、不因冷热掉血，M5 才做真的
         function indAirTemp() {
+            if (indOnMoon()) return 20;
             let t = IND_SEASONS[indSeason()].t, tod = indTod();
             if (indIsNight()) t -= 8; else if (tod > 300 && tod < 700) t += 3;
             if (ind.where === 'trip') {
@@ -1011,16 +1013,16 @@
             camera.rotation.set(-0.3, 0, 0, 'YXZ');
             document.body.onmousedown = function (e) {
                 if (!ind || ind.over || ind.paused) return;
-                if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal') || e.target.closest('#ind-panel'))) return;
-                if (ind.panel) return;
+                if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal') || e.target.closest('#ind-panel') || e.target.closest('#ind-moonpick'))) return;
+                if (ind.panel || document.getElementById('ind-moonpick')) return;   // 选落点时不锁鼠标（任务 127）
                 if (!document.pointerLockElement) safeLockPointer();
             };
             ind.onMouse = function (e) {
                 if (!ind || ind.over || ind.paused || !document.pointerLockElement) return;
-                if (e.target && e.target.closest && e.target.closest('button, #ind-panel, #sys-modal')) return;
-                if (e.button === 0) indAction(); else if (e.button === 2) indRightDown();
+                if (e.target && e.target.closest && e.target.closest('button, #ind-panel, #sys-modal, #ind-moonpick')) return;
+                if (e.button === 0) { indAction(); indDigHoldStart(); } else if (e.button === 2) indRightDown();
             };
-            ind.onMouseUp = function (e) { if (ind && !ind.over && e.button === 2) indRightUp(); };
+            ind.onMouseUp = function (e) { if (ind && !ind.over && e.button === 0) indDigStop(); if (ind && !ind.over && e.button === 2) indRightUp(); };
             ind.onCtx = function (e) { if (ind) e.preventDefault(); };
             document.addEventListener('mousedown', ind.onMouse); document.addEventListener('mouseup', ind.onMouseUp); document.addEventListener('contextmenu', ind.onCtx);
             if (!base.rule) indAskRule();
@@ -1410,7 +1412,7 @@
         // 水深：水面比脚下地面高多少（陆地 0）。浅水 < 0.6 米能跑、走跑都 ×0.85、体力照常（跑才掉）；
         // 深水游泳 0.6 倍速不能跑，动的时候体力每秒掉 5，站着不掉、停 3 秒后每秒回 8，没体力 0.3 倍速；进深水 ≥ 0.6、出深水 ≤ 0.5（滞回，不来回抖）；木筏上 2 倍速
         const IND_WATER = { wet: 0.05, shallow: 0.6, deepOut: 0.5, shallowSp: 0.85, deepSp: 0.7, tiredSp: 0.3, stamDrain: 5, stamRegen: 8, stillT: 3, raftSp: 2 };
-        function indWaterDepth(x, z) { return ind.where === 'trip' ? Math.max(0, IND_WATER_Y - indHeight(ind.map, x, z)) : 0; }
+        function indWaterDepth(x, z) { return ind.where === 'trip' && !(ind.map && ind.map.moon) ? Math.max(0, IND_WATER_Y - indHeight(ind.map, x, z)) : 0; }
         function indDeep() {
             if (ind.onRaft || ind.where !== 'trip') { ind.deepSt = false; return false; }
             let d = indWaterDepth(ind.p.x, ind.p.z);
@@ -1469,7 +1471,7 @@
             if (!ind || ind.over || ind.dead) return;
             if (ind.where === 'base') indStoveTick(dt);
             if (!ind || ind.over) return;
-            indRightHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); fmPullTick(dt); rkTick(dt); pwFxTick(dt); rdTick(dt); rcTick(dt); rcDrawSigs(); mbTick(dt);   // 怪、盾、宠物打怪（19-industry-mob.js，任务 70）
+            indRightHoldTick(dt); indDigHoldTick(dt); wdChTick(dt); wdPeelTick(dt); indShearTick(dt); pwCrankTick(dt); fmPullTick(dt); rkTick(dt); pwFxTick(dt); rdTick(dt); rcTick(dt); rcDrawSigs(); mbTick(dt);   // 怪、盾、宠物打怪（19-industry-mob.js，任务 70）
             if (!ind || ind.over) return;
             indMove(dt);
             if (ind.where === 'base') {
@@ -1497,16 +1499,17 @@
             S.water = Math.max(0, S.water - Q.water * (ind.sickT > 0 ? Q.sickWater : 1) * indHeatThirst(S.temp) * dt);
             let em = (ind.running ? Q.runEnergy : 1) * (ind.where === 'trip' && indIsNight() ? Q.nightOut : 1);
             S.energy = Math.max(0, S.energy - Q.energy * em * dt);
+            if (S.food < 10 && !ind.hungerHint) { ind.hungerHint = true; indFlash('快饿死了'); } else if (S.food >= 20) ind.hungerHint = false;   // 任务 125：每个死因都要有预警
             if (S.water < 10 && !ind.thirstHint) { ind.thirstHint = true; indFlash('快渴死了'); } else if (S.water >= 20) ind.thirstHint = false;   // 任务 90：口渴 < 10 提示一次，回到 20 以上才能再提示
             if (indSel() === 'dry_ice') S.temp = Math.max(25, S.temp - IND_DRY_COLD * dt);   // 干冰拿在手上，体温每秒 −0.05°C
             if (indHard()) {
-                let cold = S.temp < IND_BODY.freeze && !indNearHeat() ? 1 : 0;   // 任务 116：站在火边不再冻伤掉血
+                let cold = S.temp < IND_BODY.freeze && !indNearHeat() && !indOnMoon() ? 1 : 0;   // 任务 116：站在火边不再冻伤掉血
                 if (S.temp >= IND_BODY.boil) indAch('roast');   // 任务 89：体温 ≥ 41°C 算中暑；热只让口渴掉得快，不直接扣血
                 let dmg = (S.food <= 0 ? Q.starveHp : 0) + (S.water <= 0 ? Q.thirstHp : 0) + cold;
                 if (dmg > 0) {
                     if (S.food <= 0 && indHurt(Q.starveHp * dt, 'starve', '饱食到 0')) return;
                     if (S.water <= 0 && indHurt(Q.thirstHp * dt, 'thirst', '口渴到 0')) return;
-                    if (cold && indHurt(dt, 'cold', '体温 ' + S.temp.toFixed(1) + '°C')) return;
+                    if (cold && indHurt(Q.coldHp * dt, 'cold', '体温 ' + S.temp.toFixed(1) + '°C')) return;
                 }
                 else if (S.food > 30 && S.water > 30 && !ind.radHurt) S.hp = Math.min(100, S.hp + Q.regen * dt);   // 受辐射的时候不自己恢复
             }
@@ -3682,7 +3685,7 @@
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
                 '<div id="ind-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div>' +
-                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onclick="indAction()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水 (R)</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下 (Q)</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子 (V)</button><button id="ind-btn-cvback" style="' + IND_BTN + 'display:none;background:#5d4037;" onclick="cvBackStart()">回到洞口</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线 (Esc)</button>' +
+                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水 (R)</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下 (Q)</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子 (V)</button><button id="ind-btn-cvback" style="' + IND_BTN + 'display:none;background:#5d4037;" onclick="cvBackStart()">回到洞口</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线 (Esc)</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'jump\',true)" ontouchend="indHold(\'jump\',false)" onmousedown="indHold(\'jump\',true)" onmouseup="indHold(\'jump\',false)">跳</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'run\',true)" ontouchend="indHold(\'run\',false)" onmousedown="indHold(\'run\',true)" onmouseup="indHold(\'run\',false)">跑</button></div></div>';
             document.body.appendChild(d);
@@ -3707,7 +3710,7 @@
             let st = indClockTxt() + (indIsNight() ? '（夜里）' : '') + '　' + indSeasonTxt() + '　' + rule + '<br>';
             st += (indHard() ? (S.hp < 30 ? '<span class="ind-low">' + indBar('血', S.hp, '#e53935') + '</span>' : indBar('血', S.hp, '#e53935')) : '') + indBar('饱食', S.food, '#fb8c00') + indBar('口渴', S.water, '#039be5') + '<br>' + indBar('精力', S.energy, '#8e24aa') + indBar('体力', R.stam, '#43a047') + (R.where === 'trip' && R.deepSt && !R.onRaft ? '<b style="color:#0277bd">游泳中</b>' : '');
             let tc = S.temp < indChillT() ? '#1565c0' : S.temp > indSweatT() ? '#c62828' : '#2e7d32';
-            st += '<br>体温 <b style="color:' + tc + '">' + S.temp.toFixed(1) + '°C</b>　气温 ' + Math.round(indAirTemp()) + '°C　保暖 ' + indWarmth();
+            st += '<br>体温 <b style="color:' + tc + '">' + S.temp.toFixed(1) + '°C</b>　气温 ' + (indOnMoon() ? '—' : Math.round(indAirTemp()) + '°C') + '　保暖 ' + indWarmth();
             if (indNearHeat() && S.temp < 37) st += '　<b style="color:#e65100">取暖中</b>';
             if (R.guardT > 0) st += '<br><b style="color:#2e7d32">出生保护 ' + Math.ceil(R.guardT) + ' 秒：先去吃喝、取暖</b>';
             if (S.temp < indChillT()) st += '　<b style="color:#1565c0">冷得发抖</b>'; else if (S.temp > indSweatT()) st += '　<b style="color:#c62828">热得冒汗</b>';
@@ -3722,7 +3725,7 @@
             else {
                 let bm = IND_BIOMES[indBiome(R.map, R.p.x, R.p.z)].name;
                 let near = R.exits.reduce(function (a, e) { let dd = Math.hypot(R.p.x - e.x, R.p.z - e.z); return dd < a ? dd : a; }, 1e9);
-                st += '<br>远征　' + bm + '　最近的撤离点 ' + Math.round(near) + ' 米' + (R.exitT > 0 ? '　<b style="color:#2e7d32">撤离中 ' + Math.ceil(IND_T.extract - R.exitT) + '</b>' : '');
+                st += '<br>' + (R.map && R.map.moon ? '月球　' + bm + '　没有撤离点' : '远征　' + bm + '　最近的撤离点 ' + Math.round(near) + ' 米') + (R.exitT > 0 ? '　<b style="color:#2e7d32">撤离中 ' + Math.ceil(IND_T.extract - R.exitT) + '</b>' : '');
             }
             if (R.cave) st += '<br>' + cvHint();   // 矿洞（任务 66）
             { let mh = mbHud(); if (mh) st += '<br>' + mh; }   // 刀盾耐久（任务 70）

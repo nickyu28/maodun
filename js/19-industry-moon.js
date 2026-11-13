@@ -10,9 +10,9 @@
                 name: '月球', seed: 20261107, size: 600, off: 20,
                 gravity: 1.62, air: { o2: false, kPa: 0 }, day: 2552400, temp: [-170, 120],
                 // 地貌表：区域占比（月海 40%、高地 40%，余下过渡）、撞击坑／月溪／天窗／永久阴影坑个数、平地要求
-                terrain: { regionLo: 0.4, regionHi: 0.6, craters: [25, 35], bigCraters: 6, rills: [3, 5], sky: [2, 3], pits: [6, 10], poleZ: 240, flats: { w: 70, d: 55, n: 14 } },
+                terrain: { regionLo: 0.4, regionHi: 0.6, craters: [14, 18], bigCraters: 3, rills: [2, 4], sky: [2, 3], pits: [6, 10], pitsSouth: [8, 12], poleZ: 240, flats: { w: 70, d: 55, n: 14 } },
                 // 资源表：区域（mare／high／crater／edge／scatter／pole）、露头个数、每个露头的份数 [最少, 最多]。份数按 docs/industry.md "月球地图"算出来的总量 ≥ 3 倍所需（改了配方表要重新算）
-                res: { ilmenite: { at: 'mare', patches: [6, 10], amt: [80, 120] }, anorthosite: { at: 'high', patches: [6, 10], amt: [40, 70] }, olivine: { at: 'crater', amt: [30, 50] }, kreep: { at: 'edge', patches: [4, 6], amt: [60, 100] }, meteor_fe: { at: 'crater', amt: [3, 6] }, troilite: { at: 'scatter', patches: [15, 25], amt: [15, 30] }, ice: { at: 'pole', amt: [60, 120] } },
+                res: { ilmenite: { at: 'mare', patches: [6, 10], amt: [80, 120] }, anorthosite: { at: 'high', patches: [6, 10], amt: [40, 70] }, olivine: { at: 'crater', amt: [70, 110] }, kreep: { at: 'edge', patches: [4, 6], amt: [60, 100] }, meteor_fe: { at: 'crater', amt: [3, 6] }, troilite: { at: 'scatter', patches: [15, 25], amt: [15, 30] }, ice: { at: 'pole', amt: [60, 120] } },
                 cellN: 30, creatures: []
             }
         };
@@ -34,7 +34,7 @@
         function mnRng(salt) { return indRng((MN.seed * 2654435761 + salt * 40503) >>> 0); }
         // 月海／高地的分界按噪声的分位数定（40% 最低的是月海，40% 最高的是高地，中间 20% 过渡）
         function mnRegion(MG, x, z) { let v = indFbm(x / 160, z / 160, MG.seed); return v < MG.tLo ? 'mare' : v > MG.tHi ? 'high' : 'mid'; }
-        function mnCraterH(d, r) { let depth = 0.2 * r, rim = 0.06 * r; if (d < 0.5) return -depth; if (d < 1) return -depth + (depth + rim) * mnSm((d - 0.5) / 0.5); if (d < 1.45) return rim * (1 - mnSm((d - 1) / 0.45)); return 0; }
+        function mnCraterH(d, r) { let depth = 0.1 * r, rim = 0.04 * r; if (d < 0.5) return -depth; if (d < 1) return -depth + (depth + rim) * mnSm((d - 0.5) / 0.5); if (d < 1.45) return rim * (1 - mnSm((d - 1) / 0.45)); return 0; }
         function mnPitH(d, depth) { return d < 0.5 ? -depth : d < 1 ? -depth * (1 - mnSm((d - 0.5) / 0.5)) : 0; }
         function mnRillDist(rl, x, z) {
             if (x < rl.x0 || x > rl.x1 || z < rl.z0 || z > rl.z1) return 1e9;
@@ -46,8 +46,8 @@
             return m;
         }
         function mnRaw(MG, x, z) {
-            let v = indFbm(x / 160, z / 160, MG.seed), s = mnSm((v - MG.tLo) / (MG.tHi - MG.tLo));
-            let h = MN.off + s * (10 + 30 * (0.5 + 0.5 * indFbm(x / 60, z / 60, MG.seed + 3))) + (1 - s) * 0.5 * indFbm(x / 12, z / 12, MG.seed + 5) + s * 1.5 * indFbm(x / 9, z / 9, MG.seed + 6);
+            let v = indFbm(x / 160, z / 160, MG.seed), s = mnSm((v - (MG.tLo - 0.25)) / (MG.tHi - MG.tLo + 0.5));   // 过渡放宽，坡缓一点（任务 127）
+            let h = MN.off + s * (6 + 14 * (0.5 + 0.5 * indFbm(x / 60, z / 60, MG.seed + 3))) + (1 - s) * 0.2 * indFbm(x / 12, z / 12, MG.seed + 5) + s * 0.6 * indFbm(x / 9, z / 9, MG.seed + 6);
             MG.craters.forEach(function (c) { let d = Math.hypot(x - c.x, z - c.z) / c.r; if (d < 1.45) h += mnCraterH(d, c.r); });
             MG.rills.forEach(function (rl) { let dd = mnRillDist(rl, x, z), half = rl.w / 2, bank = 2 * rl.d; if (dd < half + bank) h -= rl.d * (dd <= half ? 1 : 1 - mnSm((dd - half) / bank)); });
             MG.pits.forEach(function (p) { let d = Math.hypot(x - p.x, z - p.z) / p.r; if (d < 1) h += mnPitH(d, p.depth); });
@@ -67,7 +67,7 @@
             return h;
         }
         function moonBiome(MG, x, z) {
-            if (z >= MN.P.terrain.poleZ) return 'moon_pole';
+            if (Math.abs(z) >= MN.P.terrain.poleZ) return 'moon_pole';   // 南北两个极区都有永久阴影坑（任务 127）
             let r = mnRegion(MG, x, z); return r === 'mare' ? 'moon_mare' : r === 'high' ? 'moon_high' : 'moon_mid';
         }
         let MN_MG = null;
@@ -78,7 +78,7 @@
             vs.sort(function (a, b) { return a - b; }); MG.tLo = vs[Math.floor(vs.length * MN.region[0])]; MG.tHi = vs[Math.floor(vs.length * MN.region[1])];
             let rf = mnRng(1), near = function (x, z, pad) { return MG.flats.some(function (f) { return Math.abs(x - f.x) <= f.w / 2 + pad && Math.abs(z - f.z) <= f.d / 2 + pad; }); };
             // 平地：2 块在极地边上（离水冰坑 150 米内），其余散在月海和高地脚下
-            MG.flats.push({ x: -120, z: 190, w: MN.flatW, d: MN.flatD }, { x: 120, z: 190, w: MN.flatW, d: MN.flatD });
+            MG.flats.push({ x: -120, z: 190, w: MN.flatW, d: MN.flatD }, { x: 120, z: 190, w: MN.flatW, d: MN.flatD }, { x: -120, z: -190, w: MN.flatW, d: MN.flatD }, { x: 120, z: -190, w: MN.flatW, d: MN.flatD });   // 北极、南极边上各 2 块
             for (let t = 0; t < 8000 && MG.flats.length < MN.flatN; t++) {
                 let x = Math.round((rf() * 2 - 1) * 245), z = Math.round((rf() * 2 - 1) * 150 - 40);
                 if (MG.flats.some(function (f) { return Math.hypot(f.x - x, f.z - z) < 110; })) continue;
@@ -119,6 +119,14 @@
                 if (MG.pits.some(function (q) { return Math.hypot(q.x - x, q.z - z) < q.r + r + 10; })) continue;
                 MG.pits.push({ x: x, z: z, r: r, depth: 8 });
             }
+            // 南极（z ≤ −240）：8～12 个永久阴影坑（比北极多，现实里南极的冰更多；用自己的随机数，不动北极的），头两个紧挨着南边的两块平地
+            { let rs2 = mnRng(7), wantS2 = Math.max(TP.pitsSouth[0] + Math.floor(rs2() * (TP.pitsSouth[1] - TP.pitsSouth[0] + 1)), MG.pits.length + 1), south = 0;   // 南极比北极至少多 1 个
+              for (let t = 0; t < 4000 && south < wantS2; t++) {
+                let r = 6 + rs2() * 9, x = (rs2() * 2 - 1) * (285 - r), z = -(252 + rs2() * (36 - r));
+                if (south === 0) x = -120 + (rs2() - 0.5) * 40; else if (south === 1) x = 120 + (rs2() - 0.5) * 40;
+                if (MG.pits.some(function (q) { return Math.hypot(q.x - x, q.z - z) < q.r + r + 10; })) continue;
+                MG.pits.push({ x: x, z: z, r: r, depth: 8, south: true }); south++;
+              } }
             // 平地的高度：取地形（不含平地）在中心的高度，平地范围内压成一样高
             MG.flats.forEach(function (f) { f.h = mnRaw(MG, f.x, f.z); });
             // 资源点：编号按生成顺序，露头一次挖 1 份，份数固定
@@ -135,7 +143,7 @@
             };
             patches('ilmenite', 'mare', MN.P.res.ilmenite.patches[0], MN.P.res.ilmenite.patches[1], 2); patches('anorthosite', 'high', MN.P.res.anorthosite.patches[0], MN.P.res.anorthosite.patches[1], 2);
             MG.craters.forEach(function (c) {
-                if (c.r < 30) return;
+                if (c.r < 24) return;
                 let n = 1 + Math.floor(rq() * 2); for (let i = 0; i < n; i++) { let a = rq() * Math.PI * 2; put('olivine', c.x + Math.cos(a) * c.r * 1.12, c.z + Math.sin(a) * c.r * 1.12); }
                 let m = 1 + Math.floor(rq() * 3); for (let i = 0; i < m; i++) { let a = rq() * Math.PI * 2, d = rq() * c.r * 0.35; put('meteor_fe', c.x + Math.cos(a) * d, c.z + Math.sin(a) * d); }
             });
@@ -149,7 +157,7 @@
                 if (mnRegion(MG, x, z) !== 'mare' || !free(x, z, 6) || MG.craters.some(function (c) { return Math.hypot(c.x - x, c.z - z) < c.r * 1.2 + 4; })) continue;
                 put('troilite', x, z); got++;
             }
-            MG.pits.forEach(function (p) { let n = 2 + Math.floor(rq() * 3); for (let i = 0; i < n; i++) { let a = rq() * Math.PI * 2, d = rq() * p.r * 0.35; put('ice', p.x + Math.cos(a) * d, p.z + Math.sin(a) * d); } });
+            MG.pits.forEach(function (p) { let n = (p.south ? 3 : 2) + Math.floor(rq() * 3); for (let i = 0; i < n; i++) { let a = rq() * Math.PI * 2, d = rq() * p.r * 0.35; put('ice', p.x + Math.cos(a) * d, p.z + Math.sin(a) * d); } });
             MN_MG = MG; return MG;
         }
         let MN_READS = 0;   // 读资源点的次数（选址图画一遍应该是 0：选址只看地貌，不看矿）
@@ -163,15 +171,17 @@
         // 重新生成一份（不用缓存）：测试里比两次
         function moonFresh() { let keep = MN_MG; MN_MG = null; let g = moonGen(); MN_MG = keep || g; return g; }
         // ── 存档 ──
-        function mnState() { let B = ind.base; if (!B.moon || typeof B.moon !== 'object') B.moon = { seed: MN.seed, dug: [], cells: [] }; return B.moon; }
+        function mnState() { let B = ind.base; if (!B.moon || typeof B.moon !== 'object') B.moon = { seed: MN.seed, v: 2, dug: [], cells: [] }; return B.moon; }
         function mnFixBase(b) {
             if (!b.moon || typeof b.moon !== 'object') { delete b.moon; return; }
             let m = b.moon, seen = {};
             let dug = (Array.isArray(m.dug) ? m.dug : []).filter(function (e) { return Array.isArray(e) && e.length === 2 && isFinite(e[0]) && isFinite(e[1]) && e[0] >= 0 && !seen[e[0] | 0] && (seen[e[0] | 0] = 1); }).slice(0, 2000).map(function (e) { return [e[0] | 0, Math.max(0, Math.min(1e6, e[1] | 0))]; });
             let seenC = {}, cells = (Array.isArray(m.cells) ? m.cells : []).filter(function (e) { return Array.isArray(e) && e.length === 2 && isFinite(e[0]) && isFinite(e[1]) && e[0] >= 0 && e[0] < 360000 && !seenC[e[0] | 0] && (seenC[e[0] | 0] = 1); }).slice(0, 100000).map(function (e) { return [e[0] | 0, Math.max(0, Math.min(MN.cellN, e[1] | 0))]; });
-            let out = { seed: MN.seed, dug: dug, cells: cells };
+            let old = m.v !== 2;   // 任务 127 改了坑和冰的分布：旧存档的资源点编号对不上，挖过的记录丢掉（没人在月球上存过进度）；落点保留，压平高度按新地形重算
+            let out = { seed: MN.seed, v: 2, dug: old ? [] : dug, cells: cells };
             if (m.site && isFinite(m.site.x) && isFinite(m.site.z)) out.site = { x: +m.site.x, z: +m.site.z };
             if (out.site && m.flat && isFinite(m.flat.h)) out.flat = { h: +m.flat.h }; else delete out.site;
+            if (old && out.site) { let MG0 = moonGen(), sv = MG0.site; delete MG0.site; out.flat = { h: Math.round(moonHeight(MG0, out.site.x, out.site.z) * 100) / 100 }; if (sv) MG0.site = sv; }
             b.moon = out;
         }
         // 落点压平（任务 83 选了落点才有）：把存档里的落点和高度告诉地图
@@ -199,7 +209,45 @@
             ind.wild = []; ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 120); ind.exits = [];
             let f = S.site ? { x: S.site.x, z: S.site.z } : MG.flats[2] || MG.flats[0];
             ind.p.x = f.x; ind.p.z = f.z; ind.p.y = indHeight(M, f.x, f.z); ind.p.vy = 0;
+            ind.mnSeen = new Uint8Array(MN_SEEN_N * MN_SEEN_N); ind.mnAt = null; ind.mnOnPad = false; mnLanding(MG);
             indSave(); return true;
+        }
+        // ── 月球地图（按 M，要带着地图物品）和着陆标记（任务 130）──
+        // 走过的格子：6 米一格，100 × 100，半径 30 米；不存档，每次进月球重新走（地球的图也不存档）。
+        const MN_SEEN_N = 100, MN_SEEN_CELL = 6;
+        function mnMark(r) {
+            let ci = Math.floor((ind.p.x + 300) / MN_SEEN_CELL), cj = Math.floor((ind.p.z + 300) / MN_SEEN_CELL), n = Math.ceil(r / MN_SEEN_CELL);
+            for (let di = -n; di <= n; di++) for (let dj = -n; dj <= n; dj++) { let i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= MN_SEEN_N || j >= MN_SEEN_N || Math.hypot(di, dj) * MN_SEEN_CELL > r) continue; ind.mnSeen[j * MN_SEEN_N + i] = 1; }
+        }
+        function mnSeenAt(x, z) { let i = Math.floor((x + 300) / MN_SEEN_CELL), j = Math.floor((z + 300) / MN_SEEN_CELL); return i >= 0 && j >= 0 && i < MN_SEEN_N && j < MN_SEEN_N && !!ind.mnSeen[j * MN_SEEN_N + i]; }
+        function mnTripTick() {
+            if (!ind.mnSeen) ind.mnSeen = new Uint8Array(MN_SEEN_N * MN_SEEN_N);
+            if (!ind.mnAt || Math.hypot(ind.p.x - ind.mnAt.x, ind.p.z - ind.mnAt.z) >= 3) { ind.mnAt = { x: ind.p.x, z: ind.p.z }; mnMark(30); }
+            let S = ind.base && ind.base.moon;
+            if (S && S.site) { let d = Math.max(Math.abs(ind.p.x - S.site.x), Math.abs(ind.p.z - S.site.z)); if (d < 6 && !ind.mnOnPad) { ind.mnOnPad = true; indFlash('这里是你的基地，月球基地以后做'); } else if (d > 12) ind.mnOnPad = false; }
+        }
+        function mnMapDraw() {
+            let cv = document.getElementById('ind-map'); if (!cv || !ind.mnSeen) return;
+            let g = cv.getContext('2d'), px = cv.width / 600, MG = ind.map.moon, col = { moon_mare: '#3a3f44', moon_mid: '#7d8185', moon_high: '#b0b4b8', moon_pole: '#cfd8dc' };
+            g.fillStyle = '#9e9e9e'; g.fillRect(0, 0, cv.width, cv.height);
+            for (let j = 0; j < MN_SEEN_N; j++) for (let i = 0; i < MN_SEEN_N; i++) {
+                if (!ind.mnSeen[j * MN_SEEN_N + i]) continue;
+                g.fillStyle = col[moonBiome(MG, -300 + (i + 0.5) * MN_SEEN_CELL, -300 + (j + 0.5) * MN_SEEN_CELL)]; g.fillRect(i * MN_SEEN_CELL * px, j * MN_SEEN_CELL * px, MN_SEEN_CELL * px + 0.6, MN_SEEN_CELL * px + 0.6);
+            }
+            let X = function (v) { return (v + 300) * px; };
+            g.lineWidth = 1.5; g.strokeStyle = 'rgba(0,0,0,.6)'; MG.craters.forEach(function (c) { if (c.r >= 24 && mnSeenAt(c.x, c.z)) { g.beginPath(); g.arc(X(c.x), X(c.z), c.r * px, 0, 7); g.stroke(); } });   // 已经发现的大撞击坑
+            g.strokeStyle = '#1e88e5'; g.fillStyle = '#e3f2fd'; MG.pits.forEach(function (p) { if (mnSeenAt(p.x, p.z)) { g.beginPath(); g.arc(X(p.x), X(p.z), Math.max(2, p.r * px), 0, 7); g.fill(); g.stroke(); } });   // 极区水冰坑
+            let S = ind.base.moon || { dug: [] }, byId = {}; MG.res.forEach(function (o) { byId[o.id] = o; });
+            (S.dug || []).forEach(function (e) { let o = byId[e[0]]; if (!o) return; g.fillStyle = o.key === 'ice' ? '#81d4fa' : '#' + ('000000' + ((IND_ITEMS_RAW[o.key] || { col: 0xffca28 }).col).toString(16)).slice(-6); g.beginPath(); g.arc(X(o.x), X(o.z), 2.5, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 0.8; g.stroke(); });   // 挖过的资源点
+            if (S.site) { let sx = X(S.site.x), sz = X(S.site.z); g.fillStyle = '#ff7043'; g.fillRect(sx - 30 * px, sz - 22.5 * px, 60 * px, 45 * px); g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.strokeRect(sx - 30 * px, sz - 22.5 * px, 60 * px, 45 * px); g.fillStyle = '#fff'; g.fillRect(sx - 4, sz - 2, 8, 6); g.beginPath(); g.moveTo(sx - 6, sz - 2); g.lineTo(sx, sz - 8); g.lineTo(sx + 6, sz - 2); g.fill(); }   // 基地落点：小房子图标
+            let f = indFace(); g.fillStyle = '#e53935'; g.beginPath(); g.arc(X(ind.p.x), X(ind.p.z), 4, 0, 7); g.fill(); g.strokeStyle = '#e53935'; g.lineWidth = 2; g.beginPath(); g.moveTo(X(ind.p.x), X(ind.p.z)); g.lineTo(X(ind.p.x) + f.x * 10, X(ind.p.z) + f.z * 10); g.stroke();
+        }
+        // 着陆标记：落点中心一个平台 + 旗杆 + 小房子（方块拼），200 米内看得见；站上去写"这里是你的基地"（月球基地 M3 做出来以后换成真基地）
+        function mnLanding(MG) {
+            let S = ind.base && ind.base.moon; if (!S || !S.site) return;
+            let x = S.site.x, z = S.site.z, y = indHeight(ind.map, x, z);
+            indBox(14, 0.4, 14, 0x90a4ae, x, y + 0.2, z); indBox(2.4, 7, 0.4, 0xeceff1, x - 4, y + 3.9, z - 4); indBox(2.2, 1.4, 0.15, 0xe53935, x - 3, y + 6.9, z - 4);
+            indBox(4.4, 2.6, 4.4, 0xcfd8dc, x + 3, y + 1.7, z + 2); indBox(4.8, 0.5, 4.8, 0x78909c, x + 3, y + 3.25, z + 2); indBox(1, 1.6, 0.2, 0x37474f, x + 3, y + 1.2, z + 4.25);
         }
         function indMoonLeave() { if (!ind || !ind.map || !ind.map.moon) return false; indGoBase(null); return true; }
         // 挖到露头：把剩余份数记进存档（只记动过的）
