@@ -2280,7 +2280,7 @@ async function enterExit(tab, key) {
                 gState.inv = [sh('返魂药水'), sh('医疗包'), sh('肾上腺素'), sh('鱼叉'), sh('腰包'), sh('地窖徽章')]; sortInv();
                 let a = gState.inv.filter(Boolean).map(function (x) { return x.n; });
                 gState.inv = [sh('医疗包'), sh('返魂药水'), null, null, null, null]; sortInv(); let b = gState.inv.filter(Boolean).map(function (x) { return x.n; });
-                let html = Array.prototype.map.call(document.querySelectorAll('.shop-item'), function (e) { let m = e.innerText.match(/^(\\S+) \\(\\$([\\d,]+)\\)/); return m ? [m[1], +m[2].replace(/,/g, '')] : null; }).filter(Boolean);
+                let html = Array.prototype.map.call(document.querySelectorAll('.shop-item'), function (e) { let m = e.innerText.match(/^(\\S+) \\$([\\d,]+)/); return m ? [m[1], +m[2].replace(/,/g, '')] : null; }).filter(Boolean);
                 return JSON.stringify({ a: a, b: b, html: html.filter(function (x) { return SHOP_PRICE[x[0]] !== undefined; }).every(function (x) { return SHOP_PRICE[x[0]] === x[1]; }), n: html.length }); })()`));
             if (t6.a.join() !== '地窖徽章,腰包,鱼叉,肾上腺素,返魂药水,医疗包') bad.push('六种道具整理后 ' + t6.a.join());
             if (t6.b.join() !== '医疗包,返魂药水') bad.push('同价应保持原来的先后 ' + t6.b.join());
@@ -2377,13 +2377,13 @@ async function enterExit(tab, key) {
             const a = await run({ 'stun.miwifi.com:3478': '1.2.3.4', 'stun.chat.bilibili.com:3478': '1.2.3.4' }, false, true);
             if (!a.done || a.nat.type !== 'easy' || !a.turn.ok) bad.push('好连 ' + JSON.stringify([a.done, a.nat, a.turn]));
             if (!/小米 stun\.miwifi\.com:3478：通　公网地址 1\.2\.3\.4:\d+/.test(a.text) || !/B站 stun\.chat\.bilibili\.com:3478：通　公网地址 1\.2\.3\.4:\d+/.test(a.text) || !/谷歌 stun\.l\.google\.com:19302：不通/.test(a.text) || !/Cloudflare[^\n]*：不通/.test(a.text)) bad.push('每个探路服务器一行 ' + a.text);
-            if (!/4\. 网络类型（好不好直连）：好连/.test(a.text) || !/5\. 中转服务器（TURN）：通，拿到了中转地址 9\.9\.9\.9:/.test(a.text) || !/好连的类型/.test(a.verdict)) bad.push('好连的文字 ' + a.text);
+            if (!/4\. 网络类型，好不好直连：好连/.test(a.text) || !/5\. 中转服务器，TURN：通，拿到了中转地址 9\.9\.9\.9:/.test(a.text) || !/好连的类型/.test(a.verdict)) bad.push('好连的文字 ' + a.text);
             // 2. 公网端口不一样：难连（对称型）；中转通
             const b = await run({ 'stun.miwifi.com:3478': '1.2.3.4', 'stun.chat.bilibili.com:3478': '1.2.3.4' }, true, true);
             if (b.nat.type !== 'hard' || !/难连，对称型/.test(b.text) || !/对称型/.test(b.verdict)) bad.push('难连 ' + JSON.stringify(b.nat) + b.verdict);
             // 3. 难连 + 中转也不通：话说重一点
             const c = await run({ 'stun.miwifi.com:3478': '1.2.3.4', 'stun.l.google.com:19302': '1.2.3.4' }, true, false);
-            if (c.turn.ok || !/很可能连不上别人/.test(c.verdict) || !/5\. 中转服务器（TURN）：不通/.test(c.text)) bad.push('难连又没中转 ' + c.verdict);
+            if (c.turn.ok || !/很可能连不上别人/.test(c.verdict) || !/5\. 中转服务器，TURN：不通/.test(c.text)) bad.push('难连又没中转 ' + c.verdict);
             // 4. 只有一个探路服务器通：网络类型测不出
             const d = await run({ 'stun.miwifi.com:3478': '1.2.3.4' }, false, true);
             if (d.nat.type !== 'unknown' || !/测不出来/.test(d.text)) bad.push('只通一个 ' + JSON.stringify(d.nat));
@@ -13243,7 +13243,7 @@ async function enterExit(tab, key) {
             await A.eval(GARAGE_SETUP(`[S('医疗包'), null, null, null, null, null]`, `[L('金杯'), S('鱼叉'), Object.assign({}, S('鱼叉'), { n: '地窖徽章', type: 'badge', v: 50000 })]`, 0));
             await mouseDrag(A, GAR_SLOT(0), null, 3);
             const sel = await A.eval(`gState.selectedContainer + ':' + gState.selectedSlot + ' ' + document.getElementById('sell-btn-container').innerText`);
-            if (!/^garage:0 卖掉（\$5,000）/.test(sel)) bad.push('鼠标点不中 ' + sel);
+            if (!/^garage:0 卖掉，\$5,000/.test(sel)) bad.push('鼠标点不中 ' + sel);
             await key('Backspace', 8);
             const r1 = await A.eval(`gState.money + ' ' + gState.selectedSlot + ' ' + gState.garage.filter(function (q) { return q; }).map(function (q) { return q.n; }).join(',')`);
             if (r1 !== '5000 -1 鱼叉,地窖徽章') bad.push('Backspace 卖金杯 ' + r1);
