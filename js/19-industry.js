@@ -538,6 +538,9 @@
         function indFixBase0(b) {
             if (!b || typeof b !== 'object') b = indNewBase();
             let n = indNewBase();
+            // 任务 145：认不出的物品 key 不删，原样放进 b.lost（遗失物）；物品表以后认得了再还回箱子
+            { let L = {}; if (b.lost && typeof b.lost === 'object' && !Array.isArray(b.lost)) Object.keys(b.lost).forEach(function (k) { let n = Math.floor(+b.lost[k]); if (n > 0 && isFinite(n)) L[k] = n; }); b.lost = L; }
+            let lostPut = function (k, n) { n = Math.floor(+n); if (!(n > 0) || !isFinite(n) || /^inst:/.test(k)) return; b.lost[k] = (b.lost[k] || 0) + n; b.lostNew = (b.lostNew || 0) + n; };
             if (b.rule !== 'casual' && b.rule !== 'hard') b.rule = null;
             if (!b.box || typeof b.box !== 'object') b.box = {};
             Object.keys(b.box).forEach(function (k) { if (!IND_ITEMS[k] || !(b.box[k] > 0)) delete b.box[k]; });
@@ -556,7 +559,7 @@
             let seen = {};
             b.chests.forEach(function (c) {
                 c.big = !!c.big; c.lead = !!c.lead; c.cold = !!c.cold; c.x = indNum(c.x, 0, IND_BASE.x0 + 1, IND_BASE.x1 - 1); c.z = indNum(c.z, 0, IND_BASE.z0 + 1, IND_BASE.z1 - 1);
-                Object.keys(c.items).forEach(function (k) { if (!IND_ITEMS[k] || !(c.items[k] > 0)) delete c.items[k]; else c.items[k] = Math.floor(c.items[k]); });
+                Object.keys(c.items).forEach(function (k) { if (!IND_ITEMS[k] || !(c.items[k] > 0)) { if (!IND_ITEMS[k]) lostPut(k, c.items[k]); delete c.items[k]; } else c.items[k] = Math.floor(c.items[k]); });
                 c.id = indNum(c.id, 0, 0, 1e9) | 0; while (!c.id || seen[c.id]) c.id = ++b.cid; seen[c.id] = 1; b.cid = Math.max(b.cid, c.id);
             });
             Object.keys(b.carried).forEach(function (id) {
@@ -575,10 +578,14 @@
             pwFixBase(b);
             nkFixBase(b);   // 辐射区、原子弹（19-industry-nuke.js）
             if (!b.bag || typeof b.bag !== 'object') b.bag = {};
-            Object.keys(b.bag).forEach(function (k) { if (!IND_ITEMS[k] || !(b.bag[k] > 0)) delete b.bag[k]; else b.bag[k] = Math.floor(b.bag[k]); });
-            if (indSlotsOf(b.bag) > IND_BAG_SLOTS + (b.wear && IND_ITEMS[b.wear.back] ? IND_ITEMS[b.wear.back].slots || 0 : 0)) b.bag = {};   // 超过 24 格的（乱写的）不要
+            Object.keys(b.bag).forEach(function (k) { if (!IND_ITEMS[k] || !(b.bag[k] > 0)) { if (!IND_ITEMS[k]) lostPut(k, b.bag[k]); delete b.bag[k]; } else b.bag[k] = Math.floor(b.bag[k]); });
+            {   // 任务 145：背包占格超过容量，永远不清空：超出的整堆挪到仓库箱（总数守恒）
+                let cap = IND_BAG_SLOTS + (b.wear && IND_ITEMS[b.wear.back] ? IND_ITEMS[b.wear.back].slots || 0 : 0), bigC2 = b.chests.filter(function (c) { return c.big; })[0] || b.chests[0], ks = Object.keys(b.bag);
+                while (indSlotsOf(b.bag) > cap && ks.length) { let k = ks.pop(); if (bigC2) bigC2.items[k] = (bigC2.items[k] || 0) + b.bag[k]; else lostPut(k, b.bag[k]); b.bagOver = (b.bagOver || 0) + 1; delete b.bag[k]; }
+            }
+            Object.keys(b.lost).forEach(function (k) { if (IND_ITEMS[k]) { let bg = b.chests.filter(function (c) { return c.big; })[0] || b.chests[0]; if (bg) { bg.items[k] = (bg.items[k] || 0) + b.lost[k]; delete b.lost[k]; } } });   // 物品表认得了就还回箱子
             if (!Array.isArray(b.ground)) b.ground = [];
-            b.ground = b.ground.filter(function (g) { return g && IND_ITEMS[g.k] && isFinite(g.x) && isFinite(g.z); });
+            b.ground = b.ground.filter(function (g) { if (g && !IND_ITEMS[g.k] && g.k) lostPut(g.k, 1); return g && IND_ITEMS[g.k] && isFinite(g.x) && isFinite(g.z); });
             b.ground.forEach(function (g) { g.x = indNum(g.x, 0, IND_BASE.x0 + 0.5, IND_BASE.x1 - 0.5); g.z = indNum(g.z, 0, IND_BASE.z0 + 0.5, IND_BASE.z1 - 0.5); });
             if (!Array.isArray(b.crops)) b.crops = [];
             b.crops = b.crops.filter(function (c) { return c && IND_CROPS[c.k] && isFinite(c.x) && isFinite(c.z); });
@@ -944,7 +951,8 @@
 
         // ── 进出 ──
         let ind = null;
-        document.addEventListener('visibilitychange', function () { if (document.hidden && ind && !ind.over && !ind.loading) indSave(); });   // 切走或关页面前存一次
+        document.addEventListener('visibilitychange', function () { if (document.hidden && ind && !ind.over && !ind.loading) indSave(); });
+        window.addEventListener('pagehide', function () { if (ind && !ind.loading) indSave(); }); window.addEventListener('beforeunload', function () { if (ind && !ind.loading) indSave(); });   // 任务 145：关页面前也存   // 切走或关页面前存一次
         // 任务 110："背包满了"停 2.5 秒，期间别的提示接在它后面，不把它盖掉
         // 任务 104：点了第一个设备之后取消连线（不耗线）。Esc、点空地、HUD 上"取消连线"按钮
         function indCancelWire() {
@@ -1033,6 +1041,8 @@
             ind.onMouseUp = function (e) { if (ind && !ind.over && e.button === 0) indDigStop(); if (ind && !ind.over && e.button === 2) indRightUp(); };
             ind.onCtx = function (e) { if (ind) e.preventDefault(); };
             document.addEventListener('mousedown', ind.onMouse); document.addEventListener('mouseup', ind.onMouseUp); document.addEventListener('contextmenu', ind.onCtx);
+            if (base.bagOver) { setTimeout(function () { if (ind) indFlash('背包装不下的放到箱子里了'); }, 600); delete base.bagOver; }   // 任务 145
+            if (base.lostNew) { let nn = base.lostNew; setTimeout(function () { if (ind) indFlash('有 ' + nn + ' 件东西认不出来，先放在遗失物里'); }, 1800); delete base.lostNew; }
             if (!base.rule) indAskRule();
             else if (base.sawGoal === false) indGoalShow();
             else if (gState.control !== 'pad') indFlash('左键（或 F）采集／拿／种／打开，右键 吃喝／浇水／接水，Q 放下，1～0 选快捷栏，E 背包，Shift 跑');
@@ -1088,14 +1098,12 @@
         function indExit(confirmed) {
             if (!ind) return;
             if (ind.loading) { ind = null; return; }
-            if (ind.where === 'trip' && !confirmed && Object.keys(ind.bag).length) {
-                showSysModal('猫盾工业', '还没撤离，现在回大厅身上的东西会丢。', [{ label: '丢了也回', color: '#d84315', onClick: function () { indExit(true); } }, { label: '再想想' }]);
-                return;
-            }
+            if (ind.where === 'trip' && !ind.dead) { try { indGoBase(true); } catch (e) { } }   // 任务 145：远征、月球、矿洞里回大厅，按撤离处理，东西带回基地（死亡仍然丢）
             let R = ind; R.over = true; R.paused = false;
             { let pe = document.getElementById('ind-pause'); if (pe && pe.parentNode) pe.parentNode.removeChild(pe); }
             if (R.raf) cancelAnimationFrame(R.raf);
-            indSave();   // 基地里退出：背包带着存下来；远征里没撤离的丢掉（indSave 里远征不存背包）。只存这一次，存之前别清 R.bag（以前第二次存把空背包盖上去了）
+            let leaving = false, leave = function () { if (leaving) return; leaving = true; nav('screen-lobby'); selectGameMode('industry'); };   // 任务 145：等存档写完（tx.oncomplete，最多 2 秒）再切到大厅
+            indSave(function (ok) { if (!ok) console.log('indExit：存档没写成功'); leave(); }); setTimeout(function () { if (!leaving) console.log('indExit：存档等了 2 秒还没完，先离开'); leave(); }, 2000);
             indUnbindKeys(); indPanelClose();
             document.body.onmousedown = null;
             if (R.onMouse) { document.removeEventListener('mouseup', R.onMouseUp); document.removeEventListener('mousedown', R.onMouse); document.removeEventListener('contextmenu', R.onCtx); }
@@ -1105,7 +1113,6 @@
             if (R.me) scene.remove(R.me);
             scene.background = R.oldBg; scene.fog = R.oldFog;
             R.bag = {}; ind = null;
-            nav('screen-lobby'); selectGameMode('industry');
         }
 
         // ── 场景 ──
@@ -3392,7 +3399,7 @@
         function indPanelBag() {
             if (!ind) return;
             indPanelShow('bag', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">背包　' + indSlots().length + ' / ' + indBagSlots() + ' 格</div><div id="ind-bag-zone">' + indBagChips() + '</div>' +
-                (function () { let hk = indSel(); return hk && IND_ITEMS[hk] && !IND_ITEMS[hk].dev && !IND_ITEMS[hk].gas ? '<div style="margin-top:6px;">手上：' + indName(hk) + '　' + indPutOpts('drop', 0, hk, '扔', '全扔', '扔') + '</div>' : ''; })() + '' + wdHandCraftHtml() + '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+                (function () { let hk = indSel(); return hk && IND_ITEMS[hk] && !IND_ITEMS[hk].dev && !IND_ITEMS[hk].gas ? '<div style="margin-top:6px;">手上：' + indName(hk) + '　' + indPutOpts('drop', 0, hk, '扔', '全扔', '扔') + '</div>' : ''; })() + '' + wdHandCraftHtml() + (function () { let L = ind.base.lost || {}, ks = Object.keys(L); return ks.length ? '<div style="margin-top:6px;color:#c62828;font-size:13px;">遗失物（认不出来的）：' + ks.map(function (k) { return k + ' ×' + L[k]; }).join('，') + '</div>' : ''; })() + '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
         // 背包格子换位置（任务 17）：背包存的是"种类 → 数量"，格子按种类放进来的先后排，所以换两格 = 换两种东西在里面的先后（存档格式不变）
         function indBagSwap(i, j) {

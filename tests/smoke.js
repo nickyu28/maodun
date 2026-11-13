@@ -13308,6 +13308,42 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND156 背包满了东西不凭空没：做东西、雕刻、灌桶、溢出给东西，前后总数对得上', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND157')) {
+            // IND157 进大厅不丢东西（任务 145）：背包占格超过容量不清空、溢出到箱子总数不变；认不出的 key 进 b.lost 不删；退出等存档写完（读回来对得上）；远征里、月球上回大厅东西带回基地；所有历史上出现过的物品 key 都认得（tests/item-keys.json）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const keys = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'item-keys.json'), 'utf8'));
+                const miss = await J(`${JSON.stringify(keys)}.filter(function (k) { return !IND_ITEMS[k]; })`);
+                if (miss.length) bad.push('历史上出现过的物品 key 认不出来了：' + miss.slice(0, 8).join('、'));
+                let r = await J(`(function(){ let ks = Object.keys(IND_ITEMS).filter(function (k) { return !IND_ITEMS[k].tool && !IND_ITEMS[k].hot && !IND_ITEMS[k].dev && !/^cyl|@/.test(k); }).slice(0, 40), bag = {}; ks.forEach(function (k) { bag[k] = 3; });
+                    let before = {}; ks.forEach(function (k) { before[k] = 3; });
+                    let b = indFixBase({ ver: 12, rule: 'hard', bag: Object.assign({}, bag, { zz_gone: 4 }), chests: [{ id: 1, x: 10, z: 10, big: true, items: { zz_gone2: 2, wood: 5 } }], ground: [{ k: 'zz_gone3', x: 5, z: 5 }], lost: { zz_old: 1, stone: 6 } });
+                    let tot = {}, add = function (o) { Object.keys(o).forEach(function (k) { tot[k] = (tot[k] || 0) + o[k]; }); }; add(b.bag); b.chests.forEach(function (c) { add(c.items); });
+                    let same = ks.every(function (k) { return tot[k] === 3 + (k === 'wood' ? 5 : 0) + (k === 'stone' ? 6 : 0); });
+                    return { slots: indSlotsOf(b.bag), cap: IND_BAG_SLOTS, bagKeys: Object.keys(b.bag).length, same: same, lost: JSON.stringify(b.lost), lostNew: b.lostNew, over: b.bagOver, cleared: Object.keys(b.bag).length === 0 }; })()`);
+                if (!(!r.cleared && r.slots <= r.cap && r.same && r.over >= 1)) bad.push('背包占格超过容量：不清空、超出的挪到箱子、总数不变 ' + JSON.stringify(r));
+                if (!(JSON.stringify(Object.entries(JSON.parse(r.lost)).sort()) === JSON.stringify([['zz_gone', 4], ['zz_gone2', 2], ['zz_gone3', 1], ['zz_old', 1]]) && r.lostNew === 7)) bad.push('认不出的 key 进 b.lost（背包、箱子、地上、已有的遗失物），认得的遗失物还回箱子 ' + r.lost + ' ' + r.lostNew);
+                const rd = async (setup) => { await T.eval(`window.__ld = null; (function(){ ${setup} })(); true;`); await until(T, `!ind && !!document.getElementById('screen-lobby') && getComputedStyle(document.getElementById('screen-lobby')).display !== 'none'`, 6000); await T.eval(`indLoad(function (b) { window.__ld = JSON.stringify({ bag: b.bag, box: b.chests.map(function (c) { return c.items; }) }); }); true;`); await until(T, `!!window.__ld`, 5000); return JSON.parse(await T.eval(`window.__ld`)); };
+                const sum = (o, k) => (o.bag[k] || 0) + o.box.reduce((a, x) => a + (x[k] || 0), 0);
+                await T.eval(`${HIDE} indEnter(); true;`); await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000);
+                let d1 = await rd(`indGoBase(null); ind.base.rule = 'hard'; ind.bag = { seed_cane: 7 }; ind.base.chests.forEach(function (c) { c.items = {}; }); indExit(true);`);
+                if (!(sum(d1, 'seed_cane') === 7)) bad.push('基地里退出：存档写完才离开，读回来对得上 ' + JSON.stringify(d1));
+                await T.eval(`indEnter(); true;`); await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000);
+                let d2 = await rd(`indGoTrip(2024); ind.bag = { seed_cane: 5, seed_corn: 2 }; indExit(true);`);
+                if (!(sum(d2, 'seed_cane') === 5 && sum(d2, 'seed_corn') === 2)) bad.push('远征里回大厅：东西带回基地 ' + JSON.stringify(d2));
+                await T.eval(`indEnter(); true;`); await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000);
+                let d3 = await rd(`ind.base.rule = 'hard'; indMoonEnter(); ind.bag = { seed_cane: 3 }; indExit(true);`);
+                if (!(sum(d3, 'seed_cane') === 3)) bad.push('月球上回大厅：东西带回基地 ' + JSON.stringify(d3));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND157 进大厅不丢东西：背包不清空、认不出进遗失物、退出等存档、远征月球回大厅带回东西、历史 key 都认得', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
