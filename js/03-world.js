@@ -1473,8 +1473,9 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026.11.5-52', date: '11 月 13 日', title: '最近更新', items: [
-                    '按着方向键时切走窗口，回来人物不会一直往前走了'
+                id: '2026.11.5-53', date: '11 月 13 日', title: '最近更新', items: [
+                    '按着方向键时切走窗口，回来人物不会一直往前走了',
+                    '提示和说明里的括号去掉了，读起来更顺'
                 ]
             },
             {
@@ -1547,7 +1548,7 @@
             checkinBadgeSync();
             let nextReward = CHECKIN_REWARDS[streak % 7];
             showSysModal('每日签到', (broke ? '断签啦，从第 1 天重新开始～<br>' : '') +
-                '签到成功！连续签到 <b>' + streak + '</b> 天，获得 <b>' + reward + '</b> 猫盾币（当前共 ' + coinsShow() + ' 个）。<br>' +
+                '签到成功！连续签到 <b>' + streak + '</b> 天，获得 <b>' + reward + '</b> 猫盾币，当前共 ' + coinsShow() + ' 个。<br>' +
                 '明天继续签到 +' + nextReward + ' 猫盾币。', [{ label: '太好了' }]);
         }
 
@@ -1566,7 +1567,7 @@
             Object.keys(EGGS).forEach(function (id) {
                 let e = EGGS[id], has = !!gState.eggs[id];
 
-                let hint = has ? '' : (e.hidden ? '<div style="font-size:11px; color:#bbb; margin-top:3px;">？？？（成就）</div>'
+                let hint = has ? '' : (e.hidden ? '<div style="font-size:11px; color:#bbb; margin-top:3px;">？？？成就</div>'
                     : '<div style="font-size:11px; color:#888; margin-top:3px;">' + e.how + '</div>');
                 html += '<div style="padding:8px 10px; margin-bottom:6px; border-radius:5px; background:' + (has ? '#f3e9fb' : '#f0f0f0') + ';">' +
                     '<div style="font-weight:bold; color:' + (has ? '#7b3fa0' : '#aaa') + ';">' + (has ? e.name : '？？？') +

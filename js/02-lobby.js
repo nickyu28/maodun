@@ -10,30 +10,30 @@
                 '迷宫里开箱子找宝贝，拿回起点那一格上交。',
                 '上交的东西值够了就能撤离，撤离出去才算赢。',
                 '上交不给钱，撤离后东西进仓库，卖掉才有钱。',
-                '没撤出去（倒下后离开、中途退出、关页面）算失败：上交的和背包里的全没了。',
+                '没撤出去，倒下后离开、中途退出、关页面，算失败：上交的和背包里的全没了。',
                 '怪物会追人。倒地了队友能救你，开了 AI 补齐的话 AI 也会来救。',
                 kTxt('<b>F / 左键</b> 开箱子、捡东西、打怪　<b>右键</b> 用手上的东西', '<b>互动</b> 开箱子、捡东西、打怪　<b>道具</b> 用手上的东西'),
                 kTxt('<b>1 2 3</b> 换手上的东西　<b>Q</b> 扔　<b>E</b> 背包　<b>Tab</b> 地图　<b>M</b> 静音', '点下面的格子换手上的东西，<b>背包</b> 看全部'),
                 kTxt('<b>Shift</b> 跑　<b>空格</b> 跳', '摇杆推到底就跑　<b>跳</b> 在右下角'),
                 '每个腰包自带 3 格。在背包或仓库里点一下腰包打开，东西拖进拖出；腰包不能放进腰包。',
-                kTxt('<b>4 5 6</b> 把腰包（手上拿着的，没有就背包里第一个）的第 1～3 格拿到手上；也可以按 <b>E</b> 打开背包，点腰包展开，点里面的东西放到手上。', '快捷栏旁边的 3 个小格是腰包的格子，点一下把那件拿到手上；也可以打开背包，点腰包展开，点里面的东西放到手上。'),
+                kTxt('<b>4 5 6</b> 把腰包里的第 1～3 格拿到手上，腰包是手上拿着的那个，没有就背包里第一个；也可以按 <b>E</b> 打开背包，点腰包展开，点里面的东西放到手上。', '快捷栏旁边的 3 个小格是腰包的格子，点一下把那件拿到手上；也可以打开背包，点腰包展开，点里面的东西放到手上。'),
                 '用了信号接收器，跟着蓝线走就能找到那件东西，换楼层也会带路。',
-                kTxt('<b>R</b> 放角色技能（右上有冷却图标）：绿色猫盾 8 秒内每秒回 5 血，黄色猫盾 2 秒内跑得快一倍、不受负重影响。', '点 <b>技能</b> 放角色技能：绿色猫盾 8 秒内每秒回 5 血，黄色猫盾 2 秒内跑得快一倍、不受负重影响。')
+                kTxt('<b>R</b> 放角色技能，右上有冷却图标：绿色猫盾 8 秒内每秒回 5 血，黄色猫盾 2 秒内跑得快一倍、不受负重影响。', '点 <b>技能</b> 放角色技能：绿色猫盾 8 秒内每秒回 5 血，黄色猫盾 2 秒内跑得快一倍、不受负重影响。')
             ]; } },
             night: { title: '惊魂夜', lines: function () { return [
                 '1 个追捕者对 4 个逃生者。',
                 '<b>逃生者</b>：修好 5 台矿机，逃生门就能开，从门里跑出去。',
                 '被打两下会倒地，倒地被挂上椅子就出局，队友能救你。',
                 '<b>追捕者</b>：把人打倒、挂上椅子。',
-                kTxt('<b>左键</b> 互动 / 普攻　<b>空格</b> 动作（校准、抓人、挂椅子）　<b>E</b> 破坏板子　<b>Q</b> 切换', '按钮名字会跟着你在做的事变'),
+                kTxt('<b>左键</b> 互动 / 普攻　<b>空格</b> 动作，校准、抓人、挂椅子　<b>E</b> 破坏板子　<b>Q</b> 切换', '按钮名字会跟着你在做的事变'),
                 '屏幕中间会提示现在能做什么。'
             ]; } },
             blaze: { title: '超燃', lines: function () { return [
-                '<b>2v2</b>：一条命，一队全灭输一局。快速场先赢 ' + BLAZE.quickWins + ' 局（每局 ' + BLAZE.quickPoisonDelay + ' 秒后缩圈），完整场先赢 ' + BLAZE.roundsToWin + ' 局。局间能选一项加成。',
+                '<b>2v2</b>：一条命，一队全灭输一局。快速场先赢 ' + BLAZE.quickWins + ' 局，每局 ' + BLAZE.quickPoisonDelay + ' 秒后缩圈，完整场先赢 ' + BLAZE.roundsToWin + ' 局。局间能选一项加成。',
                 '毒圈会收，站在圈外掉血。',
                 '<b>乱斗</b>：16 人混战 5 分钟，死了 10 秒后复活。击杀 +2、助攻 +2、死亡 −1。',
                 '乱斗里会慢慢进账，' + kTxt('按 <b>C</b>', '点 <b>商店</b>') + ' 花钱买卡。',
-                kTxt('<b>空格</b> 普攻　<b>左键</b> 1 技能　<b>右键</b> 2 技能（按住瞄准，松手放）　<b>Shift</b> 跳', '<b>普攻</b> <b>1技能</b> <b>2技能</b>（按住瞄准，松手放）<b>跳</b>')
+                kTxt('<b>空格</b> 普攻　<b>左键</b> 1 技能　<b>右键</b> 2 技能，按住瞄准，松手放　<b>Shift</b> 跳', '<b>普攻</b> <b>1技能</b> <b>2技能</b>按住瞄准，松手放<b>跳</b>')
             ]; } },
             race: { title: '竞速', lines: function () { return [
                 '16 人五轮淘汰：16 → 12 → 8 → 4 → 2，每轮最后几名出局。',
@@ -49,7 +49,7 @@
                 '去对面监狱碰一下，能把队友全救出来。',
                 '每队家门口有 5 件东西，扛回自己家就算抢到。被抓了东西掉在原地。',
                 '东西多的队赢，一队全进监狱直接输。一局 4 分钟。',
-                kTxt('<b>Shift</b> 跑（耗体力）　<b>空格</b> 跳', '摇杆推到底就跑（耗体力）　<b>跳</b> 在右下角')
+                kTxt('<b>Shift</b> 跑，耗体力　<b>空格</b> 跳', '摇杆推到底就跑，耗体力　<b>跳</b> 在右下角')
             ]; } },
             dodge: { title: '躲避球', lines: function () { return [
                 '两队各占半场，不能过中线。被砸中就出局。',
@@ -61,7 +61,7 @@
                 '<b>疯狂模式</b>：多了金色复活球、碰到就出局的黑球，还会空投新球。'
             ]; } },
             escape: { title: '合作密室', lines: function () { return [
-                '四个人一起开机关，全员走到出口（绿色地面）就过关。',
+                '四个人一起开机关，全员走到绿色地面的出口就过关。',
                 '脚下圆圈的颜色就是你的颜色。',
                 '<b>彩色板</b> 只有同色的人能站，<b>灰板</b> 谁都行，<b>×2</b> 要两个人。',
                 '<b>拉杆</b> 有人站着门才开，<b>按钮</b> 踩一下门开 4 秒。',
@@ -73,7 +73,7 @@
                 '玩别人用积木做的小游戏，每个游戏的规则都不一样。',
                 kTxt('<b>WASD</b> 走，<b>空格</b> 跳', '左半屏拖着走，<b>跳</b> 在右下角'),
                 '点「自己做一个」进创作界面，像 Scratch 一样拖积木做游戏。',
-                '别人玩你做的游戏，你也有猫盾币（要在同一个房间）。'
+                '别人玩你做的游戏，你也有猫盾币，要在同一个房间。'
             ]; } },
             cake: { title: '松饼大作战', lines: function () { return [
                 '不分队，谁都能抓人。',
@@ -95,7 +95,7 @@
                 '<b>单人</b>：看你能爬多高。',
                 '<b>双人</b>：两个人都到顶才赢。有人掉下去，另一个爬到下一面绿旗就能救回来。',
                 '<b>多人</b>：6 个人比谁先到顶。',
-                '起点和每面绿旗是存档点，站上去就记住（旗子变金色）。',
+                '起点和每面绿旗是存档点，站上去就记住，旗子变金色。',
                 '掉进岩浆时，岩浆还没淹到存档点，就回存档点接着爬。',
                 '淹过了再掉：单人结束，多人出局，双人倒下等队友救。',
                 '越往上特殊的台子越多：左右晃的、踩了会掉的、弹床、传送带、转动的横杆。',
@@ -265,7 +265,7 @@
             let ids = Object.keys(mmRoomPool).sort();
             document.getElementById('night-wait-list').innerHTML = ids.map(function (id) {
                 return '<div style="color:' + (id === gState.id ? '#7fd1ff' : '#cfe8ff') + ';">' +
-                    dispName(id) + (id === gState.id ? '（你）' : '') + '</div>';
+                    dispName(id) + (id === gState.id ? ' · 你' : '') + '</div>';
             }).join('') || '<div style="color:#888;">还没人加入</div>';
             let full = n >= mmActive.cap;
             // 兜底交给"发起人的心跳掉线了"来判断（roomSync 每次心跳都会把 5 秒没
@@ -400,7 +400,7 @@
                 row('触屏按键', sw('set-touch', touchOn, '显示', '隐藏')) +
                 row('转视角快慢', '<span style="display:flex; align-items:center; gap:6px;"><input type="range" id="set-sens" min="0.3" max="2.5" step="0.05" value="' + sens + '" style="width:110px;" oninput="settingsSens(this.value)"><span id="set-sens-val" style="font-size:12px; color:#777; width:32px;">' + sens.toFixed(2) + '</span></span>') +
                 row('上下视角反转', sw('set-inv', !!SETTINGS.invertY, '开', '关')) +
-                vol('总音量', 'volMaster') + vol('音乐', 'volMusic') + vol('音效', 'volSfx') + vol('语音（别人说话）', 'volVoice') +
+                vol('总音量', 'volMaster') + vol('音乐', 'volMusic') + vol('音效', 'volSfx') + vol('语音，别人说话', 'volVoice') +
                 '<div style="font-size:12px; color:#888; padding:4px 0 6px;">' + kTxt('按 <b>M</b> 一键静音，再按恢复。', '电脑上按 M 能一键静音。') + '</div>' +
                 row('画面', sw('set-hq', !!SETTINGS.hq, '清晰', '流畅')) +
                 row('新手教程', '<button onclick="tutorialStart()" style="margin:0; padding:4px 12px; font-size:12px; background:#607d8b; color:#fff; border:none; border-radius:4px;">重玩一遍</button>') +
@@ -437,7 +437,7 @@
         function applyControlHints() {
             let set = function (id, html) { let e = document.getElementById(id); if (e) e.innerHTML = html; };
             let ct = document.getElementById('chat-toggle');
-            if (ct && (typeof chatMode === 'undefined' || chatMode === 0)) ct.innerText = gState.control === 'pad' ? '发言' : '发言（回车）';
+            if (ct && (typeof chatMode === 'undefined' || chatMode === 0)) ct.innerText = gState.control === 'pad' ? '发言' : '发言，回车';
             set('calib-help-keys', kTxt('按 <b>空格</b> 校准。', '点屏幕任意处校准。'));
         }
 
@@ -624,13 +624,13 @@
             let el = document.getElementById('lobby-rank'); if (!el) return;
             let m = gState.gameMode;
             if (!RANK_MODES[m]) { el.innerText = '这个模式没有排位'; return; }
-            el.innerText = '段位：' + rankTierName(m) + '　（分数不公开，只用来定 AI 强度）';
+            el.innerText = '段位：' + rankTierName(m) + '　 · 分数不公开，只用来定 AI 强度';
         }
 
         function renderDailyModBanner() {
             let el = document.getElementById('daily-mod-banner');
             if (!el) return;
-            el.innerHTML = '<b>今日效果：' + DAILY_MOD.name + '</b>　' + DAILY_MOD.desc + '（惊魂夜、密室、乐园之外全模式生效，每天换一条）' +
+            el.innerHTML = '<b>今日效果：' + DAILY_MOD.name + '</b>　' + DAILY_MOD.desc + ' · 惊魂夜、密室、乐园之外全模式生效，每天换一条' +
                 '<div style="margin-top:4px; color:#e65100;"><b>本周活动：' + MODE_CN[weeklyMode()] + '</b>　猫盾币翻倍</div>';
         }
         function toggleModeDetail() {
@@ -722,7 +722,7 @@
             },
             mi: {
                 side: 'survivor', name: '4号', role: '挖煤',
-                desc: '被动：<br>挖煤速度 +50%。<br><br>主动：<br>冷却：40 秒<br>当前矿机 +（已修好台数 × 20，最少 20）。'
+                desc: '被动：<br>挖煤速度 +50%。<br><br>主动：<br>冷却：40 秒<br>当前矿机 + 已修好台数 × 20，最少 20。'
             },
             c1: {
                 side: 'survivor', name: '5号', role: '救援',
@@ -839,7 +839,7 @@
                 let l = matchPool[id].left;
                 rows.push('<div style="color:' + (id === gState.id ? '#7fd1ff' : '#cfe8ff') + ';">' +
                     dispName(id) + '　' + (matchPool[id].side === 'hunter' ? '追捕' : '逃生') +
-                    (id === gState.id ? '（你）' : '') +
+                    (id === gState.id ? ' · 你' : '') +
                     (typeof l === 'number' ? ' <span style="color:#888;">' + Math.ceil(l) + 's</span>' : '') +
                     '</div>');
             });
@@ -1268,7 +1268,7 @@
             }
 
             let team = document.getElementById('night-pick-team');
-            let rows = ['<div style="color:#7fd1ff;">' + dispName(gState.id) + '（你）<br><span style="color:#fff;">' +
+            let rows = ['<div style="color:#7fd1ff;">' + dispName(gState.id) + ' · 你<br><span style="color:#fff;">' +
                 (nightPickSel ? NIGHT_CHARS[nightPickSel].name : '未选') + '</span></div>'];
             let others = roomList.filter(function (r) { return r.id !== gState.id; });
             if (others.length) {
@@ -1381,7 +1381,7 @@
             let buffed = calib.elapsed >= CALIB.buffAt;
             document.getElementById('calib-stats').innerHTML =
                 `已进行 ${Math.floor(calib.elapsed / 60)}:${String(Math.floor(calib.elapsed % 60)).padStart(2, '0')}` +
-                `　当前档位: ${buffed ? '红 +5.5 / 白 +4.5（4 分钟后）' : '红 +4.5 / 白 +3.5'}<br>` +
+                `　当前档位: ${buffed ? '红 +5.5 / 白 +4.5，4 分钟后' : '红 +4.5 / 白 +3.5'}<br>` +
                 `红区 ${calib.hits.red} 次　白区 ${calib.hits.white} 次　失败 ${calib.hits.miss} 次` +
                 (calib.stunTimer > 0 ? `<br><span style="color:#d9534f;">眩晕中 ${calib.stunTimer.toFixed(1)}s</span>` : '');
         }
@@ -1747,7 +1747,7 @@
                 if (item.type === 'badge' || item.type === 'bcrown') {
                     let t = document.createElement('div'); t.innerText = item.type === 'bcrown' ? '头目皇冠不能卖，只能戴' : '地窖徽章不能卖'; t.style.cssText = 'color:#999; font-size:13px; margin:6px 0;'; sellDiv.appendChild(t);
                 } else {
-                    let sBtn = document.createElement('button'); sBtn.innerText = '卖掉（$' + garageSellPrice(item).toLocaleString() + '）' + kTxt('　Backspace', ''); sBtn.style.background = '#f39c12'; sBtn.style.color = '#fff'; sBtn.style.minWidth = '200px';
+                    let sBtn = document.createElement('button'); sBtn.innerText = '卖掉，$' + garageSellPrice(item).toLocaleString() + '' + kTxt('　Backspace', ''); sBtn.style.background = '#f39c12'; sBtn.style.color = '#fff'; sBtn.style.minWidth = '200px';
                     sBtn.onclick = garageSellSelected; sellDiv.appendChild(sBtn);
                 }
 
@@ -1756,7 +1756,7 @@
                 if (item.type === 'base') {
                     let box = document.createElement('div');
                     box.style.cssText = 'position:relative; z-index:5; margin:8px auto 0; padding:8px 10px; background:#fff; border:1px solid #ddd; border-radius:6px; font-size:12px; color:#666; max-width:320px;';
-                    box.innerHTML = '镚宝石（' + crownSockCount(item) + '/' + HUNT_GEMS.length + '）—— 六颗镚满变成皇冠<br>';
+                    box.innerHTML = '镚宝石，' + crownSockCount(item) + '/' + HUNT_GEMS.length + '，—— 六颗镚满变成皇冠<br>';
                     HUNT_GEMS.forEach(function (g) {
                         if (item.sock && item.sock[g.id]) return;
                         let gi = gState.garage.findIndex(function (q) { return q && q.type === 'gem' && q.gem === g.id; });
@@ -1778,7 +1778,7 @@
                 if (item.type === 'bbase') {
                     let box = document.createElement('div');
                     box.style.cssText = 'position:relative; z-index:5; margin:8px auto 0; padding:8px 10px; background:#fff; border:1px solid #ddd; border-radius:6px; font-size:12px; color:#666; max-width:320px;';
-                    box.innerHTML = '镶宝石（' + bossCrownCount(item) + '/' + BOSS_CROWN_SLOTS.length + '）—— 五种宝石各一颗，钻石要两颗<br>';
+                    box.innerHTML = '镶宝石，' + bossCrownCount(item) + '/' + BOSS_CROWN_SLOTS.length + '，—— 五种宝石各一颗，钻石要两颗<br>';
                     BOSS_GEMS.forEach(function (g) {
                         if (!bossCrownFreeSlot(item, g.id)) return;
                         let gi = gState.garage.findIndex(function (q) { return q && q.type === 'bgem' && q.gem === g.id; });

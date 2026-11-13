@@ -375,7 +375,7 @@
             if (heldPouch) {
                 if (cells) cells.style.display = 'none';
                 el.style.bottom = '164px';
-                el.innerHTML = '<div style="color:#ffd54f;">腰包（点一下，或按 4 / 5 / 6 拿到手上）</div>';
+                el.innerHTML = '<div style="color:#ffd54f;">腰包，点一下，或按 4 / 5 / 6 拿到手上</div>';
                 el.classList.remove('hidden');
                 return;
             }
@@ -394,7 +394,7 @@
                 return;
             }
             if (cells) cells.style.display = 'none';
-            el.innerHTML = '<div style="color:#ffd54f;">腰包（按 4 / 5 / 6 拿到手上）</div>' +
+            el.innerHTML = '<div style="color:#ffd54f;">腰包，按 4 / 5 / 6 拿到手上</div>' +
                 bag.map(function (it, n) {
                     return '<div>' + (n + 4) + '、' + (it ? it.n + '　重:' + itemWeight(it) : '<span style="color:#888;">空</span>') + '</div>';
                 }).join('');
@@ -418,7 +418,7 @@
 
         function huntRefreshSubmitUI() {
             let el = document.getElementById('submit-progress'); if (!el) return;
-            let extra = gState.aiSubmitted > 0 ? `（队友 ${gState.aiSubmitted}）` : '';
+            let extra = gState.aiSubmitted > 0 ? ` · 队友 ${gState.aiSubmitted}` : '';
             el.innerText = `上交进度: ${gState.totalSubmitted} / ${gState.extractTarget}${extra}`;
             if (gState.totalSubmitted >= gState.extractTarget) {
                 el.style.color = '#5cb85c';
@@ -718,7 +718,7 @@
         function huntQuitAsk() {
             if (!isPlaying || gState.isDead || gState.hasLeft) return;
             if (document.pointerLockElement) document.exitPointerLock();
-            showSysModal('离开本局？', '算撤离失败：背包里的东西全丢（腰包、徽章也是），这局上交的也没收。' +
+            showSysModal('离开本局？', '算撤离失败：背包里的东西全丢，腰包、徽章也是，这局上交的也没收。' +
                 (liveHumanTeammates().length ? '<br>你的位置交给 AI。' : ''), [
                 { label: '离开', color: '#d9534f', onClick: function () { if (!isPlaying || gState.isDead) return; gState.leavingAlive = true; triggerAgentDeath(); chooseLeave(); } },
                 { label: '继续玩' }
@@ -777,7 +777,7 @@
             let list = spectateTargets();
             gState.spectating = (gState.spectateIdx >= 0 && gState.spectateIdx < list.length) ? list[gState.spectateIdx] : null;
             let label = document.getElementById('spectate-target');
-            if (label) label.innerText = gState.spectating ? dispNameText(gState.spectating.userData.name) : '自己（原地）';
+            if (label) label.innerText = gState.spectating ? dispNameText(gState.spectating.userData.name) : '自己 · 原地';
         }
 
         function hideDeathUI() {
@@ -1070,7 +1070,7 @@
             { id: 'run', text: '跑一小段', hint: function () { return kTxt('按住 <b>Shift</b> 再走', '摇杆推到底就会跑'); } },
             { id: 'chest', text: '走到木箱前，把它打开', hint: function () { return kTxt('准星对着箱子，按 <b>F</b> 或点<b>左键</b>', '走近箱子，点 <b>互动</b>'); } },
             { id: 'pick', text: '把掉出来的东西捡起来', hint: function () { return kTxt('走近，按 <b>F</b> 或点<b>左键</b>', '走近，点 <b>互动</b>'); } },
-            { id: 'bag', text: '打开背包看一眼', hint: function () { return kTxt('按 <b>E</b>（再按一次关上）', '点屏幕上的 <b>背包</b>'); } },
+            { id: 'bag', text: '打开背包看一眼', hint: function () { return kTxt('按 <b>E</b>，再按一次关上', '点屏幕上的 <b>背包</b>'); } },
             { id: 'submit', text: '回到绿色的出生点，上交', hint: function () { return '站在绿色格子里，点右上角的 <b>上交</b>'; } },
             { id: 'extract', text: '上交够了，点撤离', hint: function () { return '点右上角出现的 <b>撤离</b>'; } }
         ];
@@ -1729,7 +1729,7 @@
             base.v = BOSS_BASE_V + BOSS_CROWN_SLOTS.reduce(function (s, q) { return s + (base.sock[q[0]] ? bossGemDef(q[1]).v : 0); }, 0);
             if (bossCrownCount(base) >= BOSS_CROWN_SLOTS.length) {
                 base.n = '头目皇冠'; base.type = 'bcrown'; base.v = 0; base.w = 4; base.tex = 'cup'; base.c = 0xffd54f;
-            } else base.n = '头目皇冠底座（' + bossCrownCount(base) + '/' + BOSS_CROWN_SLOTS.length + '）';
+            } else base.n = '头目皇冠底座 ' + bossCrownCount(base) + '/' + BOSS_CROWN_SLOTS.length + '';
             return true;
         }
         function bossOwnsCrown() { return gState.inv.concat(gState.garage).some(function (q) { return q && q.type === 'bcrown'; }); }

@@ -211,7 +211,7 @@
                 let credit = Math.min(PARK_CREDIT_MAX, Math.round(reward * 0.5));
                 if (credit > 0) bc.postMessage({ type: 'PARK_CREDIT', target: '*', sender: gState.id, to: park.program.creatorId, amount: credit });
             }
-            showSysModal(won ? '通关！' : '没能达成目标', '获得 ' + reward + ' 猫盾币' + (won ? '' : '（安慰奖）'),
+            showSysModal(won ? '通关！' : '没能达成目标', '获得 ' + reward + ' 猫盾币' + (won ? '' : '，安慰奖'),
                 [{ label: '返回大厅', color: '#5cb85c', onClick: function () { parkExit(); } }]);
         }
         function parkTick(dt) {

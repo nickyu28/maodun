@@ -131,7 +131,7 @@
             { get: function () { return BLAZE_TEST_NO_CD; }, set: function (v) { BLAZE_TEST_NO_CD = v; }, label: '超燃：你自己无冷却' },
             { get: function () { return BLAZE_TEST_SKIP_KEY; }, set: function (v) { BLAZE_TEST_SKIP_KEY = v; }, label: '超燃：Q 跳过本局' },
             { get: function () { return BLAZE_TEST_NO_PERK_TIMER; }, set: function (v) { BLAZE_TEST_NO_PERK_TIMER = v; }, label: '超燃：选卡不计时' },
-            { get: function () { return SFX_ENABLED; }, set: function (v) { SFX_ENABLED = v; }, label: '通用：音效（击杀播报等）' },
+            { get: function () { return SFX_ENABLED; }, set: function (v) { SFX_ENABLED = v; }, label: '通用：音效，击杀播报等' },
             {
                 get: function () { return false; },
                 set: function () {
@@ -143,15 +143,15 @@
             {
                 get: function () { return false; },
                 set: function () {
-                    showSysModal('隐藏分', '惊魂夜：' + rankOf('night') + '（' + rankTierName('night') + '）\n' +
-                        '超燃：' + rankOf('blaze') + '（' + rankTierName('blaze') + '）\n\n' +
+                    showSysModal('隐藏分', '惊魂夜：' + rankOf('night') + ' · ' + rankTierName('night') + '，\n' +
+                        '超燃：' + rankOf('blaze') + ' · ' + rankTierName('blaze') + '，\n\n' +
                         'AI 基准强度：惊魂夜 ' + Math.round(aiSkillBase('night') * 100) + '%、' +
                         '超燃 ' + Math.round(aiSkillBase('blaze') * 100) + '%', [{ label: '知道了' }]);
                 },
                 label: '排位：看一眼当前隐藏分'
             },
             { get: function () { return TEST_INFINITE_COINS; }, set: function (v) { TEST_INFINITE_COINS = v; }, label: '通用：无限猫盾币 / 全解锁' },
-            { get: function () { return AI_ACC_CHANCE <= 0; }, set: function (v) { AI_ACC_CHANCE = v ? 0 : 0.3; }, label: '通用：AI/路人不戴配饰（卡的话开这个）' },
+            { get: function () { return AI_ACC_CHANCE <= 0; }, set: function (v) { AI_ACC_CHANCE = v ? 0 : 0.3; }, label: '通用：AI/路人不戴配饰，卡的话开这个' },
             {
                 get: function () { return BGM_ENABLED; },
                 set: function (v) {
@@ -180,7 +180,7 @@
                         '<br><span style="color:#888; font-size:12px;">放在局内会和轮间选卡抢同一个弹窗。</span>',
                         [{ label: '知道了' }]);
                 },
-                label: '竞速：自选牌（已挪到大厅）'
+                label: '竞速：自选牌，已挪到大厅'
             }
         ];
 
@@ -428,7 +428,7 @@
 
         function coinsBreakText() {
             if (!coinsLast) return '';
-            return '猫盾币 +' + coinsLast.gain + '（' + coinsLast.parts.map(function (p) { return p[0] + ' ' + (typeof p[1] === 'number' ? '+' + p[1] : p[1]); }).join('，') + '）';
+            return '猫盾币 +' + coinsLast.gain + ' · ' + coinsLast.parts.map(function (p) { return p[0] + ' ' + (typeof p[1] === 'number' ? '+' + p[1] : p[1]); }).join('，') + '';
         }
         function coinsLine() {
             return '<div style="margin-top:8px; color:#e6a23c; font-size:13px;">' + coinsBreakText().replace(/^猫盾币 \+(\d+)/, function (m, n) { return coinBadgeHtml('+' + n, 16); }) + '</div>';
@@ -525,7 +525,7 @@
             let fresh = ACH_LIST.filter(function (a) { return !A.done[a.id] && achStat(a.stat) >= a.goal; });
             fresh.forEach(function (a) { A.done[a.id] = 1; });
             if (fresh.length) {
-                setTimeout(function () { blazeFlash('成就：' + fresh.map(function (a) { return a.name; }).join('、') + '（去大厅领猫盾币）'); }, 1600);
+                setTimeout(function () { blazeFlash('成就：' + fresh.map(function (a) { return a.name; }).join('、') + ' · 去大厅领猫盾币'); }, 1600);
                 sfxChime(2);
             }
             saveProgress();
@@ -596,9 +596,9 @@
                         let right = on ? '<span style="font-size:12px; color:#66bb6a;">戴着</span>' :
                             own ? '<button onclick="titleWear(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#7e57c2; color:#fff; border:none;">戴上</button>' :
                                 T.buy ? '<button onclick="titleBuy(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#e6a23c; color:#fff; border:none;">' + coinBadgeHtml(T.buy, 13) + '</button>' :
-                                    T.night ? '<span style="font-size:11px; color:#9e9e9e;">惊魂夜当追捕者累计抓 ' + NIGHT_CATCH_GOAL + ' 人送（' + Math.min(NIGHT_CATCH_GOAL, nightStatOf().catch) + '/' + NIGHT_CATCH_GOAL + '）</span>' :
-                                T.book ? '<span style="font-size:11px; color:#9e9e9e;">超燃加成图鉴点满送（' + perkBookLit() + '/' + BLAZE_PERKS.length + '）</span>' :
-                                    T.bz ? '<span style="font-size:11px; color:#9e9e9e;">' + BLAZE_CHARS[T.bz].name + '赢 ' + T.need + ' 场送（' + Math.min(T.need, blazeMasteryOf(T.bz).w) + '/' + T.need + '）</span>' :
+                                    T.night ? '<span style="font-size:11px; color:#9e9e9e;">惊魂夜当追捕者累计抓 ' + NIGHT_CATCH_GOAL + ' 人送，' + Math.min(NIGHT_CATCH_GOAL, nightStatOf().catch) + '/' + NIGHT_CATCH_GOAL + '</span>' :
+                                T.book ? '<span style="font-size:11px; color:#9e9e9e;">超燃加成图鉴点满送，' + perkBookLit() + '/' + BLAZE_PERKS.length + '</span>' :
+                                    T.bz ? '<span style="font-size:11px; color:#9e9e9e;">' + BLAZE_CHARS[T.bz].name + '赢 ' + T.need + ' 场送，' + Math.min(T.need, blazeMasteryOf(T.bz).w) + '/' + T.need + '</span>' :
                                         '<span style="font-size:11px; color:#9e9e9e;">成就「' + ACH_LIST.filter(function (a) { return a.id === T.ach; })[0].name + '」送</span>';
                         return '<div style="display:flex; align-items:center; gap:8px; padding:6px 4px; border-top:1px solid #eee;">' +
                             '<span style="flex:1;"><span style="display:inline-block; padding:1px 8px; border-radius:9px; background:#263238; color:' + T.col + '; font-size:12px; font-weight:bold;">' + T.name + '</span></span>' + right + '</div>';
@@ -754,7 +754,7 @@
                 let stageTxt = d.stages.map(function (q) {
                     let cur = (q === p.st) && owned;
                     return '<span style="color:' + (cur ? d.css : '#aaa') + ';">' +
-                        q.label + '（' + q.day + '天 · 生命+' + q.hp + ' 伤害+' + q.dmg + '）</span>';
+                        q.label + ' · ' + q.day + '天 · 生命+' + q.hp + ' 伤害+' + q.dmg + '</span>';
                 }).join(' → ');
                 out += shopRow(
                     '<div style="display:flex; justify-content:space-between; align-items:center;">' +
@@ -796,7 +796,7 @@
                     'style="width:34px; height:34px; vertical-align:middle; background:#cfd8dc; border-radius:6px;"></span>' +
                     (owned
                         ? '<button onclick="shopEquipFace(\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:' + (on ? '#5cb85c' : '#999') + '; color:#fff; border:none;">' + (on ? '使用中' : '换上') + '</button>'
-                        : d.lock ? '<span style="font-size:11px; color:#9e9e9e;">惊魂夜逃出 ' + NIGHT_ESC_GOAL + ' 次解锁（' + Math.min(NIGHT_ESC_GOAL, nightStatOf().esc) + '/' + NIGHT_ESC_GOAL + '）</span>'
+                        : d.lock ? '<span style="font-size:11px; color:#9e9e9e;">惊魂夜逃出 ' + NIGHT_ESC_GOAL + ' 次解锁，' + Math.min(NIGHT_ESC_GOAL, nightStatOf().esc) + '/' + NIGHT_ESC_GOAL + '</span>'
                         : '<button onclick="shopBuyFace(\'' + k + '\')" style="margin:0; font-size:12px; padding:4px 12px; background:#e6a23c; color:#fff; border:none;">' + coinBadgeHtml(d.price, 14) + '</button>') +
                     '</div>');
             });
@@ -894,11 +894,11 @@
             { id: 'cut', kind: 'stat', label: '减伤 +10%', only: 'tank' },
             { id: 'lifesteal', kind: 'stat', label: '吸血 +15%', only: 'guard' },
             { id: 'ctrltime', kind: 'stat', label: '控制时长 +0.1 秒', only: 'control' },
-            { id: 'invisatk', kind: 'stat', label: '隐身期间每秒攻击力 +5（现身后重置）', only: 'assassin' },
+            { id: 'invisatk', kind: 'stat', label: '隐身期间每秒攻击力 +5，现身后重置', only: 'assassin' },
             { id: 'shiftspeed', kind: 'stat', label: '位移结束后 2 秒内移速 +10%', only: 'shift' },
             { id: 'engtime', kind: 'stat', label: '建筑存在时间 +5 秒', only: 'engineer' },
             { id: 'mirblock', kind: 'stat', label: '格挡时长 +0.3 秒', only: 'mirror' },
-            { id: 'cdr', kind: 'stat', label: '冷却缩减 +15%（数值卡这一路最多 60%）', only: null },
+            { id: 'cdr', kind: 'stat', label: '冷却缩减 +15%，数值卡这一路最多 60%', only: null },
             { id: 'speed', kind: 'stat', label: '移速 +15%', only: null, max: 1 },
             { id: 'critrate', kind: 'stat', label: '暴击率 +15%', only: null },
             { id: 'critpow', kind: 'stat', label: '暴击倍率 +0.5', only: null },
@@ -915,11 +915,11 @@
             { id: 'tankskill', kind: 'func', label: '技能额外造成 1% 最大生命伤害', only: 'tank' },
             { id: 'guarddash', kind: 'func', label: '闪身距离 +2 身位', only: 'guard' },
             { id: 'ctrlextra', kind: 'func', label: '技能附带 0.2% 最大生命的额外控制', only: 'control', max: 1 },
-            { id: 'invisburst', kind: 'func', label: '爆发 ×1.5（隐身中及现身后 3 秒不能用爆发）', only: 'assassin', max: 1 },
+            { id: 'invisburst', kind: 'func', label: '爆发 ×1.5，隐身中及现身后 3 秒不能用爆发', only: 'assassin', max: 1 },
             { id: 'blinkfar', kind: 'func', label: '瞬移距离 +2 身位', only: 'mage' },
-            { id: 'shiftback', kind: 'func', label: '移速 +20%（跑得越快，充能攒得越快）', only: 'shift' },
+            { id: 'shiftback', kind: 'func', label: '移速 +20%，跑得越快，充能攒得越快', only: 'shift' },
             { id: 'engboom', kind: 'func', label: '炮台被打掉时爆炸，4 身位内 25 伤', only: 'engineer' },
-            { id: 'mirwide', kind: 'func', label: '格挡成功时，眩晕和减速范围扩大到 5 身位（不只是打你的人）', only: 'mirror' },
+            { id: 'mirwide', kind: 'func', label: '格挡成功时，眩晕和减速范围扩大到 5 身位，不只是打你的人', only: 'mirror' },
             // 通用功能卡（新增）
             { id: 'tough', kind: 'func', label: '生命上限 +30%，伤害 −20%', only: null, max: 1 },
             { id: 'winhp', kind: 'func', label: '每赢一局，生命上限 +100', only: null, max: 1 },
@@ -929,24 +929,24 @@
             { id: 'regen', kind: 'func', label: '5 秒没挨打后，每秒回 3% 最大生命', only: null, max: 1 },
             { id: 'backstab', kind: 'func', label: '从背后打人伤害 +50%', only: null, max: 1 },
             { id: 'windmg', kind: 'func', label: '每赢一局，伤害 +50', only: null, max: 1 },
-            { id: 'crit', kind: 'func', label: '暴击率 +30%（暴击基础 1.5 倍）', only: null, max: 1 },
+            { id: 'crit', kind: 'func', label: '暴击率 +30%，暴击基础 1.5 倍', only: null, max: 1 },
             { id: 'critdmg', kind: 'func', label: '暴击倍率 1.5 倍 → 2 倍', only: null, max: 1 },
             { id: 'critheal', kind: 'func', label: '暴击时 30% 概率回 20% 最大生命', only: null, max: 1 },
             {
                 id: 'critswap2', kind: 'func', only: null,
-                label: '暴击倍率 + 暴击率 × 1.0（常驻，后面涨暴击率也算）'
+                label: '暴击倍率 + 暴击率 × 1.0，常驻，后面涨暴击率也算'
             },
             { id: 'fullhp', kind: 'func', label: '对生命高于 90% 的敌人伤害 +40%', only: null, max: 1 },
-            { id: 'skillup', kind: 'func', label: '技能伤害 +30%（普攻不吃）', only: null, max: 1 },
+            { id: 'skillup', kind: 'func', label: '技能伤害 +30%，普攻不吃', only: null, max: 1 },
             { id: 'bulk', kind: 'func', label: '生命上限 +200，移速 −10%', only: null, max: 1 },
             { id: 'hpdmg', kind: 'func', label: '每 100 点最大生命，伤害 +5', only: null, max: 1 },
             {
                 id: 'dmgcd', kind: 'func', only: null, max: 1,
-                label: '固定伤害加成每 10 点，冷却缩减 +5%（最多 +30%）'
+                label: '固定伤害加成每 10 点，冷却缩减 +5%，最多 +30%'
             },
             {
                 id: 'atkcdr', kind: 'func', only: null, max: 1,
-                label: '冷却缩减的一半也作用于普攻（最多 −30%）'
+                label: '冷却缩减的一半也作用于普攻，最多 −30%'
             },
             { id: 'lifecd', kind: 'func', label: '生命上限 −20%，冷却缩减 +20%', only: null, max: 1 },
             { id: 'armor', kind: 'func', label: '受到的伤害 −15%', only: null },
@@ -1122,7 +1122,7 @@
 
         function blazeLuckyLabel(rolled) {
             let o = BLAZE_PERKS.filter(function (q) { return q.id === rolled; })[0];
-            return o ? o.label : '（什么都没抽到）';
+            return o ? o.label : '什么都没抽到';
         }
 
         // 换一批：把这三张丢掉重抽。每回合的次数有限，用完按钮就没了。
@@ -1209,7 +1209,7 @@
         function blazeFfaCustomPick(id) {
             if (!blaze || !blaze.ffa) return;
             if (blaze.ffaMoney < BLAZE.ffaCustomPrice) {
-                blazeFlash('钱不够（任选要 ' + BLAZE.ffaCustomPrice + '）'); return;
+                blazeFlash('钱不够，任选要 ' + BLAZE.ffaCustomPrice + ''); return;
             }
             blaze.ffaMoney -= BLAZE.ffaCustomPrice;
             blaze.ffaCustom = false;
@@ -1226,7 +1226,7 @@
         function blazeFfaRefresh() {
             if (!blaze || !blaze.ffa || blaze.over) return;
             let cost = blazeFfaRefreshCost();
-            if (blaze.ffaMoney < cost) { blazeFlash('钱不够刷新（要 ' + cost + '）'); return; }
+            if (blaze.ffaMoney < cost) { blazeFlash('钱不够刷新，要 ' + cost + ''); return; }
             blaze.ffaMoney -= cost;
             blaze.ffaRefreshN = (blaze.ffaRefreshN || 0) + 1;
             blaze.ffaDraw = null;

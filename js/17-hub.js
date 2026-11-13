@@ -406,7 +406,7 @@
                 el.style.display = 'flex';
                 // 真人走正式组队（lobbyParty，对方要真的同意），AI 路人还是原来那套哄一下的假流程
                 let already = nearest.isAI ? (hub.party.indexOf(nearest.name) >= 0) : (lobbyParty.indexOf(nearest.name) >= 0);
-                document.getElementById('hub-prompt-name').innerText = nearest.name + (already ? '（已组队）' : '');
+                document.getElementById('hub-prompt-name').innerText = nearest.name + (already ? ' · 已组队' : '');
                 document.getElementById('hub-prompt-friend').style.display = nearest.isAI ? 'none' : '';
                 let teamBtn = document.getElementById('hub-prompt-team');
                 teamBtn.style.display = already ? 'none' : '';
@@ -433,7 +433,7 @@
                 return;
             }
             if (hub.party.indexOf(w.name) >= 0) { blazeFlash(w.name + ' 已经在队伍里了'); return; }
-            if (hub.party.length >= 3) { blazeFlash('队伍已经满了（最多 3 人）'); return; }
+            if (hub.party.length >= 3) { blazeFlash('队伍已经满了，最多 3 人'); return; }
             if (w.teamPending) return;
             w.teamPending = true;
             hubProximityTick();
@@ -461,7 +461,7 @@
             document.getElementById('blaze-score').innerText = '在线 ' + roomOnlineCount() + ' 人';
             let team = lobbyParty.concat(hub.party);
             document.getElementById('blaze-round').innerText = '队伍：' +
-                (team.length ? team.map(dispNameText).join('、') : '（还没组队）') +
+                (team.length ? team.map(dispNameText).join('、') : '还没组队') +
                 (nightAwayActive() ? '　· 队友还在惊魂夜里，等他们打完' : '');
         }
         // ── 大厅广场联机：跟房间里其他真人互相广播位置，不经过房主转发。

@@ -351,7 +351,7 @@
                     (un ? '<b>' + n + '</b>' : '<span style="font-size:11px;">未解锁</span>') + '<br><span style="font-size:10px;">' + stars + '</span></button>';
             }).join('');
             let sb = document.getElementById('esc-start-btn'); if (sb) sb.innerText = '开始第 ' + P.sel + ' 关';
-            let tt = document.getElementById('esc-title'); if (tt) tt.innerText = '合作密室 · ' + ESC_LEVELS.length + ' 关（前 ' + ESC_INTRO_N + ' 关是入门）';
+            let tt = document.getElementById('esc-title'); if (tt) tt.innerText = '合作密室 · ' + ESC_LEVELS.length + ' 关，前 ' + ESC_INTRO_N + ' 关是入门';
             let info = document.getElementById('esc-level-info');
             if (info) {
                 let L = escLevelDef(P.sel), best = P.best[P.sel];
@@ -1405,7 +1405,7 @@
                 let a = R.actors.filter(function (o) { return o.ai; })[0];
                 if (a) aiSay(a, a.name, 'win', ESC_LINES.win);
                 body = '<div style="font-size:30px; letter-spacing:4px; margin:4px 0;"><span style="color:#f9a825;">' + '★'.repeat(stars) + '</span><span style="color:#ccc;">' + '★'.repeat(3 - stars) + '</span></div>' +
-                    '<div>' + escLvlTitle(n, lv) + ' 用时 <b>' + escFmtTime(t) + '</b>' + (rec && prev ? '（新纪录！）' : '') + '</div>' +
+                    '<div>' + escLvlTitle(n, lv) + ' 用时 <b>' + escFmtTime(t) + '</b>' + (rec && prev ? ' · 新纪录！' : '') + '</div>' +
                     '<div style="color:#888; font-size:12px; margin-top:4px;">三星 ≤ ' + escFmtTime(lv.stars[0]) + '　两星 ≤ ' + escFmtTime(lv.stars[1]) + '</div>' +
                     (reward ? '<div style="margin-top:8px;">获得 ' + coinBadgeHtml(reward, 18) + '</div>' : '');
                 if (host && !special && n < ESC_LEVELS.length) btns.push({ label: '下一关', color: '#43a047', onClick: function () { escapeRestart(n + 1); } });

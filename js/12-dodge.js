@@ -728,7 +728,7 @@
                 (dodge.crazy ? '躲避球·疯狂　' : (DODGE.teamSize === 5 ? '躲避球·5v5　' : '躲避球·经典　')) +
                 '我方存活 ' + (me.team === 0 ? a0 : a1) + '　对面存活 ' + (me.team === 0 ? a1 : a0) +
                 (me.out ? '　你出局了'
-                    : me.holding ? ('　手里：' + dodgeKindName(me.holding.kind) + (me.mustReturn ? '（中线球）' : '')) : '');
+                    : me.holding ? ('　手里：' + dodgeKindName(me.holding.kind) + (me.mustReturn ? ' · 中线球' : '')) : '');
             if (me.holding) introOnce('dodge.hold', '拿到球了', kTxt('按住 <b>左键</b> 瞄准，松手扔出去。点一下 <b>左键</b> 放下。', '按住 <b>投</b> 瞄准，松手扔出去。点一下 <b>投</b> 放下。'));
             if (me.holding && me.mustReturn) introOnce('dodge.center', '中线球', '中线上捡的球，要先跑回自己底线才能扔。');
             if (me.out) introOnce('dodge.out', '出局了', '队友接住球、或者把球投进中间的篮筐，就能把你救回来。');

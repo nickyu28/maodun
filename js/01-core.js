@@ -267,7 +267,7 @@
         function netJoinRoom(code) {
             code = (code || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
             if (!code) { netSetStatus('先填一个房间号', '#d9534f'); return; }
-            if (typeof Peer === 'undefined') { netSetStatus('联机组件没加载出来（需要联网）', '#d9534f'); return; }
+            if (typeof Peer === 'undefined') { netSetStatus('联机组件没加载出来，需要联网', '#d9534f'); return; }
             netLeaveRoom(true);
             peerRoom = code; peerWant = true;
             try { localStorage.setItem('TH_room', code); } catch (e) { }
@@ -354,21 +354,21 @@
         const NET_DIAG_STEPS = [
             ['lib', '联机组件加载'],
             ['signal', '牵线服务器'],
-            ['stun', '探路服务器（STUN，每个单独测）'],
-            ['nat', '网络类型（好不好直连）'],
-            ['turn', '中转服务器（TURN）']
+            ['stun', '探路服务器，STUN，每个单独测'],
+            ['nat', '网络类型，好不好直连'],
+            ['turn', '中转服务器，TURN']
         ];
         let netDiag = null;
         // 一行结果的大白话
         function netDiagLine(k, r) {
             if (!r) return '测试中…';
             if (k === 'stun') return r.ok ? '通了 ' + r.list.filter(function (x) { return x.ok; }).length + ' 个，共 ' + r.list.length + ' 个' : '一个都不通';
-            if (k === 'nat') return r.type === 'easy' ? '好连（两个探路服务器看到的公网端口一样）' : r.type === 'hard' ? '难连，对称型（两个探路服务器看到的公网端口不一样）' : '测不出来（' + r.why + '）';
-            if (k === 'turn') return r.ok ? '通，拿到了中转地址' + (r.addr ? ' ' + r.addr : '') + (r.ms !== undefined ? '　' + r.ms + ' 毫秒' : '') : '不通（' + (r.why || '没拿到中转地址') + '）';
-            return (r.ok ? '通' : '不通') + (r.ms !== undefined ? '　' + r.ms + ' 毫秒' : '') + (r.why ? '（' + r.why + '）' : '');
+            if (k === 'nat') return r.type === 'easy' ? '好连，两个探路服务器看到的公网端口一样' : r.type === 'hard' ? '难连，对称型，两个探路服务器看到的公网端口不一样' : '测不出来，' + r.why + '';
+            if (k === 'turn') return r.ok ? '通，拿到了中转地址' + (r.addr ? ' ' + r.addr : '') + (r.ms !== undefined ? '　' + r.ms + ' 毫秒' : '') : '不通，' + (r.why || '没拿到中转地址') + '';
+            return (r.ok ? '通' : '不通') + (r.ms !== undefined ? '　' + r.ms + ' 毫秒' : '') + (r.why ? '' + r.why + '' : '');
         }
         function netDiagStunLine(x) {
-            return x.name + ' ' + x.host + '：' + (x.ok ? '通　公网地址 ' + x.addr + '　' + x.ms + ' 毫秒' : '不通（' + x.why + '）');
+            return x.name + ' ' + x.host + '：' + (x.ok ? '通　公网地址 ' + x.addr + '　' + x.ms + ' 毫秒' : '不通，' + x.why + '');
         }
         function netDiagText() {
             if (!netDiag) return '';
@@ -387,7 +387,7 @@
             if (R.signal && !R.signal.ok) out.push('连不上牵线服务器，进不了房间。');
             let stunOk = R.stun && R.stun.ok, relay = R.turn && R.turn.ok;
             if (!stunOk) out.push('探路服务器一个都不通，两边不在同一个网络时很难直连，只能靠中转。');
-            else if (R.nat && R.nat.type === 'hard') out.push('你的网络是难连的类型（对称型），多半要靠中转才连得上别人。');
+            else if (R.nat && R.nat.type === 'hard') out.push('你的网络是难连的类型，对称型，多半要靠中转才连得上别人。');
             else if (R.nat && R.nat.type === 'easy') out.push('你的网络是好连的类型，多数情况能直连。');
             if (!relay) out.push((!stunOk || (R.nat && R.nat.type === 'hard')) ? '中转服务器也拿不到地址，这样很可能连不上别人。' : '中转服务器拿不到地址，直连打不通时就没有退路了。');
             return out.length ? out.join('') : '都通，联机这边没问题。';
@@ -630,7 +630,7 @@
             let el = document.getElementById('room-list');
             if (el) {
                 if (roomList.length === 0) {
-                    el.innerHTML = '<li style="color:#999;">单机（没进房间）</li>';
+                    el.innerHTML = '<li style="color:#999;">单机，没进房间</li>';
                 } else {
                     let now = performance.now();
                     el.innerHTML = roomList.map(function (r) {
@@ -649,9 +649,9 @@
                             : '';
                         // 语音状态：自己看是否已经开麦参与语音，别人看跟你有没有连上通话
                         let mic = r.self
-                            ? (voiceOptedIn ? ' <span style="color:#5cb85c; font-size:11px;">[语音]</span>' : '')
-                            : (voiceCalls[r.id] ? ' <span style="color:#5cb85c; font-size:11px;">[语音]</span>' : '');
-                        return '<li>' + dispName(r.id) + (r.self ? ' （你）' : '') + mic + hb + add + team + '</li>';
+                            ? (voiceOptedIn ? ' <span style="color:#5cb85c; font-size:11px;">语音</span>' : '')
+                            : (voiceCalls[r.id] ? ' <span style="color:#5cb85c; font-size:11px;">语音</span>' : '');
+                        return '<li>' + dispName(r.id) + (r.self ? ' 你' : '') + mic + hb + add + team + '</li>';
                     }).join('');
                     if (roomDupId && performance.now() - roomDupId < 8000) {
                         el.innerHTML += '<li style="color:#d9534f;">该 ID 已被占用</li>';
@@ -666,7 +666,7 @@
         const PARTY_CAP = 4;   // 算上自己最多 4 个人
         function teamInvite(id) {
             if (!id || id === gState.id) return;
-            if (!tutPassed()) { blazeFlash('先做完新手教程再组队（在设置里可以重玩）'); return; }
+            if (!tutPassed()) { blazeFlash('先做完新手教程再组队，在设置里可以重玩'); return; }
             if (lobbyParty.indexOf(id) >= 0) { blazeFlash('已经和 ' + dispNameText(id) + ' 组队了'); return; }
             if (lobbyParty.length >= PARTY_CAP - 1) { blazeFlash('队伍最多 ' + PARTY_CAP + ' 人，满了'); return; }
             bc.postMessage({ type: 'TEAM_INVITE', target: id, sender: gState.id });
@@ -676,7 +676,7 @@
             if (!tutPassed()) return;   // 新手教程做完（或跳过）之前，收不到组队邀请
             if (lobbyParty.length >= PARTY_CAP - 1) {
                 bc.postMessage({ type: 'TEAM_INVITE_ACK', target: fromId, sender: gState.id, accept: false });
-                showSysModal('组队邀请', dispName(fromId) + ' 邀请你组队，但你的队伍已经满了（最多 ' + PARTY_CAP + ' 人），自动拒绝了。', [{ label: '知道了' }]);
+                showSysModal('组队邀请', dispName(fromId) + ' 邀请你组队，但你的队伍已经满了，最多 ' + PARTY_CAP + ' 人，自动拒绝了。', [{ label: '知道了' }]);
                 return;
             }
             showSysModal('组队邀请', dispName(fromId) + ' 邀请你组队', [
@@ -858,7 +858,7 @@
             if (!el) return;
             if (!friends.length) { el.innerHTML = '<li style="color:#999;">还没有好友</li>'; return; }
             el.innerHTML = friends.map(function (f) {
-                let here = roomPeers[f.id] ? '<span style="color:#5cb85c;">（在这个房间）</span>' : '';
+                let here = roomPeers[f.id] ? '<span style="color:#5cb85c;">在这个房间</span>' : '';
                 let tier = bondTier(f.bondXp);
                 let bond = tier > 0 ? '<span style="color:' + BOND_TIER_COLOR[tier] + ';">［' + BOND_TIER_NAME[tier] + '］</span> ' : '';
                 let join = f.room
@@ -1052,7 +1052,7 @@
                 base.tex = 'cup'; base.c = 0xffd54f; base.type = undefined;
                 huntFindRecipe('crown');
             } else {
-                base.n = '王冠底座（' + crownSockCount(base) + '/' + HUNT_GEMS.length + '）';
+                base.n = '王冠底座 ' + crownSockCount(base) + '/' + HUNT_GEMS.length + '';
             }
             return true;
         }
@@ -1130,7 +1130,7 @@
             if (!n) { if (dropRec) saveProgress(); return 0; }
             gState.money = (gState.money || 0) + total;
             saveProgress();
-            setTimeout(function () { showSysModal('提示', '运气猫爪已下架，已按价值折现 ' + total + '（共 ' + n + ' 个）', [{ label: '好' }]); }, 1200);
+            setTimeout(function () { showSysModal('提示', '运气猫爪已下架，已按价值折现 ' + total + ' · 共 ' + n + ' 个', [{ label: '好' }]); }, 1200);
             return total;
         }
 
@@ -1356,7 +1356,7 @@
                         : msg.channel === 'team' ? (lobbyParty.indexOf(msg.sender) >= 0)
                             : true;
                     if (sideOk && chanOk) {
-                        let tag = msg.channel === 'friend' ? '[私信] ' : (msg.channel === 'team' ? '[队伍] ' : '');
+                        let tag = msg.channel === 'friend' ? '私信 ' : (msg.channel === 'team' ? '队伍 ' : '');
                         chatPush(msg.sender, tag + (msg.text || ''), false);
                         if (msg.channel !== 'friend') nightApplyChatOrder(msg.text || '');
                     }
@@ -1523,7 +1523,7 @@
             quick.style.display = (m === 1) ? 'flex' : 'none';
             input.style.display = (m === 2) ? 'block' : 'none';
             if (chans) chans.style.display = (m === 0) ? 'none' : 'flex';
-            toggle.innerText = m === 0 ? (padOn() ? '发言' : '发言（回车）') : (m === 1 ? (padOn() ? '点这里打字' : '点这里打字（回车）') : '收起');
+            toggle.innerText = m === 0 ? (padOn() ? '发言' : '发言，回车') : (m === 1 ? (padOn() ? '点这里打字' : '点这里打字，回车') : '收起');
             if (m === 1) chatRenderQuick();
             if (m === 2) { input.value = ''; input.focus(); }
             if (m !== 0) chatRenderChannels();
@@ -1669,7 +1669,7 @@
             text = String(text || '').trim().slice(0, 40);
             if (!text) return;
             if (chatChannel === 'friend' && !chatDMTarget) { chatPickFriendTarget(); return; }
-            let tag = chatChannel === 'friend' ? '[私信] ' : (chatChannel === 'team' ? '[队伍] ' : '');
+            let tag = chatChannel === 'friend' ? '私信 ' : (chatChannel === 'team' ? '队伍 ' : '');
             chatPush(gState.id || '我', tag + text, true);
             if (chatChannel === 'public') nightApplyChatOrder(text);
             // 彩蛋：只有公共频道打"67"才给钱——私信/队伍频道刷屏没人看得见，没意义也不该给钱。
@@ -1694,7 +1694,7 @@
                 '<input type="range" id="sens-slider" min="0.3" max="2.5" step="0.05" value="' + v + '" style="width:100%;" ' +
                 'oninput="document.getElementById(\'sens-val\').innerText = parseFloat(this.value).toFixed(2)">' +
                 '<div style="margin-top:8px; font-size:14px;">当前倍率：<span id="sens-val">' + v.toFixed(2) + '</span> ×</div>' +
-                '<div style="font-size:11px; color:#999; margin-top:8px;">调的是转视角的快慢（鼠标和触屏拖动都算），数值越大转得越快，1 是默认手感。</div>' +
+                '<div style="font-size:11px; color:#999; margin-top:8px;">调的是转视角的快慢，鼠标和触屏拖动都算，数值越大转得越快，1 是默认手感。</div>' +
                 '</div>';
             showSysModal('灵敏度设置', body, [
                 {

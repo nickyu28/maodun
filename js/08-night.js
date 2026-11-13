@@ -1291,7 +1291,7 @@
                                 nightFlash('你被淘汰了');
                                 if (!a.everRescued) unlockEgg('chair_alone');
                             }
-                        } else if (a.isPlayer) nightFlash('挂数 +1（' + a.chairCount + '/3）');
+                        } else if (a.isPlayer) nightFlash('挂数 +1，' + a.chairCount + '/3');
                     }
                 }
                 if (!a.isPlayer && !a.remote && netIsHost()) { if (a.vault) nightActorVaultTick(a, dt); else nightSurvivorAI(a, dt); }
@@ -1299,7 +1299,7 @@
 
             let p0 = night.survivors[0];
             if (night.side === 'survivor' && (p0.out || p0.escaped) && !night.spectating) {
-                nightEnterSpectate(p0.escaped ? '你已撤离 —— 可以观战队友，或点“结算回大厅”' : '你已被淘汰 —— 可以观战队友，或点“结算回大厅”（只算打完这局）');
+                nightEnterSpectate(p0.escaped ? '你已撤离 —— 可以观战队友，或点“结算回大厅”' : '你已被淘汰 —— 可以观战队友，或点“结算回大厅”，只算打完这局');
             }
 
             if (night.spectating) {
@@ -1830,7 +1830,7 @@
             m.position.set(h.p.x, 3, h.p.z); scene.add(m);
             night.spikes.push({ p: h.p.clone(), mesh: m, life: SKILL.hgouSpikeLife, rearm: 0 });
             night.spikeCd = nightCd(SKILL.hgouSpikeCd);
-            nightFlashHunter('埋下钉刺（' + night.spikes.length + '/' + SKILL.hgouSpikeMax + '）');
+            nightFlashHunter('埋下钉刺，' + night.spikes.length + '/' + SKILL.hgouSpikeMax + '');
         }
 
         function nightSpikeTick(dt) {
@@ -2318,9 +2318,9 @@
             }
 
             if (night.char === 'dog') {
-                if (night.blockCharges <= 0) { nightFlash('格挡没有充能（' + night.blockRecharge.toFixed(0) + 's 后回充）'); return; }
+                if (night.blockCharges <= 0) { nightFlash('格挡没有充能，' + night.blockRecharge.toFixed(0) + 's 后回充'); return; }
                 night.blockCharges--; night.blockT = SKILL.dogBlockTime;
-                nightFlash('举盾（余 ' + night.blockCharges + ' 次）');
+                nightFlash('举盾，余 ' + night.blockCharges + ' 次');
                 return;
             }
 
@@ -2467,7 +2467,7 @@
             nightStep(me, c.dir.x * step, c.dir.z * step);
             camera.position.copy(me.p);
             nightSpearTrailFx(me.p);
-            if (me.p.distanceTo(before) < step * 0.5) { night.charge = null; night.meowCd *= (1 - SKILL.meowWhiffRefund); nightFlash('撞到墙了（冷却已返还）'); return; }
+            if (me.p.distanceTo(before) < step * 0.5) { night.charge = null; night.meowCd *= (1 - SKILL.meowWhiffRefund); nightFlash('撞到墙了，冷却已返还'); return; }
             c.left -= step;
 
             if (h.p.distanceTo(me.p) <= NIGHT.atkRange + 4) {
@@ -2489,7 +2489,7 @@
                 nightFlash('冲撞救援成功 —— 队友半血站起，并获得 30 秒临时生命');
                 night.charge = null; return;
             }
-            if (c.left <= 0) { night.charge = null; night.meowCd *= (1 - SKILL.meowWhiffRefund); nightFlash('冲撞落空（冷却已返还）'); }
+            if (c.left <= 0) { night.charge = null; night.meowCd *= (1 - SKILL.meowWhiffRefund); nightFlash('冲撞落空，冷却已返还'); }
         }
 
         function nightSkillTick(dt) {
@@ -2571,7 +2571,7 @@
             if (night.spectateIdx >= list.length) night.spectateIdx = 0;
             let t = list[night.spectateIdx];
             if (label) label.innerText = (t === night.hunter ? '追捕' : '队友 ' + (night.survivors.indexOf(t) + 1)) +
-                (t.downed ? '（倒地）' : (t.onChair ? '（椅上）' : ''));
+                (t.downed ? ' · 倒地' : (t.onChair ? ' · 椅上' : ''));
         }
 
         function nightLeaveSpectate() {
@@ -2648,7 +2648,7 @@
         function audioMuteToggle() {
             audioMutedNow = !audioMutedNow;
             audioApply();
-            blazeFlash(audioMutedNow ? '已静音（按 M 恢复）' : '声音恢复了');
+            blazeFlash(audioMutedNow ? '已静音，按 M 恢复' : '声音恢复了');
         }
         // M 键在所有模式里都是一键静音；打字（聊天框、输入框）的时候不算
         window.addEventListener('keydown', function (e) {
@@ -3258,33 +3258,33 @@
                 if (night.char === 'cat') sk += '　治疗 ' + (night.healCd > 0 ? night.healCd.toFixed(0) + 's' : '就绪');
                 if (night.char === 'dog') {
                     sk += '　格挡 ' + night.blockCharges + '/' + SKILL.dogBlockCharges +
-                        (night.blockT > 0 ? '（举盾中）' : (night.blockCharges < SKILL.dogBlockCharges ? '（' + night.blockRecharge.toFixed(0) + 's 回充）' : ''));
-                    if (night.slamReady > 0) sk += '　【' + nightKey('space') + ' 砸地 就绪】';
+                        (night.blockT > 0 ? ' 举盾中' : (night.blockCharges < SKILL.dogBlockCharges ? ' ' + night.blockRecharge.toFixed(0) + 's 回充' : ''));
+                    if (night.slamReady > 0) sk += '　「' + nightKey('space') + ' 砸地 就绪」';
                 }
                 if (night.char === 'meow') sk += '　救援 ' + (night.meowCd > 0 ? night.meowCd.toFixed(0) + 's' : '就绪');
                 if (night.char === 'c1') sk += '　震慑 ' + (night.c1Cd > 0 ? night.c1Cd.toFixed(0) + 's' : '就绪') +
-                    ((night.hunter && night.hunter.carrying) ? '（有人被扛着）' : '');
+                    ((night.hunter && night.hunter.carrying) ? ' · 有人被扛着' : '');
                 if (night.char === 'c2') {
                     if (night.c2Cast) {
                         let c = night.c2Cast;
                         sk += c.phase === 'pick'
-                            ? '　选择矿机 ' + (c.idx + 1) + '/' + c.list.length + '（' + kTxt('Q/E', '「切换」') + ' 切换，' + nightKey('act') + ' 确认）'
+                            ? '　选择矿机 ' + (c.idx + 1) + '/' + c.list.length + ' · ' + kTxt('Q/E', '「切换」') + ' 切换，' + nightKey('act') + ' 确认'
                             : (c.phase === 'pre' ? '　起手中…' : '　收手中…');
                     } else sk += '　提速 ' + (night.c2Cd > 0 ? night.c2Cd.toFixed(0) + 's' : '就绪');
                 }
-                if (night.char === 'c3') sk += '　假身 ' + (night.c3Cd > 0 ? night.c3Cd.toFixed(0) + 's' : '就绪') + (nightInvisible(me) ? '（隐身中）' : '');
+                if (night.char === 'c3') sk += '　假身 ' + (night.c3Cd > 0 ? night.c3Cd.toFixed(0) + 's' : '就绪') + (nightInvisible(me) ? ' · 隐身中' : '');
                 if (night.char === 'mi') sk += '　爆发 ' + (night.miCd > 0 ? night.miCd.toFixed(0) + 's' : '+' + Math.max(SKILL.miBurstMin, night.done * SKILL.miBurstPer));
                 if (me.tempHpUntil && performance.now() < me.tempHpUntil) sk += '　临时生命 ' + ((me.tempHpUntil - performance.now()) / 1000).toFixed(0) + 's';
-                if (nightMyFish(me).length > 0) sk += '　小鱼干 ' + (me.fishEaten || 0) + '/' + SKILL.fishCount + '（你的还剩 ' + nightMyFish(me).length + ' 条）';
+                if (nightMyFish(me).length > 0) sk += '　小鱼干 ' + (me.fishEaten || 0) + '/' + SKILL.fishCount + ' · 你的还剩 ' + nightMyFish(me).length + ' 条';
             } else {
                 if (night.char === 'hmi') {
                     let list = nightTpTargets();
                     let cur = list[Math.min(night.tpIndex, Math.max(0, list.length - 1))];
                     sk = (night.tpCast ? '跃迁读条 ' + night.tpCast.t.toFixed(1) + ' / ' + SKILL.hmiTpCast + 's'
                         : '跃迁 ' + (night.tpCd > 0 ? night.tpCd.toFixed(0) + 's' : '就绪')) +
-                        '　目标 ' + (list.length ? (night.tpIndex + 1) + '/' + list.length + '（进度 ' + cur.progress.toFixed(0) + '）' : '无') + '　' + kTxt('Q', '「切换」') + ' 切换';
+                        '　目标 ' + (list.length ? (night.tpIndex + 1) + '/' + list.length + ' · 进度 ' + cur.progress.toFixed(0) + '' : '无') + '　' + kTxt('Q', '「切换」') + ' 切换';
                 }
-                else if (night.char === 'hgou') sk = '钉刺 ' + (night.spikeCd > 0 ? night.spikeCd.toFixed(0) + 's' : '就绪') + '（场上 ' + night.spikes.length + '/' + SKILL.hgouSpikeMax + '）';
+                else if (night.char === 'hgou') sk = '钉刺 ' + (night.spikeCd > 0 ? night.spikeCd.toFixed(0) + 's' : '就绪') + ' · 场上 ' + night.spikes.length + '/' + SKILL.hgouSpikeMax + '';
                 else if (night.char === 'hmeow') sk = night.spear ? '长矛飞行中' : ('投矛 ' + (night.throwCd > 0 ? night.throwCd.toFixed(0) + 's' : '就绪'));
                 else if (night.char === 'h3') sk = '钩锁 ' + (night.hookCd > 0 ? night.hookCd.toFixed(0) + 's' : '就绪');
                 else if (night.char === 'h4') sk = '封锁 ' + (night.sealCd > 0 ? night.sealCd.toFixed(0) + 's' : '就绪');
@@ -3383,17 +3383,17 @@
                 let downNear = night.survivors.some(function (a) { return !a.isPlayer && !a.out && !a.escaped && (a.downed || a.onChair) && lvOk(a.p) && nightFlatDist(camera.position, a.p) < 16; });
                 if (night.side === 'survivor' && fishNear && me.hp < 2 && night.char !== 'cat') show = nightKey('act') + ' 吃小鱼干';
                 else if (night.side === 'survivor' && downNear) show = nightKey('act') + ' 救援队友';
-                else if (night.side === 'survivor' && sickNear) show = nightKey('act') + ' 治疗队友（10 秒）';
+                else if (night.side === 'survivor' && sickNear) show = nightKey('act') + ' 治疗队友，10 秒';
                 else if (night.side === 'survivor' && pu.obj && pu.dist < 16) show = nightKey('act') + ' 放倒板子';
                 else if (night.side === 'survivor' && pd.obj && pd.dist < 20) {
-                    show = nightVaultLanding(pd.obj) ? nightKey('act') + ' 翻越板子（' + NIGHT.palletVault + ' 秒）'
+                    show = nightVaultLanding(pd.obj) ? nightKey('act') + ' 翻越板子，' + NIGHT.palletVault + ' 秒'
                         : '两边都落不下脚，翻不过去';
                 }
                 else if (night.side === 'hunter' && night.hunter.carrying) show = nightKey('space') + ' 挂上椅子';
                 else if (night.side === 'hunter' && nightAliveSurvivors().some(function (a) { return a.downed && !a.onChair && nightCanHit(night.hunter.p, a.p, NIGHT.atkRange + 6); })) show = nightKey('space') + ' 抓起';
-                else if (night.side === 'hunter' && pd.obj && pd.dist < NIGHT.palletBreakRange) show = nightKey('e') + ' 破坏板子（3 秒）';
-                else if (m.obj && m.dist < 16 && night.side === 'survivor') show = nightMachinesLocked() ? '矿机已经够了 —— 去开逃生门' : nightKey('act') + ' 修理矿机（' + m.obj.progress.toFixed(0) + '/100）';
-                else if (d.obj && d.dist < 20) show = night.done >= NIGHT.needed ? nightKey('act') + ' 开门（20 秒）' : '还需修好 ' + (NIGHT.needed - night.done) + ' 台矿机';
+                else if (night.side === 'hunter' && pd.obj && pd.dist < NIGHT.palletBreakRange) show = nightKey('e') + ' 破坏板子，3 秒';
+                else if (m.obj && m.dist < 16 && night.side === 'survivor') show = nightMachinesLocked() ? '矿机已经够了 —— 去开逃生门' : nightKey('act') + ' 修理矿机，' + m.obj.progress.toFixed(0) + '/100';
+                else if (d.obj && d.dist < 20) show = night.done >= NIGHT.needed ? nightKey('act') + ' 开门，20 秒' : '还需修好 ' + (NIGHT.needed - night.done) + ' 台矿机';
             }
 
             prompt.style.display = show ? 'block' : 'none'; if (show) prompt.innerText = show;
@@ -3600,7 +3600,7 @@
             sfxPlay([523, 784, 1046], 0.5, 0.06, 'triangle');
             let el = document.getElementById('debuff-msg');
             if (el) {
-                el.innerText = '合成了【' + name + '】—— 动静传出去了！';
+                el.innerText = '合成了「' + name + '」—— 动静传出去了！';
                 el.style.display = 'block';
                 clearTimeout(huntMergeBoom._t);
                 huntMergeBoom._t = setTimeout(function () { el.style.display = 'none'; }, 2200);
@@ -4235,7 +4235,7 @@
         function huntTaskHud() {
             let el = document.getElementById('hunt-task-txt'); if (!el) return;
             let t = gState.huntTask; if (!t) { el.innerText = ''; return; }
-            el.innerText = '任务：' + t.text + (t.done ? '　✔' : (t.n > 1 && t.id !== 'cash' ? '（' + t.got + '/' + t.n + '）' : '')) + '　+' + HUNT_TASK_REWARD;
+            el.innerText = '任务：' + t.text + (t.done ? '　✔' : (t.n > 1 && t.id !== 'cash' ? '' + t.got + '/' + t.n + '' : '')) + '　+' + HUNT_TASK_REWARD;
             el.style.color = t.done ? '#43a047' : '#e65100';
         }
 

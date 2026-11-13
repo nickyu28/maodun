@@ -1112,7 +1112,7 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
                     if (c.got || me.out || me.downed) return;
                     if (Math.hypot(me.p.x - s.x, me.p.z - s.z) < 6 && me.p.y < s.y + 9 && me.p.y > s.y - 7) {
                         c.got = true; c.grp.visible = false; me.runCoins = (me.runCoins || 0) + 1;
-                        blazeFlash('猫盾币 +1（' + me.runCoins + ' / ' + TOWER.coins + '）');
+                        blazeFlash('猫盾币 +1，' + me.runCoins + ' / ' + TOWER.coins + '');
                     }
                 });
                 g.actors.forEach(function (a) {
@@ -1162,7 +1162,7 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
                     a.p.set(cs.x + (Math.random() - 0.5) * spread, cs.y + 1, cs.z + (Math.random() - 0.5) * spread);
                     a.vy = 0; a.mvx = a.mvz = a.kx = a.kz = 0; a.si = a.cp || 0;
                     if (a.isPlayer) {
-                        blazeFlash(a.cp ? '回到存档点（第 ' + a.cp + ' 块）' : '回到起点');
+                        blazeFlash(a.cp ? '回到存档点，第 ' + a.cp + ' 块' : '回到起点');
                         introOnce('tower.cp', '存档点', '起点和每面绿旗是存档点，站上去就记住。<br>掉进岩浆时，岩浆还没淹到存档点就回那里接着爬；淹过了再掉，' + towerLoseWord(g) + '。');
                     }
                     return;
@@ -1215,7 +1215,7 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
             resultText: function (g, res) {
                 let h = g.me.best;
                 let rec = gState.towerBest || 0;
-                return '你爬到第 ' + h + ' 块（共 ' + (g.steps.length - 1) + ' 块）' + (h > rec ? '，新纪录！' : '，最好 ' + rec + ' 块') +
+                return '你爬到第 ' + h + ' 块，共 ' + (g.steps.length - 1) + ' 块' + (h > rec ? '，新纪录！' : '，最好 ' + rec + ' 块') +
                     '<br>掉下去 ' + (g.me.falls || 0) + ' 次　捡了 ' + (g.me.runCoins || 0) + ' 个币';
             },
             afterEnd: function (g) {
@@ -1238,7 +1238,7 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
                 nmHudText('第 ' + me.best + ' / ' + total + ' 块　离岩浆 ' + gap + '　币 ' + (me.runCoins || 0) + '/' + TOWER.coins,
                     (flooded && !me.out && !me.downed ? '⚠ 存档点被淹了，再掉下去' + towerLoseWord(g) + '　' : '存档点：' + (me.cp ? '第 ' + me.cp + ' 块' : '起点') + '　') +
                     kindTxt + (g.clock < TOWER.grace ? '　' + Math.ceil(TOWER.grace - g.clock) + ' 秒后岩浆开始涨' : '　岩浆在涨') +
-                    (mate ? '　队友：' + mate.name + (mate.downed ? '（掉下去了）' : mate.done ? '（到顶了）' : '') : '') +
+                    (mate ? '　队友：' + mate.name + (mate.downed ? ' · 掉下去了' : mate.done ? ' · 到顶了' : '') : '') +
                     (me.downed ? '　掉下去了' : ''));
                 if (mate && mate.downed) introOnce('tower.save', '救队友', '队友掉下去了。你爬到下一面绿旗，就能把他拉回来。');
                 if (me.downed) introOnce('tower.down', '掉下去了', '别急，队友爬到下一面绿旗就能把你拉回来。');
@@ -1321,7 +1321,7 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
         // 一块积木的 HTML。live=true 是右边真的积木（输入框能改），false 是左边的样品
         function makerBlockHtml(b, i, live) {
             let def = maker.D.blocks[makerKindOf(b)];
-            if (!def) return '<div class="mk-blk" style="background:#9e9e9e;" data-i="' + i + '">（这块积木现在没有了）</div>';
+            if (!def) return '<div class="mk-blk" style="background:#9e9e9e;" data-i="' + i + '">这块积木现在没有了</div>';
             let inner = def.parts.map(function (p) {
                 if (typeof p === 'string') return '<span>' + p + '</span>';
                 let f = p[0], v = b[f];
@@ -1347,7 +1347,7 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
             let L = maker.list;
             el.innerHTML = '<div class="mk-blk mk-hat">' + maker.D.hat + '</div>' +
                 L.map(function (b, i) { return makerBlockHtml(b, i, true); }).join('') +
-                (L.length ? '' : '<div class="mk-empty">把左边的积木拖到这里（点一下也行）</div>') +
+                (L.length ? '' : '<div class="mk-empty">把左边的积木拖到这里，点一下也行</div>') +
                 (maker.D.cap ? '<div class="mk-blk mk-cap">' + maker.D.cap + '</div>' : '');
             el.querySelectorAll('.mk-blk[data-i]').forEach(function (n) {
                 n.addEventListener('pointerdown', function (e) {

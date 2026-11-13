@@ -146,7 +146,7 @@
             let o = (blaze.ffaDraw || []).filter(function (q) { return q.id === id; })[0];
             if (!o) return;
             let price = blazeFfaPrice(o);
-            if (blaze.ffaMoney < price) { blazeFlash('钱不够（要 ' + price + '）'); return; }
+            if (blaze.ffaMoney < price) { blazeFlash('钱不够，要 ' + price + ''); return; }
             blaze.ffaMoney -= price;
             blazeApplyPerkNet(blaze.me, id);
             // 买完整架刷新，并且换成另一种卡
@@ -396,24 +396,24 @@
                 name: '远程猫盾', color: 0x66bb6a, css: '#66bb6a', hp: 70, atk: '普攻 cd 0.8s：射一箭，10 伤，基础射程 10 身位，会被墙挡住',
                 act: '穿墙狙 cd 5s：无视墙体锁定最近敌人，10 伤，射程固定 10 身位',
                 act2: '疾射 cd 15s：攻速 +10%，持续 7 秒',
-                pas: '每打中一次，普攻射程 +1 身位（最多 5 层），5 秒没打中就清空。血量 70'
+                pas: '每打中一次，普攻射程 +1 身位，最多 5 层，5 秒没打中就清空。血量 70'
             },
             sword: {
                 name: '剑猫盾', color: 0xef5350, css: '#ef5350', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '突进 cd 10s：向前冲 5 身位，撞到的第一个敌人吃 20 伤并眩晕 1 秒',
-                act2: '击晕 cd 7s：面前一名敌人 10 伤并眩晕 1 秒（面前没人就放不出去）',
-                pas: '技能每命中一次，之后技能伤害 +2，最多 3 层（挨打不清空）'
+                act2: '击晕 cd 7s：面前一名敌人 10 伤并眩晕 1 秒，面前没人就放不出去',
+                pas: '技能每命中一次，之后技能伤害 +2，最多 3 层，挨打不清空'
             },
             heal: {
                 name: '回血猫盾', color: 0x42a5f5, css: '#42a5f5', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '治疗 cd 7s：自己回 10% 最大生命；6 身位内的队友也各回各自 10% 上限',
-                act2: '汲取 cd 5s：6 身位内所有敌人各 10 伤，自己回 10% 上限（没敌人也照回）',
+                act2: '汲取 cd 5s：6 身位内所有敌人各 10 伤，自己回 10% 上限，没敌人也照回',
                 pas: '被你治疗的队友 5 秒内伤害 ×1.5'
             },
             tank: {
                 name: '抗伤猫盾', color: 0xffa726, css: '#ffa726', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '震地 cd 5s：5 身位内所有敌人 10 伤并眩晕 1 秒，自己同时减伤 20% 持续 5 秒',
-                act2: '护盾 cd 20s：获得最大生命 50% 的护盾，10 秒匀速掉完（毒圈无视护盾）',
+                act2: '护盾 cd 20s：获得最大生命 50% 的护盾，10 秒匀速掉完，毒圈无视护盾',
                 pas: '受到的伤害 −30%'
             },
             guard: {
@@ -426,31 +426,31 @@
             control: {
                 name: '控制猫盾', color: 0x26c6da, css: '#26c6da', atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '钩锁 cd 10s：向前甩出钩子，命中造成 15 伤并把人拖向自己，' +
-                    '拖拽期间对方放不出技能，撞到自己身上再定身 1 秒（钩空了不进冷却）',
-                act2: '震慑 cd 15s：5 身位内所有敌人 10 伤并眩晕 3 秒（范围内没人就放不出去）',
+                    '拖拽期间对方放不出技能，撞到自己身上再定身 1 秒，钩空了不进冷却',
+                act2: '震慑 cd 15s：5 身位内所有敌人 10 伤并眩晕 3 秒，范围内没人就放不出去',
                 pas: '普攻和眩晕每命中一次，下一次眩晕再长 0.1 秒，最多叠 5 层'
             },
             mage: {
                 name: '法师猫盾', color: 0x7e57c2, css: '#7e57c2', hp: 70, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
-                act: '激光 cd 10s：向正前方射出一道贯穿激光，长度 21 身位（约地图边长 1/3），' +
+                act: '激光 cd 10s：向正前方射出一道贯穿激光，长度 21 身位，约地图边长 1/3，' +
                     '路径上的敌人全部命中，每个 15 伤',
                 act2: '瞬移 cd 10s：直接闪到面前 4 身位的位置，撞墙会停在墙前',
-                pas: '滚雪球：每过一局，伤害永久 +5（第 N 局就是 +5×(N−1)）。血量只有 70'
+                pas: '滚雪球：每过一局，伤害永久 +5，第 N 局一共 +5 乘 N 减 1。血量只有 70'
             },
             assassin: {
                 name: '刺客猫盾', color: 0x78909c, css: '#78909c', hp: 70, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
                 act: '隐身 cd 15s：隐身 7 秒，期间不会被锁定；范围技能照样打得到，' +
                     '普攻预判准了也能砍中。自己放技能或普攻会立刻现身',
-                act2: '爆发 cd 20s：前方 3 身位内的敌人各吃 20 伤（面前没人就放不出去）',
+                act2: '爆发 cd 20s：前方 3 身位内的敌人各吃 20 伤，面前没人就放不出去',
                 pas: '每回合一次：血量掉到 10% 以下时刷新全部冷却并立刻隐身。血量 70'
             },
             engineer: {
                 name: '工程猫盾', color: 0x6d4c41, css: '#6d4c41', hp: 90, atk: '普攻 cd 0.8s：扳手近战，10 伤',
                 act: '炮台 cd 12s：放一座炮台，存在 15 秒，自动打 8 身位内的敌人。' +
-                    '炮台完全继承你的攻击力和你身上所有伤害卡，最多同时 2 座（40 血，能被打掉）',
-                act2: '立墙 cd 8s：面前 3 身位立一堵墙，挡视线和弹道，存在 8 秒（60 血）。' +
+                    '炮台完全继承你的攻击力和你身上所有伤害卡，最多同时 2 座，40 血，能被打掉',
+                act2: '立墙 cd 8s：面前 3 身位立一堵墙，挡视线和弹道，存在 8 秒，60 血。' +
                     '再按一次引爆：4 身位内 20 伤并眩晕 1 秒',
-                pas: '过载：场上每有一个你的建筑，你自己伤害 +15%、冷却缩减 +8%（最多算 3 个）。血量 90'
+                pas: '过载：场上每有一个你的建筑，你自己伤害 +15%、冷却缩减 +8%，最多算 3 个。血量 90'
             },
             mirror: {
                 name: '镜猫盾', color: 0x3949ab, css: '#3949ab', hp: 85, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
@@ -458,14 +458,14 @@
                     '所有打过你的人眩晕 0.5 秒并减速 15% 持续 2 秒，并立刻刷新 2 技能。挡空只走冷却',
                 act2: '换位 cd 14s：和 8 身位内最近的敌人交换位置，不造成伤害但眩晕对方 1 秒。' +
                     '3 秒内可再按一次，向前突进 3 身位，路径上敌人受 10 伤',
-                pas: '余像：每 15 秒攒一层（最多一层，存不下第二层）。受到伤害时自动消耗，' +
+                pas: '余像：每 15 秒攒一层，最多一层，存不下第二层。受到伤害时自动消耗，' +
                     '完全免疫那一次，并让攻击者接下来 3 秒造成的伤害 −25%。血量 85'
             },
             shift: {
                 name: '位移猫盾', color: 0x26a69a, css: '#26a69a', hp: 80, atk: '普攻 cd 0.8s：近身挥砍，10 伤',
-                act: '贯影（要满充能）：向前冲 5 身位，穿过路径上所有敌人，每个 12 伤。撞墙就停',
-                act2: '跃击（要满充能）：闪到 8 身位内最近敌人的背后，落地造成 15 伤。附近没人就放不出去',
-                pas: '疾行：移速永久 +10%，之后每 20 秒再永久 +5%（最多 +100%），活得越久跑得越快。' +
+                act: '贯影，要满充能：向前冲 5 身位，穿过路径上所有敌人，每个 12 伤。撞墙就停',
+                act2: '跃击，要满充能：闪到 8 身位内最近敌人的背后，落地造成 15 伤。附近没人就放不出去',
+                pas: '疾行：移速永久 +10%，之后每 20 秒再永久 +5%，最多 +100%，活得越久跑得越快。' +
                     '两个技能靠跑动攒充能，全速跑约 2.8 秒攒满，不吃冷却，用掉清零且存不下第二次。血量 80'
             }
         };
@@ -573,7 +573,7 @@
         const BLAZE_LAWS = [
             {
                 id: 'wallwalk', name: '穿墙', color: '#26c6da',
-                desc: '所有人无视墙体，地图作废（场地外墙除外）',
+                desc: '所有人无视墙体，地图作废，场地外墙除外',
                 ai: { bow: 3, mage: 3, assassin: 2, shift: 2 }
             },
             {
@@ -603,7 +603,7 @@
             },
             {
                 id: 'litfrail', name: '显形易伤', color: '#ff7043',
-                desc: '发光的人受到的伤害 ×1.5（配合「点名」用）',
+                desc: '发光的人受到的伤害 ×1.5，配合「点名」用',
                 ai: { bow: 3, mage: 2, sword: 2, assassin: 2 }
             }
         ];
@@ -702,7 +702,7 @@
                 race.savePads.push({ mesh: m, t: 12 });
             }
             raceBurst(r.p.x, r.p.y, r.p.z, 0xffee58, 6, 16, 0.35);
-            if (r.isPlayer) blazeFlash('用了【' + raceItemDef(id).name + '】');
+            if (r.isPlayer) blazeFlash('用了「' + raceItemDef(id).name + '」');
         }
         function raceEventDef(id) { return RACE_EVENTS.filter(function (e) { return e.id === id; })[0]; }
         // 一轮里手上最多两样：三选一挑的技能 + 70% 摇到的 buff。
@@ -839,7 +839,7 @@
                 (function () {
                     let m = blazeMasteryOf(gState.blazeChar), next = m.w < BLAZE_MASTERY_AT.hand ? BLAZE_MASTERY_AT.hand : m.w < BLAZE_MASTERY_AT.gold ? BLAZE_MASTERY_AT.gold : m.w < BLAZE_MASTERY_AT.master ? BLAZE_MASTERY_AT.master : 0;
                     return '<br><span style="font-size:12px; color:#999;">打了 ' + m.n + ' 场，赢了 ' + m.w + ' 场' +
-                        (next ? '　（赢到 ' + next + ' 场：' + (next === BLAZE_MASTERY_AT.gold ? '专属外观' : next === BLAZE_MASTERY_AT.hand ? '熟手称号' : '大师称号') + '）' : '　（都解锁了）') + '</span>';
+                        (next ? '　赢到 ' + next + ' 场：' + (next === BLAZE_MASTERY_AT.gold ? '专属外观' : next === BLAZE_MASTERY_AT.hand ? '熟手称号' : '大师称号') + '' : '　都解锁了') + '</span>';
                 })();
         }
         function blazePick(k) {
@@ -1573,7 +1573,7 @@
                         '<b style="color:' + o.color + ';">' + o.name + '</b>' +
                         '<br><span style="font-size:12px; color:#666;">' + o.desc + '</span></div>';
                 }).join('');
-            showSysModal('立法 · 选一条规则（' + Math.ceil(blaze.lawT) + 's）', txt, blaze.lawTable.map(function (o) {
+            showSysModal('立法 · 选一条规则，' + Math.ceil(blaze.lawT) + 's', txt, blaze.lawTable.map(function (o) {
                 return { label: o.name, color: o.color, onClick: function () { blazeLawPick(o.id); } };
             }));
         }
@@ -1621,7 +1621,7 @@
             if (blaze.lawTable) {
                 blaze.lawT -= dt;
                 let el = document.getElementById('sys-modal-title');
-                if (el) el.innerText = '立法 · 选一条规则（' + Math.max(0, Math.ceil(blaze.lawT)) + 's）';
+                if (el) el.innerText = '立法 · 选一条规则，' + Math.max(0, Math.ceil(blaze.lawT)) + 's';
                 if (blaze.lawT <= 0) {
                     let pool = blaze.lawTable;
                     let pick = pool[Math.floor(Math.random() * pool.length)];
@@ -4208,14 +4208,14 @@
             blazeMasteryEnd(place === 1);
             let gain = coinsSettle('blaze', place <= 3);
             let mvp = blazeFfaMvp();
-            let who = (mvp === blaze.me) ? '你' : (mvp.team === mine ? mvp.name + '（你队友）' : mvp.name);
+            let who = (mvp === blaze.me) ? '你' : (mvp.team === mine ? mvp.name + ' · 你队友' : mvp.name);
             let txt = '<div style="font-size:34px; font-weight:bold; color:#ff9800;">队伍第 ' + place + ' 名</div>' +
                 '<div style="color:#888; margin-top:4px;">共 ' + list.length + ' 队　猫盾币 +' + gain + '</div>' +
                 '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #eee;">' +
                 '<b style="color:#ffb300;">MVP</b>　' + who + '　' + blazeFfaScore(mvp) + ' 分' +
-                '（' + mvp.kills + '/' + mvp.assists + '/' + mvp.deaths + '）</div>' +
-                '<div style="font-size:12px; color:#aaa; margin-top:3px;">你 ' + blazeFfaScore(blaze.me) + ' 分（' +
-                blaze.me.kills + '/' + blaze.me.assists + '/' + blaze.me.deaths + '）</div>';
+                '' + mvp.kills + '/' + mvp.assists + '/' + mvp.deaths + '</div>' +
+                '<div style="font-size:12px; color:#aaa; margin-top:3px;">你 ' + blazeFfaScore(blaze.me) + ' 分，' +
+                blaze.me.kills + '/' + blaze.me.assists + '/' + blaze.me.deaths + '</div>';
             showSysModal('乱斗结束', txt, blazeEndButtons('#5cb85c'));
         }
 
@@ -4260,7 +4260,7 @@
                 let gain = coinsSettle('blaze', win);
                 showSysModal(win ? '超燃 · 你赢了' : '超燃 · 你输了',
                     '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +
-                    '　　猫盾币 +' + gain + '（共 ' + coinsShow() + '）',
+                    '　　猫盾币 +' + gain + ' · 共 ' + coinsShow() + '',
                     blazeEndButtons('#ff5722'));
                 return;
             }
@@ -4497,7 +4497,7 @@
                 (blaze.law ? '立法 · ' : blaze.tomb ? '葬场 · ' : blaze.ffaDuo ? '乱斗双人 · ' : '乱斗 · ') +
                 (me.out ? '已出局 · 第 ' + place + ' 名 / ' + list.length + unit
                     : '存活 ' + live + '/' + list.length + unit) + '　' +
-                blazeFfaScore(me) + ' 分（' + me.kills + '/' + me.assists + '/' + me.deaths + '）' +
+                blazeFfaScore(me) + ' 分，' + me.kills + '/' + me.assists + '/' + me.deaths + '' +
                 (!blaze.tomb && blaze.poisonT <= BLAZE.ffaPoisonDelay
                     ? '　毒圈 ' + Math.ceil(BLAZE.ffaPoisonDelay - blaze.poisonT) + 's 后开始收'
                     : '') +
@@ -4514,7 +4514,7 @@
                     Object.keys(blaze.laws).map(function (k) {
                         let d = blazeLawDef(k);
                         return '<div style="color:' + d.color + '; font-size:10px;">· ' + d.name +
-                            '<span style="color:#78909c;">（' + (blaze.lawBy[k] || '') + '）</span></div>';
+                            '<span style="color:#78909c;">' + (blaze.lawBy[k] || '') + '</span></div>';
                     }).join('') + '<div style="height:5px;"></div>'
                     : '') +
                     '<div style="color:#ffd54f;">击杀榜　击杀/助攻/死亡</div>' +
@@ -4527,7 +4527,7 @@
                         }).join('')
                         : blazeFfaRank().slice(0, 6).map(function (a, i) {
                             return '<div style="color:' + (a.out ? '#e57373' : a === me ? '#80d8ff' : '#fff') + '; opacity:' + (a.alive ? 1 : 0.45) + ';">' +
-                                (i + 1) + '. ' + a.name + (a.out ? '（出局）' : '') + '　' + blazeFfaScore(a) + '　' +
+                                (i + 1) + '. ' + a.name + (a.out ? ' · 出局' : '') + '　' + blazeFfaScore(a) + '　' +
                                 a.kills + '/' + a.assists + '/' + a.deaths + '</div>';
                         }).join(''));
             }
@@ -4609,7 +4609,7 @@
                     if (!a.isPlayer || !sh.pet) return '';
                     let q = petStage(sh.pet);
                     return row('宠物', q.def.name + ' · ' + q.st.label +
-                        '（生命 +' + q.st.hp + ' 伤害 +' + q.st.dmg + '）');
+                        '，生命 +' + q.st.hp + ' 伤害 +' + q.st.dmg + '');
                 })() +
                 (a.shield > 0 ? row('护盾', Math.round(a.shield)) : '');
 
@@ -4617,27 +4617,27 @@
             let mul = [];
             if (a.perkGlassDmg) mul.push('玻璃大炮 ×' + (1 + a.perkGlassDmg).toFixed(2));
             if (a.perkToughDmg) mul.push('坚韧 ×' + (1 - a.perkToughDmg).toFixed(2));
-            if (a.perkSkillDmg) mul.push('专精（只算技能）×' + (1 + a.perkSkillDmg).toFixed(2));
+            if (a.perkSkillDmg) mul.push('专精，只算技能 ×' + (1 + a.perkSkillDmg).toFixed(2));
             if (a.perkDmgPct) mul.push('伤害 % ×' + (1 + a.perkDmgPct).toFixed(2));
-            if (a.perkOpener && blaze) mul.push('先锋 ×' + (1 + BLAZE.perkOpenerDmg).toFixed(2) + '（这条命前 ' + BLAZE.perkOpenerT + 's 内，已活 ' + Math.round(blazeLifeT(a)) + 's）');
+            if (a.perkOpener && blaze) mul.push('先锋 ×' + (1 + BLAZE.perkOpenerDmg).toFixed(2) + ' · 这条命前 ' + BLAZE.perkOpenerT + 's 内，已活 ' + Math.round(blazeLifeT(a)) + 's');
             if (a.perkEndure && blaze) mul.push('持久 +' + Math.floor(blazeAliveT(a) / BLAZE.perkEndurePer) * BLAZE.perkEndureAdd +
-                '（累计存活 ' + Math.round(blazeAliveT(a)) + 's，死了也不清零）');
-            if (a.perkTriple) mul.push('三连 ×2（下一下是第 ' + ((a.atkSeq || 0) % BLAZE.perkTripleEvery + 1) + ' 下）');
-            if (a.perkSurge) mul.push('怒涛 ×1.5' + (a.surgeReady ? '（已就绪）' : '（等一次技能命中）'));
+                '累计存活 ' + Math.round(blazeAliveT(a)) + 's，死了也不清零');
+            if (a.perkTriple) mul.push('三连 ×2，下一下是第 ' + ((a.atkSeq || 0) % BLAZE.perkTripleEvery + 1) + ' 下');
+            if (a.perkSurge) mul.push('怒涛 ×1.5' + (a.surgeReady ? ' · 已就绪' : ' · 等一次技能命中'));
             if (a.perkHpDmg) mul.push('血怒 +' + Math.floor(a.maxHp / BLAZE.perkHpDmgPer) * BLAZE.perkHpDmgAdd);
-            if (a.perkRage) mul.push('背水 ×' + (1 + BLAZE.perkRageDmg).toFixed(2) + '（自己血 <' + pct(BLAZE.perkRagePct) + '）');
-            if (a.perkExec) mul.push('处决 ×' + (1 + BLAZE.perkExecDmg).toFixed(2) + '（敌血 <' + pct(BLAZE.perkExecPct) + '）');
-            if (a.perkFullHp) mul.push('先手 ×' + (1 + BLAZE.perkFullHpDmg).toFixed(2) + '（敌血 >' + pct(BLAZE.perkFullHpAt) + '）');
-            if (a.perkBackstab) mul.push('背刺 ×' + (1 + BLAZE.perkBackstab).toFixed(2) + '（从背后）');
+            if (a.perkRage) mul.push('背水 ×' + (1 + BLAZE.perkRageDmg).toFixed(2) + ' · 自己血 <' + pct(BLAZE.perkRagePct) + '');
+            if (a.perkExec) mul.push('处决 ×' + (1 + BLAZE.perkExecDmg).toFixed(2) + ' · 敌血 <' + pct(BLAZE.perkExecPct) + '');
+            if (a.perkFullHp) mul.push('先手 ×' + (1 + BLAZE.perkFullHpDmg).toFixed(2) + ' · 敌血 >' + pct(BLAZE.perkFullHpAt) + '');
+            if (a.perkBackstab) mul.push('背刺 ×' + (1 + BLAZE.perkBackstab).toFixed(2) + ' · 从背后');
             if (a.perkWinDmg) mul.push('胜利伤害 +' + BLAZE.perkWinDmg * (blaze.score[a.team] || 0));
-            if (a.buffT > 0) mul.push('受治疗增伤 ×' + BLAZE.healBuff + '（' + a.buffT.toFixed(1) + 's）');
+            if (a.buffT > 0) mul.push('受治疗增伤 ×' + BLAZE.healBuff + ' · ' + a.buffT.toFixed(1) + 's');
             out += mul.length
                 ? mul.map(function (t) { return '<div style="color:#ffab91;">· ' + t + '</div>'; }).join('')
                 : '<div style="color:#6b7c8c;">没有额外的伤害加成</div>';
 
             out += head('暴击') +
                 row('暴击率', pct(blazeCritChance(a)) +
-                    ((a.critChance || 0) > 1 ? '（超出的 ' + pct(a.critChance - 1) + ' 无效）' : '')) +
+                    ((a.critChance || 0) > 1 ? '，超出的 ' + pct(a.critChance - 1) + ' 无效' : '')) +
                 row('暴击倍率', '×' + blazeCritMul(a).toFixed(2)) +
                 row('期望增伤', '×' + (1 + blazeCritChance(a) * (blazeCritMul(a) - 1)).toFixed(2)) +
                 (a.perkCritHeal ? '<div style="color:#ffab91;">· 嗜血：暴击时 ' + pct(BLAZE.perkCritHealChance) + ' 概率回 ' + pct(BLAZE.perkCritHealPct) + ' 最大生命</div>' : '');
@@ -4646,19 +4646,19 @@
                 row('减伤', pct(1 - blazeCut(a))) +
                 row('移速', Math.round(blazeSpeed(a))) +
                 row('冷却缩减', pct(blazeCdr(a)) +
-                    '（数值卡 ' + pct(Math.min(BLAZE.perkCdrStatMax, a.perkCdrStat || 0)) +
-                    ' + 功能卡 ' + pct(blazeCdr(a) - Math.min(BLAZE.perkCdrStatMax, a.perkCdrStat || 0)) + '）') +
+                    '，数值卡 ' + pct(Math.min(BLAZE.perkCdrStatMax, a.perkCdrStat || 0)) +
+                    ' + 功能卡 ' + pct(blazeCdr(a) - Math.min(BLAZE.perkCdrStatMax, a.perkCdrStat || 0)) + '') +
                 row('普攻冷却', blazeAtkCd(a, BLAZE.atkCd).toFixed(2) + 's') +
                 (a.perkLifesteal ? row('吸血', pct(a.perkLifesteal)) : '') +
                 (a.perkRegen ? row('再生', '脱战 ' + BLAZE.perkRegenDelay + 's 后每秒回 ' + pct(BLAZE.perkRegenPct)) : '') +
                 (a.perkTenacity ? row('韧性', '控制时长减半') : '') +
-                (a.slowT > 0 ? '<div style="color:#ef9a9a;">· 迟滞：移速 −30%（' + a.slowT.toFixed(1) + 's）</div>' : '') +
-                (a.woundT > 0 ? '<div style="color:#ef9a9a;">· 重创：治疗减半（' + a.woundT.toFixed(1) + 's）</div>' : '') +
-                (a.weakT > 0 ? '<div style="color:#ef9a9a;">· 破胆：伤害 −25%（' + a.weakT.toFixed(1) + 's）</div>' : '') +
+                (a.slowT > 0 ? '<div style="color:#ef9a9a;">· 迟滞：移速 −30%，' + a.slowT.toFixed(1) + 's</div>' : '') +
+                (a.woundT > 0 ? '<div style="color:#ef9a9a;">· 重创：治疗减半，' + a.woundT.toFixed(1) + 's</div>' : '') +
+                (a.weakT > 0 ? '<div style="color:#ef9a9a;">· 破胆：伤害 −25%，' + a.weakT.toFixed(1) + 's</div>' : '') +
                 (a.inPoison ? '<div style="color:#ef9a9a;">· 圈外：持续掉血，治疗减半</div>' : '');
 
             let ids = Object.keys(a.perkCount || {});
-            out += head('已选卡牌（' + ids.reduce(function (n, id) { return n + a.perkCount[id]; }, 0) + '）');
+            out += head('已选卡牌 ' + ids.reduce(function (n, id) { return n + a.perkCount[id]; }, 0) + '');
             out += ids.length
                 ? ids.map(function (id) {
                     let o = BLAZE_PERKS.filter(function (q) { return q.id === id; })[0];
@@ -4689,9 +4689,9 @@
             else if (me.silenced) sk = '被钩住了，放不出技能';
             if (me.key === 'sword' && me.alive) sk += '　层数 ' + me.swordStacks + '/' + BLAZE.swordStackMax;
             if (me.key === 'bow' && me.alive) sk += '　射程 ' + Math.round(blazeBowMissileRange(me) / 8) + ' 身位';
-            if (me.key === 'guard' && me.dashCharges > 0) sk += '　闪身剩 ' + me.dashCharges + ' 段（' + Math.max(0, me.dashWindow).toFixed(1) + 's）';
+            if (me.key === 'guard' && me.dashCharges > 0) sk += '　闪身剩 ' + me.dashCharges + ' 段，' + Math.max(0, me.dashWindow).toFixed(1) + 's';
             if (me.invulT > 0) sk += '　复活保护 ' + me.invulT.toFixed(1) + 's';
-            if (me.key === 'shift') sk += '　充能 ' + Math.round((me.charge || 0) * 100) + '%' + (blazeShiftReady(me) ? '（满）' : '');
+            if (me.key === 'shift') sk += '　充能 ' + Math.round((me.charge || 0) * 100) + '%' + (blazeShiftReady(me) ? ' 满' : '');
             if (me.invisT > 0) sk += '　隐身 ' + me.invisT.toFixed(1) + 's';
             if (me.buffT > 0) sk += '　增伤 ' + me.buffT.toFixed(1) + 's';
             if (me.shield > 0) sk += '　护盾 ' + Math.round(me.shield);
@@ -4710,7 +4710,7 @@
                                     'style="display:block; width:100%; margin:4px 0; padding:8px 0;">' + o.label + '</button>';
                             }).join('') +
                             ((me.perkRerollsLeft || 0) > 0
-                                ? '<button onclick="blazePerkReroll()" style="display:block; width:100%; margin:10px 0 0; padding:8px 0; background:#4a2b57; color:#ffd54f; border:1px solid #ffd54f;">换一批（剩 ' + me.perkRerollsLeft + ' 次）</button>'
+                                ? '<button onclick="blazePerkReroll()" style="display:block; width:100%; margin:10px 0 0; padding:8px 0; background:#4a2b57; color:#ffd54f; border:1px solid #ffd54f;">换一批，剩 ' + me.perkRerollsLeft + ' 次</button>'
                                 : '');
                         blaze.perkUIActor = me;
                     }
@@ -4725,7 +4725,7 @@
             let c = (mSize - 1) * TILE / 2;
             document.getElementById('blaze-round').innerText =
                 '第 ' + blazeRoundNo() + ' 局 · 先赢 ' + blazeWinTarget() + ' 局　' + (me.floor + 1) + '楼　毒圈 ' + Math.round(blaze.poison) +
-                '（你 ' + Math.round(Math.hypot(me.p.x - c, me.p.z - c)) + '）';
+                ' · 你 ' + Math.round(Math.hypot(me.p.x - c, me.p.z - c)) + '';
 
             if (blazeStatsOpen) {
                 let sEl = document.getElementById('blaze-stats');

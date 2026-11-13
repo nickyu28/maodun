@@ -75,7 +75,7 @@
             else if (kind.key === 'shield') a.shieldT = Infinity;
             cakeBurst(a.p.x, a.p.z, kind.color);
             if (a.isPlayer) {
-                blazeFlash('捡到增益：' + kind.label + (kind.key === 'speed' ? '！' : '（永久）！'));
+                blazeFlash('捡到增益：' + kind.label + (kind.key === 'speed' ? '！' : '，永久！'));
                 introOnce('cake.' + kind.key, kind.label, { speed: '跑得快一阵子。', reach: '手变长了，离远一点也能抓到人。这局一直有效。', shield: '被抓的时候能挡一次。' }[kind.key] || '');
             }
         }
@@ -719,7 +719,7 @@
             if (performance.now() - cakeInvite.t0 > CAKE_INVITE_TIMEOUT) {
                 clearInterval(cakeInviteTimer); cakeInviteTimer = null;
                 let who = cakeInvite.pending.map(dispName).join('、'); cakeInvite = null;
-                showSysModal('没法开局', who + ' 没有回应（可能不在了），这次先不开松饼大作战。', [{ label: '知道了' }]);
+                showSysModal('没法开局', who + ' 没有回应，可能不在了，这次先不开松饼大作战。', [{ label: '知道了' }]);
             }
         }
         // 收到别人发来的开局邀请：不是自己身上的邀请就无视，是的话弹窗问同意不同意，

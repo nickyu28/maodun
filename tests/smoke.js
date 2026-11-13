@@ -13008,6 +13008,67 @@ async function enterExit(tab, key) {
             await T.close();
             report('KB1 按键卡住：焦点在单选框上 E 照样开背包、窗口失焦松开 W、文字框里打字不触发', bad.length === 0, bad.join(' / '));
         }
+        if (want('TX1')) {
+            // TX1 玩家看得到的文字不用括号（作者 11-13 的规矩，docs/design-rules.md）：js/01～17 和 index.html 里带中文的字符串（模板字符串的静态部分也算）、页面上的文字、title／placeholder，都不能有 （）()【】[]。
+            // 标签、属性里的括号（onclick="f(1)"）、注释、正则不管。js/18-lab.js 和 js/19-industry*.js 不归这条（Code2 的，任务 131）。检测本身先用几条样例自测，改坏要挂。
+            const bad = [];
+            function scan(src) {
+              const out = []; let i = 0, n = src.length, line = 1;
+              const isRegexStart = (prev) => !prev || /[(,=:[!&|?{};+\-*%<>~^]$/.test(prev) || /\b(return|typeof|case|in|of|delete|void|throw|new)$/.test(prev);
+              let prevTok = '';
+              const strs = [];
+              function readStr(q) {
+                let s = '', st = i, ln = line; i++;
+                while (i < n && src[i] !== q) { if (src[i] === '\\') { s += src[i] + src[i + 1]; i += 2; continue; } if (src[i] === '\n') line++; s += src[i++]; }
+                i++; strs.push({ s, ln, st }); prevTok = 'x';
+              }
+              function readTpl() {
+                let ln = line, st = i; i++; let cur = '';
+                while (i < n && src[i] !== '`') {
+                  if (src[i] === '\\') { cur += src[i] + src[i + 1]; i += 2; continue; }
+                  if (src[i] === '$' && src[i + 1] === '{') { strs.push({ s: cur, ln, st }); cur = ''; i += 2; let d = 1; const sub = i; while (i < n && d) { const c = src[i]; if (c === '{') d++; else if (c === '}') d--; else if (c === "'" || c === '"') { readStr(c); continue; } else if (c === '`') { readTpl(); continue; } else if (c === '\n') line++; i++; } continue; }
+                  if (src[i] === '\n') line++; cur += src[i++];
+                }
+                i++; strs.push({ s: cur, ln, st }); prevTok = 'x';
+              }
+              while (i < n) {
+                const c = src[i];
+                if (c === '\n') { line++; i++; continue; }
+                if (c === '/' && src[i + 1] === '/') { while (i < n && src[i] !== '\n') i++; continue; }
+                if (c === '/' && src[i + 1] === '*') { i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) { if (src[i] === '\n') line++; i++; } i += 2; continue; }
+                if (c === "'" || c === '"') { readStr(c); continue; }
+                if (c === '`') { readTpl(); continue; }
+                if (c === '/' && isRegexStart(prevTok)) { // regex literal
+                  i++; let inCls = false; while (i < n && (src[i] !== '/' || inCls)) { if (src[i] === '\\') i++; else if (src[i] === '[') inCls = true; else if (src[i] === ']') inCls = false; i++; } i++; while (/[a-z]/.test(src[i] || '')) i++; prevTok = 'x'; continue;
+                }
+                if (/\s/.test(c)) { i++; continue; }
+                if (/[A-Za-z0-9_$]/.test(c)) { let st = i; while (i < n && /[A-Za-z0-9_$]/.test(src[i])) i++; prevTok = src.slice(st, i); continue; }
+                prevTok = c; i++;
+              }
+              return strs;
+            }
+
+            const CJK_ = /[\u4e00-\u9fff]/, BR_ = /[（）【】]|[()\[\]]/;
+            const visible = (s) => {
+                let t = s; const gt = t.indexOf('>'), lt = t.indexOf('<');
+                if (gt >= 0 && (lt < 0 || gt < lt) && /["=]/.test(t.slice(0, gt))) t = t.slice(gt + 1);
+                t = t.replace(/<[^>]*>/g, ''); const l2 = t.lastIndexOf('<'); if (l2 >= 0 && t.indexOf('>', l2) < 0 && /["= ]/.test(t.slice(l2))) t = t.slice(0, l2);
+                return t;
+            };
+            const hit = (s) => { const t = visible(s); return /[（）【】]/.test(t) || (CJK_.test(t) && BR_.test(t)); };
+            const self = scan("let a = '提示（x）'; // 注释（x）\nlet r = /（/; let b = `你好${f(1)}（`; let c = '<a onclick=\"f(1)\">好</a>'; let d = '没括号';").map((x) => x.s).filter(hit);
+            if (self.length !== 2) bad.push('检测自测不对 ' + JSON.stringify(self));
+            const fsx = require('fs'), pth = require('path');
+            const files = fsx.readdirSync(pth.join(ROOT, 'js')).filter((f) => /\.js$/.test(f) && !/^18-lab|^19-industry/.test(f));
+            files.forEach((f) => { const src = fsx.readFileSync(pth.join(ROOT, 'js', f), 'utf8'); scan(src).filter((x) => hit(x.s)).slice(0, 3).forEach((x) => bad.push(f + ':' + x.ln + ' ' + x.s.replace(/\n/g, ' ').slice(0, 40))); });
+            const html = fsx.readFileSync(pth.join(ROOT, 'index.html'), 'utf8');
+            const re = /<script[^>]*>([\s\S]*?)<\/script>/g; let m;
+            while ((m = re.exec(html))) scan(m[1]).filter((x) => hit(x.s)).slice(0, 3).forEach((x) => bad.push('index.html 脚本 ' + x.s.slice(0, 40)));
+            const page = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '');
+            page.replace(/<[^>]*>/g, '\n').split('\n').forEach((t) => { if (CJK_.test(t) && BR_.test(t)) bad.push('index.html 文字 ' + t.trim().slice(0, 40)); });
+            [...page.matchAll(/(?:title|placeholder|alt)="([^"]*)"/g)].forEach((a) => { if (BR_.test(a[1])) bad.push('index.html 属性 ' + a[1].slice(0, 40)); });
+            report('TX1 玩家看得到的文字不用括号：js/01～17、index.html', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

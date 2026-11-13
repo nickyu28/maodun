@@ -314,7 +314,7 @@
                     b.gone = 6; b.mesh.visible = false;
                     r.item = raceRollItem();      // 开出什么完全看运气
                     raceBurst(b.x, r.p.y, b.z, 0xffca28, 6, 16, 0.35);
-                    if (r.isPlayer) { blazeFlash('开到【' + raceItemDef(r.item).name + '】'); introOnce('race.item', '道具', '路上的箱子能开出道具，' + kTxt('按 <b>Q</b>', '点 <b>道具</b>') + ' 用掉。一次只能拿一个。'); }
+                    if (r.isPlayer) { blazeFlash('开到「' + raceItemDef(r.item).name + '」'); introOnce('race.item', '道具', '路上的箱子能开出道具，' + kTxt('按 <b>Q</b>', '点 <b>道具</b>') + ' 用掉。一次只能拿一个。'); }
                 });
             });
         }
@@ -456,7 +456,7 @@
             // 保底规则不写出来（不告诉玩家有保底），只说抽什么、管什么
             let out = '<div style="font-size:12px; color:#888; margin-bottom:8px; text-align:left;">' +
                 '随机抽一个身体颜色，也可能谢谢参与。只是好看，不加属性；分队伍颜色的模式里不显示。</div>' +
-                '<button onclick="skinDraw()" style="width:100%; margin:0 0 10px; background:#e6a23c; color:#fff; border:none; padding:9px 0; font-size:14px;">抽一次（' + SKIN_PRICE + ' 猫盾币）</button>' +
+                '<button onclick="skinDraw()" style="width:100%; margin:0 0 10px; background:#e6a23c; color:#fff; border:none; padding:9px 0; font-size:14px;">抽一次，' + SKIN_PRICE + ' 猫盾币</button>' +
                 '<div style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px;">';
             SKIN_COLORS.forEach(function (col) {
                 let owned = !!(gState.skins && gState.skins[col]);
@@ -1298,7 +1298,7 @@
             let me = race.racers[0];
             if (!race.draw || race.phase !== 'ready' || me.out) { bar.style.display = 'none'; return; }
             let pad = padOn();
-            bar.innerHTML = '<div style="font-size:12px; color:#ddd; margin-bottom:6px;">选个技能' + (pad ? '' : '（按 1 / 2 / 3）') + '，开跑前没选就随机</div>' +
+            bar.innerHTML = '<div style="font-size:12px; color:#ddd; margin-bottom:6px;">选个技能' + (pad ? '' : '，按 1 / 2 / 3') + '，开跑前没选就随机</div>' +
                 '<div style="display:flex; gap:6px; justify-content:center;">' +
                 race.draw.map(function (c, i) {
                     return '<button onclick="racePick(\'' + c.id + '\')" style="margin:0; flex:1; min-width:0; max-width:170px; background:#fff; border:2px solid #7e57c2; border-radius:8px; padding:6px 6px; text-align:left; cursor:pointer;">' +
@@ -1314,7 +1314,7 @@
             race.draw = null;
             raceCardRender();
             let c = raceCardDef(id);
-            if (c) blazeFlash('这轮用【' + c.name + '】');
+            if (c) blazeFlash('这轮用「' + c.name + '」');
         }
 
         // 开跑前把本轮的牌和事件一起亮出来
@@ -1322,9 +1322,9 @@
             let ev = raceEventDef(race.event);
             let me = race.racers[0];
             let sk = raceCardDef(me.skill), bf = raceCardDef(me.buff);
-            let line = '开跑！' + (sk ? '　【' + sk.name + '】' : '');
+            let line = '开跑！' + (sk ? '　「' + sk.name + '」' : '');
             if (sk) introOnce('race.skill', '技能', '这轮选的技能 ' + kTxt('按 <b>E</b> 或 <b>右键</b>', '点 <b>技能</b>') + ' 放，用完要等一会儿才能再放。');
-            if (bf) line += '　+【' + bf.name + '】';
+            if (bf) line += '　+「' + bf.name + '」';
             if (ev && ev.id !== 'none') {
                 line += '　' + '本轮：' + ev.name;
                 introOnce('race.ev.' + ev.id, '本轮：' + ev.name, ev.desc);
@@ -1572,7 +1572,7 @@
             let b = document.getElementById('race-testcard-btn');
             if (!b) return;
             let d = RACE_TEST_CARD ? raceCardDef(RACE_TEST_CARD) : null;
-            b.innerText = '测试：自选牌（' + (d ? d.name : '随机') + '）';
+            b.innerText = '测试：自选牌，' + (d ? d.name : '随机') + '';
             b.style.background = d ? '#7e57c2' : '#eceff1';
             b.style.color = d ? '#fff' : '#607d8b';
         }
@@ -1589,7 +1589,7 @@
                 };
             });
             btns.push({ label: '恢复随机', color: '#888', onClick: function () { RACE_TEST_CARD = null; raceTestCardBtnSync(); } });
-            showSysModal('竞速 · 自选牌（整场生效）',
+            showSysModal('竞速 · 自选牌，整场生效',
                 '<div style="font-size:12px; color:#888;">选定之后整场每轮都发这张，跳过三选一，方便单独调一个技能。</div>' +
                 RACE_CARDS.map(function (c) {
                     return '<div style="margin:3px 0; font-size:12px; color:#666;"><b>' + c.name + '</b>　' + c.desc + '</div>';
@@ -1689,7 +1689,7 @@
             bar.style.display = on ? 'flex' : 'none';
             if (on) {
                 let list = raceSpecList(), i = list.indexOf(look);
-                document.getElementById('race-spectate-target').innerText = look.name + (i >= 0 ? '（第 ' + (i + 1) + '）' : '');
+                document.getElementById('race-spectate-target').innerText = look.name + (i >= 0 ? ' · 第 ' + (i + 1) + '' : '');
             }
         }
         // 幽灵：你在"同样段数"的这一轮里跑出过的最好成绩，按那个配速从起点匀速飘到终点。
@@ -1731,10 +1731,10 @@
             document.getElementById('blaze-round').innerText =
                 (fm ? '竞速 · ' + fm.no + ' ' + fm.name + '　' : (race.duo ? '竞速·双人 · 第 ' : '竞速 · 第 ') + (race.round + 1) + ' / ' + ladder.length + ' 轮　' +
                 ladder[race.round] + (race.duo ? ' 队开跑，留 ' + (ladder[race.round + 1] || 1) + ' 队　' : ' 人开跑，留 ' + (ladder[race.round + 1] || 1) + ' 人　')) +
-                (me.out ? (race.duo ? '你的队伍已淘汰（观战）' : '你已淘汰（观战）')
+                (me.out ? (race.duo ? '你的队伍已淘汰，观战' : '你已淘汰，观战')
                     : race.duo ? (function () {
                         let mate = raceTeammateOf(me);
-                        return '队友：' + mate.name + (mate.out ? '（已出局）' : mate.finished ? '（已完赛）' : '');
+                        return '队友：' + mate.name + (mate.out ? ' · 已出局' : mate.finished ? ' · 已完赛' : '');
                     })()
                         : '当前第 ' + (ahead + 1) + ' 位') +
                 (me.dashCd > 0 ? '　冲刺 ' + me.dashCd.toFixed(1) + 's' : '　冲刺就绪') +

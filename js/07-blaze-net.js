@@ -157,7 +157,7 @@
                     let gain2 = coinsSettle('blaze', m.w === blaze.me.team);
                     showSysModal(m.w === blaze.me.team ? '超燃 · 你赢了' : '超燃 · 你输了',
                         '比分 ' + blaze.score[blaze.me.team] + ' : ' + blaze.score[1 - blaze.me.team] +
-                        '　　猫盾币 +' + gain2 + '（共 ' + coinsShow() + '）',
+                        '　　猫盾币 +' + gain2 + ' · 共 ' + coinsShow() + '',
                         blazeEndButtons('#ff5722'));
                 }
             }
