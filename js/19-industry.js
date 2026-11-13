@@ -194,7 +194,7 @@
             tongs: { name: '钳子', col: 0x795548, use: '拿烫锭' },
             pick_bronze: { name: '青铜稿', col: 0xb87333, tool: 2 }, pick_iron: { name: '铁稿', col: 0x616161, tool: 3, bonus: 1 }, pick_steel: { name: '钢稿', col: 0x90a4ae, tool: 4 },
             battery: { name: '电池', col: 0x43a047, use: '装进电池组' }, wire: { name: '铜线', col: 0xff7043, use: '接线' },
-            dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '蒸汽发电机', col: 0x546e7a, dev: 'gen', use: '要水要炉子：拿着对炉子右键贴上去（一个炉子一台），炉子中火以上、水箱有水就发电；拿一桶生水左键装进水箱，一桶发 12 V 两分钟' },
+            dev_bank: { name: '电池组', col: 0x2e7d32, dev: 'bank' }, dev_gen: { name: '蒸汽发电机', col: 0x546e7a, dev: 'gen', use: '自己烧柴烧煤，加水就发电' },
             dev_el: { name: '电解槽', col: 0x00838f, dev: 'el' },
             ash: { name: '草木灰', col: 0x9e9e9e, use: '当肥料' }, bottle: { name: '玻璃瓶', col: 0xb3e5fc },
             b_h2: { name: '氢气瓶', col: 0xf8bbd0, gas: 'h2', use: '压进钢瓶' }, b_o2: { name: '氧气瓶', col: 0x90caf9, gas: 'o2' }, b_cl2: { name: '氯气瓶', col: 0xc6ff00, gas: 'cl2', use: '压进钢瓶' },
@@ -768,6 +768,7 @@
             } else {
                 let hot = 0;   // 灶台、小熔炉、大窑 4 米内取暖，取最热的一个
                 indCooks().forEach(function (c) { if (c.C.temp > 100 && Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < IND_BODY.fireR + (c.ty === 'kiln' ? 1 : 0)) hot = Math.max(hot, Math.min(12, c.C.temp / 80)); });
+                if (rlGenHeat(ind.p.x, ind.p.z)) hot = Math.max(hot, 600 / 80);   // 任务 151：自带炉膛的蒸汽发电机烧着，4 米内取暖，按中火 600°C 算
                 t += hot;
             }
             if (indFires().some(function (f) { return f.fuel > 0 && Math.hypot(ind.p.x - f.x, ind.p.z - f.z) < IND_BODY.fireR; })) t += IND_BODY.fireHeat;
@@ -783,6 +784,7 @@
             if (!ind || !ind.p) return false;
             if (indFires().some(function (f) { return f.fuel > 0 && Math.hypot(ind.p.x - f.x, ind.p.z - f.z) < IND_BODY.fireR; })) return true;
             if (ind.where !== 'base') return false;
+            if (typeof rlGenHeat === 'function' && rlGenHeat(ind.p.x, ind.p.z)) return true;
             return indCooks().some(function (c) { return c.C.fire > 0 && c.C.temp > 100 && Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < IND_BODY.fireR + (c.ty === 'kiln' ? 1 : 0); });
         }
         function indHeavy() { let f = 1; Object.keys(ind.base.wear).forEach(function (sl) { f *= IND_ITEMS[ind.base.wear[sl]].heavy || 1; }); return f; }   // 防爆服 ×0.6
@@ -2294,7 +2296,7 @@
             if (indCooks().some(function (c) { let sp = indSpoutPos(c); return Math.hypot(x - sp.x, z - sp.z) < 1.2; })) { indFlash('这里是出料槽的位置，换个地方'); return false; }
             if (IND_ITEMS[k].dev === 'reactor' && !indSpotFree(x, z, 2.2)) { indFlash('反应堆占 3×3 米，这里放不下，换个空地'); return false; }
             indBagDel(k, 1);
-            ind.base.devs.push({ id: ++ind.base.dseq, ty: IND_ITEMS[k].dev, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} });
+            { let nd = { id: ++ind.base.dseq, ty: IND_ITEMS[k].dev, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} }; if (nd.ty === 'gen') { nd.self = true; nd.fi = {}; nd.fu = 0; nd.lit = false; nd.wt = 0; nd.wm = 'wood'; } ind.base.devs.push(nd); }   // 任务 151：新放的蒸汽发电机自带炉膛
             ind.devDirty = true; indSave(); 
             return true;
         }
@@ -2591,7 +2593,8 @@
             if (d.rods) d.rods.forEach(function (r) { put(nkRodKeyOf(r), 1); });   // 反应堆里的燃料棒
             if (d.cy) put(d.cy, 1);
             rcPickHook(d, put); odPick(d, put); if (d.ty === 'fridge' && d.items) Object.keys(d.items).forEach(function (k) { put(k, d.items[k]); });   // 电路元件：信号线退回、芯片里的元件退回
-            if (d.ty === 'gen' && d.wt > 0) put(indFilledKey('water_raw', d.wm || 'wood'), 1);   // 蒸汽发电机水箱里没用完的水还回成一桶
+            if (d.ty === 'gen' && d.wt > 0) put(indFilledKey('water_raw', d.wm || 'wood'), 1);
+            if (d.ty === 'gen' && d.fi) Object.keys(d.fi).forEach(function (k) { put(k, d.fi[k]); });   // 任务 151：没烧完的柴还回来   // 蒸汽发电机水箱里没用完的水还回成一桶
             let N = tot.box + tot.bag + tot.ground;
             ind.base.devs = ind.base.devs.filter(function (x) { return x !== d; });
             let nw = ind.base.wires.length;

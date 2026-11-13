@@ -42,7 +42,14 @@
         // 任务 55：蒸汽发电机（原来的 dev_gen）。水箱装一桶生水（空桶还你）；3 米内有点着的炉子（中火以上）而且水箱有水才发 12 V，一桶撑 120 秒。
         // 用的是炉子多出来的热，炉子不降温。没水或没炉子就停。拿起时没用完的水还回成一桶（indPickDev）。老档的发电机水箱是空的
         const RL_GEN = { tank: 120, r: 5, gap: 0.9 };   // r：放在地上的老发电机找炉子的范围（任务 106 从 3 米放大到 5 米）
-        IND_DEV_FIX.gen = function (d) { d.wt = indNum(d.wt, 0, 0, RL_GEN.tank); d.wm = IND_MATS[d.wm] ? d.wm : 'wood'; if (!(d.cook === 'stove' || typeof d.cook === 'number')) delete d.cook; };
+        IND_DEV_FIX.gen = function (d) {
+            d.wt = indNum(d.wt, 0, 0, RL_GEN.tank); d.wm = IND_MATS[d.wm] ? d.wm : 'wood'; if (!(d.cook === 'stove' || typeof d.cook === 'number')) delete d.cook;
+            d.self = d.self === true && d.cook === undefined;   // 任务 151：自带炉膛的是新放的，老的（贴炉子、靠炉子）规则不变
+            if (d.self) {
+                let fi = {}; if (d.fi && typeof d.fi === 'object') Object.keys(d.fi).forEach(function (k) { if (IND_ITEMS[k] && IND_ITEMS[k].fuel > 0 && d.fi[k] > 0) fi[k] = Math.min(99, d.fi[k] | 0); });
+                d.fi = fi; d.fu = indNum(d.fu, 0, 0, 1e5); d.lit = !!d.lit;
+            } else { delete d.fi; delete d.fu; delete d.lit; }
+        };
         // 任务 106：拿着蒸汽发电机对炉子右键，贴在炉子背面（出料槽在右、漏斗在左，发电机在后面，不抢位置）；一个炉子贴一台。贴着的看这个炉子的火，放在地上的看 5 米内
         function rlGenCook(d) { return d.cook !== undefined && d.cook !== null ? indCookById(d.cook) : null; }
         function rlGenHot(d) { let c = rlGenCook(d); if (c) return c.C.fire >= 2; return indHeatNear(d.x, d.z, RL_GEN.r).fire >= 2; }
@@ -50,6 +57,7 @@
         function rlGenAttach(a) {
             let c = ckCookOfAim(a); if (!c) return false;
             if (ind.where !== 'base') return false;
+            indFlash('它自己就是炉子，放在地上就行'); return true;   // 任务 151：不再贴在炉子上
             if (ind.base.devs.some(function (d) { return d.ty === 'gen' && d.cook === c.id; })) { indFlash(IND_COOK[c.ty].name + '已经贴了一台蒸汽发电机'); return true; }
             if (ind.base.devs.length >= IND_DEV_CAP) { indFlash('设备太多了'); return true; }
             let p = rlGenPos(c);
@@ -59,19 +67,47 @@
             indFlash('蒸汽发电机贴在' + IND_COOK[c.ty].name + '上了：拿一桶生水左键装水，炉子中火以上就发电');
             return true;
         }
-        function rlGenOn(d) { return d.wt > 0 && rlGenHot(d); }
+        function rlGenOn(d) { return d.wt > 0 && (d.self ? d.lit && d.fu > 0 : rlGenHot(d)); }
+        // 任务 151：自带炉膛。点着以后烧柴，一份柴撑多久按它的 fuel 值（秒）；悠闲有柴就自己烧。烧着就算火，水箱有水才发电
+        function rlGenFuelN(d) { let n = 0; Object.keys(d.fi || {}).forEach(function (k) { n += d.fi[k]; }); return n; }
+        function rlGenBurn(d, dt) {
+            if (!d.lit && !indHard() && (d.fu > 0 || rlGenFuelN(d) > 0)) d.lit = true;
+            if (!d.lit) return;
+            if (!(d.fu > 0)) {
+                let k = Object.keys(d.fi).filter(function (q) { return d.fi[q] > 0; })[0];
+                if (!k) { d.lit = false; if (!ind.sleeping) indFlash('蒸汽发电机没柴了'); return; }
+                d.fi[k]--; if (d.fi[k] <= 0) delete d.fi[k]; d.fu += IND_ITEMS[k].fuel;
+            }
+            d.fu = Math.max(0, d.fu - dt);
+        }
+        function rlGenHeat(x, z) { return ind.where === 'base' && ind.base.devs.some(function (d) { return d.ty === 'gen' && d.self && d.lit && d.fu > 0 && Math.hypot(d.x - x, d.z - z) < IND_BODY.fireR; }); }
         IND_DEV_TICK.gen = function (d, dt) {
+            if (d.self) rlGenBurn(d, dt / pwAccelMultDev(d));
             if (!rlGenOn(d)) return;
             d.wt = Math.max(0, d.wt - dt / pwAccelMultDev(d));   // 时间加速器不加速发电机（不多发电，也不多费水）
             if (d.wt <= 0 && !ind.sleeping) indFlash('蒸汽发电机没水了');
         };
         function rlGenInfo(d) {
             let D = IND_DEVS.gen, w = d.wt > 0 ? '水箱剩 ' + Math.ceil(d.wt) + ' 秒' : rlPipesOf(d.id).some(function (p) { return p[1] === d.id; }) ? '水塔没水了' : '水箱空了，拿一桶生水左键装点水';
+            if (d.self) return D.name + (rlGenOn(d) ? ' 发电中 12 V' : ' 没在发电') + '　柴 ' + (rlGenFuelN(d) + (d.fu > 0 ? 1 : 0)) + ' 份' + (d.lit ? '　烧着' : indHard() ? '　没点火，拿火柴左键点' : '') + '　' + w;
             if (rlGenOn(d)) return D.name + ' 发电中 12 V　' + w;
             let c = rlGenCook(d);
             return D.name + (c ? '（贴在' + IND_COOK[c.ty].name + '上）' : '') + ' 没在发电　' + w + (rlGenHot(d) ? '' : c ? '　' + IND_COOK[c.ty].name + '要中火以上' : '　对着炉子右键贴上去，或者放在点着的炉子（中火以上）5 米内');
         }
         function rlGenAct(d, k) {
+            if (d.self && k) {
+                let it = IND_ITEMS[k];
+                if (it && it.fuel > 0 && !indContOf(k)) {
+                    if (rlGenFuelN(d) >= 20) { indFlash('柴放满了'); return false; }
+                    indBagDel(k, 1); d.fi[k] = (d.fi[k] || 0) + 1; indSave(); indFlash('加了 1 份' + indName(k) + '，共 ' + rlGenFuelN(d) + ' 份'); return true;
+                }
+                if (['ember', 'match', 'lighter', 'torch', 'flint'].indexOf(k) >= 0 && indHard()) {
+                    if (d.lit) { indFlash('已经烧着了'); return false; }
+                    if (!(d.fu > 0 || rlGenFuelN(d) > 0)) { indFlash('先加柴'); return false; }
+                    let r = fiUseSource(k); if (r !== true) return r === false ? false : true;
+                    d.lit = true; rlGenBurn(d, 0); indSave(); indFlash('点着了'); return true;
+                }
+            }
             let c = indContOf(k);
             if (c && !c.empty && c.base === 'water_raw') {
                 if (d.wt > 0) { indFlash('水箱还有水（剩 ' + Math.ceil(d.wt) + ' 秒），用完再装'); return false; }

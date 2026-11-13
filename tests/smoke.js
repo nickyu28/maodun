@@ -5993,6 +5993,7 @@ async function enterExit(tab, key) {
                 const gen = await place('dev_gen', 8, -15), pump = await place('dev_pump', 12, -10);
                 await click(gen, 'wire'); await click(pump, 'wire');
                 await T.eval(`indBagAdd('water_raw', 1); true;`); await click(gen, 'water_raw');   // 蒸汽发电机要水（任务 55）
+                await T.eval(`(function(){ let d = indDev(${gen}); d.fi = { wood: 3 }; d.lit = true; })(); true;`);   // 任务 151：新放的自带炉膛，加柴点着
                 await T.eval(`indTeleport(-8, 5); indAdvance(0.5); true;`);
                 const pp = JSON.parse(await T.eval(`JSON.stringify({ v: indSrcVolt(indDev(${gen})), pw: indDev(${pump}).pw, wet: ind.base.crops[0].wet > ind.base.clock })`));
                 if (pp.v !== 12 || !pp.pw || !pp.wet) bad.push('发电机带水泵不对 ' + JSON.stringify(pp));
@@ -9582,8 +9583,8 @@ async function enterExit(tab, key) {
                 r = await J(`(function(){ let d = indDev(9); d.wm = 'fe'; ind.bag = {}; ind.base.chests[0].items = {}; indPickDev(d); return { bag: ind.bag, box: ind.base.chests[0].items }; })()`);
                 if (!(r.bag['water_raw@fe'] === 1 || r.box['water_raw@fe'] === 1)) bad.push('拿起时剩的水还回成一桶 ' + JSON.stringify(r));
                 // 老档：水箱空
-                r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.devs = [{ id: 3, ty: 'gen', x: 1, z: 1, bats: 0, u: 0, on: true, ft: 20, st: {} }]; b.wires = []; b = indFixBase(b); return [b.devs[0].wt, IND_ITEMS.dev_gen.name, /要水/.test(IND_ITEMS.dev_gen.use) && /炉子/.test(IND_ITEMS.dev_gen.use)]; })()`);
-                if (!(r[0] === 0 && r[1] === '蒸汽发电机' && r[2])) bad.push('老档水箱空、改名、说明写要水要炉子 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.devs = [{ id: 3, ty: 'gen', x: 1, z: 1, bats: 0, u: 0, on: true, ft: 20, st: {} }]; b.wires = []; b = indFixBase(b); return [b.devs[0].wt, IND_ITEMS.dev_gen.name, /加水/.test(IND_ITEMS.dev_gen.use) && /烧柴/.test(IND_ITEMS.dev_gen.use)]; })()`);
+                if (!(r[0] === 0 && r[1] === '蒸汽发电机' && r[2])) bad.push('老档水箱空、改名、说明写烧柴加水 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -12725,15 +12726,14 @@ async function enterExit(tab, key) {
                 const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; indPanelClose(); B.devs = []; B.wires = []; B.pipes = [];
                     let St = IND_BASE_ST.stove; B.off.stove = false; B.stove = Object.assign(ckNewState(), { spout: [], fuel: 9999, fire: 2, temp: 600 }); let c = indCookById('stove');
                     ${body} } finally { blazeFlash = bf; } })()`);
-                let r = await run(`ind.bag = { dev_gen: 2 }; indSelect('dev_gen'); indTeleport(St.x, St.z + 2.6); indLookAt(St.x, St.z); let a = indAim(); indUse(); let d = B.devs[0];
-                    let one = { aim: a && a.kind, n: B.devs.length, cook: d && d.cook, dz: d && d.z - St.z, dx: d && d.x - St.x, left: ind.bag.dev_gen };
-                    indUse(); let two = { n: B.devs.length, left: ind.bag.dev_gen, fl: fl.join('|') };
+                let r = await run(`ind.bag = { dev_gen: 2 }; indSelect('dev_gen'); indTeleport(St.x, St.z + 2.6); indLookAt(St.x, St.z); let a = indAim(); indUse();
+                    let one = { aim: a && a.kind, n: B.devs.length, left: ind.bag.dev_gen, fl: fl.join('|') };
+                    let d = { id: 900, ty: 'gen', x: St.x, z: St.z - 2.4, bats: 0, u: 0, on: true, ft: 20, st: {}, cook: 'stove', wt: 0, wm: 'wood' }; B.devs.push(d);
                     let wk = indFilledKey('water_raw', 'wood'); ind.bag = {}; ind.bag[wk] = 1; indSelect(wk); rlGenAct(d, wk); let v2 = indSrcVolt(d); B.stove.fire = 1; let v1 = indSrcVolt(d); B.stove.fire = 3; let v3 = indSrcVolt(d);
                     let save = indFixBase(JSON.parse(JSON.stringify(B))).devs[0].cook;
-                    ind.bag = {}; indPickDev(d); return { one: one, two: two, v2: v2, v1: v1, v3: v3, save: save, gone: B.devs.length, back: ind.bag[wk] || 0, gen: ind.bag.dev_gen || 0 };`);
-                if (!(r.one.aim === 'stove' && r.one.n === 1 && r.one.cook === 'stove' && r.one.dz < -1.5 && Math.abs(r.one.dx) < 0.01 && r.one.left === 1)) bad.push('对炉子右键贴在背面 ' + JSON.stringify(r.one));
-                if (!(r.two.n === 1 && r.two.left === 1 && /已经贴了/.test(r.two.fl))) bad.push('一个炉子只能贴一台 ' + JSON.stringify(r.two));
-                if (!(r.v2 === 12 && r.v1 === 0 && r.v3 === 12 && r.save === 'stove')) bad.push('中火以上有水发 12 V、小火不发、存档带着 ' + JSON.stringify(r));
+                    ind.bag = {}; indPickDev(d); return { one: one, v2: v2, v1: v1, v3: v3, save: save, gone: B.devs.length, back: ind.bag[wk] || 0, gen: ind.bag.dev_gen || 0 };`);
+                if (!(r.one.aim === 'stove' && r.one.n === 0 && r.one.left === 2 && /自己就是炉子/.test(r.one.fl))) bad.push('对炉子右键不再贴，提示它自己就是炉子（任务 151） ' + JSON.stringify(r.one));
+                if (!(r.v2 === 12 && r.v1 === 0 && r.v3 === 12 && r.save === 'stove')) bad.push('老的贴着炉子的：中火以上有水发 12 V、小火不发、存档带着 ' + JSON.stringify(r));
                 if (!(r.gone === 0 && r.back === 1 && r.gen === 1)) bad.push('收起退水 ' + JSON.stringify(r));
                 r = await run(`B.devs.push({ id: 901, ty: 'gen', x: St.x + 4.5, z: St.z, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 100, wm: 'wood' }, { id: 902, ty: 'gen', x: St.x + 6.2, z: St.z, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 100, wm: 'wood' });
                     let fixed = indFixBase(JSON.parse(JSON.stringify(B))).devs.filter(function (d) { return d.ty === 'gen'; }).length; return { a: indSrcVolt(B.devs[0]), b: indSrcVolt(B.devs[1]), fixed: fixed };`);
@@ -12741,7 +12741,7 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND141 蒸汽发电机贴着炉子：右键装上、一炉一台、中火有水 12 V、收起退水、地上的 5 米', bad.length === 0, bad.join(' / '));
+            report('IND141 蒸汽发电机老规矩：对炉子右键不再贴、老的贴着炉子照常发电、收起退水、地上的 5 米', bad.length === 0, bad.join(' / '));
         }
         if (want('IND142')) {
             // IND142 外面能放工作台、能随手合成工作台（任务 108）：背包里没工作台时背包面板"随手合成"能做出来（硬核木 6 + 草绳 2、悠闲木 6 + 石头 2）；远征图里放下、左键打开、做一件东西、长按右键收回；
@@ -13623,6 +13623,42 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND167 风箱炉子右键优先鼓风：长按不收起、灭着不收起、面板能收、没风箱的仍长按收起', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND168')) {
+            // IND168 蒸汽发电机自带炉膛（任务 151）：放下加柴加水点火 12 V；没水没柴停；4 米内取暖；收起柴和水还回来；老的贴着炉子的照常；对炉子右键只提示
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const wk = `indFilledKey('water_raw', 'wood')`;
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.devs = []; B.wires = []; B.off.stove = true; B.cookers = []; indPanelClose();
+                    ind.bag = { dev_gen: 1, wood: 3, match: 2 }; indSelect('dev_gen'); indTeleport(-10, 5); indLookAt(-10, 1); indUse(); let d = B.devs[0]; let o = { placed: B.devs.length === 1 && d.ty === 'gen' && d.self === true };
+                    o.v0 = indSrcVolt(d); indSelect('wood'); for (let i = 0; i < 3; i++) rlGenAct(d, 'wood'); o.fuel = rlGenFuelN(d); o.v1 = indSrcVolt(d);
+                    ind.bag[${wk}] = 1; rlGenAct(d, ${wk}); o.v2 = indSrcVolt(d);
+                    indSelect('match'); rlGenAct(d, 'match'); o.lit = d.lit; o.v3 = indSrcVolt(d); o.match = ind.bag.match;
+                    ind.p.x = d.x + 2; ind.p.z = d.z; o.heat = rlGenHeat(ind.p.x, ind.p.z); ind.p.x = d.x + 6; o.far = rlGenHeat(ind.p.x, ind.p.z);
+                    for (let i = 0; i < 70; i++) { d.wt = 100; IND_DEV_TICK.gen(d, 1); } o.fuelLeft = rlGenFuelN(d); o.fu = Math.round(d.fu);
+                    d.wt = 0; o.v4 = indSrcVolt(d); d.wt = 50; o.v5 = indSrcVolt(d);
+                    let save = indFixBase(JSON.parse(JSON.stringify(B))).devs[0]; o.save = [save.self, save.lit, rlGenFuelN(save) === rlGenFuelN(d)];
+                    for (let i = 0; i < 400; i++) IND_DEV_TICK.gen(d, 1); o.v6 = indSrcVolt(d); o.lit6 = d.lit;
+                    ind.bag = {}; d.fi = { coal: 2 }; d.wt = 60; d.wm = 'wood'; indPickDev(d); o.back = [ind.bag.coal || 0, ind.bag[${wk}] || 0, ind.bag.dev_gen || 0]; return o; })()`);
+                if (!(r.placed && r.v0 === 0 && r.fuel === 3 && r.v1 === 0 && r.v2 === 0 && r.lit && r.v3 === 12 && r.match === 1)) bad.push('放下、加 3 份柴、加水、点火才发 12 V ' + JSON.stringify(r));
+                if (!(r.heat === true && r.far === false)) bad.push('4 米内取暖、6 米外没有 ' + JSON.stringify(r));
+                if (!(r.v4 === 0 && r.v5 === 12)) bad.push('没水停电、有水又发 ' + JSON.stringify(r));
+                if (!(r.save.join() === 'true,true,true' && r.v6 === 0 && r.lit6 === false)) bad.push('存档带着、柴烧完熄火停电 ' + JSON.stringify(r));
+                if (!(r.back.join() === '2,1,1')) bad.push('收起：柴、水、发电机都还回来 ' + r.back.join());
+                r = await J(`(function(){ indGoBase(null); let B = ind.base; B.devs = []; B.off.stove = false; B.stove = Object.assign(ckNewState(), { spout: [], fuel: 9999, fire: 2, temp: 600 }); let St = IND_BASE_ST.stove; ind.bag = { dev_gen: 1 }; indSelect('dev_gen'); indTeleport(St.x, St.z + 2.6); indLookAt(St.x, St.z); indUse(); return { n: B.devs.length }; })()`);
+                if (r.n !== 0) bad.push('对炉子右键不再贴也不放 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = { ver: 12, rule: 'hard', devs: [{ id: 5, ty: 'gen', x: 1, z: 1, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 30, wm: 'wood' }] }; let f = indFixBase(b); let g = f.devs[0]; return [g.self, g.fi === undefined, g.wt]; })()`);
+                if (r.join() !== 'false,true,30') bad.push('老存档的发电机还是老规矩 ' + r.join());
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND168 蒸汽发电机自带炉膛：加柴加水点火发 12 V、没水没柴停、4 米取暖、收起还东西、老的照常', bad.length === 0, bad.join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
