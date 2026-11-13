@@ -291,7 +291,7 @@
             else if (m.ty === 'mush') { put('shroom', r(0, 2)); if (indRand() < 0.15) put('shroom_bad', 1); }
             else if (m.ty === 'cloud') put('fluff', r(0, 1));
             else if (m.ty === 'cactus') put('cactus', 1);
-            else if (m.ty === 'boar') { put('meat_raw', r(1, 2)); put('hide', r(0, 1)); }
+            else if (m.ty === 'boar') { put('meat_raw', r(1, 2)); put('hide', 1); }   // 任务 149：野猪必掉 1 张皮
             else if (m.ty === 'bee') put('honey', r(0, 1));
             if (typeof nkTripItemsSync === 'function') nkTripItemsSync();
         }
