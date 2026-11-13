@@ -8650,8 +8650,8 @@ async function enterExit(tab, key) {
                 const up = await J(`(function(){ indSetRule('hard'); return ind.base.chests.filter(function (x) { return x.big; })[0].items; })()`);
                 if (up.compass !== 1) bad.push('悠闲升级成硬核不收回礼包 ' + JSON.stringify(up));
                 // ── 硬核从零开局：只靠地上的东西做出草绳、小刀、斧子 ──
-                r = await J(`(function(){ let b = indNewBase(); indFixBase(b); ind.base = b; indSetRule('hard'); ${fresh} ind.bag = {}; indGoTrip(4321); let n = 0;
-                    ind.tripGround.slice().forEach(function (g) { if (Math.hypot(ind.p.x - g.x, ind.p.z - g.z) > 25.5) return; indTeleport(g.x, g.z + 1); indLookAt(g.x, g.z); indAction(); n++; });
+                r = await J(`(function(){ let b = indNewBase(); indFixBase(b); ind.base = b; indSetRule('hard'); ${fresh} ind.bag = {}; indGoTrip(4321); let n = 0, sp0 = { x: ind.p.x, z: ind.p.z };
+                    ind.tripGround.slice().forEach(function (g) { if (Math.hypot(sp0.x - g.x, sp0.z - g.z) > 25.5) return; indTeleport(g.x, g.z + 1); indLookAt(g.x, g.z); indAction(); n++; });
                     let got = JSON.parse(JSON.stringify(ind.bag)); ['sharp_flint', 'twig', 'stone'].forEach(function (k, i) { ind.bag[k] = Math.max(ind.bag[k] || 0, [3, 1, 2][i]); }); ind.bag.grass = Math.max(ind.bag.grass || 0, 6);   // 任务 132：25 米内保证有 2 尖石片和 4 草，别的看群系，这里补够再测配方
                     let cr = function (o) { let i = IND_CRAFT.findIndex(function (q) { return q.out === o && indCraftShow(q); }); return i >= 0 && indCraft(i); };
                     cr('rope'); cr('rope'); cr('rope'); cr('knife'); let kn = ind.bag.knife || 0;
