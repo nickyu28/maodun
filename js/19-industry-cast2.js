@@ -6,7 +6,10 @@
         CT_PART_METAL.ingot_fe = 1; CT_PART_METAL.steel = 1;
         (function () {
             let TIER = { ingot_fe: 'iron', steel: 'steel' }, add = {};
-            IND_CRAFT.forEach(function (r) { if (r.hard && !r.fix && !r.poison && /^(knife|axe|pick|shovel|shears)_(iron|steel)$/.test(r.out) && (r.in.ingot_fe || r.in.steel)) r.off = true; });
+            // 任务 154：铁、钢工具改回锻造：锭 + 木头，背包里有锤子就能在工作台做（不消耗锤子）。钢镐还是只能走铸造（镍 + 熔池钢 + 耐火砖模具）
+            IND_CRAFT.forEach(function (r) { if (r.hard && !r.fix && !r.poison && /^(knife|axe|pick|shovel|shears)_(iron|steel)$/.test(r.out) && (r.in.ingot_fe || r.in.steel)) { if (r.out === 'pick_steel') r.off = true; else { r.off = false; r.need = 'hammer'; } } });
+            IND_ITEMS_RAW.hammer = { name: '锤子', col: 0x607d8b, use: '放在背包里，工作台才打得了铁工具和钢工具，不会用掉' };
+            IND_CRAFT.push({ out: 'hammer', in: { ingot_fe: 2, handle: 1 }, hard: true });
             Object.keys(CT_SHAPE).forEach(function (s) {
                 let S = CT_SHAPE[s];
                 IND_RECIPES.push({ in: { ['mold_' + s + '_f_raw']: 1 }, out: { ['mold_' + s + '_f']: 1 }, cls: 'smelt', minT: 1500, time: 60, hard: true });

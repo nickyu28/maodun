@@ -33,7 +33,7 @@
         IND_CRAFT.push({ out: 'bulb_ar', in: { bulb_dead: 1, battery_li: 1, b_ar: 1 }, back: { bottle: 1 }, hard: true });
         // 配方下标存在炉子里，新的只能加在表最后：带保护气炼钢（20 秒，原来 40 秒），还空瓶
         ['charcoal', 'coal'].forEach(function (c) {
-            ['b_n2', 'b_ar'].forEach(function (g) { IND_RECIPES.push({ in: { ingot_fe: 1, [c]: 1, [g]: 1 }, out: { hot_steel: 1, bottle: 1 }, cls: 'smelt', minT: 1550, time: AS.fast, pri: true, hard: true }); });
+            ['b_n2', 'b_ar'].forEach(function (g) { IND_RECIPES.push({ in: { ingot_fe: 1, [c]: 1, [g]: 1 }, out: { hot_steel: 1, bottle: 1 }, cls: 'smelt', minT: 1100, time: AS.fast, pri: true, hard: true }); });
         });
         // 氮气瓶对着篝火右键：灭火，还空瓶
         function asuFire(k, a) {

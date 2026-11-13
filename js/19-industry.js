@@ -144,7 +144,7 @@
             oil: { name: '石油', col: 0x212121, fuel: 250, use: '装在桶里，能烧（硬核要用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒），也是后面的原料' },   // 桶装液体：key 'oil' = 木桶装的石油，其它材质 oil@jar／@fe／@cu；一桶烧 600（煤 150）
             ore_cu: { name: '铜矿', col: 0xd84315 , use: '加 1 份木炭／煤／焦炭一起进炉子，1085°C 炼成铜锭' },
             ore_zn: { name: '锌矿', col: 0x90a4ae , use: '加 1 份木炭／煤／焦炭一起进炉子，950°C 炼成锌锭' },
-            ore_fe: { name: '铁矿', col: 0x795548 , use: '加 1 份木炭／煤／焦炭一起进炉子，1538°C 炼成铁锭' },
+            ore_fe: { name: '铁矿', col: 0x795548 , use: '加 1 份木炭／煤／焦炭一起进炉子，大火 1100°C 炼成铁锭' },
             sulfur: { name: '硫', col: 0xfdd835, useLater: '后面的阶段' },
             ore_sn: { name: '锡矿', col: 0xb0bec5 , use: '加 1 份木炭／煤／焦炭一起进炉子，1200°C 炼成锡锭' },
             ore_u: { name: '铀矿', col: 0x7cb342, useLater: '核和火箭' },
@@ -394,10 +394,10 @@
             { in: { clay: 2 }, out: { jar: 1 }, minT: 600, time: 20, cls: 'bulk' },
             { in: { milk: 1 }, out: { cheese: 1, bucket: 1 }, minT: 40, time: 90, burnT: 300 },   // 任务 56：奶酪是温热发酵，40°C、90 秒
             // 冶炼（只给硬核）：温度用真实熔点；出来的锭是烫的
-            { in: { ingot_fe: 1, charcoal: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1550, time: 40, hard: true },
+            { in: { ingot_fe: 1, charcoal: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1100, time: 60, hard: true },   // 任务 154：渗碳炼钢 1100°C，要烧得久
             { in: { ingot_cu: 1, ingot_zn: 1 }, out: { hot_brass: 2 }, cls: 'smelt', minT: 950, time: 20, hard: true },
             // 矿要还原剂（任务 53）：每份矿 + 1 份木炭；煤、焦炭的两条在配方表最后（19-industry-real.js），别挪这里的序号
-            { in: { ore_fe: 1, charcoal: 1 }, out: { hot_fe: 1 }, cls: 'smelt', minT: 1538, time: 30, hard: true },
+            { in: { ore_fe: 1, charcoal: 1 }, out: { hot_fe: 1 }, cls: 'smelt', minT: 1100, time: 30, hard: true },   // 任务 154：块炼法 1100°C，铁不熔化
             { in: { ore_cu: 1, charcoal: 1 }, out: { hot_cu: 1 }, cls: 'smelt', minT: 1085, time: 20, hard: true },
             { in: { ore_zn: 1, charcoal: 1 }, out: { hot_zn: 1 }, cls: 'smelt', minT: 950, time: 15, hard: true },   // 锌 907°C 沸腾，950 是折中
             { in: { ore_sn: 1, charcoal: 1 }, out: { hot_sn: 1 }, cls: 'smelt', minT: 1200, time: 15, hard: true },
@@ -408,8 +408,8 @@
             // 压力：木炭在氧气里烧成二氧化碳
             { in: { charcoal: 1, b_o2: 1 }, out: { b_co2: 1 }, minT: 400, time: 10, hard: true, cls: 'bulk' },
             // 煤、焦炭也能炼钢：火候、时间、产出和"铁锭 + 木炭"一样，没有质量区别。放在最后，不挪动前面配方的序号（正在烧的灶台存的是序号）
-            { in: { ingot_fe: 1, coal: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1550, time: 40, hard: true },
-            { in: { ingot_fe: 1, char: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1550, time: 40, hard: true }
+            { in: { ingot_fe: 1, coal: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1100, time: 60, hard: true },
+            { in: { ingot_fe: 1, char: 1 }, out: { hot_steel: 1 }, cls: 'smelt', minT: 1100, time: 60, hard: true }
         ];
         // 电解槽的三种用法（按顺序找第一种原料够、电压够的）
         const IND_EL_RECIPES = [
@@ -2987,7 +2987,7 @@
             return true;
         }
         function indCraftShow(r) { return !r.off && (!r.hard || indHard()) && !(r.casual && indHard()); }   // off：换成别的做法了，留着下标   // casual：只在悠闲出现的简单配方
-        function indCraftCan(r) { return indCraftShow(r) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.glass && (!ind.base.gh || ind.base.glass)) && !(r.pot && ind.base.pot); }
+        function indCraftCan(r) { return indCraftShow(r) && (!r.need || (ind.bag[r.need] || 0) > 0) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.glass && (!ind.base.gh || ind.base.glass)) && !(r.pot && ind.base.pot); }
         function indCraft(i) {
             if (!ind) return false;
             let r = IND_CRAFT[i]; if (!r || !indCraftCan(r)) { indFlash('原料不够'); return false; }
@@ -3032,7 +3032,7 @@
                 let r = IND_CRAFT[i];
                 if (!indCraftShow(r)) return '';
                 let nm = (canOf[i] ? '<b class="ind-can" style="color:#2e7d32;">✓</b> ' : '') + (r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.glass ? r.name + (ind.base.glass ? '（已经盖了）' : '') : r.pot ? r.name + (ind.base.pot ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : ''));
-                let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + (r.out && IND_ITEMS[r.out] ? '　→ ' + indName(r.out) + ' ×' + (r.n || 1) : '');
+                let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + (r.need ? ' + ' + indName(r.need) + '在身上' : '') + (r.out && IND_ITEMS[r.out] ? '　→ ' + indName(r.out) + ' ×' + (r.n || 1) : '');
                 let can = indCraftCan(r), once = r.gh || r.glass || r.pot;   // 盖暖棚、装大锅只能一次
                 return indRow('<span data-ci="' + i + '" style="' + (can ? '' : 'color:#999;') + '">' + nm + '</span><br><small style="color:#888">' + need + '</small>', '<span style="white-space:nowrap;"><button style="' + IND_BTN + (can ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>' + (once ? '' : '<button style="' + IND_BTN + (can ? 'background:#1b5e20;' : 'background:#bbb;') + '" onclick="indCraftMax(' + i + ')">做最多</button>') + '</span>');
             }).join('');

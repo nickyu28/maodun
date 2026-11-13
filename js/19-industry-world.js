@@ -437,7 +437,7 @@
         function wdHandCraftHtml() {
             let rows = IND_CRAFT.map(function (r, i) {
                 if (!r.hand || !indCraftShow(r)) return '';
-                let can = indCraftCan(r), need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ');
+                let can = indCraftCan(r), need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + (r.need ? ' + ' + indName(r.need) + '在身上' : '');
                 return indRow(indName(r.out) + '<br><small style="color:#888">' + need + '</small>', '<button id="ind-hand-' + i + '" style="' + IND_BTN + (can ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>');
             }).join('');
             return rows ? '<div style="margin-top:8px;font-weight:bold;">随手合成（不用工作台）</div>' + rows : '';

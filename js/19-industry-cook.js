@@ -6,7 +6,7 @@
             brick: { name: '砖槽', cool: 60, maxT: 1200 }
         };
         const CK_FUNNEL = { brick: { name: '砖漏斗' }, iron: { name: '铁漏斗' } };
-        const CK_MELT = { hot_cu: 1085, hot_zn: 420, hot_sn: 232, hot_bronze: 950, hot_brass: 950, hot_pb: 327, hot_fe: 1538, hot_steel: 1550 };   // 烫锭的熔点：超过槽耐温的进不了槽，留在炉膛里
+        const CK_MELT = { hot_cu: 1085, hot_zn: 420, hot_sn: 232, hot_bronze: 950, hot_brass: 950, hot_pb: 327, hot_fe: 1100, hot_steel: 1100 };   // 任务 154：块炼铁和渗碳钢不熔化，砖槽接得住；熔池里的铁钢还是 1538、1550   // 烫锭的熔点：超过槽耐温的进不了槽，留在炉膛里
         const CK = { oilFuel: 250, oilTotal: 20, funnelCap: 1200, funnelRate: 10, funnelKeep: 300, hearthCool: 150, kickR: 1.8, scatter: 1.5, kickCool: 60, oilMax: 4, oilRegen: 120 };
 
         Object.assign(IND_ITEMS_RAW, {

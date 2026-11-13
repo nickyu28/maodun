@@ -62,7 +62,7 @@
                 indFlash('黏土模具浇不了' + CT_METAL[P.m].n + '，裂了'); return;
             }
             let need = CT_SHAPE[M.s].need; if (!CT_PART_METAL[P.m] || P.n < need - (M.fill || 0)) return;
-            if (ctNeedNi(M, P) && !(S.items.ingot_ni > 0)) { if (!S.niWarn) { S.niWarn = 1; indFlash('钢镐头要加 1 份镍锭'); } return; }   // 任务 101：钢镐头要镍，镍要铁镐才挖得到，不能跳级
+            if (ctNeedNi(M, P) && !(S.items.ingot_ni > 0)) { S.niWarn = 1; return; }   // 任务 155：原因写在炉子面板里   // 任务 101：钢镐头要镍，镍要铁镐才挖得到，不能跳级
             S.niWarn = 0;
             M.fill = (M.fill || 0) + CT.flow * dt;
             if (M.fill < need) return;
@@ -110,10 +110,35 @@
             }
             S.mold = null; indSave(); indPanelStove();
         }
+        // 任务 155：模具装好了但流不进去的时候，面板上写最前面卡住的那一条原因（一直显示，不只弹一次）
+        function ctWhy(c) {
+            let S = c.C, M = S.mold, P = S.pool; if (!M || M.part) return '';
+            let U = !S.cook ? ctMeltUnit(S) : null, mm = P ? P.m : (U ? U.m : null), Sh = CT_SHAPE[M.s];
+            if (!mm) return '熔池是空的，把要铸的锭放进炉膛';
+            let Mt = CT_METAL[mm], need = Sh.need, sp = ckSpoutDef(S);
+            if (P && U && P.m !== U.m) return '熔池里是' + CT_METAL[P.m].n + '，先倒完再化' + CT_METAL[U.m].n;
+            if (!CT_PART_METAL[mm]) return Mt.n + '铸不了零件';
+            if (Mt.melt > sp.maxT) return '槽太低：要耐火砖槽，现在是' + sp.name;
+            if (Mt.melt > (M.f ? CT.fireMax : CT.clayMax)) return '模具不是耐火砖的，浇不了' + Mt.n;
+            if (S.temp < Mt.melt) return '炉温 ' + Math.round(S.temp) + '°C，不到 ' + Mt.melt + '°C，' + (P ? '熔池要凝了' : '化不了锭');
+            let have = (P ? P.n : 0) - (M.fill || 0);
+            if (!P || have < need - 1e-9) {
+                let more = need - (P ? P.n : 0);
+                return '熔池里' + (P ? '只有 ' + P.n + ' 份' : '还没有') + '，要 ' + need + ' 份' + (U ? '，还要 ' + Math.ceil(Math.max(0, CT.meltT - (S.meltT || 0)) + CT.meltT * Math.max(0, Math.ceil(more / U.n) - 1)) + ' 秒' : '，再放 ' + Math.ceil(more) + ' 块' + Mt.n + '锭');
+            }
+            if (ctNeedNi(M, P) && !(S.items.ingot_ni > 0)) return '缺 1 份镍锭，放进炉膛';
+            return '正在浇：' + Math.floor(M.fill || 0) + ' / ' + need;
+        }
+        function ctPlanTxt(c) {
+            let S = c.C, M = S.mold; if (!M || M.part) return '';
+            let U = !S.cook ? ctMeltUnit(S) : null, mm = S.pool ? S.pool.m : (U ? U.m : null); if (!mm) return '';
+            return '本次要做：' + CT_METAL[mm].n + CT_SHAPE[M.s].n + '，要 ' + CT_METAL[mm].n + ' ' + CT_SHAPE[M.s].need + ' 份' + (ctNeedNi(M, { m: mm }) ? ' + 镍锭 1 份' : '');
+        }
         function ctHtml(c) {
             if (!indHard()) return '';
             let S = c.C, P = S.pool, M = S.mold, h = '<br>熔池：' + (P ? CT_METAL[P.m].n + ' ' + P.n + ' / ' + ctCap(c) + ' 份' : '空') + (S.meltT > 0 ? '　化锭 ' + Math.floor(S.meltT / CT.meltT * 100) + '%' : '');
             if (M) h += '<br>模具：' + (M.f ? '耐火砖' : '') + CT_SHAPE[M.s].n + '（还能用 ' + M.dura + ' 次）' + (M.part ? '　' + indName(M.part) + (M.t > 0 ? ' 烫，还要 ' + Math.ceil(M.t) + ' 秒' : ' 凉了，左键出料槽取') : M.fill > 0 ? '　在流 ' + Math.floor(M.fill / CT_SHAPE[M.s].need * 100) + '%' : P && !CT_PART_METAL[P.m] ? '　<span style="color:#c62828">' + CT_METAL[P.m].n + '铸不了零件</span>' : '') + '　<button style="' + IND_BTN + '" onclick="ctMoldOut()">取下模具</button>';
+            if (M && !M.part) { let pl = ctPlanTxt(c), w = ctWhy(c); if (pl) h += '<br>' + pl; if (w) h += '<br><span style="color:#c62828">' + w + '</span>'; }
             let ms = Object.keys(ind.bag).filter(function (k) { return /^mold_[a-z]+(_f)?$/.test(k) && CT_SHAPE[k.slice(5).replace(/_f$/, '')]; });
             if (!M && ms.length) h += '<br>' + ms.map(function (k) { return '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="ctMoldPut(\'' + k + '\')">' + indName(k) + ' 放进出料槽</button>'; }).join('');
             return h;
