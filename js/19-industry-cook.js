@@ -58,6 +58,7 @@
             }
         }
         function ckFix(S, b) {
+            if (S.ckV !== 2) { if (S.cook && typeof CK_TIME_OLD !== 'undefined' && CK_TIME_OLD[S.cook.i] && IND_RECIPES[S.cook.i]) S.cook.t = (+S.cook.t || 0) * IND_RECIPES[S.cook.i].time / CK_TIME_OLD[S.cook.i]; S.ckV = 2; }   // 任务 153：烧制时间减半，进行中的进度按比例换算
             if (typeof ctFix === 'function') ctFix(S);   // 熔池、槽里的模具（铸造）
             if (!(S.spoutTy === null || CK_SPOUT[S.spoutTy])) S.spoutTy = undefined;
             if (S.spoutTy === undefined && b && b.rule) S.spoutTy = b.rule === 'hard' ? 'brick' : 'auto';   // 老档：硬核的炉子补一个砖槽（里面的锭不丢），悠闲照旧自带
@@ -71,7 +72,7 @@
         // 新炉子的状态：悠闲自带出料槽，硬核没有（要合成），还没选规则的先不写
         function ckNewState() {
             let r = ind && ind.base && ind.base.rule;
-            return { items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, ashT: 0, spoutTy: r === 'hard' ? null : r === 'casual' ? 'auto' : undefined, funnel: null };
+            return { ckV: 2, items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, ashT: 0, spoutTy: r === 'hard' ? null : r === 'casual' ? 'auto' : undefined, funnel: null };
         }
         // 选规则时：悠闲的炉子自带槽；硬核的炉子没有槽；悠闲升级成硬核，已有的自带槽变成砖槽（里面的锭不丢）
         function ckRuleChanged(from, to) {

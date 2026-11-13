@@ -7,8 +7,8 @@
 //  火柴：工作台 硫 1 + 木头 1 → 5 根，一根点一次
 //  打火机：工作台 黄铜 2 + 铁锭 1，拿着对装了石油的桶右键加满 50 次，一次点一次
 //  点着的火把（任务 66）：左键点炉子就着；拿火把左键点着着的炉子或篝火，火把又能烧 90 秒
-// 干木头：木头放在基地地上 120 秒变干木头（灶台、炉子 3 米内 30 秒）；远征砍的是湿的。
-        const FI = { drill: 15, ember: 60, flintP: 0.9, flintDrop: 0.15, matchN: 5, lighterN: 50, dry: 120, dryNear: 30, nearR: 3, emberFromFlame: 0.35 };
+// 干木头：木头放在基地地上 60 秒变干木头（灶台、炉子 3 米内 15 秒，任务 153 减半）；远征砍的是湿的。
+        const FI = { drill: 15, ember: 60, flintP: 0.9, flintDrop: 0.15, matchN: 5, lighterN: 50, dry: 60, dryNear: 15, nearR: 3, emberFromFlame: 0.35 };
         // 冒烟测试页（?notut=1）默认不用点火，免得几百处"直接调火候"的老检查全挂；IND95 关掉它测起火
         let IND_FIRE_FREE = /[?&]notut\b/.test(location.search);
         Object.assign(IND_ITEMS_RAW, {

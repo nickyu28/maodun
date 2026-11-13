@@ -200,6 +200,8 @@ async function openTab(chrome, url, opts) {
 
 // 关掉弹窗。介绍卡片要连排队一起清掉，光藏起来的话 introOpen 一直是 true，单人密室会一直停着
 // 注意：它把 introOpen 直接设成 false、清空排队，会盖住"卡片卡死"这类问题——测弹窗本身的检查（I1）不要用它
+// 任务 153 之后配方时间减半、升温加快；这些老检查测的是别的东西，进来先把时间和升温速度换回老数（新数字在 IND169 里测）
+const OLD_TIMES = `IND_RECIPES.forEach(function (r, i) { if (CK_TIME_OLD[i]) r.time = CK_TIME_OLD[i]; }); IND_COOK.stove.rate = 50; IND_COOK.furnace.rate = 50; IND_COOK.stone.rate = 50; IND_COOK.kiln.rate = 10; FI.dry = 120; FI.dryNear = 30;`;
 const HIDE = `document.getElementById('sys-modal').classList.add('hidden'); introQ.length = 0; introOpen = false; sysModalWait.length = 0;`;
 const MODAL = `(document.getElementById('sys-modal').classList.contains('hidden') ? null : document.getElementById('sys-modal-title').innerText)`;
 const CLICK_OK = `(function(){ let b = document.querySelector('#sys-modal-btns button'); if (b) b.click(); return !!b; })()`;
@@ -3219,7 +3221,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const recipe = JSON.parse(await T.eval(`JSON.stringify(['charcoal', 'coal', 'char'].map(function (k) { let r = IND_RECIPES.filter(function (q) { return q.in.ingot_fe === 1 && q.in[k] === 1 && Object.keys(q.in).length === 2; })[0]; return r ? [r.minT, r.time, r.cls, !!r.hard, JSON.stringify(r.out), IND_RECIPES.indexOf(r)] : null; }))`));
                 if (!recipe[0] || !recipe[1] || !recipe[2]) bad.push('缺配方 ' + JSON.stringify(recipe));
                 else if (JSON.stringify(recipe[0].slice(0, 5)) !== JSON.stringify(recipe[1].slice(0, 5)) || JSON.stringify(recipe[0].slice(0, 5)) !== JSON.stringify(recipe[2].slice(0, 5)) || recipe[0][0] !== 1100 || recipe[0][1] !== 60) bad.push('煤、焦炭的火候/时间/产出跟木炭不一样 ' + JSON.stringify(recipe));
@@ -5874,7 +5876,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else {
-                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; true;`);
                 // 背包、地上有不认识的东西（老档里删掉的、CK4 这种测试塞的）：烫锭那一步跳过，不报错（CI 上 CK4 挂过 "reading 'hot'"）
                 const unk = await T.eval(`(function(){ ind.bag.__nokey = 1; ind.base.ground.push({ k: '__nokey', x: 30, z: 30 }); try { indHotTick(0.1); return 'ok'; } catch (e) { return e.message; } finally { delete ind.bag.__nokey; ind.base.ground = ind.base.ground.filter(function (g) { return g.k !== '__nokey'; }); } })()`);
                 if (unk !== 'ok') bad.push('背包里有不认识的东西就报错 ' + unk);
@@ -6101,7 +6103,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else {
-                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 50; S.water = 50; S.temp = 37; S.hp = 100; true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} let S = ind.base.surv; S.food = 50; S.water = 50; S.temp = 37; S.hp = 100; true;`);
                 const cook = (items, secs) => T.eval(`(function(){ ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 500, fire: 1, temp: 200, cook: null }; indAdvance(${secs}); return JSON.stringify(ind.base.stove); })()`);
                 // 萝卜汤：19 秒还没好，21 秒好
                 await cook({ radish: 1, water_boiled: 1, salt: 1 }, 19);
@@ -6255,7 +6257,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else {
-                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; true;`);
                 const stoveSet = (items, fire, temp) => T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null }; true;`);
                 const near3 = (a, b) => Math.abs(a - b) <= 1.2;
                 const hn = (c, k) => (c.out[k] || 0) + (c.spout || []).filter((e) => e.k === k).length;   // 烫锭在出料槽里
@@ -6756,7 +6758,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else {
-                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; true;`);
                 const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
                 const stoveSet = (items, fire, temp, spout) => T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null, spout: ${JSON.stringify(spout || [])} }; true;`);
                 // 冶炼的烫锭进出料槽
@@ -6840,7 +6842,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else {
-                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; window.__oldFlash = indFlash; indFlash = function (t) { __fl.push(t); }; true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; window.__oldFlash = indFlash; indFlash = function (t) { __fl.push(t); }; true;`);
                 const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
                 const stoveSet = (items, fire, temp) => T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null, spout: [] }; window.__fl = []; true;`);
                 // 名字
@@ -6996,7 +6998,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else {
-                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; window.__oldFlash = indFlash; indFlash = function (t) { __fl.push(t); }; true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; window.__oldFlash = indFlash; indFlash = function (t) { __fl.push(t); }; true;`);
                 const J = (e) => T.eval(`JSON.stringify(${e})`).then(JSON.parse);
                 // ── 篝火出灰 ──
                 await T.eval(`ind.base.ground = []; ind.base.fires = [{ x: 14, z: 8, fuel: 120, ashT: 0 }]; ind.fireDirty = true; indAdvance(119); true;`);
@@ -8142,9 +8144,9 @@ async function enterExit(tab, key) {
                 if (r.out.b_so2 !== 1) bad.push('石炉做化学配方（硫 + 氧气 → 二氧化硫） ' + JSON.stringify(r));
                 r = await run({ sand: 2, ash: 1 }, 'coal', 3, 50);
                 if (r.out.glass_plate !== 1) bad.push('石炉烧玻璃板 ' + JSON.stringify(r));
-                // 规格跟灶台一样：升温每秒 50、最高 1200、风箱 1600、一批 4 份
+                // 规格跟灶台一样：升温每秒 100（任务 153）、最高 1200、风箱 1600、一批 4 份
                 const spec = await J(`{ rate: indCookK('stone').rate, burn: indCookK('stone').burn, only: indCookK('stone').only, batch: indCookK('stone').batch, st: [indCookK('stove').rate, indCookK('stove').burn], fire3: indFireDef('stone', 3).t, fire4: indFireDef('stone', 4).t }`);
-                if (spec.rate !== 50 || spec.burn !== 1 || spec.only || spec.batch.food !== 4 || spec.fire3 !== 1200 || spec.fire4 !== 1600) bad.push('石炉规格跟灶台一样 ' + JSON.stringify(spec));
+                if (spec.rate !== 100 || spec.burn !== 1 || spec.only || spec.batch.food !== 4 || spec.fire3 !== 1200 || spec.fire4 !== 1600) bad.push('石炉规格跟灶台一样 ' + JSON.stringify(spec));
                 // 石油：硬核用漏斗、悠闲直接倒
                 await T.eval(`(function(){ let C = ind.base.cookers[0]; C.fuel = 0; C.funnel = { ty: 'brick', oil: 0 }; ind.bag = { oil: 1 }; })(); ckPourOil('oil', { kind: 'funnel', o: indCookById(${cid}) }); indAdvance(2); true;`);
                 if (!(await T.eval(`ind.base.cookers[0].fuel > 15 && ind.base.cookers[0].funnel.oil < 250`))) bad.push('石炉接进料漏斗烧石油');
@@ -8253,7 +8255,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 // 盐点数量：改前（给 1～3、权重 3）改后（给 4～8、权重 5）各数 12 张图
                 const st = await J(`(function(){ let seeds = []; for (let i = 1; i <= 12; i++) seeds.push(i * 7919);
@@ -9026,7 +9028,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const kiln = (ty, items, secs) => J(`(function(){ ind.base.rule = 'hard'; ind.base.cookers = ${ty === 'kiln' ? "[{ id: 5, ty: 'kiln', x: 20, z: 10, items: " + JSON.stringify(items) + ", out: {}, fuel: 900, fire: 3, temp: 500, cook: null, spout: [] }]" : '[]'};
                     ${ty === 'kiln' ? '' : "ind.base.stove = { items: " + JSON.stringify(items) + ", out: {}, fuel: 900, fire: 3, temp: 500, cook: null, spout: [] };"}
@@ -9350,7 +9352,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const kiln = (id, x, z) => `{ id: ${id}, ty: 'kiln', x: ${x}, z: ${z}, items: { ore_sn: 1, charcoal: 1 }, out: {}, fuel: 900, fire: 3, temp: 1200, cook: null, spout: [], spoutTy: 'brick' }`;
                 const dev = (id, ty, x, z, o) => JSON.stringify(Object.assign({ id: id, ty: ty, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}));
@@ -9505,7 +9507,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const cook = (items, fire, temp, secs, boost) => J(`(function(){ ind.base.rule = 'hard'; window.__ob = window.__ob || indElecBoost; indElecBoost = ${boost ? 'function () { return true; }' : 'window.__ob'}; ind.base.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: ${JSON.stringify(items)}, out: {}, fuel: 9000, fire: ${fire}, bellows: true, blow: 1e6, temp: ${temp}, cook: null, spout: [], spoutTy: 'brick' }]; indAdvance(${secs}); let c = ind.base.cookers[0], h = {}; c.spout.forEach(function (e) { h[e.k] = (h[e.k] || 0) + 1; }); Object.keys(c.out).forEach(function (k) { h[k] = (h[k] || 0) + c.out[k]; }); indElecBoost = window.__ob; return { hot: h, items: c.items, temp: c.temp }; })()`);
                 for (const red of ['charcoal', 'coal', 'char']) {
@@ -9945,7 +9947,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} window.__fl = []; indFlash = function (t) { __fl.push(t); }; true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 // 粉碎机：2 小麦 → 2 面粉
                 let r = await J(`(function(){ ind.base.devs = [{ id: 1, ty: 'bank', x: -20, z: 4, bats: 8, u: 1440, on: true, ft: 20, st: {} }, { id: 2, ty: 'crusher', x: -20, z: 0, bats: 0, u: 0, on: true, ft: 20, st: { wheat: 4 } }]; ind.base.wires = [[1, 2]]; indAdvance(21); return indDev(2).st; })()`);
@@ -10053,7 +10055,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const dev = (id, ty, x, z, o) => JSON.stringify(Object.assign({ id: id, ty: ty, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} }, o || {}));
                 // 电炉：16 节电池组（24 V）→ 电炉，3 米内的小熔炉（没点火，任务 154 之后钢只要 1100°C，这里测电炉自己把炉子顶热）炼钢；大窑也行
@@ -10386,7 +10388,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; let B = ind.base; B.clAge = {}; B.clHint = false; B.chests = []; B.devs = [];
                     ${body} } finally { blazeFlash = bf; } })()`);
@@ -10488,7 +10490,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const breed = (rods, temp, ctl, secs) => J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; let d = { id: ++ind.base.dseq, ty: 'reactor', x: 20, z: 20, on: true, rods: ${rods}, ctl: ${ctl}, T: ${temp}, melt: 0, st: {} }; ind.base.devs = [d];
                     for (let i = 0; i < ${secs} / 10; i++) { d.T = ${temp}; IND_DEV_TICK.reactor(d, 10); } return { rods: d.rods.map(function (r) { return r.dep ? 'dep' + Math.floor(r.b * 100) : r.irr ? 'irr' : r.spent ? 'spent' : 'fuel'; }).join(',') }; })()`);
@@ -10561,7 +10563,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoTrip(2024); ind.base.rule = 'hard'; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.bag = {}; ind.tap = null; indTeleport(0, 0);
                     let tree = function (t) { let o = { key: 'wood', tree: t, x: 1, z: 0, y: 0.5, n: 4, seed: 'seed_wheat', dead: false }; ind.nodes.push(o); return o; }, aim = function (o) { return { kind: 'node', o: o }; };
@@ -10651,7 +10653,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; let B = ind.base; B.devs = []; B.wires = []; B.ground = []; B.cookers = []; ind.bag = {}; indPanelClose(); indTeleport(-30, 20);
                     let cook = function (ty) { let c = Object.assign({ id: ++B.cseq, ty: ty, x: 5, z: 5 }, ckNewState()); B.cookers.push(c); return c; };
@@ -10706,7 +10708,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); IND_MB_AUTO = true; true;`);   // 测试页默认不自己刷怪，这里打开
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} IND_MB_AUTO = true; true;`);   // 测试页默认不自己刷怪，这里打开
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const run = (body, rule) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { ind.base.rule = '${'${rule}'}' || 'hard'; ind.base.animals = []; ind.base.ach = {}; ind.dead = null; ind.hurt = null; let S = ind.base.surv; S.hp = 100; S.temp = 37; S.food = 80; S.water = 80; ind.bag = {}; ind.base.dura = {}; ind.base.duraHalf = {}; delete ind.base.poisonK;
                     let day = function () { ind.base.clock = IND_DAY * 3 + 300; }, night = function () { ind.base.clock = IND_DAY * 3 + IND_DUSK + 100; };
@@ -11082,7 +11084,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; B.pond = []; B.wells = []; B.devs = []; B.animals = []; delete B.poolW; delete B.wellDig; ind.bag = {}; ind.ch = null; ind.fishing = null; ind.fnet = null; indPanelClose();
                     let cell = function (i, j, w) { let c = { i: i, j: j, w: w || 0 }; B.pond.push(c); return c; }, shovel = Object.keys(TL_TOOL).filter(function (k) { return TL_TOOL[k].kind === 'shovel'; })[0];
@@ -11181,7 +11183,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 let r = await J(`(function(){ let anc = 0, mtn = 0, cas = 0, gv = [], bad = 0; for (let s = 1; s <= 24; s++) { indGoTrip(s * 7919); ind.nodes.forEach(function (o) { if (o.key !== 'clay_fire') return; let bm = indBiome(ind.map, o.x, o.z); if (bm === 'ancient') anc++; else if (bm === 'mountain') mtn++; gv.push(o.n); }); }
                     ind.base.rule = 'casual'; for (let s = 1; s <= 12; s++) { indGoTrip(s * 7919); ind.nodes.forEach(function (o) { if (o.key === 'clay_fire') cas++; }); } ind.base.rule = 'hard';
@@ -11478,7 +11480,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const run = (body) => J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.cookers = []; ind.bag = {}; indPanelClose(); ind.carve = null;
                     let cook = function (ty) { let c = Object.assign({ id: ++B.cseq, ty: ty, x: 5, z: 5 }, ckNewState()); B.cookers.push(c); return c; }, ent = function (c) { return indCooks().filter(function (x) { return x.id === c.id; })[0]; }, tick = function (c, secs, T0) { let e = ent(c); for (let i = 0; i < secs; i++) { if (T0) c.temp = T0; indCookTick(e, 1); } };
@@ -11804,7 +11806,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else {
-                await T.eval(`${HIDE} indSetRule('casual'); ind.base.surv.food = 100; ind.base.surv.water = 100; ind.base.surv.temp = 37; true;`);
+                await T.eval(`${HIDE} indSetRule('casual'); ${OLD_TIMES} ind.base.surv.food = 100; ind.base.surv.water = 100; ind.base.surv.temp = 37; true;`);
                 // 做桶、做剪刀（悠闲就有）
                 const bi = `IND_CRAFT.findIndex(function (r) { return r.out === 'bucket'; })`, si = `IND_CRAFT.findIndex(function (r) { return r.out === 'shears'; })`;
                 await T.eval(`ind.bag = {}; indBagAdd('wood', 3); indCraft(${bi}); true;`);
@@ -11907,7 +11909,7 @@ async function enterExit(tab, key) {
                 if ((await T.eval(`ind.base.stove.out.bake_potato || 0`)) !== 4 || (await T.eval(`ind.base.stove.items.potato`)) !== 2) bad.push('烤土豆一炉 4 个不对 ' + await T.eval(`JSON.stringify(ind.base.stove)`));
                 await T.eval(`indFlash = window.__oldFlash; ind.base.pot = false; indBagAdd('brass', 0); true;`);
                 // 黄铜大锅（装在灶台上，存档）和铃铛（30 米内的动物走过来）
-                await T.eval(`indSetRule('hard'); ind.base.rule = 'hard'; ind.bag = {}; indBagAdd('brass', 3); indCraft(IND_CRAFT.findIndex(function (r) { return r.pot; })); true;`);
+                await T.eval(`indSetRule('hard'); ${OLD_TIMES} ind.base.rule = 'hard'; ind.bag = {}; indBagAdd('brass', 3); indCraft(IND_CRAFT.findIndex(function (r) { return r.pot; })); true;`);
                 if (!(await T.eval(`ind.base.pot === true && !ind.bag.brass`))) bad.push('做不出黄铜大锅 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 await T.eval(`ind.bag = {}; indBagAdd('brass', 3); true;`);
                 if (await T.eval(`indCraft(IND_CRAFT.findIndex(function (r) { return r.pot; }))`)) bad.push('黄铜大锅能装两次');
@@ -12831,7 +12833,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; B.cookers = []; indPanelClose(); ind.bag = {};
                     let mk = function (n) { let c = Object.assign({ id: ++B.cseq, ty: 'stone', x: 6, z: 6 }, ckNewState(), { spout: [], spoutTy: 'brick', fuel: 9999, fire: 2, temp: 600, n: n }); B.cookers.push(c); return indCooks().filter(function (x) { return x.id === c.id; })[0]; };
@@ -13477,7 +13479,7 @@ async function enterExit(tab, key) {
             await T.eval(`indEnter(); true;`);
             if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
             else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                await T.eval(`${HIDE} indSetRule('hard'); ${OLD_TIMES} true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 let r = await J(`(function(){ let o = {}; ['charcoal', 'coal', 'char'].forEach(function (k) { let a = IND_RECIPES.filter(function (q) { return q.in.ore_fe === 1 && q.in[k] === 1; })[0], b = IND_RECIPES.filter(function (q) { return q.in.ingot_fe === 1 && q.in[k] === 1 && q.out.hot_steel; })[0]; o[k] = [a && a.minT, b && b.minT, b && b.time]; }); o.ar = IND_RECIPES.filter(function (q) { return q.out.hot_steel && q.in.b_ar; })[0].minT; o.melt = [CT_METAL.ingot_fe.melt, CT_METAL.steel.melt]; return o; })()`);
                 if (!(['charcoal', 'coal', 'char'].every(function (k) { return r[k][0] === 1100 && r[k][1] === 1100 && r[k][2] === 60; }) && r.ar === 1100 && r.melt.join() === '1538,1550')) bad.push('炼铁炼钢 1100°C、钢 60 秒、保护气炼钢也 1100、熔池还是 1538 和 1550 ' + JSON.stringify(r));
@@ -13659,6 +13661,29 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND168 蒸汽发电机自带炉膛：加柴加水点火发 12 V、没水没柴停、4 米取暖、收起还东西、老的照常', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND169')) {
+            // IND169 烧制提速（任务 153）：配方时间减半最低 5 秒、钢 20 秒；冷灶台 13 秒到 1200°C、大窑 40 秒；晾干 60 和 15 秒；老存档进行中的进度按比例换算
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let f = function (o) { return IND_RECIPES.filter(function (q) { return q.out[o] === 1 && !q.in.b_n2 && !q.in.b_ar; }); }; let o = {}; ['brick', 'hot_fe', 'hot_steel', 'hot_cu', 'cactus_roast', 'cheese', 'charcoal'].forEach(function (k) { o[k] = f(k).map(function (q) { return q.time; }); }); o.rate = [IND_COOK.stove.rate, IND_COOK.furnace.rate, IND_COOK.stone.rate, IND_COOK.kiln.rate]; o.dry = [FI.dry, FI.dryNear]; o.min = Math.min.apply(null, IND_RECIPES.map(function (q) { return q.time; })); return o; })()`);
+                if (!(r.brick[0] === 10 && r.hot_fe.every(function (t) { return t === 15; }) && r.hot_steel.every(function (t) { return t === 20; }) && r.hot_cu[0] === 10 && r.cactus_roast[0] === 5 && r.cheese[0] === 45 && r.charcoal[0] === 15 && r.min >= 5)) bad.push('配方时间减半、最低 5 秒、钢 20 秒 ' + JSON.stringify(r));
+                if (!(r.rate.join() === '100,100,100,30' && r.dry.join() === '60,15')) bad.push('升温速度和晾干时间 ' + JSON.stringify(r));
+                const heat = (ty, secs) => J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.rule = 'hard'; ind.base.off.stove = false; ind.base.cookers = []; ${ty === 'stove' ? "ind.base.stove = Object.assign(ckNewState(), { fuel: 9999, fire: 3, temp: 20 }); let C = ind.base.stove;" : "ind.base.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'kiln', x: 20, z: 10, fuel: 9999, fire: 3, temp: 20 })]; let C = ind.base.cookers[0];"} indAdvance(${secs}); return C.temp; })()`);
+                let t1 = await heat('stove', 13), t2 = await heat('kiln', 40);
+                if (!(t1 >= 1195 && t2 >= 1195)) bad.push('冷灶台 13 秒、大窑 40 秒到 1200°C ' + t1 + ' / ' + t2);
+                r = await J(`(function(){ let i = IND_RECIPES.findIndex(function (q) { return q.out.brick === 1; }); let b = { ver: 12, rule: 'hard', stove: { items: { clay: 2 }, fuel: 100, fire: 3, temp: 900, cook: { i: i, t: 18, burn: 0, n: 1 } } }; let f = indFixBase(b); let t = f.stove.cook && f.stove.cook.t; let f2 = indFixBase(JSON.parse(JSON.stringify(f))); return [Math.round(t * 10) / 10, f2.stove.cook && Math.round(f2.stove.cook.t * 10) / 10]; })()`);
+                if (r.join() !== '9,9') bad.push('老存档进度 18 / 20 换成 9 / 10，再读一次不再换 ' + r.join());
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND169 烧制提速：时间减半钢 20 秒、灶台 13 秒大窑 40 秒到 1200°C、晾干 60 和 15、老存档进度按比例', bad.length === 0, bad.join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }

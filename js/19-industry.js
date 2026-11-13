@@ -370,10 +370,10 @@
         // 灶台、小熔炉、大窑都是"炉子"：rate 温度每秒变几度，burn 燃料烧得多快（1 = 灶台），batch 一炉每类配方最多几份，only 只做哪类配方，top 大火的温度
         // 小熔炉：只做冶炼，大火最高 1300°C，燃料烧 2 倍久，一次炼 2 份；大窑（占 3×3 米）：灶台所有配方，吃的 16 份、砖玻璃木炭 10 份、冶炼 6 份（只给硬核），温度每秒只变 10°C，燃料烧 3 倍久
         const IND_COOK = {
-            stove: { name: '灶台', rate: 50, burn: 1, r: 1.5, col: 0xb71c1c },
-            furnace: { name: '小熔炉', rate: 50, burn: 0.5, only: 'smelt', top: 1300, batch: { smelt: 2 }, r: 1.2, size: [1.6, 1.4, 1.6], col: 0x6d4c41 },
-            stone: { name: '石炉', rate: 50, burn: 1, r: 1.5, size: [2.2, 1.0, 1.5], col: 0x9e9e9e },   // 8 块石头合成：规格跟灶台一样，什么都能做，燃料不限
-            kiln: { name: '大窑', rate: 10, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 6, chem: 6 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
+            stove: { name: '灶台', rate: 100, burn: 1, r: 1.5, col: 0xb71c1c },
+            furnace: { name: '小熔炉', rate: 100, burn: 0.5, only: 'smelt', top: 1300, batch: { smelt: 2 }, r: 1.2, size: [1.6, 1.4, 1.6], col: 0x6d4c41 },
+            stone: { name: '石炉', rate: 100, burn: 1, r: 1.5, size: [2.2, 1.0, 1.5], col: 0x9e9e9e },   // 8 块石头合成：规格跟灶台一样，什么都能做，燃料不限
+            kiln: { name: '大窑', rate: 30, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 6, chem: 6 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
         };
         const IND_COOK_CAP = 6, IND_TILE_CAP = 100, IND_SPOUT_CAP = 10;   // 出料槽最多 10 块   // 灶台上最多放几种
         const IND_RECIPES = [
