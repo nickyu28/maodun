@@ -33,7 +33,7 @@
             IND_CRAFT.forEach(function (r) { if (r.hard && !r.fix && !r.poison && /^(knife|axe|pick|shovel|shears)_bronze$/.test(r.out) && r.in.bronze) r.off = true; });
         })();
         function ctMeltUnit(S) {   // 炉膛里下一样能化的：{ k 物品, m 金属, n 份 }
-            let u = null; Object.keys(S.items).forEach(function (k) { if (u || !(S.items[k] > 0)) return; if (CT_METAL[k]) u = { k: k, m: k, n: 1 }; else { let q = typeof rpMeltOf === 'function' ? rpMeltOf(k) : null; if (q) u = { k: k, m: q.m, n: q.n }; } });
+            let u = null; Object.keys(S.items).forEach(function (k) { if (u || !(S.items[k] > 0)) return; if (CT_METAL[k]) { if (CT_PART_METAL[k]) u = { k: k, m: k, n: 1 }; } else { let q = typeof rpMeltOf === 'function' ? rpMeltOf(k) : null; if (q && CT_PART_METAL[q.m]) u = { k: k, m: q.m, n: q.n }; } });
             return u;
         }
         function ctMetalOf(S) { let m = null; Object.keys(S.items).forEach(function (k) { if (!m && CT_METAL[k] && S.items[k] > 0) m = k; }); return m; }
@@ -41,6 +41,7 @@
         // 每个炉子每帧（ckTick 里调）：化锭、凝固、往模具里流、零件凉
         function ctTick(c, dt) {
             if (!indHard()) return;
+            if (CT_OLDPOOL) { indFlash('熔池里的' + CT_OLDPOOL + '凝成锭了'); CT_OLDPOOL = ''; }
             let S = c.C, P = S.pool;
             if (P && P.n > 0 && S.temp < CT_METAL[P.m].melt) {   // 凉到熔点以下：凝成烫锭（槽接得住进槽，不然留在炉膛）
                 ctSolid(S, CT_METAL[P.m].hot, P.n); S.pool = null; P = null; S.flowT = 0;
@@ -48,7 +49,7 @@
             }
             let U = !S.cook ? ctMeltUnit(S) : null, m = U && U.m;   // 锭化 1 份；坏了的金属工具化几份（任务 78，19-industry-repair.js）
             if (m && S.temp >= CT_METAL[m].melt && indCookFind(ckPool(S), indCookK(c.ty, S), undefined, S.items) < 0) {
-                if (P && P.m !== m) { if (!S.ctWarn) { S.ctWarn = 1; indFlash('熔池里是' + CT_METAL[P.m].n + '，先倒完'); } }
+                if (P && P.m !== m) { if (!S.ctWarn) { S.ctWarn = 1; indFlash('熔池里是' + CT_METAL[P.m].n + '，先倒完，点倒出来'); } }
                 else if (!P || P.n + U.n <= ctCap(c)) {
                     S.meltT = (S.meltT || 0) + dt;
                     if (S.meltT >= CT.meltT) { S.meltT = 0; S.items[U.k]--; if (S.items[U.k] <= 0) delete S.items[U.k]; S.pool = P = { m: m, n: (P ? P.n : 0) + U.n }; S.ctWarn = 0; if (ind.panel === 'stove') ind.panelDirty = true; }
@@ -70,6 +71,12 @@
             if (ctNeedNi(M, { m: P.m })) { S.items.ingot_ni--; if (S.items.ingot_ni <= 0) delete S.items.ingot_ni; }
             M.fill = 0; M.part = 'part_' + M.s + '_' + P.m; M.t = ckSpoutDef(S).cool;
             if (ind.panel === 'stove') ind.panelDirty = true;
+        }
+        // 任务 148：倒出来。熔池里的金属凝成烫锭（槽接得住进槽，不然留炉膛），熔池清空，不丢
+        function ctPour() {
+            let c = indCookCur(), S = c && c.C, P = S && S.pool; if (!P) return;
+            ctSolid(S, CT_METAL[P.m].hot, P.n); S.pool = null; S.meltT = 0; S.flowT = 0; S.ctWarn = 0; if (S.mold) S.mold.fill = 0;
+            indFlash('倒出来了，凝成 ' + P.n + ' 块' + CT_METAL[P.m].n + '锭'); indSave(); indPanelStove();
         }
         // n 块烫锭落下来：槽接得住且还有地方就进槽，不然留在炉膛（规则同冶炼出来的烫锭，任务 94）
         function ctSolid(S, h, n) { for (let i = 0; i < n; i++) { if (ckSpoutTakes(S, h) && S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: h, t: ckSpoutDef(S).cool }); else S.out[h] = (S.out[h] || 0) + 1; } }
@@ -136,7 +143,8 @@
         }
         function ctHtml(c) {
             if (!indHard()) return '';
-            let S = c.C, P = S.pool, M = S.mold, h = '<br>熔池：' + (P ? CT_METAL[P.m].n + ' ' + P.n + ' / ' + ctCap(c) + ' 份' : '空') + (S.meltT > 0 ? '　化锭 ' + Math.floor(S.meltT / CT.meltT * 100) + '%' : '');
+            let S = c.C, P = S.pool, M = S.mold, h = '<br>熔池：' + (P ? CT_METAL[P.m].n + ' ' + P.n + ' / ' + ctCap(c) + ' 份' : '空') + (S.meltT > 0 ? '　化锭 ' + Math.floor(S.meltT / CT.meltT * 100) + '%' : '') + (P ? '　<button style="' + IND_BTN + '" onclick="ctPour()">倒出来</button>' : '');
+            { let nm = Object.keys(S.items).filter(function (k) { return CT_METAL[k] && !CT_PART_METAL[k] && S.items[k] > 0 && S.temp >= CT_METAL[k].melt; }).map(function (k) { return CT_METAL[k].n + '锭'; }); if (nm.length) h += '<br><span style="color:#888">' + nm.join('、') + '不熔，当炉料</span>'; }
             if (M) h += '<br>模具：' + (M.f ? '耐火砖' : '') + CT_SHAPE[M.s].n + '（还能用 ' + M.dura + ' 次）' + (M.part ? '　' + indName(M.part) + (M.t > 0 ? ' 烫，还要 ' + Math.ceil(M.t) + ' 秒' : ' 凉了，左键出料槽取') : M.fill > 0 ? '　在流 ' + Math.floor(M.fill / CT_SHAPE[M.s].need * 100) + '%' : P && !CT_PART_METAL[P.m] ? '　<span style="color:#c62828">' + CT_METAL[P.m].n + '铸不了零件</span>' : '') + '　<button style="' + IND_BTN + '" onclick="ctMoldOut()">取下模具</button>';
             if (M && !M.part) { let pl = ctPlanTxt(c), w = ctWhy(c); if (pl) h += '<br>' + pl; if (w) h += '<br><span style="color:#c62828">' + w + '</span>'; }
             let ms = Object.keys(ind.bag).filter(function (k) { return /^mold_[a-z]+(_f)?$/.test(k) && CT_SHAPE[k.slice(5).replace(/_f$/, '')]; });
@@ -203,8 +211,11 @@
             if (cc) cc.style.transform = 'rotate(' + ctPos() * 360 + 'deg)';
             if (tt) tt.textContent = '雕' + (C.f ? '耐火砖' : '') + CT_SHAPE[C.s].n + '模具 ' + C.score + ' / ' + CT_SHAPE[C.s].cuts + (tlKind(indSel()) !== 'knife' ? '　拿上小刀' : '　红区按空格');
         }
+        // 任务 148：熔池里是没有零件的金属（锡、锌、铅、铜），老存档里被堵住的，读档时凝成烫锭放进炉膛，不丢
+        let CT_OLDPOOL = '';
         function ctFix(S) {
             if (S.pool && !(S.pool && CT_METAL[S.pool.m] && S.pool.n > 0)) S.pool = null; else if (S.pool) S.pool = { m: S.pool.m, n: indNum(S.pool.n, 1, 1, CT.capKiln) | 0 };
+            if (S.pool && !CT_PART_METAL[S.pool.m]) { let h = CT_METAL[S.pool.m].hot; if (!S.out || typeof S.out !== 'object') S.out = {}; S.out[h] = (S.out[h] || 0) + S.pool.n; CT_OLDPOOL = CT_METAL[S.pool.m].n; S.pool = null; S.meltT = 0; }
             if (S.mold && !(S.mold && CT_SHAPE[S.mold.s])) S.mold = null;
             else if (S.mold) { let M = S.mold; S.mold = { s: M.s, dura: indNum(M.dura, CT.q0, 1, 30) | 0 }; if (M.f) S.mold.f = true; if (M.part && IND_ITEMS_RAW[M.part]) { S.mold.part = M.part; S.mold.t = indNum(M.t, 0, 0, 600); } }
         }

@@ -13555,6 +13555,30 @@ async function enterExit(tab, key) {
             report('IND164 退出重进站在原地：位置朝向对、压在水池上挪开、老存档不报错、远征撤离仍放出口', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND165')) {
+            // IND165 熔池不收没用的金属（任务 148）：锡锭 300°C 不进熔池、面板写不熔当炉料；青铜和铁正常进；倒出来得到烫锭、熔池空；老存档里锡的熔池读档变烫锡锭
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const st = (items, temp, sp, pool) => `ind.base.rule = 'hard'; ind.base.stove = Object.assign(ckNewState(), { items: ${JSON.stringify(items)}, fuel: 9000, fire: 3, temp: ${temp}, spout: [], spoutTy: ${sp ? "'" + sp + "'" : 'null'}, pool: ${pool ? JSON.stringify(pool) : 'null'} }); ind.cookId = 'stove';`;
+                let r = await J(`(function(){ ${st({ ingot_sn: 1 }, 300)} cancelAnimationFrame(ind.raf); for (let i = 0; i < 20; i++) ctTick(indCookCur(), 1); let S = ind.base.stove; return { pool: S.pool, sn: S.items.ingot_sn, html: ctHtml(indCookCur()) }; })()`);
+                if (!(r.pool === null && r.sn === 1 && /锡锭不熔，当炉料/.test(r.html))) bad.push('锡锭不进熔池、面板写当炉料 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${st({ bronze: 1, ingot_sn: 1 }, 1000)} for (let i = 0; i < 12; i++) ctTick(indCookCur(), 1); let S = ind.base.stove, a = S.pool && S.pool.m; ${st({ ingot_fe: 1 }, 1600)} for (let i = 0; i < 12; i++) ctTick(indCookCur(), 1); return [a, ind.base.stove.pool && ind.base.stove.pool.m, ind.base.stove.items.ingot_sn]; })()`);
+                if (!(r[0] === 'bronze' && r[1] === 'ingot_fe')) bad.push('青铜和铁正常进熔池，锡不挡路 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${st({}, 1000, 'brick', { m: 'bronze', n: 3 })} ind.base.stove.mold = null; ctPour(); let S = ind.base.stove; return { pool: S.pool, spout: S.spout.length, html: (function(){ ind.base.stove.pool = { m: 'bronze', n: 2 }; return ctHtml(indCookCur()); })() }; })()`);
+                if (!(r.pool === null && r.spout === 3 && /倒出来/.test(r.html))) bad.push('倒出来：3 份变 3 块烫锭进槽、熔池空、面板有按钮 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.stove = Object.assign(ckNewState(), { pool: { m: 'ingot_sn', n: 5 }, spoutTy: null }); let f = indFixBase(b); return { pool: f.stove.pool, hot: f.stove.out.hot_sn }; })()`);
+                if (!(!r.pool && r.hot === 5)) bad.push('老存档锡熔池读档变 5 块烫锡锭 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND165 熔池不收锡：锡不进熔池当炉料、青铜铁正常、倒出来变烫锭、老存档锡熔池读档变锭', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
