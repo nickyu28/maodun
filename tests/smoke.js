@@ -11705,9 +11705,9 @@ async function enterExit(tab, key) {
                 r = await run(`let tip = []; ['b_n2', 'b_ne', 'b_ar', 'b_kr'].forEach(function (k) { indBagAdd(k, 1); }); return { e: [7, 10, 18, 36].map(function (z) { return !!B.elems[z]; }), names: [7, 10, 18, 36].map(indElemName).join(), tips: fl.filter(function (t) { return /元素表点亮了/.test(t); }).length };`);
                 if (!(r.e.join() === 'true,true,true,true' && r.names === '氮,氖,氩,氪' && r.tips === 4)) bad.push('拿到氮氖氩氪元素表点亮 ' + JSON.stringify(r));
                 const sm = async (items, secs) => { await T.eval(`ind.base.stove = Object.assign(ckNewState(), { items: ${JSON.stringify(items)}, fuel: 9000, fire: 4, bellows: true, blow: 1e6, temp: 1700, spout: [], spoutTy: null }); ind.cookId = 'stove'; indAdvance(${secs}); true;`); return J(`{ out: ind.base.stove.out, items: ind.base.stove.items }`); };
-                const sa = await sm({ ingot_fe: 1, charcoal: 1, b_n2: 1 }, 24), sb = await sm({ ingot_fe: 1, charcoal: 1 }, 24), sc = await sm({ ingot_fe: 1, coal: 1, b_ar: 1 }, 24);
+                const sa = await sm({ ingot_fe: 1, charcoal: 1, b_n2: 1 }, 15), sb = await sm({ ingot_fe: 1, charcoal: 1 }, 15), sc = await sm({ ingot_fe: 1, coal: 1, b_ar: 1 }, 15);
                 r = { sa: sa, sb: sb, sc: sc };
-                if (!(sa.out.hot_steel === 1 && sa.out.bottle === 1 && !sb.out.hot_steel && sc.out.hot_steel === 1 && sc.out.bottle === 1)) bad.push('带氮气／氩气炼钢 24 秒出钢还空瓶、没带 24 秒还没好 ' + JSON.stringify(r));
+                if (!(sa.out.hot_steel === 1 && sa.out.bottle === 1 && !sb.out.hot_steel && sc.out.hot_steel === 1 && sc.out.bottle === 1)) bad.push('带氮气／氩气炼钢 15 秒出钢还空瓶、没带 15 秒还没好 ' + JSON.stringify(r));
                 r = await run(`indBagAdd('b_n2', 1); let f = { x: 3, z: 3, fuel: 80 }; B.fires = [f]; let a = asuFire('b_n2', { kind: 'fire', o: f }); let wrong = asuFire('b_ar', { kind: 'fire', o: f });
                     ind.bag = { bulb_dead: 1, battery_li: 1, b_ar: 1 }; let i = IND_CRAFT.findIndex(function (q) { return q.out === 'bulb_ar'; }); indCraft(i); let made = JSON.stringify(Object.keys(ind.bag).sort()); B.wear.head = 'bulb_ar'; let dr = cvBulbDraw(); B.wear.head = 'bulb'; let dr1 = cvBulbDraw();
                     return { a: a, fuel: f.fuel, bottle: ind.bag.bottle, wrong: wrong, made: made, dr: dr, dr1: dr1 };`);
