@@ -3912,7 +3912,11 @@
         window.addEventListener('keydown', function (e) {
             // chat-input 自己的回车/Esc 不能被这条总闸拦掉，不然 chatMode===2
             // 那条分支永远走不到 —— 这就是「聊天栏发不出去」的病根。
-            if (e.target.tagName === 'INPUT' && e.target.id !== 'chat-input') return;
+            if (e.target.tagName === 'INPUT' && e.target.id !== 'chat-input') {
+                // 只有真的在打字的输入框才拦；单选框、复选框、滑块（大厅里点过的"AI 补齐队友"、难度之类）停在上面会吞掉 E／WASD，背包打不开
+                if (inputTakesTyping(e.target)) return;
+                if (isPlaying) e.target.blur();
+            }
             let code = e.keyCode; let keyStr = e.key.toLowerCase();
 
             if (chatMode === 2) {
@@ -3985,6 +3989,15 @@
             }
         });
         window.addEventListener('keyup', function (e) { let k = e.key.toLowerCase(); keys[k] = false; moveKeyUp(k); });
+        // 按着的键松开时窗口已经没焦点（切走、弹出系统窗口、锁鼠标丢了），keyup 到不了页面，那个键就一直算按着——人物停不下来、再按也没用。失焦、页面隐藏时全部松开。
+        function inputTakesTyping(el) { let t = (el.type || 'text').toLowerCase(); return !(t === 'radio' || t === 'checkbox' || t === 'range' || t === 'button' || t === 'submit' || t === 'color'); }
+        function releaseAllKeys() {
+            Object.keys(keys).forEach(function (k) { keys[k] = false; });
+            moveHeld = { arrow: {}, letter: {} };
+            tMove.x = 0; tMove.y = 0;
+        }
+        window.addEventListener('blur', releaseAllKeys);
+        document.addEventListener('visibilitychange', function () { if (document.hidden) releaseAllKeys(); });
 
         // 方向键跟 WASD 一样能走：所有模式读的都是 keys['w'/'a'/'s'/'d']，这里把方向键映射过去。
         // 两边分开记，松开其中一个不会把另一个还按着的也算成松开。

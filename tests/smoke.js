@@ -12980,6 +12980,34 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND149 成就关系图：有线、隐藏的？？规则、新成就逐个触发、主线一条链、老存档补发、总数算法', bad.length === 0, bad.join(' / '));
         }
+        if (want('KB1')) {
+            // KB1 按键卡住（化学寻宝队有人报：一直往前走停不下来、背包打不开）：焦点停在大厅的单选框／复选框上，进局后 E 照样开背包；按着 W 时窗口失焦（keyup 到不了页面），回来人物不会自己往前走；文字输入框里打字还是不触发游戏键
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`gState.lab = { box: { bulb: 1, bat: 3, switch: 1 } }; gState.modeIntroShown = { hunt: 1 }; document.querySelector('input[name=map_diff]').focus(); true;`);
+            await T.eval(`${HIDE} chemHuntStart(); true;`);
+            if (!(await until(T, `isPlaying && typeof chem !== 'undefined' && chem && chem.on`, 30000))) bad.push('化学寻宝队没开起来');
+            else {
+                const key = async (k, code, vk, type) => { await T.send('Input.dispatchKeyEvent', { type: type || 'rawKeyDown', key: k, code, windowsVirtualKeyCode: vk }); };
+                await T.eval(`${HIDE} gState.backpackOpen = false; document.querySelector('input[name=map_diff]').focus(); true;`);
+                await key('e', 'KeyE', 69); await key('e', 'KeyE', 69, 'keyUp');
+                if (!(await T.eval(`gState.backpackOpen`))) bad.push('焦点在单选框上，E 没打开背包');
+                await T.eval(`gState.backpackOpen = false; document.getElementById('backpack-overlay-page').classList.add('hidden'); true;`);
+                await key('w', 'KeyW', 87);
+                if (!(await until(T, `keys['w'] === true`, 3000))) bad.push('按下 W 没记上');
+                await T.eval(`window.dispatchEvent(new Event('blur')); true;`);
+                if (await T.eval(`!!keys['w'] || !!moveHeld.letter['w']`)) bad.push('窗口失焦后 W 还算按着');
+                await key('w', 'KeyW', 87, 'keyUp');
+                await T.eval(`(function(){ let i = document.createElement('input'); i.id = 'kb1-text'; i.type = 'text'; i.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;'; document.body.appendChild(i); i.focus(); })(); true;`);
+                if (!(await T.eval(`document.activeElement && document.activeElement.id === 'kb1-text'`))) bad.push('测试用的输入框没拿到焦点');
+                await T.eval(`gState.backpackOpen = false; true;`);
+                await key('e', 'KeyE', 69); await key('e', 'KeyE', 69, 'keyUp');
+                if (await T.eval(`gState.backpackOpen`)) bad.push('文字输入框里打字也触发了 E');
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('KB1 按键卡住：焦点在单选框上 E 照样开背包、窗口失焦松开 W、文字框里打字不触发', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (ONLY || (SHARD && SHARD.i !== 1)) throw new Error('ONLY_DONE');
 
