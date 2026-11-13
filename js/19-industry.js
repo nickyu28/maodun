@@ -42,7 +42,7 @@
         const IND_BASE = { x: 30, z: 22.5, x0: -30, x1: 30, z0: -22.5, z1: 22.5 };          // 基地半宽、半深（60 × 45 米）
         const IND_FIELD = { x0: -28, x1: -6, z0: -18, z1: 18, tile: 2 };   // 农田（基地左边），2 米一格
         const IND_MAP = 520, IND_K = 3, IND_ZOOM = Math.sqrt(3);   // 远征地图半宽（1040 × 1040 米，任务 92：面积约 3 倍）；数量 × IND_K，群系噪声放大 IND_ZOOM 倍（群系面积约 3 倍）
-        const IND_BAG_SLOTS = 24, IND_STACK = 99, IND_CHEST_SLOTS = 30;        // 背包 24 格，每格最多 99 个，同一种能占多格；新做的箱子 30 格，原来那个仓库箱不限
+        const IND_BAG_SLOTS = 36, IND_STACK = 99, IND_CHEST_SLOTS = 30;   // 任务 146：基础背包 24 → 36 格；便宜量大的原料每格 200（物品自己的 stack），别的 99        // 背包 24 格，每格最多 99 个，同一种能占多格；新做的箱子 30 格，原来那个仓库箱不限
         const IND_EYE = 1.8;
         const IND_CAM = { back: 4.4, up: 1.2 };
         // 时间：一天 1200 秒（白天 900、夜里 300）；生存值按"每秒"算
@@ -668,15 +668,16 @@
 
         // ── 背包（24 格，每格最多 99，同一种能占多格）──
         // ind.bag 是 { 物品: 总数 }，格子是算出来的：每种按 99 一格切开，按放进来的先后排
-        function indSlotsOf(B) { let n = 0; Object.keys(B).forEach(function (k) { n += Math.ceil(B[k] / IND_STACK); }); return n; }
+        function indStackOf(k) { let d = IND_ITEMS[k]; return d && d.stack || IND_STACK; }   // 这种东西一格最多放几个（任务 146）
+        function indSlotsOf(B) { let n = 0; Object.keys(B).forEach(function (k) { n += Math.ceil(B[k] / indStackOf(k)); }); return n; }
         // 往 B（cap 格，0 = 不限）里最多还能放几个 k
         function indFits(B, cap, k, n) {
             if (!cap) return n;
             let c = B[k] || 0, free = cap - indSlotsOf(B);
-            return Math.max(0, Math.min(n, (Math.ceil(c / IND_STACK) + free) * IND_STACK - c));
+            let st = indStackOf(k); return Math.max(0, Math.min(n, (Math.ceil(c / st) + free) * st - c));
         }
         // 不认识的物品 key 跳过（任务 61）
-        function indSlots() { let L = []; Object.keys(ind.bag).forEach(function (k) { if (!IND_ITEMS[k]) return; let c = ind.bag[k]; while (c > 0) { L.push({ k: k, n: Math.min(IND_STACK, c) }); c -= IND_STACK; } }); return L; }
+        function indSlots() { let L = []; Object.keys(ind.bag).forEach(function (k) { if (!IND_ITEMS[k]) return; let c = ind.bag[k], st = indStackOf(k); while (c > 0) { L.push({ k: k, n: Math.min(st, c) }); c -= st; } }); return L; }
         function indBagAdd(k, n) {
             if (IND_ELEM_OF[k] && ind.base && !ind.base.elems[IND_ELEM_OF[k]]) { ind.base.elems[IND_ELEM_OF[k]] = 1; indFlash('元素表点亮了：' + indElemName(IND_ELEM_OF[k])); }
             let B = ind.bag, take = indFits(B, indBagSlots(), k, n);
@@ -3354,7 +3355,7 @@
         function indChestCur() { let C = ind.base.chests; if (typeof ind.boxId === 'string') { let f = clFridgeOf(ind.boxId); if (f) return f; } return C.filter(function (c) { return c.id === ind.boxId; })[0] || indBoxTarget(); }
         function indChestCap(c) { return c.big ? 0 : IND_CHEST_SLOTS; }
         // 格子：{ 物品: 总数 } 按 99 一格切开（和背包一样）
-        function indSlotsIn(B) { let L = []; Object.keys(B).forEach(function (k) { let c = B[k]; while (c > 0) { L.push({ k: k, n: Math.min(IND_STACK, c) }); c -= IND_STACK; } }); return L; }
+        function indSlotsIn(B) { let L = []; Object.keys(B).forEach(function (k) { let c = B[k], st = indStackOf(k); while (c > 0) { L.push({ k: k, n: Math.min(st, c) }); c -= st; } }); return L; }
         const IND_X_BTN = 'margin-left:4px;padding:1px 6px;border:none;border-radius:8px;background:#e53935;color:#fff;font-size:12px;cursor:pointer;';
         // 身上的格子（样子照屏幕下方的物品栏）；箱子面板和背包面板共用
         // 箱子面板多选（任务 93）：点一格选中，再点别的格也选中，再点已选中的取消；两边（背包、箱子）各自记
@@ -3414,7 +3415,7 @@
             if (!SL[i]) return false;
             if (i !== h && SL[h] && SL[i].k === SL[h].k) ind.selIdx = h;
             else if (i !== h && SL[h]) {
-                let k = SL[i].k, hk = SL[h].k, multi = ind.bag[k] > IND_STACK || ind.bag[hk] > IND_STACK;
+                let k = SL[i].k, hk = SL[h].k, multi = ind.bag[k] > indStackOf(k) || ind.bag[hk] > indStackOf(hk);
                 if (!multi) indBagSwap(i, h);   // 两边都只占一格：直接换
                 else {   // 有占好几格的：只把点的这种东西挪到手上那种前面，别的东西的先后不动（任务 61）
                     let ks = Object.keys(ind.bag).filter(function (x) { return x !== k; }); ks.splice(ks.indexOf(hk), 0, k);

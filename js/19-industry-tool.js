@@ -7,6 +7,7 @@
         const TL_TIER = { wood: { mul: 1.2, dura: 40, back: 'wood' }, stone: { mul: 1, dura: 120, back: 'stone' }, bronze: { mul: 0.7, dura: 450, back: 'bronze' }, iron: { mul: 0.6, dura: 900, back: 'ingot_fe' }, steel: { mul: 0.5, dura: 2250, back: 'steel' }, diamond: { mul: 0.4, dura: 7500, back: 'diamond' } };   // 任务 129（11-13）：石 120、青铜 450、铁 900、钢 2250、钻石 7500；刀盾不动
         // 任务 98：挖矿一次出 4 个，镐的一次耐久顶原来 4 次；为了不变成几乎不坏，青铜、铁、钢、钻石镐的耐久减半（150／300／750／2500，每把能挖的矿还是任务 87 时的 2 倍）。别的工具不变
         const TL_PICK_HALF = { bronze: 1, iron: 1, steel: 1, diamond: 1 };
+        ['dirt', 'sand', 'stone', 'clay', 'wood', 'twig', 'grass', 'coal', 'charcoal', 'char', 'salt', 'ash'].forEach(function (k) { if (IND_ITEMS_RAW[k]) IND_ITEMS_RAW[k].stack = 200; });   // 任务 146：便宜量大的原料一格 200（现实里一堆一堆搬）；别的 99
         const TL_TOOL = {};   // key → { kind, tier, dura }（刀的耐久照 MB_KNIFE）
         const TL_KIND_NAME = { axe: '斧子', pick: '镐', shovel: '铲子', shears: '剪刀', knife: '小刀' };
         (function () {

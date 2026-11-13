@@ -6389,40 +6389,43 @@ async function enterExit(tab, key) {
                 const JP = (e) => T.eval(`(${e}).then(function (v) { return JSON.stringify(v); })`).then(JSON.parse);   // e 是个 Promise
                 const face = (px, pz, tx, tz) => T.eval(`indTeleport(${px}, ${pz}); indLookAt(${tx}, ${tz}); true;`);
                 // ── 背包格子 ──
-                await T.eval(`ind.bag = {}; indBagAdd('wood', 150); true;`);
+                await T.eval(`ind.bag = {}; indBagAdd('seed_wheat', 150); true;`);
                 let bg = await J(`{ slots: indSlotsOf(ind.bag), list: indSlots().map(function (x) { return x.n; }) }`);
                 if (bg.slots !== 2 || bg.list.join() !== '99,51') bad.push('同一种 150 个应该占 2 格（99 + 51） ' + JSON.stringify(bg));
                 await T.eval(`ind.bag = {}; true;`);
-                const added = +(await T.eval(`indBagAdd('wood', 5000)`));
-                if (added !== 24 * 99) bad.push('24 格应该装 2376 个 ' + added);
+                const added = +(await T.eval(`indBagAdd('seed_wheat', 5000)`));
+                if (added !== 36 * 99) bad.push('36 格应该装 3564 个 ' + added);
+                await T.eval(`ind.bag = {}; indBagAdd('wood', 150); true;`);
+                if ((await J(`indSlotsOf(ind.bag)`)) !== 1) bad.push('便宜的原料一格 200：150 个木头占 1 格（任务 146）');
+                await T.eval(`ind.bag = {}; indBagAdd('seed_wheat', 5000); true;`);
                 if (await T.eval(`indBagAdd('stone', 1)`) !== 0) bad.push('满了还能放别的');
                 await T.eval(`window.__fl = []; window.__oldFlash = indFlash; indFlash = function (t) { __fl.push(t); }; ind.base.ground = [{ k: 'stone', x: 5, z: 6 }]; ind.itemDirty = true; indPickItem(ind.base.ground[0]); true;`);
                 if (!(await T.eval(`ind.base.ground.length === 1 && __fl.indexOf('背包满了') >= 0`))) bad.push('背包满了还能捡起来 ' + await T.eval(`JSON.stringify(__fl)`));
-                await T.eval(`ind.base.ground = []; ind.bag = { wood: 2376 }; indBagDel('wood', 1); window.__fl = []; true;`);
+                await T.eval(`ind.base.ground = []; ind.bag = { seed_wheat: 3564 }; indBagDel('seed_wheat', 1); window.__fl = []; true;`);
                 // 做东西：成品放不下就做不出（提示背包满了）；原料腾出格子就行
                 await T.eval(`ind.bag = { wood: 2278, stone: 98 }; true;`);   // 24 格：wood 23 格 + stone 1 格；做桶用 3 木头，成品桶要新的一格
                 const full = await T.eval(`indBagAdd('wood', 20)`);
                 await T.eval(`ind.bag = {}; for (let i = 0; i < 23; i++) ind.bag['seed_' + ['wheat','potato','tomato','corn','cane','pumpkin','cotton','cabbage','radish'][i % 9] + (i < 9 ? '' : '#' + i)] = 1; true;`);
                 await T.eval(`ind.bag = { wood: 3 }; for (let i = 0; i < 23; i++) ind.bag['x' + i] = 1; true;`);
                 // 上面的假物品不在表里，改成真实的 23 种
-                const real = ['stone','sand','clay','salt','coal','ore_cu','ore_zn','ore_sn','ore_fe','sulfur','dirt','charcoal','char','bread','sugar','cheese','milk','wool','yarn','cotton','wheat','potato','tomato'];
+                const real = await J(`Object.keys(IND_ITEMS).filter(function (k) { return !IND_ITEMS[k].tool && !IND_ITEMS[k].hot && !IND_ITEMS[k].dev && !/^cyl|@/.test(k) && ['wood', 'stone', 'bucket', 'shears', 'rope', 'handle', 'furn_bench', 'chest'].indexOf(k) < 0; }).slice(0, 35)`);
                 await T.eval(`ind.bag = { wood: 3 }; ${JSON.stringify(real)}.forEach(function (k) { ind.bag[k] = 1; }); window.__fl = []; true;`);
-                if (await T.eval(`indSlotsOf(ind.bag)`) !== 24) bad.push('测试没凑够 24 格');
+                if (await T.eval(`indSlotsOf(ind.bag)`) !== 36) bad.push('测试没凑够 36 格');
                 // 做桶：3 木头用掉，空出 1 格，成品桶放进去，做得出
                 await T.eval(`indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'bucket'; })); true;`);
                 if (!(await T.eval(`ind.bag.bucket === 1 && !ind.bag.wood`))) bad.push('材料用完腾出格子，应该做得出桶 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 // 做剪刀：2 石头 + 1 木头，石头只有 1 个... 换成：背包满，原料用不完（木头 5 个剩 4 个）→ 成品放不下
-                await T.eval(`ind.bag = { wood: 5, stone: 3 }; ${JSON.stringify(real.filter((k) => k !== 'stone'))}.slice(0, 22).forEach(function (k) { ind.bag[k] = 1; }); window.__fl = []; true;`);
-                if (await T.eval(`indSlotsOf(ind.bag)`) !== 24) bad.push('第二个凑格子没凑够 ' + await T.eval(`indSlotsOf(ind.bag)`));
+                await T.eval(`ind.bag = { wood: 5, stone: 3 }; ${JSON.stringify(real.filter((k) => k !== 'stone'))}.slice(0, 34).forEach(function (k) { ind.bag[k] = 1; }); window.__fl = []; true;`);
+                if (await T.eval(`indSlotsOf(ind.bag)`) !== 36) bad.push('第二个凑格子没凑够 ' + await T.eval(`indSlotsOf(ind.bag)`));
                 await T.eval(`indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'shears'; })); true;`);
                 if (await T.eval(`!!ind.bag.shears || __fl.indexOf('背包满了') < 0`)) bad.push('背包满了还做得出东西 ' + await T.eval(`JSON.stringify([ind.bag.shears, __fl])`));
                 await T.eval(`indFlash = window.__oldFlash; ind.bag = {}; true;`);
                 // 快捷栏照格子显示：10 格（任务 17）；选第 2 个格子
-                await T.eval(`ind.bag = { wood: 150, stone: 1 }; ind.hudSig = ''; indHudUpdate(); true;`);
+                await T.eval(`ind.bag = { seed_wheat: 150, stone: 1 }; ind.hudSig = ''; indHudUpdate(); true;`);
                 const cells = await T.eval(`document.getElementById('ind-bag').children.length`);
                 if (cells !== 10) bad.push('快捷栏应该有 10 个格子（任务 17） ' + cells);
                 await T.eval(`ind.selIdx = 1; true;`);
-                if ((await T.eval(`indSel()`)) !== 'wood') bad.push('第 2 格应该是木头（同一种占 2 格）');
+                if ((await T.eval(`indSel()`)) !== 'seed_wheat') bad.push('第 2 格应该是小麦种子（同一种占 2 格）');
                 await T.eval(`ind.selIdx = 2; true;`);
                 if ((await T.eval(`indSel()`)) !== 'stone') bad.push('第 3 格应该是石头');
                 // ── 搬东西 ──
@@ -6451,9 +6454,9 @@ async function enterExit(tab, key) {
                 const cs = await J(`ind.base.chests.map(function (c) { return [c.id, c.big]; })`);
                 if (cs.length !== 2 || cs[1][1]) bad.push('新箱子没放下 ' + JSON.stringify(cs));
                 const small = cs[1][0];
-                await T.eval(`(function(){ let c = ind.base.chests.filter(function (c) { return c.id === ${small}; })[0]; ind.boxId = c.id; c.items = {}; ['stone','sand','clay','salt','coal','ore_cu','ore_zn','ore_sn','ore_fe','sulfur','dirt','charcoal','char','bread','sugar','cheese','milk','wool','yarn','cotton','wheat','potato','tomato','corn','cane','pumpkin','radish','cabbage','bucket'].forEach(function (k) { c.items[k] = 1; }); ind.bag = { wood: 200 }; })(); true;`);
+                await T.eval(`(function(){ let c = ind.base.chests.filter(function (c) { return c.id === ${small}; })[0]; ind.boxId = c.id; c.items = {}; ['stone','sand','clay','salt','coal','ore_cu','ore_zn','ore_sn','ore_fe','sulfur','dirt','charcoal','char','bread','sugar','cheese','milk','wool','yarn','cotton','wheat','potato','tomato','corn','cane','pumpkin','radish','cabbage','bucket'].forEach(function (k) { c.items[k] = 1; }); ind.bag = { seed_wheat: 200 }; })(); true;`);
                 await T.eval(`indBoxPutAll(); indPanelClose(); true;`);
-                const put = await J(`{ chest: ind.base.chests.filter(function (c) { return c.id === ${small}; })[0].items.wood, bag: ind.bag.wood }`);
+                const put = await J(`{ chest: ind.base.chests.filter(function (c) { return c.id === ${small}; })[0].items.seed_wheat, bag: ind.bag.seed_wheat }`);
                 if (put.chest !== 99 || put.bag !== 101) bad.push('29 格满 + 1 格空，只能再放 99 个木头 ' + JSON.stringify(put));
                 await T.eval(`ind.boxId = 1; ind.bag = { wood: 5000 }; true;`);
                 await T.eval(`ind.bag = { wood: 2000, stone: 300 }; indBoxPutAll(); indPanelClose(); true;`);
@@ -8929,7 +8932,7 @@ async function enterExit(tab, key) {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 // 一次调用里摆窑、收、读提示
-                const pick = (kiln, bagFull) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.bag = {}; ${bagFull ? "for (let i = 0; i < 24; i++) ind.bag['pad' + i] = 99;" : ''}
+                const pick = (kiln, bagFull) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.bag = {}; ${bagFull ? "for (let i = 0; i < 36; i++) ind.bag['pad' + i] = 99;" : ''}
                     ind.base.cookers = [Object.assign({ id: 5, ty: 'kiln', x: 20, z: 10, items: { sand: 2 }, out: {}, fuel: 100, fire: 0, temp: 20, cook: null, spout: [] }, ${JSON.stringify(kiln)})];
                     let ok; try { ok = indPickFurn({ ty: 'kiln', o: ind.base.cookers[0] }); } finally { blazeFlash = bf; } return { ok: ok, fl: fl.join('|'), left: ind.base.cookers.length, carried: Object.keys(ind.base.carried || {}).length }; })()`);
                 let r = await pick({ temp: 600, fire: 0 });
@@ -9145,22 +9148,22 @@ async function enterExit(tab, key) {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const r = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; ind.base.rule = 'hard'; ind.base.wear = {}; ind.bag = {};
-                    for (let i = 0; i < 24; i++) ind.bag['pad' + i] = 1; ind.bag.pack_grass = 0; delete ind.bag.pack_grass;
-                    let full0 = indFits(ind.bag, indBagSlots(), 'wood', 1);   // 24 格满了放不进
-                    ind.bag = {}; for (let i = 0; i < 23; i++) ind.bag['pad' + i] = 1; ind.bag.pack_grass = 1; indWear('pack_grass');   // 23 + 草背包（穿上腾出 1 格）
-                    let slots = indBagSlots(); for (let i = 0; i < 7; i++) ind.bag['pad' + (30 + i)] = 1;   // 23 + 7 = 30 格
+                    for (let i = 0; i < 36; i++) ind.bag['pad' + i] = 1; ind.bag.pack_grass = 0; delete ind.bag.pack_grass;
+                    let full0 = indFits(ind.bag, indBagSlots(), 'wood', 1);   // 36 格满了放不进
+                    ind.bag = {}; for (let i = 0; i < 35; i++) ind.bag['pad' + i] = 1; ind.bag.pack_grass = 1; indWear('pack_grass');   // 35 + 草背包（穿上腾出 1 格）
+                    let slots = indBagSlots(); for (let i = 0; i < 7; i++) ind.bag['pad' + (40 + i)] = 1;   // 35 + 7 = 42 格
                     let used = indSlotsOf(ind.bag), putIn = indBagAdd('wood', 1);   // 第 31 个放不进
                     let off1 = (indTakeOff('back'), ind.base.wear.back), msg = fl[fl.length - 1];
-                    for (let i = 0; i < 7; i++) delete ind.bag['pad' + (30 + i)]; delete ind.bag.pad22; // 23 → 22 个，脱得下来
+                    for (let i = 0; i < 7; i++) delete ind.bag['pad' + (40 + i)]; delete ind.bag.pad34; // 23 → 22 个，脱得下来
                     indTakeOff('back'); blazeFlash = bf;
                     return { full0: full0, slots: slots, used: used, putIn: putIn, off1: off1, msg: msg, off2: ind.base.wear.back || null, pack: ind.bag.pack_grass || 0, slots2: indBagSlots() }; })()`);
                 if (r.full0 !== 0) bad.push('没戴背包 24 格满了放不进');
-                if (!(r.slots === 30 && r.used === 30 && r.putIn === 0)) bad.push('戴草背包 30 格，能放到第 30 格、第 31 个放不进 ' + JSON.stringify(r));
+                if (!(r.slots === 42 && r.used === 42 && r.putIn === 0)) bad.push('戴草背包 30 格，能放到第 30 格、第 31 个放不进 ' + JSON.stringify(r));
                 if (!(r.off1 === 'pack_grass' && /先把多出来的格子清空/.test(r.msg || ''))) bad.push('第 25～30 格有东西时脱不下来并提示 ' + JSON.stringify(r));
-                if (!(r.off2 === null && r.pack === 1 && r.slots2 === 24)) bad.push('清空后脱得下来 ' + JSON.stringify(r));
+                if (!(r.off2 === null && r.pack === 1 && r.slots2 === 36)) bad.push('清空后脱得下来 ' + JSON.stringify(r));
                 // 换更大的：草 → 布 +12；换小的有东西不让
-                const sw = await J(`(function(){ ind.base.wear = {}; ind.bag = { pack_grass: 1, pack_cloth: 1, pack_steel: 1 }; indWear('pack_grass'); indWear('pack_steel'); let a = [ind.base.wear.back, indBagSlots()]; for (let i = 0; i < 30; i++) ind.bag['pad' + i] = 1; let ok = indWear('pack_grass'); return { a: a, ok: ok, now: ind.base.wear.back, slots: indBagSlots() }; })()`);
-                if (!(sw.a[0] === 'pack_steel' && sw.a[1] === 42 && sw.ok === false && sw.now === 'pack_steel')) bad.push('换更大的行、装满了换小的不行 ' + JSON.stringify(sw));
+                const sw = await J(`(function(){ ind.base.wear = {}; ind.bag = { pack_grass: 1, pack_cloth: 1, pack_steel: 1 }; indWear('pack_grass'); indWear('pack_steel'); let a = [ind.base.wear.back, indBagSlots()]; for (let i = 0; i < 50; i++) ind.bag['pad' + i] = 1; let ok = indWear('pack_grass'); return { a: a, ok: ok, now: ind.base.wear.back, slots: indBagSlots() }; })()`);
+                if (!(sw.a[0] === 'pack_steel' && sw.a[1] === 54 && sw.ok === false && sw.now === 'pack_steel')) bad.push('换更大的行、装满了换小的不行 ' + JSON.stringify(sw));
                 // 存档整理：戴着钢架背包、背包 40 格东西，读档不被清掉
                 const sv = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); b.wear = { back: 'pack_steel' }; b.bag = {}; for (let i = 0; i < 40; i++) b.bag['pad' + i] = 1; IND_ITEMS_RAW.pad0 = IND_ITEMS_RAW.pad0 || { name: 'x' }; for (let i = 0; i < 40; i++) IND_ITEMS_RAW['pad' + i] = { name: 'p' }; indFixBase(b); return { n: Object.keys(b.bag).length, back: b.wear.back }; })()`);
                 if (!(sv.n === 40 && sv.back === 'pack_steel')) bad.push('存档里戴着钢架背包，40 格东西读档不能丢 ' + JSON.stringify(sv));
@@ -9198,7 +9201,7 @@ async function enterExit(tab, key) {
                 if (!(pk.ni === 2 && pk.b === 2)) bad.push('收起带镍电池的电池组，镍电池还回来（原来的 2 节普通电池也还 2 节） ' + JSON.stringify(pk));
                 // 铝架背包 +24、铝线、镍稿配方
                 const rc = await J(`(function(){ ind.base.rule = 'hard'; ind.base.wear = {}; ind.bag = { pack_al: 1 }; indWear('pack_al'); let s = indBagSlots(); ind.bag = { ingot_al: 1 }; let i = IND_CRAFT.findIndex(function (r) { return r.out === 'wire' && r.in.ingot_al; }); let ok = indCraft(i); let w = ind.bag.wire; ind.bag = { ingot_ni: 3, wood: 2 }; let j = IND_CRAFT.findIndex(function (r) { return r.out === 'pick_ni'; }); indCraft(j); return { s: s, w: w, pick: ind.bag.pick_ni }; })()`);
-                if (!(rc.s === 48 && rc.w === 3 && rc.pick === 1)) bad.push('铝架背包 48 格、1 铝锭出 3 根铜线、镍稿 ' + JSON.stringify(rc));
+                if (!(rc.s === 60 && rc.w === 3 && rc.pick === 1)) bad.push('铝架背包 60 格、1 铝锭出 3 根铜线、镍稿 ' + JSON.stringify(rc));
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND53 铝和镍：山地有矿、镍矿进窑出镍锭、铝土矿进电解槽出铝锭、镍电池 360 U、元素表点亮、铝架背包、铝线、镍稿', bad.length === 0, bad.join(' / '));
@@ -10462,7 +10465,7 @@ async function enterExit(tab, key) {
                 r = await run(`let c = []; for (let i = 0; i < 66; i++) c.push({ k: 'stone', x: 3 + (i % 8) * 0.5, z: 3 + Math.floor(i / 8) * 0.5 }); B.ground = c; ind.achT = 0; achTick(); let a = achGot('p6767'); B.ground.push({ k: 'stone', x: 4, z: 4 }); ind.achT = 0; achTick(); let b = achGot('p6767');
                     B.ach = {}; let far = []; for (let i = 0; i < 70; i++) far.push({ k: 'stone', x: (i % 7) * 20 - 60, z: Math.floor(i / 7) * 20 - 90 }); B.ground = far; ind.achT = 0; achTick(); return { a: a, b: b, far: achGot('p6767') };`);
                 if (!(r.a === false && r.b === true && r.far === false)) bad.push('6767：半径 6 米内 67 个才算 ' + JSON.stringify(r));
-                r = await run(`let m = achMaxBag(), full = {}; let ks = Object.keys(IND_ITEMS).filter(function (k) { return IND_ITEMS[k].wear === 'back' && IND_ITEMS[k].slots === m - IND_BAG_SLOTS; }); B.wear.back = ks[0]; ind.bag = {}; for (let i = 0; i < indBagSlots(); i++) ind.bag['stone' + (i ? '' : '')] = 99 * indBagSlots(); achTick(); let a = achGot('full'); B.wear.back = null; ind.bag = { stone: 99 * indBagSlots() }; B.ach = {}; ind.achT = 0; achTick(); return { a: a, e: achGot('full'), m: m };`);
+                r = await run(`let m = achMaxBag(), full = {}; let ks = Object.keys(IND_ITEMS).filter(function (k) { return IND_ITEMS[k].wear === 'back' && IND_ITEMS[k].slots === m - IND_BAG_SLOTS; }); B.wear.back = ks[0]; ind.bag = {}; for (let i = 0; i < indBagSlots(); i++) ind.bag['stone' + (i ? '' : '')] = indStackOf('stone') * indBagSlots(); achTick(); let a = achGot('full'); B.wear.back = null; ind.bag = { stone: indStackOf('stone') * indBagSlots() }; B.ach = {}; ind.achT = 0; achTick(); return { a: a, e: achGot('full'), m: m };`);
                 if (!(r.a === true && r.e === false)) bad.push('塞不下了：最大的背包塞满才算 ' + JSON.stringify(r));
                 // 成就表：隐藏的没拿到不出现、拿到才出现；没标的写名字和条件；已获得 N / 总数
                 r = await run(`achPanel(); let t0 = document.getElementById('ind-panel').innerText; indAch('ice3'); indAch('roast'); achPanel(); let t1 = document.getElementById('ind-panel').innerText; indPanelClose();
@@ -13343,6 +13346,32 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND157 进大厅不丢东西：背包不清空、认不出进遗失物、退出等存档、远征月球回大厅带回东西、历史 key 都认得', bad.length === 0, bad.join(' / '));
+        }
+        if (want('IND158')) {
+            // IND158 背包 36 格（任务 146）：新号 36 格、草背包 42 格；200 个石头 1 格、201 个 2 格、别的东西一格 99；老存档 30 种东西读档不丢；典型一趟高峰占用 ≤ 75%
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.wear = {}; let out = {}; out.base = indBagSlots(); B.wear = { back: 'pack_grass' }; out.grass = indBagSlots(); B.wear = {};
+                    out.s200 = indSlotsOf({ stone: 200 }); out.s201 = indSlotsOf({ stone: 201 }); out.w99 = indSlotsOf({ seed_wheat: 99 }); out.w100 = indSlotsOf({ seed_wheat: 100 }); out.coal = indSlotsOf({ coal: 400 }); out.ingot = indSlotsOf({ ingot_fe: 100 });
+                    out.fits = indFits({ stone: 200 }, 1, 'stone', 5); out.fits2 = indFits({}, 1, 'stone', 300);
+                    let bag = {}; ['sulfur', 'bread', 'bucket', 'bottle', 'pick_stone', 'pick_bronze', 'axe', 'shears', 'torch', 'rope'].forEach(function (k) { if (IND_ITEMS[k]) bag[k] = 1; });
+                    Object.assign(bag, { stone: 120, coal: 150, wood: 160, ore_fe: 60, ore_cu: 30, ore_sn: 12, ore_zn: 10, clay: 40, sand: 40, charcoal: 80, ingot_fe: 30, ingot_cu: 24, salt: 20, bread: 6 });
+                    out.peak = indSlotsOf(bag); out.peakOld = (function () { let n = 0; Object.keys(bag).forEach(function (k) { n += Math.ceil(bag[k] / 99); }); return n; })();
+                    let keys = Object.keys(IND_ITEMS).filter(function (k) { return !IND_ITEMS[k].tool && !IND_ITEMS[k].hot && !IND_ITEMS[k].dev && !/^cyl|@/.test(k); }).slice(0, 30), ob = {}; keys.forEach(function (k) { ob[k] = 5; });
+                    let fx = indFixBase({ ver: 12, rule: 'hard', bag: ob }); out.old = Object.keys(fx.bag).length; out.oldOver = fx.bagOver || 0; return out; })()`);
+                if (!(r.base === 36 && r.grass === 42 && r.s200 === 1 && r.s201 === 2 && r.w99 === 1 && r.w100 === 2 && r.coal === 2 && r.ingot === 2)) bad.push('36 格、草背包 42、200 一格、别的 99 一格 ' + JSON.stringify(r));
+                if (!(r.fits === 0 && r.fits2 === 200)) bad.push('indFits 按每种东西自己的一格数量算 ' + JSON.stringify(r));
+                if (!(r.old === 30 && !r.oldOver)) bad.push('老存档 30 种东西读档不丢 ' + JSON.stringify(r));
+                if (!(r.peak <= 36 * 0.75)) bad.push('典型一趟高峰占用 ' + r.peak + ' / 36（改前按 99 一格是 ' + r.peakOld + ' / 24）要 ≤ 75% ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND158 背包 36 格：草背包 42、200 一格别的 99、老存档不丢、典型一趟高峰 ≤ 75%', bad.length === 0, bad.join(' / '));
         }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
