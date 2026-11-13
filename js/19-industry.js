@@ -1231,7 +1231,7 @@
             let fol = fromTrip && ind.wild ? ind.wild.filter(function (a) { return a.follow && !a.petRef && Math.hypot(a.x - ind.p.x, a.z - ind.p.z) <= 10; }) : [];   // 跟出去的宠物本来就是基地的（任务 70）
             ind.wild = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.cave = null; ind.caves = []; mbReset();
             indClearWorld();
-            ind.where = 'base'; ind.map = null; ind.exitT = 0;
+            ind.where = 'base'; ind.map = null; ind.exitT = 0; ind.speed = 1;
             scene.background = new THREE.Color(0xcfe8ff); scene.fog = null;
             let X0 = IND_BASE.x0, X1 = IND_BASE.x1, Z0 = IND_BASE.z0, Z1 = IND_BASE.z1, F = IND_FIELD, CX = (X0 + X1) / 2, CZ = (Z0 + Z1) / 2, W = X1 - X0, D = Z1 - Z0;
             ind.grass = indPlane(W + 30, D + 30, 0xa5d6a7, CX, 0, CZ); ind.grassSeason = -1;
@@ -1309,7 +1309,7 @@
             if (ind && ind.carve) ctCarveExit(true);
             if (ind.base.rule && typeof ind.base.away !== 'number') ind.base.away = ind.base.clock;   // 记下出门时刻，回家补算（任务 3）
             indClearWorld(); mbReset();
-            ind.where = 'trip'; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
+            ind.where = 'trip'; ind.speed = 1; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
             let M = ind.map = indMakeMap(seed === undefined ? ((Date.now() ^ (Math.random() * 1e9)) >>> 0) : seed); odApplyMap(M);   // 钉住的块盖上去（19-industry-outdoor.js）
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 30, IND_VIEW.day);
             wdTerrain(M);   // 地形分成 10 × 10 块，视野外的块不画（19-industry-world.js）
@@ -1405,7 +1405,7 @@
             d.style.cssText = 'position:fixed;inset:0;z-index:130;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;';
             d.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 40px;text-align:center;"><div style="font-size:30px;font-weight:bold;color:#222;">已暂停</div>' +
                 '<div style="margin-top:20px;"><button id="ind-pause-go" style="' + IND_BTN + 'background:#2e7d32;font-size:20px;padding:12px 26px;" onclick="indResume()">继续</button>' +
-                '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button>' + (ind.cave ? '<button id="ind-pause-cvback" style="' + IND_BTN + 'background:#5d4037;font-size:20px;padding:12px 26px;" onclick="indResume(); cvBackStart()">回到洞口</button>' : '') + '</div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续</div></div>';
+                '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button>' + (ind.cave ? '<button id="ind-pause-cvback" style="' + IND_BTN + 'background:#5d4037;font-size:20px;padding:12px 26px;" onclick="indResume(); cvBackStart()">回到洞口</button>' : '') + '</div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续　Z 倍速（只在基地）</div></div>';
             document.body.appendChild(d);
         }
         function indResume() {
@@ -1418,7 +1418,7 @@
             if (introFrozen()) { ind.raf = requestAnimationFrame(indLoop); return; }   // R1：提示卡片开着时静止
             let now = performance.now(), dt = Math.min(0.05, (now - ind.last) / 1000);
             ind.last = now;
-            if (!ind.paused) indTick(dt);   // 暂停：世界静止，只画画面
+            if (!ind.paused) { indTick(dt); if (ind && !ind.over && ind.speed > 1) spTick(dt); }   // 暂停：世界静止，只画画面；倍速在后面补时间（任务 144，19-industry-speed.js）
             if (ind && !ind.over) { indRender(); ind.raf = requestAnimationFrame(indLoop); }
         }
         function indGround(x, z) { return ind.where === 'trip' ? Math.max(IND_WATER_Y, indHeight(ind.map, x, z)) : 0; }
@@ -1503,7 +1503,7 @@
             indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); hmSync(); indHouseFadeTick(dt); indSyncTiles(); mbSync(); if (ind.carve) ctBar(); pdSync();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
-            ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); indSeasonLook(); }
+            ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); spBtn(); indSeasonLook(); }
         }
         // 生存值：饱食、口渴、精力按时间掉；拉肚子口渴掉 3 倍；夜里在外面精力掉 3 倍；
         // 到 0：悠闲只是变慢；硬核饿了每秒扣 1 血、渴了每秒扣 2 血，血到 0 就死
@@ -3667,6 +3667,7 @@
             if (k === 'shift') { ind.k.run = true; return; }
             if (e.repeat) return;
             if (k === 'escape') { if (ind.carve && !ind.panel) { ctCarveExit(); return; } if (indCancelWire()) return; if (ind.panel) indPanelClose(); return; }   // 任务 138：Esc 退出雕模具   // 任务 104：连线状态下 Esc 先取消连线
+            if (k === 'z' && !ind.panel && !e.ctrlKey && !e.metaKey) { spCycle(); return; }   // 倍速（任务 144）
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）
             if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); indTrashHand(); return; }   // Ctrl+Q：销毁手上那一格（5 秒能撤销）
@@ -3698,7 +3699,7 @@
             d.innerHTML =
                 '<div style="position:absolute;left:8px;top:8px;"><div id="ind-status" style="background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
                 '<div id="ind-wear" style="margin-top:4px;background:rgba(255,255,255,.92);padding:4px 10px;border-radius:8px;font-size:13px;pointer-events:auto;"></div></div>' +
-                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-bag" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-map" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) wdMapToggle()">地图</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-ach" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="achPanel()">成就</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
+                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-bag" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-map" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) wdMapToggle()">地图</button><button id="ind-btn-speed" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="spCycle()">倍速 ×1　Z</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-ach" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="achPanel()">成就</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
                 '<div id="ind-hint" style="position:fixed;left:50%;top:6px;transform:translateX(-50%);max-width:70vw;color:#fff;padding:3px 12px;font-size:15px;line-height:1.35;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;background:rgba(0,0,0,.28);border-radius:8px;pointer-events:none;z-index:6;"></div>' +
                 '<div id="ind-cross" style="position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.7);pointer-events:none;z-index:6;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +

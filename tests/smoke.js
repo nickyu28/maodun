@@ -9375,7 +9375,7 @@ async function enterExit(tab, key) {
                 if (nop.nearDone !== 0) bad.push('没电不加速 ' + JSON.stringify(nop));
                 // 配方和用途
                 const rc = await J(`(function(){ let r = IND_CRAFT.find(function (x) { return x.out === 'dev_accel'; }); return { has: !!r, use: IND_ITEMS.dev_accel.use }; })()`);
-                if (!(rc.has && /6 米/.test(rc.use) && /载具/.test(rc.use))) bad.push('配方和物品说明 ' + JSON.stringify(rc));
+                if (!(rc.has && /6 米/.test(rc.use) && !/载具/.test(rc.use))) bad.push('配方和物品说明 ' + JSON.stringify(rc));
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND58 时间加速器：6 米内 ×3（做东西、燃料）、8 米外不加速、反应堆不加速、重叠不叠乘、没电不加速', bad.length === 0, bad.join(' / '));
@@ -13373,6 +13373,47 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND158 背包 36 格：草背包 42、200 一格别的 99、老存档不丢、典型一趟高峰 ≤ 75%', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND159')) {
+            // IND159 倍速（任务 144）：×4 时 200 帧（10 秒）游戏时间走 40 秒、炉子烧完两批；走路距离不乘；血低于 60／饿／有怪／面板／出门自动回 ×1；按钮在 ×1 2 4 8 16 间转；×16 一帧最多 8 步；时间加速器配方 off
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const SET = `cancelAnimationFrame(ind.raf); ind.panel = null; ind.paused = false; ind.dead = false; ind.sleeping = false; ind.mobs = []; ind.redT = 0; ind.coldWarn = 0; ind.heatHint = false; ind.hurt = null; ind.guardT = 0; Object.assign(ind.base.surv, { hp: 100, food: 80, water: 80, energy: 100, temp: 37 });`;
+                const r = await J(`(function(){ ${SET} let B = ind.base; B.rule = 'hard'; B.off.pool = true; B.fires = [];
+                    B.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: { ore_sn: 3, charcoal: 3 }, out: {}, fuel: 900, fire: 3, temp: 1200, cook: null, spout: [], spoutTy: 'brick' }];
+                    let o = {}; ind.speed = 1; let c0 = B.clock, n = 0; ind.speed = 4;
+                    for (let i = 0; i < 200; i++) { indTick(0.05); n += spTick(0.05); } o.dClock = B.clock - c0; o.speed = ind.speed;
+                    let k = B.cookers[0]; o.done = (k.out.hot_sn || 0) + k.spout.length; o.steps = n;
+                    ind.speed = 16; ${SET.replace('cancelAnimationFrame(ind.raf); ', '')} o.s16 = spTick(0.05);
+                    function walk(sp) { ind.speed = sp; ind.p.x = 0; ind.p.z = 0; ind.p.yaw = 0; ind.k.w = true; for (let i = 0; i < 30; i++) { indTick(0.05); spTick(0.05); } let x0 = ind.p.x, z0 = ind.p.z; for (let i = 0; i < 100; i++) { indTick(0.05); spTick(0.05); } ind.k.w = false; return Math.hypot(ind.p.x - x0, ind.p.z - z0); }
+                    ${SET.replace('cancelAnimationFrame(ind.raf); ', '')} walk(1); o.d1 = walk(1); ${SET.replace('cancelAnimationFrame(ind.raf); ', '')} o.d4 = walk(4); ind.speed = 1;
+                    return o; })()`);
+                if (!(Math.abs(r.dClock - 40) < 1.5 && r.speed === 4)) bad.push('×4 走 200 帧游戏时间约 40 秒 ' + JSON.stringify(r));
+                if (!(r.done >= 2)) bad.push('15 秒一批的炉子 40 秒做完 2 批 ' + JSON.stringify(r));
+                if (!(r.s16 >= 1 && r.s16 <= 8)) bad.push('×16 一帧最多 8 步 ' + JSON.stringify(r));
+                if (!(r.d1 > 3 && r.d4 / r.d1 > 0.85 && r.d4 / r.d1 < 1.15)) bad.push('走路距离不乘倍速 ' + JSON.stringify(r));
+                const stops = await J(`(function(){ ${SET} let o = [], B = ind.base;
+                    function t(name, f) { ${SET.replace('cancelAnimationFrame(ind.raf); ', '')} ind.where = 'base'; ind.speed = 4; f(); spTick(0.05); o.push(name + ':' + ind.speed); }
+                    t('hp', function () { B.surv.hp = 50; }); t('food', function () { B.surv.food = 10; }); t('cold', function () { B.surv.temp = 33; });
+                    t('mob', function () { ind.mobs = [{ x: ind.p.x + 5, z: ind.p.z, dead: false }]; }); t('far', function () { ind.mobs = [{ x: ind.p.x + 40, z: ind.p.z, dead: false }]; });
+                    t('panel', function () { ind.panel = 'bag'; }); t('ok', function () { }); t('red', function () { ind.redT = 1; });
+                    ${SET.replace('cancelAnimationFrame(ind.raf); ', '')} ind.where = 'trip'; ind.speed = 4; spTick(0.05); o.push('trip:' + ind.speed); ind.speed = 1; spCycle(); o.push('tripcycle:' + ind.speed); ind.where = 'base';
+                    return o; })()`);
+                if (stops.join() !== 'hp:1,food:1,cold:1,mob:1,far:4,panel:1,ok:4,red:1,trip:1,tripcycle:1') bad.push('危险自动回 ×1，远处的怪不停，出门灰着 ' + stops.join());
+                const cy = await J(`(function(){ ${SET} ind.where = 'base'; ind.speed = 1; let o = []; for (let i = 0; i < 6; i++) { spCycle(); o.push(ind.speed); } spCycle(); let b = document.getElementById('ind-btn-speed'); o.push(b ? b.textContent : 'nobtn'); ind.where = 'trip'; spBtn(); o.push(b && b.disabled ? 'dis' : 'en'); ind.where = 'base'; spBtn(); ind.speed = 1; spBtn(); return o; })()`);
+                if (cy.slice(0, 6).join() !== '2,4,8,16,1,2' || !/×4/.test(cy[6] || '') && !/×2/.test(cy[6] || '') || cy[7] !== 'dis') bad.push('按钮在 1 2 4 8 16 间转、出门灰 ' + cy.join());
+                const ac = await J(`(function(){ let r = IND_CRAFT.find(function (x) { return x.out === 'dev_accel'; }); return { off: !!(r && r.off), item: !!IND_ITEMS.dev_accel }; })()`);
+                if (!(ac.off && ac.item)) bad.push('时间加速器配方 off、物品还在 ' + JSON.stringify(ac));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND159 倍速：×4 时间快 4 倍、走路不乘、危险自动回 ×1、出门灰着、按钮循环、加速器配方 off', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

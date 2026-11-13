@@ -125,10 +125,11 @@
 
 // ── 时间加速器（任务 39）：6 米内的炉子和设备的计时 ×3（做东西、进出料、烧燃料、耗电都 ×3），两台重叠只算一次；反应堆、汽轮发电机、作物、动物不加速 ──
         Object.assign(IND_ITEMS_RAW, {
-            dev_accel: { name: '时间加速器', col: 0x00acc1, dev: 'accel', use: '放下接 24 V：6 米内的炉子、粉碎机、压力机、离心机、电解槽、水泵、压缩机的时间 ×3（燃料和电也多耗 3 倍）；睡觉、出门回家也算；以后做载具还要用' }
+            dev_accel: { name: '时间加速器', col: 0x00acc1, dev: 'accel', use: '放下接 24 V：6 米内的炉子、粉碎机、压力机、离心机、电解槽、水泵、压缩机的时间 ×3（燃料和电也多耗 3 倍）；睡觉、出门回家也算' }
         });
         Object.assign(IND_DEVS, { accel: { name: '时间加速器', col: 0x00acc1, rated: 24, minV: 18, draw: 16, size: [1.4, 1.5, 1.4] } });
-        IND_CRAFT.push({ out: 'dev_accel', in: { steel: 16, brass: 8, wire: 80, glass_plate: 8, coil: 4, diamond: 2, 'uf6:0': 2, ingot_ge: 4, battery_li: 16 }, hard: true });
+        IND_CRAFT.push({ out: 'dev_accel', in: { steel: 16, brass: 8, wire: 80, glass_plate: 8, coil: 4, diamond: 2, 'uf6:0': 2, ingot_ge: 4, battery_li: 16 }, hard: true, off: true });
+        IND_ITEMS_RAW.dev_accel.later = '老存档里放好的时间加速器，配方换成倍速按钮了';   // 任务 144：不再能做，换成倍速按钮；放下的照旧能用
         const PW_ACCEL = { r: 6, mul: 3, types: { crusher: 1, press: 1, centrifuge: 1, el: 1, pump: 1, comp: 1 } };
         // 某个位置的加速倍数（用上一帧的通电状态，差一帧没关系）
         function pwAccelMult(x, z) {
