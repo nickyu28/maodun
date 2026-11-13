@@ -9801,7 +9801,7 @@ async function enterExit(tab, key) {
                 if (!(r <= 1200.5)) bad.push('不拉风箱上不去 1600（应该停在大火 1200） ' + r);
                 // 任务 114 起风箱改成点右键拉一下 +10°C（细节在 IND134）：这里只看点一下涨、体力掉
                 r = await J(`(function(){ let a = indAim(); let t0 = ind.base.stove.temp, s0 = ind.stam; indRightDown(); indRightUp(); return { aim: a && a.kind, t0: t0, t1: ind.base.stove.temp, s0: s0, s1: ind.stam }; })()`);
-                if (!(r.aim === 'stove' && Math.abs(r.t1 - r.t0 - 10) < 0.01 && Math.abs(r.s0 - r.s1 - 2) < 0.01)) bad.push('点一下右键拉风箱 +10°C、吃 2 体力 ' + JSON.stringify(r));
+                if (!(r.aim === 'stove' && Math.abs(r.t1 - r.t0 - 10) < 0.01 && Math.abs(r.s0 - r.s1) < 0.01)) bad.push('点一下右键拉风箱 +10°C、不耗体力（任务 150） ' + JSON.stringify(r));
                 // 扇子：对着大火的炉子扇，到 1400 不到 1600
                 await T.eval(setup + '; ind.base.stove.fire = 3; true;');
                 r = await J(`(function(){ ind.bag = { fan: 1 }; indSelect('fan'); indRightDown(); let s0 = ind.stam; for (let i = 0; i < 300; i++) { ind.stam = Math.max(ind.stam, 50); indAdvance(0.05); } let t = ind.base.stove.temp; indRightUp(); return { t: t, fanned: !!ind.base.stove.fan || t > 1200 }; })()`);
@@ -12503,25 +12503,25 @@ async function enterExit(tab, key) {
                     let click = function () { indRightDown(); indRightUp(); };
                     ${body} } finally { blazeFlash = bf; } })()`);
                 let r = await run(`click(); let one = B.stove.temp, s1 = ind.stam; for (let i = 0; i < 10; i++) click(); return { one: one, s1: s1, ten: B.stove.temp, s: ind.stam, hint: document.getElementById('ind-hint') ? document.getElementById('ind-hint').innerHTML : '' };`);
-                if (!(r.one === 610 && r.s1 === 98 && r.ten === 710 && r.s === 78)) bad.push('点一下 +10°C、−2 体力，连点 10 下 +100 ' + JSON.stringify(r));
+                if (!(r.one === 610 && r.s1 === 100 && r.ten === 710 && r.s === 100)) bad.push('点一下 +10°C、不耗体力（任务 150），连点 10 下 +100 ' + JSON.stringify(r));
                 r = await run(`B.stove.temp = 1580; for (let i = 0; i < 5; i++) { ind.stam = 100; click(); } let top = B.stove.temp; for (let i = 0; i < 400; i++) indAdvance(0.5); return { top: top, back: B.stove.temp, carried: !B.off.stove };`);
                 if (!(r.top === 1600 && Math.abs(r.back - 600) < 1)) bad.push('到 1600 不再涨，停手掉回中火 600 ' + JSON.stringify(r));
                 r = await run(`click(); let a = B.stove.temp; indAdvance(1); let b = B.stove.temp; return { a: a, b: b };`);
                 if (!(r.a === 610 && r.b > 600 && r.b < 610)) bad.push('拉上去的温度慢慢掉（不是一下掉回） ' + JSON.stringify(r));
                 r = await run(`B.stove.fire = 0; B.stove.temp = 500; click(); let off = B.stove.temp; B.stove.fire = 2; B.stove.temp = 600; B.stove.bellows = false; click(); return { off: off, nob: B.stove.temp, s: ind.stam };`);
                 if (!(r.off === 500 && r.nob === 600 && r.s === 100)) bad.push('灭着、没装风箱右键不拉 ' + JSON.stringify(r));
-                r = await run(`ind.stam = 1; click(); return { t: B.stove.temp, fl: fl.join('|') };`);
-                if (!(r.t === 600 && /没力气/.test(r.fl))) bad.push('体力不够拉不动 ' + JSON.stringify(r));
-                r = await run(`B.stove.fire = 0; B.stove.temp = 20; indRightDown(); for (let i = 0; i < 25; i++) indAdvance(0.05); indRightUp(); return { off: !!B.off.stove, t: B.stove.temp, s: ind.stam, bag: ind.bag.stove || 0 };`);
-                if (!(r.off && r.t <= 20.5)) bad.push('长按右键 1 秒还是收起 ' + JSON.stringify(r));
+                r = await run(`ind.stam = 0; click(); return { t: B.stove.temp, fl: fl.join('|') };`);
+                if (!(r.t === 610)) bad.push('拉风箱不耗体力，体力 0 也能拉 ' + JSON.stringify(r));
+                r = await run(`B.stove.bellows = false; B.stove.fire = 0; B.stove.temp = 20; indRightDown(); for (let i = 0; i < 25; i++) indAdvance(0.05); indRightUp(); return { off: !!B.off.stove, t: B.stove.temp, s: ind.stam, bag: ind.bag.stove || 0 };`);
+                if (!(r.off && r.t <= 20.5)) bad.push('没装风箱的炉子长按右键 1 秒还是收起 ' + JSON.stringify(r));
                 r = await run(`indRightDown(); for (let i = 0; i < 25; i++) indAdvance(0.05); indRightUp(); return { t: B.stove.temp, off: !!B.off.stove };`);
-                if (!(r.t < 605)) bad.push('长按（烧着收不了）不算拉一下 ' + JSON.stringify(r));
+                if (!(r.t > 605 && !r.off)) bad.push('装了风箱的烧着的炉子按住右键连着拉、不收起 ' + JSON.stringify(r));
                 r = await J(`(function(){ let b = indFixBase({ ver: 11, rule: 'hard', stove: { items: {}, out: {}, fuel: 50, fire: 4, bellows: true, temp: 1500 } }); return [b.stove.fire, b.stove.bellows]; })()`);
                 if (r.join() !== '4,true') bad.push('老存档鼓风档读档 ' + r.join());
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND134 风箱右键拉：一下 +10°C、连点都算、封顶 1600、停手慢慢掉回火候、灭着没风箱不拉、长按收起、体力 −2、老存档', bad.length === 0, bad.join(' / '));
+            report('IND134 风箱右键拉：一下 +10°C、连点都算、封顶 1600、停手慢慢掉回火候、灭着没风箱不拉、没装风箱长按收起、拉风箱不耗体力、老存档', bad.length === 0, bad.join(' / '));
         }
         if (want('IND135')) {
             // IND135 取暖（任务 116，硬核）：气温 10°C、体温 33，站在烧着的篝火 2 米内，20 秒内 ≥ 35；火边体温低于 33 不掉血；离火 10 米不涨；篝火没柴不涨；基地灶台 3 米内同样；
@@ -13599,6 +13599,30 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND167')) {
+            // IND167 装了风箱的炉子右键优先鼓风（任务 150）：烧着的炉子按住右键 1.5 秒不被收起、温度涨、不耗体力；灭着的不收起；面板里"收起炉子"能收；没装风箱的长按右键还是收起
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const set = (bell, fire, temp) => `cancelAnimationFrame(ind.raf); ind.panel = null; ind.bag = {}; ind.base.rule = 'hard'; ind.base.off.stove = false; ind.base.stove = Object.assign(ckNewState(), { fuel: 9000, fire: ${fire}, temp: ${temp}, bellows: ${bell}, spout: [], spoutTy: null }); ind.cookId = 'stove'; ind.stam = 100; indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 3); indLookAt(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z); ind.rh = null; ind.pumpHold = null;`;
+                let r = await J(`(function(){ ${set(true, 3, 600)} let t0 = ind.base.stove.temp; indRightDown(); for (let i = 0; i < 30; i++) { indTick(0.05); } let mid = ind.base.stove.temp; indRightUp(); return { t0: t0, mid: mid, stam: ind.stam, off: !!ind.base.off.stove, hold: !!ind.pumpHold, rh: !!ind.rh }; })()`);
+                if (!(r.mid - r.t0 >= 30 && !r.off && !r.hold && r.stam === 100)) bad.push('按住右键 1.5 秒连着拉、炉子没被收起、不耗体力 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set(true, 0, 20)} indRightDown(); for (let i = 0; i < 40; i++) indTick(0.05); indRightUp(); return { off: !!ind.base.off.stove }; })()`);
+                if (r.off) bad.push('灭着的有风箱的炉子右键不该收起');
+                r = await J(`(function(){ ${set(false, 0, 20)} indRightDown(); for (let i = 0; i < 40; i++) indTick(0.05); indRightUp(); return { off: !!ind.base.off.stove }; })()`);
+                if (!r.off) bad.push('没装风箱的炉子长按右键仍然收起 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set(true, 0, 20)} indPanelStove(); let has = !!document.getElementById('ind-stove-pick'); indPickFromPanel(); return { has: has, off: !!ind.base.off.stove }; })()`);
+                if (!(r.has && r.off)) bad.push('面板里收起炉子 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND167 风箱炉子右键优先鼓风：长按不收起、灭着不收起、面板能收、没风箱的仍长按收起', bad.length === 0, bad.join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }

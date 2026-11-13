@@ -1909,6 +1909,7 @@
             if (mbShieldDown()) return;   // 选中盾：举盾，不拉风箱（任务 70）
             { let aa = indAim(); if (aa && aa.kind === 'animal' && (mbPetUse(aa.o, indSel()) || mbBark(aa.o))) return; }   // 右键狗猫：装刀盾、喂水，不然就叫一声
             if (fmPullDown(indAim())) return;   // 拉风箱、扇扇子（任务 44）：要在"按住收起炉子"前面
+            if (fmPumpDown(indAim())) return;   // 任务 150：装了风箱的炉子，右键一律是鼓风，按住连着拉，不再长按收起
             let f = ind.ride ? null : indFurnOf(indAim());   // 骑着不能搬东西
             if (f) { ind.rh = { f: f, t: 0, done: false, pump: fmPumpCook(indAim()) }; return; }   // 装了风箱的烧着的炉子：短按是拉风箱（任务 114），长按还是收起
             if (!ind.ride && pwCrankDown(indAim())) return;   // 手摇发电机：按住右键摇（19-industry-power.js）
@@ -1919,6 +1920,7 @@
             indUse();
         }
         function indRightUp() {
+            if (fmPumpUp()) return;
             if (pwCrankUp()) return;
             if (fmPullUp()) return;
             if (ind && ind.ch && ind.ch.right) { let quick = ind.ch.t < 0.25; ind.ch = null; if (quick) indUse(); return; }
@@ -2436,6 +2438,10 @@
             if (S.temp > 60) return '现在 ' + Math.round(S.temp) + '°C，要降到 60°C 以下（约 ' + indFurnCoolSecs(ty, S) + ' 秒）';
             if (S.spout.some(function (e) { return e.t > 0; })) return '出料槽里还有没凉的锭';
             return '';
+        }
+        function indPickFromPanel() {
+            let c = indCookCur(); if (!c) return;
+            indPickFurn(c.id === 'stove' ? { ty: 'stove', o: null } : { ty: c.ty, o: c.C });
         }
         function indPickFurn(f) {
             let B = ind.base, ty = f.ty, key, id;
@@ -3625,7 +3631,7 @@
             // 鼓风档只给电动鼓风机（风箱改成右键拉，任务 114；老存档开着鼓风档的照样显示）
             let fire = IND_FIRE.map(function (f, i) { if (f.bellows && !fmHasBlower(c) && !(S.bellows && S.fire === 4)) return ''; let fd = indFireDef(c.ty, i); return '<button style="' + IND_BTN + (S.fire === i ? 'background:#d84315;' : '') + '" onclick="indStoveFire(' + i + ')">' + fd.name + '</button>'; }).join('');
             if (fiOn() && !(S.fire > 0)) fire = '<div style="color:#c62828;font-size:13px;">灭了，要先点火</div><span style="opacity:.4;pointer-events:none;">' + fire + '</span>';   // 硬核灭着：火候按钮灰的，"点火"按钮在面板顶上（任务 113）
-            fire += '<button id="ind-stove-off" style="' + IND_BTN + 'background:#455a64;" onclick="indStoveFire(0)">熄火并降温</button>' + (S.temp > 60 ? '<div style="font-size:13px;color:#888;">降到 60°C 还要约 ' + indFurnCoolSecs(c.ty, S) + ' 秒（收起要 60°C 以下）</div>' : '');
+            fire += '<button id="ind-stove-off" style="' + IND_BTN + 'background:#455a64;" onclick="indStoveFire(0)">熄火并降温</button><button id="ind-stove-pick" style="' + IND_BTN + 'background:#6d4c41;" onclick="indPickFromPanel()">收起炉子</button>' + (S.temp > 60 ? '<div style="font-size:13px;color:#888;">降到 60°C 还要约 ' + indFurnCoolSecs(c.ty, S) + ' 秒（收起要 60°C 以下）</div>' : '');
             let on = Object.keys(S.items).map(function (k) { let g = IND_ITEMS[k] && IND_ITEMS[k].cyl; return (g && indCylN(g) ? indCylName(g, S.temp) : indName(k)) + '×' + S.items[k]; }).join('、') || '空';
             let out = Object.keys(S.out).map(function (k) { return indName(k) + '×' + S.out[k]; }).join('、') || '无';
             let spt = !ckSpoutOn(S) ? '没装出料槽（冶炼出的锭留在炉膛里，凉了直接取，烫的要钳子）' : S.spout.length ? ckSpoutDef(S).name + ' ' + indSpoutTxt(c) + '（左键点炉子旁边的出料槽取出）' : ckSpoutDef(S).name + ' 空';

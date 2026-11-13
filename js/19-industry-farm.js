@@ -119,7 +119,7 @@
         // 扇子：手里拿着按住右键。对着点着的炉子（3 米内）扇，目标 1400°C；不对着炉子是扇自己，体温往 37°C 拉（每秒 0.3°C）。没体力就停
         const FM_PULL = { near: 3, grace: 0.3, bellows: 3, fanCook: 4, fanSelf: 2, fanT: 1400, selfRate: 0.3 };
         Object.assign(IND_ITEMS_RAW, { fan: { name: '扇子', col: 0xdce775, use: '按住右键扇：对着点着的炉子扇到 1400°C；不对着炉子是扇自己，热了凉快、冷了也往舒服拉（吃体力）' } });
-        IND_ITEMS_RAW.bellows.use = '装在炉子上。炉子烧着时对着它点右键拉一下，炉温 +10°C，最高 1600°C（每下吃 2 体力）';
+        IND_ITEMS_RAW.bellows.use = '装在炉子上。炉子烧着时对着它点右键拉一下，炉温 +10°C，最高 1600°C，按住连着拉，不耗体力';
         IND_CRAFT.push({ out: 'fan', in: { grass: 6, rope: 2, wood: 1 }, hard: true });
         function fmBlowerOn(c) { return typeof fmBlowerPw === 'function' && fmBlowerPw(c); }   // 电动鼓风机（任务 51）
         // 这一帧炉子实际按哪档烧：鼓风档没人拉、也没电动鼓风机，就按大火；扇子扇着的炉子目标 1400
@@ -139,7 +139,7 @@
         }
         // 任务 114：风箱改成一下一下点右键拉。烧着的炉子装了风箱：短按右键一下炉温 +10°C，最高 1600°C，每下吃 2 体力，两下之间不设间隔。
         // 长按 1 秒还是收起炉子（短按、长按在 indRightUp 里分开）。停手后按 FM_PUMP.decay 每秒往当前火候的目标温度掉。
-        const FM_PUMP = { dT: 10, max: 1600, stam: 2, decay: 5 };
+        const FM_PUMP = { dT: 10, max: 1600, stam: 0, decay: 5 };   // 任务 150、121：拉风箱不耗体力
         function fmPumpCook(a) { if (indSel() === 'dev_gen') return null; let c = fmCookOfAim(a); return c && c.C.bellows && c.C.fire > 0 ? c : null; }
         function fmPumpHint(a) {   // 准星提示（任务 114）：烧着的炉子装了风箱写"右键：拉风箱"，没装写"要装风箱"（硬核才有风箱）
             let c = fmCookOfAim(a); if (!c || !indHard() || !(c.C.fire > 0) || fmHasBlower(c)) return '';
@@ -154,8 +154,28 @@
             if (ind.panel === 'stove') ind.panelDirty = true;
             return true;
         }
+        // 任务 150：装了风箱的炉子，按下右键就拉一下，按住连着拉，每秒 2 下慢慢加到 10 下，松开停。灭着的炉子右键不会收起。
+        // 拿着桶、漏斗、风箱、蒸汽发电机、火把这类对炉子有右键用法的东西时，还是先做它们自己的事
+        const FM_HOLD = { r0: 2, r1: 10, ramp: 3 };
+        function fmPumpDown(a) {
+            let c = fmCookOfAim(a); if (!c || !indHard() || ind.ride) return false;
+            let k = indSel(); if (k && (IND_ITEMS[k].attach || k === 'bellows' || k === 'dev_gen' || k === 'torch' || indContOf(k) || indIsEmptyCont(k))) return false;
+            if (fmHasBlower(c)) { indFlash('装了鼓风机，不用拉'); return true; }
+            if (!c.C.bellows) return false;
+            if (!(c.C.fire > 0)) { indFlash('点着了才能鼓风'); return true; }
+            ind.pumpHold = { id: c.id, t: 0, acc: 0 }; fmPump(c); return true;
+        }
+        function fmPumpUp() { if (!ind || !ind.pumpHold) return false; ind.pumpHold = null; return true; }
+        function fmPumpHoldTick(dt) {
+            let H = ind.pumpHold; if (!H) return;
+            let c = indCookById(H.id), a = fmCookOfAim(indAim());
+            if (!c || !c.C.bellows || !(c.C.fire > 0) || !a || a.id !== H.id || ind.panel) { ind.pumpHold = null; return; }
+            H.t += dt; H.acc += (FM_HOLD.r0 + (FM_HOLD.r1 - FM_HOLD.r0) * Math.min(1, H.t / FM_HOLD.ramp)) * dt;
+            while (H.acc >= 1) { H.acc -= 1; fmPump(c); }
+        }
         function fmPullUp() { if (!ind || !ind.pull) return false; ind.pull = null; ind.effort = 0; return true; }
         function fmPullTick(dt) {
+            fmPumpHoldTick(dt);
             ind.effort = ind.crankEffort || 0;   // 摇手摇发电机也吃体力（19-industry-power.js）
             let P = ind.pull; if (!P) return;
             if (ind.stam <= 0) { ind.pull = null; indFlash('没力气了'); return; }
