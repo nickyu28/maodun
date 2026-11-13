@@ -13525,6 +13525,36 @@ async function enterExit(tab, key) {
             report('IND163 熔池流不进模具：每种卡住的情形面板里写原因、写本次要做什么', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND164')) {
+            // IND164 退出重进站在原地（任务 147）：基地里走到 (x, z) 面朝某个方向，退出重进位置差 < 0.5、朝向对；存的位置压在水池或设备上就挪到旁边空地；老存档没有字段不报错；坐标不合法的被清掉；从远征撤离仍放在出口
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const reenter = async () => { await T.eval(`indExit(true); true;`); await until(T, `ind === null && IND_SAVING === 0`, 10000); await T.eval(`indEnter(); true;`); return until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000); };
+                const noMe = await J(`(function(){ return { me: !!ind.base.me, x: ind.p.x, z: ind.p.z }; })()`);
+                if (!(noMe.x === 0 && noMe.z === 4)) bad.push('新档默认位置 ' + JSON.stringify(noMe));
+                await T.eval(`cancelAnimationFrame(ind.raf); ind.p.x = -12.5; ind.p.z = 7.25; camera.rotation.y = 1.3; ind.paused = false; true;`);
+                if (!(await reenter())) bad.push('重进失败');
+                let r = await J(`{ x: ind.p.x, z: ind.p.z, ry: camera.rotation.y }`);
+                if (!(Math.hypot(r.x + 12.5, r.z - 7.25) < 0.5 && Math.abs(r.ry - 1.3) < 0.05)) bad.push('退出重进位置和朝向 ' + JSON.stringify(r));
+                await T.eval(`cancelAnimationFrame(ind.raf); ind.p.x = IND_BASE_ST.pool.x; ind.p.z = IND_BASE_ST.pool.z; true;`);
+                if (!(await reenter())) bad.push('重进失败 2');
+                r = await J(`{ d: Math.hypot(ind.p.x - IND_BASE_ST.pool.x, ind.p.z - IND_BASE_ST.pool.z), r: IND_BASE_ST.pool.r }`);
+                if (!(r.d >= r.r + 0.3 && r.d < r.r + 5)) bad.push('存的位置在水池里要挪到池子外面 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = JSON.parse(JSON.stringify(ind.base)); delete b.me; let a = indFixBase(b); let b2 = JSON.parse(JSON.stringify(ind.base)); b2.me = { x: 999, z: 0, ry: 0 }; let c = indFixBase(b2); let b3 = JSON.parse(JSON.stringify(ind.base)); b3.me = { x: 3, z: 4, ry: 'x' }; let d = indFixBase(b3); return [a.me === undefined, c.me === undefined, d.me && d.me.ry]; })()`);
+                if (r.join() !== 'true,true,0') bad.push('老存档没有字段、坐标不合法清掉 ' + r.join());
+                r = await J(`(function(){ indGoTrip(2024); indGoBase(true); return { x: ind.p.x, z: ind.p.z, zEx: IND_BASE.z0 + 4 }; })()`);
+                if (!(Math.abs(r.x) < 0.01 && Math.abs(r.z - r.zEx) < 0.01)) bad.push('从远征撤离放在出口 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND164 退出重进站在原地：位置朝向对、压在水池上挪开、老存档不报错、远征撤离仍放出口', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

@@ -606,6 +606,7 @@
             b.cookers = b.cookers.filter(function (c) { return c && IND_COOK[c.ty] && c.ty !== 'stove' && isFinite(c.x) && isFinite(c.z) && c.id; }).slice(0, indCookCap());
             b.cookers.forEach(function (c) { indFixCook(c, b); });
             b.cseq = indNum(b.cseq, 0, 0, 1e9) | 0; b.cookers.forEach(function (c) { b.cseq = Math.max(b.cseq, c.id); });
+            if (b.me && typeof b.me === 'object' && isFinite(b.me.x) && isFinite(b.me.z) && b.me.x >= IND_BASE.x0 && b.me.x <= IND_BASE.x1 && b.me.z >= IND_BASE.z0 && b.me.z <= IND_BASE.z1) b.me = { x: +b.me.x, z: +b.me.z, ry: isFinite(b.me.ry) ? +b.me.ry : 0 }; else delete b.me;   // 任务 147
             b.devs.forEach(function (d) { d.ser = d.ser === true; if (d.ty === 'bank') { d.li = !!d.li; if (d.bats > (d.li ? 128 : 64)) d.bats = d.li ? 128 : 64; d.ni = indNum(d.ni, 0, 0, 64); if (d.um !== undefined) d.um = indNum(d.um, 0, 0, 128 * 720); } d.cy = typeof d.cy === 'string' && indCylParse(d.cy) ? d.cy : null; d.ct = indNum(d.ct, 0, 0, 100); d.pt = indNum(d.pt, 0, 0, 100); if (IND_DEV_FIX[d.ty]) IND_DEV_FIX[d.ty](d); });
             let ids = {}; b.devs.forEach(function (d) { ids[d.id] = d; });
             if (!Array.isArray(b.wires)) b.wires = [];
@@ -648,6 +649,7 @@
         let IND_SAVING = 0, IND_SAVE_SEQ = 0, IND_SAVE_PUT = 0;   // IND_SAVE_SEQ：第几次存；IND_SAVE_PUT：已经开始写的最新一次
         function indSave(cb) {
             if (!ind || !ind.base) { if (cb) cb(false); return; }
+            if (ind.where === 'base' && !ind.loading && ind.p) ind.base.me = { x: Math.round(ind.p.x * 100) / 100, z: Math.round(ind.p.z * 100) / 100, ry: Math.round(camera.rotation.y * 1000) / 1000 };   // 任务 147：基地里记下人站的位置和朝向
             let data = JSON.parse(JSON.stringify(ind.base));
             data.bag = ind.where === 'base' ? JSON.parse(JSON.stringify(ind.bag)) : {};   // 基地里背包跟着存；在远征里的不存（回不来就丢了）
             IND_SAVING++;
@@ -1013,6 +1015,27 @@
                 indStart(base);
             });
         }
+        // 任务 147：基地里的站位。回来时站在上次退出的地方，不安全（压在设备家具上、水池里、墙里）就找最近的空地，找不到用默认位置
+        function indMeFree(x, z) {
+            let B = ind.base, S = IND_BASE_ST, bad = false;
+            if (x < IND_BASE.x0 + 0.6 || x > IND_BASE.x1 - 0.6 || z < IND_BASE.z0 + 0.6 || z > IND_BASE.z1 - 0.6) return false;
+            if (!B.off.pool && Math.hypot(x - S.pool.x, z - S.pool.z) < S.pool.r + 0.4) return false;
+            [['stove', 1.5], ['bed', 1.6], ['bench', 1.4]].forEach(function (q) { if (!B.off[q[0]] && Math.hypot(x - S[q[0]].x, z - S[q[0]].z) < q[1]) bad = true; });
+            B.devs.forEach(function (d) { if (Math.hypot(x - d.x, z - d.z) < 0.9) bad = true; });
+            B.chests.forEach(function (c) { if (Math.hypot(x - c.x, z - c.z) < 1.1) bad = true; });
+            indCooks().forEach(function (c) { if (c.id !== 'stove' && Math.hypot(x - c.x, z - c.z) < (IND_COOK[c.ty] ? IND_COOK[c.ty].r : 1.5) + 0.4) bad = true; });
+            if (bad) return false;
+            let p = { x: x, z: z, y: 0 }; if (B.houses.length) indHouseCollide(p); hmCollide(p);
+            return Math.hypot(p.x - x, p.z - z) < 0.05;
+        }
+        function indRestoreMe() {
+            let m = ind.base.me; if (!m || ind.where !== 'base') return false;
+            let spot = null;
+            for (let r = 0; r <= 4 && !spot; r += 0.5) for (let a = 0; a < (r ? 16 : 1) && !spot; a++) { let x = m.x + Math.cos(a * Math.PI / 8) * r, z = m.z + Math.sin(a * Math.PI / 8) * r; if (indMeFree(x, z)) spot = { x: x, z: z }; }
+            if (!spot) return false;
+            ind.p.x = spot.x; ind.p.z = spot.z; ind.p.y = 0; camera.rotation.y = m.ry || 0; camera.updateMatrixWorld();
+            return true;
+        }
         function indStart(base) {
             nav('none');
             document.getElementById('ui-layer').classList.add('hidden');
@@ -1028,6 +1051,7 @@
             indGoBase(null);
             indBuildHud(); indBindKeys();
             camera.rotation.set(-0.3, 0, 0, 'YXZ');
+            indRestoreMe();   // 任务 147：回到上次退出时站的地方
             document.body.onmousedown = function (e) {
                 if (!ind || ind.over || ind.paused) return;
                 if (e.target && e.target.closest && (e.target.closest('button') || e.target.closest('#sys-modal') || e.target.closest('#ind-panel') || e.target.closest('#ind-moonpick'))) return;
