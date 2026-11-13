@@ -51,7 +51,7 @@
         const IND_SEASONS = [{ name: '春', t: 18 }, { name: '夏', t: 28 }, { name: '秋', t: 15 }, { name: '冬', t: -5 }];
         // 体温：等效气温 = 气温 + 衣服保暖 × 2.5；低于 15°C 慢慢变冷、高于 30°C 慢慢变热，每差 1 度每秒变 0.0015°C；不冷不热时每秒回 37°C 0.02
         const IND_BODY = { warmMul: 2.5, cold: 15, hot: 30, rate: 0.0015, back: 0.02, chill: 35, freeze: 33, sweat: 39, boil: 41, fireR: 4, fireHeat: 20, waterCold: 10, waterCool: 0.1, waterMin: 36 };
-        const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 4 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, regen: 0.3, starveHp: 0.25, thirstHp: 1, coldHp: 0.5 };   // 任务 125：掉血速度按"最坏情况下跑到最近的水／撤离点的时间 × 2"定（饿 400 秒、渴 100 秒、冻 200 秒死）
+        const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 4 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, walkDrain: 4, walkRegenAdd: 0.5, regen: 0.3, starveHp: 0.25, thirstHp: 1, coldHp: 0.5 };   // 任务 125：掉血速度按"最坏情况下跑到最近的水／撤离点的时间 × 2"定（饿 400 秒、渴 100 秒、冻 200 秒死）
 
         // ── 物品 ──
         // tool：稿子等级；eat：吃喝的效果 { f 饱食, w 口渴, sick 拉肚子概率, back 吃完还回来什么 }
@@ -1427,7 +1427,7 @@
         function indAtWater() { return indInWater() || (ind.where === 'trip' && indHeight(ind.map, ind.p.x, ind.p.z) < IND_WATER_Y + 0.2); }
         // 水深：水面比脚下地面高多少（陆地 0）。浅水 < 0.6 米能跑、走跑都 ×0.85、体力照常（跑才掉）；
         // 深水游泳 0.6 倍速不能跑，动的时候体力每秒掉 5，站着不掉、停 3 秒后每秒回 8，没体力 0.3 倍速；进深水 ≥ 0.6、出深水 ≤ 0.5（滞回，不来回抖）；木筏上 2 倍速
-        const IND_WATER = { wet: 0.05, shallow: 0.6, deepOut: 0.5, shallowSp: 0.85, deepSp: 0.7, tiredSp: 0.3, stamDrain: 5, stamRegen: 8, stillT: 3, raftSp: 2 };
+        const IND_WATER = { wet: 0.05, shallow: 0.6, deepOut: 0.5, shallowSp: 0.85, deepSp: 0.7, tiredSp: 0.3, stillT: 3, raftSp: 2 };
         function indWaterDepth(x, z) { return ind.where === 'trip' && !(ind.map && ind.map.moon) ? Math.max(0, IND_WATER_Y - indHeight(ind.map, x, z)) : 0; }
         function indDeep() {
             if (ind.onRaft || ind.where !== 'trip') { ind.deepSt = false; return false; }
@@ -1612,6 +1612,13 @@
             });
             if (ch) ind.cropDirty = true;
         }
+        // 任务 143：精神 ≥ 60 恢复 ×1，精神 0 恢复 ×0.4。站着恢复 stamRegen；走路每秒耗 walkDrain、恢复 walkDrain + 0.5（也乘精神系数）
+        function indStamF(energy) { return 0.4 + 0.6 * Math.min(1, Math.max(0, energy) / 60); }
+        function indStamWalk(stam, moving, energy, dt) {
+            let f = indStamF(energy), Q = IND_SURV;
+            let d = moving ? (Q.walkDrain + Q.walkRegenAdd) * f - Q.walkDrain : Q.stamRegen * f;
+            return Math.max(0, Math.min(100, stam + d * dt));
+        }
         function indMove(dt) {
             let R = ind, k = R.k, blocked = !!R.panel;
             let cd = new THREE.Vector3(); camera.getWorldDirection(cd); cd.y = 0;
@@ -1625,7 +1632,7 @@
             R.running = canRun;
             if (R.ride && R.ride.ty === 'bike') { R.stillT = 0; R.stam = moving ? Math.max(0, R.stam - RD.pedal * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }   // 脚踏吃体力
             else if (R.effort > 0) { R.stillT = 0; R.stam = Math.max(0, R.stam - R.effort * dt); }   // 拉风箱、扇扇子吃体力（任务 44）
-            else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }
+            else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : indStamWalk(R.stam, moving, S.energy, dt); }   // 任务 143：走路也耗体力，恢复略高于消耗；精神影响恢复
             let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1) * pwMoveMul() * mbMoveMul();   // 举着盾 ×0.6   // 鞋和药的跑速加成，合起来不超过 ×2.0（19-industry-power.js）
             if (R.ride) sp = rdMoveSpeed(dt, moving);   // 载具速度固定，鞋药不乘（19-industry-ride.js）
             if (moving) {

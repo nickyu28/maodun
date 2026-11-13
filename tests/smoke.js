@@ -13447,6 +13447,29 @@ async function enterExit(tab, key) {
             report('IND160 电源串联：并联 12 V 不够、串联 24 V、一个没电整条断、耗电按电压分、超额定先问、老存档并联', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND161')) {
+            // IND161 走路耗体力（任务 143）：精神 100 体力 50 走 10 秒体力 ≥ 50；精神 0 走 10 秒体力降到 28 左右；站着恢复按精神缩放；跑步每秒 −28；水里的旧数没了
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const go = (en, stam, keys, secs) => `(function(){ cancelAnimationFrame(ind.raf); ind.panel = null; ind.paused = false; ind.ride = null; ind.effort = 0; ind.base.surv.energy = ${en}; ind.stam = ${stam}; ind.k.w = ${keys.w ? 'true' : 'false'}; ind.k.run = ${keys.run ? 'true' : 'false'}; for (let i = 0; i < ${secs * 20}; i++) { ind.base.surv.energy = ${en}; indMove(0.05); } ind.k.w = false; ind.k.run = false; return ind.stam; })()`;
+                let a = await J(go(100, 50, { w: 1 }, 10)); if (!(a >= 50 && a <= 60)) bad.push('精神 100 走 10 秒体力涨约 5 ' + a);
+                a = await J(go(0, 50, { w: 1 }, 10)); if (!(a > 24 && a < 32)) bad.push('精神 0 走 10 秒体力降到约 28 ' + a);
+                a = await J(go(0, 20, {}, 1)); if (!(Math.abs(a - 26.4) < 1)) bad.push('精神 0 站 1 秒恢复 6.4 ' + a);
+                a = await J(go(100, 20, {}, 1)); if (!(Math.abs(a - 36) < 1)) bad.push('精神 100 站 1 秒恢复 16 ' + a);
+                a = await J(go(30, 20, {}, 1)); if (!(Math.abs(a - (20 + 16 * 0.7)) < 1)) bad.push('精神 30 系数 0.7 ' + a);
+                a = await J(go(100, 80, { w: 1, run: 1 }, 1)); if (!(Math.abs(a - 52) < 1.5)) bad.push('跑步每秒 −28 ' + a);
+                a = await J(`IND_WATER.stamDrain === undefined && IND_WATER.stamRegen === undefined`); if (a !== true) bad.push('水里的旧体力数该去掉');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND161 走路耗体力：精神高走路慢涨、精神 0 慢降、站着按精神缩放、跑步照旧、水里旧数去掉', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
