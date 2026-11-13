@@ -12815,7 +12815,7 @@ async function enterExit(tab, key) {
                 if (!(/还剩 6 份/.test(r.h) && /一次 4 个/.test(r.h) && r.got.join() === '4,4,4,4,4,4' && r.total === 24 && r.worn === 6)) bad.push('24 个的露头挖 6 次、每次 4 个、写还剩 6 份、耐久扣 6 ' + JSON.stringify(r));
                 if (!(r.iron === 5 && r.left2 === 19 && /一次 5 个/.test(r.h2) && /还剩 5 份/.test(r.h2))) bad.push('铁稿一次 5 个（按次数 +1） ' + JSON.stringify(r));
                 r = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', duraV: 1, dura: { pick_iron: 500, axe_iron: 500, pick_stone: 30 } }); let b2 = indFixBase(JSON.parse(JSON.stringify(b))); return { d: b.dura, v: b.duraV, again: JSON.stringify(b2.dura) === JSON.stringify(b.dura) }; })()`);
-                if (!(r.d.pick_iron === 250 && r.d.axe_iron === 500 && r.d.pick_stone === 30 && r.v === 2 && r.again)) bad.push('老存档镐剩的耐久减半一次、别的不动 ' + JSON.stringify(r));
+                if (!(r.d.pick_iron === 750 && r.d.axe_iron === 750 && r.d.pick_stone === 90 && r.v === 3 && r.again)) bad.push('老存档耐久换算一次（镐减半再 ×3，斧 ×1.5，石 ×3） ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
