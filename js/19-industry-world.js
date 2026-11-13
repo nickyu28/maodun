@@ -157,20 +157,66 @@
             indPanelClose();
             return wdChStart({ kind: 'craft', need: r.time, label: r.label || '做', done: function () { ind.craftNow = true; try { indCraft(i); } finally { ind.craftNow = false; } } });
         }
-        // 出生点 15 米内撒着捡得到的东西（每趟重新撒，捡完就没了）：悠闲 石头树枝各 6～8；硬核 尖石片 4、石头 6～8、树枝 6～8、草 8～10
+        // 任务 132：尖石片、石头、树枝、草撒遍全图，按群系决定密度（树枝在林子里、尖石片石头在山脚、草在草地）。每趟重新撒，捡完就没了。
+        // 然后找出生点：离 (0, 0) 最近的"能活"的点（不在水里、火山口、陡坡上，30 米内没有岩浆），25 米内要凑得齐第一把石稿的原料，凑不齐往附近挪，
+        // 还是不行就在 25 米内按群系补撒缺的。出生点附近没有特殊照顾。
+        const WD_SC = {
+            sharp_flint: { n: 250, hard: true, w: { mountain: 3, ancient: 3, beach: 2, volcano: 1, desert: 0.5, plain: 0.4, forest: 0.4 } },
+            stone: { n: 350, w: { mountain: 3, ancient: 3, volcano: 2, beach: 1.5, desert: 1, plain: 0.8, forest: 0.6 } },
+            twig: { n: 450, w: { forest: 3, plain: 1.5, mountain: 0.4, beach: 0.3, ancient: 0.2, desert: 0.1, volcano: 0.1 } },
+            grass: { n: 400, hard: true, w: { plain: 3, forest: 3, beach: 0.6, mountain: 0.4, desert: 0.2, ancient: 0.2, volcano: 0.1 } }
+        };
+        const WD_SPAWN = { r: 25, slope: 0.466, lava: 30, minH: 0.15, need: { sharp_flint: 2, grass: 4 }, needCasual: { stone: 2, twig: 2 } };
+        function wdSpawnOk(M, x, z) {
+            if (Math.abs(x) > IND_MAP - 20 || Math.abs(z) > IND_MAP - 20) return false;
+            let h = indHeight(M, x, z); if (h < WD_SPAWN.minH) return false;
+            let g = Math.max(Math.abs(indHeight(M, x + 2, z) - h), Math.abs(indHeight(M, x - 2, z) - h), Math.abs(indHeight(M, x, z + 2) - h), Math.abs(indHeight(M, x, z - 2) - h)) / 2;
+            if (g > WD_SPAWN.slope) return false;
+            for (let i = 0; i < M.volc.length; i++) { let v = M.volc[i], d = Math.hypot(x - v.x, z - v.z); if (d - v.r * 0.3 < WD_SPAWN.lava) return false; }
+            if (M.pinLava && M.pinLava.some(function (p) { return Math.hypot(x - p.x, z - p.z) - p.r < WD_SPAWN.lava; })) return false;
+            if (ind.nodes.some(function (o) { return !o.dead && Math.hypot(o.x - x, o.z - z) < 2.5; })) return false;
+            return true;
+        }
+        function wdSpawnHave(x, z) {
+            let c = {}; ind.tripGround.forEach(function (g) { if (Math.hypot(g.x - x, g.z - z) <= WD_SPAWN.r) c[g.k] = (c[g.k] || 0) + 1; }); return c;
+        }
+        function wdSpawnShort(M, x, z, hard) {
+            let need = hard ? WD_SPAWN.need : WD_SPAWN.needCasual, have = wdSpawnHave(x, z), miss = {};
+            Object.keys(need).forEach(function (k) { if ((have[k] || 0) < need[k]) miss[k] = need[k] - (have[k] || 0); });
+            return miss;
+        }
         function wdScatter(M) {
-            let r = indRng(M.seed ^ 0x51ed270b), hard = indHard(), list = [];
-            let add = function (k, n) { for (let i = 0; i < n; i++) list.push(k); };
-            if (hard) add('sharp_flint', 4);
-            add('stone', 6 + Math.floor(r() * 3)); add('twig', 6 + Math.floor(r() * 3));
-            if (hard) add('grass', 8 + Math.floor(r() * 3));
-            list.forEach(function (k) {
-                for (let t = 0; t < 30; t++) {
-                    let a = r() * Math.PI * 2, d = 3 + r() * 11, x = Math.cos(a) * d, z = -4 + Math.sin(a) * d;
+            let r = indRng(M.seed ^ 0x51ed270b), hard = indHard(); ind.tripGround = ind.tripGround || [];
+            Object.keys(WD_SC).forEach(function (k) {
+                let S = WD_SC[k]; if (S.hard && !hard) return;
+                for (let n = 0, tries = 0; n < S.n && tries < S.n * 40; tries++) {
+                    let x = (r() * 2 - 1) * (IND_MAP - 6), z = (r() * 2 - 1) * (IND_MAP - 6);
                     if (indHeight(M, x, z) < 0.2) continue;
-                    ind.tripGround.push({ k: k, x: x, z: z }); break;
+                    if (r() > (S.w[indBiome(M, x, z)] || 0) / 3) continue;
+                    ind.tripGround.push({ k: k, x: x, z: z }); n++;
                 }
             });
+            // 出生点：离 (0, 0) 近的、能活的点；要凑得齐原料。两遍：先要原料齐，再只要能活
+            let cand = [], found = null, safe = null, rep = { moved: false, topped: false };
+            for (let d = 0; d <= 300; d += (d < 60 ? 4 : 10)) for (let a = 0; a < (d ? Math.max(8, Math.round(d / 4)) : 1); a++) { let t = a / Math.max(1, Math.round(d / 4)) * Math.PI * 2 + d * 0.37; cand.push({ x: Math.cos(t) * d, z: Math.sin(t) * d - (d ? 0 : 4), d: d }); }
+            for (let i = 0; i < cand.length && !found; i++) {
+                let c = cand[i]; if (!wdSpawnOk(M, c.x, c.z)) continue;
+                if (!safe) safe = c;
+                if (c.d > 60 && safe.d <= 60) break;   // 60 米内找得到能活的，就不再往远处挪
+                if (!Object.keys(wdSpawnShort(M, c.x, c.z, hard)).length) found = c;
+            }
+            if (!found) found = safe || { x: 0, z: -4, d: 0 };
+            let miss = wdSpawnShort(M, found.x, found.z, hard);   // 还缺的在 25 米内按群系补撒
+            Object.keys(miss).forEach(function (k) {
+                let bm = indBiome(M, found.x, found.z);
+                if (k === 'twig' && (bm === 'mountain' || bm === 'ancient' || bm === 'desert' || bm === 'volcano')) return;   // 山里、沙漠里不补树枝
+                for (let i = 0, t = 0; i < miss[k] && t < 60; t++) {
+                    let a = r() * Math.PI * 2, d = 3 + r() * 21, x = found.x + Math.cos(a) * d, z = found.z + Math.sin(a) * d;
+                    if (indHeight(M, x, z) < 0.2) continue;
+                    ind.tripGround.push({ k: k, x: x, z: z }); i++; rep.topped = true;
+                }
+            });
+            M.spawn = { x: found.x, z: found.z }; M.spawnInfo = { d: Math.round(found.d), topped: rep.topped, biome: indBiome(M, found.x, found.z) };
             nkTripItemsSync();
         }
         // 对着地面挖：空手 3 秒、稿子 1 秒，每次 1 份；平原森林泥土、海边沙漠沙子、山地古老岩层火山石头（要石稿，火山偶尔 1 份硫），地上留一个小坑

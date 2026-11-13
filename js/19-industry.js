@@ -456,7 +456,7 @@
             wdMakeRivers(M);   // 河：1～3 条，从山地流到海边（19-industry-world.js）
             return M;
         }
-        function indElev(M, x, z) { let d = Math.hypot(x, z) / 160; return indFbm(x / (70 * IND_ZOOM), z / (70 * IND_ZOOM), M.seed) + (d < 1 ? 0.55 * (1 - d) : 0); }   // 出生点周围 160 米抬高一点：群系放大以后别让出生点被海围住（任务 92）
+        function indElev(M, x, z) { let d = Math.hypot(x, z) / 160, e = indFbm(x / (70 * IND_ZOOM), z / (70 * IND_ZOOM), M.seed); return d < 1 && e < -0.02 ? e + (-0.02 - e) * Math.min(1, (1 - d) * 3) : e; }   // 任务 132：中心 160 米内只把海抬到刚好是陆地（e ≥ -0.02），不再把出生点周围推成山地
         function indMoist(M, x, z) { return indFbm(x / (90 * IND_ZOOM), z / (90 * IND_ZOOM), M.seed + 101); }
         function indBiome(M, x, z) {
             if (M.moon) return moonBiome(M.moon, x, z);   // 月球（19-industry-moon.js）
@@ -464,7 +464,6 @@
             if (M.pins) { let pb = odPinBiome(M, x, z); if (pb) return pb; }
             for (let i = 0; i < M.volc.length; i++) { let v = M.volc[i]; if (Math.hypot(x - v.x, z - v.z) < v.r) return 'volcano'; }
             let e = indElev(M, x, z), m = indMoist(M, x, z), rr = Math.hypot(x, z) / IND_MAP;
-            if (Math.hypot(x, z) < 14) return 'plain';
             if (e < -0.05) return 'beach';   // 海边：海岸线上一条沙滩（再往下是海底）
             if (e > 0.32) return rr > 0.78 ? 'ancient' : 'mountain';
             if (m < -0.25) return 'desert';
@@ -476,7 +475,6 @@
             if (x > IND_MAP + 50) return CV.floor;   // 地图外面是矿洞（19-industry-cave.js，任务 66），地面平的
             let e0 = indElev(M, x, z), h = e0 * 9 + Math.max(0, e0 - 0.32) * 26;   // 山地更陡
             if (M.riv) h = wdRiverCarve(M, x, z, h);   // 河（19-industry-world.js）
-            let dsp = Math.hypot(x, z), spawn = Math.max(0, 1 - dsp / 14); h *= (1 - spawn); if (dsp < 14) h = Math.max(h, 0.4 * Math.min(1, (14 - dsp) / 4));   // 出生点周围 10 米一定是陆地
             for (let i = 0; i < M.volc.length; i++) {
                 let v = M.volc[i], d = Math.hypot(x - v.x, z - v.z);
                 if (d < v.r * 1.6) { let t = 1 - d / (v.r * 1.6); h += t * t * 22 - (d < v.r * 0.3 ? (1 - d / (v.r * 0.3)) * 8 : 0); }
@@ -1174,7 +1172,7 @@
             me.scale.setScalar(0.2); scene.add(me); ind.me = me;
         }
         // 成组画：基地地上的东西、农田里的作物、远征的资源点，各一个 InstancedMesh
-        const IND_ITEM_CAP = 600, IND_CROP_CAP = 200;
+        const IND_ITEM_CAP = 1800, IND_CROP_CAP = 200;   // 任务 132：地上的东西撒遍全图，上限从 600 提到 1800
         function indInst(geo, cap) {
             let m = new THREE.InstancedMesh(indGeo(geo), indMat(new THREE.MeshLambertMaterial({ color: 0xffffff })), cap);
             m.setColorAt(0, new THREE.Color(0xffffff));   // 先建好每个实例的颜色，第一次画之前着色器就带上实例颜色（不然后面设颜色也是白的）
@@ -1397,7 +1395,8 @@
             fmSpawnWild(M);   // 野兔、野鹿（另用一个随机数，不打乱上面的）
             ind.animalMesh = indInst(new THREE.BoxGeometry(1, 1, 1), 120);
             // 撤离点：4 个。1 个就在出生点脚下（走开一次才生效，不然一出生就回家了），另外 3 个每趟随机散在地图里（离出生点和彼此都 ≥ 150 米，找不到就一点点放宽）
-            ind.exits = [{ x: 0, z: -4, name: '撤离点', armed: false }];
+            let SP = M.spawn || { x: 0, z: -4 };
+            ind.exits = [{ x: SP.x, z: SP.z, name: '撤离点', armed: false }];
             for (let tries = 0, minD = 260; ind.exits.length < 4 && tries < 2000; tries++) {
                 if (tries && tries % 300 === 0) minD = Math.max(60, minD - 20);
                 let x = (r() * 2 - 1) * (IND_MAP - 20), z = (r() * 2 - 1) * (IND_MAP - 20);
@@ -1412,7 +1411,7 @@
                 beam.position.set(e.x, y + 15, e.z); indAdd(beam);
                 indSign(e.name, e.x, y + 3.2, e.z, 2.6, 0.65);
             });
-            ind.p.x = 0; ind.p.z = -4; ind.p.y = indHeight(M, 0, -4); ind.p.vy = 0;
+            ind.p.x = SP.x; ind.p.z = SP.z; ind.p.y = indHeight(M, SP.x, SP.z); ind.p.vy = 0;
             mbPetsOut();   // 装了刀的宠物跟着出门（任务 70）
             indSave();
             indFlash('出发了！走回绿色撤离圈里站 ' + IND_T.extract + ' 秒才算带回来');

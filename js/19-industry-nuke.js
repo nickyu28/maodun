@@ -376,7 +376,7 @@
                 ind.nodes.forEach(function (o) {
                     if (o.dead || !inR(o) || o.key === 'oil') return;   // 油点是泉，不炸开
                     let nd = IND_NODES[o.key], k = o.key === 'seeds' ? o.seed : (nd.out || o.key);
-                    for (let i = 0; i < o.n * 2 && ind.tripGround.length < 400; i++) { let a = i * 2.399; ind.tripGround.push({ k: k, x: o.x + Math.cos(a) * 0.6, z: o.z + Math.sin(a) * 0.6 }); }
+                    for (let i = 0; i < o.n * 2 && ind.tripGround.length < IND_ITEM_CAP; i++) { let a = i * 2.399; ind.tripGround.push({ k: k, x: o.x + Math.cos(a) * 0.6, z: o.z + Math.sin(a) * 0.6 }); }
                     o.dead = true;
                 });
                 ind.nodeDirty = true; nkTripItemsSync();

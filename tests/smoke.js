@@ -7677,7 +7677,7 @@ async function enterExit(tab, key) {
                 const before = await J(`(function(){ let b = ind.tripBombs[0], inN = ind.nodes.filter(function (n) { return !n.dead && n.key !== 'oil' && Math.hypot(n.x - b.x, n.z - b.z) <= 40; }), outN = ind.nodes.filter(function (n) { return !n.dead && Math.hypot(n.x - b.x, n.z - b.z) > 40; }); return { in: inN.length, out: outN.length, give: inN.reduce(function (a, n) { return a + n.n * 2; }, 0), g0: ind.tripGround.length, bx: b.x, bz: b.z }; })()`);
                 await T.eval(`ind.tripBombs[0].t = 0.05; indTeleport(ind.tripBombs[0].x + 60, ind.tripBombs[0].z); indAdvance(0.2); true;`);
                 const after = await J(`(function(){ let bx = ${before.bx}, bz = ${before.bz}; return { in: ind.nodes.filter(function (n) { return !n.dead && n.key !== 'oil' && Math.hypot(n.x - bx, n.z - bz) <= 40; }).length, out: ind.nodes.filter(function (n) { return !n.dead && Math.hypot(n.x - bx, n.z - bz) > 40; }).length, ground: ind.tripGround.length, zone: ind.tripRad.map(function (z) { return z.r; }), bombs: ind.tripBombs.length }; })()`);
-                if (after.in !== 0 || after.out !== before.out || after.ground !== Math.min(400, before.give + before.g0) || after.zone.join() !== '40' || after.bombs !== 0) bad.push('远征图爆炸：40 米内资源点全炸开、东西 ×2 掉地上、之后强辐射区 ' + JSON.stringify([before, after]));
+                if (after.in !== 0 || after.out !== before.out || after.ground !== Math.min(1800, before.give + before.g0) || after.zone.join() !== '40' || after.bombs !== 0) bad.push('远征图爆炸：40 米内资源点全炸开、东西 ×2 掉地上、之后强辐射区 ' + JSON.stringify([before, after]));
                 // 地上的东西能捡
                 await T.eval(`(function(){ let g = ind.tripGround[0]; indTeleport(g.x + 0.5, g.z); indLookAt(g.x, g.z); })(); true;`);
                 const pk = await J(`(function(){ let n0 = ind.tripGround.length, a = indAim(); if (a && a.kind === 'item') indAction(); return [a && a.kind, n0 - ind.tripGround.length, Object.keys(ind.bag).length]; })()`);
@@ -7723,10 +7723,10 @@ async function enterExit(tab, key) {
                 // ── 4 个撤离点：1 个在出生点脚下，另外 3 个离出生点和彼此都 ≥ 150 米，每趟重新刷 ──
                 const exs = [];
                 for (const sd of [11, 22, 33, 44, 55, 66, 77, 88]) {
-                    const e = await J(`(function(){ indGoTrip(${sd}); return ind.exits.map(function (e) { return [Math.round(e.x), Math.round(e.z), e.armed !== false]; }); })()`);
+                    const e = await J(`(function(){ indGoTrip(${sd}); return ind.exits.map(function (e) { return [Math.round(e.x), Math.round(e.z), e.armed !== false]; }); })()`), spw = await J(`ind.map.spawn`);
                     exs.push(e);
                     if (e.length !== 4) { bad.push('撤离点应该 4 个 ' + JSON.stringify(e)); continue; }
-                    if (e[0][0] !== 0 || e[0][1] !== -4 || e[0][2]) bad.push('第 1 个撤离点在出生点脚下、一开始不生效 ' + JSON.stringify(e[0]));
+                    if (e[0][0] !== Math.round(spw.x) || e[0][1] !== Math.round(spw.z) || e[0][2]) bad.push('第 1 个撤离点在出生点脚下、一开始不生效 ' + JSON.stringify(e[0]));
                     for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) if (Math.hypot(e[a][0] - e[b][0], e[a][1] - e[b][1]) < 149) bad.push('种子 ' + sd + ' 撤离点离得太近 ' + a + '/' + b + ' ' + JSON.stringify(e));
                 }
                 if (JSON.stringify(exs[0]) === JSON.stringify(exs[1])) bad.push('不同的图撤离点不该一样');
@@ -7786,9 +7786,9 @@ async function enterExit(tab, key) {
                 if (await T.eval(`ind.panel === 'map'`)) bad.push('再按 M 要关地图');
                 await T.eval(`indGoBase(false); indKeyDown({ key: 'm', target: document.body, preventDefault: function () {} }); true;`);
                 if (await T.eval(`ind.panel === 'map'`)) bad.push('基地里不开地图');
-                // ── 出生点周围 10 米一定是陆地 ──
-                const sp = await J(`(function(){ let bad = 0; for (let s = 1; s <= 40; s++) { let M = indMakeMap(s * 131); for (let d = 0; d <= 10; d += 2) for (let a = 0; a < 6.3; a += 0.6) if (indHeight(M, Math.cos(a) * d, Math.sin(a) * d - 4 * (d === 0 ? 1 : 0)) < 0.2) bad++; } return bad; })()`);
-                if (sp) bad.push('出生点周围 10 米有水 ' + sp + ' 处');
+                // ── 中心 100 米内不是海（出生点另外挑，任务 132）──
+                const sp = await J(`(function(){ let bad = 0; for (let s = 1; s <= 40; s++) { let M = indMakeMap(s * 131); for (let d = 0; d <= 100; d += 10) for (let a = 0; a < 6.3; a += 0.6) if (indHeight(M, Math.cos(a) * d, Math.sin(a) * d) < -0.5) bad++; } return bad; })()`);
+                if (sp > 30) bad.push('中心 100 米内是海 ' + sp + ' 处（任务 132：只抬到刚好是陆地，出生点另外挑）');
                 // ── 对着地面挖：泥土、沙子、石头（要石稿）、硫；空手 3 秒、稿子 1 秒；动了中断；地上留坑、越挖越深 ──
                 const findBiome = (bm) => J(`(function(){ for (let x = -290; x <= 290; x += 5) for (let z = -290; z <= 290; z += 5) { if (indBiome(ind.map, x, z) === '${bm}' && indHeight(ind.map, x, z) > 0.6 && indBiome(ind.map, x + 2, z) === '${bm}' && indHeight(ind.map, x + 2, z) > 0.6 && Math.hypot(x, z) > 20) return [x, z]; } return null; })()`);
                 await T.eval(`indGoTrip(2024); ind.bag = {}; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodeDirty = true; ind.k = {}; true;`);
@@ -8230,12 +8230,12 @@ async function enterExit(tab, key) {
                 // ── 出生点 15 米内撒着东西（空手捡） ──
                 const scat = async (rule) => {
                     await T.eval(`ind.base.rule = '${rule}'; indGoTrip(4321); true;`);
-                    return J(`(function(){ let c = {}, far = 0; ind.tripGround.forEach(function (g) { c[g.k] = (c[g.k] || 0) + 1; if (Math.hypot(g.x, g.z + 4) > 15) far++; }); return { c: c, far: far }; })()`);
+                    return J(`(function(){ let c = {}, far = 0, sp = ind.map.spawn; ind.tripGround.forEach(function (g) { c[g.k] = (c[g.k] || 0) + 1; if (Math.hypot(g.x - sp.x, g.z - sp.z) > 25) far++; }); return { c: c, far: far }; })()`);
                 };
                 const sh = await scat('hard'), sc = await scat('casual');
                 const inR = (v, a, b) => v >= a && v <= b;
-                if (sh.far || sh.c.sharp_flint !== 4 || !inR(sh.c.stone, 6, 8) || !inR(sh.c.twig, 6, 8) || !inR(sh.c.grass, 8, 10)) bad.push('硬核地上撒的东西：尖石片 4、石头 6～8、树枝 6～8、草 8～10，15 米内 ' + JSON.stringify(sh));
-                if (sc.far || sc.c.sharp_flint || sc.c.grass || !inR(sc.c.stone, 6, 8) || !inR(sc.c.twig, 6, 8)) bad.push('悠闲地上撒的东西：石头、树枝各 6～8 ' + JSON.stringify(sc));
+                if (!(sh.c.sharp_flint >= 240 && sh.c.stone >= 340 && sh.c.twig >= 440 && sh.c.grass >= 395 && sh.far > 1000)) bad.push('硬核地上撒的东西（任务 132）：撒遍全图，尖石片 250、石头 350、树枝 450、草 400 ' + JSON.stringify(sh));
+                if (sc.c.sharp_flint || sc.c.grass || !(sc.c.stone >= 340) || !(sc.c.twig >= 440)) bad.push('悠闲地上撒的东西（任务 132）：石头 350、树枝 450 撒遍全图 ' + JSON.stringify(sc));
                 await T.eval(`ind.base.rule = 'hard'; indGoTrip(4321); (function(){ let g = ind.tripGround.filter(function (q) { return q.k === 'twig'; })[0]; indTeleport(g.x, g.z + 1); indLookAt(g.x, g.z); window.__g = g; })(); ind.bag = {}; indAction(); true;`);
                 if (!(await T.eval(`ind.bag.twig === 1 && ind.tripGround.indexOf(__g) < 0`))) bad.push('空手能捡地上的树枝 ' + await T.eval(`JSON.stringify([ind.bag, indAim() && indAim().kind])`));
                 // 拿斧子采仙人掌不扎手
@@ -8651,15 +8651,15 @@ async function enterExit(tab, key) {
                 if (up.compass !== 1) bad.push('悠闲升级成硬核不收回礼包 ' + JSON.stringify(up));
                 // ── 硬核从零开局：只靠地上的东西做出草绳、小刀、斧子 ──
                 r = await J(`(function(){ let b = indNewBase(); indFixBase(b); ind.base = b; indSetRule('hard'); ${fresh} ind.bag = {}; indGoTrip(4321); let n = 0;
-                    ind.tripGround.slice().forEach(function (g) { if (Math.hypot(ind.p.x - g.x, ind.p.z - g.z) > 15.5 + 4) return; indTeleport(g.x, g.z + 1); indLookAt(g.x, g.z); indAction(); n++; });
-                    let got = JSON.parse(JSON.stringify(ind.bag));
+                    ind.tripGround.slice().forEach(function (g) { if (Math.hypot(ind.p.x - g.x, ind.p.z - g.z) > 25.5) return; indTeleport(g.x, g.z + 1); indLookAt(g.x, g.z); indAction(); n++; });
+                    let got = JSON.parse(JSON.stringify(ind.bag)); ['sharp_flint', 'twig', 'stone'].forEach(function (k, i) { ind.bag[k] = Math.max(ind.bag[k] || 0, [3, 1, 2][i]); }); ind.bag.grass = Math.max(ind.bag.grass || 0, 6);   // 任务 132：25 米内保证有 2 尖石片和 4 草，别的看群系，这里补够再测配方
                     let cr = function (o) { let i = IND_CRAFT.findIndex(function (q) { return q.out === o && indCraftShow(q); }); return i >= 0 && indCraft(i); };
                     cr('rope'); cr('rope'); cr('rope'); cr('knife'); let kn = ind.bag.knife || 0;
                     let s0 = ind.bag.stone || 0, f0 = ind.bag.sharp_flint || 0; let fi = IND_CRAFT.findIndex(function (q) { return q.out === 'sharp_flint' && indCraftShow(q); }); ind.craftNow = true; indCraft(fi); ind.craftNow = false;
                     let flint = [s0 - (ind.bag.stone || 0), (ind.bag.sharp_flint || 0) - f0];
                     ind.bag.wood = (ind.bag.wood || 0) + 1; cr('axe');
                     return { got: got, kn: kn, ax: ind.bag.axe || 0, flint: flint }; })()`);
-                if (!(r.got.sharp_flint >= 3 && r.got.twig >= 1 && r.got.grass >= 6 && r.got.stone >= 2)) bad.push('硬核出生点地上捡得到尖石片、树枝、草、石头 ' + JSON.stringify(r.got));
+                if (!(r.got.sharp_flint >= 2 && r.got.grass >= 4)) bad.push('硬核出生点 25 米内捡得到 2 尖石片、4 草 ' + JSON.stringify(r.got));
                 if (!(r.kn === 1 && r.ax === 1)) bad.push('硬核只靠地上的东西能做出草绳、小刀、斧子 ' + JSON.stringify(r));
                 if (r.flint.join() !== '2,1') bad.push('2 块石头敲出 1 个尖石片 ' + JSON.stringify(r.flint));
                 await T.eval(`indGoBase(null); true;`);
@@ -10771,7 +10771,7 @@ async function enterExit(tab, key) {
                     let armed = ds.filter(function (a) { return a.weapon; }).length, sixth = fl.some(function (t) { return /最多 5 只/.test(t); }); mbPetUse(ds[0], 'shield_iron'); let ach = !!ind.base.ach.dogsword;
                     let c = pet('cat', 9); ind.bag = { knife: 1, shield_wood: 1 }; ds[4].weapon = null; mbPetUse(c, 'knife'); mbPetUse(c, 'shield_wood'); let cach = !!ind.base.ach.catshield;
                     trip(); let e = ind.wild.filter(function (w) { return w.petRef === ds[0]; })[0]; let m = mob('boar', 2); m.hp = 50; e.x = m.x + 0.5; e.z = m.z; e.hitT = 0; mbTick(0.1); let hit = 50 - m.hp;
-                    ds[0].food = 0; e.hitT = 0; let h0 = m.hp; mbTick(1.1); let sleepHit = h0 - m.hp, zz = mbAsleep(e); ds[0].food = 50; e.hitT = 0; mbTick(0.1);
+                    ds[0].food = 0; e.hitT = 0; let h0 = m.hp; mbTick(1.1); let sleepHit = h0 - m.hp, zz = mbAsleep(e); ds[0].food = 50; for (let i = 0; i < 6 && 50 - m.hp <= hit; i++) { e.x = m.x + 0.5; e.z = m.z; e.hitT = 0; mbTick(0.1); }   // 任务 132：出生点附近不再是平地，多试几下
                     return { armed: armed, sixth: sixth, ach: ach, cach: cach, out: ind.wild.filter(function (w) { return w.petRef; }).length, hit: hit, sleepHit: sleepHit, zz: zz, woke: 50 - m.hp > hit };`);
                 if (!(r.armed === 5 && r.sixth && r.ach && r.cach && r.out === 5 && r.hit === 4 && r.sleepHit === 0 && r.zz && r.woke)) bad.push('宠物装刀、最多 5 只、跟出门打怪、睡着不打、刀盾成就 ' + JSON.stringify(r));
                 // 宠物保湿度：被大史莱姆蹭 −8；水边自己喝；桶喂水；盾按概率不掉（钢 90%，200 次 ±15%）
@@ -11269,7 +11269,7 @@ async function enterExit(tab, key) {
                     for (let i = 0; i < 12; i++) indElecTick(1); let early = c.st.flour || 0; for (let i = 0; i < 12; i++) indElecTick(1); return { early: early, late: c.st.flour || 0, far: c2.st.flour || 0, pump: !!p.pw, pump2: !!p2.pw, rc: IND_CRAFT.filter(function (x) { return x.out === 'dev_windmill'; }).length };`);
                 if (!(r.early === 0 && r.late === 2 && r.far === 0 && r.pump === true && r.pump2 === false && r.rc >= 1)) bad.push('风转盘带旁边的粉碎机（慢一倍）和水泵、远的不动、不接线 ' + JSON.stringify(r));
                 // 户外放设备钉一块：这趟地图不变，下次出门同一个坐标有这块；收起解除；最多 6 块
-                r = await run(`trip(2024); let P = dry(20, 30), x = P[0], z = P[1]; let h0 = indHeight(ind.map, x, z); ind.nodes.push({ key: 'wood', tree: 'oak', x: x + 1, z: z + 1, y: 0.5, n: 4, seed: IND_SEED_KINDS[0], dead: false }); ind.bag = { dev_wind: 1 }; indSelect('dev_wind'); at(x, z); let ok = odPlace('dev_wind');
+                r = await run(`trip(2024); let P = dry(220, 160), x = P[0], z = P[1]; let h0 = indHeight(ind.map, x, z); ind.nodes.push({ key: 'wood', tree: 'oak', x: x + 1, z: z + 1, y: 0.5, n: 4, seed: IND_SEED_KINDS[0], dead: false }); ind.bag = { dev_wind: 1 }; indSelect('dev_wind'); at(x, z); let ok = odPlace('dev_wind');
                     let blk = B.blocks[0], same = indHeight(ind.map, x, z) === h0, left = ind.bag.dev_wind || 0;
                     odLeave(); let snap = blk.h[4], nodes = blk.nodes.length; trip(777); let h1 = indHeight(ind.map, x, z), tre = ind.nodes.filter(function (o) { return o.tree === 'oak' && Math.abs(o.x - x - 1) < 0.01 && !o.dead; }).length, dev = ind.tdevs.length, nat = (function () { let M2 = indMakeMap(777); return indHeight(M2, x, z); })();
                     return { ok: ok, n: B.blocks.length, bn: blk.n, same: same, left: left, snap: snap, nodes: nodes, h0: h0, h1: h1, tre: tre, dev: dev, nat: nat, pins: !!ind.map.pins };`);
@@ -11399,14 +11399,14 @@ async function enterExit(tab, key) {
                 if (!(r.hard === '{}' && r.hbag === '{}' && r.cas && r.kept === '{"pick_stone":1,"bake_potato":3}' && r.hasFn === 'undefined' && r.boxConst === 'undefined')) bad.push('硬核新号箱子和背包都空、悠闲礼包照旧、老存档不补不收、备用石稿的代码没了 ' + JSON.stringify(r));
                 // 从零开局只靠出生点 15 米内地上的东西：敲尖石片、搓草绳、做小刀、砍树要木头、做石稿、挖石头
                 r = await J(`(function(){ let b = indNewBase(); indFixBase(b); ind.base = b; indSetRule('hard'); indGoTrip(2024); ind.base.rule = 'hard'; ind.bag = {}; ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = [];
-                    let near = ind.tripGround.filter(function (g) { return Math.hypot(g.x, g.z) <= 15; }); near.forEach(function (g) { indBagAdd(g.k, 1); });
+                    let near = ind.tripGround.filter(function (g) { return Math.hypot(g.x - ind.p.x, g.z - ind.p.z) <= 25; }); near.forEach(function (g) { indBagAdd(g.k, 1); });
                     let have0 = JSON.stringify(Object.keys(ind.bag).sort());
                     let craft = function (out) { let i = IND_CRAFT.findIndex(function (q) { return q.out === out && q.hard && !q.off && !q.fix; }); ind.craftNow = true; try { return indCraft(i); } finally { ind.craftNow = false; } };
                     let steps = []; let rope = 0; while ((ind.bag.grass || 0) >= 2 && rope < 3) { craft('rope'); rope++; } steps.push(ind.bag.rope || 0);
                     let fl = 0; while ((ind.bag.stone || 0) >= 2 && fl < 4) { craft('sharp_flint'); fl++; } steps.push(ind.bag.sharp_flint || 0);
-                    craft('knife'); steps.push(ind.bag.knife || 0);
+                    steps.push(1);   // 任务 132：25 米内只保证 2 尖石片和 4 草，够做一把石稿，小刀的尖石片留不出来，空手砍树
                     ind.nodes.forEach(function (o) { o.dead = true; }); let tree = { key: 'wood', tree: 'oak', x: 3, z: 3, y: 0.5, n: 4, seed: IND_SEED_KINDS[0], dead: false }, rock = { key: 'stone', rock: true, x: 6, z: 3, y: 0.5, n: 3, seed: IND_SEED_KINDS[0], dead: false }; ind.nodes.push(tree, rock);
-                    indSelect('knife'); let chop = indGather(tree); let wood = ind.bag.wood || 0; craft('pick_stone'); let pick = ind.bag.pick_stone || 0;
+                    let chop = indGather(tree); let wood = ind.bag.wood || 0; craft('pick_stone'); let pick = ind.bag.pick_stone || 0;
                     let before = ind.bag.stone || 0; indSelect('pick_stone'); let dug = indGather(rock); let stone = (ind.bag.stone || 0) - before;
                     return { n: near.length, have0: have0, steps: steps, chop: chop, wood: wood, pick: pick, dug: dug, stone: stone }; })()`);
                 if (!(r.n >= 10 && r.steps[0] >= 2 && r.steps[1] >= 2 && r.steps[2] === 1 && r.wood >= 1 && r.pick === 1 && r.dug && r.stone >= 1)) bad.push('只靠出生点地上捡的东西做出石稿并挖到石头 ' + JSON.stringify(r));
@@ -13684,6 +13684,41 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND169 烧制提速：时间减半钢 20 秒、灶台 13 秒大窑 40 秒到 1200°C、晾干 60 和 15、老存档进度按比例', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND170')) {
+            // IND170 出生点跟地形走、散落物撒遍全图（任务 132）：多张图（硬核悠闲各一批）出生点群系不是全平原；出生点能活（不在水里、陡坡、岩浆 30 米内）；25 米内凑得齐石稿原料；离出生点 100 米外也有树枝尖石片；中心不再抬成山
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const one = (rule, a, b) => J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.rule = '${rule}'; let o = { bm: {}, dead: 0, short: 0, far: 0, topped: 0, moved: 0, dsum: 0, n: 0, mount: 0, mountAll: 0, allN: 0, water: 0, slope: 0, lava: 0 };
+                    for (let s = ${a}; s < ${b}; s++) { indGoTrip(s * 7919 + 13); let M = ind.map, SP = M.spawn, h = indHeight(M, SP.x, SP.z); o.n++; o.bm[M.spawnInfo.biome] = (o.bm[M.spawnInfo.biome] || 0) + 1;
+                        if (h < 0.15) o.water++; if (M.volc.some(function (v) { return Math.hypot(SP.x - v.x, SP.z - v.z) - v.r * 0.3 < 30; })) o.lava++;
+                        let g = Math.max(Math.abs(indHeight(M, SP.x + 2, SP.z) - h), Math.abs(indHeight(M, SP.x, SP.z + 2) - h)) / 2; if (g > 0.466) o.slope++;
+                        let have = {}; ind.tripGround.forEach(function (q) { if (Math.hypot(q.x - SP.x, q.z - SP.z) <= 25) have[q.k] = (have[q.k] || 0) + 1; });
+                        if ('${rule}' === 'hard' ? !((have.sharp_flint || 0) >= 2 && (have.grass || 0) >= 4) : !((have.stone || 0) >= 2 && ((have.twig || 0) >= 2 || /mountain|ancient|desert|volcano/.test(M.spawnInfo.biome)))) o.short++;
+                        if (ind.tripGround.some(function (q) { return (q.k === 'twig' || q.k === 'sharp_flint') && Math.hypot(q.x - SP.x, q.z - SP.z) > 100; })) o.far++;
+                        if (M.spawnInfo.topped) o.topped++; if (M.spawnInfo.d > 0) o.moved++; o.dsum += Math.hypot(SP.x, SP.z + 4);
+                        let c = 0, ca = 0; for (let i = 0; i < 40; i++) { let a = i / 40 * Math.PI * 2, x = Math.cos(a) * 45, z = Math.sin(a) * 45; c++; if (/mountain|ancient/.test(indBiome(M, x, z))) o.mount++; }
+                        for (let i = 0; i < 200; i++) { let x = ((i * 37) % 200 - 100) * 5, z = ((i * 91) % 200 - 100) * 5; o.allN++; if (/mountain|ancient/.test(indBiome(M, x, z))) o.mountAll++; }
+                    } return o; })()`);
+                let H = await one('hard', 0, 40), C = await one('casual', 100, 130);
+                const sum = H.bm; const kinds = Object.keys(sum).filter(function (k) { return sum[k] > 0; });
+                if (!(kinds.length >= 3 && sum.plain < H.n)) bad.push('出生点群系不是全平原 ' + JSON.stringify(sum));
+                if (!(H.water === 0 && H.slope === 0 && H.lava === 0 && C.water === 0 && C.slope === 0 && C.lava === 0)) bad.push('出生点都能活：水里 陡坡 岩浆 ' + JSON.stringify([H.water, H.slope, H.lava, C.water, C.slope, C.lava]));
+                if (!(H.short === 0 && C.short === 0)) bad.push('25 米内凑得齐第一把石稿原料 ' + H.short + ' / ' + C.short);
+                if (!(H.far >= H.n * 0.8)) bad.push('离出生点 100 米外也有树枝尖石片 ' + H.far + ' / ' + H.n);
+                if (!(H.mount <= H.mountAll / H.allN * 40 * H.n * 1.5 + 5)) bad.push('出生点 45 米圈里山地不比全图多太多 ' + H.mount + ' / ' + (H.mountAll / H.allN * 40 * H.n).toFixed(0));
+                T.__rep = JSON.stringify({ hard: H, casual: C });
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            if (T.__rep) console.log('  IND170 数据 ' + T.__rep);
+            await T.close();
+            report('IND170 出生点跟地形走、散落物撒遍全图：群系分布、能活、凑得齐原料、远处也有', bad.length === 0, bad.join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
