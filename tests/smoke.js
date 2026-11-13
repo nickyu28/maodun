@@ -13241,6 +13241,43 @@ async function enterExit(tab, key) {
             await T.close();
             report('ES1 所有弹出的东西按 Esc 关：系统弹窗按按钮规则、一次一层、鼠标锁着不关、图鉴、记录榜、背包、大地图、商店、仓库', bad.length === 0, bad.join(' / '));
         }
+        if (want('ES2')) {
+            // ES2 面板关掉自动把鼠标锁回来（任务 P2 补充）：弹窗时鼠标锁着，Esc 关掉就马上锁；锁被拒绝（pointerlockerror）就等下一次点击补锁，这一下点击只锁、不当成别的动作，再点才是正常点击；按键补锁不吞按键；背包一样；触屏不锁；鼠标本来没锁的不锁
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const esc = async () => { await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); };
+            const click = async () => { await T.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 400, y: 300, button: 'left', clickCount: 1 }); await T.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 400, y: 300, button: 'left', clickCount: 1 }); };
+            await T.eval(`${HIDE} window.__lk = 0; window.__lmb = 0; window.__fake = false; safeLockPointer = function () { window.__lk++; };
+                Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: function () { return window.__fake ? document.body : null; } });
+                window.addEventListener('mousedown', function () { window.__lmb++; }); gState.control = 'laptop'; true;`);
+            const lk = () => T.eval(`__lk`);
+            let n0 = await lk();
+            await T.eval(`__fake = true; showSysModal('t', 'x', [{ label: '知道了' }]); __fake = false; true;`);
+            await esc(); await W(300);
+            if ((await lk()) !== n0 + 1) bad.push('弹窗 Esc 关掉没锁鼠标 ' + [n0, await lk()]);
+            await T.eval(`document.dispatchEvent(new Event('pointerlockerror')); true;`);
+            n0 = await lk(); await click(); await W(200);
+            if ((await lk()) !== n0 + 1 || (await T.eval(`__lmb`)) !== 0) bad.push('锁被拒后点一下：该补锁且这一下不当成点击 ' + JSON.stringify([n0, await lk(), await T.eval(`__lmb`)]));
+            await click(); await W(200);
+            if ((await T.eval(`__lmb`)) !== 1) bad.push('补锁之后的点击该是正常点击 ' + await T.eval(`__lmb`));
+            await T.eval(`__fake = true; toggleBackpackUI(); __fake = false; true;`);
+            n0 = await lk(); await esc(); await W(300);
+            if ((await lk()) !== n0 + 1 || (await T.eval(`gState.backpackOpen`))) bad.push('背包 Esc 关掉没锁鼠标 ' + [n0, await lk()]);
+            await T.eval(`document.dispatchEvent(new Event('pointerlockerror')); true;`);
+            n0 = await lk();
+            await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'x', code: 'KeyX', windowsVirtualKeyCode: 88 }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'x', code: 'KeyX', windowsVirtualKeyCode: 88 });
+            if ((await lk()) !== n0 + 1) bad.push('锁被拒后按键该补锁 ' + [n0, await lk()]);
+            // 触屏、鼠标本来没锁：不锁
+            await T.eval(`gState.control = 'pad'; __fake = true; showSysModal('t', 'x', [{ label: '知道了' }]); __fake = false; true;`);
+            n0 = await lk(); await esc(); await W(300);
+            if ((await lk()) !== n0) bad.push('触屏不该锁鼠标 ' + [n0, await lk()]);
+            await T.eval(`gState.control = 'laptop'; showSysModal('t', 'x', [{ label: '知道了' }]); true;`);
+            n0 = await lk(); await esc(); await W(300);
+            if ((await lk()) !== n0) bad.push('鼠标本来没锁，关弹窗不该去锁 ' + [n0, await lk()]);
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('ES2 面板关掉自动锁回鼠标：Esc 关就锁、被拒后点一下只锁不当点击、按键补锁、背包、触屏和本来没锁的不动', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

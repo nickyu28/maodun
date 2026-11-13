@@ -40,7 +40,7 @@
         function sysModalSync() {
             let vis = sysModalVisible();
             if (typeof introOpen !== 'undefined') introOpen = vis && sysModalKind === 'intro';
-            if (!vis) { sysModalKind = null; setTimeout(sysModalNext, 150); }
+            if (!vis) { sysModalKind = null; setTimeout(sysModalNext, 150); setTimeout(panelClosedRelock, 220); }
         }
         // 代码里要关掉"自己弹的那个普通弹窗"时用这个：开着的是卡片就不动它（它的普通弹窗还在排队，一起撤掉）
         function sysModalCloseNormal() {
@@ -54,7 +54,7 @@
         function sysModalRender(title, text, buttons, kind) {
             // 大厅里鼠标一直是指针锁定状态（转视角用），弹窗一开还锁着的话，
             // 想点弹窗按钮鼠标根本不会动，还一直在转镜头——弹窗前先解锁。
-            if (document.pointerLockElement) { try { document.exitPointerLock(); } catch (e) { } }
+            if (document.pointerLockElement) { relockHad = true; try { document.exitPointerLock(); } catch (e) { } }
             document.getElementById('sys-modal-title').innerText = title;
             document.getElementById('sys-modal-text').innerHTML = text;
             let btnContainer = document.getElementById('sys-modal-btns'); btnContainer.innerHTML = '';

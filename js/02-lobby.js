@@ -1687,12 +1687,35 @@
                 { name: '仓库', open: function () { return escShown('screen-garage'); }, close: garageBackToLobby }
             ];
         }
+        // ── 面板关掉以后把鼠标锁回来（任务 P2 补充，作者 11-13）──
+        // 弹出面板时鼠标本来是锁着的就记一笔（relockHad）；面板全关了就马上 safeLockPointer()。Chrome 不把 Esc 算用户操作，会拒绝，
+        // 拒绝了（pointerlockerror）就等下一次按键或点击补锁：按键照常用，点击那一下只锁鼠标，不当成攻击或别的动作。触屏、没有鼠标锁的模式不受影响。
+        let relockHad = false, relockPending = false;
+        function panelsAnyOpen() { return escLayers().some(function (l) { try { return l.open(); } catch (e) { return false; } }); }
+        function panelClosedRelock() {
+            if (!relockHad) return;
+            if (gState.control !== 'laptop' || document.pointerLockElement || panelsAnyOpen()) { if (document.pointerLockElement || gState.control !== 'laptop') relockHad = false; return; }
+            if (!(isPlaying || (typeof hub !== 'undefined' && hub))) { relockHad = false; return; }
+            relockHad = false; relockPending = false;
+            safeLockPointer();
+        }
+        document.addEventListener('pointerlockerror', function () { relockPending = true; });
+        document.addEventListener('pointerlockchange', function () { if (document.pointerLockElement) relockPending = false; });
+        window.addEventListener('keydown', function (e) {
+            if (!relockPending || document.pointerLockElement || e.key === 'Escape' || panelsAnyOpen()) return;
+            relockPending = false; safeLockPointer();
+        }, true);
+        window.addEventListener('mousedown', function (e) {
+            if (!relockPending || document.pointerLockElement || panelsAnyOpen()) return;
+            if (e.target && e.target.closest && e.target.closest('button, input, select, textarea, a')) return;
+            relockPending = false; safeLockPointer(); e.stopImmediatePropagation(); e.preventDefault();
+        }, true);
         // 关掉最上面一层，返回关的是哪一层的名字；没有可关的返回 null
         function escCloseTop() {
             let L = escLayers();
             for (let i = 0; i < L.length; i++) {
                 let o = false; try { o = L[i].open(); } catch (e) { }
-                if (o) { try { L[i].close(); } catch (e) { } return L[i].name; }
+                if (o) { try { L[i].close(); } catch (e) { } setTimeout(panelClosedRelock, 0); return L[i].name; }
             }
             return null;
         }
@@ -2045,17 +2068,18 @@
             if (gState.largeMapOpen) return;
             gState.backpackOpen = !gState.backpackOpen;
             const bpPage = document.getElementById('backpack-overlay-page');
-            if (gState.backpackOpen) { bpPage.classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock(); tutEvent('bag'); }
+            if (gState.backpackOpen) { bpPage.classList.remove('hidden'); if (document.pointerLockElement) { relockHad = true; document.exitPointerLock(); } tutEvent('bag'); }
             else { bpPage.classList.add('hidden'); gState.needsLock = true; }
             updateHUD();
+            if (!gState.backpackOpen) panelClosedRelock();
         }
 
         function toggleLargeMapUI() {
             if (gState.backpackOpen) return;
             gState.largeMapOpen = !gState.largeMapOpen;
             const mapPage = document.getElementById('large-map-panel');
-            if (gState.largeMapOpen) { mapPage.classList.remove('hidden'); if (document.pointerLockElement) document.exitPointerLock(); refreshLargeMinimap(); }
-            else { mapPage.classList.add('hidden'); gState.needsLock = true; }
+            if (gState.largeMapOpen) { mapPage.classList.remove('hidden'); if (document.pointerLockElement) { relockHad = true; document.exitPointerLock(); } refreshLargeMinimap(); }
+            else { mapPage.classList.add('hidden'); gState.needsLock = true; panelClosedRelock(); }
         }
 
         let isDraggingCamera = false; let camTouchId = null; let lastCamX = 0, lastCamY = 0;
