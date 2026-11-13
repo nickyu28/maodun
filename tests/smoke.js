@@ -13068,6 +13068,7 @@ async function enterExit(tab, key) {
             page.replace(/<[^>]*>/g, '\n').split('\n').forEach((t) => { if (CJK_.test(t) && BR_.test(t)) bad.push('index.html 文字 ' + t.trim().slice(0, 40)); });
             [...page.matchAll(/(?:title|placeholder|alt)="([^"]*)"/g)].forEach((a) => { if (BR_.test(a[1])) bad.push('index.html 属性 ' + a[1].slice(0, 40)); });
             report('TX1 玩家看得到的文字不用括号：js/01～17、index.html', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
         if (want('IND150')) {
             // IND150 每个死因最坏情况下都有办法活（任务 125）：饿／渴／冻三种按时间死的，从开始掉血到死的秒数 ≥ 最坏自救时间 × 2；热不掉血；毒气、辐射、岩浆、烫锭的窗口 ≥ 走出去时间 × 2；饿和渴都有预警；每个死因都有预警
             const bad = [];
