@@ -5730,7 +5730,7 @@ async function enterExit(tab, key) {
                 const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ rule: b.rule, clock: b.clock, e: b.surv.energy, ver: b.ver })); }); })`));
                 if (sv.rule !== 'hard' || Math.abs(sv.e - 100) > 0.5 || sv.ver < 2 || Math.abs(sv.clock - clk0) > 1) bad.push('存档读回来不对 ' + JSON.stringify(sv) + ' 存的时候 ' + clk0);
                 // 硬核：饿渴到血 0 会死，身上的东西没了，回到基地
-                await T.eval(`(function(){ indBagAdd('stone', 3); indGoTrip(4242); let S = ind.base.surv; S.food = 0; S.water = 0; S.hp = 5; indAdvance(3); })(); true;`);
+                await T.eval(`(function(){ indBagAdd('stone', 3); indGoTrip(4242); let S = ind.base.surv; S.food = 0; S.water = 0; S.hp = 5; indAdvance(8); })(); true;`);
                 const dscr = JSON.parse(await T.eval(`JSON.stringify({ d: ind.dead, el: !!document.getElementById('ind-dead') })`));
                 if (!dscr.d || !dscr.el || !/饿死|渴死/.test(dscr.d.cause)) bad.push('硬核饿渴死了应该停在死亡画面 ' + JSON.stringify(dscr));
                 await T.eval(`indRespawn(); true;`);
@@ -7281,7 +7281,7 @@ async function enterExit(tab, key) {
                             total++; if (n.key === 'sand_sn') san++;
                             if (!n.out) return;
                             ore++; units += n.n; if (n.key === 'ore_sn') { sn++; snUnits += n.n; }
-                            if (!(n.n >= 10 && n.n <= 30 && n.n0 === n.n)) badN++;
+                            if (!((n.key === 'coal' ? n.n >= 20 && n.n <= 60 : n.n >= 10 && n.n <= 30) && n.n0 === n.n)) badN++;   // 煤 20～60（任务 136）
                             // 一处 1～2 个露头：6 米内同种的另一个最多 1 个
                             if (nodes.filter(function (m) { return m !== n && m.out && m.key === n.key && Math.hypot(m.x - n.x, m.z - n.z) <= 6.01; }).length > 1) crowd++;
                         });
