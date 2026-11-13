@@ -1473,9 +1473,10 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026.11.5-55', date: '11 月 13 日', title: '最近更新', items: [
+                id: '2026.11.5-56', date: '11 月 13 日', title: '最近更新', items: [
                     '按着方向键时切走窗口，回来人物不会一直往前走了',
-                    '提示和说明里的括号去掉了，读起来更顺'
+                    '提示和说明里的括号去掉了，读起来更顺',
+                    '弹出来的窗口、背包、地图都能按 Esc 关'
                 ]
             },
             {

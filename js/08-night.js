@@ -3912,6 +3912,8 @@
         window.addEventListener('keydown', function (e) {
             // chat-input 自己的回车/Esc 不能被这条总闸拦掉，不然 chatMode===2
             // 那条分支永远走不到 —— 这就是「聊天栏发不出去」的病根。
+            // Esc：关最上面一层弹出的东西（任务 P2）。鼠标还锁着时这一下是浏览器在解锁，不关；聊天输入框自己的 Esc 走下面的聊天逻辑
+            if (e.key === 'Escape' && e.target.id !== 'chat-input' && !document.pointerLockElement && escCloseTop()) { e.preventDefault(); e.stopImmediatePropagation(); return; }
             if (e.target.tagName === 'INPUT' && e.target.id !== 'chat-input') {
                 // 只有真的在打字的输入框才拦；单选框、复选框、滑块（大厅里点过的"AI 补齐队友"、难度之类）停在上面会吞掉 E／WASD，背包打不开
                 if (inputTakesTyping(e.target)) return;

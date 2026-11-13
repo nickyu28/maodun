@@ -13199,6 +13199,48 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND154 煤产量：每张图总量够、出生点附近够、平原森林有煤', bad.length === 0, bad.join(' / '));
         }
+        if (want('ES1')) {
+            // ES1 所有弹出的东西能按 Esc 关（任务 P2）：系统弹窗（只有一个按钮点它、取消／确定点取消、确定／清除这种全动东西的不动）、图鉴、两个记录榜、背包、大地图、商店、仓库、校准练习；一次只关最上面一层；鼠标还锁着时不关
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const esc = async () => { await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); };
+            const J = async (e) => JSON.parse(await T.eval(`JSON.stringify(${e})`));
+            await T.eval(`${HIDE} true;`);
+            // 系统弹窗
+            let got = [];
+            await T.eval(`window.__esc = []; showSysModal('t', 'x', [{ label: '知道了', onClick: function () { window.__esc.push('ok1'); } }]); true;`);
+            await esc(); if (await T.eval(`sysModalVisible() || __esc.join() !== 'ok1'`)) bad.push('单按钮弹窗 Esc 没关');
+            await T.eval(`showSysModal('t', 'x', [{ label: '确定', onClick: function () { window.__esc.push('yes'); } }, { label: '取消', onClick: function () { window.__esc.push('no'); } }]); true;`);
+            await esc(); if (await T.eval(`sysModalVisible() || __esc.join() !== 'ok1,no'`)) bad.push('确定／取消弹窗 Esc 没点取消 ' + await T.eval(`__esc.join()`));
+            await T.eval(`showSysModal('t', 'x', [{ label: '清除', onClick: function () { window.__esc.push('clear'); } }, { label: '定下来', onClick: function () { window.__esc.push('fix'); } }]); true;`);
+            await esc(); if (!(await T.eval(`sysModalVisible() && __esc.join() === 'ok1,no'`))) bad.push('两个都会动东西的弹窗 Esc 不该点任何按钮');
+            await T.eval(`${HIDE} true;`);
+            // 鼠标锁着不关
+            await T.eval(`window.__pl = Object.getOwnPropertyDescriptor(Document.prototype, 'pointerLockElement'); Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: function () { return document.body; } }); showSysModal('t', 'x', [{ label: '知道了' }]); true;`);
+            await esc(); if (!(await T.eval(`sysModalVisible()`))) bad.push('鼠标锁着时 Esc 不该关');
+            await T.eval(`delete document.pointerLockElement; true;`);
+            await esc(); if (await T.eval(`sysModalVisible()`)) bad.push('鼠标没锁时 Esc 没关');
+            // 一次一层：背包开着再弹窗，Esc 先关弹窗，再关背包
+            await T.eval(`gState.backpackOpen = false; toggleBackpackUI(); showSysModal('t', 'x', [{ label: '知道了' }]); true;`);
+            await esc(); if (!(await T.eval(`!sysModalVisible() && gState.backpackOpen`))) bad.push('Esc 一次关了不止一层');
+            await esc(); if (await T.eval(`gState.backpackOpen`)) bad.push('背包 Esc 没关');
+            // 记录榜、图鉴、大地图
+            for (const [open, shown] of [[`bookOpen('mob')`, `escShown('book-modal')`], [`raceBoardOpen ? raceBoardOpen() : document.getElementById('race-board').classList.remove('hidden')`, `escShown('race-board')`], [`document.getElementById('tower-board').classList.remove('hidden')`, `escShown('tower-board')`], [`toggleLargeMapUI()`, `gState.largeMapOpen`]]) {
+                await T.eval(`${open}; true;`);
+                if (!(await T.eval(`${shown}`))) { bad.push('没打开 ' + open); continue; }
+                await esc(); if (await T.eval(`${shown}`)) bad.push('Esc 没关 ' + open);
+            }
+            // 商店、仓库页面
+            await T.eval(`openShop(); true;`); if (!(await T.eval(`escShown('screen-shop')`))) bad.push('商店没开');
+            await esc(); if (await T.eval(`escShown('screen-shop')`) || !(await T.eval(`escShown('screen-lobby')`))) bad.push('商店 Esc 没回大厅');
+            await T.eval(`nav('screen-garage'); true;`);
+            await esc(); if (await T.eval(`escShown('screen-garage')`)) bad.push('仓库 Esc 没关');
+            // 没有弹出的东西时 Esc 什么都不做
+            if (await T.eval(`escCloseTop() !== null`)) bad.push('没有弹层时 escCloseTop 该返回 null');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('ES1 所有弹出的东西按 Esc 关：系统弹窗按按钮规则、一次一层、鼠标锁着不关、图鉴、记录榜、背包、大地图、商店、仓库', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

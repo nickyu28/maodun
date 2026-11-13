@@ -1659,6 +1659,44 @@
         function bookOpen(tab) { if (tab) bookTab = tab; document.getElementById('book-modal').classList.remove('hidden'); bookRender(); }
         function bookClose() { document.getElementById('book-modal').classList.add('hidden'); }
 
+        // ── Esc 关最上面一层（任务 P2，作者 11-13：所有弹出的东西都能按 Esc 退出）──
+        // 一次只关一层；鼠标还锁着时不关（浏览器按 Esc 先解锁，那一下不算）。从上到下：系统弹窗（含规则卡片）→ 图鉴 → 记录榜 → 密码面板 → 积木编辑 → 测试面板 → 背包 → 大地图 → 校准练习 → 商店、仓库页面。
+        // 系统弹窗按 Esc 等于点"不动东西"的那个按钮：取消、再看看、知道了、好、返回之类；只有一个按钮就点它；有好几个又都会动东西（清数据、定下来）就什么也不做，只把这一下吃掉。
+        const ESC_SAFE_LABELS = /^(取消|再看看|关闭|知道了|我知道了|好|好的|好了|收下|不了|返回|算了|留下|继续|先不|没事|下次再说|不删|不要|拒绝)$/;
+        function escSysModalPick() {
+            let bs = Array.prototype.slice.call(document.querySelectorAll('#sys-modal-btns button'));
+            let safe = bs.filter(function (b) { return ESC_SAFE_LABELS.test((b.innerText || '').trim()); });
+            let t = safe.length ? safe[safe.length - 1] : (bs.length === 1 ? bs[0] : null);
+            if (t) t.click();
+            return true;
+        }
+        function escShown(id) { let e = document.getElementById(id); return !!e && !e.classList.contains('hidden'); }
+        function escLayers() {
+            return [
+                { name: '系统弹窗', open: sysModalVisible, close: escSysModalPick },
+                { name: '图鉴', open: function () { return escShown('book-modal'); }, close: bookClose },
+                { name: '竞速记录榜', open: function () { return escShown('race-board'); }, close: raceBoardClose },
+                { name: '爬塔记录榜', open: function () { return escShown('tower-board'); }, close: towerBoardClose },
+                { name: '密码面板', open: function () { return escShown('esc-code-panel'); }, close: escCodeClose },
+                { name: '积木编辑', open: function () { return escShown('maker'); }, close: makerClose },
+                { name: '测试面板', open: function () { return escShown('test-panel'); }, close: function () { document.getElementById('test-panel').classList.add('hidden'); } },
+                { name: '背包', open: function () { return !!gState.backpackOpen; }, close: toggleBackpackUI },
+                { name: '大地图', open: function () { return !!gState.largeMapOpen; }, close: toggleLargeMapUI },
+                { name: '校准练习', open: function () { return escShown('screen-calib'); }, close: closeCalibPractice },
+                { name: '商店', open: function () { return escShown('screen-shop'); }, close: function () { nav('screen-lobby'); } },
+                { name: '仓库', open: function () { return escShown('screen-garage'); }, close: garageBackToLobby }
+            ];
+        }
+        // 关掉最上面一层，返回关的是哪一层的名字；没有可关的返回 null
+        function escCloseTop() {
+            let L = escLayers();
+            for (let i = 0; i < L.length; i++) {
+                let o = false; try { o = L[i].open(); } catch (e) { }
+                if (o) { try { L[i].close(); } catch (e) { } return L[i].name; }
+            }
+            return null;
+        }
+
         let bookTab = 'recipe';
         function bookTabSet(t) { bookTab = t; bookRender(); }
         function bookRender() {
