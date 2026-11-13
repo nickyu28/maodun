@@ -3329,18 +3329,18 @@ async function enterExit(tab, key) {
                 };
                 for (const k of ['bucket_fe', 'water_raw@fe']) {
                     await run(k, '', '背包有空格（任务 26：先背包）', { where: 'bag', flash: /收起了电解槽，里面的 30 个东西放进了背包/ });
-                    await run(k, 'for (let i = 0; i < 23; i++) ind.bag["pad" + i] = 99', '背包满了才进不限格的箱子', { where: 'box', flash: /放进了仓库箱/ });
+                    await run(k, 'for (let i = 0; i < indBagSlots() - 1; i++) ind.bag["pad" + i] = 99', '背包满了才进不限格的箱子', { where: 'box', flash: /放进了仓库箱/ });
                     await run(k, 'ind.base.chests = []', '没有箱子', { where: 'bag', flash: /放进了背包/ });
-                    await run(k, 'ind.base.chests = []; for (let i = 0; i < 23; i++) ind.bag["pad" + i] = 99', '没有箱子、背包只剩放设备那一格', { where: 'ground', flash: /掉在了地上/ });
+                    await run(k, 'ind.base.chests = []; for (let i = 0; i < indBagSlots() - 1; i++) ind.bag["pad" + i] = 99', '没有箱子、背包只剩放设备那一格', { where: 'ground', flash: /掉在了地上/ });
                     await run(k, 'ind.base.chests[0].big = false; for (let i = 0; i < 30; i++) ind.base.chests[0].items["x" + i] = 1', '只有一个满了的 30 格箱子', { where: 'bag', flash: /放进了背包/ });
-                    await run(k, 'ind.base.chests[0].big = false; for (let i = 0; i < 30; i++) ind.base.chests[0].items["x" + i] = 1; for (let i = 0; i < 23; i++) ind.bag["pad" + i] = 99', '满了的 30 格箱子、背包也满', { where: 'ground', flash: /掉在了地上/ });
+                    await run(k, 'ind.base.chests[0].big = false; for (let i = 0; i < 30; i++) ind.base.chests[0].items["x" + i] = 1; for (let i = 0; i < indBagSlots() - 1; i++) ind.bag["pad" + i] = 99', '满了的 30 格箱子、背包也满', { where: 'ground', flash: /掉在了地上/ });
                 }
                 // 放下电解槽：槽是空的（设计）
                 const empty = await T.eval(`(function(){ indBagAdd('dev_el', 1); indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_el'); indUse(); let d = ind.base.devs[ind.base.devs.length - 1]; return Object.keys(d.st).length; })()`);
                 if (empty !== 0) bad.push('放下的电解槽该是空的');
                 // 电池组收起：电池还回来，背包放不下就掉地上
                 await T.eval(`ind.bag = {}; ind.base.devs = []; ind.base.ground = []; ind.base.chests = []; true;`);
-                const bk = await T.eval(`(function(){ indBagAdd('dev_bank', 1); indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_bank'); indUse(); let d = ind.base.devs[ind.base.devs.length - 1]; d.bats = 5; d.u = 5 * IND_BAT_U; indBagDel('dev_bank', 99); for (let i = 0; i < 23; i++) ind.bag["pad" + i] = 99; indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); indPickDev(d); return (ind.bag.battery || 0) + ind.base.ground.filter(function (g) { return g.k === 'battery'; }).length; })()`);
+                const bk = await T.eval(`(function(){ indBagAdd('dev_bank', 1); indTeleport(-10, 10); indLookAt(-10, 5); indSelect('dev_bank'); indUse(); let d = ind.base.devs[ind.base.devs.length - 1]; d.bats = 5; d.u = 5 * IND_BAT_U; indBagDel('dev_bank', 99); for (let i = 0; i < indBagSlots() - 1; i++) ind.bag["pad" + i] = 99; indTeleport(d.x, d.z + 1.5); indLookAt(d.x, d.z); indPickDev(d); return (ind.bag.battery || 0) + ind.base.ground.filter(function (g) { return g.k === 'battery'; }).length; })()`);
                 if (bk !== 5) bad.push('电池组收起：5 节电池一节都不能少 ' + bk);
                 // 电解槽自己用桶：装水的铁桶进去，电解完还回一个空铁桶，总数不变
                 await T.eval(`ind.bag = {}; ind.base.devs = []; ind.base.ground = []; true;`);
@@ -8480,8 +8480,8 @@ async function enterExit(tab, key) {
                 await T.eval(`indPanelClose(); ind.bag = { wood: 5, sulfur: 1 }; indSelect('sulfur'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', ctrlKey: true })); true;`);
                 if (!(await T.eval(`ind.bag.sulfur === undefined && ind.bag.wood === 5 && !!document.getElementById('ind-undo')`))) bad.push('Ctrl+Q 该销毁手上那格（装水的桶也能销毁） ' + await T.eval(`JSON.stringify(ind.bag)`));
                 // 背包满了撤销放不回去
-                await T.eval(`{ let b = {}; Object.keys(IND_ITEMS).filter(function (k) { return k !== 'sulfur'; }).slice(0, 24).forEach(function (k) { b[k] = 1; }); ind.bag = b; } true;`);
-                if (await T.eval(`indSlots().length === 24`)) {
+                await T.eval(`{ let b = {}; Object.keys(IND_ITEMS).filter(function (k) { return k !== 'sulfur'; }).slice(0, indBagSlots()).forEach(function (k) { b[k] = 1; }); ind.bag = b; } true;`);
+                if (await T.eval(`indSlots().length === indBagSlots()`)) {
                     await T.eval(`window.__fl = []; indUndo(); true;`);
                     if (!(await T.eval(`ind.bag.sulfur === undefined && __fl.some(function (t) { return /放不下了/.test(t); })`))) bad.push('背包满时撤销该提示放不下了');
                 }
@@ -10035,8 +10035,8 @@ async function enterExit(tab, key) {
                 // 仓库箱："拿"同样；背包满了能拿几个拿几个
                 r = await J(`(function(){ let c = ind.base.chests[0]; c.items = { sand: 40 }; ind.boxId = c.id; ind.bag = {}; indPanelBox(c.id); let e = document.getElementById(indNumId('box', 0, 'sand')); if (!e) return null; e.value = '17'; e.nextElementSibling.click(); let a = [ind.bag.sand, c.items.sand]; let e2 = document.getElementById(indNumId('box', 0, 'sand')); e2.value = '999'; e2.nextElementSibling.click(); return a.concat([ind.bag.sand, c.items.sand || 0]); })()`);
                 if (!(r && r.join() === '17,23,40,0')) bad.push('仓库箱填数字拿 ' + JSON.stringify(r));
-                r = await J(`(function(){ let c = ind.base.chests[0]; c.items = { sand: 500 }; ind.bag = {}; for (let i = 0; i < indBagSlots() - 1; i++) ind.bag['seed_' + ['wheat','potato','tomato','corn','cane','pumpkin','cotton','cabbage','radish'][i % 9] + (i < 9 ? '' : '')] = 1; let fill = 0; ['wood','stone','clay','salt','coal','charcoal','brick','wheat','potato','tomato','cotton','wool','yarn','dirt','sugar'].forEach(function (k) { if (indSlotsOf(ind.bag) < indBagSlots() - 1) ind.bag[k] = 1; }); indPanelBox(c.id); __fl.length = 0; let e = document.getElementById(indNumId('box', 0, 'sand')); e.value = '300'; e.nextElementSibling.click(); return [ind.bag.sand, c.items.sand, __fl.slice(-1)[0], indSlotsOf(ind.bag), indBagSlots()]; })()`);
-                if (!(r[0] === 99 && r[1] === 401 && /背包满了/.test(r[2]))) bad.push('背包只剩一格：拿 99 个、提示背包满了、剩下的留在箱子里 ' + JSON.stringify(r));
+                r = await J(`(function(){ let c = ind.base.chests[0]; c.items = { sand: 500 }; ind.bag = {}; for (let i = 0; i < indBagSlots() - 1; i++) ind.bag['pad' + i] = 1; indPanelBox(c.id); __fl.length = 0; let e = document.getElementById(indNumId('box', 0, 'sand')); e.value = '300'; e.nextElementSibling.click(); return [ind.bag.sand, c.items.sand, __fl.slice(-1)[0], indSlotsOf(ind.bag), indBagSlots()]; })()`);
+                if (!(r[0] === 200 && r[1] === 300 && /背包满了/.test(r[2]))) bad.push('背包只剩一格：拿 200 个、提示背包满了、剩下的留在箱子里 ' + JSON.stringify(r));
                 await T.eval(`indPanelClose(); true;`);
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
@@ -10104,11 +10104,11 @@ async function enterExit(tab, key) {
                 const b1 = await J(`(function(){ ind.base.rule = 'hard'; ind.bag = {}; ind.base.chests = [{ id: 1, x: 12, z: 12, big: true, items: { stone: 500 } }]; ind.boxId = 1; indPanelBox(1);
                     let ids = Array.prototype.map.call(document.querySelectorAll('#ind-panel input.ind-num'), function (e) { return e.id; }).filter(function (i) { return /stone/.test(i); }); let uniq = ids.filter(function (v, i) { return ids.indexOf(v) === i; }).length;
                     document.getElementById(ids[2]).value = '30'; let row = ids[2].split('-')[3]; indNumGo('box', +row, 'stone'); return { n: ids.length, uniq: uniq, got: ind.bag.stone || 0, left: ind.base.chests[0].items.stone }; })()`);
-                if (!(b1.n === 6 && b1.uniq === 6 && b1.got === 30 && b1.left === 470)) bad.push('仓库箱第 3 行填 30 拿 30（每行框的 id 不同） ' + JSON.stringify(b1));
+                if (!(b1.n === 3 && b1.uniq === 3 && b1.got === 30 && b1.left === 470)) bad.push('仓库箱第 3 行填 30 拿 30（每行框的 id 不同） ' + JSON.stringify(b1));
                 // ② 背包点格子换到手上
-                const b2 = await J(`(function(){ ind.bag = { wood: 1, stone: 203, tomato: 1, wheat: 5 }; ind.selIdx = 2; indBagToHand(4); let ks = Object.keys(ind.bag), sl = indSlots(), stoneIdx = []; sl.forEach(function (x, i) { if (x.k === 'stone') stoneIdx.push(i); });
+                const b2 = await J(`(function(){ ind.bag = { wood: 1, stone: 403, tomato: 1, wheat: 5 }; ind.selIdx = 2; indBagToHand(4); let ks = Object.keys(ind.bag), sl = indSlots(), stoneIdx = []; sl.forEach(function (x, i) { if (x.k === 'stone') stoneIdx.push(i); });
                     return { ks: ks, stone: ind.bag.stone, sel: indSel(), stoneIdx: stoneIdx }; })()`);
-                if (!(b2.ks.join() === 'wood,tomato,stone,wheat' && b2.stone === 203 && b2.sel === 'tomato' && b2.stoneIdx.every(function (i) { return i < 10; }))) bad.push('点番茄只换那一格：石头不被挤出快捷栏、别的东西先后不变 ' + JSON.stringify(b2));
+                if (!(b2.ks.join() === 'wood,tomato,stone,wheat' && b2.stone === 403 && b2.sel === 'tomato' && b2.stoneIdx.every(function (i) { return i < 10; }))) bad.push('点番茄只换那一格：石头不被挤出快捷栏、别的东西先后不变 ' + JSON.stringify(b2));
                 // ③ 放射性的东西睡觉
                 const b3 = await J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; let B = ind.base; B.rule = 'hard'; B.clock = Math.floor(B.clock / IND_DAY) * IND_DAY + IND_DAY - 200; B.surv.energy = 40; B.wear = {}; ind.bag = { rod_spent: 1 };
                     let a = indSleep(), m = fl[fl.length - 1]; B.wear = { body: 'lead_apron' }; let b = indSleep(); ind.bag = {}; B.wear = {}; B.clock = Math.floor(B.clock / IND_DAY) * IND_DAY + IND_DAY - 200; B.surv.energy = 40; let c = indSleep(); blazeFlash = bf; return [a, m, b, c]; })()`);
@@ -13172,7 +13172,7 @@ async function enterExit(tab, key) {
                     out.per = per; out.wear = d0 - mbDura('pick_steel'); out.mined = tot0 - o.n; out.flashes = fl.filter(function (t) { return t.charAt(0) === '+'; }).length;
                     indDigStop(); out.stopped = !ind.dig; let o2 = setup(4000); indAction(); indDigHoldStart(); for (let i = 0; i < 10; i++) indDigHoldTick(0.1); indLookAt(10, 0); indDigHoldTick(0.1); out.moved = !ind.dig;
                     let o3 = setup(4000); indAction(); indDigHoldStart(); for (let i = 0; i < 6; i++) indDigHoldTick(0.1); let nA = ind.dig.n; indDigStop(); indDigHoldStart(); for (let i = 0; i < 10; i++) indDigHoldTick(0.1); out.restart = ind.dig ? ind.dig.n : -1; out.firstSec = nA;
-                    let o4 = setup(4000); indAction(); indDigHoldStart(); ind.bag = { pick_steel: 1 }; Object.keys(IND_ITEMS).filter(function (k) { return !IND_ITEMS[k].tool && !IND_ITEMS[k].hot && !IND_ITEMS[k].dev; }).slice(0, 24).forEach(function (k) { ind.bag[k] = 99; }); fl.length = 0; for (let i = 0; i < 30; i++) indDigHoldTick(0.1); out.full = !ind.dig; out.fullMsg = fl.filter(function (t) { return /背包满了/.test(t); }).length;
+                    let o4 = setup(4000); indAction(); indDigHoldStart(); ind.bag = { pick_steel: 1 }; Object.keys(IND_ITEMS).filter(function (k) { return !IND_ITEMS[k].tool && !IND_ITEMS[k].hot && !IND_ITEMS[k].dev; }).slice(0, indBagSlots()).forEach(function (k) { ind.bag[k] = indStackOf(k); }); fl.length = 0; for (let i = 0; i < 30; i++) indDigHoldTick(0.1); out.full = !ind.dig; out.fullMsg = fl.filter(function (t) { return /背包满了/.test(t); }).length;
                     let o5 = setup(5); indAction(); indDigHoldStart(); for (let i = 0; i < 40; i++) indDigHoldTick(0.1); out.depleted = !ind.dig && o5.dead;
                     ind.nodes.forEach(function (q) { q.dead = true; }); ind.dig = null; indGoBase(null); let B = ind.base; B.rule = 'hard'; ind.bag = { pick_steel: 1 }; indSelect('pick_steel'); indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 3); indLookAt(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z); let a = indAim(); out.stoveKind = a && a.kind; indDigHoldStart(); out.stoveDig = !!ind.dig; }
                     finally { blazeFlash = bf; } return out; })()`);
