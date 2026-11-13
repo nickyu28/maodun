@@ -13414,6 +13414,39 @@ async function enterExit(tab, key) {
             report('IND159 倍速：×4 时间快 4 倍、走路不乘、危险自动回 ×1、出门灰着、按钮循环、加速器配方 off', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND160')) {
+            // IND160 电源串联（任务 152）：两个 12 V 电池组并联电炉得 12 V 不工作；串联 24 V 工作；一个没电整条断；12+6 V 串联耗电 2 比 1；12+18 V 串联超额定先问、确认后冒烟；老存档默认并联
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const setup = (bats1, bats2, ser, u1, u2) => `ind.base.rule = 'hard'; ind.base.off.pool = true; cancelAnimationFrame(ind.raf); ind.base.devs = [
+                    { id: 1, ty: 'bank', x: -30, z: 0, bats: ${bats1}, u: ${u1 === undefined ? bats1 + ' * IND_BAT_U' : u1}, um: ${bats1} * IND_BAT_U, on: true, ft: 20, st: {} },
+                    { id: 2, ty: 'bank', x: -30, z: 4, bats: ${bats2}, u: ${u2 === undefined ? bats2 + ' * IND_BAT_U' : u2}, um: ${bats2} * IND_BAT_U, on: true, ft: 20, st: {} },
+                    { id: 3, ty: 'furnace', x: 20, z: 30, bats: 0, u: 0, on: true, ft: 20, st: {}${ser ? ', ser: true' : ''} }]; ind.base.wires = [[1, 3], [2, 3]]; ind.base.fires = [];`;
+                let r = await J(`(function(){ ${setup(8, 8, false)} indElecTick(1); let a = { pw: indDev(3).pw, v: indDevVolt(indDev(3)) }; indDev(3).ser = true; indElecTick(1); let b = { pw: indDev(3).pw, v: indDevVolt(indDev(3)), u1: indDev(1).u, u2: indDev(2).u, info: indDevInfo(indDev(3)) }; return { a: a, b: b }; })()`);
+                if (!(r.a.pw === false && Math.abs(r.a.v - 12) < 0.01)) bad.push('并联 12 V 电炉不工作 ' + JSON.stringify(r.a));
+                if (!(r.b.pw === true && Math.abs(r.b.v - 24) < 0.01 && /串联/.test(r.b.info))) bad.push('串联 24 V 电炉工作 ' + JSON.stringify(r.b));
+                if (!(Math.abs(r.b.u1 - r.b.u2) < 0.01)) bad.push('两个一样的电池组各扣一半 ' + JSON.stringify(r.b));
+                r = await J(`(function(){ ${setup(8, 8, true, '8 * IND_BAT_U', 0)} indElecTick(1); let d = indDev(3); return { pw: d.pw, v: indDevVolt(d), info: indDevInfo(d) }; })()`);
+                if (!(r.pw === false && r.v === 0 && /没电/.test(r.info))) bad.push('串联里一个没电整条断 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${setup(12, 4, true)} indElecTick(1); let d = indDev(3), u1 = indDev(1).u, u2 = indDev(2).u; let m1 = 12 * IND_BAT_U, m2 = 4 * IND_BAT_U; return { pw: d.pw, v: indDevVolt(d), c1: m1 - u1, c2: m2 - u2 }; })()`);
+                if (!(r.pw === true && Math.abs(r.v - 24) < 0.01 && r.c2 > 0 && Math.abs(r.c1 / r.c2 - 3) < 0.05)) bad.push('18+6 V 串联耗电按电压 3 比 1 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${setup(12, 8, false)} let d = indDev(3); let ok1 = srSwitch(d, true); let o = { ser1: !!d.ser, ask: ind.srAsk === 3, ok1: ok1 }; let ok2 = srSwitch(d, true, true); indElecTick(1); o.ser2 = d.ser; o.burn = d.burn > 0; o.back = srSwitch(d, false); o.ser3 = d.ser; return o; })()`);
+                if (!(r.ok1 === false && r.ser1 === false && r.ask && r.ser2 === true && r.burn && r.back && r.ser3 === false)) bad.push('30 V 超 24 V 额定：先问不改、确认后冒烟、能切回并联 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${setup(8, 8, false)} let b = JSON.parse(JSON.stringify(ind.base)); delete b.devs[2].ser; let fx = indFixBase(b); let b2 = JSON.parse(JSON.stringify(ind.base)); b2.devs[2].ser = 'yes'; let fx2 = indFixBase(b2); let b3 = JSON.parse(JSON.stringify(ind.base)); b3.devs[2].ser = true; let fx3 = indFixBase(b3); return [fx.devs[2].ser, fx2.devs[2].ser, fx3.devs[2].ser]; })()`);
+                if (r.join() !== 'false,false,true') bad.push('老存档默认并联，串联存得住 ' + r.join());
+                r = await J(`(function(){ return IND_ITEMS.dev_furnace.use; })()`);
+                if (!/24 V/.test(r) || !/串联/.test(r)) bad.push('电炉说明 ' + r);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND160 电源串联：并联 12 V 不够、串联 24 V、一个没电整条断、耗电按电压分、超额定先问、老存档并联', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

@@ -606,7 +606,7 @@
             b.cookers = b.cookers.filter(function (c) { return c && IND_COOK[c.ty] && c.ty !== 'stove' && isFinite(c.x) && isFinite(c.z) && c.id; }).slice(0, indCookCap());
             b.cookers.forEach(function (c) { indFixCook(c, b); });
             b.cseq = indNum(b.cseq, 0, 0, 1e9) | 0; b.cookers.forEach(function (c) { b.cseq = Math.max(b.cseq, c.id); });
-            b.devs.forEach(function (d) { if (d.ty === 'bank') { d.li = !!d.li; if (d.bats > (d.li ? 128 : 64)) d.bats = d.li ? 128 : 64; d.ni = indNum(d.ni, 0, 0, 64); if (d.um !== undefined) d.um = indNum(d.um, 0, 0, 128 * 720); } d.cy = typeof d.cy === 'string' && indCylParse(d.cy) ? d.cy : null; d.ct = indNum(d.ct, 0, 0, 100); d.pt = indNum(d.pt, 0, 0, 100); if (IND_DEV_FIX[d.ty]) IND_DEV_FIX[d.ty](d); });
+            b.devs.forEach(function (d) { d.ser = d.ser === true; if (d.ty === 'bank') { d.li = !!d.li; if (d.bats > (d.li ? 128 : 64)) d.bats = d.li ? 128 : 64; d.ni = indNum(d.ni, 0, 0, 64); if (d.um !== undefined) d.um = indNum(d.um, 0, 0, 128 * 720); } d.cy = typeof d.cy === 'string' && indCylParse(d.cy) ? d.cy : null; d.ct = indNum(d.ct, 0, 0, 100); d.pt = indNum(d.pt, 0, 0, 100); if (IND_DEV_FIX[d.ty]) IND_DEV_FIX[d.ty](d); });
             let ids = {}; b.devs.forEach(function (d) { ids[d.id] = d; });
             if (!Array.isArray(b.wires)) b.wires = [];
             b.wires = b.wires.filter(function (w) { return Array.isArray(w) && ids[w[0]] && ids[w[1]] && IND_DEVS[ids[w[0]].ty].src && !IND_DEVS[ids[w[1]].ty].src; });
@@ -1503,7 +1503,7 @@
             indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); hmSync(); indHouseFadeTick(dt); indSyncTiles(); mbSync(); if (ind.carve) ctBar(); pdSync();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
-            ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); spBtn(); indSeasonLook(); }
+            ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); spBtn(); srBtn(); indSeasonLook(); }
         }
         // 生存值：饱食、口渴、精力按时间掉；拉肚子口渴掉 3 倍；夜里在外面精力掉 3 倍；
         // 到 0：悠闲只是变慢；硬核饿了每秒扣 1 血、渴了每秒扣 2 血，血到 0 就死
@@ -2151,15 +2151,20 @@
             B.wires.forEach(function (w) {
                 let d = indDev(w[1]); if (!d || seen[d.id] || d.burn > 0) return; seen[d.id] = 1;
                 let D = IND_DEVS[d.ty], live = indDevSrcs(d).filter(function (s) { return indSrcVolt(s) > 0; });
-                let V = live.reduce(function (m, s) { return Math.max(m, indSrcVolt(s)); }, 0);
+                let ser = srOn(d), V = ser ? srVolt(indDevSrcs(d)) : live.reduce(function (m, s) { return Math.max(m, indSrcVolt(s)); }, 0);   // 任务 152：串联电压相加，有一个没电整条断
+                if (ser && !V) live = [];
                 if (V > D.rated + 1e-6) { booms.push({ d: d, V: V, live: live }); return; }
                 d.v = V;
-                live.forEach(function (s) { if (s.ty === 'bank' && indSrcVolt(s) < V - IND_PAR_DV - 1e-6) { s.lowNow = true; s.low = (s.low || 0) + dt; if (!s.lowWarned) { s.lowWarned = true; if (!ind.sleeping) indFlash('两个电池电压不一样，会烧。'); } } });   // 并联电压差超过 1 V：高的往低的灌电，低的 3 秒后烧坏
+                if (!ser) live.forEach(function (s) { if (s.ty === 'bank' && indSrcVolt(s) < V - IND_PAR_DV - 1e-6) { s.lowNow = true; s.low = (s.low || 0) + dt; if (!s.lowWarned) { s.lowWarned = true; if (!ind.sleeping) indFlash('两个电池电压不一样，会烧。'); } } });   // 并联电压差超过 1 V：高的往低的灌电，低的 3 秒后烧坏
                 if (!live.length || !d.on || V < D.minV) return;
                 if (d.ty === 'el' && indElRecipe(d, V) < 0) return;   // 电解槽没活干不耗电
                 if (d.ty === 'comp' && !indCompBusy(d)) return;   // 压缩机、压力机也是有活干才耗电
                 if (d.ty === 'press' && !indPressBusy(d)) return;
                 if (IND_DEV_BUSY[d.ty] && !IND_DEV_BUSY[d.ty](d)) return;
+                if (ser) {   // 串联：耗电按电压占比分给每个电源，发电机不扣，电池组扣自己那份
+                    live.forEach(function (s) { let u = pwUpstream([s]), bs = u.filter(function (q) { return q.ty === 'bank'; }); if (bs.length === u.length) bs.forEach(function (q) { stkDrain(q, D.draw * stkN(d) * dt * pwAccelMultDev(d) * (indSrcVolt(s) / V) / bs.length); }); });
+                    d.pw = true; return;
+                }
                 let up = pwUpstream(live), banks = up.filter(function (s) { return s.ty === 'bank'; });   // 变压器后面的用电器，耗电算回变压器输入端的电池组
                 if (banks.length === up.length) banks.forEach(function (s) { stkDrain(s, D.draw * stkN(d) * dt * pwAccelMultDev(d) / banks.length); });   // 叠了 n 台耗电 ×n；电池组叠成一组按电量分担（任务 68）
                 d.pw = true;
@@ -2656,7 +2661,7 @@
             if (d.ty === 'gen') return rlGenInfo(d);
             let ss = indDevSrcs(d);
             let wired = ss.length ? '　接着 ' + ss.length + ' 个电源：' + ss.map(function (s) { let v = indSrcVolt(s); return IND_DEVS[s.ty].name + ' ' + (s.ty === 'bank' ? v.toFixed(1) : String(Math.round(v * 10) / 10)) + ' V'; }).join('、') + '，工作电压 ' + (Math.round(indDevVolt(d) * 10) / 10) + ' V' : '　没接电';
-            return D.name + (stkN(d) > 1 ? ' ×' + stkN(d) : '') + '（额定 ' + D.rated + ' V）' + wired + (d.on ? (d.pw ? '　工作中' : '　没在工作') : '　关着');
+            return D.name + (stkN(d) > 1 ? ' ×' + stkN(d) : '') + '（额定 ' + D.rated + ' V）' + wired + srInfo(d) + (d.on ? (d.pw ? '　工作中' : '　没在工作') : '　关着');
         }
         // 画设备（一组画完，有电的亮）和电线（一组线段）
         function indSyncDevs() {
@@ -2777,7 +2782,7 @@
         }
         // 用电器接着的电源（最多 4 个，任务 16）；工作电压 = 还有电的里面最高的那个
         function indDevSrcs(d) { return ind.base.wires.filter(function (x) { return x[1] === d.id; }).map(function (x) { return indDev(x[0]); }).filter(function (s) { return !!s; }); }
-        function indDevVolt(d) { return indDevSrcs(d).reduce(function (m, s) { return Math.max(m, indSrcVolt(s)); }, 0); }
+        function indDevVolt(d) { if (srOn(d)) return srVolt(indDevSrcs(d)); return indDevSrcs(d).reduce(function (m, s) { return Math.max(m, indSrcVolt(s)); }, 0); }
         function indDevPut(id, k, n) {
             let d = indDev(id); if (!d || !ind.bag[k]) return;
             if (k && IND_ITEMS[k].cyl && d.ty === 'comp') {
@@ -3669,6 +3674,7 @@
             if (k === 'escape') { if (ind.carve && !ind.panel) { ctCarveExit(); return; } if (indCancelWire()) return; if (ind.panel) indPanelClose(); return; }   // 任务 138：Esc 退出雕模具   // 任务 104：连线状态下 Esc 先取消连线
             if (k === 'z' && !ind.panel && !e.ctrlKey && !e.metaKey) { spCycle(); return; }   // 倍速（任务 144）
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
+            if (k === 'j' && !ind.panel) { srToggleAim(); return; }   // 任务 152：切并联串联
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）
             if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); indTrashHand(); return; }   // Ctrl+Q：销毁手上那一格（5 秒能撤销）
             if ((k === 'b' || k === 'e') && (!ind.panel || ind.panel === 'bag')) { if (ind.panel) indPanelClose(); else indPanelBag(); return; }   // E 和 B 开同一个背包面板（任务 17）
@@ -3705,7 +3711,7 @@
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
                 '<div id="ind-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div>' +
-                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水 (R)</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下 (Q)</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子 (V)</button><button id="ind-btn-cvback" style="' + IND_BTN + 'display:none;background:#5d4037;" onclick="cvBackStart()">回到洞口</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线 (Esc)</button>' +
+                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水 (R)</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下 (Q)</button><button id="ind-btn-ser" style="' + IND_BTN + 'display:none;background:#00838f;" onclick="srToggleAim()">接法</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子 (V)</button><button id="ind-btn-cvback" style="' + IND_BTN + 'display:none;background:#5d4037;" onclick="cvBackStart()">回到洞口</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线 (Esc)</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'jump\',true)" ontouchend="indHold(\'jump\',false)" onmousedown="indHold(\'jump\',true)" onmouseup="indHold(\'jump\',false)">跳</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'run\',true)" ontouchend="indHold(\'run\',false)" onmousedown="indHold(\'run\',true)" onmouseup="indHold(\'run\',false)">跑</button></div></div>';
             document.body.appendChild(d);
