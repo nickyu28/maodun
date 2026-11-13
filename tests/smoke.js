@@ -8315,11 +8315,11 @@ async function enterExit(tab, key) {
                 // 再来一次（连着退出两次也不丢）
                 await T.eval(`indExit(); true;`);
                 if (!(await reenter()) || !(await T.eval(`ind.bag.wood === 3 && ind.bag.salt === 1`))) bad.push('第二次退出再进来，背包没了');
-                // 远征里没撤离回大厅：背包丢，存的是空背包
+                // 远征里回大厅：按撤离处理，东西带回基地（任务 145）
                 await T.eval(`indGoTrip(2024); ind.bag = { wood: 5, coal: 2 }; true;`);
                 await T.eval(`indExit(true); true;`);
                 if (!(await reenter())) bad.push('远征退出后进不去');
-                else if (!(await T.eval(`ind.where === 'base' && Object.keys(ind.bag).length === 0`))) bad.push('远征里没撤离回大厅，背包该空 ' + await T.eval(`JSON.stringify(ind.bag)`));
+                else if (!(await T.eval(`ind.where === 'base' && ind.bag.wood === 5 && ind.bag.coal === 2`))) bad.push('远征里回大厅按撤离处理，东西带回基地（任务 145） ' + await T.eval(`JSON.stringify(ind.bag)`));
                 // ── 10.2 暂停 ──
                 await T.eval(`ind.base.rule = 'hard'; let S = ind.base.surv; S.food = 80; S.water = 80; S.energy = 80; S.temp = 37; S.hp = 100;
                     ind.base.stove = { items: { wheat: 1 }, out: {}, fuel: 500, fire: 2, temp: 300, cook: null }; ind.base.crops = [{ k: 'wheat', x: -20, z: 0, g: 5, wet: 1e9, times: 0 }]; ind.cropDirty = true; ind.panel = null; true;`);
