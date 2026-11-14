@@ -13957,6 +13957,28 @@ async function enterExit(tab, key) {
             report('IND173 配方查询完整链、石锤：链里有雕模具浇铸合金、名字能点、石锤冷锻青铜工具', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('SET4')) {
+            // SET4 开发者面板换键（任务 P5 后续）：只有 ?dev=1 才有，按反引号开关，T 不再开；不带 ?dev=1 按反引号没有任何反应、设置页按键表里没有"开发者面板"
+            const bad = [];
+            const press = async (T, k, code, vk) => { await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code, windowsVirtualKeyCode: vk }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk }); };
+            const D = await openTab(chrome, url, { query: 'dev=1' });
+            await D.eval(`${HIDE} true;`);
+            const shown = () => D.eval(`!document.getElementById('test-panel').classList.contains('hidden')`);
+            await press(D, 't', 'KeyT', 84); if (await shown()) bad.push('带 ?dev=1 按 T 不该再开面板');
+            await press(D, '`', 'Backquote', 192); if (!(await shown())) bad.push('带 ?dev=1 按反引号没开面板');
+            await D.eval(`document.getElementById('test-panel').classList.add('hidden'); openSettings('操作'); true;`); await W(150);
+            if (!(await D.eval(`!!document.getElementById('set-key-dev-panel')`))) bad.push('?dev=1 时设置页按键表里没有开发者面板');
+            if (D.errors.length) bad.push(D.errors.slice(0, 2).join(' / '));
+            await D.close();
+            const N = await openTab(chrome, url);
+            await N.eval(`${HIDE} true;`);
+            await press(N, '`', 'Backquote', 192); await press(N, 't', 'KeyT', 84);
+            if (await N.eval(`!document.getElementById('test-panel').classList.contains('hidden')`)) bad.push('不带 ?dev=1 面板不该能开');
+            await N.eval(`openSettings('操作'); true;`); await W(150);
+            if (await N.eval(`!!document.getElementById('set-key-dev-panel')`)) bad.push('不带 ?dev=1 设置页里不该有开发者面板这一行');
+            await N.close();
+            report('SET4 开发者面板：只有 ?dev=1 才有、按反引号开关、T 不再开、设置页按键表里只在 ?dev=1 时出现', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

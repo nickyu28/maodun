@@ -126,7 +126,7 @@
         document.addEventListener('touchcancel', atkTouchEnd, { passive: false });
 
         // ══════════════ 测试开关面板 ══════════════
-        // 所有测试用的开关都收在这里，游戏里随时按 T 呼出来改，不用回去改代码。
+        // 所有测试用的开关都收在这里，游戏里随时按反引号键呼出来改，不用回去改代码。
         const TEST_TOGGLES = [
             { get: function () { return BLAZE_TEST_NO_CD; }, set: function (v) { BLAZE_TEST_NO_CD = v; }, label: '超燃：你自己无冷却' },
             { get: function () { return BLAZE_TEST_SKIP_KEY; }, set: function (v) { BLAZE_TEST_SKIP_KEY = v; }, label: '超燃：Q 跳过本局' },
@@ -213,13 +213,10 @@
                 if (sl) { sl.value = BLAZE.roundsToWin; testSetWinScore(BLAZE.roundsToWin); }
             }
         }
-        // A5：测试面板只有网址带 ?dev=1 才能用 T 打开
+        // A5：测试面板只有网址带 ?dev=1 才有。P5 以后按反引号键打开（原来是 T，跟猫盾工业的元素表快捷键冲突）；
+        // 键是登记出来的，所以 ?dev=1 时在设置页的按键表里能看到、能改；不带 ?dev=1 时什么都不登记，玩家看不到
         const DEV_MODE = (function () { try { return new URLSearchParams(location.search).get('dev') === '1'; } catch (e) { return false; } })();
-        window.addEventListener('keydown', function (e) {
-            if (!DEV_MODE) return;
-            if (e.target && /input|textarea/i.test(e.target.tagName)) return;
-            if (e.key === 't' || e.key === 'T') testPanelShow();
-        });
+        if (DEV_MODE) keyRegister('dev', 'panel', '`', '开发者面板', function () { testPanelShow(); });
 
         // ══════════════ 猫盾币 / 角色解锁 ══════════════
         // 全模式通用的一个钱包（寻宝队自己的钱是另一套，不通用）。免费角色：寻宝队全部；
