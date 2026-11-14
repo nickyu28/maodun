@@ -18,10 +18,23 @@
         function lvBuild() {
             if (ind.lvMap === ind.map) return; ind.lvMap = ind.map;
             if (ind.where !== 'trip' || !ind.map || !ind.map.volc || ind.cave) return;
+            ind.volcSmoke = [];   // 任务 134：火山口冒烟柱，纯地标，不受雾影响，夜里底部发红
+            ind.map.volc.forEach(function (v) {
+                let y = indHeight(ind.map, v.x, v.z), sm = indMat(new THREE.MeshBasicMaterial({ color: 0xcfd8dc, transparent: true, opacity: 0.6, depthWrite: false, fog: false })), gl = indMat(new THREE.MeshBasicMaterial({ color: 0xff3d00, transparent: true, opacity: 0.3, fog: false }));
+                let col = new THREE.Mesh(indGeo(new THREE.CylinderGeometry(9, 4, 140, 10, 1, true)), sm); col.position.set(v.x, y + 70, v.z); col.frustumCulled = false; indAdd(col);
+                let base = new THREE.Mesh(indGeo(new THREE.CylinderGeometry(6, 8, 36, 10, 1, true)), gl); base.position.set(v.x, y + 18, v.z); base.frustumCulled = false; indAdd(base);
+                ind.volcSmoke.push({ smoke: sm, glow: gl });
+            });
             lvPools().forEach(function (v) {
                 let r = v.r, m = new THREE.Mesh(indGeo(new THREE.CircleGeometry(r, 24)), indMat(new THREE.MeshBasicMaterial({ color: 0xff3d00 })));
                 m.rotation.x = -Math.PI / 2; m.position.set(v.x, indHeight(ind.map, v.x, v.z) + 0.08, v.z); indAdd(m);
             });
+        }
+        // 烟柱的颜色：白天灰白，夜里发暗，底部红光亮起来（每帧画之前调）
+        function lvSmokeTick() {
+            if (!ind || !ind.volcSmoke || !ind.volcSmoke.length) return;
+            let d = indDark();
+            ind.volcSmoke.forEach(function (s) { s.smoke.color.setRGB(0.81 - d * 0.5, 0.85 - d * 0.58, 0.86 - d * 0.55); s.glow.opacity = 0.3 + d * 0.6; });
         }
         function lvTick(dt) {
             if (!ind || ind.dead || ind.over) return;

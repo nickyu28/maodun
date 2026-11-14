@@ -452,7 +452,13 @@
         function indMakeMap(seed) {
             let r = indRng(seed), M = { seed: seed, volc: [] };
             let nv = IND_K * (2 + Math.floor(r() * 3));
-            for (let i = 0; i < nv; i++) { let a = r() * Math.PI * 2, d = IND_MAP * (0.62 + r() * 0.25); M.volc.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 16 + r() * 6 }); }
+            // 任务 134：火山全图随机分布，离地图边至少 40 米，彼此至少 120 米；第一座一定在离中心 200 到 250 米（出生点最多挪 50 米，还是在 150 到 300 米内）
+            { let a0 = r() * Math.PI * 2, d0 = 200 + r() * 50; M.volc.push({ x: Math.cos(a0) * d0, z: Math.sin(a0) * d0, r: 16 + r() * 6 }); }
+            for (let i = 1, tries = 0; i < nv && tries < 2000; tries++) {
+                let x = (r() * 2 - 1) * (IND_MAP - 40), z = (r() * 2 - 1) * (IND_MAP - 40);
+                if (M.volc.some(function (v) { return Math.hypot(v.x - x, v.z - z) < 120; })) continue;
+                M.volc.push({ x: x, z: z, r: 16 + r() * 6 }); i++;
+            }
             wdMakeRivers(M);   // 河：1～3 条，从山地流到海边（19-industry-world.js）
             return M;
         }
@@ -1690,6 +1696,7 @@
             R.me.position.set(R.p.x, R.p.y, R.p.z);
         }
         function indRender() {
+            lvSmokeTick();
             // 夜里：天空和雾变暗，屏幕盖一层半透明黑（不改场景里原有的灯）
             let d = indDark(), nightEl = document.getElementById('ind-night');
             if (nightEl) nightEl.style.opacity = (d * 0.55 * (indLampNear() ? 0.35 : 1)).toFixed(3);

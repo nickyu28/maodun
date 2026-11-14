@@ -13721,6 +13721,29 @@ async function enterExit(tab, key) {
             report('IND170 出生点跟地形走、散落物撒遍全图：群系分布、能活、凑得齐原料、远处也有', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND171')) {
+            // IND171 火山随机分布和烟柱（任务 134）：100 张图每张 6～12 座、离边 40 米外、彼此 120 米外、至少一座离中心 200～250 米；30 张完整图里出生点 150～300 米内有火山；烟柱材质不受雾影响
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let o = { cnt: 0, edge: 0, close: 0, near: 0, n: 100, within300: 0 }; for (let s = 1; s <= 100; s++) { let M = indMakeMap(s * 313 + 5); if (M.volc.length < 6 || M.volc.length > 12) o.cnt++; if (M.volc.some(function (v) { return Math.abs(v.x) > IND_MAP - 40 + 1e-6 || Math.abs(v.z) > IND_MAP - 40 + 1e-6; })) o.edge++;
+                    for (let i = 0; i < M.volc.length; i++) for (let j = i + 1; j < M.volc.length; j++) if (Math.hypot(M.volc[i].x - M.volc[j].x, M.volc[i].z - M.volc[j].z) < 120) o.close++;
+                    if (M.volc.some(function (v) { let d = Math.hypot(v.x, v.z); return d >= 200 && d <= 250; })) o.near++; if (M.volc.some(function (v) { return Math.hypot(v.x, v.z) <= 300; })) o.within300++; } return o; })()`);
+                if (!(r.cnt === 0 && r.edge === 0 && r.close === 0 && r.near === 100)) bad.push('每张 6～12 座、离边 40 米、彼此 120 米、至少一座在中心 200～250 米 ' + JSON.stringify(r));
+                r = await J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.rule = 'hard'; let o = { ok: 0, n: 30 }; for (let s = 1; s <= 30; s++) { indGoTrip(s * 4099 + 3); let SP = ind.map.spawn; if (ind.map.volc.some(function (v) { let d = Math.hypot(v.x - SP.x, v.z - SP.z); return d >= 150 && d <= 300; })) o.ok++; } indGoTrip(2024); lvBuild(); let sm = ind.volcSmoke || []; o.smoke = sm.length === ind.map.volc.length && sm.every(function (q) { return q.smoke.fog === false && q.glow.fog === false; }); ind.base.clock = 300; indRender(); let a = sm[0].glow.opacity; ind.base.clock = IND_DUSK + 200; indRender(); let b = sm[0].glow.opacity; o.glow = [a, b]; ind.base.clock = 300; return o; })()`);
+                if (r.ok !== 30) bad.push('出生点 150～300 米内有火山 ' + r.ok + ' / 30');
+                if (!r.smoke) bad.push('烟柱材质不受雾影响 ' + JSON.stringify(r));
+                if (!(r.glow[1] > r.glow[0] + 0.2)) bad.push('夜里底部红光更亮 ' + JSON.stringify(r.glow));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND171 火山随机分布：数量边距间距、近处至少一座、出生点 150～300 米内有火山、烟柱不受雾影响夜里发红', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
