@@ -3804,14 +3804,14 @@ async function enterExit(tab, key) {
             // 走到道具上自动捡：道具可能被收缩的台面收走、位置也可能被挤开，所以每次查都重新站到现在的第一个道具上（有了就算捡到）
             const n0 = await T.eval(`nm.items.length`);
             if (!(await until(T, `(function(){ if (nm.me.item) return true; if (nm.items[0]) nm.me.p.set(nm.items[0].x, 0, nm.items[0].z); return false; })()`, 60000))) bad.push('走过去没自动捡 ' + await T.eval(`JSON.stringify({ item: nm.me.item, n: nm.items.length, out: nm.me.out, ph: nm.phase || null })`));
-            else if (!(await T.eval(`nm.items.length < ${n0} || nm.items.length <= 1`))) bad.push('捡了道具还在场上');
+            else if (await T.eval(`nm.items.some(function (i) { return Math.hypot(i.x - nm.me.p.x, i.z - nm.me.p.z) < 1; })`)) bad.push('捡了道具还在场上');   // 看脚下那个有没有收走；新道具会按时掉，数个数不准（CI 慢的时候掉得更勤）
             // AI 也会捡
             if (!(await until(T, `(function(){ if (!nm.items.length) nm.itemT = Math.min(nm.itemT, 0.01); return nm.items.length > 0; })()`, 30000))) bad.push('场上一直没有新道具，AI 没得捡');   // 道具可能已被收缩的台面收走或被我捡光：催一下掉落，等它真的出现
             await T.eval(`(function(){ let it = nm.items[0]; if (!it) return; nm.actors[1].p.set(it.x, 0, it.z); window.__k2 = it.kind; })(); true;`);
             if (!(await until(T, `nm.actors[1].item === window.__k2`))) bad.push('AI 没捡到道具');
             // 逐个用
-            await T.eval(`nm.me.item = 'hammer'; keys['q'] = true; true;`);
-            if (!(await until(T, `nm.me.hammerT > 4 && !nm.me.item`))) bad.push('大锤没生效');
+            await T.eval(`window.__hm = 0; nm.me.item = 'hammer'; keys['q'] = true; true;`);
+            if (!(await until(T, `(window.__hm = Math.max(window.__hm, nm.me.hammerT || 0)) > 4 && !nm.me.item`, 20000))) bad.push('大锤没生效');   // 大锤时间在倒数，CI 慢时轮询可能错过 >4 的那一小段，所以记最大值
             await T.eval(`nm.me.item = 'shield'; keys['q'] = true; true;`);
             if (!(await until(T, `nm.me.shield === true`))) bad.push('护盾没生效');
             await T.eval(`window.__kx0 = nm.me.kx; nmKnock(nm.me, 100, 0, nm.actors[1], 22); true;`);
