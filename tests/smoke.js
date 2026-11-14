@@ -13700,7 +13700,7 @@ async function enterExit(tab, key) {
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const one = (rule, a, b) => J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.rule = '${rule}'; let o = { bm: {}, dead: 0, short: 0, far: 0, topped: 0, moved: 0, dsum: 0, n: 0, mount: 0, mountAll: 0, allN: 0, water: 0, slope: 0, lava: 0 };
                     for (let s = ${a}; s < ${b}; s++) { indGoTrip(s * 7919 + 13); let M = ind.map, SP = M.spawn, h = indHeight(M, SP.x, SP.z); o.n++; o.bm[M.spawnInfo.biome] = (o.bm[M.spawnInfo.biome] || 0) + 1;
-                        if (h < 0.15) o.water++; if (M.volc.some(function (v) { return Math.hypot(SP.x - v.x, SP.z - v.z) - v.r * 0.3 < 30; })) o.lava++;
+                        if (h < 0.15) o.water++; if (M.volc.some(function (v) { return Math.hypot(SP.x - v.x, SP.z - v.z) - v.r * 0.3 < 10; })) o.lava++;
                         let g = Math.max(Math.abs(indHeight(M, SP.x + 2, SP.z) - h), Math.abs(indHeight(M, SP.x, SP.z + 2) - h)) / 2; if (g > 0.466) o.slope++;
                         let have = {}; ind.tripGround.forEach(function (q) { if (Math.hypot(q.x - SP.x, q.z - SP.z) <= 25) have[q.k] = (have[q.k] || 0) + 1; });
                         if ('${rule}' === 'hard' ? !((have.sharp_flint || 0) >= 2 && (have.grass || 0) >= 4) : !((have.stone || 0) >= 2 && ((have.twig || 0) >= 2 || /mountain|ancient|desert|volcano/.test(M.spawnInfo.biome)))) o.short++;
@@ -13979,6 +13979,23 @@ async function enterExit(tab, key) {
             await N.close();
             report('SET4 开发者面板：只有 ?dev=1 才有、按反引号开关、T 不再开、设置页按键表里只在 ?dev=1 时出现', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND174')) {
+            // IND174 火山坡上能出生（任务 132 补充）：强制把火山放在 (25, 5) 附近，出生点离岩浆池边 ≥ 10 米、不在火山口内圈，有的图出生点就在火山坡上
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const r = JSON.parse(await T.eval(`JSON.stringify((function(){ cancelAnimationFrame(ind.raf); ind.base.rule = 'hard'; let om = indMakeMap; indMakeMap = function (sd) { let M = om(sd); M.volc.push({ x: 25, z: 5, r: 20 }); return M; };
+                    let o = { n: 0, lava: 0, inner: 0, slope: 0 }; try { for (let s = 1; s <= 30; s++) { indGoTrip(s * 211 + 9); let SP = ind.map.spawn, v = ind.map.volc[ind.map.volc.length - 1], d = Math.hypot(SP.x - v.x, SP.z - v.z); o.n++; if (d - v.r * 0.3 < 10) o.lava++; if (d < v.r * 0.5) o.inner++; if (d < v.r * 1.6) o.slope++; } } finally { indMakeMap = om; } return o; })())`));
+                if (!(r.lava === 0 && r.inner === 0 && r.slope >= 1)) bad.push('火山放在出生点旁边：离岩浆 ≥ 10 米、不在口内圈、有的图出生在火山坡上 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND174 火山坡上能出生：强制火山在出生点旁，离岩浆 ≥ 10 米，有的图出生在坡上', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
