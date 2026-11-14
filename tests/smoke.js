@@ -13744,6 +13744,31 @@ async function enterExit(tab, key) {
             report('IND171 火山随机分布：数量边距间距、近处至少一座、出生点 150～300 米内有火山、烟柱不受雾影响夜里发红', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND172')) {
+            // IND172 物品小图标（任务 157）：所有物品都画得出来（不报错、不是空白）；所有矿两两不同、所有金属锭两两不同、三种桶不同；背包和快捷栏、箱子里每一格有图标
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let keys = Object.keys(IND_ITEMS_RAW), err = [], blank = [], t0 = performance.now(); keys.forEach(function (k) { let u = ''; try { u = indIcon(k, 32); } catch (e) { err.push(k); } if (!u || u.length < 200) blank.push(k); }); let ms = performance.now() - t0;
+                    let ores = keys.filter(function (k) { return /^ore_/.test(k); }), ings = keys.filter(function (k) { return /^ingot_/.test(k) || /^(steel|bronze|brass)$/.test(k); });
+                    let dup = function (L) { let seen = {}, d = []; L.forEach(function (k) { let u = indIcon(k, 32); if (seen[u]) d.push(seen[u] + '=' + k); else seen[u] = k; }); return d; };
+                    let bk = ['bucket', 'bucket_fe', 'bucket_cu'].filter(function (k) { return IND_ITEMS[k]; }), bd = dup(bk), hot = dup(keys.filter(function (k) { return /^hot_/.test(k); }));
+                    return { n: keys.length, err: err, blank: blank.slice(0, 5), ms: Math.round(ms), ores: ores.length, oreDup: dup(ores), ingDup: dup(ings), ings: ings.length, bd: bd, hotDup: hot }; })()`);
+                if (!(r.n > 300 && r.err.length === 0 && r.blank.length === 0)) bad.push('所有物品都画得出来 ' + JSON.stringify(r));
+                if (r.oreDup.length || r.ingDup.length || r.bd.length || r.hotDup.length) bad.push('矿、锭、桶、烫锭两两不同 ' + JSON.stringify([r.oreDup, r.ingDup, r.bd, r.hotDup]));
+                if (r.ms > 4000) bad.push('画图太慢 ' + r.ms + ' 毫秒');
+                r = await J(`(function(){ ind.bag = { stone: 3, ore_cu: 2, ingot_fe: 1, pick_iron: 1 }; ind.base.chests[0].items = { ore_zn: 4, sand: 2 }; ind.hudSig = ''; indHudUpdate(); let hot = document.querySelectorAll('#ind-bag .ind-hot img').length; indPanelBag(); let bag = document.querySelectorAll('#ind-panel .ind-slot img').length, bagN = document.querySelectorAll('#ind-panel .ind-slot').length; indPanelBox(ind.base.chests[0].id); let box = document.querySelectorAll('#ind-panel .ind-slot img').length, boxN = document.querySelectorAll('#ind-panel .ind-slot').length; return { hot: hot, bag: bag, bagN: bagN, box: box, boxN: boxN }; })()`);
+                if (!(r.hot >= 4 && r.bag === r.bagN && r.bag >= 4 && r.box === r.boxN && r.box >= 6)) bad.push('快捷栏、背包、箱子每一格有图标 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND172 物品小图标：全都画得出来、矿锭桶两两不同、快捷栏背包箱子每格有图标', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
