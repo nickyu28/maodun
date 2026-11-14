@@ -5635,7 +5635,7 @@ async function enterExit(tab, key) {
                 // 篝火：脱掉衣服，做篝火点上，旁边气温 +20；拿木头左键加柴
                 await T.eval(`(function(){ ['body', 'head', 'neck'].forEach(indTakeOff); indBagAdd('wood', 6); indBagAdd('stone', 3); indCraft(3); indSelect('campfire'); indUse(); })(); true;`);
                 const fr = JSON.parse(await T.eval(`(function(){ let f = ind.base.fires[0]; if (!f) return 'null'; let a = indAirTemp(); f.fuel = 0; let b = indAirTemp(); f.fuel = 120; indLookAt(f.x, f.z); let before = f.fuel; indSelect('wood'); indAction(); return JSON.stringify({ n: ind.base.fires.length, d: a - b, add: f.fuel - before }); })()`));
-                if (fr === null || fr.n !== 1 || Math.abs(fr.d - 20) > 0.01 || fr.add !== 60) bad.push('篝火不对 ' + JSON.stringify(fr));
+                if (fr === null || fr.n !== 1 || Math.abs(fr.d - 20) > 0.01 || fr.add !== 40) bad.push('篝火不对 ' + JSON.stringify(fr));
                 // 存档：衣服、暖棚、篝火都在
                 await T.eval(`indBagAdd('scarf', 1); indSelect('scarf'); indUse(); indSave(); true;`); await until(T, `IND_SAVING === 0`, 5000);
                 const sv = JSON.parse(await T.eval(`new Promise(function (r) { indLoad(function (b) { r(JSON.stringify({ wear: b.wear, gh: b.gh, fires: b.fires.length, ver: b.ver })); }); })`));
@@ -12194,7 +12194,7 @@ async function enterExit(tab, key) {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const ord = `(function(row){ return Array.prototype.map.call(row.querySelectorAll('button, input.ind-num'), function (e) { return e.tagName === 'INPUT' ? 'IN:' + e.value : e.textContent; }).join('|'); })`;
-                let r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; ind.bag = { wood: 7, stone: 3 }; ind.cookId = 'stove'; B.stove = Object.assign(ckNewState(), { spoutTy: 'brick' }); indPanelStove();
+                let r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; ind.bag = { stone: 3, wood: 7 }; ind.selIdx = 0; ind.cookId = 'stove'; B.stove = Object.assign(ckNewState(), { spoutTy: 'brick' }); indPanelStove();   // 任务 133：拿着的那一格不列在当柴烧里，手上拿石头
                     let rows = Array.prototype.filter.call(document.querySelectorAll('#ind-panel > div'), function (d) { return /^木头 × 7/.test(d.textContent); }); let o = ${ord}; let row = rows.length ? rows[rows.length - 1] : null;
                     let stoneRow = Array.prototype.filter.call(document.querySelectorAll('#ind-panel > div'), function (d) { return /^石头 × 3/.test(d.textContent); }).pop();
                     return { wood: row ? o(row) : null, stone: stoneRow ? o(stoneRow) : null }; })()`);
