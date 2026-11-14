@@ -5,7 +5,7 @@
         // 竖着拿平板/手机时画面很窄，65° 的视角下自己的角色占掉大半个屏幕、左右什么都看不到。
         // 竖屏按"横向大约 70°"来算纵向视角（最多 95°），横屏还是原来的 65°。
         function camFovFor(aspect) {
-            if (!(aspect < 1)) return 65;
+            if (!(aspect < 1)) { let f = +SETTINGS.fov; return isFinite(f) && f >= 50 && f <= 100 ? f : 65; }   // 视野可以在设置里调，竖屏照老办法算
             return Math.min(95, 2 * Math.atan(Math.tan(35 * Math.PI / 180) / aspect) * 180 / Math.PI);
         }
         let tpLastD = 0;
@@ -163,6 +163,7 @@
             scene.remove = function () { for (let i = 0; i < arguments.length; i++) { let o = arguments[i]; THREE.Scene.prototype.remove.call(this, o); disposeObject(o); } return this; };
             camera = new THREE.PerspectiveCamera(camFovFor(window.innerWidth / window.innerHeight), window.innerWidth / window.innerHeight, 0.5, 1600); camera.rotation.order = 'YXZ';
             let canvas = document.getElementById('gameCanvas'); renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true }); renderer.setPixelRatio(SETTINGS.hq ? Math.min(2, window.devicePixelRatio || 1) : 1); renderer.setSize(window.innerWidth, window.innerHeight);
+            if (window.settingsApplyDisplay) window.settingsApplyDisplay();   // 视野、视距按设置套上
             window.addEventListener('resize', function () { if (camera && renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.fov = camFovFor(camera.aspect); camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); } });
             clock = new THREE.Clock(); raycaster = new THREE.Raycaster();
             pVel = new THREE.Vector3();
@@ -1476,7 +1477,8 @@
                 id: '2026.11.5-75', date: '11 月 14 日', title: '最近更新', items: [
                     '设置分成声音、操作、显示、游戏四页',
                     '按键能自己改，冲突会提示，能一键恢复默认',
-                    '左右上下转视角的快慢分开调了，触屏按钮大小和透明度也能调'
+                    '左右上下转视角的快慢分开调了，触屏按钮大小和透明度也能调',
+                    '显示里能调界面大小、快捷栏位置、视野、帧率上限，小地图和准星能关'
                 ]
             },
             {

@@ -13857,6 +13857,32 @@ async function enterExit(tab, key) {
             await T.close();
             report('SET2 按键绑定：改键存档、冲突拒绝、Esc 不能改、新键等于原键原键没用、打字不翻译、恢复默认、登记接口', bad.length === 0, bad.join(' / '));
         }
+        if (want('SET3')) {
+            // SET3 显示设置（任务 P3 第二批）：界面大小、快捷栏位置、小地图／准星／数字／信息条开关、工业那排按钮放哪个角、视野、视距、帧率上限都在“显示”那一组，改了马上生效、存档、刷新还在
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} openSettings('显示'); true;`); await W(200);
+            const txt = await T.eval(`document.getElementById('set-content').innerText`);
+            for (const w of ['界面大小', '快捷栏位置', '小地图', '准星', '视野', '帧率上限', '看多远', '左上角信息条', '工业右上那排按钮']) if (txt.indexOf(w) < 0) bad.push('显示组里没有 ' + w);
+            await T.eval(`(function(){ setSliderSet('set-reg-hud_scale', 1.3); settingsSet('hotbar_pos', 'left'); settingsSet('btn_pos', 'bl'); ['show_minimap', 'show_xhair', 'show_nums', 'show_info'].forEach(function (k) { settingsSet(k, false); }); settingsSet('fov', 80); settingsSet('view_dist', 'near'); })(); true;`);
+            const r = JSON.parse(await T.eval(`JSON.stringify({ sc: getComputedStyle(document.documentElement).getPropertyValue('--hud-scale').trim(), hb: document.body.dataset.hotbar, bp: document.body.dataset.btnpos,
+                mm: getComputedStyle(document.getElementById('minimap-container')).display, xh: getComputedStyle(document.getElementById('crosshair')).display, nums: getComputedStyle(document.querySelector('.bar-num')).display, info: getComputedStyle(document.querySelector('#stats-left > div')).display,
+                left: getComputedStyle(document.getElementById('bottom-ui-wrapper')).left, fov: camera.fov, far: camera.far, far0: camera.userData.far0 })`));
+            if (r.sc !== '1.3' || r.hb !== 'left' || r.bp !== 'bl' || r.mm !== 'none' || r.xh !== 'none' || r.nums !== 'none' || r.info !== 'none' || r.left !== '12px') bad.push('显示项没生效 ' + JSON.stringify(r));
+            if (r.fov !== 80 || !(r.far0 > 0) || Math.abs(r.far - r.far0 * 0.35) > 1e-6) bad.push('视野、视距没套到相机 ' + JSON.stringify([r.fov, r.far, r.far0]));
+            await T.eval(`settingsSet('fps_cap', 30); true;`); await W(300);
+            const f0 = await T.eval(`renderer.info.render.frame`); await W(1500); const f1 = await T.eval(`renderer.info.render.frame`);
+            if (f1 - f0 > 50) bad.push('帧率上限 30 但 1.5 秒画了 ' + (f1 - f0) + ' 帧');
+            await T.eval(`settingsSet('fps_cap', 0); true;`);
+            await T.send('Page.reload'); await W(3000);
+            await T.eval(`document.getElementById('player-id').value = 'set3' + Date.now() % 100000; requestLobbyAccess(); true;`);
+            await until(T, `camera && renderer`, 15000);
+            const b = JSON.parse(await T.eval(`JSON.stringify({ fov: settingsGet('fov'), hb: document.body.dataset.hotbar, mm: document.body.classList.contains('set-no-minimap'), cam: camera ? camera.fov : null, far: camera ? camera.far : null })`));
+            if (b.fov !== 80 || b.hb !== 'left' || !b.mm || b.cam !== 80 || !(b.far < 1600)) bad.push('刷新后没读回来 ' + JSON.stringify(b));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('SET3 显示设置：界面大小、快捷栏位置、四个显示开关、工业按钮角、视野、视距、帧率上限，生效、存档、刷新还在', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

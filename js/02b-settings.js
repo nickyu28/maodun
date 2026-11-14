@@ -261,3 +261,42 @@ function openSettings(tab) {
     if (mo && !mo.__setObs && window.MutationObserver) { mo.__setObs = new MutationObserver(function () { if (mo.classList.contains('hidden')) setKeyEnd(); }); mo.__setObs.observe(mo, { attributes: true, attributeFilter: ['class'] }); }
 }
 keyRebuild();
+
+// ── 显示：这几项都靠登记接口，放在"显示"那一组（任务 P3 第二批）──
+(function () {
+    const B = function () { return document.body; };
+    const cls = function (c, on) { if (B()) B().classList.toggle(c, !!on); };
+    let lastRender = 0;
+    settingsRegister({ group: '显示', id: 'hud_scale', label: '界面大小', type: 'slider', def: 1, min: 0.8, max: 1.5, step: 0.05, onChange: function (v) { document.documentElement.style.setProperty('--hud-scale', String(v)); } });
+    settingsRegister({ group: '显示', id: 'hotbar_pos', label: '快捷栏位置', type: 'choice', def: 'bottom', choices: [['bottom', '下边'], ['left', '左边']], onChange: function (v) { if (B()) B().dataset.hotbar = v; } });
+    settingsRegister({ group: '显示', id: 'btn_pos', label: '工业右上那排按钮', type: 'choice', def: 'tr', choices: [['tr', '右上'], ['tl', '左上'], ['br', '右下'], ['bl', '左下']], onChange: function (v) { if (B()) B().dataset.btnpos = v; } });
+    settingsRegister({ group: '显示', id: 'show_minimap', label: '小地图', type: 'toggle', def: true, onChange: function (v) { cls('set-no-minimap', !v); } });
+    settingsRegister({ group: '显示', id: 'show_xhair', label: '准星', type: 'toggle', def: true, onChange: function (v) { cls('set-no-xhair', !v); } });
+    settingsRegister({ group: '显示', id: 'show_nums', label: '血条体力条上的数字', type: 'toggle', def: true, onChange: function (v) { cls('set-no-nums', !v); } });
+    settingsRegister({ group: '显示', id: 'show_info', label: '左上角信息条', type: 'toggle', def: true, onChange: function (v) { cls('set-no-info', !v); } });
+    settingsRegister({ group: '显示', id: 'fov', label: '视野，度数大看得宽', type: 'slider', def: 65, min: 50, max: 100, step: 1, onChange: function (v) { SETTINGS.fov = v; if (typeof camera !== 'undefined' && camera) { camera.fov = camFovFor(camera.aspect); camera.updateProjectionMatrix(); } } });
+    settingsRegister({ group: '显示', id: 'view_dist', label: '看多远，低端手机选近', type: 'choice', def: 'far', choices: [['near', '近'], ['mid', '中'], ['far', '远']], onChange: function (v) {
+        if (typeof camera === 'undefined' || !camera) return;
+        if (!camera.userData.far0) camera.userData.far0 = camera.far;
+        camera.far = camera.userData.far0 * (v === 'near' ? 0.35 : v === 'mid' ? 0.65 : 1); camera.updateProjectionMatrix();
+    } });
+    settingsRegister({ group: '显示', id: 'fps_cap', label: '帧率上限', type: 'choice', def: 0, choices: [[30, '30'], [60, '60'], [0, '不限']] });
+    // 帧率上限：只管画，逻辑照常跑。主画面这一帧离上一次画得太近就跳过
+    if (typeof THREE !== 'undefined' && THREE.WebGLRenderer) {
+        let r0 = THREE.WebGLRenderer.prototype.render;
+        THREE.WebGLRenderer.prototype.render = function () {
+            let cap = +settingsGet('fps_cap');
+            if (cap > 0 && typeof renderer !== 'undefined' && this === renderer) {
+                let now = performance.now();
+                if (now - lastRender < 1000 / cap - 2) return;
+                lastRender = now;
+            }
+            return r0.apply(this, arguments);
+        };
+    }
+    // 显示项重新套一遍：相机刚建好、页面加载完时调
+    window.settingsApplyDisplay = function () {
+        ['hud_scale', 'hotbar_pos', 'btn_pos', 'show_minimap', 'show_xhair', 'show_nums', 'show_info', 'fov', 'view_dist'].forEach(function (id) { let o = settingsOpt(id); if (o && o.onChange) { try { o.onChange(settingsGet(id)); } catch (e) { } } });
+    };
+    window.addEventListener('load', window.settingsApplyDisplay);
+})();

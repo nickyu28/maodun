@@ -437,6 +437,22 @@
         /* P3：触屏按钮大小和透明度（设置里调），用 scale 从中心放大缩小，位置不动 */
         .joystick-zone, .action-btn { scale: var(--pad-scale, 1); opacity: var(--pad-alpha, 1); }
 
+        /* P3 显示：HUD 缩放、快捷栏位置、小地图和准星和数字和信息条开关、工业那排按钮放哪个角。值在 js/02b-settings.js 里设到 body 和 :root 上 */
+        #stats-left { transform-origin: top left; scale: var(--hud-scale, 1); }
+        #bars-center { transform-origin: top center; scale: var(--hud-scale, 1); }
+        #hud-right { transform-origin: top right; scale: var(--hud-scale, 1); }
+        #bottom-ui-wrapper #hud-hotbar-container { transform-origin: bottom center; scale: var(--hud-scale, 1); }
+        body[data-hotbar="left"] #bottom-ui-wrapper { left: 12px; bottom: 50%; transform: translateY(50%); flex-direction: column; }
+        body[data-hotbar="left"] #hud-hotbar-container { flex-direction: column; }
+        body.set-no-minimap #minimap-container, body.set-no-minimap #minimap-expand { display: none !important; }
+        body.set-no-xhair #crosshair { display: none !important; }
+        body.set-no-nums .bar-num { display: none !important; }
+        body.set-no-info #stats-left > div { display: none !important; }
+        /* 猫盾工业右上那排按钮（配方、背包、地图等）：靠 :has 找到装它们的盒子，改它的角。盒子里按钮的 id 变了这里要跟着改 */
+        body[data-btnpos="tl"] div:has(> #ind-btn-book) { right: auto !important; left: 8px !important; }
+        body[data-btnpos="br"] div:has(> #ind-btn-book) { top: auto !important; bottom: 8px !important; }
+        body[data-btnpos="bl"] div:has(> #ind-btn-book) { right: auto !important; left: 8px !important; top: auto !important; bottom: 8px !important; }
+
         .knob {
             position: absolute;
             top: 50px;
