@@ -1539,6 +1539,7 @@ async function enterExit(tab, key) {
             if (await G.eval('!!gState.tutorial || gState.tutDone !== "done"')) bad.push('刷新后又开教程了 ' + (await G.eval('gState.tutDone')));
             // 设置里重玩（不再给猫盾币）；然后点右上角跳过
             await G.eval(`${HIDE} openSettings(); true;`); await W(300);
+            await G.eval(`setTabGo('游戏'); true;`);   // 设置页分组了，重玩教程在“游戏”那一组
             const p = await mouseAt(G, '#sys-modal-text button[onclick="tutorialStart()"]');
             if (!p) bad.push('设置里没有重玩按钮');
             else { await G.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p[0], y: p[1] }); await G.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p[0], y: p[1], button: 'left', buttons: 1, clickCount: 1 }); await G.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p[0], y: p[1], button: 'left', buttons: 0, clickCount: 1 }); await W(1500); }
@@ -13771,6 +13772,91 @@ async function enterExit(tab, key) {
             report('IND172 物品小图标：全都画得出来、矿锭桶两两不同、快捷栏背包箱子每格有图标', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('SET1')) {
+            // SET1 设置页（任务 P3）：四组都在、换组不关窗；声音、灵敏度（左右上下分开）、反转、触屏按钮大小透明度存进 TH_settings、刷新还在；登记接口登记的选项出现在设置页、能存能读；Esc 关；按钮至少 40 像素
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} openSettings(); true;`); await W(200);
+            const tabs = JSON.parse(await T.eval(`JSON.stringify([].map.call(document.querySelectorAll('#set-tabs button'), function (b) { return b.innerText; }))`));
+            if (tabs.join() !== '声音,操作,显示,游戏') bad.push('分组 ' + tabs.join());
+            for (const g of ['操作', '显示', '游戏', '声音']) { await T.eval(`setTabGo('${g}'); true;`); if (!(await T.eval(`sysModalVisible() && document.getElementById('set-content').innerText.length > 5`))) bad.push('换到 ' + g + ' 窗关了或空了'); }
+            const small = await T.eval(`[].filter.call(document.querySelectorAll('#sys-modal button, #set-content button'), function (b) { let r = b.getBoundingClientRect(); return r.width > 0 && (r.height < 39.5 || r.width < 39.5); }).map(function (b) { return b.innerText + ':' + Math.round(b.getBoundingClientRect().width) + 'x' + Math.round(b.getBoundingClientRect().height); }).join()`);
+            if (small) bad.push('按钮小于 40 像素 ' + small);
+            await T.eval(`setTabGo('声音'); true;`);
+            await T.eval(`(function(){ [['volMaster', 70], ['volMusic', 40]].forEach(function (p) { let e = document.getElementById('set-' + p[0]); e.value = p[1]; e.dispatchEvent(new Event('input')); e.dispatchEvent(new Event('change')); }); setToggleSet('set-muteBg', true); })(); true;`);
+            await T.eval(`setTabGo('操作'); (function(){ let e = document.getElementById('set-sens'); e.value = 1.5; e.dispatchEvent(new Event('input')); e = document.getElementById('set-sensV'); e.value = 0.5; e.dispatchEvent(new Event('input')); e = document.getElementById('set-padScale'); e.value = 1.3; e.dispatchEvent(new Event('input')); e = document.getElementById('set-padAlpha'); e.value = 0.6; e.dispatchEvent(new Event('input')); setToggleSet('set-inv', true); })(); true;`);
+            const st = JSON.parse(await T.eval(`localStorage.getItem('TH_settings')`));
+            if (st.volMaster !== 0.7 || st.volMusic !== 0.4 || st.muteBg !== true || Math.abs(st.sens - 1.5) > 1e-9 || Math.abs(st.sensV - 0.5) > 1e-9 || Math.abs(st.padScale - 1.3) > 1e-9 || Math.abs(st.padAlpha - 0.6) > 1e-9 || st.invertY !== true) bad.push('没存进 TH_settings ' + JSON.stringify(st));
+            if (!(await T.eval(`lookY() === -0.5 && getComputedStyle(document.documentElement).getPropertyValue('--pad-scale').trim() === '1.3'`))) bad.push('上下灵敏度、反转、按钮大小没生效');
+            // 登记接口
+            await T.eval(`window.__reg = []; settingsRegister({ group: '测试组', id: 'tst_a', label: '测试滑条', type: 'slider', def: 0.5, min: 0, max: 1, onChange: function (v) { window.__reg.push(v); } });
+                settingsRegister({ group: '游戏', id: 'tst_b', label: '测试开关', type: 'toggle', def: true }); settingsRegister({ group: '操作', id: 'tst_c', label: '测试选择', type: 'choice', def: 'a', choices: [['a', '甲'], ['b', '乙']] }); true;`);
+            await T.eval(`openSettings('游戏'); true;`); await W(150);
+            if (!(await T.eval(`document.getElementById('set-content').innerText.indexOf('测试开关') >= 0 && document.getElementById('set-tab-测试组') !== null`))) bad.push('登记的选项没出现在设置页');
+            await T.eval(`setTabGo('测试组'); true;`);
+            if (!(await T.eval(`document.getElementById('set-content').innerText.indexOf('测试滑条') >= 0`))) bad.push('自己的分组里没有登记的滑条');
+            await T.eval(`setSliderSet('set-reg-tst_a', 0.8); setToggleSet('set-reg-tst_b', false); settingsSet('tst_c', 'b'); settingsSet('tst_c', 'zzz'); true;`);
+            if (!(await T.eval(`settingsGet('tst_a') === 0.8 && settingsGet('tst_b') === false && settingsGet('tst_c') === 'b' && __reg[__reg.length - 1] === 0.8`))) bad.push('登记选项存取不对');
+            // Esc 关设置
+            await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+            if (await T.eval(`sysModalVisible()`)) bad.push('Esc 没关设置');
+            // 刷新还在（登记的选项要登记后才读得到，这里看存的值）
+            await T.send('Page.reload'); await W(2500);
+            const back = JSON.parse(await T.eval(`JSON.stringify({ v: SETTINGS.volMaster, s: SETTINGS.sens, sv: SETTINGS.sensV, inv: SETTINGS.invertY, reg: SETTINGS.reg })`));
+            if (back.v !== 0.7 || back.s !== 1.5 || back.sv !== 0.5 || back.inv !== true || back.reg.tst_a !== 0.8) bad.push('刷新后没读回来 ' + JSON.stringify(back));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('SET1 设置页：四组都在、声音和灵敏度和触屏按钮存档刷新还在、登记接口的选项出现在设置页、Esc 关、按钮不小于 40 像素', bad.length === 0, bad.join(' / '));
+        }
+        if (want('SET2')) {
+            // SET2 按键绑定（任务 P3）：设置页里点改再按键就改好；同一个模式里冲突被拒绝；Esc 不能改、改键时按 Esc 是取消；改了以后新键等于原键、原键没用了；能恢复默认；keyRegister 登记的按键按了就调 fn；打字不被翻译
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const key = async (k, code, vk) => { await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code, windowsVirtualKeyCode: vk }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk }); };
+            await T.eval(`${HIDE} openSettings('操作'); true;`); await W(200);
+            if (!(await T.eval(`document.getElementById('set-key-all-bag') !== null && document.getElementById('set-key-all-bag').innerText === 'E'`))) bad.push('按键表里没有背包或不是 E');
+            // 点改，按 B
+            await T.eval(`document.getElementById('set-key-all-bag').click(); true;`);
+            if (!(await T.eval(`window.__keyCapture === true`))) bad.push('点改没进入等按键');
+            await key('Escape', 'Escape', 27);
+            if (await T.eval(`window.__keyCapture === true || !sysModalVisible()`)) bad.push('改键时按 Esc 该取消，不该关设置窗 ' + await T.eval(`[window.__keyCapture, sysModalVisible()]`));
+            await T.eval(`document.getElementById('set-key-all-bag').click(); true;`);
+            await key('b', 'KeyB', 66);
+            if (!(await T.eval(`keyOf('all', 'bag') === 'b' && JSON.parse(localStorage.getItem('TH_settings')).keymap['all:bag'] === 'b'`))) bad.push('改成 B 没存下来');
+            // 冲突
+            await T.eval(`document.getElementById('set-key-all-throw').click(); true;`);
+            await key('w', 'KeyW', 87);
+            if (!(await T.eval(`keyOf('all', 'throw') === 'q' && document.getElementById('set-msg') && /已经用在/.test(document.getElementById('set-msg').innerText)`))) bad.push('冲突没拒绝 ' + await T.eval(`keyOf('all', 'throw')`));
+            if (!(await T.eval(`keyBind('all', 'throw', 'escape').ok === false && keyBind('all', 'jump', 'b').ok === false`))) bad.push('Esc 或已被占用的键没拒绝');
+            // 翻译：按 B 老代码收到 e；按 E 收不到
+            await T.eval(`${HIDE} document.getElementById('sys-modal').classList.add('hidden'); window.__ks = []; window.addEventListener('keydown', function (e) { window.__ks.push(e.key); }); window.addEventListener('keyup', function (e) { window.__ks.push('up:' + e.key); }); true;`);
+            await key('b', 'KeyB', 66); await key('e', 'KeyE', 69);
+            const ks = await T.eval(`__ks.join()`);
+            if (ks !== 'e,up:e') bad.push('翻译不对 ' + ks);
+            // 输入框里打字不被翻译
+            await T.eval(`(function(){ let i = document.createElement('input'); i.id = 'set-test-in'; i.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;'; document.body.appendChild(i); i.focus(); window.__ks = []; })(); true;`);
+            await key('b', 'KeyB', 66);
+            if ((await T.eval(`__ks.join()`)) !== 'b,up:b') bad.push('输入框里按 B 被翻译了 ' + await T.eval(`__ks.join()`));
+            await T.eval(`document.getElementById('set-test-in').remove(); true;`);
+            // 恢复默认
+            await T.eval(`keyReset('all', 'bag'); window.__ks = []; true;`);
+            await key('e', 'KeyE', 69);
+            if ((await T.eval(`__ks.join()`)) !== 'e,up:e' || (await T.eval(`keyOf('all', 'bag')`)) !== 'e') bad.push('恢复默认后 E 又该是 E ' + await T.eval(`__ks.join()`));
+            await T.eval(`keyBind('all', 'map', 'n'); keyBind('all', 'skill', 'k'); keyResetAll(); true;`);
+            if (await T.eval(`Object.keys(SETTINGS.keymap).length !== 0 || keyOf('all', 'map') !== 'tab'`)) bad.push('全部恢复默认没清干净');
+            // 登记按键：fn 被调用；自己的模式里冲突检测
+            await T.eval(`window.__fk = 0; keyRegister('tst', 'act1', 'g', '测试一', function () { window.__fk++; }); keyRegister('tst', 'act2', 'h', '测试二', null); true;`);
+            await key('g', 'KeyG', 71);
+            if ((await T.eval(`__fk`)) !== 1) bad.push('登记的按键没调 fn ' + await T.eval(`__fk`));
+            if (!(await T.eval(`keyBind('tst', 'act2', 'g').ok === false && keyBind('tst', 'act1', 'j').ok === true && keyIs({ key: 'J' }, 'tst', 'act1') && keyBind('all', 'jump', 'g').ok === true`))) bad.push('自己模式里的冲突检测不对，或者别的模式里同一个键不该冲突');
+            await key('g', 'KeyG', 71);
+            if ((await T.eval(`__fk`)) !== 1) bad.push('act1 改成 J 后按 G 不该再调 fn');
+            await T.eval(`openSettings('操作'); true;`); await W(150);
+            if (!(await T.eval(`document.getElementById('set-key-tst-act1') !== null && document.getElementById('set-key-tst-act1').innerText === 'J'`))) bad.push('登记的按键没出现在设置页');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('SET2 按键绑定：改键存档、冲突拒绝、Esc 不能改、新键等于原键原键没用、打字不翻译、恢复默认、登记接口', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

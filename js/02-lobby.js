@@ -181,7 +181,7 @@
         function introPaused() { return introHolds(); }
         function introOnce(key, title, text) {
             if (!gState.introSeen || typeof gState.introSeen !== 'object') gState.introSeen = {};
-            if (gState.introSeen[key]) return;
+            if (gState.introSeen[key] || SETTINGS.tips === false) return;
             gState.introSeen[key] = 1; saveProgress();
             introPush(title, '<div style="text-align:left; font-size:14px; line-height:1.75;">' + text + '</div>');
         }
@@ -338,7 +338,7 @@
         // 没设置过的时候：手指操作的设备（粗指针）或者窄屏触屏默认显示，其它默认隐藏。
         // 灵敏度原来存在 gState 里但 saveProgress 没带上它，每次刷新都回到 1——现在也放这儿存。
         // P1：寻宝队难度、AI 补齐队友、惊魂夜选的角色也存在这里（null = 没选过，用默认），进大厅时恢复
-        let SETTINGS = { touch: null, sens: 1, invertY: false, sfx: true, hq: false, mapDiff: null, aiFill: null, nightChar: null, blazeFull: false, volMaster: 1, volMusic: 1, volSfx: 1, volVoice: 1 };
+        let SETTINGS = { touch: null, sens: 1, invertY: false, sfx: true, hq: false, mapDiff: null, aiFill: null, nightChar: null, blazeFull: false, volMaster: 1, volMusic: 1, volSfx: 1, volVoice: 1, sensV: 1, muteBg: false, autoLock: true, tips: true, padScale: 1, padAlpha: 1, reg: {}, keymap: {} };
         function settingsLoad() {
             try { let v = JSON.parse(localStorage.getItem('TH_settings') || 'null'); if (v) Object.keys(SETTINGS).forEach(function (k) { if (v[k] !== undefined) SETTINGS[k] = v[k]; });
                 // S1：老设置里“音效关”变成音效音量 0
@@ -358,9 +358,12 @@
             SFX_ENABLED = SETTINGS.sfx !== false;
             let touch = SETTINGS.touch === null ? touchUiDefault() : SETTINGS.touch;
             selectControl(touch ? 'pad' : 'laptop');
+            let rs = document.documentElement.style, ps = +SETTINGS.padScale, pa = +SETTINGS.padAlpha;
+            rs.setProperty('--pad-scale', String(isFinite(ps) && ps >= 0.8 && ps <= 1.6 ? ps : 1)); rs.setProperty('--pad-alpha', String(isFinite(pa) && pa >= 0.3 && pa <= 1 ? pa : 1));
             if (renderer) { renderer.setPixelRatio(SETTINGS.hq ? Math.min(2, window.devicePixelRatio || 1) : 1); renderer.setSize(window.innerWidth, window.innerHeight); }
         }
-        function lookY() { return SETTINGS.invertY ? -1 : 1; }
+        // 上下转的快慢跟左右分开：sensV 是上下相对左右的倍数
+        function lookY() { let v = +SETTINGS.sensV; return (SETTINGS.invertY ? -1 : 1) * (isFinite(v) && v > 0 ? v : 1); }
         // P1：进大厅时把上次的三个选择放回去。不在加载时做：NIGHT_CHARS 定义在这个文件后面
         function settingsRestoreChoices() {
             if (['easy', 'med', 'map4', 'hard'].indexOf(SETTINGS.mapDiff) >= 0) {
@@ -378,60 +381,7 @@
             if (touch) selectControl('pad');
         })();
 
-        function openSettings() {
-            let touchOn = gState.control === 'pad';
-            let row = function (label, ctrl) {
-                return '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid #eee;">' +
-                    '<span style="font-size:14px; color:#444;">' + label + '</span>' + ctrl + '</div>';
-            };
-            let sw = function (id, on, a, b) {
-                let btn = function (val, txt) {
-                    let sel = on === val;
-                    return '<button id="' + id + '-' + (val ? 'on' : 'off') + '" onclick="settingsPick(\'' + id + '\', ' + val + ')" style="margin:0; padding:4px 10px; font-size:12px; border:none; border-radius:4px; background:' + (sel ? '#5cb85c' : '#eceff1') + '; color:' + (sel ? '#fff' : '#555') + ';">' + txt + '</button>';
-                };
-                return '<span style="display:flex; gap:4px;">' + btn(true, a) + btn(false, b) + '</span>';
-            };
-            let sens = SETTINGS.sens || 1;
-            let vol = function (label, key) {
-                let v = Math.round(audioClamp(SETTINGS[key]) * 100);
-                return row(label, '<span style="display:flex; align-items:center; gap:6px;"><input type="range" id="set-' + key + '" min="0" max="100" step="5" value="' + v + '" oninput="settingsVol(\'' + key + '\', this.value)" onchange="settingsVolDone(\'' + key + '\')" style="width:120px;"><span id="set-' + key + '-val" style="font-size:12px; color:#666; width:30px;">' + v + '</span></span>');
-            };
-            let body = '<div style="text-align:left; min-width:250px;">' +
-                row('触屏按键', sw('set-touch', touchOn, '显示', '隐藏')) +
-                row('转视角快慢', '<span style="display:flex; align-items:center; gap:6px;"><input type="range" id="set-sens" min="0.3" max="2.5" step="0.05" value="' + sens + '" style="width:110px;" oninput="settingsSens(this.value)"><span id="set-sens-val" style="font-size:12px; color:#777; width:32px;">' + sens.toFixed(2) + '</span></span>') +
-                row('上下视角反转', sw('set-inv', !!SETTINGS.invertY, '开', '关')) +
-                vol('总音量', 'volMaster') + vol('音乐', 'volMusic') + vol('音效', 'volSfx') + vol('语音，别人说话', 'volVoice') +
-                '<div style="font-size:12px; color:#888; padding:4px 0 6px;">' + kTxt('按 <b>M</b> 一键静音，再按恢复。', '电脑上按 M 能一键静音。') + '</div>' +
-                row('画面', sw('set-hq', !!SETTINGS.hq, '清晰', '流畅')) +
-                row('新手教程', '<button onclick="tutorialStart()" style="margin:0; padding:4px 12px; font-size:12px; background:#607d8b; color:#fff; border:none; border-radius:4px;">重玩一遍</button>') +
-                row('快捷语', '<button onclick="openChatSetup()" style="margin:0; padding:4px 12px; font-size:12px; background:#607d8b; color:#fff; border:none; border-radius:4px;">改一下</button>') +
-                '</div>';
-            showSysModal('设置', body, [{ label: '好了', color: '#5cb85c' }]);
-        }
-        function settingsPick(id, on) {
-            if (id === 'set-touch') SETTINGS.touch = on;
-            else if (id === 'set-inv') SETTINGS.invertY = on;
-            else if (id === 'set-hq') SETTINGS.hq = on;
-            settingsSave(); settingsApply();
-            let a = document.getElementById(id + '-on'), b = document.getElementById(id + '-off');
-            if (a && b) {
-                a.style.background = on ? '#5cb85c' : '#eceff1'; a.style.color = on ? '#fff' : '#555';
-                b.style.background = !on ? '#5cb85c' : '#eceff1'; b.style.color = !on ? '#fff' : '#555';
-            }
-        }
-        // S1：四个音量滑条。拖的时候马上生效，松手存档，音乐以外的松手时响一声让人听到音量
-        function settingsVol(key, v) {
-            SETTINGS[key] = audioClamp(+v / 100); audioApply();
-            let el = document.getElementById('set-' + key + '-val'); if (el) el.innerText = Math.round(SETTINGS[key] * 100);
-        }
-        function settingsVolDone(key) {
-            settingsSave();
-            if (key === 'volSfx' || key === 'volMaster') sfxPlay([659, 880], 0.2, 0.06, 'triangle');
-        }
-        function settingsSens(v) {
-            SETTINGS.sens = parseFloat(v) || 1; settingsSave(); gState.mouseSensitivity = SETTINGS.sens;
-            let el = document.getElementById('set-sens-val'); if (el) el.innerText = SETTINGS.sens.toFixed(2);
-        }
+        // 设置页在 js/02b-settings.js（任务 P3）
 
         // 大厅里那几段静态说明，选完设备再按设备填进去
         function applyControlHints() {
@@ -1696,6 +1646,7 @@
             if (!relockHad) return;
             if (gState.control !== 'laptop' || document.pointerLockElement || panelsAnyOpen()) { if (document.pointerLockElement || gState.control !== 'laptop') relockHad = false; return; }
             if (!(isPlaying || (typeof hub !== 'undefined' && hub))) { relockHad = false; return; }
+            if (SETTINGS.autoLock === false) { relockHad = false; return; }
             relockHad = false; relockPending = false;
             safeLockPointer();
         }

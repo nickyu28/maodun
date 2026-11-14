@@ -24,6 +24,7 @@
 - **更新公告（作者的决定）**：每次发版只写一条公告，最多 5 句，每句一行、口语、越短越好；同一次发版的多项改动合并进这一条，不要一项一条。
   `CHANGELOG` 只保留最新 3 条，旧的删掉。条目的 `id` 的日期部分（年.月.日）跟 `GAME_VERSION` 一样，N 不能比版本号的 N 大；Code2 只把 N 加一、不写公告时，公告 `id` 可以落后于版本号（冒烟 V3 按这个判：日期对得上、N ≤ 版本号的 N）。挑玩家最能感觉到的几件事写，别的不写。
 - 存档是白名单：往 `gState` 加要存的新字段，记得同时加进 `saveProgress()` / `loadProgress()`，不然刷新就没了。
+- **设置和按键（P3）**：跟着设备走的设置放 `SETTINGS`（存 `TH_settings`），不进 `gState`。新模式的选项用 `settingsRegister`、按键用 `keyRegister` 登记（js/02b-settings.js，说明在 docs/settings.md），设置页自己画、自己存。老代码写死的按键不用改，登记时带 `legacy` 就由设置页翻译。
 - **不要再清玩家数据**：10-05 已经按作者的决定每台设备清过一次（`DATA_WIPE_VER` / `maodun_data_ver`）。以后不许再清、不许改 `DATA_WIPE_VER`，除非作者明确说。
 - **新手教程（T0）**：新号起完名字自动开始，是寻宝队同一套代码的小图（`TUT_SIZE`），`gState.tutorial` 为真时 `saveProgress()` 直接返回、背包开始时备份结束时还原。
   冒烟的 `openTab` 默认给网址加 `?notut=1` 关掉自动开始；测教程本身的检查传 `tut: true`。做完或跳过（`gState.tutDone`）之前不能组队、收不到邀请。

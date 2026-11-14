@@ -2636,7 +2636,7 @@
         function audioClamp(v) { v = +v; return isFinite(v) ? Math.max(0, Math.min(1, v)) : 1; }
         function audioMuted() { return audioMutedNow; }
         function audioVol(kind) {
-            if (audioMutedNow) return 0;
+            if (audioMutedNow || (SETTINGS.muteBg && document.hidden)) return 0;
             let k = kind === 'music' ? SETTINGS.volMusic : kind === 'voice' ? SETTINGS.volVoice : SETTINGS.volSfx;
             return audioClamp(SETTINGS.volMaster) * audioClamp(k);
         }
@@ -2650,6 +2650,7 @@
             audioApply();
             blazeFlash(audioMutedNow ? '已静音，按 M 恢复' : '声音恢复了');
         }
+        document.addEventListener('visibilitychange', function () { if (SETTINGS.muteBg) audioApply(); });
         // M 键在所有模式里都是一键静音；打字（聊天框、输入框）的时候不算
         window.addEventListener('keydown', function (e) {
             if (e.repeat || !e.key || e.key.toLowerCase() !== 'm' || e.ctrlKey || e.metaKey || e.altKey) return;
