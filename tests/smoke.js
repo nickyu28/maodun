@@ -1472,15 +1472,17 @@ async function enterExit(tab, key) {
         }
 
                 if (want('T0')) {
-            // T0 新手教程：新号起完名字自动开始；9 步各自做到才进下一步（别的动作不算）；做完还原背包、给 20 猫盾币、存档记 tutDone；
-            // 右上角能跳过；设置里能重玩；做完或跳过之前不能组队、收不到邀请；教程里什么都不存
+            // T0 新手教程：P4 以后不再起完名字自动开始，改成第一次点寻宝队的开始时播（自动开始、没做教程不能组队这两条删了，见 TUT1）；9 步各自做到才进下一步（别的动作不算）；做完还原背包、给 20 猫盾币、存档记 tutDone；
+            // 右上角能跳过；设置里能重播；教程里什么都不存
             const bad = [];
             const G = await openTab(chrome, url, { tut: true, noLobby: true });
             const name = 't0' + Date.now() % 100000;
             await G.eval(`document.getElementById('player-id').value = ${JSON.stringify(name)}; requestLobbyAccess(); true;`); await W(3500);
+            if (await G.eval(`!!gState.tutorial || isPlaying`)) bad.push('起完名字不该自动开教程');
+            await G.eval(`selectGameMode('hunt'); lobbyPrimaryStart(); true;`); await until(G, `!!gState.tutorial && isPlaying`, 20000);
             const st0 = JSON.parse(await G.eval(`JSON.stringify({ t: !!gState.tutorial, play: isPlaying, panel: !document.getElementById('tut-panel').classList.contains('hidden'), skip: !document.getElementById('tut-skip').classList.contains('hidden'),
                 step: gState.tutorial && gState.tutorial.step, text: document.getElementById('tut-text').innerText, ents: entities.length, task: gState.huntTask, mSize: mSize, chests: chests.length, tutDone: gState.tutDone })`));
-            if (!st0.t || !st0.play || !st0.panel || !st0.skip || st0.step !== 0 || st0.tutDone !== false) bad.push('没自动开始 ' + JSON.stringify(st0));
+            if (!st0.t || !st0.play || !st0.panel || !st0.skip || st0.step !== 0 || st0.tutDone !== false) bad.push('第一次点开始没进教程 ' + JSON.stringify(st0));
             if (st0.mSize !== 9 || st0.chests !== 1 || st0.task !== null || st0.ents !== 0) bad.push('教程图不对 ' + JSON.stringify(st0));
             const invBefore = await G.eval(`JSON.stringify(gState.tutorial.back.inv)`);
             const garBefore = await G.eval(`JSON.stringify(gState.garage)`);
@@ -1540,8 +1542,8 @@ async function enterExit(tab, key) {
             // 设置里重玩（不再给猫盾币）；然后点右上角跳过
             await G.eval(`${HIDE} openSettings(); true;`); await W(300);
             await G.eval(`setTabGo('游戏'); true;`);   // 设置页分组了，重玩教程在“游戏”那一组
-            const p = await mouseAt(G, '#sys-modal-text button[onclick="tutorialStart()"]');
-            if (!p) bad.push('设置里没有重玩按钮');
+            const p = await mouseAt(G, '#set-tut-hunt');
+            if (!p) bad.push('设置里没有寻宝队的重播按钮');
             else { await G.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p[0], y: p[1] }); await G.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p[0], y: p[1], button: 'left', buttons: 1, clickCount: 1 }); await G.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p[0], y: p[1], button: 'left', buttons: 0, clickCount: 1 }); await W(1500); }
             if (!(await G.eval('!!gState.tutorial && isPlaying'))) bad.push('重玩没开始');
             const coin1 = await G.eval('gState.mcoin || 0');
@@ -1551,28 +1553,28 @@ async function enterExit(tab, key) {
             if (sk.t || sk.play || !sk.lobby || sk.done !== 'done' || sk.coin !== coin1 || sk.inv !== invBefore) bad.push('跳过后 ' + JSON.stringify(sk).slice(0, 200));
             if (G.errors.length) bad.push(G.errors.slice(0, 2).join(' / '));
             await G.close();
-            // 跳过：新号直接点跳过，记 skip；组队在做完或跳过之前不行
+            // 跳过：新号第一次点开始进教程，直接跳过，记 skip；没做教程也能组队、收邀请（P4 去掉了这条限制）
             const K = await openTab(chrome, url, { tut: true, noLobby: true });
             const name2 = 't0s' + Date.now() % 100000;
             await K.eval(`document.getElementById('player-id').value = ${JSON.stringify(name2)}; requestLobbyAccess(); true;`); await W(3500);
-            const gate1 = JSON.parse(await K.eval(`JSON.stringify({ tut: !!gState.tutorial, done: gState.tutDone, passed: tutPassed() })`));
-            if (!gate1.tut || gate1.passed) bad.push('第二个新号没自动开 ' + JSON.stringify(gate1));
             await K.eval(`window.__sent = []; (function(){ let b = bc.postMessage.bind(bc); bc.postMessage = function (m) { window.__sent.push(m.type); return b(m); }; })(); teamInvite('someone-else'); teamOnInviteReceived('someone-else'); true;`); await W(300);
             const gate2 = JSON.parse(await K.eval(`JSON.stringify({ sent: window.__sent.filter(function (t) { return t === 'TEAM_INVITE'; }).length, modal: ${MODAL} })`));
-            if (gate2.sent !== 0 || gate2.modal === '组队邀请') bad.push('没做完教程就能组队/收邀请 ' + JSON.stringify(gate2));
+            if (gate2.sent !== 1 || gate2.modal !== '组队邀请') bad.push('没做教程该能组队、收邀请 ' + JSON.stringify(gate2));
+            await K.eval(`${HIDE} true;`);
+            await K.eval(`selectGameMode('hunt'); tutorialStart(); true;`); await until(K, `!!gState.tutorial`, 20000);
             await K.eval(`tutLeave(false); true;`); await W(1200);
-            await K.eval(`${HIDE} window.__sent = []; teamInvite('someone-else'); teamOnInviteReceived('someone-else'); true;`); await W(300);
-            const gate3 = JSON.parse(await K.eval(`JSON.stringify({ sent: window.__sent.filter(function (t) { return t === 'TEAM_INVITE'; }).length, modal: ${MODAL}, done: gState.tutDone })`));
-            if (gate3.done !== 'skip' || gate3.sent !== 1 || gate3.modal !== '组队邀请') bad.push('跳过后还是不能组队 ' + JSON.stringify(gate3));
+            const gate3 = JSON.parse(await K.eval(`JSON.stringify({ done: gState.tutDone, seen: gState.tutSeen.hunt })`));
+            if (gate3.done !== 'skip' || gate3.seen !== true) bad.push('跳过后记录不对 ' + JSON.stringify(gate3));
             await K.close();
             // 触屏设备：自动开始，提示用摇杆/点按钮的说法
             const Mo = await openTab(chrome, url, { tut: true, noLobby: true, mobile: true });
             await Mo.eval(`document.getElementById('player-id').value = 't0m' + Date.now() % 100000; requestLobbyAccess(); true;`); await W(3500);
+            await Mo.eval(`selectGameMode('hunt'); lobbyPrimaryStart(); true;`); await until(Mo, `!!gState.tutorial`, 20000);
             const mo = JSON.parse(await Mo.eval(`JSON.stringify({ t: !!gState.tutorial, hint: document.getElementById('tut-hint').innerText, pad: gState.control })`));
             if (!mo.t || !/摇杆/.test(mo.hint)) bad.push('触屏上教程 ' + JSON.stringify(mo));
             if (Mo.errors.length) bad.push('触屏报错 ' + Mo.errors.slice(0, 2).join(' / '));
             await Mo.close();
-            report('T0 新手教程：新号自动开始、9 步各自做到才算、做完还原背包给 20 猫盾币记 tutDone、能跳过能重玩、教程里不存档、做完前不能组队', bad.length === 0, bad.join(' / '));
+            report('T0 新手教程：第一次点开始进教程、9 步各自做到才算、做完还原背包给 20 猫盾币记 tutDone、能跳过能重播、教程里不存档、没做教程也能组队', bad.length === 0, bad.join(' / '));
         }
 
                 if (want('H16')) {
@@ -13882,6 +13884,55 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('SET3 显示设置：界面大小、快捷栏位置、四个显示开关、工业按钮角、视野、视距、帧率上限，生效、存档、刷新还在', bad.length === 0, bad.join(' / '));
+        }
+        if (want('TUT1')) {
+            // TUT1 新手教程改成第一次进入每个模式时播（任务 P4）：新号起名不自动开教程、能直接组队；第一次点寻宝队开始播教程、tutSeen 记下、第二次不播；老存档 tutDone 有值全部算看过；别的模式第一次点开弹规则卡片（知道了和 Esc 能关）并记 tutSeen；设置里每个模式一行重播；工业和实验室没登记播放函数就不播，登记了才播
+            const bad = [];
+            const T = await openTab(chrome, url, { tut: true, noLobby: true });
+            await T.eval(`document.getElementById('player-id').value = 'tut1' + Date.now() % 100000; requestLobbyAccess(); true;`); await W(3500);
+            if (await T.eval(`!!gState.tutorial || isPlaying`)) bad.push('新号起名后自动开教程了');
+            if (await T.eval(`Object.keys(gState.tutSeen || {}).length !== 0 || tutShouldPlay('hunt') !== true`)) bad.push('新号 tutSeen 该是空、寻宝队该要播');
+            await T.eval(`window.__sent = []; (function(){ let b = bc.postMessage.bind(bc); bc.postMessage = function (m) { window.__sent.push(m.type); return b(m); }; })(); teamInvite('someone-else'); true;`); await W(300);
+            if ((await T.eval(`window.__sent.filter(function (t) { return t === 'TEAM_INVITE'; }).length`)) !== 1) bad.push('没做教程不能组队');
+            await T.eval(`${HIDE} selectGameMode('hunt'); lobbyPrimaryStart(); true;`);
+            if (!(await until(T, `!!gState.tutorial && isPlaying`, 20000))) bad.push('第一次点开始没进教程');
+            if ((await T.eval(`gState.tutSeen.hunt`)) !== true) bad.push('进教程没记 tutSeen');
+            await T.eval(`tutLeave(false); true;`); await W(1200); await T.eval(`${HIDE} true;`);
+            if (await T.eval(`tutShouldPlay('hunt')`)) bad.push('看过以后不该再自动播');
+            const saved = await T.eval(`JSON.parse(localStorage.getItem('TH_save_' + gState.id)).tutSeen.hunt`);
+            if (saved !== true) bad.push('tutSeen 没存进存档 ' + saved);
+            // 别的模式：第一次点开弹规则卡片、记 tutSeen、Esc 能关；第二次不弹
+            await T.eval(`${HIDE} gState.modeIntroShown = {}; gState.tutSeen = {}; modePick('night'); true;`);
+            if (!(await until(T, `sysModalVisible()`, 5000))) bad.push('第一次点惊魂夜没弹卡片');
+            await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+            if (await T.eval(`sysModalVisible()`)) bad.push('Esc 没关卡片');
+            if ((await T.eval(`gState.tutSeen.night`)) !== true) bad.push('惊魂夜卡片没记 tutSeen');
+            await T.eval(`modePick('night'); true;`); await W(900);
+            if (await T.eval(`sysModalVisible()`)) bad.push('第二次点开不该再弹');
+            // 设置里重播：每个模式一行；点惊魂夜重播弹卡片；点寻宝队重播进教程
+            await T.eval(`openSettings('游戏'); true;`); await W(200);
+            const rows = await T.eval(`MODE_NAME_LIST.filter(function (m) { return document.getElementById('set-tut-' + m[0]); }).length`);
+            if (rows !== 11) bad.push('设置里重播按钮 ' + rows + ' 个，该是 11 个');
+            if (await T.eval(`!!document.getElementById('set-tut-industry') || !!document.getElementById('set-tut-lab')`)) bad.push('工业、实验室没登记播放函数时不该有重播按钮');
+            await T.eval(`document.getElementById('set-tut-night').click(); true;`);
+            if (!(await until(T, `sysModalVisible() && /规则/.test(document.getElementById('sys-modal-title').innerText)`, 5000))) bad.push('重播惊魂夜没弹卡片');
+            await T.eval(`${HIDE} document.getElementById('sys-modal').classList.add('hidden'); true;`);
+            await T.eval(`openSettings('游戏'); document.getElementById('set-tut-hunt').click(); true;`);
+            if (!(await until(T, `!!gState.tutorial && isPlaying`, 20000))) bad.push('重播寻宝队没进教程');
+            await T.eval(`tutLeave(false); true;`); await W(1000); await T.eval(`${HIDE} true;`);
+            // 老存档：tutDone 有值，所有模式算看过
+            await T.eval(`gState.tutSeen = {}; gState.tutDone = 'old'; tutOldSaveSeen(); true;`);
+            if (await T.eval(`TUT_MODES.some(function (k) { return !gState.tutSeen[k]; })`)) bad.push('老存档没把所有模式设成看过');
+            // 工业和实验室：没登记不播，登记了才播，播了不再播；重播调它的函数
+            await T.eval(`gState.tutSeen = {}; window.__ip = 0; true;`);
+            if (await T.eval(`tutShouldPlay('industry') || tutShouldPlay('lab')`)) bad.push('没登记播放函数的工业、实验室不该播');
+            await T.eval(`tutRegister('industry', function () { window.__ip++; tutMark('industry'); }); true;`);
+            if (!(await T.eval(`tutShouldPlay('industry')`))) bad.push('登记后第一次该播');
+            await T.eval(`tutReplay('industry'); true;`);
+            if (!(await T.eval(`window.__ip === 1 && !tutShouldPlay('industry')`))) bad.push('重播没调登记的函数或播完还要播');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('TUT1 新手教程改成第一次进入模式时播：不自动开、能直接组队、第一次点开始播第二次不播、老存档全算看过、别的模式规则卡片和 Esc、设置里重播、工业实验室登记接口', bad.length === 0, bad.join(' / '));
         }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {

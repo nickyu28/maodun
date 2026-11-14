@@ -1074,20 +1074,34 @@
             { id: 'submit', text: '回到绿色的出生点，上交', hint: function () { return '站在绿色格子里，点右上角的 <b>上交</b>'; } },
             { id: 'extract', text: '上交够了，点撤离', hint: function () { return '点右上角出现的 <b>撤离</b>'; } }
         ];
-        function tutPassed() { return !!gState.tutDone; }
-        function tutAutoStart() {
-            if (gState.tutDone || /[?&]notut\b/.test(location.search)) return;
-            let tries = 0;
-            (function go() {
-                if (gState.tutDone || gState.tutorial || isPlaying) return;
-                if (sysModalVisible() && tries++ < 15) { setTimeout(go, 800); return; }   // 先让"数据重置"之类的提示看完
-                tutorialStart();
-            })();
+        // ── P4：新手教程改成第一次进入每个模式时播，设置里能重播 ──
+        // gState.tutSeen[模式名]：这个模式的新手教程或提示卡片看过了（存档白名单）。寻宝队的教程是下面这份小图（第一次点开始时播），
+        // 别的模式第一次点开时弹自己的规则卡片，有「知道了」和 Esc。老存档 tutDone 有值的，全部算看过。
+        // 猫盾工业和实验室的教程归 Code2：自己用 tutRegister('industry', 播放函数) 登记，进入时问 tutShouldPlay('industry')，播了调 tutMark。
+        const TUT_MODES = ['hunt', 'night', 'blaze', 'race', 'jail', 'dodge', 'escape', 'park', 'cake', 'sumo', 'tower', 'industry', 'lab'];
+        const TUT_PLAYERS = {};
+        function tutRegister(modeKey, fn) { TUT_PLAYERS[modeKey] = fn; }
+        function tutSeenMap() { if (!gState.tutSeen || typeof gState.tutSeen !== 'object') gState.tutSeen = {}; return gState.tutSeen; }
+        function tutMark(modeKey) { if (tutSeenMap()[modeKey]) return; gState.tutSeen[modeKey] = true; saveProgress(); }
+        function tutOldSaveSeen() { if (gState.tutDone) TUT_MODES.forEach(function (k) { tutSeenMap()[k] = true; }); }
+        // 这个模式现在要不要自动播教程：没看过、不在教程里、没带 ?notut；工业和实验室还要它自己登记过播放函数
+        function tutShouldPlay(modeKey) {
+            if (tutSeenMap()[modeKey] || gState.tutorial || /[?&]notut\b/.test(location.search)) return false;
+            if (modeKey === 'industry' || modeKey === 'lab') return !!TUT_PLAYERS[modeKey];
+            return true;
+        }
+        // 重播：设置页里点。寻宝队走小图教程，登记过的（工业、实验室）调它们自己的，别的模式再弹一次规则卡片
+        function tutReplay(modeKey) {
+            if (gState.tutorial) return;
+            if (modeKey === 'hunt') { tutorialStart(); return; }
+            if (TUT_PLAYERS[modeKey]) { sysModalCloseNormal(); try { TUT_PLAYERS[modeKey](); } catch (e) { } return; }
+            if (typeof MODE_RULES !== 'undefined' && MODE_RULES[modeKey]) { sysModalCloseNormal(); setTimeout(function () { openRules(modeKey); }, 150); }
         }
         function tutorialStart() {
             if (gState.tutorial || isPlaying) return;
             let k = chatActiveModeKey(); if (k && k !== 'hub') return;   // 只能在大厅里开
             sysModalCloseNormal();
+            tutMark('hunt');
             gState.tutorial = {
                 step: 0, runT: 0, ring: null, mark: null, beam: null, tableCell: null,
                 back: { inv: JSON.parse(JSON.stringify(gState.inv)), mapDifficulty: gState.mapDifficulty, extractTarget: gState.extractTarget, team: gState.team, selectedSlot: gState.selectedSlot }
@@ -1229,7 +1243,7 @@
             tutPanelRender();
             nav('screen-lobby');
             if (done && first) { coinsAdd('tutorial', TUT_REWARD); }
-            if (done) showSysModal('教程做完了', first ? ('得到 ' + TUT_REWARD + ' 个猫盾币。想再看一遍，在设置里点“新手教程”。') : '想再看一遍，在设置里点“新手教程”。', [{ label: '好', color: '#5cb85c' }]);
+            if (done) showSysModal('教程做完了', first ? ('得到 ' + TUT_REWARD + ' 个猫盾币。想再看一遍，在设置里点“重播新手教程”。') : '想再看一遍，在设置里点“重播新手教程”。', [{ label: '好', color: '#5cb85c' }]);
         }
 
         // ══════════════ G2 怪物外形 + 怪物图鉴 ══════════════

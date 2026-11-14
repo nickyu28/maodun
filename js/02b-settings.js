@@ -240,7 +240,11 @@ function setTabHtml(t) {
         return setRow('画面', setToggle('set-hq', !!SETTINGS.hq, '清晰', '流畅')) + setRegRows('显示');
     }
     return setRow('新手提示', setToggle('set-tips', SETTINGS.tips !== false, '开', '关')) + setRow('关面板后自动锁鼠标', setToggle('set-autoLock', SETTINGS.autoLock !== false, '开', '关')) +
-        setRow('新手教程', '<button onclick="tutorialStart()" style="' + setBtnStyle(false) + '">重玩一遍</button>') + setRow('快捷语', '<button onclick="openChatSetup()" style="' + setBtnStyle(false) + '">改一下</button>') + setRegRows('游戏');
+        '<div style="font-size:12px; color:#888; padding:8px 0 2px;">重播新手教程，点哪个模式就播哪个</div>' + setTutRows() + setRow('快捷语', '<button onclick="openChatSetup()" style="' + setBtnStyle(false) + '">改一下</button>') + setRegRows('游戏');
+}
+function setTutRows() {
+    let list = MODE_NAME_LIST.slice(); [['industry', '猫盾工业'], ['lab', '实验室']].forEach(function (x) { if (TUT_PLAYERS[x[0]]) list.push(x); });
+    return '<div style="display:flex; flex-wrap:wrap; gap:6px; padding:4px 0 8px;">' + list.map(function (m) { return '<button id="set-tut-' + m[0] + '" onclick="tutReplay(\'' + m[0] + '\')" style="' + setBtnStyle(false) + '">' + m[1] + '</button>'; }).join('') + '</div>';
 }
 function setGroups() {
     let g = SET_TABS.slice(); SETREG.opts.forEach(function (o) { if (g.indexOf(o.group) < 0) g.push(o.group); });

@@ -194,7 +194,7 @@
         function showModeIntroIfFirstTime(key) {
             if (!gState.modeIntroShown) gState.modeIntroShown = {};
             if (gState.modeIntroShown[key]) return;
-            gState.modeIntroShown[key] = true; saveProgress();
+            gState.modeIntroShown[key] = true; tutMark(key);
             if (MODE_RULES[key]) setTimeout(function () { openRules(key); }, 400);
         }
 
@@ -486,7 +486,6 @@
                 netJoinRoom(r);
             } catch (e) { }
             dataWipeNotice();
-            tutAutoStart();
             let eb = document.getElementById('btn-egg-book');
             if (eb) eb.innerText = '彩蛋图鉴 ' + eggCount() + ' / ' + Object.keys(EGGS).length;
         }

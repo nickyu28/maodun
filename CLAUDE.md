@@ -26,8 +26,8 @@
 - 存档是白名单：往 `gState` 加要存的新字段，记得同时加进 `saveProgress()` / `loadProgress()`，不然刷新就没了。
 - **设置和按键（P3）**：跟着设备走的设置放 `SETTINGS`（存 `TH_settings`），不进 `gState`。新模式的选项用 `settingsRegister`、按键用 `keyRegister` 登记（js/02b-settings.js，说明在 docs/settings.md），设置页自己画、自己存。老代码写死的按键不用改，登记时带 `legacy` 就由设置页翻译。
 - **不要再清玩家数据**：10-05 已经按作者的决定每台设备清过一次（`DATA_WIPE_VER` / `maodun_data_ver`）。以后不许再清、不许改 `DATA_WIPE_VER`，除非作者明确说。
-- **新手教程（T0）**：新号起完名字自动开始，是寻宝队同一套代码的小图（`TUT_SIZE`），`gState.tutorial` 为真时 `saveProgress()` 直接返回、背包开始时备份结束时还原。
-  冒烟的 `openTab` 默认给网址加 `?notut=1` 关掉自动开始；测教程本身的检查传 `tut: true`。做完或跳过（`gState.tutDone`）之前不能组队、收不到邀请。
+- **新手教程（T0，P4 改过）**：不再新号起名后自动开始，也不再因为没做教程就不能组队、收不到邀请。改成第一次进入每个模式时播：寻宝队第一次点开始走一遍小图教程（`TUT_SIZE`，寻宝队同一套代码；`gState.tutorial` 为真时 `saveProgress()` 直接返回、背包开始时备份结束时还原），别的模式第一次点开弹自己的规则卡片。看过记在 `gState.tutSeen[模式名]`（已在 `saveProgress()` / `loadProgress()`），老存档 `tutDone` 有值的全部算看过；设置里每个模式一行"重播"（`tutReplay`）。猫盾工业和实验室用 `tutRegister` 登记自己的播放函数，进入时问 `tutShouldPlay`，播了调 `tutMark`。
+  冒烟的 `openTab` 默认给网址加 `?notut=1`，让 `tutShouldPlay` 返回假；测教程本身的检查传 `tut: true`（T0、TUT1）。
 - **提示卡片（R1）**：单人局里卡片开着整局要静止——每个模式的主循环开头问一声 `introFrozen()`（新加模式别忘了）；多人局（`introSessionMulti() === true`）卡片自动变成屏幕上方的提示条，不暂停。
 - 每次发版改版本号：`index.html` 里的 `GAME_VERSION`（格式 `年.月.日-N`，同一天再发就把 N 加一），大厅左上角会显示。拆文件（B5）后脚本地址也带这个版本号。
 - 联机消息的格式或含义变了，`NET_PROTO` 就加一（房间 id 带它，新旧版本不会进同一个房间）。
