@@ -13960,6 +13960,30 @@ async function enterExit(tab, key) {
             report('LB31 手动拼原子、灶台燃料：粒子包给物品、拼合台、提示、没燃料不反应、有燃料自己反应', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND177')) {
+            // IND177 草和木制品能当燃料（任务 133）：草 8、树枝 15、草绳 15、木柄 30；湿木头 40 干木头 60；青铜镐不能烧；烧做好的东西先确认；拿着的那一格不列
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let f = function (k) { return IND_ITEMS[k] && IND_ITEMS[k].fuel; }; return { g: f('grass'), t: f('twig'), r: f('rope'), h: f('handle'), w: f('wood'), wd: f('wood_dry'), pick: f('pick_bronze'), pickS: f('pick_stone'), kw: f('knife_wood'), sw: f('shield_wood'), swMade: !!IND_ITEMS.shield_wood.fuelMade, bag: f('pack_grass'), cold: f('pick_cold') }; })()`);
+                if (!(r.g === 8 && r.t === 15 && r.r === 15 && r.h === 30 && r.w === 40 && r.wd === 60)) bad.push('草 8、树枝 15、草绳 15、木柄 30、湿木头 40、干木头 60 ' + JSON.stringify(r));
+                if (!(!r.pick && !r.pickS && !r.bag && !r.cold && r.kw > 0 && r.sw > 0 && r.swMade)) bad.push('青铜镐、石镐、草背包不能烧，木刀木盾能烧 ' + JSON.stringify(r));
+                r = await J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.rule = 'hard'; ind.base.off.stove = false; ind.base.stove = Object.assign(ckNewState(), { fuel: 0 }); ind.cookId = 'stove'; ind.bag = { grass: 3, shield_wood: 1, twig: 2 }; let o = {};
+                    indStoveFuel('grass'); o.fuel1 = ind.base.stove.fuel; indStoveFuel('shield_wood'); o.shield = ind.bag.shield_wood || 0; o.modal = !!document.querySelector('#sys-modal:not(.hidden)'); o.fuel2 = ind.base.stove.fuel;
+                    indStoveFuel('shield_wood', true); o.shield2 = ind.bag.shield_wood || 0; o.fuel3 = ind.base.stove.fuel;
+                    ind.bag = { grass: 2, twig: 2 }; indSelect('twig'); indPanelStove(); let html = document.getElementById('ind-panel').innerHTML; o.heldListed = html.indexOf("indPutN('fuel',0,'twig'") >= 0; o.otherListed = html.indexOf("indPutN('fuel',0,'grass'") >= 0; return o; })()`);
+                if (!(r.fuel1 === 8 && r.shield === 1 && r.modal && r.fuel2 === 8 && r.shield2 === 0 && r.fuel3 > 8)) bad.push('草烧 8；烧木盾先弹确认，不确认不烧，确认才烧 ' + JSON.stringify(r));
+                if (!(r.otherListed && !r.heldListed)) bad.push('拿着的那一格不列在当柴烧里 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND177 草和木制品能烧：燃料值、青铜镐不能烧、做好的东西先确认、拿着的不列', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

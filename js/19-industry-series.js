@@ -71,3 +71,25 @@
             });
             Object.assign(IND_ITEMS_RAW, add);
         })();
+        // 任务 133：草和木制品能当燃料。干木头 60，湿木头 40。纯木头做的东西按木头那部分算一半（木头 30），带金属头石头头的工具、穿的东西不能烧
+        (function () {
+            let set = function (k, f, note) { let d = IND_ITEMS_RAW[k]; if (!d) return; d.fuel = f; if (note && !/能烧/.test(d.use || '')) d.use = (d.use ? d.use + '。' : '') + note; };
+            set('grass', 8, '能烧，烧得很快'); set('twig', 15, '能烧'); set('rope', 15, '能烧'); set('handle', 30, '能烧');
+            IND_ITEMS_RAW.wood.fuel = 40;
+            let W = { wood: 30, handle: 15, rope: 7, grass: 4, twig: 7 }, seen = {};
+            IND_CRAFT.forEach(function (r) {
+                let o = r.out; if (!o || r.fix || r.poison || r.off || seen[o] || !IND_ITEMS_RAW[o] || IND_ITEMS_RAW[o].fuel || IND_ITEMS_RAW[o].wear || /^(rope|handle)$/.test(o)) return;
+                let ks = Object.keys(r.in); if (!ks.length || !ks.every(function (q) { return W[q]; })) return;
+                if (!r.in.wood && !r.in.handle) return;
+                let f = 0; ks.forEach(function (q) { f += W[q] * r.in[q]; }); f = Math.round(f / (r.n || 1));
+                if (f > 0) { seen[o] = 1; IND_ITEMS_RAW[o].fuel = f; IND_ITEMS_RAW[o].fuelMade = true; }
+            });
+        })();
+        const IND_STOVE_FUEL0 = indStoveFuel;
+        indStoveFuel = function (k, ok) {
+            if (ind && ind.bag[k] && IND_ITEMS[k] && IND_ITEMS[k].fuelMade && !ok) {
+                showSysModal('烧掉', indName(k) + '是做好的东西，真的烧掉吗', [{ label: '烧掉', color: '#d84315', onClick: function () { if (ind) indStoveFuel(k, true); } }, { label: '不烧', color: '#757575', onClick: function () { } }]);
+                return;
+            }
+            return IND_STOVE_FUEL0(k);
+        };

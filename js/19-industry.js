@@ -3382,7 +3382,7 @@
             if (kind === 'stove') { indStovePut(k, n); return true; }
             if (kind === 'el') { for (let i = 0; i < n && ind.bag[k]; i++) indElPut(id, k); return true; }
             if (kind === 'dev') { indDevPut(id, k, n); return true; }
-            if (kind === 'fuel') { for (let i = 0; i < n && ind.bag[k]; i++) { let b0 = ind.bag[k]; indStoveFuel(k); if (ind.bag[k] === b0) break; } return true; }
+            if (kind === 'fuel') { if (IND_ITEMS[k].fuelMade) { indStoveFuel(k); return true; } for (let i = 0; i < n && ind.bag[k]; i++) { let b0 = ind.bag[k]; indStoveFuel(k); if (ind.bag[k] === b0) break; } return true; }   // 任务 133：做好的东西先问一声，一次烧一个
             if (kind === 'drop') { return indDropN(k, n); }
             return false;
         }
@@ -3657,7 +3657,7 @@
               if (ri >= 0) { let r0 = IND_RECIPES[ri], n0 = S.cook ? (S.cook.n || 1) : indBatchN(r0, pool, K0); st += '<br>这次出：<b>' + indOutAll(r0, n0) + '</b>' + (n0 > 1 ? '（' + n0 + ' 份）' : '') + (!S.cook && S.temp < r0.minT ? '<br><span style="color:#c62828">温度不够：要 ' + r0.minT + '°C，现在 ' + Math.round(S.temp) + '°C' + (r0.minT > 1200 ? '（要鼓风或者电炉）' : '') + '</span>' : ''); } }
             let put = Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k); }).map(function (k) {
                 let b = indPutOpts('stove', 0, k, '放', '全放', '放');
-                if (IND_ITEMS[k].fuel && !(indHard() && indContOf(k) && indContOf(k).base === 'oil')) b += '<br>' + indPutOpts('fuel', 0, k, indContOf(k) ? '倒' : '加', indContOf(k) ? '全倒' : '全加', indContOf(k) ? '倒' : '加');   // 燃料：加 1、全加、加 n
+                if (IND_ITEMS[k].fuel && k !== indSel() && !(indHard() && indContOf(k) && indContOf(k).base === 'oil')) b += '<br>' + indPutOpts('fuel', 0, k, indContOf(k) ? '倒' : '加', indContOf(k) ? '全倒' : '全加', indContOf(k) ? '倒' : '加');   // 燃料：加 1、全加、加 n
                 return indRow(indName(k) + ' × ' + ind.bag[k], b);
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + D.name + '</div><div style="line-height:1.7;">' + st + '</div><div>' + fire + '</div>' +
