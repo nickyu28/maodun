@@ -1074,7 +1074,7 @@
             document.addEventListener('mousedown', ind.onMouse); document.addEventListener('mouseup', ind.onMouseUp); document.addEventListener('contextmenu', ind.onCtx);
             if (base.bagOver) { setTimeout(function () { if (ind) indFlash('背包装不下的放到箱子里了'); }, 600); delete base.bagOver; }   // 任务 145
             if (base.lostNew) { let nn = base.lostNew; setTimeout(function () { if (ind) indFlash('有 ' + nn + ' 件东西认不出来，先放在遗失物里'); }, 1800); delete base.lostNew; }
-            if (!base.rule) indAskRule();
+            if (typeof indTutMaybe === 'function' && indTutMaybe(base)) { } else if (!base.rule) indAskRule();
             else if (base.sawGoal === false) indGoalShow();
             else if (gState.control !== 'pad') indFlash('左键（或 F）采集／拿／种／打开，右键 吃喝／浇水／接水，Q 放下，1～0 选快捷栏，E 背包，Shift 跑');
             ind.last = performance.now();
@@ -1436,6 +1436,7 @@
             d.style.cssText = 'position:fixed;inset:0;z-index:130;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;';
             d.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 40px;text-align:center;"><div style="font-size:30px;font-weight:bold;color:#222;">已暂停</div>' +
                 '<div style="margin-top:20px;"><button id="ind-pause-go" style="' + IND_BTN + 'background:#2e7d32;font-size:20px;padding:12px 26px;" onclick="indResume()">继续</button>' +
+                '<button id="ind-pause-tut" style="' + IND_BTN + 'background:#546e7a;font-size:20px;padding:12px 26px;" onclick="indResume(); indTutPlay()">重播教程</button>' +
                 '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button>' + (ind.cave ? '<button id="ind-pause-cvback" style="' + IND_BTN + 'background:#5d4037;font-size:20px;padding:12px 26px;" onclick="indResume(); cvBackStart()">回到洞口</button>' : '') + '</div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续　Z 倍速（只在基地）</div></div>';
             document.body.appendChild(d);
         }
@@ -1446,7 +1447,7 @@
         }
         function indLoop() {
             if (!ind || ind.over) return;
-            if (introFrozen()) { ind.raf = requestAnimationFrame(indLoop); return; }   // R1：提示卡片开着时静止
+            if (introFrozen() || ind.tutOpen) { ind.raf = requestAnimationFrame(indLoop); return; }   // R1：提示卡片开着时静止；教程卡片也一样
             let now = performance.now(), dt = Math.min(0.05, (now - ind.last) / 1000);
             ind.last = now;
             if (!ind.paused) { indTick(dt); if (ind && !ind.over && ind.speed > 1) spTick(dt); }   // 暂停：世界静止，只画画面；倍速在后面补时间（任务 144，19-industry-speed.js）
@@ -3708,7 +3709,7 @@
         // ── 键盘、界面 ──
         const IND_KEYMAP = { w: 'w', a: 'a', s: 's', d: 'd', arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' };
         function indKeyDown(e) {
-            if (!ind || ind.over || ind.dead) return;
+            if (!ind || ind.over || ind.dead || ind.tutOpen) return;
             let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
             let k = (e.key || '').toLowerCase();
             if (ind.paused) { if (!e.repeat && (k === 'p' || k === 'escape')) indResume(); e.preventDefault(); return; }

@@ -323,6 +323,7 @@
             if (gState.control !== 'pad') labFlash('点一下画面锁住鼠标：左键捡／用，右键拆包／接水，Q 放下，Esc 松开');
             lab.last = performance.now();
             lab.raf = requestAnimationFrame(labLoop);
+            if (typeof tutShouldPlay === 'function' && tutShouldPlay('lab')) labTutPlay();   // 任务 161：第一次进实验室播简单教程
         }
         function labExit(died) {
             if (!lab) return;
@@ -473,7 +474,7 @@
         // ── 键盘和按钮 ──
         const LAB_KEYMAP = { w: 'w', a: 'a', s: 's', d: 'd', arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' };
         function labKeyDown(e) {
-            if (!lab || lab.over) return;
+            if (!lab || lab.over || lab.tutOpen) return;
             let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
             let k = (e.key || '').toLowerCase();
             if (LAB_KEYMAP[k]) { lab.k[LAB_KEYMAP[k]] = true; e.preventDefault(); return; }
@@ -571,6 +572,7 @@
         // ── 主循环 ──
         function labLoop() {
             if (!lab || lab.over) return;
+            if (lab.tutOpen) { lab.raf = requestAnimationFrame(labLoop); return; }
             let now = performance.now(), dt = Math.min(0.05, (now - lab.last) / 1000);
             lab.last = now;
             labTick(dt);

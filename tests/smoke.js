@@ -13895,6 +13895,7 @@ async function enterExit(tab, key) {
             // TUT1 新手教程改成第一次进入每个模式时播（任务 P4）：新号起名不自动开教程、能直接组队；第一次点寻宝队开始播教程、tutSeen 记下、第二次不播；老存档 tutDone 有值全部算看过；别的模式第一次点开弹规则卡片（知道了和 Esc 能关）并记 tutSeen；设置里每个模式一行重播；工业和实验室没登记播放函数就不播，登记了才播
             const bad = [];
             const T = await openTab(chrome, url, { tut: true, noLobby: true });
+            await T.eval(`delete TUT_PLAYERS.industry; delete TUT_PLAYERS.lab; true;`);   // 工业实验室自己登记了播放函数（任务 161），这条测的是没登记的情况，先清掉
             await T.eval(`document.getElementById('player-id').value = 'tut1' + Date.now() % 100000; requestLobbyAccess(); true;`); await W(3500);
             if (await T.eval(`!!gState.tutorial || isPlaying`)) bad.push('新号起名后自动开教程了');
             if (await T.eval(`Object.keys(gState.tutSeen || {}).length !== 0 || tutShouldPlay('hunt') !== true`)) bad.push('新号 tutSeen 该是空、寻宝队该要播');
@@ -14024,6 +14025,30 @@ async function enterExit(tab, key) {
             await T.close();
             report('SET5 改键在真局里管用：寻宝队里背包改成 B 按 B 开按 E 不开、互动改成 X 变成 F，出了寻宝队不再翻译', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND175')) {
+            // IND175 工业和实验室简单教程（任务 161）：新号第一次进工业出卡片，点完记成看过、再选玩法；第二次不出；老存档（有玩法）不出；Esc 和跳过能关；暂停菜单有重播；实验室重播能出
+            const bad = [];
+            const T = await openTab(chrome, url + '?hcdebug=1', { tut: true }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`{ card: !!document.getElementById('tut-cards'), open: !!ind.tutOpen, txt: (document.getElementById('tut-cards') || { innerText: '' }).innerText }`);
+                if (!(r.card && r.open && !/[（）()]/.test(r.txt))) bad.push('新号第一次进工业出卡片、不用括号 ' + JSON.stringify(r));
+                r = await J(`(function(){ let n = 0; while (document.getElementById('tut-next') && n < 10) { document.getElementById('tut-next').click(); n++; } return { n: n, gone: !document.getElementById('tut-cards'), seen: gState.tutSeen && gState.tutSeen.industry === true, open: !!ind.tutOpen, rule: !!document.querySelector('#sys-modal:not(.hidden)') }; })()`);
+                if (!(r.n === 5 && r.gone && r.seen && !r.open)) bad.push('点完 5 张卡片关掉、记成看过 ' + JSON.stringify(r));
+                r = await J(`(function(){ gState.tutSeen = {}; let a = indTutMaybe({ rule: 'hard', trips: 0 }), b = gState.tutSeen.industry === true, c = !document.getElementById('tut-cards'); gState.tutSeen = {}; let d = indTutMaybe({ rule: null, trips: 3 }); let e = gState.tutSeen.industry === true; gState.tutSeen = { industry: true }; let f = indTutMaybe({ rule: null, trips: 0 }); return [a, b, c, d, e, f]; })()`);
+                if (r.join() !== 'false,true,true,false,true,false') bad.push('老存档不教、看过的不再教 ' + r.join());
+                r = await J(`(function(){ tutReplay('industry'); let a = !!document.getElementById('tut-cards'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); let b = !document.getElementById('tut-cards'); tutReplay('industry'); document.getElementById('tut-skip').click(); let c = !document.getElementById('tut-cards'); tutReplay('lab'); let d = !!document.getElementById('tut-cards') && document.getElementById('tut-cards').innerText.indexOf('1 / 3') >= 0; document.getElementById('tut-skip').click(); return [a, b, c, d]; })()`);
+                if (r.join() !== 'true,true,true,true') bad.push('重播能出、Esc 和跳过能关、实验室的教程 ' + r.join());
+                r = await J(`(function(){ indPause(); let b = !!document.getElementById('ind-pause-tut'); indResume(); return b; })()`);
+                if (!r) bad.push('暂停菜单里要有重播教程');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND175 简单教程：新号出 5 张卡片、点完记看过、老存档不教、Esc 和跳过、重播、实验室', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
