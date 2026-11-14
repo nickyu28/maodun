@@ -13934,6 +13934,29 @@ async function enterExit(tab, key) {
             await T.close();
             report('TUT1 新手教程改成第一次进入模式时播：不自动开、能直接组队、第一次点开始播第二次不播、老存档全算看过、别的模式规则卡片和 Esc、设置里重播、工业实验室登记接口', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND173')) {
+            // IND173 配方查询展开成完整链、石锤（任务 158）：查"青铜镐"链里有雕模具和浇铸；链上的名字能点；石锤能做；青铜锭 + 木头 + 石锤做青铜镐、没锤子不行；铸造老配方还在
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indPanelBook('青铜镐'); let t = document.getElementById('ind-panel').innerText, h = document.getElementById('ind-panel').innerHTML; return { mold: /小刀右键/.test(t) && /雕/.test(t), pour: /浇进/.test(t), alloy: /青铜/.test(t) && /铜锭/.test(t), link: h.indexOf('indBookSearch') >= 0, paren: /[（）()]/.test((document.getElementById('ind-panel').querySelector('div[style*=f3e5f5]') || { innerText: '' }).innerText) }; })()`);
+                if (!(r.mold && r.pour && r.alloy && r.link && !r.paren)) bad.push('配方查询链里有雕模具、浇铸、合金，名字能点，不用括号 ' + JSON.stringify(r));
+                r = await J(`(function(){ indPanelClose(); ind.bag = { stone: 2, wood: 1 }; let hi = IND_CRAFT.findIndex(function (q) { return q.out === 'hammer_stone'; }); indCraft(hi); let o = { h: ind.bag.hammer_stone || 0 };
+                    let bi = IND_CRAFT.findIndex(function (q) { return q.out === 'pick_bronze' && q.in.bronze && q.need === 'hammer' && !q.off; }); o.bi = bi >= 0; let need = bi >= 0 ? JSON.parse(JSON.stringify(IND_CRAFT[bi].in)) : {};
+                    ind.bag = Object.assign({}, need); o.no = bi >= 0 && indCraftCan(IND_CRAFT[bi]); ind.bag.hammer_stone = 1; o.yes = bi >= 0 && indCraftCan(IND_CRAFT[bi]); indCraft(bi); o.pick = ind.bag.pick_bronze || 0; o.keep = ind.bag.hammer_stone || 0;
+                    ind.bag = Object.assign({}, need); ind.bag.hammer = 1; o.fe = indCraftCan(IND_CRAFT[bi]);
+                    o.cast = IND_CRAFT.some(function (q) { return q.out === 'pick_bronze' && q.in.part_pick_bronze && !q.off; }); return o; })()`);
+                if (!(r.h === 1 && r.bi && r.no === false && r.yes === true && r.pick === 1 && r.keep === 1 && r.fe === true && r.cast)) bad.push('石锤能做、青铜工具冷锻要锤子、铁锤也行、铸造老配方还在 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND173 配方查询完整链、石锤：链里有雕模具浇铸合金、名字能点、石锤冷锻青铜工具', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

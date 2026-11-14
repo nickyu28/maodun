@@ -30,7 +30,7 @@
             IND_CRAFT.push({ out: 'handle', n: 2, in: { wood: 1 }, hard: true });
             Object.assign(IND_ITEMS_RAW, add);
             // 青铜工具原来的"锭直接做"配方：留着下标，标 off 不显示
-            IND_CRAFT.forEach(function (r) { if (r.hard && !r.fix && !r.poison && /^(knife|axe|pick|shovel|shears)_bronze$/.test(r.out) && r.in.bronze) r.off = true; });
+            IND_CRAFT.forEach(function (r) { if (r.hard && !r.fix && !r.poison && /^(knife|axe|pick|shovel|shears)_bronze$/.test(r.out) && r.in.bronze) { r.off = false; r.need = 'hammer'; } });   // 任务 158：青铜工具也能冷锻，要锤子（石锤就行），铸造那条路还在
         })();
         function ctMeltUnit(S) {   // 炉膛里下一样能化的：{ k 物品, m 金属, n 份 }
             let u = null; Object.keys(S.items).forEach(function (k) { if (u || !(S.items[k] > 0)) return; if (CT_METAL[k]) { if (CT_PART_METAL[k]) u = { k: k, m: k, n: 1 }; } else { let q = typeof rpMeltOf === 'function' ? rpMeltOf(k) : null; if (q && CT_PART_METAL[q.m]) u = { k: k, m: q.m, n: q.n }; } });

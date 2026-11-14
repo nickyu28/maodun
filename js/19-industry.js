@@ -3026,7 +3026,8 @@
             return true;
         }
         function indCraftShow(r) { return !r.off && (!r.hard || indHard()) && !(r.casual && indHard()); }   // off：换成别的做法了，留着下标   // casual：只在悠闲出现的简单配方
-        function indCraftCan(r) { return indCraftShow(r) && (!r.need || (ind.bag[r.need] || 0) > 0) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.glass && (!ind.base.gh || ind.base.glass)) && !(r.pot && ind.base.pot); }
+        function indHasNeed(n) { return (ind.bag[n] || 0) > 0 || (n === 'hammer' && (ind.bag.hammer_stone || 0) > 0); }   // 任务 158：锤子类，铁锤石锤都行
+        function indCraftCan(r) { return indCraftShow(r) && (!r.need || indHasNeed(r.need)) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.glass && (!ind.base.gh || ind.base.glass)) && !(r.pot && ind.base.pot); }
         function indCraft(i) {
             if (!ind) return false;
             let r = IND_CRAFT[i]; if (!r || !indCraftCan(r)) { indFlash('原料不够'); return false; }
@@ -3691,7 +3692,7 @@
         }
         function indPanelBook(q) {
             if (!ind) return;
-            q = (q || '').trim();
+            q = (q || '').trim().replace(/镐/g, '稿');   // 任务 158：游戏里写的是稿，搜镐也能搜到
             let L = indBookLines().filter(function (l) {
                 if (!q) return true;
                 return (l.name || '').indexOf(q) >= 0 || l.ins.concat(l.outs).some(function (k) { return indName(k).indexOf(q) >= 0; });
@@ -3699,7 +3700,7 @@
             let rows = L.map(function (l) { return '<div style="padding:4px 0;border-bottom:1px solid #eee;"><div>' + l.txt + '</div><small style="color:#888">' + l.where + '</small></div>'; }).join('') || '<div style="color:#999;padding:8px 0;">没找到</div>';
             indPanelShow('book', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">配方</div>' +
                 '<input id="ind-book-q" value="' + q.replace(/"/g, '') + '" placeholder="搜东西，比如：铁" style="width:100%;box-sizing:border-box;padding:6px;font-size:15px;margin-bottom:6px;" oninput="indBookSearch(this.value)">' +
-                '<div id="ind-book-list">' + rows + '</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+                (typeof bkChainHtml === 'function' ? bkChainHtml(q) : '') + '<div id="ind-book-list">' + rows + '</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
             let inp = document.getElementById('ind-book-q'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
         }
         function indBookSearch(q) { indPanelBook(q); }
@@ -3822,7 +3823,7 @@
             else if (R.onRaft) hint = '木筏<br><small>左键：下筏（水上 2 倍速，不能上岸）</small>';
             else if (a && a.kind === 'raft') hint = '木筏<br><small>左键：上去</small>';
             else if (a && a.kind === 'bomb') hint = a.o.t >= 0 ? '原子弹：' + Math.ceil(a.o.t) + ' 秒后爆炸，半径 40 米<br><small>左键：拆掉</small>' : '原子弹<br><small>左键：启动（30 秒后爆炸，半径 40 米）　长按右键：收起</small>';
-            else if (a && a.kind === 'item') hint = indName(a.o.k) + '<br><small>' + (indFits(ind.bag, indBagSlots(), a.o.k, 1) <= 0 ? IND_FULL_TXT : '左键：拿') + '</small>';
+            else if (a && a.kind === 'item') hint = indName(a.o.k) + '<br><small>' + (indFits(ind.bag, indBagSlots(), a.o.k, 1) <= 0 ? IND_FULL_TXT : '左键：拿') + '</small>' + (typeof bkHowShort === 'function' && indHard() && bkHowShort(a.o.k) ? '<br><small style="color:#bbb">' + bkHowShort(a.o.k) + '</small>' : '');
             else if (a && a.kind === 'crop') { let C = IND_CROPS[a.o.k], ripe = indCropRipe(a.o); hint = C.name + (ripe ? '（熟了）' : ' ' + Math.floor(a.o.g / C.grow * 100) + '%' + (!indCropSeasonOK(a.o) ? '　这个季节不长' : a.o.wet > R.base.clock ? '' : '　没浇水') + (a.o.fert ? '　施过肥了' : '')) + '<br><small>' + (ripe ? '左键：收' : '拿着水右键：浇水　拿草木灰或硝石右键：施肥') + '</small>'; }
             else if (a && a.kind === 'fire') hint = a.o.fuel > 0 ? '篝火 还能烧 ' + Math.ceil(a.o.fuel) + ' 秒<br><small>拿着木头，左键：加柴</small>' : '篝火<br><small style="color:#ff8a65">没柴了，左键加木头</small>';   // 任务 116
             else if (a && a.kind === 'door') hint = IND_HOUSE[a.o.ty].name + '的门（' + (a.o.open ? '开着' : '关着') + '）<br><small>左键：' + (a.o.open ? '关门' : '开门') + '　长按右键：收起房子</small>';
