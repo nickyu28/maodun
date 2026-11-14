@@ -13816,21 +13816,22 @@ async function enterExit(tab, key) {
             const T = await openTab(chrome, url);
             const key = async (k, code, vk) => { await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code, windowsVirtualKeyCode: vk }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk }); };
             await T.eval(`${HIDE} openSettings('操作'); true;`); await W(200);
-            if (!(await T.eval(`document.getElementById('set-key-all-bag') !== null && document.getElementById('set-key-all-bag').innerText === 'E'`))) bad.push('按键表里没有背包或不是 E');
+            if (!(await T.eval(`document.getElementById('set-key-hunt-bag') !== null && document.getElementById('set-key-hunt-bag').innerText === 'E'`))) bad.push('按键表里没有背包或不是 E');
             // 点改，按 B
-            await T.eval(`document.getElementById('set-key-all-bag').click(); true;`);
+            await T.eval(`document.getElementById('set-key-hunt-bag').click(); true;`);
             if (!(await T.eval(`window.__keyCapture === true`))) bad.push('点改没进入等按键');
             await key('Escape', 'Escape', 27);
             if (await T.eval(`window.__keyCapture === true || !sysModalVisible()`)) bad.push('改键时按 Esc 该取消，不该关设置窗 ' + await T.eval(`[window.__keyCapture, sysModalVisible()]`));
-            await T.eval(`document.getElementById('set-key-all-bag').click(); true;`);
+            await T.eval(`document.getElementById('set-key-hunt-bag').click(); true;`);
             await key('b', 'KeyB', 66);
-            if (!(await T.eval(`keyOf('all', 'bag') === 'b' && JSON.parse(localStorage.getItem('TH_settings')).keymap['all:bag'] === 'b'`))) bad.push('改成 B 没存下来');
+            if (!(await T.eval(`keyOf('hunt', 'bag') === 'b' && JSON.parse(localStorage.getItem('TH_settings')).keymap['hunt:bag'] === 'b'`))) bad.push('改成 B 没存下来');
             // 冲突
-            await T.eval(`document.getElementById('set-key-all-throw').click(); true;`);
+            await T.eval(`document.getElementById('set-key-hunt-throw').click(); true;`);
             await key('w', 'KeyW', 87);
-            if (!(await T.eval(`keyOf('all', 'throw') === 'q' && document.getElementById('set-msg') && /已经用在/.test(document.getElementById('set-msg').innerText)`))) bad.push('冲突没拒绝 ' + await T.eval(`keyOf('all', 'throw')`));
-            if (!(await T.eval(`keyBind('all', 'throw', 'escape').ok === false && keyBind('all', 'jump', 'b').ok === false`))) bad.push('Esc 或已被占用的键没拒绝');
-            // 翻译：按 B 老代码收到 e；按 E 收不到
+            if (!(await T.eval(`keyOf('hunt', 'throw') === 'q' && document.getElementById('set-msg') && /已经用在/.test(document.getElementById('set-msg').innerText)`))) bad.push('冲突没拒绝 ' + await T.eval(`keyOf('hunt', 'throw')`));
+            if (!(await T.eval(`keyBind('hunt', 'throw', 'escape').ok === false && keyBind('all', 'jump', 'b').ok === false`))) bad.push('Esc 或已被占用的键没拒绝');
+            // 翻译：按 B 老代码收到 e；按 E 收不到（寻宝队的键只在寻宝队里翻译，这里假装现在在寻宝队）
+            await T.eval(`window.__camk = chatActiveModeKey; window.chatActiveModeKey = function () { return 'hunt'; }; true;`);
             await T.eval(`${HIDE} document.getElementById('sys-modal').classList.add('hidden'); window.__ks = []; window.addEventListener('keydown', function (e) { window.__ks.push(e.key); }); window.addEventListener('keyup', function (e) { window.__ks.push('up:' + e.key); }); true;`);
             await key('b', 'KeyB', 66); await key('e', 'KeyE', 69);
             const ks = await T.eval(`__ks.join()`);
@@ -13841,16 +13842,21 @@ async function enterExit(tab, key) {
             if ((await T.eval(`__ks.join()`)) !== 'b,up:b') bad.push('输入框里按 B 被翻译了 ' + await T.eval(`__ks.join()`));
             await T.eval(`document.getElementById('set-test-in').remove(); true;`);
             // 恢复默认
-            await T.eval(`keyReset('all', 'bag'); window.__ks = []; true;`);
+            await T.eval(`keyReset('hunt', 'bag'); window.__ks = []; true;`);
             await key('e', 'KeyE', 69);
-            if ((await T.eval(`__ks.join()`)) !== 'e,up:e' || (await T.eval(`keyOf('all', 'bag')`)) !== 'e') bad.push('恢复默认后 E 又该是 E ' + await T.eval(`__ks.join()`));
-            await T.eval(`keyBind('all', 'map', 'n'); keyBind('all', 'skill', 'k'); keyResetAll(); true;`);
-            if (await T.eval(`Object.keys(SETTINGS.keymap).length !== 0 || keyOf('all', 'map') !== 'tab'`)) bad.push('全部恢复默认没清干净');
+            if ((await T.eval(`__ks.join()`)) !== 'e,up:e' || (await T.eval(`keyOf('hunt', 'bag')`)) !== 'e') bad.push('恢复默认后 E 又该是 E ' + await T.eval(`__ks.join()`));
+            await T.eval(`keyBind('hunt', 'map', 'n'); keyBind('hunt', 'skill', 'k'); keyResetAll(); true;`);
+            if (await T.eval(`Object.keys(SETTINGS.keymap).length !== 0 || keyOf('hunt', 'map') !== 'tab'`)) bad.push('全部恢复默认没清干净');
+            // 不在寻宝队里，寻宝队的改键不翻译
+            await T.eval(`keyBind('hunt', 'bag', 'b'); window.chatActiveModeKey = window.__camk; window.__ks = []; true;`);
+            await key('b', 'KeyB', 66); await key('e', 'KeyE', 69);
+            if ((await T.eval(`__ks.join()`)) !== 'b,up:b,e,up:e') bad.push('不在寻宝队里不该翻译 ' + await T.eval(`__ks.join()`));
+            await T.eval(`keyResetAll(); true;`);
             // 登记按键：fn 被调用；自己的模式里冲突检测
             await T.eval(`window.__fk = 0; keyRegister('tst', 'act1', 'g', '测试一', function () { window.__fk++; }); keyRegister('tst', 'act2', 'h', '测试二', null); true;`);
             await key('g', 'KeyG', 71);
             if ((await T.eval(`__fk`)) !== 1) bad.push('登记的按键没调 fn ' + await T.eval(`__fk`));
-            if (!(await T.eval(`keyBind('tst', 'act2', 'g').ok === false && keyBind('tst', 'act1', 'j').ok === true && keyIs({ key: 'J' }, 'tst', 'act1') && keyBind('all', 'jump', 'g').ok === true`))) bad.push('自己模式里的冲突检测不对，或者别的模式里同一个键不该冲突');
+            if (!(await T.eval(`keyBind('tst', 'act2', 'g').ok === false && keyBind('tst', 'act1', 'j').ok === true && keyIs({ key: 'J' }, 'tst', 'act1') && keyBind('all', 'jump', 'j').ok === false && keyBind('night', 'act', 'j').ok === true`))) bad.push('冲突检测不对：同模式冲突、通用和各模式冲突，两个不同模式之间同一个键不冲突');
             await key('g', 'KeyG', 71);
             if ((await T.eval(`__fk`)) !== 1) bad.push('act1 改成 J 后按 G 不该再调 fn');
             await T.eval(`openSettings('操作'); true;`); await W(150);
@@ -13996,6 +14002,28 @@ async function enterExit(tab, key) {
             report('IND174 火山坡上能出生：强制火山在出生点旁，离岩浆 ≥ 10 米，有的图出生在坡上', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('SET5')) {
+            // SET5 改键在真局里管用（任务 P3 补完）：寻宝队里把背包改成 B，按 B 开背包、按 E 不开；惊魂夜自己的键（互动 F）不受寻宝队的改键影响；回到大厅寻宝队的改键不再翻译
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const key = async (k, code, vk) => { await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code, windowsVirtualKeyCode: vk }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk }); };
+            await T.eval(`${HIDE} keyBind('hunt', 'bag', 'b'); keyBind('hunt', 'act', 'x'); selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+            if (!(await until(T, `isPlaying && !gState.isDead`, 30000))) bad.push('寻宝队没开起来');
+            else {
+                await T.eval(`${HIDE} gState.backpackOpen = false; true;`);
+                await key('e', 'KeyE', 69); if (await T.eval(`gState.backpackOpen`)) bad.push('背包改成 B 以后按 E 不该开');
+                await key('b', 'KeyB', 66); if (!(await T.eval(`gState.backpackOpen`))) bad.push('按 B 没开背包');
+                await key('b', 'KeyB', 66); if (await T.eval(`gState.backpackOpen`)) bad.push('再按 B 没关背包');
+                await T.eval(`window.__f = 0; window.addEventListener('keydown', function (e) { if (e.key === 'f') window.__f++; }); true;`);
+                await key('x', 'KeyX', 88); if ((await T.eval(`__f`)) !== 1) bad.push('互动改成 X 以后按 X 该变成 F ' + await T.eval(`__f`));
+                await T.eval(`${MODES.hunt.exit}; true;`); await W(1500);
+                await T.eval(`window.__f = 0; true;`);
+                await key('x', 'KeyX', 88); if ((await T.eval(`__f`)) !== 0) bad.push('出了寻宝队按 X 不该再翻译成 F');
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('SET5 改键在真局里管用：寻宝队里背包改成 B 按 B 开按 E 不开、互动改成 X 变成 F，出了寻宝队不再翻译', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

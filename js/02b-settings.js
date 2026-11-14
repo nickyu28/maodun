@@ -57,7 +57,8 @@ function keyBind(mode, action, key) {
     let k = keyEntry(mode, action); if (!k) return { ok: false, why: '没有这个动作' };
     key = String(key || '').toLowerCase();
     if (!key || KEY_RESERVED.indexOf(key) >= 0) return { ok: false, why: key === 'escape' ? 'Esc 不能改' : '没按到键' };
-    let clash = SETREG.keys.filter(function (x) { return x.mode === mode && x.action !== action && keyOf(x.mode, x.action) === key; })[0];
+    // 同一个模式里不能重；通用的（all）和各模式的也不能重，不然翻译会互相打架
+    let clash = SETREG.keys.filter(function (x) { return x.action !== action || x.mode !== mode; }).filter(function (x) { return (x.mode === mode || x.mode === 'all' || mode === 'all') && keyOf(x.mode, x.action) === key; })[0];
     if (clash) return { ok: false, why: keyShow(key) + ' 已经用在「' + clash.label + '」上' };
     if (!SETTINGS.keymap || typeof SETTINGS.keymap !== 'object') SETTINGS.keymap = {};
     if (key === k.def) delete SETTINGS.keymap[mode + ':' + action]; else SETTINGS.keymap[mode + ':' + action] = key;
@@ -68,16 +69,25 @@ function keyReset(mode, action) { if (SETTINGS.keymap) { delete SETTINGS.keymap[
 function keyResetAll() { SETTINGS.keymap = {}; settingsSave(); keyRebuild(); }
 
 // ── 翻译：玩家按的新键换成老代码认的原键 ──
-let KEYTR = { map: {}, block: {} };
+let KEYTR = {};   // 模式名 -> { map: 新键 -> 原键, block: 原键 -> 1 }，只给带 legacy 登记的动作建
 function keyRebuild() {
-    let map = {}, block = {}, used = {};
-    SETREG.keys.forEach(function (x) { if (x.legacy) used[keyOf(x.mode, x.action)] = 1; });
+    let T = {}, used = {};
+    SETREG.keys.forEach(function (x) { if (x.legacy) { used[x.mode] = used[x.mode] || {}; used[x.mode][keyOf(x.mode, x.action)] = 1; } });
     SETREG.keys.forEach(function (x) {
         if (!x.legacy) return;
         let cur = keyOf(x.mode, x.action);
-        if (cur !== x.def) { map[cur] = x.def; if (!used[x.def]) block[x.def] = 1; }
+        if (cur === x.def) return;
+        let t = T[x.mode] = T[x.mode] || { map: {}, block: {} };
+        t.map[cur] = x.def; if (!used[x.mode][x.def]) t.block[x.def] = 1;
     });
-    KEYTR = { map: map, block: block };
+    KEYTR = T;
+}
+// 现在这一下该用哪张表：通用的加上当前模式的（寻宝队、惊魂夜之类）
+function keyTranslateFor(k) {
+    let cur = null; try { cur = typeof chatActiveModeKey === 'function' ? chatActiveModeKey() : null; } catch (e) { }
+    let a = KEYTR.all || { map: {}, block: {} }, m = (cur && KEYTR[cur]) || { map: {}, block: {} };
+    let d = m.map[k] !== undefined ? m.map[k] : a.map[k];
+    return { to: d, block: !!(m.block[k] || a.block[k]) };
 }
 const KEY_CODES = { ' ': ['Space', 32], shift: ['ShiftLeft', 16], tab: ['Tab', 9], enter: ['Enter', 13], arrowup: ['ArrowUp', 38], arrowdown: ['ArrowDown', 40], arrowleft: ['ArrowLeft', 37], arrowright: ['ArrowRight', 39] };
 function keyCodeOf(k) {
@@ -94,14 +104,14 @@ function keyCodeOf(k) {
             if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || (typeof chatMode !== 'undefined' && chatMode === 2)) return;
             if (e.ctrlKey || e.metaKey || e.altKey) return;
             let k = e.key.toLowerCase();
-            let d = KEYTR.map[k];
+            let tr = keyTranslateFor(k), d = tr.to;
             if (d !== undefined) {
                 e.stopImmediatePropagation(); e.preventDefault();
                 let c = keyCodeOf(d), ne;
                 try { ne = new KeyboardEvent(type, { key: d === ' ' ? ' ' : (d.length === 1 ? d : d.charAt(0).toUpperCase() + d.slice(1)), code: c[0], keyCode: c[1], which: c[1], repeat: e.repeat, shiftKey: e.shiftKey, bubbles: true, cancelable: true }); } catch (x) { return; }
                 ne.__remap = true;
                 (e.target && e.target.dispatchEvent ? e.target : document.body).dispatchEvent(ne);
-            } else if (KEYTR.block[k]) { e.stopImmediatePropagation(); e.preventDefault(); }
+            } else if (tr.block) { e.stopImmediatePropagation(); e.preventDefault(); }
         }, true);
     });
     // 登记时带了 fn 的按键：按了就调（连发不算）
@@ -117,11 +127,17 @@ function keyCodeOf(k) {
     }, true);
 })();
 
-// 通用按键：老代码写死的 WASD 之类，登记成 legacy，设置页里能改
-[['move_f', 'w', '前进'], ['move_b', 's', '后退'], ['move_l', 'a', '左移'], ['move_r', 'd', '右移'], ['jump', ' ', '跳，动作'], ['run', 'shift', '跑'],
-['bag', 'e', '背包'], ['map', 'tab', '大地图'], ['throw', 'q', '扔东西'], ['skill', 'r', '角色技能'], ['lamp', 'l', '开关灯，化学寻宝队'], ['mute', 'm', '静音'], ['chat', 'enter', '聊天']].forEach(function (a) {
-    keyRegister('all', a[0], a[1], a[2], null, { legacy: true });
+// 老代码写死的按键，登记成 legacy，设置页里能改。通用的（所有模式一样）放 all；每个模式自己的键放那个模式，只在那个模式里翻译
+[['all', 'move_f', 'w', '前进'], ['all', 'move_b', 's', '后退'], ['all', 'move_l', 'a', '左移'], ['all', 'move_r', 'd', '右移'], ['all', 'jump', ' ', '跳，动作'], ['all', 'run', 'shift', '跑'],
+['all', 'mute', 'm', '静音'], ['all', 'chat', 'enter', '聊天'],
+['hunt', 'bag', 'e', '背包'], ['hunt', 'map', 'tab', '大地图'], ['hunt', 'throw', 'q', '扔东西'], ['hunt', 'skill', 'r', '角色技能'], ['hunt', 'lamp', 'l', '开关灯，化学寻宝队'], ['hunt', 'act', 'f', '开箱，捡东西，互动'],
+['night', 'act', 'f', '互动，普攻'], ['night', 'brk', 'e', '破坏板子，追捕者'], ['night', 'swap', 'q', '切换目标，追捕者'],
+['race', 'skill', 'e', '技能'], ['race', 'item', 'q', '道具'],
+['escape', 'act', 'e', '互动'],
+['sumo', 'push', 'e', '推'], ['sumo', 'item', 'q', '道具'], ['tower', 'push', 'e', '推'], ['tower', 'item', 'q', '道具']].forEach(function (a) {
+    keyRegister(a[0], a[1], a[2], a[3], null, { legacy: true });
 });
+function keyModeName(m) { if (m === 'all') return '通用'; let p = typeof MODE_NAME_LIST !== 'undefined' ? MODE_NAME_LIST.filter(function (q) { return q[0] === m; })[0] : null; return p ? p[1] : m; }
 
 // ── 设置页 ──
 const SET_TABS = ['声音', '操作', '显示', '游戏'];
@@ -203,7 +219,7 @@ function setKeyRows() {
             return setRow(x.label, '<span style="display:flex; gap:4px; align-items:center;"><button id="set-key-' + x.mode + '-' + x.action + '" onclick="setKeyStart(\'' + x.mode + '\', \'' + x.action + '\')" style="' + setBtnStyle(cap) + ' min-width:84px;">' + (cap ? '按新键' : keyShow(cur)) + '</button>' +
                 (ch ? '<button onclick="setKeyReset(\'' + x.mode + '\', \'' + x.action + '\')" style="' + setBtnStyle(false) + '">默认</button>' : '') + '</span>');
         }).join('');
-        return '<div style="font-size:12px; color:#888; padding:8px 0 2px;">按键，' + (m === 'all' ? '通用' : m) + '</div>' + rows;
+        return '<div style="font-size:12px; color:#888; padding:8px 0 2px;">按键，' + keyModeName(m) + '</div>' + rows;
     }).join('') + '<div style="padding:8px 0;"><button onclick="setKeyResetAll()" style="' + setBtnStyle(false) + '">全部恢复默认</button></div>';
 }
 function setKeyStart(mode, action) {
