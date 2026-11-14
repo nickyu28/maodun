@@ -375,7 +375,7 @@
             stone: { name: '石炉', rate: 100, burn: 1, r: 1.5, size: [2.2, 1.0, 1.5], col: 0x9e9e9e },   // 8 块石头合成：规格跟灶台一样，什么都能做，燃料不限
             kiln: { name: '大窑', rate: 30, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 10, chem: 10 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
         };
-        const IND_COOK_CAP = 6, IND_TILE_CAP = 100, IND_SPOUT_CAP = 20;   // 出料槽最多 20 块（任务 164 从 10 放大）   // 灶台上最多放几种
+        const IND_COOK_CAP = 6, IND_WARN_N = 200, IND_TILE_CAP = 2000, IND_SPOUT_CAP = 20;   // 出料槽最多 20 块（任务 164 从 10 放大）   // 灶台上最多放几种
         const IND_RECIPES = [
             // 面包排在烧水前面：有小麦和盐的时候，生水也是和面用的
             { in: { flour: 3, salt: 1, water_boiled: 1 }, out: { bread: 3, bucket: 1 }, minT: 200, time: 40, burnT: 300 },   // 任务 56：面包用面粉（原来是小麦 4），原位置改的
@@ -559,7 +559,7 @@
             delete b.pos.pool;   // 水池是挖在地上的，不能搬：以前收起来的读档时放回原位（背包里的 furn_pool 下面按未知物品清掉）
             let off = {}; ['stove', 'bed', 'bench'].forEach(function (k) { if (b.off && b.off[k]) off[k] = true; }); b.off = off;
             if (!Array.isArray(b.chests)) { let bp = b.pos.box; b.chests = [{ id: 1, x: bp ? bp.x : IND_ST_DEF.box.x, z: bp ? bp.z : IND_ST_DEF.box.z, big: true, items: b.box }]; }   // 老档：原来的仓库箱变成不限格数的那个箱子
-            b.chests = b.chests.filter(function (c) { return c && isFinite(c.x) && isFinite(c.z) && c.items && typeof c.items === 'object'; }).slice(0, 20);
+            b.chests = b.chests.filter(function (c) { return c && isFinite(c.x) && isFinite(c.z) && c.items && typeof c.items === 'object'; });   // 任务 167：箱子不限个数
             let seen = {};
             b.chests.forEach(function (c) {
                 c.big = !!c.big; c.lead = !!c.lead; c.cold = !!c.cold; c.x = indNum(c.x, 0, IND_BASE.x0 + 1, IND_BASE.x1 - 1); c.z = indNum(c.z, 0, IND_BASE.z0 + 1, IND_BASE.z1 - 1);
@@ -1725,6 +1725,7 @@
         }
         function indPlaceTile() {
             if (ind.where !== 'base') { indFlash('泥土只能在基地里开农田'); return false; }
+            if (ind.base.tiles.length >= IND_WARN_N && ind.base.tiles.length % 50 === 0) indFlash('放太多了，会卡');   // 任务 167：农田格不再有 100 的上限，只提示
             if (ind.base.tiles.length >= IND_TILE_CAP) { indFlash('农田开满了'); return false; }
             let f = indFace(), t = indTileAt(ind.p.x + f.x * 2.2, ind.p.z + f.z * 2.2);
             if (t.x < IND_BASE.x0 + 1 || t.x > IND_BASE.x1 - 1 || t.z < IND_BASE.z0 + 1 || t.z > IND_BASE.z1 - 1) { indFlash('这里开不了'); return false; }
@@ -2488,8 +2489,8 @@
             if (ind.where !== 'base') { indFlash('只能放在基地里'); return false; }
             let B = ind.base, d = IND_ITEMS[k], ty = d.furn, pay = d.inst ? B.carried[k.slice(5)] : null, r = IND_FURN_R[ty];
             if (ty === 'bench' && !B.off.bench) { indFlash('基地里已经有一个工作台了'); return false; }   // 任务 108：做出来的工作台在基地里只能顶替收起来的那个
-            if (ty === 'chest' && B.chests.length >= 20) { indFlash('箱子太多了'); return false; }
-            if (IND_COOK[ty] && ty !== 'stove' && B.cookers.length >= indCookCap()) { indFlash('炉子太多了'); return false; }
+            // 任务 167：箱子、炉子、农田不再有个数上限，同一种超过 200 个只提示不阻止
+            if (ty === 'chest' ? B.chests.length >= IND_WARN_N : IND_COOK[ty] && ty !== 'stove' ? B.cookers.filter(function (c) { return c.ty === ty; }).length >= IND_WARN_N : false) indFlash('放太多了，会卡');
             let f = indFace(), x = ind.p.x + f.x * (r + 1.2), z = ind.p.z + f.z * (r + 1.2);
             x = Math.max(IND_BASE.x0 + r, Math.min(IND_BASE.x1 - r, x)); z = Math.max(IND_BASE.z0 + r, Math.min(IND_BASE.z1 - r, z));
             if (!indSpotFree(x, z, r)) { indFlash('这里放不下，换个空地'); return false; }
@@ -2506,7 +2507,7 @@
         function indPlaceCook(k) {
             if (ind.where !== 'base') { indFlash('只能放在基地里'); return false; }
             let ty = IND_ITEMS[k].cook, D = IND_COOK[ty];
-            if (ind.base.cookers.length >= indCookCap()) { indFlash('炉子太多了'); return false; }
+            if (ind.base.cookers.filter(function (c) { return c.ty === ty; }).length >= IND_WARN_N) indFlash('放太多了，会卡');   // 任务 167：炉子不限个数，超过 200 个只提示
             let f = indFace(), x = ind.p.x + f.x * (D.r + 1.2), z = ind.p.z + f.z * (D.r + 1.2);
             x = Math.max(IND_BASE.x0 + D.r, Math.min(IND_BASE.x1 - D.r, x)); z = Math.max(IND_BASE.z0 + D.r, Math.min(IND_BASE.z1 - D.r, z));
             if (!indSpotFree(x, z, D.r)) { indFlash('这里放不下，换个空地'); return false; }

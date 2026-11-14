@@ -8165,12 +8165,12 @@ async function enterExit(tab, key) {
                 if (back.length !== 1 || back[0][0] !== 'stone' || back[0][1].sand !== 3 || back[0][2].ash !== 2 || back[0][3] !== 10) bad.push('放下后里面的东西不丢 ' + JSON.stringify(back));
                 const warm = await J(`(function(){ let C = ind.base.cookers[0]; C.temp = 600; indTeleport(C.x + 3, C.z); let a = indHeatNear(C.x + 3, C.z, 4).temp; indTeleport(C.x + 9, C.z); return [a, indHeatNear(C.x + 9, C.z, 4).temp]; })()`);
                 if (warm[0] < 600 || warm[1] !== 0) bad.push('4 米内取暖 ' + JSON.stringify(warm));
-                // 炉子上限共用 6 个
-                await T.eval(`for (let i = 0; i < 6; i++) { if (ind.base.cookers.length < 6) ind.base.cookers.push(Object.assign({ id: 900 + i, ty: 'stone', x: -10 + i * 3, z: -10 }, ckNewState())); } ind.bag = { cook_stone: 1 }; indSelect('cook_stone'); window.__fl = []; indUse(); true;`);
-                if (!(await T.eval(`ind.base.cookers.length === 6 && __fl.some(function (t) { return /炉子太多/.test(t); })`))) bad.push('石炉算进炉子上限 6 个');
+                // 任务 167：炉子不再有 6 个的上限，放第 7 个照样放得下，也不弹"炉子太多"
+                await T.eval(`for (let i = 0; i < 6; i++) { if (ind.base.cookers.length < 6) ind.base.cookers.push(Object.assign({ id: 900 + i, ty: 'stone', x: -10 + i * 3, z: -10 }, ckNewState())); } ind.bag = { cook_stone: 1 }; indSelect('cook_stone'); window.__fl = []; indFlash = function (t) { __fl.push(t); }; indUse(); true;`);
+                if (!(await T.eval(`ind.base.cookers.length === 7 && !__fl.some(function (t) { return /炉子太多/.test(t); })`))) bad.push('石炉不再有 6 个的上限 ' + await T.eval(`JSON.stringify([ind.base.cookers.length, __fl])`));
                 // 存档、老存档
                 const sv = await J(`(function(){ let b = indFixBase(JSON.parse(JSON.stringify(ind.base))); return b.cookers.filter(function (c) { return c.ty === 'stone'; }).length; })()`);
-                if (sv !== 6) bad.push('石炉存档读回来 ' + sv);
+                if (sv !== 7) bad.push('石炉存档读回来 ' + sv);
                 if (!(await T.eval(`indFixBase({ ver: 11, rule: 'hard', box: { stone: 10 } }).box.stone === 10`))) bad.push('老存档读档不报错');
                 // 被炸会没
                 await T.eval(`ind.base.cookers = [{ id: 1, ty: 'stone', x: 5, z: 5, items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, spout: [] }]; indBoom(5, 5, 3, '测试'); true;`);
@@ -14046,6 +14046,31 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND175 简单教程：新号出 5 张卡片、点完记看过、老存档不教、Esc 和跳过、重播、实验室', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND176')) {
+            // IND176 炉子箱子农田不限个数（任务 167）：放 8 个灶台不弹"太多"；炉子超过 200 个只提示不阻止；存档读档数量对
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); let B = ind.base; B.rule = 'hard'; B.cookers = []; B.chests = B.chests.slice(0, 1); let fl = [], f0 = indFlash; indFlash = function (t) { fl.push(t); };
+                    try { for (let i = 0; i < 7; i++) B.cookers.push(Object.assign({ id: 900 + i, ty: 'stone', x: -25 + i * 4, z: -10 }, ckNewState())); ind.bag = { cook_stone: 1 }; indSelect('cook_stone'); indTeleport(0, 8); indLookAt(0, -20); indUse();
+                    let n8 = B.cookers.length, many8 = fl.some(function (t) { return /放太多|炉子太多/.test(t); });
+                    for (let i = 0; i < 205; i++) B.cookers.push(Object.assign({ id: 1000 + i, ty: 'stone', x: -28 + (i % 40) * 1.5, z: 15 + Math.floor(i / 40) * 1.5 }, ckNewState()));
+                    fl.length = 0; indBagAdd('cook_stone', 1); indSelect('cook_stone'); indTeleport(0, 0); indLookAt(0, -10); let before = B.cookers.length; indUse(); let warn = fl.some(function (t) { return /放太多了，会卡/.test(t); }), placed = B.cookers.length - before;
+                    let size = JSON.stringify(B).length, back = indFixBase(JSON.parse(JSON.stringify(B))).cookers.length;
+                    return { n8: n8, many8: many8, warn: warn, placed: placed, total: B.cookers.length, back: back, size: size }; } finally { indFlash = f0; } })()`);
+                if (!(r.n8 === 8 && !r.many8)) bad.push('放第 8 个石炉不弹太多 ' + JSON.stringify(r));
+                if (!(r.warn && r.back === r.total)) bad.push('超过 200 个只提示（能放不能放看地方），存档读档数量对 ' + JSON.stringify(r));
+                console.log('  IND176 数据 213 个炉子存档 ' + r.size + ' 字节');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND176 炉子不限个数：放 8 个不弹、超 200 只提示、存档读档数量对', bad.length === 0, bad.join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }

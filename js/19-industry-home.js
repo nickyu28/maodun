@@ -23,7 +23,7 @@
         }
         function hmAreaCap() { return Math.max(6, Math.min(16, Math.floor((IND_BASE.x1 - IND_BASE.x0) * (IND_BASE.z1 - IND_BASE.z0) / 1000) * 2)); }
         function indHouseCap() { return hmAreaCap(); }
-        function indCookCap() { return hmAreaCap(); }
+        function indCookCap() { return 100000; }   // 任务 167：炉子不限个数
         function hmCost(x) { let c = HM.cost0 + HM.costStep * (x.e + x.w + x.s); return indHard() ? c : Math.ceil(c / 2); }
         function hmLeft(x, dir) { return dir === 's' ? HM.maxS - x.s : HM.maxX - x.e - x.w; }
         const HM_DIR = { e: '东', w: '西', s: '南' };
