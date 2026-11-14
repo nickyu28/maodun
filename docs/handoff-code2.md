@@ -86,6 +86,13 @@ function indLookAt(x, z) { if (!indDebugOn() || !ind) return; camera.rotation.se
 - 提交顺序：一个任务一个提交，推之前 `git pull --rebase origin main`，smoke.js 和 index.html 常冲突，保留两边。
 - 新文件加进 `GAME_FILES`，现在最后几个是 `…moonpick, speed, series, icon, book`。
 
+## Code1 的接口（11-14，用法在 docs/settings.md）
+- 设置和按键：`settingsRegister({group, id, label, type, def})`、`keyRegister(mode, action, defKey, label, fn, opts)`，同一模式键冲突设置页会拒绝。
+- 教程：`tutRegister('industry'|'lab', 播放函数)`，进入时问 `tutShouldPlay(模式名)`，播了调 `tutMark(模式名)`。
+- 别改 `#ind-btn-book` 的 id 和它那个盒子的 `right:8px; top:8px` 内联样式，index.html 的 CSS 靠它让玩家选这排按钮放哪个角。
+- 开发者面板 `?dev=1` 换成反引号键，T 留给元素表。
+- 冒烟 IND172 在 CI 上红过，已修（11-14 推了，比颜色加字，不比像素）。
+
 ## 没做、留给下一个人（按协调者的顺序）
 133 草和木制品当燃料、135 炉子面板分燃料和炉料（含补充 2 石油倒漏斗）、139 烧制成品进储料槽、137 皮革鞣制、142 体检第二批、140 关面板自动锁回鼠标、118+121 删不存在的怪和风箱不耗体力（121 的拉风箱部分已在 150 做了）、120 胶水加锤子修复加熔了重铸（锤子物品已有：`hammer`、`hammer_stone`）、131 说明改准改短、122+123+126 耐久条、背包满提示、快捷键、97 矿洞去传送门、158 后续、159 往后看 docs/code2-tasks.md。
 - **协调者 11-14 新加的**（原话都在 docs/code2-tasks.md 末尾，最新顺序看 docs/queue-code2.md 最前面）：
