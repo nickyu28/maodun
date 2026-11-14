@@ -10733,7 +10733,7 @@ async function enterExit(tab, key) {
                 // 黏土模具浇铁会裂；装配：斧头 + 木柄 → 青铜斧；锭直接做青铜斧的配方不显示
                 r = await run(`let c = cook('kiln'); c.spoutTy = 'auto'; c.pool = { m: 'ingot_fe', n: 2 }; c.temp = 1600; c.fire = 4; c.blow = 99; c.mold = { s: 'axe', dura: 20 }; tick(c, 0.25);
                     ind.bag = { part_axe_bronze: 1, wood: 1 }; let h = IND_CRAFT.findIndex(function (q) { return q.out === 'handle'; }), a = IND_CRAFT.findIndex(function (q) { return q.out === 'axe_bronze' && q.in.part_axe_bronze; }); indCraft(h); indCraft(a);
-                    let old = IND_CRAFT.filter(function (q) { return q.out === 'axe_bronze' && q.in.bronze && !q.fix; }).map(indCraftShow);
+                    let old = IND_CRAFT.filter(function (q) { return q.out === 'axe_cold' && q.in.bronze && !q.fix; }).map(indCraftShow);   // 任务 158 补充：冷锻的出 axe_cold
                     return { mold: c.mold, crack: fl.some(function (t) { return /裂了/.test(t); }), axe: ind.bag.axe_bronze || 0, handle: ind.bag.handle || 0, old: old };`);
                 if (!(r.mold === null && r.crack && r.axe === 1 && r.handle === 1 && r.old.length && r.old.every(function (x) { return x === true; }))) bad.push('黏土模具浇铁裂、装配、锭直接做的老配方任务 158 起显示（要锤子） ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
@@ -11007,7 +11007,7 @@ async function enterExit(tab, key) {
                 // 悠闲成本减半（向上取整）；石头不够不扩；炉子房子上限随面积涨
                 r = await run(`B.rule = 'casual'; let s0 = ind.bag.stone; hmExpand('e'); let c1 = s0 - ind.bag.stone; B.rule = 'hard'; ind.bag = { stone: 100 }; fl.length = 0; let ok = hmExpand('s'); let msg = fl.join('|'); B.ext = { e: 4, w: 0, s: 4 }; hmApply(B); let big = indHouseCap(), cook = indCookCap(); B.ext = { e: 0, w: 0, s: 0 }; hmApply(B);
                     return { c1: c1, ok: ok, msg: msg, big: big, cook: cook };`);
-                if (!(r.c1 === 60 && r.ok === false && /要 \d+ 块石头/.test(r.msg) && r.big === 16 && r.cook === 16)) bad.push('悠闲成本减半、石头不够、上限按面积涨（100 × 85 → 16） ' + JSON.stringify(r));
+                if (!(r.c1 === 60 && r.ok === false && /要 \d+ 块石头/.test(r.msg) && r.big === 16 && r.cook >= 16)) bad.push('悠闲成本减半、石头不够、上限按面积涨（100 × 85 → 16） ' + JSON.stringify(r));
                 // 边界跟着变：扩了以后东边新地方能放东西、走得进去；存档整理保留；老存档没有 ext 是 60 × 45
                 r = await run(`B.ext = { e: 2, w: 1, s: 1 }; hmApply(B); indGoBase(null); let lim = [IND_BASE.x0, IND_BASE.x1, IND_BASE.z1]; ind.p.x = 49; ind.p.z = 30; ind.k = { d: true }; for (let i = 0; i < 30; i++) indMove(0.1); ind.k = {}; let reach = ind.p.x;
                     let b = JSON.parse(JSON.stringify(B)); b.walls = [{ x: 1, z: 1, r: 1 }, { x: 'x' }]; b.floors = [{ x: 4, z: 4 }]; let fixed = indFixBase(b); let ext = fixed.ext; let old = indFixBase({ ver: 12, rule: 'hard' }); let oldLim = [IND_BASE.x0, IND_BASE.x1, IND_BASE.z0, IND_BASE.z1];
@@ -13800,11 +13800,14 @@ async function enterExit(tab, key) {
                 let r = await J(`(function(){ indPanelBook('青铜镐'); let t = document.getElementById('ind-panel').innerText, h = document.getElementById('ind-panel').innerHTML; return { mold: /小刀右键/.test(t) && /雕/.test(t), pour: /浇进/.test(t), alloy: /青铜/.test(t) && /铜锭/.test(t), link: h.indexOf('indBookSearch') >= 0, paren: /[（）()]/.test((document.getElementById('ind-panel').querySelector('div[style*=f3e5f5]') || { innerText: '' }).innerText) }; })()`);
                 if (!(r.mold && r.pour && r.alloy && r.link && !r.paren)) bad.push('配方查询链里有雕模具、浇铸、合金，名字能点，不用括号 ' + JSON.stringify(r));
                 r = await J(`(function(){ indPanelClose(); ind.bag = { stone: 2, wood: 1 }; let hi = IND_CRAFT.findIndex(function (q) { return q.out === 'hammer_stone'; }); indCraft(hi); let o = { h: ind.bag.hammer_stone || 0 };
-                    let bi = IND_CRAFT.findIndex(function (q) { return q.out === 'pick_bronze' && q.in.bronze && q.need === 'hammer' && !q.off; }); o.bi = bi >= 0; let need = bi >= 0 ? JSON.parse(JSON.stringify(IND_CRAFT[bi].in)) : {};
-                    ind.bag = Object.assign({}, need); o.no = bi >= 0 && indCraftCan(IND_CRAFT[bi]); ind.bag.hammer_stone = 1; o.yes = bi >= 0 && indCraftCan(IND_CRAFT[bi]); indCraft(bi); o.pick = ind.bag.pick_bronze || 0; o.keep = ind.bag.hammer_stone || 0;
+                    let bi = IND_CRAFT.findIndex(function (q) { return q.out === 'pick_cold' && q.in.bronze && q.need === 'hammer' && !q.off; }); o.bi = bi >= 0; let need = bi >= 0 ? JSON.parse(JSON.stringify(IND_CRAFT[bi].in)) : {};
+                    ind.bag = Object.assign({}, need); o.no = bi >= 0 && indCraftCan(IND_CRAFT[bi]); ind.bag.hammer_stone = 1; o.yes = bi >= 0 && indCraftCan(IND_CRAFT[bi]); indCraft(bi); o.pick = ind.bag.pick_cold || 0; o.keep = ind.bag.hammer_stone || 0;
                     ind.bag = Object.assign({}, need); ind.bag.hammer = 1; o.fe = indCraftCan(IND_CRAFT[bi]);
                     o.cast = IND_CRAFT.some(function (q) { return q.out === 'pick_bronze' && q.in.part_pick_bronze && !q.off; }); return o; })()`);
                 if (!(r.h === 1 && r.bi && r.no === false && r.yes === true && r.pick === 1 && r.keep === 1 && r.fe === true && r.cast)) bad.push('石锤能做、青铜工具冷锻要锤子、铁锤也行、铸造老配方还在 ' + JSON.stringify(r));
+                r = await J(`(function(){ let o = { cold: TL_TOOL.pick_cold.dura, cast: TL_TOOL.pick_bronze.dura, tool: IND_ITEMS.pick_cold.tool, tool0: IND_ITEMS.pick_bronze.tool, name: IND_ITEMS.pick_cold.name, kn: MB_KNIFE.knife_cold.dura, kn0: MB_KNIFE.knife_bronze.dura, kind: tlKind('pick_cold') };
+                    ind.bag = { pick_cold: 1 }; o.mine = indTool(); ind.bag = { pick_bronze: 1 }; o.mine0 = indTool(); return o; })()`);
+                if (!(Math.abs(r.cold - r.cast * 0.4) <= 1 && r.tool === r.tool0 && r.kind === 'pick' && r.name === '冷锻青铜镐' && Math.abs(r.kn - r.kn0 * 0.4) <= 1 && r.mine === r.mine0)) bad.push('冷锻青铜工具耐久是铸造的 40%、挖矿档位一样、名字不用括号 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();

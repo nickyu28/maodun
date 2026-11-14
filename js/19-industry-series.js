@@ -57,3 +57,17 @@
         // 任务 158：石锤，一开始就能做。青铜工具冷锻要锤子，铁钢工具要锤子，石锤铁锤都行
         IND_ITEMS_RAW.hammer_stone = { name: '石锤', col: 0x9e9e9e, use: '放在背包里，工作台才打得了青铜、铁、钢的工具，不会用掉' };
         IND_CRAFT.push({ out: 'hammer_stone', in: { stone: 2, wood: 1 }, hard: true });
+        // 任务 158 补充：石锤冷锻的青铜工具单独一个 key（xx_cold），耐久是铸造的 40%，其余跟青铜的一样（挖矿档位、加成、干活时间）。铸造的不变
+        (function () {
+            let N = { pick: '镐', axe: '斧', shovel: '铲', shears: '剪刀', knife: '刀' }, add = {};
+            Object.keys(N).forEach(function (kind) {
+                let base = kind + '_bronze', cold = kind + '_cold', B = IND_ITEMS_RAW[base]; if (!B) return;
+                add[cold] = Object.assign({}, B, { name: '冷锻青铜' + N[kind], use: '敲出来的，不耐用，耐久只有铸造的 40%。' + (B.use || '') });
+                if (kind === 'knife') MB_KNIFE[cold] = Object.assign({}, MB_KNIFE[base], { dura: Math.round(MB_KNIFE[base].dura * 0.4), name: add[cold].name });
+                else TL_TOOL[cold] = Object.assign({}, TL_TOOL[base], { dura: Math.round(TL_TOOL[base].dura * 0.4) });
+                add['broken_' + cold] = { name: '坏了的' + add[cold].name, col: 0x616161, use: '工作台：回收一半主料，或者加 1 胶水修好' };
+                IND_CRAFT.push({ out: 'bronze', n: 1, in: { ['broken_' + cold]: 1 }, hard: true }, { out: cold, fix: true, in: { ['broken_' + cold]: 1, glue: 1 }, hard: true });
+                IND_CRAFT.forEach(function (r) { if (r.out === base && r.need === 'hammer' && !r.fix) r.out = cold; });   // 冷锻配方出冷锻的
+            });
+            Object.assign(IND_ITEMS_RAW, add);
+        })();
