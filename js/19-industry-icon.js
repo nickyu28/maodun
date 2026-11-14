@@ -2,7 +2,7 @@
 // indIcon(key, size) 返回 dataURL，按 key 和尺寸缓存；indIconImg(key, px) 返回 <img> 的 HTML。
         const IC_SYM = { cu: '铜', zn: '锌', sn: '锡', fe: '铁', ni: '镍', pb: '铅', al: '铝', u: '铀', ge: '锗', ga: '镓', li: '锂', si: '硅', ti: '钛', na: '钠', mg: '镁', bronze: '青', brass: '黄', steel: '钢' };   // 任务 157 补充：图标上写中文，不写化学式
         const IC_GAS = { h2: '氢', o2: '氧', n2: '氮', cl2: '氯', ar: '氩', co2: '碳', so2: '硫', hf: '氟', h2so4: '酸', hno3: '酸', freon: '冷', ne: '氖', kr: '氪' };
-        let IC_TXT = {};
+        let IC_TXT = {}, IC_META = {}, IC_LAST = '';
         const IC_TIER = { wood: '#a1887f', stone: '#9e9e9e', bronze: '#a0642d', iron: '#546e7a', steel: '#78909c', diamond: '#4fc3f7' };
         const IC_LIQ = { water_raw: '#42a5f5', water_sea: '#1e88e5', water_boiled: '#90caf9', milk: '#fafafa', oil: '#212121', tomato_soup: '#e53935', radish_soup: '#ef9a9a', cabbage_stew: '#aed581' };
         let IC_CACHE = {};
@@ -28,9 +28,9 @@
         }
         function icDraw(k, size) {
             let d = IND_ITEMS_RAW[k] || (IND_ITEMS[k] || {}), cv = document.createElement('canvas'); cv.width = cv.height = size;
-            let g = cv.getContext('2d'), s = size, col = icHex(d.col || 0x888888), kind = icKind(k, d), t = s / 32;
+            IC_LAST = ''; let g = cv.getContext('2d'), s = size, col = icHex(d.col || 0x888888), kind = icKind(k, d), t = s / 32;
             let rr = function (x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
-            let txt = function (str, x, y, px, c) { g.font = 'bold ' + Math.max(7, Math.round(px * t)) + 'px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; IC_TXT[str] = 1; g.lineWidth = 2 * t; g.strokeStyle = 'rgba(0,0,0,.65)'; g.strokeText(str, x, y); g.fillStyle = c || '#fff'; g.fillText(str, x, y); };
+            let txt = function (str, x, y, px, c) { g.font = 'bold ' + Math.max(7, Math.round(px * t)) + 'px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; IC_TXT[str] = 1; IC_LAST = str; g.lineWidth = 2 * t; g.strokeStyle = 'rgba(0,0,0,.65)'; g.strokeText(str, x, y); g.fillStyle = c || '#fff'; g.fillText(str, x, y); };
             g.lineJoin = 'round'; g.lineWidth = 1.5 * t; g.strokeStyle = '#263238';
             let suffix = k.replace(/^(ore|ingot|hot)_/, '').replace(/@.*/, '');
             if (kind === 'ore') {
@@ -74,6 +74,7 @@
                 let h = icHash(k); g.fillStyle = 'rgba(255,255,255,.55)'; for (let i = 0; i < 3; i++) { g.beginPath(); g.arc((7 + ((h >> (i * 5)) % 18)) * t, (7 + ((h >> (i * 5 + 2)) % 18)) * t, 1.4 * t, 0, 7); g.fill(); }
                 txt(icZh(k), 16 * t, 17 * t, 15);
             }
+            IC_META[k] = col + '|' + kind + '|' + IC_LAST;   // 测试用：颜色加类别加写的字，不靠像素（没有中文字体的机器上字画出来都是方框）
             return cv;
         }
         function indIcon(k, size) {

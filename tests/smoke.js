@@ -10888,7 +10888,7 @@ async function enterExit(tab, key) {
                     ind.bag = { part_axe_bronze: 1, wood: 1 }; let h = IND_CRAFT.findIndex(function (q) { return q.out === 'handle'; }), a = IND_CRAFT.findIndex(function (q) { return q.out === 'axe_bronze' && q.in.part_axe_bronze; }); indCraft(h); indCraft(a);
                     let old = IND_CRAFT.filter(function (q) { return q.out === 'axe_bronze' && q.in.bronze && !q.fix; }).map(indCraftShow);
                     return { mold: c.mold, crack: fl.some(function (t) { return /裂了/.test(t); }), axe: ind.bag.axe_bronze || 0, handle: ind.bag.handle || 0, old: old };`);
-                if (!(r.mold === null && r.crack && r.axe === 1 && r.handle === 1 && r.old.length && r.old.every(function (x) { return x === false; }))) bad.push('黏土模具浇铁裂、装配、老配方不显示 ' + JSON.stringify(r));
+                if (!(r.mold === null && r.crack && r.axe === 1 && r.handle === 1 && r.old.length && r.old.every(function (x) { return x === true; }))) bad.push('黏土模具浇铁裂、装配、锭直接做的老配方任务 158 起显示（要锤子） ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -13758,7 +13758,7 @@ async function enterExit(tab, key) {
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 let r = await J(`(function(){ let keys = Object.keys(IND_ITEMS_RAW), err = [], blank = [], t0 = performance.now(); keys.forEach(function (k) { let u = ''; try { u = indIcon(k, 32); } catch (e) { err.push(k); } if (!u || u.length < 200) blank.push(k); }); let ms = performance.now() - t0;
                     let ores = keys.filter(function (k) { return /^ore_/.test(k); }), ings = keys.filter(function (k) { return /^ingot_/.test(k) || /^(steel|bronze|brass)$/.test(k); });
-                    let dup = function (L) { let seen = {}, d = []; L.forEach(function (k) { let u = indIcon(k, 32); if (seen[u]) d.push(seen[u] + '=' + k); else seen[u] = k; }); return d; };
+                    let dup = function (L) { let seen = {}, d = []; L.forEach(function (k) { indIcon(k, 32); let u = IC_META[k] + (/^(bucket)/.test(k) ? indIcon(k, 32) : ''); if (seen[u]) d.push(seen[u] + '=' + k); else seen[u] = k; }); return d; };
                     let bk = ['bucket', 'bucket_fe', 'bucket_cu'].filter(function (k) { return IND_ITEMS[k]; }), bd = dup(bk), hot = dup(keys.filter(function (k) { return /^hot_/.test(k); }));
                     return { n: keys.length, err: err, blank: blank.slice(0, 5), ms: Math.round(ms), ores: ores.length, oreDup: dup(ores), ingDup: dup(ings), ings: ings.length, bd: bd, hotDup: hot }; })()`);
                 if (!(r.n > 300 && r.err.length === 0 && r.blank.length === 0)) bad.push('所有物品都画得出来 ' + JSON.stringify(r));
