@@ -120,7 +120,7 @@
             if (/^b:/.test(key)) return '装在瓶里';
             return '';
         }
-        const LAB_ST_DESC = { stove: '摆好材料再点火', craft: '合成药剂和器材', orders: '看订单、拿奖励', box: '存取材料', table: '氢到铁的元素和同位素', trash: '手上的东西扔进去就没了' };
+        const LAB_ST_DESC = { fuse: '把质子中子电子拼成原子', stove: '加燃料，摆好材料就反应', craft: '合成药剂和器材', orders: '看订单、拿奖励', box: '存取材料', table: '氢到铁的元素和同位素', trash: '手上的东西扔进去就没了' };
         function labValue(key) { return labDef(key).v || 0; }
 
         // ── 按 key 存数量的小仓库（仓库箱、身上、灶台都是这个形状）──
@@ -269,7 +269,7 @@
         // ══════════════ 运行时：一个能走动的小场景 ══════════════
         let lab = null;
         // 一个大房间（24 × 18 米）：靠北墙一排家具，水池在东南角。四面墙是实的，走不出去
-        const LAB_ST = { stove: { x: -8, z: -7.3, name: '灶台' }, craft: { x: -3, z: -7.3, name: '合成台' }, orders: { x: 3, z: -8.5, name: '订单板' }, box: { x: 8, z: -7.3, name: '仓库箱' }, table: { x: -11.7, z: 0, name: '元素表' }, trash: { x: 10.9, z: -2.5, name: '垃圾桶' } };
+        const LAB_ST = { stove: { x: -8, z: -7.3, name: '灶台' }, craft: { x: -3, z: -7.3, name: '合成台' }, orders: { x: 3, z: -8.5, name: '订单板' }, fuse: { x: 0, z: -7.6, name: '原子拼合台' }, box: { x: 8, z: -7.3, name: '仓库箱' }, table: { x: -11.7, z: 0, name: '元素表' }, trash: { x: 10.9, z: -2.5, name: '垃圾桶' } };
         const LAB_POOL = { x: 8, z: 4.5, r: 1.7 };
         const LAB_ROOM = { x: 12, z: 9 };   // 墙内侧到中心的距离
         const LAB_BOUND = { x0: -11.4, x1: 11.4, z0: -8.4, z1: 8.4 };   // 人的中心能到的范围（离墙 0.6 米）
@@ -289,7 +289,7 @@
             document.getElementById('ui-layer').classList.add('hidden');
             ensureScene();
             lab = {
-                over: false, t: 0, seq: 0, last: performance.now(), raf: null, ground: [], bag: {}, sel: null, stove: { items: {}, cook: null },
+                over: false, t: 0, seq: 0, last: performance.now(), raf: null, ground: [], bag: {}, sel: null, stove: { items: {}, cook: null, fuel: {}, fuelT: 0 },
                 hp: 100, p: { x: 0, y: 0, z: 2, vy: 0 }, face: { x: 0, z: -1 }, k: {}, selIdx: 0, hold: null, speedT: 0, dmgT: 0, springT: 0, poisonT: 0,
                 geo: {}, groups: {}, dirty: true, cl: {}, labels: [], labelDraws: 0, objs: [], fx: [], fxFree: [], fxAll: [], fxGeo: null, hudT: 0, boxT: 5, hudSig: '', booms: 0, panel: null, devs: [], wires: [], dmap: {}, dseq: 0, wseq: 0, cyc: null, cirDirty: true, cirWarned: false, wirePend: null, devSig: '', dlabels: [], dm: {}, wm: null, halo: null, oldBg: scene.background, oldFog: scene.fog
             };
@@ -399,6 +399,7 @@
             labBox(3, 1.2, 1.6, 0xb71c1c, st.stove.x, 0.6, st.stove.z); labSign(st.stove.name, st.stove.x, 2.2, st.stove.z, 2.4, 0.6);
             labBox(3, 1.1, 1.6, 0x4a148c, st.craft.x, 0.55, st.craft.z); labSign(st.craft.name, st.craft.x, 2.2, st.craft.z, 2.4, 0.6);
             labBox(2.2, 1.2, 1.6, 0x455a64, st.box.x, 0.6, st.box.z); labSign(st.box.name, st.box.x, 2.2, st.box.z, 2.4, 0.6);
+            labBox(1.6, 1.1, 1.2, 0x00897b, st.fuse.x, 0.55, st.fuse.z); labSign(st.fuse.name, st.fuse.x, 2.2, st.fuse.z, 2.4, 0.6);
             labBox(3.4, 2.4, 0.3, 0xfff59d, st.orders.x, 1.5, st.orders.z); labSign(st.orders.name, st.orders.x, 3.0, st.orders.z + 0.3, 2.4, 0.6);
             let tc = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.42, 1.0, 16), new THREE.MeshLambertMaterial({ color: 0x607d8b }));   // 垃圾桶
             tc.position.set(st.trash.x, 0.5, st.trash.z); labAddObj(tc); labSign(st.trash.name, st.trash.x, 1.9, st.trash.z, 1.8, 0.45);
@@ -584,7 +585,7 @@
             labHoldTick(dt); labSyncSel();
             labGasTick(dt);
             labDecayTick(dt, Math.random);
-            labAssemble(dt);
+            // 任务 166：粒子不再散在地上自动拼，labAssemble 不再调用，改成原子拼合台手动拼
             labReact(dt);
             labFill();
             labToxic(dt);
@@ -1395,6 +1396,8 @@
         }
         function labStoveFire() {
             let R = lab; if (R.stove.cook) return false;
+            if (!labStoveFuelOn()) { labFlash('灶台没燃料了'); return false; }
+            if (!(R.stove.fuelT > 0)) labStoveBurn(0);
             let rec = labStoveRecipe();
             if (!rec) { labFlash('这些东西放在一起没反应'); return false; }
             R.stove.items = {};
@@ -1409,11 +1412,25 @@
             });
             labFlash('做好了：' + rec.name);
         }
-        function labStoveTick(dt) {
-            let c = lab.stove.cook; if (!c) return;
-            c.t -= dt;
-            if (c.t <= 0) { lab.stove.cook = null; labStoveDone(c.rec); if (lab.panel === 'stove') labPanelStove(); }
+        // 任务 166：灶台有燃料格，不用点火。燃料一直在烧，烧完自动换下一份；有燃料在烧、材料格正好对上配方就自己反应
+        const LAB_STFUEL = { coal: 120, charcoal: 120, wood: 60, coke: 40 };
+        function labStoveFuelOn() { return lab.stove.fuelT > 0 || Object.keys(lab.stove.fuel || {}).some(function (k) { return lab.stove.fuel[k] > 0; }); }
+        function labStoveBurn(dt) {
+            let S = lab.stove; if (!S.fuel) S.fuel = {};
+            if (!(S.fuelT > 0)) { let k = Object.keys(S.fuel).filter(function (q) { return S.fuel[q] > 0; })[0]; if (k) { labDel(S.fuel, k, 1); S.fuelT = LAB_STFUEL[k] || 60; } }
+            if (S.fuelT > 0) S.fuelT = Math.max(0, S.fuelT - dt);
         }
+        function labStoveTick(dt) {
+            let S = lab.stove; labStoveBurn(dt);
+            if (S.cook) { S.cook.t -= dt; if (S.cook.t <= 0) { let rec = S.cook.rec; S.cook = null; labStoveDone(rec); if (lab.panel === 'stove') labPanelStove(); } return; }
+            if ((S.fuelT > 0) && labStoveRecipe()) { labStoveFire(); if (lab.panel === 'stove') labPanelStove(); }
+        }
+        function labStovePutFuel(k, all) {
+            let n = all ? labN(lab.bag, k) : 1;
+            if (!LAB_STFUEL[k] || n <= 0 || !labDel(lab.bag, k, n)) return;
+            labAdd(lab.stove.fuel, k, n); labSyncSel(); labPanelStove();
+        }
+        function labStoveTakeFuel(k) { let n = labN(lab.stove.fuel, k); if (n <= 0) return; delete lab.stove.fuel[k]; labBagGive(k, n); labPanelStove(); }
         function labStovePut(k, all) {
             let n = all ? labN(lab.bag, k) : 1;
             if (lab.stove.cook || n <= 0 || !labDel(lab.bag, k, n)) return;
@@ -1554,18 +1571,13 @@
             labSyncSel();
             let k = lab.sel; if (!k || !labN(lab.bag, k)) { labFlash('先选一样东西'); return false; }
             let d = labDef(k);
-            if (d.pack && mode !== 'L' && labParticleCount() + d.pack[0] * 2 + d.pack[1] > LAB_PARTICLE_CAP) return labFull();   // 散落的粒子最多 300 个
             if ((d.pack || k === 'bottle') && mode === 'L') { labFlash(d.pack ? '右键拆开' : '右键接水（站在水池边）'); return false; }
             if (!d.pack && k !== 'bottle' && mode === 'R') { labFlash('这个用左键'); return false; }
             if (d.pack) {
                 labDel(lab.bag, k, 1);
-                let z = d.pack[0], n = d.pack[1], list = [];
-                for (let i = 0; i < z; i++) list.push('p', 'e'); for (let i = 0; i < n; i++) list.push('n');
-                list.forEach(function (pk) {
-                    let q = labNear(lab.p.x, lab.p.z, 0.25);   // 就落在脚边（0.25 米内，互相都在 0.5 米内，成一簇，4 秒后按数量拼）
-                    labSpawn(pk, q.x, q.z);
-                });
-                labFlash('粒子包拆开了');
+                let z = d.pack[0], n = d.pack[1];   // 任务 166：粒子包给对应数量的质子、电子、中子，进身上，不再撒在地上
+                if (z) { labBagGive('p', z); labBagGive('e', z); } if (n) labBagGive('n', n);
+                labFlash('拆开了：' + (z ? z + ' 质子、' + z + ' 电子' : '') + (z && n ? '、' : '') + (n ? n + ' 中子' : '') + '，去拼合台拼');
             } else if (/^b:(h2|o2|co2|so2|cl2)$/.test(k)) {
                 labDel(lab.bag, k, 1); labBagGive('bottle', 1);
                 labSpawn('g:' + k.slice(2), lab.p.x + lab.face.x * 0.5, lab.p.z + lab.face.z * 0.5, { noFill: lab.t + 2 });
@@ -1606,7 +1618,7 @@
         function labInteractWith(st) {
             if (!st) { labFlash('附近没有能用的台子'); return false; }
             if (st === 'trash') return labTrash();
-            if (st === 'stove') labPanelStove(); else if (st === 'craft') labPanelCraft(); else if (st === 'orders') labPanelOrders(); else if (st === 'table') labPanelTable(); else labPanelBox();
+            if (st === 'fuse') labPanelFuse(); else if (st === 'stove') labPanelStove(); else if (st === 'craft') labPanelCraft(); else if (st === 'orders') labPanelOrders(); else if (st === 'table') labPanelTable(); else labPanelBox();
             return true;
         }
         function labInteract() { let a = labAim(); if (a.dev) return labDevClick(a.dev); return labInteractWith(labNearStation()); }
@@ -1722,11 +1734,38 @@
             let recs = LAB_RECIPES.filter(function (r) { return r.where === '灶台'; }).map(function (r) {
                 return '<div style="color:#555;">' + r.name + '：' + Object.keys(r.in).map(function (k) { return labName(k) + '×' + r.in[k]; }).join(' + ') + ' → ' + Object.keys(r.out).map(function (k) { return labName(k) + '×' + r.out[k]; }).join(' + ') + (r.time ? '（烧 ' + r.time + ' 秒）' : '') + '</div>';
             }).join('');
-            labPanelOpen('stove', '灶台', '<div style="margin:4px 0;color:#666;">摆上去的东西要正好是某个配方里的这些，再点火。</div>' +
-                '<div><b>台面</b></div>' + on + '<div style="margin-top:6px;"><b>身上</b></div>' + bag +
-                '<div style="margin:8px 0;"><button id="lab-fire" style="' + LAB_BTN + '" onclick="labStoveFire();labPanelStove()">点火</button> ' +
-                (S.cook ? '<span>烧着呢：' + S.cook.rec.name + '，还要 ' + Math.ceil(S.cook.t) + ' 秒</span>' : (rec ? '<span style="color:#2e7d32;">可以做：' + rec.name + '</span>' : '<span style="color:#888;">现在摆的东西没有对应的配方</span>')) + '</div>' +
+            let fuelOn = Object.keys(S.fuel || {}).map(function (k) { return labItemRow(k, S.fuel[k], '<button style="' + LAB_BTN2 + '" onclick="labStoveTakeFuel(\'' + k + '\')">拿回</button>'); }).join('') || '<div style="color:#888;">燃料格是空的</div>';
+            let bagF = Object.keys(lab.bag).filter(function (k) { return LAB_STFUEL[k]; }).map(function (k) { return labItemRow(k, lab.bag[k], '<button style="' + LAB_BTN2 + '" onclick="labStovePutFuel(\'' + k + '\')">当燃料 1 个</button><button style="' + LAB_BTN2 + '" onclick="labStovePutFuel(\'' + k + '\',true)">全当燃料</button>'); }).join('');
+            let state = S.cook ? '<span>反应中：' + S.cook.rec.name + '，还要 ' + Math.ceil(S.cook.t) + ' 秒</span>' : (rec ? (labStoveFuelOn() ? '<span style="color:#2e7d32;">马上反应：' + rec.name + '</span>' : '<span style="color:#c62828;">灶台没燃料了</span>') : '<span style="color:#888;">现在摆的东西没有对应的配方</span>');
+            labPanelOpen('stove', '灶台', '<div style="margin:4px 0;color:#666;">加了燃料灶台就一直烧，材料格里摆的东西正好是某个配方，就自己反应。</div>' +
+                '<div><b>燃料格</b>　' + (S.fuelT > 0 ? '烧着，还能烧 ' + Math.ceil(S.fuelT) + ' 秒' : '没在烧') + '</div>' + fuelOn + bagF +
+                '<div style="margin-top:6px;"><b>材料格</b></div>' + on + '<div style="margin-top:6px;"><b>身上</b>　放材料用下面的按钮</div>' + bag +
+                '<div style="margin:8px 0;">' + state + '</div>' +
                 '<div style="margin-top:6px;border-top:1px solid #eee;padding-top:6px;font-size:12px;"><b>灶台配方</b>' + recs + '</div>');
+        }
+        // 任务 166：原子拼合台。选质子、中子、电子的数量，点拼合。质子数等于电子数，对得上一个已有的核素才出原子
+        function labAtomOk(z, n) { return z >= 1 && z <= 26 && ((LAB_STABLE[z] || []).indexOf(z + n) >= 0 || LAB_UNST.some(function (u) { return u[0] === z && u[1] === n; })); }
+        function labFuse(p, n, e) {
+            p = Math.floor(+p) || 0; n = Math.floor(+n) || 0; e = Math.floor(+e) || 0;
+            if (p <= 0) { labFlash('至少要 1 个质子'); return false; }
+            if (p > 26) { labFlash('质子超过 26，拼不了'); return false; }
+            if (labN(lab.bag, 'p') < p || labN(lab.bag, 'n') < n || labN(lab.bag, 'e') < e) { labFlash('身上的粒子不够'); return false; }
+            if (e !== p) { labFlash('电子数要等于质子数'); return false; }
+            if (!labAtomOk(p, n)) { labFlash('这个组合不存在'); return false; }
+            labDel(lab.bag, 'p', p); labDel(lab.bag, 'e', e); if (n) labDel(lab.bag, 'n', n);
+            let k = 'a:' + p + ':' + n; labBagGive(k, 1); labMade(k, 1); labSyncSel();
+            labFlash('拼出了 ' + labAtomName(p, n)); if (lab.panel === 'fuse') labPanelFuse();
+            return true;
+        }
+        function labFuseVal(id) { let el = document.getElementById(id); return el ? Math.max(0, Math.floor(+el.value) || 0) : 0; }
+        function labFuseStep(id, d) { let el = document.getElementById(id); if (el) el.value = Math.max(0, labFuseVal(id) + d); }
+        function labFuseGo() { labFuse(labFuseVal('lab-fz-p'), labFuseVal('lab-fz-n'), labFuseVal('lab-fz-e')); }
+        function labPanelFuse() {
+            let keep = ['p', 'n', 'e'].map(function (k) { let el = document.getElementById('lab-fz-' + k); return el ? el.value : '0'; });
+            let row = function (k, name, v) { return '<div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0;"><span>' + name + '　身上 ' + labN(lab.bag, k) + '</span><span><button style="' + LAB_BTN2 + '" onclick="labFuseStep(\'lab-fz-' + k + '\',-1)">减</button><input id="lab-fz-' + k + '" type="number" min="0" value="' + v + '" style="width:64px;padding:6px;font-size:16px;text-align:center;"><button style="' + LAB_BTN2 + '" onclick="labFuseStep(\'lab-fz-' + k + '\',1)">加</button></span></div>'; };
+            labPanelOpen('fuse', '原子拼合台', '<div style="margin:4px 0;color:#666;">选质子、中子、电子的数量。电子数要等于质子数，质子最多 26。拼成功会点亮元素表。</div>' +
+                row('p', '质子', keep[0]) + row('n', '中子', keep[1]) + row('e', '电子', keep[2]) +
+                '<div style="margin:8px 0;text-align:right;"><button style="' + LAB_BTN + '" onclick="labFuseGo()">拼合</button><button style="' + LAB_BTN2 + '" onclick="labPanelClose()">关上</button></div>');
         }
         // 元素表：氢到铁（Z 1～26）每个同位素，直接读 LAB_STABLE 和 LAB_UNST（半衰期比 1000 年长的和稳定的一样，不进 LAB_DECAY）
         function labIsoList() {
