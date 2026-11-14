@@ -5601,14 +5601,13 @@ async function enterExit(tab, key) {
             // IND1 骨架：藏着时看不到、选不到、进不去；?hcdebug=1 能进基地；出门生成远征图（同一个种子同一张图）、采集、稿子等级、
             // 撤离圈站满 3 秒才回基地且东西进仓库箱；基地里放的东西存进 IndexedDB 读得回来；远征里回大厅身上的东西丢；进出 3 次资源不涨
             const bad = [];
-            const N = await openTab(chrome, url, { query: 'hcdebug=0' });   // 前面别的检查开过 ?hcdebug=1 会记在 localStorage 里，这里先清掉，才是"正常玩家"
+            const N = await openTab(chrome, url, { query: 'hcdebug=0' });   // 任务 163：不带参数的正常玩家，按钮对所有人显示，调试函数还是只有 hcdebug 才管用
             await N.eval(`${HIDE} nav('screen-lobby'); selectGameMode('hunt'); true;`);
-            const hid = JSON.parse(await N.eval(`JSON.stringify({ vis: indVisible(), btn: getComputedStyle(document.getElementById('btn-mode-industry')).display })`));
-            if (hid.vis || hid.btn !== 'none') bad.push('正常玩家看得到猫盾工业 ' + JSON.stringify(hid));
+            const hid = JSON.parse(await N.eval(`JSON.stringify({ vis: indVisible(), btn: getComputedStyle(document.getElementById('btn-mode-industry')).display, txt: document.getElementById('btn-mode-industry').textContent, dbg: indDebugOn() })`));
+            if (!hid.vis || hid.btn === 'none' || !/测试版/.test(hid.txt) || hid.dbg) bad.push('正常玩家看得到猫盾工业按钮、标测试版、调试函数没开 ' + JSON.stringify(hid));
             await N.eval(`selectGameMode('industry'); true;`);
-            if ((await N.eval(`gState.gameMode`)) === 'industry') bad.push('藏起来的时候选得到');
-            await N.eval(`indEnter(); true;`); await frames(N, 5);
-            if (await N.eval(`ind !== null`)) bad.push('藏起来的时候进得去');
+            if ((await N.eval(`gState.gameMode`)) !== 'industry') bad.push('正常玩家选不到猫盾工业');
+            await N.eval(`indTeleport(5, 5); true;`);
             if (N.errors.length) bad.push(N.errors.slice(0, 2).join(' / '));
             await N.close();
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);

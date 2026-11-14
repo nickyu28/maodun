@@ -18,7 +18,7 @@
         //  气瓶放下就是放气：氢气碰到火（灶台开着、篝火 3 米内）就炸，氯气是毒气（45 秒，3 米内每秒扣 8 血）；元素表（拿到一种元素就点亮一格）。
         //  还没有：猫狗带到大厅当装饰（要改主游戏的宠物，以后和 Code 一起做）。
         // ══════════════════════════════════════════════════════════
-        const IND_ENABLED = false;
+        const IND_ENABLED = true;   // 任务 163：按钮对所有人显示，?hcdebug=1 只开调试函数
         const IND_DBG_KEY = 'TH_hcdebug';
         function indDebugRead() {
             let q = null;
@@ -1082,7 +1082,7 @@
         }
         // 第一次进来选世界规则（只能从悠闲升级到硬核）
         function indAskRule() {
-            showSysModal('猫盾工业：选一种玩法', '悠闲：种地、做饭、养动物。饿了渴了只会变慢，不会死，远征不出矿。　　硬核：全部内容，饿死渴死都会死，以后还有冶炼、电、核和火箭。　　悠闲以后能升级成硬核，硬核不能退回悠闲。', [
+            showSysModal('猫盾工业：选一种玩法', '悠闲：种地做饭养动物，饿了渴了只会变慢，不会死。　　硬核：全部内容，饿死渴死都会死，有冶炼、电、核和火箭。　　悠闲以后能升级成硬核，硬核不能退回。', [
                 { label: '悠闲', color: '#43a047', onClick: function () { indSetRule('casual'); } },
                 { label: '硬核', color: '#d84315', onClick: function () { indSetRule('hard'); } }
             ]);
@@ -3884,11 +3884,12 @@
             try {
                 let grid = document.getElementById('game-mode-select');
                 if (grid && !document.getElementById('btn-mode-industry')) {
-                    let b = document.createElement('button'); b.id = 'btn-mode-industry'; b.textContent = '猫盾工业';
+                    let b = document.createElement('button'); b.id = 'btn-mode-industry'; b.textContent = '猫盾工业 测试版';
                     b.style.cssText = 'display:none; margin:0; font-size:11px; padding:7px 2px;';
                     b.onclick = function () { selectGameMode('industry'); };
                     let lb = document.getElementById('btn-mode-lab');
                     if (lb && lb.nextSibling) grid.insertBefore(b, lb.nextSibling); else grid.appendChild(b);
+                    indRefreshButton(typeof gState !== 'undefined' ? gState.gameMode : null);   // 任务 162：插进去马上同步一次可见状态
                 }
             } catch (e) { }
         })();
