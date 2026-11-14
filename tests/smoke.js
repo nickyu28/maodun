@@ -6340,9 +6340,9 @@ async function enterExit(tab, key) {
                 if ((await getC(K)).out.brick !== 10) bad.push('大窑砖应该一次 10 块 ' + JSON.stringify((await getC(K)).out));
                 await setC(K, { wood: 24 }, 3, 1200); await T.eval(`indAdvance(31); true;`);
                 if ((await getC(K)).out.charcoal !== 10) bad.push('大窑木炭应该一次 10 份');
-                await setC(K, { ore_cu: 8, charcoal: 8 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
+                await setC(K, { ore_cu: 12, charcoal: 12 }, 3, 1200); await T.eval(`indAdvance(21); true;`);
                 f = await getC(K);
-                if (hn(f, 'hot_cu') !== 6 || f.items.ore_cu !== 2) bad.push('大窑冶炼应该一次 6 份 ' + JSON.stringify(f));
+                if (hn(f, 'hot_cu') !== 10 || f.items.ore_cu !== 2) bad.push('大窑冶炼应该一次 10 份（任务 164） ' + JSON.stringify(f));
                 // "灶台 3 米内"的判定：发电机在小熔炉旁边、熔炉中火以上才发电；熔融盐电解旁边的大窑够热
                 await T.eval(`(function(){ let c = ind.base.cookers[0]; ind.base.devs = [{ id: 701, ty: 'gen', x: c.x + 2, z: c.z, bats: 0, u: 0, on: true, ft: 20, st: {}, wt: 120 }]; c.fire = 0; c.fuel = 0; ind.base.cookers.forEach(function (o) { if (o !== c && Math.hypot(o.x - c.x - 2, o.z - c.z) <= 6.5) { o.fire = 0; o.fuel = 0; } }); if (Math.hypot(IND_BASE_ST.stove.x - c.x - 2, IND_BASE_ST.stove.z - c.z) <= 6.5) { ind.base.stove.fire = 0; ind.base.stove.fuel = 0; } })(); true;`);   // 任务 106 起地上的发电机找 5 米内的炉子：旁边别的炉子先灭掉
                 if (await T.eval(`indSrcVolt(indDev(701))`) !== 0) bad.push('熔炉没点着发电机也发电');
@@ -6799,15 +6799,15 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.bag = { water_boiled: 1 }; ind.base.stove.spout = [{ k: 'hot_cu', t: 0 }]; indSelect('water_boiled'); indUse(); true;`);
                 if (!(await T.eval(`ind.bag.water_boiled === 1`))) bad.push('槽里没有烫的也浇水');
                 // 满了：10 块，炉子暂停出料，面板写出料槽满了；取走以后接着出
-                const ten = JSON.stringify(Array.from({ length: 10 }, () => ({ k: 'hot_cu', t: 30 })));
+                const ten = JSON.stringify(Array.from({ length: 20 }, () => ({ k: 'hot_cu', t: 30 })));
                 await stoveSet({ ore_cu: 1, charcoal: 1 }, 3, 1200, JSON.parse(ten)); await T.eval(`indAdvance(25); true;`);
                 st = await J(`{ n: ind.base.stove.spout.length, full: ind.base.stove.cook && ind.base.stove.cook.full, items: ind.base.stove.items }`);
-                if (st.n !== 10 || !st.full || st.items.ore_cu !== 1) bad.push('出料槽满了应该暂停出料 ' + JSON.stringify(st));
+                if (st.n !== 20 || !st.full || st.items.ore_cu !== 1) bad.push('出料槽满了（20 块）应该暂停出料 ' + JSON.stringify(st));
                 await T.eval(`indPanelStove('stove'); true;`);
                 if (!/出料槽满了/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('面板没写"出料槽满了"');
                 await T.eval(`indPanelClose(); ind.base.stove.spout.pop(); indAdvance(1); true;`);
                 st = await J(`{ n: ind.base.stove.spout.length, items: ind.base.stove.items }`);
-                if (st.n !== 10 || st.items.ore_cu) bad.push('腾出位置以后应该接着出料 ' + JSON.stringify(st));
+                if (st.n !== 20 || st.items.ore_cu) bad.push('腾出位置以后应该接着出料 ' + JSON.stringify(st));
                 // 搬炉子：有烫的不能搬，凉了的连槽里的锭一起搬
                 await stoveSet({}, 0, 20, [{ k: 'hot_cu', t: 12 }, { k: 'hot_cu', t: 0 }]);
                 await T.eval(`indPickFurn({ ty: 'stove', o: null }); true;`);
@@ -6825,7 +6825,7 @@ async function enterExit(tab, key) {
                 // 小熔炉、大窑也有出料槽；模型画出来了（炉子外面）
                 await T.eval(`ind.base.cookers = [{ id: 81, ty: 'furnace', x: 4, z: 6, items: { ore_cu: 3, charcoal: 3 }, out: {}, fuel: 3000, fire: 3, temp: 1300, cook: null, ashT: 0 }, { id: 82, ty: 'kiln', x: -4, z: 4, items: { ore_cu: 8, charcoal: 8 }, out: {}, fuel: 3000, fire: 3, temp: 1200, cook: null, ashT: 0 }]; ind.base.cseq = 82; ind.furnDirty = true; indSyncFurn(); indAdvance(21); true;`);
                 const fk = await J(`ind.base.cookers.map(function (c) { return [c.ty, c.spout.length, Math.round(c.temp)]; })`);
-                if (fk[0][1] !== 2 || fk[1][1] !== 6) bad.push('小熔炉一次 2 块、大窑一次 6 块都该进各自的出料槽 ' + JSON.stringify(fk));
+                if (fk[0][1] !== 2 || fk[1][1] !== 8) bad.push('小熔炉一次 2 块、大窑放 8 份一次 8 块（任务 164）都该进各自的出料槽 ' + JSON.stringify(fk));
                 if (await T.eval(`Object.keys(ind.furnMesh).length < 3 || ind.furnMesh.stove.m.length < 6`)) bad.push('出料槽没画出来（炉子外面）');
                 const pos = await J(`{ f: indSpoutPos(indCookById(81)), s: indSpoutPos(indCookById('stove')), k: indSpoutPos(indCookById(82)) }`);
                 if (!(pos.f.x > 4 + 1.2 && pos.k.x > -4 + 2.1 && pos.s.x > 8)) bad.push('出料槽应该在炉子外面 ' + JSON.stringify(pos));
@@ -9037,10 +9037,10 @@ async function enterExit(tab, key) {
                     indAdvance(${secs}); let S = ${ty === 'kiln' ? 'ind.base.cookers[0]' : 'ind.base.stove'}; return { out: S.out, items: S.items, cook: S.cook ? S.cook.n : 0 }; })()`);
                 let r = await kiln('kiln', { yellowcake: 6, b_hf: 18 }, 29);
                 if (r.out['uf6:0']) bad.push('29 秒不该好（还是 30 秒） ' + JSON.stringify(r));
-                r = await kiln('kiln', { yellowcake: 6, b_hf: 18 }, 32);
-                if (!(r.out['uf6:0'] === 6 && r.out.bottle === 18)) bad.push('6 份一次出 6 个罐 + 18 个空瓶 ' + JSON.stringify(r));
-                r = await kiln('kiln', { yellowcake: 7, b_hf: 21 }, 32);
-                if (!(r.out['uf6:0'] === 6 && r.items.yellowcake === 1 && r.items.b_hf === 3)) bad.push('放 7 份只做 6 份 ' + JSON.stringify(r));
+                r = await kiln('kiln', { yellowcake: 10, b_hf: 30 }, 32);
+                if (!(r.out['uf6:0'] === 10 && r.out.bottle === 30)) bad.push('10 份一次出 10 个罐 + 30 个空瓶（任务 164） ' + JSON.stringify(r));
+                r = await kiln('kiln', { yellowcake: 11, b_hf: 33 }, 32);
+                if (!(r.out['uf6:0'] === 10 && r.items.yellowcake === 1 && r.items.b_hf === 3)) bad.push('放 11 份只做 10 份 ' + JSON.stringify(r));
                 r = await kiln('stove', { yellowcake: 3, b_hf: 9 }, 32);
                 if (!(r.out['uf6:0'] === 1 && r.items.yellowcake === 2)) bad.push('灶台化学还是一次 1 份 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }

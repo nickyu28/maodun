@@ -373,9 +373,9 @@
             stove: { name: '灶台', rate: 100, burn: 1, r: 1.5, col: 0xb71c1c },
             furnace: { name: '小熔炉', rate: 100, burn: 0.5, only: 'smelt', top: 1300, batch: { smelt: 2 }, r: 1.2, size: [1.6, 1.4, 1.6], col: 0x6d4c41 },
             stone: { name: '石炉', rate: 100, burn: 1, r: 1.5, size: [2.2, 1.0, 1.5], col: 0x9e9e9e },   // 8 块石头合成：规格跟灶台一样，什么都能做，燃料不限
-            kiln: { name: '大窑', rate: 30, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 6, chem: 6 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
+            kiln: { name: '大窑', rate: 30, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 10, chem: 10 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
         };
-        const IND_COOK_CAP = 6, IND_TILE_CAP = 100, IND_SPOUT_CAP = 10;   // 出料槽最多 10 块   // 灶台上最多放几种
+        const IND_COOK_CAP = 6, IND_TILE_CAP = 100, IND_SPOUT_CAP = 20;   // 出料槽最多 20 块（任务 164 从 10 放大）   // 灶台上最多放几种
         const IND_RECIPES = [
             // 面包排在烧水前面：有小麦和盐的时候，生水也是和面用的
             { in: { flour: 3, salt: 1, water_boiled: 1 }, out: { bread: 3, bucket: 1 }, minT: 200, time: 40, burnT: 300 },   // 任务 56：面包用面粉（原来是小麦 4），原位置改的
@@ -3180,7 +3180,7 @@
             indSpoutTick(c, dt); ckTick(c, dt); rlCookWaterTick(c);   // 接了水管：空桶自动装生水（任务 58）
             let S = c.C, K = indCookK(c.ty, c.C), F = fmFireEff(c, dt);   // 鼓风要有人拉风箱（任务 44），扇子扇到 1400
             if (S.fire > 0) {
-                let burn = F.burn * K.burn * dt;
+                let burn = F.burn * K.burn * dt * (c.ty === 'kiln' && S.cook && IND_RECIPES[S.cook.i] && (IND_RECIPES[S.cook.i].cls === 'smelt' || IND_RECIPES[S.cook.i].cls === 'chem') ? (S.cook.n || 1) : 1);   // 任务 164：大窑一炉冶炼、化工多份，燃料按份数扣
                 S.fuel -= burn;
                 S.ashT = (S.ashT || 0) + burn;   // 烧掉 2 根木头的燃料攒出 1 份草木灰
                 if (S.ashT >= IND_ASH_PER * 60) { S.ashT -= IND_ASH_PER * 60; S.out.ash = (S.out.ash || 0) + 1; }
