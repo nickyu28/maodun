@@ -146,3 +146,13 @@
             return IND_CRAFT0(i);
         };
         function indPourOilPanel(k) { let c = indCookCur(); if (!c || !ind.bag[k]) return; ckPourOil(k, { kind: 'funnel', o: c }); indSave(); indPanelStove(); }
+
+        // 任务 140：关掉面板以后自动把鼠标锁回来。Esc 不算用户操作，Chrome 会拒绝，那就等下一次按键补锁；点击那一下本来就只负责锁（没锁的时候 onMouse 不动作）
+        function indRelock() {
+            if (!ind || ind.over || ind.paused || ind.dead || ind.panel || ind.tutOpen || ind.loading || (typeof gState !== 'undefined' && gState.control === 'pad')) return false;
+            if (document.pointerLockElement || document.getElementById('ind-moonpick') || document.getElementById('ind-pause') || document.getElementById('tut-cards')) { ind.relockWait = false; return false; }
+            let m = document.getElementById('sys-modal'); if (m && !m.classList.contains('hidden')) return false;
+            safeLockPointer(); ind.relockWait = true; ind.relockN = (ind.relockN || 0) + 1; return true;
+        }
+        function indRelockSoon() { setTimeout(function () { indRelock(); }, 0); }
+        document.addEventListener('pointerlockchange', function () { if (document.pointerLockElement && typeof ind !== 'undefined' && ind) ind.relockWait = false; });

@@ -3328,7 +3328,7 @@
         // ── 面板：仓库箱、灶台 ──
         const IND_BTN = 'margin:3px;padding:7px 12px;border:none;border-radius:6px;background:#455a64;color:#fff;font-size:14px;cursor:pointer;';
         const IND_PANEL_CSS = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;background:#fff;border-radius:10px;padding:14px;width:min(92vw,440px);max-height:76vh;overflow:auto;font-family:"Microsoft YaHei",sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.3);';
-        function indPanelClose() { let p = document.getElementById('ind-panel'); if (p && p.parentNode) p.parentNode.removeChild(p); if (ind) { ind.panel = null; ind.cookId = null; ind.boxId = null; ind.panelKey = null; ind.boxSel = null; ind.boxMulti = { bag: [], box: [] }; } indDragEnd(); }
+        function indPanelClose() { let p = document.getElementById('ind-panel'); let had = !!p; if (p && p.parentNode) p.parentNode.removeChild(p); if (ind && had && typeof indRelockSoon === 'function') indRelockSoon(); if (ind) { ind.panel = null; ind.cookId = null; ind.boxId = null; ind.panelKey = null; ind.boxSel = null; ind.boxMulti = { bag: [], box: [] }; } indDragEnd(); }
         // 面板换内容不回顶部（任务 14.1）：同一个面板刷新时记下自己和里面有滚动条的子元素的 scrollTop，换完还原；换了别的面板才回顶部
         function indPanelKey(kind) { return kind + '|' + (ind.boxId == null ? '' : ind.boxId) + '|' + (ind.cookId == null ? '' : ind.cookId); }
         function indPanelSet(p, html) {
@@ -3725,6 +3725,7 @@
             let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
             let k = (e.key || '').toLowerCase();
             if (ind.paused) { if (!e.repeat && (k === 'p' || k === 'escape')) indResume(); e.preventDefault(); return; }
+            if (ind.relockWait && k !== 'escape' && !ind.panel) indRelock();   // 任务 140：Esc 关面板 Chrome 不让立刻锁，下一次按键补锁
             if (k === 'p' && !e.repeat && !ind.panel) { indPause(); return; }
             if (k === ' ' && ind.carve && !ind.panel) { e.preventDefault(); if (!e.repeat) ctHit(); return; }   // 雕模具：红区按空格（任务 95）
             if (IND_KEYMAP[k]) { ind.k[IND_KEYMAP[k]] = true; e.preventDefault(); return; }

@@ -14017,6 +14017,35 @@ async function enterExit(tab, key) {
             report('IND178 燃料和炉料分开：两块、煤按钮不同、没配方不收、一次 5 个以上确认、取出燃料、火柴先问', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND179')) {
+            // IND179 关面板自动锁鼠标（任务 140）：关面板就试着锁（桩函数记次数）；被拒绝时进入等补锁，下一次按键再锁；暂停、死亡、有面板开着、触屏不锁
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); window.__lk = 0; window.__lk0 = safeLockPointer; safeLockPointer = function () { window.__lk++; }; true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const wait = () => new Promise(function (r) { setTimeout(r, 120); });
+                const chk = async (setup, label, want) => { await T.eval(`window.__lk = 0; ind.relockWait = false; ${setup} indPanelClose(); true;`); await wait(); const n = await T.eval(`window.__lk`); if ((n > 0) !== want) bad.push(label + ' 锁了 ' + n + ' 次，应该' + (want ? '锁' : '不锁')); };
+                await chk(`ind.paused = false; ind.dead = null; indPanelBag();`, '关背包', true);
+                if (!(await T.eval(`ind.relockWait === true`))) bad.push('被拒绝就进入等补锁状态');
+                await T.eval(`window.__lk = 0; window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' })); window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w' })); true;`);
+                if (!((await T.eval(`window.__lk`)) >= 1)) bad.push('下一次按键补锁');
+                await T.eval(`window.__lk = 0; ind.relockWait = true; window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true;`);
+                if ((await T.eval(`window.__lk`)) !== 0) bad.push('Esc 本身不补锁');
+                await chk(`ind.paused = true; indPanelBag();`, '暂停时', false);
+                await T.eval(`ind.paused = false; true;`);
+                await chk(`ind.dead = { why: 'x' }; indPanelBag();`, '死亡时', false);
+                await T.eval(`ind.dead = null; true;`);
+                await chk(`let g0 = gState.control; gState.control = 'pad'; indPanelBag(); window.__g0 = g0;`, '触屏', false);
+                await T.eval(`gState.control = window.__g0; safeLockPointer = window.__lk0; true;`);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND179 关面板自动锁鼠标：关就锁、被拒等下一次按键、暂停死亡触屏不锁', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
