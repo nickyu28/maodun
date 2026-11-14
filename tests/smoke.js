@@ -13797,8 +13797,15 @@ async function enterExit(tab, key) {
             else { try {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
-                let r = await J(`(function(){ indPanelBook('青铜镐'); let t = document.getElementById('ind-panel').innerText, h = document.getElementById('ind-panel').innerHTML; return { mold: /小刀右键/.test(t) && /雕/.test(t), pour: /浇进/.test(t), alloy: /青铜/.test(t) && /铜锭/.test(t), link: h.indexOf('indBookSearch') >= 0, paren: /[（）()]/.test((document.getElementById('ind-panel').querySelector('div[style*=f3e5f5]') || { innerText: '' }).innerText) }; })()`);
-                if (!(r.mold && r.pour && r.alloy && r.link && !r.paren)) bad.push('配方查询链里有雕模具、浇铸、合金，名字能点，不用括号 ' + JSON.stringify(r));
+                let r = await J(`(function(){ ind.bag = {}; ind.base.seenK = {}; indPanelBook('青铜稿'); 
+                    ['pick_bronze', 'part_pick_bronze', 'handle', 'bronze', 'mold_pick', 'mold_pick_raw'].forEach(function (k) { ind.base.seenK[k] = 1; }); indPanelBook('青铜稿'); let t = document.getElementById('ind-panel').innerText, h = document.getElementById('ind-panel').innerHTML;
+                    indItemInfo('part_pick_bronze'); let t2 = document.getElementById('ind-panel').innerText; indItemInfo('mold_pick_raw'); let t3 = document.getElementById('ind-panel').innerText; let back = !!document.querySelector('#ind-panel button[onclick*=indItemInfoBack]');
+                    return { one: /青铜镐头/.test(t) && /木柄/.test(t) && !/小刀右键/.test(t), link: h.indexOf('indItemInfo') >= 0, next: /浇进/.test(t2) && /镐头模具/.test(t2), deep: /小刀右键/.test(t3), back: back, paren: /[（）()]/.test(t2 + t3) }; })()`);
+                if (!(r.one && r.link && r.next && r.deep && r.back && !r.paren)) bad.push('配方查询只写直接做法一层，点原料看下一层，有返回，不用括号 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.base.seenK = { pick_bronze: 1 }; ind.bag = {}; indItemInfo('mold_pick'); let t = document.getElementById('ind-panel').innerText; return { q: /？/.test(t), spoil: /小刀右键|黏土/.test(t) }; })()`);
+                if (!(r.q && !r.spoil)) bad.push('没见过的东西只显示？不剧透 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.base.seenK = { hide: 1, pleather: 1, bellows: 1 }; ind.bag = {}; indItemInfo('bellows'); let t = document.getElementById('ind-panel').innerText; return { slash: /皮/.test(t) && t.indexOf('/') >= 0, rows: (t.match(/风箱 =/g) || []).length }; })()`);
+                if (!(r.slash && r.rows <= 2)) bad.push('皮革和人造革合成一行用斜杠写 ' + JSON.stringify(r));
                 r = await J(`(function(){ indPanelClose(); ind.bag = { stone: 2, wood: 1 }; let hi = IND_CRAFT.findIndex(function (q) { return q.out === 'hammer_stone'; }); indCraft(hi); let o = { h: ind.bag.hammer_stone || 0 };
                     let bi = IND_CRAFT.findIndex(function (q) { return q.out === 'pick_cold' && q.in.bronze && q.need === 'hammer' && !q.off; }); o.bi = bi >= 0; let need = bi >= 0 ? JSON.parse(JSON.stringify(IND_CRAFT[bi].in)) : {};
                     ind.bag = Object.assign({}, need); o.no = bi >= 0 && indCraftCan(IND_CRAFT[bi]); ind.bag.hammer_stone = 1; o.yes = bi >= 0 && indCraftCan(IND_CRAFT[bi]); indCraft(bi); o.pick = ind.bag.pick_cold || 0; o.keep = ind.bag.hammer_stone || 0;
