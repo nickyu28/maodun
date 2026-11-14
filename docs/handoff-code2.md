@@ -1,4 +1,4 @@
-# Code2 交接文档（11-08）
+# Code2 交接文档（11-14 更新）
 
 接手的人先读：CLAUDE.md、docs/queue-code2.md（排队和最近一次汇报）、docs/code2-tasks.md（每个任务的原话要求）、docs/industry.md（每个系统的说明）。跟作者沟通用中文。
 
@@ -12,7 +12,7 @@ Code2 负责猫盾工业（硬核模式）+ 实验室：`js/19-industry*.js`、`
 4. 推之前看 `gh run list --branch main`：main 最近一次运行 smoke 和 deploy 都成功才推（deploy 不能是跳过）；还在跑就等；红的先不推，等 Code1 修。
 5. 推完盯这次运行到 smoke 和 deploy 都成功；红了先修，不堆新活。
 6. 推完在 `docs/queue-code2.md` 的"最近一次汇报"写：提交号、全量冒烟结果、CI 和 deploy 状态、线上版本号、没做的东西。
-7. 版本号：玩家能玩到的改动把 `index.html` 的 `GAME_VERSION` 的 N 加一（现在 `2026.11.5-36`）；不写 CHANGELOG；不动 `DATA_WIPE_VER`；联机消息格式没动，`NET_PROTO` 不动。
+7. 版本号：玩家能玩到的改动把 `index.html` 的 `GAME_VERSION` 的 N 加一（现在 `2026.11.5-75`）；不写 CHANGELOG；不动 `DATA_WIPE_VER`；联机消息格式没动，`NET_PROTO` 不动。
 
 ## 本机环境
 - 跑冒烟要先 `export CHROME_PATH=/opt/pw-browsers/chromium`，不然报"Chrome 没起来"。起不来时 `pkill -f chromium` 再跑。
@@ -28,28 +28,67 @@ Code2 负责猫盾工业（硬核模式）+ 实验室：`js/19-industry*.js`、`
 - 玩家看得到的文字不许出现"保底""必出"；文案短、口语。
 - 不要往 `industry` 分支提交；`IND` 开头的检查和 industry 命名的文件你说了算，别人别动。
 
-## 现在的状态（线上 2026.11.5-36）
-最近推了：`d69808b`（元素表补锡铅钚、TNT 炸户外设备、任务 80～83）、`eb168c9`（汇报）。CI 绿，已部署。
+## ?hcdebug=1 调试开关（全部代码）
+工业整个功能默认藏起来（`IND_ENABLED = false`），网址带 `?hcdebug=1` 才看得到，记在本机 localStorage，`?hcdebug=0` 清掉。代码在 `js/19-industry.js` 开头和结尾，没有别处：
 
-| 任务 | 文件 | 检查 | 入口 |
-|---|---|---|---|
-| 80 冰淇淋、冰棍 | `19-industry-cold.js`、`cast2.js` | IND115 | 工作台（硬核） |
-| 81 空气分离塔、氮氩氖氪 | `19-industry-asu.js` | IND116 | 设备"空气分离塔" |
-| 82 月球地图 M1 | `19-industry-moon.js` | IND117 | `?hcdebug=1` 控制台 `indMoonEnter()` |
-| 83 月球选落点 M2 | `19-industry-moonpick.js` | IND118 | `?hcdebug=1` 控制台 `indMoonPick()` |
+```js
+const IND_ENABLED = false;
+const IND_DBG_KEY = 'TH_hcdebug';
+function indDebugRead() {
+    let q = null;
+    try { let m = /[?&]hcdebug=([01])(&|$)/.exec(location.search); if (m) q = m[1]; } catch (e) { }
+    if (q === '1') { try { localStorage.setItem(IND_DBG_KEY, '1'); } catch (e) { } return true; }
+    if (q === '0') { try { localStorage.removeItem(IND_DBG_KEY); } catch (e) { } return false; }
+    try { return localStorage.getItem(IND_DBG_KEY) === '1'; } catch (e) { return false; }
+}
+let IND_DBG_CACHE = null;
+function indDebugOn() { if (IND_DBG_CACHE === null) IND_DBG_CACHE = indDebugRead(); return IND_DBG_CACHE; }
+function indVisible() { return IND_ENABLED || indDebugOn(); }
 
-- 月球：`IND_PLANETS.moon` 是星球数据表（重力、大气、昼夜、温度现在只记着）。固定种子 20261107，自己的随机数，不用 `indRand`／`Math.random`。存档 `ind.base.moon = {seed, dug, cells, site?, flat?}`。矿量按 `moonNeed()`／`moonCover()` 算，都 ≥3 倍，改了配方表要重跑 IND117。
-- 氩气灯泡：`js/19-industry-cave.js` 的 `cvBulbIs()`／`cvBulbDraw()`。氮气灭火挂在 `indUse` 里。
+// 文件结尾的调试函数，冒烟测试靠它们：
+function indAdvance(secs, step) {   // 快进 secs 秒，每步 0.05 秒调 indTick
+    if (!indDebugOn() || !ind || ind.loading) return;
+    step = step || 0.05;
+    for (let t = 0; t < secs - 1e-9 && ind && !ind.over; t += step) indTick(step);
+}
+function indTeleport(x, z) { if (!indDebugOn() || !ind || ind.loading) return; ind.p.x = x; ind.p.z = z; ind.p.y = indGround(x, z); }
+function indLookAt(x, z) { if (!indDebugOn() || !ind) return; camera.rotation.set(-0.3, Math.atan2(-(x - ind.p.x), -(z - ind.p.z)), 0, 'YXZ'); camera.updateMatrixWorld(); }
+```
+- 大厅里的猫盾工业隐藏按钮用 `indVisible()` 判断显不显示。
+- 冒烟里 `openTab(chrome, url, { query: 'hcdebug=1' })` 就是开这个开关。测试里还常用：`indEnter()`、`indSetRule('hard')`、`indGoTrip(种子)`、`indGoBase(null)`、`indMoonEnter()`、`indMoonPick()`，都是普通函数，控制台能直接调。
 
-## 没做、留给下一个人
-- 月球和选落点**没有玩家入口**，等火箭发射那期接。火箭第二期起（docs/rocket.md "火箭之后"、docs/rocket-steps.md）没做。
-- 氖、氪只点元素表，用处等作者定。我提议：氖——氖灯、制冷剂；氪——氪灯泡、隔热玻璃填充。
-- 返程火箭燃料现在按 400 份水冰折算（`MN_FUEL_WATER`），火箭做出来按真数重算。橄榄石、KREEP 没配方用，按 100 份底线。铁没算火箭箭体的钢。
-- 重力、大气、温度没接上。
-- 作者说**不做**的：品质系统、LED（任务 65）、任务 76（已取消）、电路第 2～3 期。
-- 任务 78 里"拆设备、拆电池"要等作者确认。
-- Code1 真玩报给 Code2 的问题（没排期，等作者）：基站没电整块丢了；死了以后没围成的基站还丢（见 docs/queue-code2.md 上一次汇报）。
-- 作者的第三类星球设想"分界星"只是草稿，没排期（docs/moon.md 末尾）。
+## 现在的状态（线上 2026.11.5-75，11-14）
+从 11-08 起推了 80 多个任务，全在 main，CI 绿（偶尔 S2、N1、IND1 和"Chrome 没起来"是老毛病，重跑失败的那份）。详细每条在 docs/queue-code2.md "最近一次汇报"和 docs/industry.md 各节。最近做完的：
+
+| 任务 | 内容 | 检查 |
+|---|---|---|
+| 143 | 走路耗体力，恢复略高，精神影响恢复 | IND161 |
+| 144 | 倍速 ×1/2/4/8/16，Z 键，只在基地，危险自动回 ×1，`js/19-industry-speed.js` | IND159 |
+| 145、146 | 读档不丢东西，背包 36 格，原料一格 200 | IND157、IND158 |
+| 147 | 退出重进站原地 `base.me` | IND164 |
+| 148 | 熔池不收锡锌铅铜，倒出来 | IND165 |
+| 149 | 活塞风箱，野猪必掉皮 | IND166 |
+| 150 | 风箱炉子右键优先鼓风，拉风箱不耗体力 | IND167 |
+| 151 | 蒸汽发电机自带炉膛 | IND168 |
+| 152 | 电源串联，J 键，`js/19-industry-series.js` | IND160 |
+| 153 | 烧制提速：配方时间减半，升温加快 | IND169 |
+| 154、155 | 铁钢 1100°C，铁工具锻造要锤子，熔池写原因 | IND162、IND163 |
+| 157 | 物品小图标，`js/19-industry-icon.js`，中文字 | IND172 |
+| 158 | 配方查询完整链，石锤，`js/19-industry-book.js` | IND173 |
+| 132、134 | 出生点跟地形走，散落物撒遍全图，火山随机分布加烟柱 | IND170、IND171 |
+| 124 | 通关用时估算，只报告，docs/pacing.md | 无 |
+
+## 新踩的坑
+- 老检查测的是别的东西、却依赖配方时间或升温速度的，进来先用 `${OLD_TIMES}` 把时间换回老数（tests/smoke.js 顶部），新数字只在 IND169 测。
+- CI 机器没有中文字体：图标检查别比像素，比 `IC_META`。
+- 出生点不再是 (0, -4)，是 `ind.map.spawn`。测试里要站在出生点用它，别写死坐标。
+- 配方表只能往最后加：新配方都放在 `js/19-industry-series.js` 末尾（它是最后一个文件，后面是 icon、book）。
+- 提交顺序：一个任务一个提交，推之前 `git pull --rebase origin main`，smoke.js 和 index.html 常冲突，保留两边。
+- 新文件加进 `GAME_FILES`，现在最后几个是 `…moonpick, speed, series, icon, book`。
+
+## 没做、留给下一个人（按协调者的顺序）
+133 草和木制品当燃料、135 炉子面板分燃料和炉料（含补充 2 石油倒漏斗）、139 烧制成品进储料槽、137 皮革鞣制、142 体检第二批、140 关面板自动锁回鼠标、118+121 删不存在的怪和风箱不耗体力（121 的拉风箱部分已在 150 做了）、120 胶水加锤子修复加熔了重铸（锤子物品已有：`hammer`、`hammer_stone`）、131 说明改准改短、122+123+126 耐久条、背包满提示、快捷键、97 矿洞去传送门、158 后续、159 往后看 docs/code2-tasks.md。
+- 没做的小项：153 大窑一批份数放大（槽容量要一起改）；157 图标只接了快捷栏、背包、箱子，炉子面板、配方、元素表、准星条没接；132 火山坡上出生和岩浆 30 米矛盾，作者定。
 
 ## 夜间自动跑
 每天北京时间凌晨 2 点前后各起一个会话照着清单做。没活的夜里只看 CI、在"最近一次汇报"写一行、结束，不跑全量、不重读大文档、不自己找活。
