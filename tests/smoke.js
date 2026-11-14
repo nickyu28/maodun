@@ -13761,6 +13761,8 @@ async function enterExit(tab, key) {
                 if (!(r.n > 300 && r.err.length === 0 && r.blank.length === 0)) bad.push('所有物品都画得出来 ' + JSON.stringify(r));
                 if (r.oreDup.length || r.ingDup.length || r.bd.length || r.hotDup.length) bad.push('矿、锭、桶、烫锭两两不同 ' + JSON.stringify([r.oreDup, r.ingDup, r.bd, r.hotDup]));
                 if (r.ms > 4000) bad.push('画图太慢 ' + r.ms + ' 毫秒');
+                r = await J(`Object.keys(IC_TXT).filter(function (t) { return /[A-Za-z0-9]/.test(t); })`);
+                if (r.length) bad.push('图标上不能有拉丁字母和数字 ' + JSON.stringify(r));
                 r = await J(`(function(){ ind.bag = { stone: 3, ore_cu: 2, ingot_fe: 1, pick_iron: 1 }; ind.base.chests[0].items = { ore_zn: 4, sand: 2 }; ind.hudSig = ''; indHudUpdate(); let hot = document.querySelectorAll('#ind-bag .ind-hot img').length; indPanelBag(); let bag = document.querySelectorAll('#ind-panel .ind-slot img').length, bagN = document.querySelectorAll('#ind-panel .ind-slot').length; indPanelBox(ind.base.chests[0].id); let box = document.querySelectorAll('#ind-panel .ind-slot img').length, boxN = document.querySelectorAll('#ind-panel .ind-slot').length; return { hot: hot, bag: bag, bagN: bagN, box: box, boxN: boxN }; })()`);
                 if (!(r.hot >= 4 && r.bag === r.bagN && r.bag >= 4 && r.box === r.boxN && r.box >= 6)) bad.push('快捷栏、背包、箱子每一格有图标 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
