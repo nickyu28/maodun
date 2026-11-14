@@ -3075,6 +3075,7 @@
                 if (!indCraftShow(r)) return '';
                 let nm = (canOf[i] ? '<b class="ind-can" style="color:#2e7d32;">✓</b> ' : '') + (r.gh ? r.name + (ind.base.gh ? '（已经盖了）' : '') : r.glass ? r.name + (ind.base.glass ? '（已经盖了）' : '') : r.pot ? r.name + (ind.base.pot ? '（已经装了）' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '（保暖 ' + IND_ITEMS[r.out].warm + '）' : ''));
                 let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + (r.need ? ' + ' + indName(r.need) + '在身上' : '') + (r.out && IND_ITEMS[r.out] ? '　→ ' + indName(r.out) + ' ×' + (r.n || 1) : '');
+                if (r.out && ind.bag[r.out] > 0) need += '　现有 ' + ind.bag[r.out];   // 任务 135：背包里现有几个
                 let can = indCraftCan(r), once = r.gh || r.glass || r.pot;   // 盖暖棚、装大锅只能一次
                 return indRow('<span data-ci="' + i + '" style="' + (can ? '' : 'color:#999;') + '">' + nm + '</span><br><small style="color:#888">' + need + '</small>', '<span style="white-space:nowrap;"><button style="' + IND_BTN + (can ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>' + (once ? '' : '<button style="' + IND_BTN + (can ? 'background:#1b5e20;' : 'background:#bbb;') + '" onclick="indCraftMax(' + i + ')">做最多</button>') + '</span>');
             }).join('');
@@ -3655,14 +3656,24 @@
             if (ckSpoutOn(S) && S.spout.length) spt += ' <button id="ind-spout-take" style="' + IND_BTN + '" onclick="indSpoutTake(indCookCur()); indPanelStove()">取出槽里的</button>';   // 任务 115：面板里也能取
             { let pool = ckPool(S), K0 = indCookK(c.ty, S), ri = S.cook ? S.cook.i : indCookFind(pool, K0, undefined, S.items);   // 这次出多少（任务 36）：现在放进去的东西能做几份，连空瓶空桶一起写
               if (ri >= 0) { let r0 = IND_RECIPES[ri], n0 = S.cook ? (S.cook.n || 1) : indBatchN(r0, pool, K0); st += '<br>这次出：<b>' + indOutAll(r0, n0) + '</b>' + (n0 > 1 ? '（' + n0 + ' 份）' : '') + (!S.cook && S.temp < r0.minT ? '<br><span style="color:#c62828">温度不够：要 ' + r0.minT + '°C，现在 ' + Math.round(S.temp) + '°C' + (r0.minT > 1200 ? '（要鼓风或者电炉）' : '') + '</span>' : ''); } }
+            // 任务 135：面板分"燃料"和"炉料"两块。煤、木炭、焦炭两块里都有，按钮字不一样：加柴、放进去炼
+            let isFuel = function (k) { return IND_ITEMS[k].fuel && k !== indSel() && !(indHard() && indContOf(k) && indContOf(k).base === 'oil'); };
+            let fuelRows = Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k) && isFuel(k); }).map(function (k) {
+                return indRow(indName(k) + ' × ' + ind.bag[k], indPutOpts('fuel', 0, k, indContOf(k) ? '倒' : '加柴', indContOf(k) ? '全倒' : '全加柴', indContOf(k) ? '倒' : '加柴'));
+            }).join('') || '<div style="color:#999;padding:6px 0;">身上没有能烧的</div>';
+            if (indHard()) {   // 任务 135 补充 2：装了油的桶也列在燃料里，倒进漏斗；没装漏斗灰着写缺什么
+                Object.keys(ind.bag).filter(function (k) { let q = indContOf(k); return q && q.base === 'oil'; }).forEach(function (k) {
+                    fuelRows += indRow(indName(k) + ' × ' + ind.bag[k], S.funnel ? '<button style="' + IND_BTN + '" onclick="indPourOilPanel(\'' + k + '\')">倒进漏斗</button>' : '<span style="color:#999;font-size:13px;">要先装进料漏斗：3 块砖或 2 个铁锭，工作台做</span>');
+                });
+                if (S.funnel) fuelRows += '<div style="font-size:13px;color:#666;">漏斗里还有 ' + Math.round(S.funnel.oil) + ' / ' + CK.funnelCap + ' 份油，一桶 ' + CK.oilFuel + ' 份</div>';
+            }
             let put = Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k); }).map(function (k) {
-                let b = indPutOpts('stove', 0, k, '放', '全放', '放');
-                if (IND_ITEMS[k].fuel && k !== indSel() && !(indHard() && indContOf(k) && indContOf(k).base === 'oil')) b += '<br>' + indPutOpts('fuel', 0, k, indContOf(k) ? '倒' : '加', indContOf(k) ? '全倒' : '全加', indContOf(k) ? '倒' : '加');   // 燃料：加 1、全加、加 n
-                return indRow(indName(k) + ' × ' + ind.bag[k], b);
+                return indRow(indName(k) + ' × ' + ind.bag[k], indPutOpts('stove', 0, k, '放进去炼', '全放进去炼', '放进去炼'));
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + D.name + '</div><div style="line-height:1.7;">' + st + '</div><div>' + fire + '</div>' +
                 '<div style="margin-top:6px;">锅里：' + on + '<br>做好的：' + out + '<br>出料槽：' + spt + '</div>' +
-                '<div style="margin-top:6px;font-weight:bold;">身上的东西　<button style="' + IND_BTN + 'background:#00838f;" onclick="indStoveFill()">放满一炉</button></div>' + put +
+                '<div style="margin-top:6px;font-weight:bold;">燃料　烧火用的　<button style="' + IND_BTN + 'background:#8d6e63;" onclick="indStoveFuelOut()">取出燃料</button></div>' + fuelRows +
+                '<div style="margin-top:6px;font-weight:bold;">炉料　要炼要烤要烧的，煤木炭焦炭放这里是还原剂　<button style="' + IND_BTN + 'background:#00838f;" onclick="indStoveFill()">放满一炉</button></div>' + put +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indStoveTakeAll()">全部拿出来</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>';
         }
         function indPanelStove(id) { if (!ind) return; let cid = id !== undefined ? id : ind.cookId; ind.cookId = cid; indPanelShow('stove', indStoveHtml()); ind.cookId = cid; }
@@ -3673,7 +3684,7 @@
             let L = [];
             IND_RECIPES.forEach(function (r) {
                 if (r.hard && !indHard()) return;
-                L.push({ ins: Object.keys(r.in), outs: Object.keys(r.out), txt: Object.keys(r.in).map(function (k) { return indName(k, true) + (IND_CONT_BASES.indexOf(k) >= 0 ? '（要能上火的容器装的）' : '') + '×' + r.in[k]; }).join(' + ') + ' → ' + Object.keys(r.out).map(function (k) { return (k === 'bucket' ? '空容器（陶罐有 1/10 碎掉）' : indName(k, true)) + '×' + r.out[k]; }).join(' + '), where: '灶台 ' + r.minT + '°C 以上，' + r.time + ' 秒' + (r.burnT ? '（超过 ' + r.burnT + '°C 会烧焦）' : '') });
+                L.push({ ins: Object.keys(r.in), outs: Object.keys(r.out), red: ['charcoal', 'coal', 'char'].some(function (q) { return r.in[q]; }) && Object.keys(r.in).some(function (q) { return /^ore_/.test(q); }), txt: Object.keys(r.in).map(function (k) { return indName(k, true) + (IND_CONT_BASES.indexOf(k) >= 0 ? '（要能上火的容器装的）' : '') + '×' + r.in[k]; }).join(' + ') + ' → ' + Object.keys(r.out).map(function (k) { return (k === 'bucket' ? '空容器（陶罐有 1/10 碎掉）' : indName(k, true)) + '×' + r.out[k]; }).join(' + '), where: '灶台 ' + r.minT + '°C 以上，' + r.time + ' 秒' + (r.burnT ? '（超过 ' + r.burnT + '°C 会烧焦）' : '') });
             });
             IND_CRAFT.forEach(function (r) {
                 if (!indCraftShow(r)) return;
@@ -3699,7 +3710,7 @@
                 if (!q) return true;
                 return (l.name || '').indexOf(q) >= 0 || l.ins.concat(l.outs).some(function (k) { return indName(k).indexOf(q) >= 0; });
             });
-            let rows = L.map(function (l) { return '<div style="padding:4px 0;border-bottom:1px solid #eee;"><div>' + l.txt + '</div><small style="color:#888">' + l.where + '</small></div>'; }).join('') || '<div style="color:#999;padding:8px 0;">没找到</div>';
+            let rows = L.map(function (l) { return '<div style="padding:4px 0;border-bottom:1px solid #eee;"><div>' + l.txt + '</div><small style="color:#888">' + l.where + (l.red ? '　煤、木炭、焦炭在这里是还原剂，不是燃料' : '') + '</small></div>'; }).join('') || '<div style="color:#999;padding:8px 0;">没找到</div>';
             indPanelShow('book', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">配方</div>' +
                 '<input id="ind-book-q" value="' + q.replace(/"/g, '') + '" placeholder="搜东西，比如：铁" style="width:100%;box-sizing:border-box;padding:6px;font-size:15px;margin-bottom:6px;" oninput="indBookSearch(this.value)">' +
                 (typeof bkChainHtml === 'function' ? bkChainHtml(q) : '') + '<div id="ind-book-list">' + rows + '</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');

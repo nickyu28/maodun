@@ -12197,13 +12197,13 @@ async function enterExit(tab, key) {
                 let r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; ind.bag = { stone: 3, wood: 7 }; ind.selIdx = 0; ind.cookId = 'stove'; B.stove = Object.assign(ckNewState(), { spoutTy: 'brick' }); indPanelStove();   // 任务 133：拿着的那一格不列在当柴烧里，手上拿石头
                     let rows = Array.prototype.filter.call(document.querySelectorAll('#ind-panel > div'), function (d) { return /^木头 × 7/.test(d.textContent); }); let o = ${ord}; let row = rows.length ? rows[rows.length - 1] : null;
                     let stoneRow = Array.prototype.filter.call(document.querySelectorAll('#ind-panel > div'), function (d) { return /^石头 × 3/.test(d.textContent); }).pop();
-                    return { wood: row ? o(row) : null, stone: stoneRow ? o(stoneRow) : null }; })()`);
+                    return { wood: row ? o(row) : null, woodFuel: rows.length > 1 ? o(rows[0]) : null, stone: stoneRow ? o(stoneRow) : null }; })()`);
                 if (!(r.stone && /^放 1\|全放\|放 n\|IN:3$|^放 1\|全放\|IN:3\|放 n$/.test(r.stone.replace(/\|放 n/, '|放 n')) )) { /* 下面按位置严格判 */ }
                 const pos = (txt, a) => a.map((w) => txt.indexOf(w));
                 const okOrder = (txt, words) => { const p = pos(txt, words); return p.every((v, i) => v >= 0 && (i === 0 || v > p[i - 1])); };
-                if (!(r.wood && okOrder(r.wood, ['放 1', '全放', 'IN:7', '放 n']) && okOrder(r.wood, ['加 1', '全加', '加 n']) && r.wood.indexOf('加 1') > r.wood.indexOf('放 n'))) bad.push('炉子里放：放 1、全放、自定义最后（默认 7），加燃料：加 1、全加、加 n ' + JSON.stringify(r.wood));
-                if (!(r.stone && okOrder(r.stone, ['放 1', '全放', 'IN:3', '放 n']) && r.stone.indexOf('加 1') < 0)) bad.push('不是燃料的没有加燃料 ' + JSON.stringify(r.stone));
-                r = await J(`(function(){ let B = ind.base; ind.bag = { wood: 7 }; ind.cookId = 'stove'; B.stove.fuel = 0; indPutN('fuel', 0, 'wood', 1); let a = B.stove.fuel, wa = ind.bag.wood; indPutN('fuel', 0, 'wood', 'all'); let b = B.stove.fuel, wb = ind.bag.wood || 0;
+                if (!(r.wood && r.woodFuel && okOrder(r.wood, ['放进去炼 1', '全放进去炼', 'IN:7', '放进去炼 n']) && okOrder(r.woodFuel, ['加柴 1', '全加柴', 'IN:7', '加柴 n']))) bad.push('任务 135：炉料放进去炼 1、全放、自定义最后（默认 7），燃料加柴 1、全加柴、加柴 n ' + JSON.stringify(r.wood));
+                if (!(r.stone && okOrder(r.stone, ['放进去炼 1', '全放进去炼', 'IN:3', '放进去炼 n']) && r.stone.indexOf('加柴') < 0)) bad.push('不是燃料的没有加燃料 ' + JSON.stringify(r.stone));
+                r = await J(`(function(){ let B = ind.base; ind.bag = { wood: 7 }; ind.cookId = 'stove'; B.stove.fuel = 0; indPutN('fuel', 0, 'wood', 1); let a = B.stove.fuel, wa = ind.bag.wood; ind.fuelOk = { k: 'wood', n: 6 }; indPutN('fuel', 0, 'wood', 'all'); ind.fuelOk = null; let b = B.stove.fuel, wb = ind.bag.wood || 0;
                     ind.bag = { wood: 5 }; B.stove.items = {}; indPutN('stove', 0, 'wood', 99); let over = B.stove.items.wood, left = ind.bag.wood || 0; ind.bag = { stone: 4 }; B.stove.items = {}; indPutN('stove', 0, 'stone', 'all'); let all = B.stove.items.stone;
                     ind.bag = { stone: 4 }; indPanelStove(); let inp = document.querySelector('#ind-panel input.ind-num'); let def = inp && inp.value; ind.bag.stone = 6; indPanelStove(); inp = document.querySelector('#ind-panel input.ind-num'); let def2 = inp && inp.value; inp.value = '2'; indPanelStove(); inp = document.querySelector('#ind-panel input.ind-num'); let kept = inp && inp.value;
                     return { a: a, wa: wa, b: b, wb: wb, over: over, left: left, all: all, def: def, def2: def2, kept: kept, per: IND_ITEMS.wood.fuel }; })()`);
@@ -13982,6 +13982,39 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND177 草和木制品能烧：燃料值、青铜镐不能烧、做好的东西先确认、拿着的不列', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND178')) {
+            // IND178 炉子燃料和炉料分开（任务 135）：面板有燃料和炉料两块，煤的按钮字不一样；煤放进炉料没配方用就不收；草放不进炉料；一次加柴 ≥ 5 个先确认；取出燃料按比例还；火柴现有 ≥ 50 做之前先问；配方里写煤是还原剂
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); let B = ind.base; B.rule = 'hard'; B.off.stove = false; B.stove = Object.assign(ckNewState(), { fuel: 0 }); ind.cookId = 'stove'; ind.bag = { stone: 1, coal: 12, grass: 2 }; ind.selIdx = 0; indPanelStove(); let t = document.getElementById('ind-panel').innerText;
+                    return { fuelBlock: t.indexOf('燃料') >= 0 && t.indexOf('炉料') >= 0, coalFuel: t.indexOf('煤 × 12') >= 0 && t.indexOf('加柴') > t.indexOf('煤 × 12'), coalPut: /放进去炼/.test(t), take: t.indexOf('取出燃料') >= 0 }; })()`);
+                if (!(r.fuelBlock && r.coalFuel && r.coalPut && r.take)) bad.push('面板有燃料和炉料两块，煤加柴和放进去炼，有取出燃料 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base, fl = [], f0 = indFlash; indFlash = function (t) { fl.push(t); }; try { B.stove = Object.assign(ckNewState(), { fuel: 0 }); ind.bag = { coal: 3, grass: 2, stone: 1 }; let o = {};
+                    indStovePut('coal'); o.coal = (B.stove.items.coal || 0) + '/' + ind.bag.coal; o.coalMsg = fl.some(function (t) { return /用不上煤/.test(t); });
+                    indStovePut('grass'); o.grass = (B.stove.items.grass || 0) + '/' + ind.bag.grass; o.grassMsg = fl.some(function (t) { return /不能放进炉料/.test(t); });
+                    ind.bag = { coal: 3, ore_fe: 2 }; B.stove.items = { ore_fe: 1 }; fl.length = 0; indStovePut('coal'); o.coalOk = B.stove.items.coal || 0; return o; } finally { indFlash = f0; } })()`);
+                if (!(r.coal === '0/3' && r.coalMsg && r.grass === '0/2' && r.grassMsg && r.coalOk === 1)) bad.push('煤放进炉料没配方就不收、草放不进、有铁矿时煤收 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base; B.stove = Object.assign(ckNewState(), { fuel: 0 }); ind.bag = { coal: 10 }; ind.selIdx = 5; indPutN('fuel', 0, 'coal', 'all'); let modal = !!document.querySelector('#sys-modal:not(.hidden)'), kept = ind.bag.coal;
+                    ind.fuelOk = { k: 'coal', n: 10 }; indPutN('fuel', 0, 'coal', 'all'); ind.fuelOk = null; let fuel = B.stove.fuel; B.stove.fuel = fuel * 0.7; B.stove.fire = 3; indStoveFuelOut(); return { modal: modal, kept: kept, fuel: fuel, back: ind.bag.coal || 0, left: B.stove.fuel, fire: B.stove.fire }; })()`);
+                if (!(r.modal && r.kept === 10 && r.fuel === 1500 && r.back === 7 && r.left === 0 && r.fire === 0)) bad.push('一次放 10 个先确认；放了烧掉 3 成取出得 7 个、火灭 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.bag = { sulfur: 1, wood: 1, match: 60 }; let i = IND_CRAFT.findIndex(function (q) { return q.out === 'match'; }); ind.craftOk = {}; indCraft(i); let modal = !!document.querySelector('#sys-modal:not(.hidden)'), n1 = ind.bag.match; indPanelBench(); let txt = document.getElementById('ind-panel').innerText; return { modal: modal, n1: n1, have: /现有 60/.test(txt) }; })()`);
+                if (!(r.modal && r.n1 === 60 && r.have)) bad.push('火柴现有 ≥ 50 再做先问、配方行写现有数量 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base; B.stove = Object.assign(ckNewState(), { fuel: 0, funnel: null }); ind.cookId = 'stove'; let k = indFilledKey('oil', 'wood'); ind.bag = {}; ind.bag[k] = 2; indPanelStove(); let t0 = document.getElementById('ind-panel').innerText;
+                    B.stove.funnel = { ty: 'brick', oil: 100 }; indPanelStove(); let t1 = document.getElementById('ind-panel').innerText, b = !!document.querySelector('#ind-panel button[onclick*=indPourOilPanel]'); indPourOilPanel(k); return { noFunnel: /要先装进料漏斗/.test(t0), hasBtn: b, oil: B.stove.funnel.oil, left: ind.bag[k] || 0, info: /漏斗里还有/.test(t1) }; })()`);
+                if (!(r.noFunnel && r.hasBtn && r.oil === 100 + 250 && r.left === 1 && r.info)) bad.push('燃料块里列装了油的桶：没漏斗灰着写缺什么，有漏斗倒进去，写漏斗里还有多少 ' + JSON.stringify(r));
+                r = await J(`(function(){ indPanelBook('铁'); let t = document.getElementById('ind-panel').innerText; return /还原剂，不是燃料/.test(t); })()`);
+                if (!r) bad.push('炼铁配方行写煤木炭是还原剂不是燃料');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND178 燃料和炉料分开：两块、煤按钮不同、没配方不收、一次 5 个以上确认、取出燃料、火柴先问', bad.length === 0, bad.join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }

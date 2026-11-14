@@ -93,3 +93,56 @@
             }
             return IND_STOVE_FUEL0(k);
         };
+
+        // 任务 135：炉子的燃料和炉料分开，一次加柴 ≥ 5 个先确认，能取出没烧完的燃料，煤放进炉料没配方用就不收，做东西现有 ≥ 50 个先问
+        const IND_STOVE_FUEL1 = indStoveFuel;
+        indStoveFuel = function (k, ok) {
+            if (!ind || !ind.bag[k]) return;
+            let S = indCookCur().C; if (S.fuel <= 0) { S.fuelItems = {}; S.fuelAdd = 0; }
+            let r = IND_STOVE_FUEL1(k, ok);
+            return r;
+        };
+        function indFuelNote(k, n) { let S = indCookCur().C; S.fuelItems = S.fuelItems || {}; S.fuelItems[k] = (S.fuelItems[k] || 0) + n; S.fuelAdd = (S.fuelAdd || 0) + (IND_ITEMS[k].fuel || 0) * n; }
+        const IND_PUTN0 = indPutN;
+        indPutN = function (kind, id, k, n) {
+            if (ind && kind === 'fuel' && IND_ITEMS[k] && IND_ITEMS[k].fuel && !indContOf(k)) {
+                let have = ind.bag[k] || 0, m = n === 'all' ? have : Math.min(n, have);
+                if (m >= 5 && !(ind.fuelOk && ind.fuelOk.k === k && ind.fuelOk.n === m)) {
+                    showSysModal('加柴', '一次放进去 ' + m + ' 个' + indName(k, true) + '，确定吗', [{ label: '放进去', color: '#d84315', onClick: function () { if (ind) { ind.fuelOk = { k: k, n: m }; indPutN('fuel', id, k, m); ind.fuelOk = null; } } }, { label: '不放', color: '#757575', onClick: function () { } }]);
+                    return false;
+                }
+                let b0 = ind.bag[k] || 0, r = IND_PUTN0(kind, id, k, n), added = b0 - (ind.bag[k] || 0); if (added > 0) indFuelNote(k, added);
+                return r;
+            }
+            return IND_PUTN0(kind, id, k, n);
+        };
+        // 取出燃料：没烧完的按比例还回背包，炉子立刻没燃料，火灭
+        function indStoveFuelOut() {
+            let c = indCookCur(), S = c.C, items = S.fuelItems || {}, add = S.fuelAdd || 0;
+            if (!(S.fuel > 0) || add <= 0) { indFlash('炉子里没有能取的燃料'); return; }
+            let ratio = Math.min(1, S.fuel / add), got = [];
+            Object.keys(items).forEach(function (k) { let n = Math.floor(items[k] * ratio + 1e-9); if (n > 0) { let r = indBoxAdd(k, n); got.push(indName(k, true) + ' ' + n); } });
+            S.fuel = 0; S.fuelItems = {}; S.fuelAdd = 0; S.fire = 0;
+            indSave(); indFlash(got.length ? '取出了燃料：' + got.join('、') : '没烧完的不够一个'); indPanelStove();
+        }
+        const IND_STOVEPUT0 = indStovePut;
+        indStovePut = function (k, n) {
+            if (ind && ind.bag[k] && IND_ITEMS[k]) {
+                let S = indCookCur().C, red = k === 'coal' || k === 'charcoal' || k === 'char', usedByAny = IND_RECIPES.some(function (r) { return r.in[k]; });
+                if (red) {
+                    let pool = {}; Object.keys(S.items).forEach(function (q) { pool[q] = (pool[q] || 0) + S.items[q]; }); pool[k] = 1;
+                    if (!IND_RECIPES.some(function (r) { return r.in[k] && Object.keys(r.in).every(function (q) { return q === k || (pool[q] || 0) > 0 || (ind.bag[q] || 0) > 0; }); })) { indFlash('这个配方用不上' + indName(k, true)); return; }
+                } else if (IND_ITEMS[k].fuel && !usedByAny && !indContOf(k)) { indFlash('这个不能放进炉料，要烧用加柴'); return; }
+            }
+            return IND_STOVEPUT0(k, n);
+        };
+        const IND_CRAFT0 = indCraft;
+        indCraft = function (i) {
+            let r = IND_CRAFT[i];
+            if (ind && r && r.out && (ind.bag[r.out] || 0) >= 50 && indCraftCan(r)) {
+                ind.craftOk = ind.craftOk || {};
+                if (!ind.craftOk[r.out]) { showSysModal('再做吗', '已经有 ' + ind.bag[r.out] + ' 个' + indName(r.out, true) + '了，再做吗', [{ label: '再做', color: '#43a047', onClick: function () { if (ind) { ind.craftOk[r.out] = true; indCraft(i); } } }, { label: '不做', color: '#757575', onClick: function () { } }]); return false; }
+            }
+            return IND_CRAFT0(i);
+        };
+        function indPourOilPanel(k) { let c = indCookCur(); if (!c || !ind.bag[k]) return; ckPourOil(k, { kind: 'funnel', o: c }); indSave(); indPanelStove(); }
