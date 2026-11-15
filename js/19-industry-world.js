@@ -164,6 +164,8 @@
             sharp_flint: { n: 250, hard: true, w: { mountain: 3, ancient: 3, beach: 2, volcano: 1, desert: 0.5, plain: 0.4, forest: 0.4 } },
             stone: { n: 350, w: { mountain: 3, ancient: 3, volcano: 2, beach: 1.5, desert: 1, plain: 0.8, forest: 0.6 } },
             twig: { n: 450, w: { forest: 3, plain: 1.5, mountain: 0.4, beach: 0.3, ancient: 0.2, desert: 0.1, volcano: 0.1 } },
+            shroom: { n: 70, hard: true, w: { forest: 3, ancient: 2, mountain: 0.5 } },   // 任务 118：蘑菇是采的，长在森林和古老岩层
+            shroom_bad: { n: 14, hard: true, w: { forest: 3, ancient: 2, mountain: 0.5 } },
             grass: { n: 400, hard: true, w: { plain: 3, forest: 3, beach: 0.6, mountain: 0.4, desert: 0.2, ancient: 0.2, volcano: 0.1 } }
         };
         const WD_SPAWN = { r: 25, slope: 0.466, lava: 10, inner: 0.5, minH: 0.15, need: { sharp_flint: 2, grass: 4 }, needCasual: { stone: 2, twig: 2 } };

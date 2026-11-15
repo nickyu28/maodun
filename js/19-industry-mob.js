@@ -143,6 +143,11 @@
         function mbNearWater(x, z) { for (let i = 0; i < 8; i++) { let a = i * Math.PI / 4; if (indHeight(ind.map, x + Math.cos(a) * MB.tameWater, z + Math.sin(a) * MB.tameWater) < IND_WATER_Y + 0.3) return true; } return indHeight(ind.map, x, z) < IND_WATER_Y + 0.3; }
         function mbKinds(bm, cave, x, z) {
             let night = indIsNight(), L = [];
+            // 任务 118：史莱姆、小蘑菇、云团、火苗仔、刺球现实里没有，不再刷。只剩野猪和蜜蜂（怪的代码和物品 key 都留着，老存档照用）
+            if (cave) return L;
+            if (bm === 'forest' || bm === 'plain') L.push('boar');
+            if (bm === 'plain' && !night) L.push('bee');
+            return L;
             if (cave) { L.push(cave.bm === 'ancient' ? 'slime:pink' : 'slime:blue', 'flame'); if (cave.bm === 'ancient') L.push('mush'); return L; }
             if ((bm === 'plain' || bm === 'forest') && night) L.push('slime:green');
             if (bm === 'forest') L.push('mush');
@@ -261,6 +266,7 @@
         }
         // 出门地图上的火山边（30 米内）同一时刻最多 1 只；玩家走到火山附近才刷
         function mbFlameSpawn() {
+            if (true) return;   // 任务 118：火苗仔不再刷
             if (!IND_MB_AUTO || ind.cave || !ind.map || !ind.map.volc) return;
             ind.map.volc.forEach(function (v, i) {
                 if (Math.hypot(ind.p.x - v.x, ind.p.z - v.z) > v.r * 1.6 + 40) return;
