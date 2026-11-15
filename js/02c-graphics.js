@@ -109,19 +109,28 @@ function gfxEff() {
     return Math.min(t, peak > 65 ? peak : 60);
 }
 function gfxIsMulti() { try { return (typeof introSessionMulti === 'function' && introSessionMulti() === true) || (typeof lobbyParty !== 'undefined' && lobbyParty.length > 0); } catch (e) { return false; } }
-// 退出当前模式回大厅。猫盾工业走 indExit，别的模式走各自的退出；联机局不退，只提示
-function gfxExitNow() {
+// 太卡到不行时怎么办，看现在在哪：猫盾工业和实验室没有联机没有危险，直接暂时退出（工业走 indExit 存档）；单人局直接暂停（弹卡片，整局静止，点知道了或按 Esc 继续）；
+// 联机局现在只提示（托管和重连是第三批，还没做）。返回 'industry' | 'lab' | 'multi' | 'single' | null（不在局里）
+function gfxKind() {
+    try { if (typeof ind !== 'undefined' && ind && !ind.over && !ind.loading) return 'industry'; } catch (e) { }
+    try { if (typeof lab !== 'undefined' && lab && !lab.over) return 'lab'; } catch (e) { }
     let m = null; try { m = chatActiveModeKey(); } catch (e) { }
-    try { if (typeof ind !== 'undefined' && ind && !ind.over && !ind.loading && typeof indExit === 'function') { indExit(true); return 'industry'; } } catch (e) { }
-    let ex = { hunt: function () { chooseLeave(); let g = document.getElementById('game-over'); if (g) g.classList.add('hidden'); nav('screen-lobby'); }, blaze: blazeExit, race: raceExit, jail: jailExit, dodge: dodgeExit, escape: escapeExit, park: parkExit, cake: cakeExit, sumo: nmExit, tower: nmExit, night: function () { endNightGame('画面太卡，自动退出'); } };
-    if (m && ex[m]) { try { saveProgress(); ex[m](); } catch (e) { } return m; }
-    return null;
+    if (!m || m === 'hub') return null;
+    return gfxIsMulti() ? 'multi' : 'single';
+}
+function gfxExitNow(kind) {
+    try { if (kind === 'industry') { indExit(true); return true; } if (kind === 'lab') { labExit(false); return true; } } catch (e) { }
+    return false;
 }
 function gfxAutoExit() {
-    if (gfxIsMulti()) { blazeFlash('画面太卡了，联机局不会自动退出，可以自己退出或调低画质'); return false; }
-    let m = gfxExitNow();
-    if (m) blazeFlash('画面太卡了，已经存档退出，可以到设置里调低画质或视野');
-    return !!m;
+    let k = gfxKind();
+    if (k === 'industry' || k === 'lab') { gfxExitNow(k); blazeFlash('画面太卡了，已经存档退出，可以到设置里调低画质或视野'); return k; }
+    if (k === 'multi') { blazeFlash('画面太卡了，联机局不会自动退出，可以自己退出或调低画质'); return k; }
+    if (k === 'single') { gfxPause(); return k; }
+    return null;
+}
+function gfxPause() {
+    introPush('太卡了，已暂停', '<div style="text-align:left; font-size:14px; line-height:1.75;">画面太卡，游戏先停住了。可以去设置里调低画质或视野，再点知道了继续。</div>');
 }
 function gfxRecommend() { return gfxDeviceLow() ? { q: 0, v: 0, f: 1 } : { q: 2, v: 1, f: 1 }; }
 function gfxApplyRecommend() {

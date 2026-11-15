@@ -14069,19 +14069,36 @@ async function enterExit(tab, key) {
         }
 
         if (want('GFX1')) {
-            // GFX1 画质、视野、流畅度（任务 P6 第一批）：设置页显示组里三项各 4、4、3 行，选中的右边打对勾、每行不低于 44 像素、点哪行选哪行；改了存档刷新还在；接口 graphicsFpsTarget 是 30、60、120、graphicsViewMul 是 1、1.4、2、3；画质低时像素比 1、分段数变少；视野改雾和相机 far；流畅度 30 时 1.5 秒画的帧数明显少；左上角帧率能开关
+            // GFX1 画质、视野、流畅度（任务 P6 第一批）：设置页显示组里三项是下拉：方框左边写现在选的右边向下箭头、点开纵向列出 4、4、3 行（选中的有对勾，每行不低于 44 像素）、点哪行选哪行选完收起、Esc 先收列表；改了存档刷新还在；接口 graphicsFpsTarget 是 30、60、120、graphicsViewMul 是 1、1.4、2、3；画质低时像素比 1、分段数变少；视野改雾和相机 far；流畅度 30 时 1.5 秒画的帧数明显少；左上角帧率能开关
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} openSettings('显示'); true;`); await W(200);
-            const rows = JSON.parse(await T.eval(`JSON.stringify(['gfx_quality', 'gfx_view', 'gfx_fps'].map(function (id) { return document.querySelectorAll('[id^="set-ch-' + id + '-"]').length; }))`));
+            // 下拉选择：方框左边是现在选的、右边向下的箭头；点开纵向列出所有选项（4、4、3 行），点哪个选哪个，选完收起
+            const box = JSON.parse(await T.eval(`JSON.stringify(['gfx_quality', 'gfx_view', 'gfx_fps'].map(function (id) { let d = document.getElementById('set-dd-' + id); return d ? [d.innerText.replace(/\\s/g, ''), d.getBoundingClientRect().height, !!document.getElementById('set-dd-list-' + id)] : null; }))`));
+            if (box.some((x) => !x || !/▼$/.test(x[0]) || x[1] < 43.5 || x[2])) bad.push('三个方框没有向下的箭头、不到 44 像素或一开始就展开了 ' + JSON.stringify(box));
+            const rows = [];
+            for (const id of ['gfx_quality', 'gfx_view', 'gfx_fps']) {
+                await T.eval(`setChoiceToggle('${id}'); true;`);
+                rows.push(await T.eval(`document.querySelectorAll('[id^="set-ch-${id}-"]').length`));
+                const small = await T.eval(`[].filter.call(document.querySelectorAll('[id^="set-ch-${id}-"]'), function (d) { return d.getBoundingClientRect().height < 43.5; }).length`);
+                if (small) bad.push(id + ' 有 ' + small + ' 行不到 44 像素');
+                await T.eval(`setChoiceToggle('${id}'); true;`);
+            }
             if (rows.join() !== '4,4,3') bad.push('三项行数 ' + rows.join() + '，该是 4,4,3');
-            const small = await T.eval(`[].filter.call(document.querySelectorAll('[id^="set-ch-"]'), function (d) { return d.getBoundingClientRect().height < 43.5; }).length`);
-            if (small) bad.push('有 ' + small + ' 行不到 44 像素');
-            // 选中的右边打对勾，点另一行换过去
-            await T.eval(`document.getElementById('set-ch-gfx_quality-2').click(); true;`);
+            const pick = async (id, i) => { await T.eval(`if (!document.getElementById('set-ch-${id}-${i}')) setChoiceToggle('${id}'); document.getElementById('set-ch-${id}-${i}').click(); true;`); };
+            // 点开、点高：选中、收起、方框里写高、再展开时那行有对勾
+            await pick('gfx_quality', 2);
+            if ((await T.eval(`graphicsQuality()`)) !== 2 || (await T.eval(`!!document.getElementById('set-dd-list-gfx_quality')`)) || !/高/.test(await T.eval(`document.getElementById('set-dd-gfx_quality').innerText`))) bad.push('点高没选中、没收起或方框里没写高');
+            await T.eval(`setChoiceToggle('gfx_quality'); true;`);
             const ck = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { return document.getElementById('set-ch-gfx_quality-' + i).innerText.indexOf('✓') >= 0; }))`));
-            if (ck.join() !== 'false,false,true,false' || (await T.eval(`graphicsQuality()`)) !== 2) bad.push('点高没选中或没打对勾 ' + ck.join());
-            await T.eval(`document.getElementById('set-ch-gfx_view-3').click(); document.getElementById('set-ch-gfx_fps-0').click(); true;`);
+            if (ck.join() !== 'false,false,true,false') bad.push('展开后选中那行没对勾 ' + ck.join());
+            // Esc：先收列表，设置窗还在；再 Esc 才关设置窗
+            await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+            if ((await T.eval(`!!document.getElementById('set-dd-list-gfx_quality') || !sysModalVisible()`))) bad.push('Esc 该先只收起列表');
+            await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+            if (await T.eval(`sysModalVisible()`)) bad.push('第二下 Esc 没关设置窗');
+            await T.eval(`${HIDE} openSettings('显示'); true;`); await W(200);
+            await pick('gfx_view', 3); await pick('gfx_fps', 0);
             const g = JSON.parse(await T.eval(`JSON.stringify({ q: graphicsQuality(), v: graphicsView(), f: graphicsFps(), m: graphicsViewMul(), t: graphicsFpsTarget() })`));
             if (g.q !== 2 || g.v !== 3 || g.f !== 0 || g.m !== 3 || g.t !== 30) bad.push('接口 ' + JSON.stringify(g));
             const tt = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2].map(function (i) { settingsSet('gfx_fps', i); return graphicsFpsTarget(); }).concat([0, 1, 2, 3].map(function (i) { settingsSet('gfx_view', i); return graphicsViewMul(); })))`));
@@ -14118,7 +14135,7 @@ async function enterExit(tab, key) {
             if (b.q !== 3 || b.v !== 2 || b.f !== 2) bad.push('刷新后没读回来 ' + JSON.stringify(b));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('GFX1 画质、视野、流畅度：各 4、4、3 行选中打对勾、存档刷新还在、接口数、画质低像素比和分段、视野改雾和相机、流畅度限帧、左上角帧率', bad.length === 0, bad.join(' / '));
+            report('GFX1 画质、视野、流畅度：下拉方框和 4、4、3 行选项、Esc 先收列表、存档刷新还在、接口数、画质低像素比和分段、视野改雾和相机、流畅度限帧、左上角帧率', bad.length === 0, bad.join(' / '));
         }
         if (want('IND181')) {
             // IND181 体检第一批（任务 142）：绷带回血药配方 off 但已有的仍能喝；电炉电解槽配方要钢；粉碎机磨矿出矿粉、矿粉炼出的锭多一半；老存档读档不丢
@@ -14152,7 +14169,7 @@ async function enterExit(tab, key) {
             // GFX2 卡顿处理（任务 P6 第二批，帧率用桩函数直接喂 gfxSample，每喂一次算 0.5 秒）：连续 3 秒低于目标的 60% 冒红色图标、回到 80% 以上 3 秒消失；连续 10 秒低于 8 帧画质降一档；降完再连续 20 秒低于 5 帧才退出；联机局只提示不退出；没在画（0 帧）不算卡；三项两项以上在最高两档时设备差马上提示、设备好量 3 秒不行再提示，都能点调回推荐
             const bad = [];
             const T = await openTab(chrome, url);
-            await T.eval(`${HIDE} window.__gfxManual = true; gfxLowS = gfxOkS = gfxVlowS = gfxCritS = 0; gfxWarnOn = false; gfxPeaks = []; gfxProbe = null; window.__ex = 0; gfxIsMulti = function () { return false; }; gfxExitNow = function () { window.__ex++; return 'x'; }; settingsSet('gfx_quality', 1); settingsSet('gfx_view', 0); settingsSet('gfx_fps', 1); true;`);
+            await T.eval(`${HIDE} window.__gfxManual = true; gfxLowS = gfxOkS = gfxVlowS = gfxCritS = 0; gfxWarnOn = false; gfxPeaks = []; gfxProbe = null; window.__ex = 0; gfxIsMulti = function () { return false; }; gfxKind = function () { return window.__kind; }; window.__kind = 'industry'; gfxExitNow = function () { window.__ex++; return true; }; settingsSet('gfx_quality', 1); settingsSet('gfx_view', 0); settingsSet('gfx_fps', 1); true;`);
             const feed = (n, k) => T.eval(`(function(){ for (let i = 0; i < ${k}; i++) gfxSample(${n}); gfxHudRefresh(); })(); true;`);
             const warnShown = () => T.eval(`getComputedStyle(document.getElementById('gfx-warn')).display === 'block'`);
             await feed(10, 5); if (await warnShown()) bad.push('才低了 2.5 秒就冒图标');
@@ -14164,11 +14181,15 @@ async function enterExit(tab, key) {
             await feed(6, 19); if ((await T.eval(`graphicsQuality()`)) !== 1) bad.push('不到 10 秒就降画质');
             await feed(6, 1); if ((await T.eval(`graphicsQuality()`)) !== 0) bad.push('连续 10 秒低于 8 帧没降一档');
             await feed(3, 39); if ((await T.eval(`__ex`)) !== 0) bad.push('降完不到 20 秒就退出');
-            await feed(3, 1); if ((await T.eval(`__ex`)) !== 1) bad.push('降完连续 20 秒低于 5 帧没退出 ' + await T.eval(`__ex`));
+            await feed(3, 1); if ((await T.eval(`__ex`)) !== 1) bad.push('工业里降完连续 20 秒低于 5 帧没退出 ' + await T.eval(`__ex`));
             // 联机局只提示
-            await T.eval(`window.__ex = 0; gfxIsMulti = function () { return true; }; true;`);
-            await feed(3, 45); if ((await T.eval(`__ex`)) !== 0) bad.push('联机局不该自动退出');
-            await T.eval(`gfxIsMulti = function () { return false; }; true;`);
+            await T.eval(`window.__ex = 0; window.__kind = 'multi'; true;`);
+            await feed(3, 45); if ((await T.eval(`__ex`)) !== 0 || (await T.eval(`sysModalVisible()`))) bad.push('联机局不该自动退出也不该暂停');
+            // 单人局：直接暂停，弹卡片，点知道了继续
+            await T.eval(`window.__kind = 'single'; true;`);
+            await feed(3, 45);
+            if ((await T.eval(`__ex`)) !== 0 || !(await T.eval(`sysModalVisible() && introOpen && /已暂停/.test(document.getElementById('sys-modal-title').innerText)`))) bad.push('单人局该暂停（弹卡片）不该退出 ' + await T.eval(`[__ex, sysModalVisible(), introOpen]`));
+            await T.eval(`document.getElementById('sys-modal').classList.add('hidden'); window.__kind = 'industry'; true;`);
             await feed(60, 10);
             // 三项太高：设备好，量 3 秒，帧率够不提示
             await T.eval(`gfxDeviceLow = function () { return false; }; gfxReady = true; settingsSet('gfx_quality', 3); settingsSet('gfx_view', 3); settingsSet('gfx_fps', 2); true;`);
@@ -14192,7 +14213,7 @@ async function enterExit(tab, key) {
             if (await T.eval(`!!gfxProbe || !!gfxNotice`)) bad.push('只有一项在最高档不该提示');
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('GFX2 卡顿处理：连续低帧冒红色图标、恢复消失、10 秒低于 8 帧降画质、再 20 秒低于 5 帧退出、联机局只提示、三项太高提示和调回推荐', bad.length === 0, bad.join(' / '));
+            report('GFX2 卡顿处理：连续低帧冒红色图标、恢复消失、10 秒低于 8 帧降画质、再 20 秒低于 5 帧退出、联机局只提示、单人局暂停、三项太高提示和调回推荐', bad.length === 0, bad.join(' / '));
         }
         if (want('IND182')) {
             // IND182 体检第二批（任务 142 的 5 和 6）：钠对着水先问再出氢气；核废料加玻璃出玻璃固化块；氖灯氪灯泡能戴、耗电不同；泥土加草做墙；羊毛做毛毡垫；草喂羊牛

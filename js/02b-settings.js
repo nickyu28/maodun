@@ -200,14 +200,23 @@ function setToggleSet(id, on) {
 }
 function setChoiceSet(rid, i) {
     let o = settingsOpt(rid); if (!o || !o.choices[i]) return;
-    settingsSet(rid, o.choices[i][0]); setRender();
+    settingsSet(rid, o.choices[i][0]); setOpenCh = null; setRender();
 }
-// 选项列表（作者的 pic1 草图）：标题一行，下面每个选项一行，选中的那行右边打对勾；整行都能点，每行不低于 44 像素
+// 下拉选择（作者的 pic1 草图，11-15 更正）：一个方框，左边写现在选的，右边一个向下的小箭头；点一下纵向展开所有选项，点哪个选哪个，选完收起。
+// 展开是接在方框下面往下排，设置窗里的内容区会滚动，不会被边框裁掉；每行不低于 44 像素。Esc 先收起展开的列表，再关设置窗。
+let setOpenCh = null;
 function setChoiceBlock(o, v) {
-    return '<div style="padding:6px 0; border-bottom:1px solid #eee;"><div style="font-size:14px; color:#444; padding:4px 0;">' + o.label + '</div>' + o.choices.map(function (c, i) {
+    let cur = o.choices.filter(function (c) { return c[0] === v; })[0] || o.choices[0], open = setOpenCh === o.id;
+    let box = '<div id="set-dd-' + o.id + '" onclick="setChoiceToggle(\'' + o.id + '\')" style="display:flex; align-items:center; justify-content:space-between; min-height:44px; padding:0 12px; border:1px solid ' + (open ? '#5cb85c' : '#bbb') + '; border-radius:6px; background:#fff; cursor:pointer; font-size:14px; color:#333;"><span>' + cur[1] + '</span><span style="font-size:14px; color:#666;">' + (open ? '▲' : '▼') + '</span></div>';
+    let list = open ? '<div id="set-dd-list-' + o.id + '" style="border:1px solid #ccc; border-top:none; border-radius:0 0 6px 6px; background:#fafafa;">' + o.choices.map(function (c, i) {
         let on = c[0] === v;
-        return '<div id="set-ch-' + o.id + '-' + i + '" onclick="setChoiceSet(\'' + o.id + '\', ' + i + ')" style="display:flex; align-items:center; justify-content:space-between; min-height:44px; padding:0 12px; margin:3px 0; border-radius:6px; cursor:pointer; font-size:14px; background:' + (on ? '#e8f5e9' : '#f5f5f5') + '; color:' + (on ? '#2e7d32' : '#555') + ';"><span>' + c[1] + '</span><span style="font-size:18px; font-weight:bold;">' + (on ? '✓' : '') + '</span></div>';
-    }).join('') + '</div>';
+        return '<div id="set-ch-' + o.id + '-' + i + '" onclick="setChoiceSet(\'' + o.id + '\', ' + i + ')" style="display:flex; align-items:center; justify-content:space-between; min-height:44px; padding:0 12px; cursor:pointer; font-size:14px; border-top:1px solid #eee; background:' + (on ? '#e8f5e9' : 'transparent') + '; color:' + (on ? '#2e7d32' : '#555') + ';"><span>' + c[1] + '</span><span style="font-size:16px; font-weight:bold;">' + (on ? '✓' : '') + '</span></div>';
+    }).join('') + '</div>' : '';
+    return '<div style="padding:6px 0; border-bottom:1px solid #eee;"><div style="font-size:14px; color:#444; padding:4px 0;">' + o.label + '</div>' + box + list + '</div>';
+}
+function setChoiceToggle(id) {
+    setOpenCh = setOpenCh === id ? null : id; setRender();
+    if (setOpenCh) { let l = document.getElementById('set-dd-list-' + id); if (l && l.scrollIntoView) l.scrollIntoView({ block: 'nearest' }); }
 }
 function setRegRows(group) {
     return SETREG.opts.filter(function (o) { return o.group === group; }).map(function (o) {
@@ -279,9 +288,9 @@ function setRender() {
     if (tabs) tabs.innerHTML = setGroups().map(function (t) { return '<button id="set-tab-' + t + '" onclick="setTabGo(\'' + t + '\')" style="' + setBtnStyle(t === setTab) + ' flex:1;">' + t + '</button>'; }).join('');
     el.innerHTML = (setTab === '显示' && typeof gfxNoticeHtml === 'function' ? gfxNoticeHtml() : '') + (setMsg ? '<div id="set-msg" style="font-size:12px; color:#d9534f; padding:4px 0;">' + setMsg + '</div>' : '') + (setGroups().indexOf(setTab) < SET_TABS.length ? setTabHtml(setTab) : setRegRows(setTab));
 }
-function setTabGo(t) { setKeyEnd(); setMsg = ''; setTab = t; setRender(); }
+function setTabGo(t) { setKeyEnd(); setOpenCh = null; setMsg = ''; setTab = t; setRender(); }
 function openSettings(tab) {
-    setKeyEnd(); setMsg = ''; setTab = tab && setGroups().indexOf(tab) >= 0 ? tab : setTab;
+    setKeyEnd(); setOpenCh = null; setMsg = ''; setTab = tab && setGroups().indexOf(tab) >= 0 ? tab : setTab;
     showSysModal('设置', '<div style="text-align:left; min-width:270px; max-width:92vw;"><div id="set-tabs" style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:6px;"></div><div id="set-content" style="max-height:60vh; overflow-y:auto;"></div></div>', [{ label: '好了', color: '#5cb85c' }]);
     setRender();
     let mo = document.getElementById('sys-modal');

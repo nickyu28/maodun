@@ -1622,6 +1622,7 @@
         function escShown(id) { let e = document.getElementById(id); return !!e && !e.classList.contains('hidden'); }
         function escLayers() {
             return [
+                { name: '下拉选择', open: function () { return typeof setOpenCh !== 'undefined' && setOpenCh !== null && sysModalVisible(); }, close: function () { setOpenCh = null; setRender(); } },
                 { name: '系统弹窗', open: sysModalVisible, close: escSysModalPick },
                 { name: '图鉴', open: function () { return escShown('book-modal'); }, close: bookClose },
                 { name: '竞速记录榜', open: function () { return escShown('race-board'); }, close: raceBoardClose },
