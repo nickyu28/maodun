@@ -1,6 +1,6 @@
 # 测试员交接文档
 
-写于 11-15（协调者代写，交接员 11-15 核对）。上次报告 docs/playtest-2026-11-14.md 测到 -75，现在 main 到 -91，中间推的都没测，下一批要补，见 queue-tester。会话："猫盾游戏测试"，`session_01ESXCnsAAkA51os8fzPqjwy`。接手先读 `CLAUDE.md`、`docs/queue-tester.md`（开测条件、这一轮要测什么、汇报格式）、`docs/design-rules.md`、`docs/playtest-2026-11-06.md`（第一份报告，包含怎么玩）。
+写于 11-15（协调者代写，交接员 11-15 核对）。上次报告 docs/playtest-2026-11-14.md 测到 -75，现在 main 到 -91，中间推的都没测，下一批要补，见 queue-tester。会话："猫盾游戏测试"，`session_01ESXCnoS5r8HxQfRfND6bFA`。接手先读 `CLAUDE.md`、`docs/queue-tester.md`（开测条件、这一轮要测什么、汇报格式）、`docs/design-rules.md`、`docs/playtest-2026-11-06.md`（第一份报告，包含怎么玩）。
 
 ## 角色
 只玩、查、报告，**不改任何游戏代码、不改别人的文件、不碰分支 industry**。报告写 `docs/playtest-<日期>.md`，只改这一个文件，普通推送到 main（`git pull --rebase origin main` 再 `git push origin HEAD:main`），docs 的推送不触发 CI。
