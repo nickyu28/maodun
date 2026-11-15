@@ -9664,7 +9664,7 @@ async function enterExit(tab, key) {
                 if (!(r.temp < 38.8 && r.temp >= 37 && r.stam < 100 && r.stam > 92)) bad.push('扇自己体温往 37 拉、吃一点体力 ' + JSON.stringify(r));
                 // 配方：风箱要皮（或人造革），扇子
                 const rc = await J(`[IND_CRAFT.filter(function (x) { return x.out === 'bellows'; }).map(function (x) { return x.in; }), IND_CRAFT.find(function (x) { return x.out === 'fan'; }).in]`);
-                if (!(rc[0].length === 3 && rc[0][2].wool === 4 && rc[0][0].hide === 2 && rc[0][1].pleather === 2 && !rc[0][0].steel && JSON.stringify(rc[1]) === JSON.stringify({ grass: 6, rope: 2, wood: 1 }))) bad.push('风箱（皮、人造革、羊毛活塞）和扇子的配方 ' + JSON.stringify(rc));
+                if (!(rc[0].length === 3 && rc[0][2].wool === 4 && rc[0][0].leather === 2 && rc[0][1].pleather === 2 && !rc[0][0].steel && JSON.stringify(rc[1]) === JSON.stringify({ grass: 6, rope: 2, wood: 1 }))) bad.push('风箱（皮、人造革、羊毛活塞）和扇子的配方 ' + JSON.stringify(rc));
                 // 老档：装了风箱、鼓风档的炉子读档不报错（照常读，按大火烧，任务 114）
                 r = await J(`(function(){ let b = indFixBase({ ver: 11, rule: 'hard', stove: { items: {}, out: {}, fuel: 50, fire: 4, bellows: true, temp: 1500 } }); return [b.stove.fire, b.stove.bellows]; })()`);
                 if (r.join() !== '4,true') bad.push('老档风箱 ' + r.join());
@@ -13440,10 +13440,10 @@ async function enterExit(tab, key) {
             else { try {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
-                let r = await J(`(function(){ let o = {}; let a = IND_CRAFT.findIndex(function (q) { return q.out === 'bellows' && q.in.wool; }), b = IND_CRAFT.findIndex(function (q) { return q.out === 'bellows' && q.in.hide; });
+                let r = await J(`(function(){ let o = {}; let a = IND_CRAFT.findIndex(function (q) { return q.out === 'bellows' && q.in.wool; }), b = IND_CRAFT.findIndex(function (q) { return q.out === 'bellows' && q.in.leather; });
                     o.both = a >= 0 && b >= 0 && a > b; ind.bag = { wood: 10, rope: 12, wool: 4, ingot_cu: 2, clay: 4 }; o.can = indCraftCan(IND_CRAFT[a]); indCraft(a); o.bellows = ind.bag.bellows || 0; o.left = JSON.stringify(ind.bag);
                     ind.bag = { wood: 10, rope: 12, wool: 3, ingot_cu: 2, clay: 4 }; o.canLess = indCraftCan(IND_CRAFT[a]);
-                    ind.bag = { wood: 6, clay: 4, ingot_cu: 2, rope: 10, hide: 2 }; o.old = indCraftCan(IND_CRAFT[b]); return o; })()`);
+                    ind.bag = { wood: 6, clay: 4, ingot_cu: 2, rope: 10, leather: 2 }; o.old = indCraftCan(IND_CRAFT[b]); return o; })()`);
                 if (!(r.both && r.can && r.bellows === 1 && r.left === '{"bellows":1}' && !r.canLess && r.old)) bad.push('不用皮的风箱、老配方还在 ' + JSON.stringify(r));
                 r = await J(`(function(){ indGoTrip(977); ind.mbSpawn = 1e9; ind.mobs.forEach(mbDrop); ind.mobs = []; let miss = 0; for (let i = 0; i < 60; i++) { ind.tripGround = []; let m = mbNew('boar', 0, -4, {}); m.dead = false; mbDamage(m, 999); if (!ind.tripGround.some(function (g) { return g.k === 'hide'; })) miss++; } return miss; })()`);
                 if (r !== 0) bad.push('野猪死了必掉皮，漏了 ' + r + ' 次');
@@ -14044,6 +14044,28 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND179 关面板自动锁鼠标：关就锁、被拒等下一次按键、暂停死亡触屏不锁', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND180')) {
+            // IND180 皮革和皮背包（任务 137）：皮 + 草木灰 + 水桶在灶台低温熏出皮革还空桶；风箱皮鞋要皮革、人造革也行；皮背包 +9 格；老存档的皮鞋风箱读档不丢
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); let B = ind.base; B.rule = 'hard'; B.off.stove = false; let wk = indFilledKey('water_raw', 'wood'); B.stove = Object.assign(ckNewState(), { items: { hide: 1, ash: 1 }, fuel: 9999, fire: 1, temp: 80, spoutTy: null }); B.stove.items[wk] = 1; ind.cookId = 'stove'; indAdvance(40); let S = B.stove; return { leather: S.out.leather || 0, bucket: S.out.bucket || 0, hide: S.items.hide || 0, cook: S.cook, items: S.items, out: S.out, temp: S.temp }; })()`);
+                if (!(r.leather === 1 && r.bucket === 1 && !r.hide)) bad.push('皮 + 草木灰 + 水桶熏出皮革还空桶 ' + JSON.stringify(r));
+                r = await J(`(function(){ let f = function (out) { return IND_CRAFT.filter(function (q) { return q.out === out && !q.fix && indCraftShow(q); }).map(function (q) { return Object.keys(q.in).join(); }); };
+                    let o = { bel: f('bellows'), shoe: f('shoe_leather'), pack: f('pack_leather') }; ind.base.wear = {}; ind.base.wear.back = 'pack_leather'; o.slots = indBagSlots(); ind.base.wear = {}; o.base = indBagSlots(); o.noHide = !IND_CRAFT.some(function (q) { return (q.out === 'bellows' || q.out === 'shoe_leather') && q.in.hide; }); return o; })()`);
+                if (!(r.bel.some(function (x) { return /leather/.test(x); }) && r.bel.some(function (x) { return /pleather/.test(x); }) && r.shoe.length >= 2 && r.pack.length === 2 && r.slots - r.base === 9 && r.noHide)) bad.push('风箱皮鞋要皮革人造革也行，皮背包 +9 格，不再直接要皮 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', wear: { foot: 'shoe_leather' }, bag: { hide: 3, bellows: 1 } }); return [b.wear.foot, b.bag.hide, b.bag.bellows]; })()`);
+                if (r.join() !== 'shoe_leather,3,1') bad.push('老存档的皮鞋、皮、风箱读档不丢 ' + r.join());
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND180 皮革和皮背包：鞣制出皮革、风箱皮鞋要皮革、人造革代替、皮背包 +9 格、老存档不丢', bad.length === 0, bad.join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
