@@ -14073,15 +14073,25 @@ async function enterExit(tab, key) {
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} openSettings('显示'); true;`); await W(200);
-            const rows = JSON.parse(await T.eval(`JSON.stringify(['gfx_quality', 'gfx_view', 'gfx_fps'].map(function (id) { return document.querySelectorAll('[id^="set-ch-' + id + '-"]').length; }))`));
+            const opn = async function (id) { await T.eval(`(function () { if (!document.getElementById('set-chl-${id}')) document.getElementById('set-chb-${id}').click(); return true; })()`); };
+            if ((await T.eval(`!!document.querySelector('[id^="set-chl-"]')`))) bad.push('没点就展开了');
+            const rows = [], smallN = [];
+            for (const id of ['gfx_quality', 'gfx_view', 'gfx_fps']) {
+                await opn(id);
+                rows.push(await T.eval(`document.querySelectorAll('[id^="set-ch-${id}-"]').length`));
+                smallN.push(await T.eval(`[].filter.call(document.querySelectorAll('[id^="set-ch-"], [id^="set-chb-gfx"]'), function (d) { return d.id.indexOf('arrow') < 0 && d.getBoundingClientRect().height < 43.5; }).length`));
+            }
             if (rows.join() !== '4,4,3') bad.push('三项行数 ' + rows.join() + '，该是 4,4,3');
-            const small = await T.eval(`[].filter.call(document.querySelectorAll('[id^="set-ch-"]'), function (d) { return d.getBoundingClientRect().height < 43.5; }).length`);
-            if (small) bad.push('有 ' + small + ' 行不到 44 像素');
+            if (smallN.some(function (x) { return x; })) bad.push('有行不到 44 像素 ' + smallN.join());
+            await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); true;`);
+            if ((await T.eval(`!!document.querySelector('[id^="set-chl-"]')`)) || (await T.eval(`document.getElementById('sys-modal').classList.contains('hidden')`))) bad.push('Esc 该先收起列表、设置页还开着');
+            await opn('gfx_quality');
             // 选中的右边打对勾，点另一行换过去
             await T.eval(`document.getElementById('set-ch-gfx_quality-2').click(); true;`);
-            const ck = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { return document.getElementById('set-ch-gfx_quality-' + i).innerText.indexOf('✓') >= 0; }))`));
-            if (ck.join() !== 'false,false,true,false' || (await T.eval(`graphicsQuality()`)) !== 2) bad.push('点高没选中或没打对勾 ' + ck.join());
-            await T.eval(`document.getElementById('set-ch-gfx_view-3').click(); document.getElementById('set-ch-gfx_fps-0').click(); true;`);
+            const shown = await T.eval(`document.getElementById('set-chb-gfx_quality').innerText`);
+            if (!/高/.test(shown) || (await T.eval(`graphicsQuality()`)) !== 2 || (await T.eval(`!!document.getElementById('set-chl-gfx_quality')`))) bad.push('点高没选中、方框没显示高或没收起 ' + shown);
+            await opn('gfx_view'); await opn('gfx_fps');
+            await T.eval(`document.getElementById('set-ch-gfx_view-3').click(); true;`); await opn('gfx_fps'); await T.eval(`document.getElementById('set-ch-gfx_fps-0').click(); true;`);
             const g = JSON.parse(await T.eval(`JSON.stringify({ q: graphicsQuality(), v: graphicsView(), f: graphicsFps(), m: graphicsViewMul(), t: graphicsFpsTarget() })`));
             if (g.q !== 2 || g.v !== 3 || g.f !== 0 || g.m !== 3 || g.t !== 30) bad.push('接口 ' + JSON.stringify(g));
             const tt = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2].map(function (i) { settingsSet('gfx_fps', i); return graphicsFpsTarget(); }).concat([0, 1, 2, 3].map(function (i) { settingsSet('gfx_view', i); return graphicsViewMul(); })))`));

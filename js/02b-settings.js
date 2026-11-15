@@ -198,16 +198,21 @@ function setToggleSet(id, on) {
     let a = document.getElementById(id + '-on'), b = document.getElementById(id + '-off');
     if (a && b) { a.setAttribute('style', setBtnStyle(on)); b.setAttribute('style', setBtnStyle(!on)); }
 }
+let setOpenCh = null;   // 当前展开的那一项设置的 id
 function setChoiceSet(rid, i) {
     let o = settingsOpt(rid); if (!o || !o.choices[i]) return;
-    settingsSet(rid, o.choices[i][0]); setRender();
+    settingsSet(rid, o.choices[i][0]); setOpenCh = null; setRender();
 }
-// 选项列表（作者的 pic1 草图）：标题一行，下面每个选项一行，选中的那行右边打对勾；整行都能点，每行不低于 44 像素
+function setChoiceToggle(rid) { setOpenCh = setOpenCh === rid ? null : rid; setRender(); }
+// 选项方框（作者 11-15 的 pic1）：左边写当前选的，右边一个向下的小箭头；点一下纵向展开所有选项，点哪个选哪个，选完收起。每行不低于 44 像素
 function setChoiceBlock(o, v) {
-    return '<div style="padding:6px 0; border-bottom:1px solid #eee;"><div style="font-size:14px; color:#444; padding:4px 0;">' + o.label + '</div>' + o.choices.map(function (c, i) {
+    let cur = o.choices.filter(function (c) { return c[0] === v; })[0], open = setOpenCh === o.id;
+    let box = '<div id="set-chb-' + o.id + '" onclick="setChoiceToggle(\'' + o.id + '\')" style="display:flex; align-items:center; justify-content:space-between; min-height:44px; padding:0 0 0 12px; border:1px solid #bbb; border-radius:6px; cursor:pointer; font-size:14px; background:#fff; color:#333;"><span>' + (cur ? cur[1] : '') + '</span><span id="set-chb-arrow-' + o.id + '" style="width:44px; min-height:44px; display:flex; align-items:center; justify-content:center; border-left:1px solid #ddd; font-size:14px; color:#666;">' + (open ? '▲' : '▼') + '</span></div>';
+    let list = !open ? '' : '<div id="set-chl-' + o.id + '" style="border:1px solid #bbb; border-top:none; border-radius:0 0 6px 6px; background:#fff;">' + o.choices.map(function (c, i) {
         let on = c[0] === v;
-        return '<div id="set-ch-' + o.id + '-' + i + '" onclick="setChoiceSet(\'' + o.id + '\', ' + i + ')" style="display:flex; align-items:center; justify-content:space-between; min-height:44px; padding:0 12px; margin:3px 0; border-radius:6px; cursor:pointer; font-size:14px; background:' + (on ? '#e8f5e9' : '#f5f5f5') + '; color:' + (on ? '#2e7d32' : '#555') + ';"><span>' + c[1] + '</span><span style="font-size:18px; font-weight:bold;">' + (on ? '✓' : '') + '</span></div>';
+        return '<div id="set-ch-' + o.id + '-' + i + '" onclick="setChoiceSet(\'' + o.id + '\', ' + i + ')" style="display:flex; align-items:center; min-height:44px; padding:0 12px; cursor:pointer; font-size:14px; border-top:1px solid #eee; background:' + (on ? '#e8f5e9' : '#fff') + '; color:' + (on ? '#2e7d32' : '#444') + ';">' + c[1] + '</div>';
     }).join('') + '</div>';
+    return '<div style="padding:6px 0; border-bottom:1px solid #eee;"><div style="font-size:14px; color:#444; padding:4px 0;">' + o.label + '</div>' + box + list + '</div>';
 }
 function setRegRows(group) {
     return SETREG.opts.filter(function (o) { return o.group === group; }).map(function (o) {
@@ -279,9 +284,9 @@ function setRender() {
     if (tabs) tabs.innerHTML = setGroups().map(function (t) { return '<button id="set-tab-' + t + '" onclick="setTabGo(\'' + t + '\')" style="' + setBtnStyle(t === setTab) + ' flex:1;">' + t + '</button>'; }).join('');
     el.innerHTML = (setTab === '显示' && typeof gfxNoticeHtml === 'function' ? gfxNoticeHtml() : '') + (setMsg ? '<div id="set-msg" style="font-size:12px; color:#d9534f; padding:4px 0;">' + setMsg + '</div>' : '') + (setGroups().indexOf(setTab) < SET_TABS.length ? setTabHtml(setTab) : setRegRows(setTab));
 }
-function setTabGo(t) { setKeyEnd(); setMsg = ''; setTab = t; setRender(); }
+function setTabGo(t) { setKeyEnd(); setOpenCh = null; setMsg = ''; setTab = t; setRender(); }
 function openSettings(tab) {
-    setKeyEnd(); setMsg = ''; setTab = tab && setGroups().indexOf(tab) >= 0 ? tab : setTab;
+    setKeyEnd(); setMsg = ''; setOpenCh = null; setTab = tab && setGroups().indexOf(tab) >= 0 ? tab : setTab;
     showSysModal('设置', '<div style="text-align:left; min-width:270px; max-width:92vw;"><div id="set-tabs" style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:6px;"></div><div id="set-content" style="max-height:60vh; overflow-y:auto;"></div></div>', [{ label: '好了', color: '#5cb85c' }]);
     setRender();
     let mo = document.getElementById('sys-modal');
@@ -307,3 +312,8 @@ keyRebuild();
     };
     window.addEventListener('load', window.settingsApplyDisplay);
 })();
+
+// Esc 先收起展开的列表，再关设置页
+window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && setOpenCh && document.getElementById('set-content')) { e.preventDefault(); e.stopImmediatePropagation(); setOpenCh = null; setRender(); }
+}, true);
