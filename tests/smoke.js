@@ -13804,7 +13804,7 @@ async function enterExit(tab, key) {
                 if (!(r.one && r.link && r.next && r.deep && r.back && !r.paren)) bad.push('配方查询只写直接做法一层，点原料看下一层，有返回，不用括号 ' + JSON.stringify(r));
                 r = await J(`(function(){ ind.base.seenK = { pick_bronze: 1 }; ind.bag = {}; indItemInfo('mold_pick'); let t = document.getElementById('ind-panel').innerText; return { q: /？/.test(t), spoil: /小刀右键|黏土/.test(t) }; })()`);
                 if (!(r.q && !r.spoil)) bad.push('没见过的东西只显示？不剧透 ' + JSON.stringify(r));
-                r = await J(`(function(){ ind.base.seenK = { hide: 1, pleather: 1, bellows: 1 }; ind.bag = {}; indItemInfo('bellows'); let t = document.getElementById('ind-panel').innerText; return { slash: /皮/.test(t) && t.indexOf('/') >= 0, rows: (t.match(/风箱 =/g) || []).length }; })()`);
+                r = await J(`(function(){ ind.base.seenK = { leather: 1, pleather: 1, bellows: 1 }; ind.bag = {}; indItemInfo('bellows'); let t = document.getElementById('ind-panel').innerText; return { slash: /皮/.test(t) && t.indexOf('/') >= 0, rows: (t.match(/风箱 =/g) || []).length }; })()`);
                 if (!(r.slash && r.rows <= 2)) bad.push('皮革和人造革合成一行用斜杠写 ' + JSON.stringify(r));
                 r = await J(`(function(){ indPanelClose(); ind.bag = { stone: 2, wood: 1 }; let hi = IND_CRAFT.findIndex(function (q) { return q.out === 'hammer_stone'; }); indCraft(hi); let o = { h: ind.bag.hammer_stone || 0 };
                     let bi = IND_CRAFT.findIndex(function (q) { return q.out === 'pick_cold' && q.in.bronze && q.need === 'hammer' && !q.off; }); o.bi = bi >= 0; let need = bi >= 0 ? JSON.parse(JSON.stringify(IND_CRAFT[bi].in)) : {};
