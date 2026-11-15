@@ -32,4 +32,4 @@
 
 ## 夜班和会话
 - 夜班**只开 Code2**，Code1 的夜班 11-15 作者说关了（`trig_01RMATYdMMSuijPUJ4Wh3YT6`，已 disabled）；想开要问作者（Pro 订阅用量紧）。
-- 本会话：`session_01ESXCnoXz3zGbLJv75iC61N`（"猫盾游戏"），模型 Sonnet 5.5，作者用 medium 档。**做完一批会停下来，要协调者发消息才继续**，所以做完把"下一步是什么"写在 `queue-code1.md` 汇报里。
+- 本会话：`session_01ESXCnoXz3zGbLJv75iC61N`（"code1猫盾"），模型 Sonnet 5.5，作者用 medium 档。**做完一批会停下来，要协调者发消息才继续**，所以做完把"下一步是什么"写在 `queue-code1.md` 汇报里。
