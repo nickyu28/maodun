@@ -1475,9 +1475,10 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026.11.5-89', date: '11 月 15 日', title: '最近更新', items: [
+                id: '2026.11.5-90', date: '11 月 15 日', title: '最近更新', items: [
                     '设置里能选画质、视野、流畅度，选中的那行打对勾',
-                    '左上角显示帧率，设置里能关'
+                    '左上角显示帧率，设置里能关',
+                    '卡的时候左上角冒红色图标，太卡会自动降画质'
                 ]
             },
             {

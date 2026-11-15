@@ -277,7 +277,7 @@ function setRender() {
     let el = document.getElementById('set-content'); if (!el) return;
     let tabs = document.getElementById('set-tabs');
     if (tabs) tabs.innerHTML = setGroups().map(function (t) { return '<button id="set-tab-' + t + '" onclick="setTabGo(\'' + t + '\')" style="' + setBtnStyle(t === setTab) + ' flex:1;">' + t + '</button>'; }).join('');
-    el.innerHTML = (setMsg ? '<div id="set-msg" style="font-size:12px; color:#d9534f; padding:4px 0;">' + setMsg + '</div>' : '') + (setGroups().indexOf(setTab) < SET_TABS.length ? setTabHtml(setTab) : setRegRows(setTab));
+    el.innerHTML = (setTab === '显示' && typeof gfxNoticeHtml === 'function' ? gfxNoticeHtml() : '') + (setMsg ? '<div id="set-msg" style="font-size:12px; color:#d9534f; padding:4px 0;">' + setMsg + '</div>' : '') + (setGroups().indexOf(setTab) < SET_TABS.length ? setTabHtml(setTab) : setRegRows(setTab));
 }
 function setTabGo(t) { setKeyEnd(); setMsg = ''; setTab = t; setRender(); }
 function openSettings(tab) {

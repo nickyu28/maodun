@@ -14148,6 +14148,52 @@ async function enterExit(tab, key) {
             report('IND181 体检第一批：绷带、电炉电解槽要钢、粉碎机磨矿粉炼出多一半', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('GFX2')) {
+            // GFX2 卡顿处理（任务 P6 第二批，帧率用桩函数直接喂 gfxSample，每喂一次算 0.5 秒）：连续 3 秒低于目标的 60% 冒红色图标、回到 80% 以上 3 秒消失；连续 10 秒低于 8 帧画质降一档；降完再连续 20 秒低于 5 帧才退出；联机局只提示不退出；没在画（0 帧）不算卡；三项两项以上在最高两档时设备差马上提示、设备好量 3 秒不行再提示，都能点调回推荐
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} window.__gfxManual = true; gfxLowS = gfxOkS = gfxVlowS = gfxCritS = 0; gfxWarnOn = false; gfxPeaks = []; gfxProbe = null; window.__ex = 0; gfxIsMulti = function () { return false; }; gfxExitNow = function () { window.__ex++; return 'x'; }; settingsSet('gfx_quality', 1); settingsSet('gfx_view', 0); settingsSet('gfx_fps', 1); true;`);
+            const feed = (n, k) => T.eval(`(function(){ for (let i = 0; i < ${k}; i++) gfxSample(${n}); gfxHudRefresh(); })(); true;`);
+            const warnShown = () => T.eval(`getComputedStyle(document.getElementById('gfx-warn')).display === 'block'`);
+            await feed(10, 5); if (await warnShown()) bad.push('才低了 2.5 秒就冒图标');
+            await feed(10, 1); if (!(await warnShown())) bad.push('连续 3 秒低帧没冒红色图标');
+            await feed(60, 5); if (!(await warnShown())) bad.push('回到正常才 2.5 秒图标就没了');
+            await feed(60, 1); if (await warnShown()) bad.push('回到正常 3 秒图标没消失');
+            await feed(0, 40); if (await warnShown() || (await T.eval(`graphicsQuality()`)) !== 1) bad.push('没在画（0 帧）不该算卡');
+            // 降画质、退出
+            await feed(6, 19); if ((await T.eval(`graphicsQuality()`)) !== 1) bad.push('不到 10 秒就降画质');
+            await feed(6, 1); if ((await T.eval(`graphicsQuality()`)) !== 0) bad.push('连续 10 秒低于 8 帧没降一档');
+            await feed(3, 39); if ((await T.eval(`__ex`)) !== 0) bad.push('降完不到 20 秒就退出');
+            await feed(3, 1); if ((await T.eval(`__ex`)) !== 1) bad.push('降完连续 20 秒低于 5 帧没退出 ' + await T.eval(`__ex`));
+            // 联机局只提示
+            await T.eval(`window.__ex = 0; gfxIsMulti = function () { return true; }; true;`);
+            await feed(3, 45); if ((await T.eval(`__ex`)) !== 0) bad.push('联机局不该自动退出');
+            await T.eval(`gfxIsMulti = function () { return false; }; true;`);
+            await feed(60, 10);
+            // 三项太高：设备好，量 3 秒，帧率够不提示
+            await T.eval(`gfxDeviceLow = function () { return false; }; gfxReady = true; settingsSet('gfx_quality', 3); settingsSet('gfx_view', 3); settingsSet('gfx_fps', 2); true;`);
+            if (!(await T.eval(`!!gfxProbe`))) bad.push('三项调到最高没开始量');
+            await feed(80, 6); if (await T.eval(`sysModalVisible() || !!gfxProbe`)) bad.push('帧率够，不该提示');
+            // 量出来不行：提示，点调回推荐
+            await T.eval(`gfxApplyRecommend(); settingsSet('gfx_quality', 3); settingsSet('gfx_view', 3); settingsSet('gfx_fps', 2); true;`);
+            await feed(10, 6);
+            if (!(await T.eval(`sysModalVisible() && /跑不动/.test(document.getElementById('sys-modal-text').innerText)`))) bad.push('帧率低时没提示');
+            await T.eval(`[].filter.call(document.querySelectorAll('#sys-modal-btns button'), function (b) { return b.innerText === '调回推荐'; })[0].click(); true;`);
+            const rec = JSON.parse(await T.eval(`JSON.stringify([graphicsQuality(), graphicsView(), graphicsFps()])`));
+            if (rec.join() !== '2,1,1') bad.push('调回推荐（设备好）该是 2,1,1，实际 ' + rec.join());
+            // 设备差：马上在设置页里提示，推荐低
+            await T.eval(`gfxDeviceLow = function () { return true; }; settingsSet('gfx_quality', 3); settingsSet('gfx_view', 2); openSettings('显示'); true;`); await W(200);
+            if (!(await T.eval(`!!document.getElementById('gfx-notice')`))) bad.push('设备差调高了设置页里没提示');
+            await T.eval(`gfxApplyRecommend(); true;`);
+            const rec2 = JSON.parse(await T.eval(`JSON.stringify([graphicsQuality(), graphicsView(), graphicsFps(), !!document.getElementById('gfx-notice')])`));
+            if (rec2.join() !== '0,0,1,false') bad.push('设备差的推荐该是 0,0,1 且提示消失，实际 ' + rec2.join());
+            // 没有两项在最高两档不提示
+            await T.eval(`document.getElementById('sys-modal').classList.add('hidden'); gfxDeviceLow = function () { return false; }; settingsSet('gfx_quality', 3); settingsSet('gfx_view', 0); settingsSet('gfx_fps', 0); true;`);
+            if (await T.eval(`!!gfxProbe || !!gfxNotice`)) bad.push('只有一项在最高档不该提示');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('GFX2 卡顿处理：连续低帧冒红色图标、恢复消失、10 秒低于 8 帧降画质、再 20 秒低于 5 帧退出、联机局只提示、三项太高提示和调回推荐', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
