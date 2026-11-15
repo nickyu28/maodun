@@ -14217,6 +14217,34 @@ async function enterExit(tab, key) {
             report('IND182 体检第二批：钠遇水氢气、玻璃固化块、氖灯氪灯泡、土墙、毛毡垫、草喂羊牛', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND183')) {
+            // IND183 胶水新做法和锤子修工具（任务 120）：皮加水煮出胶水 2、松脂加木炭出胶水 2、黏液老配方 off；锤子加锭补青铜镐耐久、补满不再扣、铁镐没热炉子补不了有热炉子能补、断了的能补、石斧不行
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); let o = {}; let g = IND_RECIPES.filter(function (q) { return q.out.glue; }); o.old = g.filter(function (q) { return q.in.goo; }).every(function (q) { return q.off; }); o.hide = g.some(function (q) { return q.in.hide === 1 && q.in.water_raw === 1 && q.out.glue === 2 && !q.off; }); o.resin = g.some(function (q) { return q.in.resin === 2 && q.in.charcoal === 1 && q.out.glue === 2 && !q.off; });
+                    let B = ind.base; B.rule = 'hard'; B.dura = {}; B.off.stove = false; B.stove = Object.assign(ckNewState(), { fire: 0, temp: 20 }); B.cookers = [];
+                    ind.bag = { pick_bronze: 1, hammer_stone: 1, bronze: 3, pick_iron: 1, ingot_fe: 2, axe: 1 }; B.dura.pick_bronze = 100; B.dura.pick_iron = 100; indTeleport(0, 0);
+                    let a0 = mbDura('pick_bronze'); rpMend('pick_bronze'); o.bronze = [a0, B.dura.pick_bronze, ind.bag.bronze]; 
+                    let fl = []; let f0 = indFlash; indFlash = function (t) { fl.push(t); }; rpMend('pick_iron'); o.noHeat = fl.some(function (t) { return /烧红/.test(t); }) && ind.bag.ingot_fe === 2; indFlash = f0;
+                    B.stove = Object.assign(ckNewState(), { fire: 3, temp: 900 }); indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 2); rpMend('pick_iron'); o.iron = [B.dura.pick_iron > 100, ind.bag.ingot_fe];
+                    B.dura.pick_bronze = mbMax('pick_bronze'); let b1 = ind.bag.bronze; rpMend('pick_bronze'); o.full = ind.bag.bronze === b1;
+                    ind.bag = { broken_pick_bronze: 1, hammer: 1, bronze: 2 }; B.dura = {}; rpMend('broken_pick_bronze'); o.broken = [ind.bag.pick_bronze || 0, ind.bag.broken_pick_bronze || 0, ind.bag.bronze];
+                    o.stone = rpMendInfo('axe'); return o; })()`);
+                if (!(r.old && r.hide && r.resin)) bad.push('胶水：皮加水、松脂加木炭，黏液老配方 off ' + JSON.stringify(r));
+                if (!(r.bronze[1] > r.bronze[0] && r.bronze[2] === 2)) bad.push('青铜镐锤子加锭补耐久、扣 1 个锭 ' + JSON.stringify(r.bronze));
+                if (!(r.noHeat && r.iron[0] && r.iron[1] === 1)) bad.push('铁镐没热炉子补不了、有 ≥ 800°C 炉子补得了 ' + JSON.stringify([r.noHeat, r.iron]));
+                if (!(r.full && r.broken[0] === 1 && r.broken[1] === 0 && r.broken[2] === 1 && r.stone === null)) bad.push('补满不扣锭、断了的能补、石斧不能用锤子 ' + JSON.stringify([r.full, r.broken, r.stone]));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND183 胶水新做法、锤子修工具：补耐久、铁要热炉子、断了的能补、补满不扣', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
