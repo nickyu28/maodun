@@ -1,4 +1,6 @@
-# Code2 交接文档（11-14 更新）
+# Code2 交接文档（11-14 更新，交接员 11-15 补）
+
+**11-15 补**：版本现在 `2026.11.5-91`。夜班定时任务现在是 `trig_019DTc2eViE7Q8T7sgXCn59K`（01:46 北京，叫醒本会话），旧的 `trig_015nMUQSrPSo6fY34RSCNZYp` 已 disabled。11-15 早上已推：118 删怪、137 皮革、142 第一批第二批、120 胶水。166、168 之后接 Code1 的 P6 接口，在 `docs/settings.md`。其余以 `docs/queue-code2.md` 为准。
 
 接手的人先读：CLAUDE.md、docs/queue-code2.md（排队和最近一次汇报）、docs/code2-tasks.md（每个任务的原话要求）、docs/industry.md（每个系统的说明）。跟作者沟通用中文。
 
