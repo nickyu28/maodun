@@ -5,9 +5,9 @@
 
 ## 要更新的四份（`docs/` 下）
 1. `handoff-coordinator.md`：协调者（会话"猫盾游戏开发"，`session_01ESXCnokz9VVaPopTrnjA4F`）的手册：会话和定时任务现状、用量记录、现在的进度、作者定过的大决定、等作者定的事。
-2. `handoff-code1.md`：Code1（主游戏，`session_01ESXCnpBss1Yohjk9C2Ewey`）。
-3. `handoff-code2.md`：Code2（猫盾工业和实验室，`session_01ESXCnobWdg9DPTcTvRxC9t`）。这份 Code2 自己也常更新，你只补它没写的、改过时的。
-4. `handoff-tester.md`：测试员（`session_01ESXCnsAAkA51os8fzPqjwy`）。
+2. `handoff-code1.md`：Code1（主游戏，`session_01ESXCnoXz3zGbLJv75iC61N`）。
+3. `handoff-code2.md`：Code2（猫盾工业和实验室，`session_01ESXCnps1Zq25mJmYU9DJDr`）。这份 Code2 自己也常更新，你只补它没写的、改过时的。
+4. `handoff-tester.md`：测试员（`session_01ESXCnoS5r8HxQfRfND6bFA`）。
 
 ## 每次怎么做
 1. `git pull origin main`。读 `docs/queue-code1.md`、`docs/queue-code2.md`、`docs/queue-tester.md`、`docs/design-rules.md`、最新的 `docs/playtest-*.md`、`docs/settings.md`、`docs/ideas.md`。

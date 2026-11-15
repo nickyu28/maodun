@@ -11,13 +11,13 @@
 ## 二、角色和会话（11-15）
 | 谁 | 管什么 | 会话（send_message 用） | 交接文档 |
 |---|---|---|---|
-| Code1 | 主游戏、CI、设置、教程；清单 docs/queue-code1.md | "code1猫盾" `session_01ESXCnpBss1Yohjk9C2Ewey` | docs/handoff-code1.md |
-| Code2 | 猫盾工业 + 实验室；清单 docs/queue-code2.md | "code2猫盾工业" `session_01ESXCnobWdg9DPTcTvRxC9t` | docs/handoff-code2.md |
-| 测试员 | 只玩、查、报告 | "猫盾游戏测试" `session_01ESXCnsAAkA51os8fzPqjwy` | docs/handoff-tester.md |
+| Code1 | 主游戏、CI、设置、教程；清单 docs/queue-code1.md | "猫盾游戏" `session_01ESXCnoXz3zGbLJv75iC61N` | docs/handoff-code1.md |
+| Code2 | 猫盾工业 + 实验室；清单 docs/queue-code2.md | "猫盾工业" `session_01ESXCnps1Zq25mJmYU9DJDr` | docs/handoff-code2.md |
+| 测试员 | 只玩、查、报告 | "猫盾测试" `session_01ESXCnoS5r8HxQfRfND6bFA` | docs/handoff-tester.md |
 | 交接员 | 每 5 天更新四份交接文档，说明见 docs/handoff-writer.md | `session_01ESXCnqJFcb46xi7isnM93K` | 无 |
 | 协调者（我） | 听作者、拍板、写任务、发指令 | "猫盾游戏开发" `session_01ESXCnokz9VVaPopTrnjA4F` | 本文 |
 旧会话"猫盾"、"猫盾工业"、"猫盾开发"作者说不要用。分支 industry 不要碰。三个会话都是**做完一批就停，要发消息才继续**，所以每次作者提新需求，我写好任务后要 `send_message` 对应的会话；他们不会自己醒。
-**定时任务（11-15）**：只开两个——Code2 夜班（`trig_019DTc2eViE7Q8T7sgXCn59K`，北京 01:46 叫醒 Code2 会话）和一个一次性的 Code1 自查提醒（`trig_01Nc115GZjBqPT6DfaELuRKz`，11-15 14:47 北京，查 P6 第二批 CI）。**每 5 天写交接文档不再归协调者**：旧定时任务 `trig_01EauCwQNfpDncxtzGdve4ZU` 作者 11-15 已设 disabled，改由交接员会话做，看 docs/handoff-writer.md。Code1 夜班 `trig_01RMATYdMMSuijPUJ4Wh3YT6`、测试员夜班 `trig_019zLxRQQ3atth6UVicsUwZE`、旧 Code2 夜班 `trig_015nMUQSrPSo6fY34RSCNZYp` 都 disabled。**坑**：我用 `create_trigger` 建的"新起会话"类定时任务没有仓库授权和 add_repo，推不上去（11-14 傍晚的测试员报告就这么丢了）；要让它能推，要么绑已有会话（`persistent_session_id`），要么作者在 claude.ai Routines 页面建并选仓库和连接器。作者 Pro 订阅，**模型都是 Sonnet 5.5 + medium 档**，夜班定时任务也已指定 Sonnet。
+**定时任务（11-15）**：只开两个——Code2 夜班（`trig_019DTc2eViE7Q8T7sgXCn59K`，北京 01:46 叫醒 Code2 会话）和一个一次性的 Code1 自查提醒（`trig_01Nc115GZjBqPT6DfaELuRKz`，11-15 14:47 北京，查 P6 第二批 CI）。**每 5 天写交接文档不再归协调者**：定时任务 `trig_01EauCwQNfpDncxtzGdve4ZU` 已改绑交接员会话（每月 1、6、11、16、21、26、31 日北京 11:17），做法看 docs/handoff-writer.md。**11-15 作者换了四个新会话**，旧编号作废：Code1「猫盾游戏」、Code2「猫盾工业」、测试员「猫盾测试」，编号见上表。Code2 夜班触发器绑的是不是新 Code2 会话没核实。Code1 夜班 `trig_01RMATYdMMSuijPUJ4Wh3YT6`、测试员夜班 `trig_019zLxRQQ3atth6UVicsUwZE`、旧 Code2 夜班 `trig_015nMUQSrPSo6fY34RSCNZYp` 都 disabled。**坑**：我用 `create_trigger` 建的"新起会话"类定时任务没有仓库授权和 add_repo，推不上去（11-14 傍晚的测试员报告就这么丢了）；要让它能推，要么绑已有会话（`persistent_session_id`），要么作者在 claude.ai Routines 页面建并选仓库和连接器。作者 Pro 订阅，**模型都是 Sonnet 5.5 + medium 档**，夜班定时任务也已指定 Sonnet。
 
 ## 三、用量（最重要的新规矩；作者是 Pro 订阅，用量紧）
 - **11-12 晚 Marty 报已用 40%**（下午 20%、睡前预估 30%±5，结果 40%：一下午加晚上协调者、Code1、Code2 交互会话、CI 一共吃了约 20 个点，比预估多）。这是量夜班的基线：明早的数减 40 = 三个夜班加睡前剩余操作的用量。阈值不变：≥ 90 关 Code2 夜班，≥ 95 只回答问题。
