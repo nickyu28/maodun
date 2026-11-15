@@ -18,6 +18,7 @@
         }
         // 每帧（远征里）：脚下的撤离点走开才生效；80 米内看见过的撤离点；走过的地方；指南针
         function wdTripTick(dt) {
+            wdQualityCheck();
             if (ind.map && ind.map.moon) { mnTripTick(); return; }   // 月球：自己的走过的格子、着陆标记（19-industry-moon.js，任务 130）
             ind.exits.forEach(function (e) {
                 let d = Math.hypot(ind.p.x - e.x, ind.p.z - e.z);
@@ -414,8 +415,17 @@
 
         // ── 地形：600 米分成 10 × 10 块（每块 60 米、24 × 24 格），视野外的块藏起来 ──
         const WD_CH = 10;
+        // 任务 168：画质低 210、中 420、高 520、超高 630 格（要能被 10 整除）。indHeight 是函数，不看网格，碰撞和采样不变
+        function indSeg() { return IND_SEG_Q[typeof graphicsQuality === 'function' ? graphicsQuality() : 1] || IND_SEG; }
+        // 画质变了（设置里改、自动降档）就把地形块重建一遍
+        function wdQualityCheck() {
+            if (!ind || !ind.chunks || !ind.map || !ind.segUsed || ind.segUsed === indSeg()) return;
+            let old = ind.chunks; ind.chunks = null;
+            old.forEach(function (m) { scene.remove(m); let i = ind.objs.indexOf(m); if (i >= 0) ind.objs.splice(i, 1); let g = ind.geos.indexOf(m.geometry); if (g >= 0) ind.geos.splice(g, 1); m.geometry.dispose(); });
+            wdTerrain(ind.map); ind.nodeView = null;
+        }
         function wdTerrain(M) {
-            let N = IND_SEG + 1, st = IND_MAP * 2 / IND_SEG, H = new Float32Array(N * N), C = new Float32Array(N * N * 3), c = new THREE.Color();
+            let SEG = indSeg(); ind.segUsed = SEG; let N = SEG + 1, st = IND_MAP * 2 / SEG, H = new Float32Array(N * N), C = new Float32Array(N * N * 3), c = new THREE.Color();
             for (let gj = 0; gj < N; gj++) for (let gi = 0; gi < N; gi++) {
                 let k = gj * N + gi, x = -IND_MAP + gi * st, z = -IND_MAP + gj * st, h = indHeight(M, x, z), bm = indBiome(M, x, z);
                 H[k] = h;
@@ -424,7 +434,7 @@
                 else if (h < IND_WATER_Y + 0.05 && wdRiverNear(M, x, z, 0.5)) col = 0x8d7b5f;   // 河床
                 c.setHex(col); let sh = 0.92 + indHash(k, 3, M.seed) * 0.12; C[k * 3] = c.r * sh; C[k * 3 + 1] = c.g * sh; C[k * 3 + 2] = c.b * sh;
             }
-            let per = IND_SEG / WD_CH, mat = indMat(new THREE.MeshLambertMaterial({ vertexColors: true }));
+            let per = SEG / WD_CH, mat = indMat(new THREE.MeshLambertMaterial({ vertexColors: true }));
             ind.chunks = [];
             for (let cj = 0; cj < WD_CH; cj++) for (let ci = 0; ci < WD_CH; ci++) {
                 let n = per + 1, pos = new Float32Array(n * n * 3), nor = new Float32Array(n * n * 3), col = new Float32Array(n * n * 3), idx = [];

@@ -14278,6 +14278,29 @@ async function enterExit(tab, key) {
             report('IND183 胶水新做法、锤子修工具：补耐久、铁要热炉子、断了的能补、补满不扣', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND184')) {
+            // IND184 工业接画质视野（任务 168）：视野超远时远征的雾和视野半径是正常的 3 倍；画质低时地形网格比中少、改画质后地形自己重建、高度不变；老存档读不到设置用默认
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ settingsSet('gfx_view', 0); settingsSet('gfx_quality', 1); indGoTrip(777); let o = {}; o.r0 = indViewR(0); o.fog0 = scene.fog.far; o.verts1 = ind.chunks[0].geometry.attributes.position.count; o.h1 = indHeight(ind.map, 31.3, -57.7);
+                    settingsSet('gfx_view', 3); gfxApplyView(); o.r3 = indViewR(0); indRender(); o.fog3 = scene.fog.far;
+                    settingsSet('gfx_quality', 0); wdTripTick(0.1); o.verts0 = ind.chunks[0].geometry.attributes.position.count; o.h0 = indHeight(ind.map, 31.3, -57.7); o.chunks = ind.chunks.length; o.objsOk = ind.objs.indexOf(ind.chunks[0]) >= 0;
+                    settingsSet('gfx_quality', 3); wdTripTick(0.1); o.verts3 = ind.chunks[0].geometry.attributes.position.count;
+                    settingsSet('gfx_view', 0); settingsSet('gfx_quality', 1); wdTripTick(0.1); return o; })()`);
+                if (!(r.r0 === 80 && Math.abs(r.r3 - 240) < 1e-6 && Math.abs(r.fog3 - 240) < 1e-6)) bad.push('视野超远是正常的 3 倍 ' + JSON.stringify(r));
+                if (!(r.verts0 < r.verts1 && r.verts3 > r.verts1 && r.chunks === 100 && r.objsOk)) bad.push('画质低地形网格比中少、超高比中多、改了自己重建 ' + JSON.stringify(r));
+                if (!(r.h0 === r.h1)) bad.push('网格变了高度不能变 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND184 工业接画质视野：超远 3 倍、低画质网格少、改画质重建地形、高度不变', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

@@ -37,7 +37,7 @@
         const IND_AIM_COS = Math.cos(30 * Math.PI / 180);
         // 视野：白天看得到 80 米（雾），夜里 40 米；更远的资源点、动物、树不画
         const IND_VIEW = { day: 80, night: 40, margin: 6 };
-        function indViewR(d) { if (d === undefined) d = indDark(); return IND_VIEW.day - (IND_VIEW.day - IND_VIEW.night) * d; }
+        function indViewR(d) { if (d === undefined) d = indDark(); return (IND_VIEW.day - (IND_VIEW.day - IND_VIEW.night) * d) * (typeof graphicsViewMul === 'function' ? graphicsViewMul() : 1); }   // 任务 168：乘视野倍数，雾、地形块、树石、动物都跟着
         const IND_T = { extract: 3, pickR: 2.6, gateR: 2.2, exitR: 3, speed: 7, run: 1.6 };
         const IND_BASE = { x: 30, z: 22.5, x0: -30, x1: 30, z0: -22.5, z1: 22.5 };          // 基地半宽、半深（60 × 45 米）
         const IND_FIELD = { x0: -28, x1: -6, z0: -18, z1: 18, tile: 2 };   // 农田（基地左边），2 米一格
@@ -1333,7 +1333,7 @@
         }
 
         // 远征：地形（一个网格，颜色按地貌）、水面、资源点（一个 InstancedMesh）、两个撤离点
-        const IND_SEG = 420, IND_NODE_N = 1680 * IND_K, IND_WILD_N = 56 * IND_K;   // 地图 1040 × 1040：资源点和动物按面积（原来 600 × 600 的 3 倍）
+        const IND_SEG = 420, IND_SEG_Q = [210, 420, 520, 630], IND_NODE_N = 1680 * IND_K, IND_WILD_N = 56 * IND_K;   // 地图 1040 × 1040：资源点和动物按面积（原来 600 × 600 的 3 倍）
         const IND_SEED_KINDS = ['seed_wheat', 'seed_potato', 'seed_tomato', 'seed_corn', 'seed_cane', 'seed_pumpkin', 'seed_cotton', 'seed_cabbage', 'seed_radish'];
         function indGoTrip(seed) {
             if (ind && ind.carve) ctCarveExit(true);
