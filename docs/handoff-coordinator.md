@@ -17,7 +17,7 @@
 | 交接员 | 每 5 天更新四份交接文档，说明见 docs/handoff-writer.md | `session_01ESXCnqJFcb46xi7isnM93K` | 无 |
 | 协调者（我） | 听作者、拍板、写任务、发指令 | "猫盾游戏开发" `session_01ESXCnokz9VVaPopTrnjA4F` | 本文 |
 **11-15 作者换了一批新会话**（旧的 code1猫盾、code2猫盾工业、猫盾游戏测试要删）：Code1 = 猫盾游戏 session_01ESXCnoXz3zGbLJv75iC61N，Code2 = 猫盾工业 session_01ESXCnps1Zq25mJmYU9DJDr，测试员 = 猫盾测试 session_01ESXCnoS5r8HxQfRfND6bFA，交接员 = 猫盾开发 session_01ESXCnqJFcb46xi7isnM93K（能推 main，每 5 天的定时任务 trig_01XDnGE2hAqA1rnajyEZFEfX 绑它）。旧的"猫盾"、"猫盾工业"、"猫盾开发（老的）"不要用。分支 industry 不要碰。三个会话都是**做完一批就停，要发消息才继续**，所以每次作者提新需求，我写好任务后要 `send_message` 对应的会话；他们不会自己醒。
-**定时任务（11-15）**：只开两个——Code2 夜班（新建，北京 01:46 叫醒新 Code2 会话；旧的 `trig_019DTc2eViE7Q8T7sgXCn59K` 绑已删会话，disabled）和一个一次性的 Code1 自查提醒（`trig_01Nc115GZjBqPT6DfaELuRKz`，11-15 14:47 北京，查 P6 第二批 CI）。**每 5 天写交接文档不再归协调者**：旧定时任务 `trig_01EauCwQNfpDncxtzGdve4ZU` 作者 11-15 已设 disabled，改由交接员会话做，看 docs/handoff-writer.md。Code1 夜班 `trig_01RMATYdMMSuijPUJ4Wh3YT6`、测试员夜班 `trig_019zLxRQQ3atth6UVicsUwZE`、旧 Code2 夜班 `trig_015nMUQSrPSo6fY34RSCNZYp` 都 disabled。**坑**：我用 `create_trigger` 建的"新起会话"类定时任务没有仓库授权和 add_repo，推不上去（11-14 傍晚的测试员报告就这么丢了）；要让它能推，要么绑已有会话（`persistent_session_id`），要么作者在 claude.ai Routines 页面建并选仓库和连接器。作者 Pro 订阅，**模型都是 Sonnet 5.5 + medium 档**，夜班定时任务也已指定 Sonnet。
+**定时任务（11-15 晚）**：只开两个——Code2 夜班（新建，北京 01:46 叫醒新 Code2 会话；旧的 `trig_019DTc2eViE7Q8T7sgXCn59K` 绑已删会话，disabled）和一个一次性的 Code1 自查提醒（`trig_01Nc115GZjBqPT6DfaELuRKz`，11-15 14:47 北京，查 P6 第二批 CI）。**每 5 天写交接文档不再归协调者**：旧定时任务 `trig_01EauCwQNfpDncxtzGdve4ZU` 作者 11-15 已设 disabled，改由交接员会话做，看 docs/handoff-writer.md。Code1 夜班 `trig_01RMATYdMMSuijPUJ4Wh3YT6`、测试员夜班 `trig_019zLxRQQ3atth6UVicsUwZE`、旧 Code2 夜班 `trig_015nMUQSrPSo6fY34RSCNZYp` 都 disabled。**坑**：我用 `create_trigger` 建的"新起会话"类定时任务没有仓库授权和 add_repo，推不上去（11-14 傍晚的测试员报告就这么丢了）；要让它能推，要么绑已有会话（`persistent_session_id`），要么作者在 claude.ai Routines 页面建并选仓库和连接器。作者 Pro 订阅，**模型都是 Sonnet 5.5 + medium 档**，夜班定时任务也已指定 Sonnet。
 
 ## 三、用量（最重要的新规矩；作者是 Pro 订阅，用量紧）
 - **11-12 晚 Marty 报已用 40%**（下午 20%、睡前预估 30%±5，结果 40%：一下午加晚上协调者、Code1、Code2 交互会话、CI 一共吃了约 20 个点，比预估多）。这是量夜班的基线：明早的数减 40 = 三个夜班加睡前剩余操作的用量。阈值不变：≥ 90 关 Code2 夜班，≥ 95 只回答问题。
@@ -73,3 +73,5 @@
 - 浏览器不能同时跑两批冒烟。
 - 测试员脚本用 `?notut=1` 会关怪物自动刷新和点火免费，要测怪得手动开 `IND_MB_AUTO`。
 - `ReadNotifications` 在提醒到点时要先调用；我的提醒是发给自己会话的，会话要开着。
+
+- **11-15 晚，协调者会话（`session_01ESXCnokz9VVaPopTrnjA4F`）被作者删除**：以后作者提新需求，要开一个新的"协调者"会话，第一句让它读 docs/handoff-coordinator.md 和 CLAUDE.md；这份手册就是它的全部背景。交接员（猫盾开发）每 5 天更新这份。**待办交给下一个协调者**：①测试员"猫盾测试"只许推自己的分支 claude/zealous-noether-8ilqat，它测完会发消息给协调者（提交号），要把那个提交 cherry-pick 进 main；②作者每周用量显示警告，11-19 周四北京 14:00 刷新，别让会话同时烧用量；③联机托管重连（P6 第三批）等作者点头；④化学寻宝失焦卡键待复现。
