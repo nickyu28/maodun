@@ -14194,6 +14194,29 @@ async function enterExit(tab, key) {
             await T.close();
             report('GFX2 卡顿处理：连续低帧冒红色图标、恢复消失、10 秒低于 8 帧降画质、再 20 秒低于 5 帧退出、联机局只提示、三项太高提示和调回推荐', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND182')) {
+            // IND182 体检第二批（任务 142 的 5 和 6）：钠对着水先问再出氢气；核废料加玻璃出玻璃固化块；氖灯氪灯泡能戴、耗电不同；泥土加草做墙；羊毛做毛毡垫；草喂羊牛
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); let o = {}; indGoBase(null); ind.bag = { sodium: 1, bottle: 1 }; indSelect('sodium'); indTeleport(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z + 3.5); indLookAt(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z); indUse(); o.modal = !!document.querySelector('#sys-modal:not(.hidden)'); o.kept = ind.bag.sodium === 1 && ind.bag.bottle === 1;
+                    let fl = []; let f0 = indFlash; indFlash = function (t) { fl.push(t); }; ind.bag = { sodium: 1 }; indSelect('sodium'); indUse(); o.noBottle = fl.some(function (t) { return /要有空瓶/.test(t); }); indFlash = f0;
+                    let c = IND_CRAFT.filter(function (q) { return q.out === 'glass_block'; })[0]; o.glass = !!c && c.in.nuclear_waste === 1 && c.in.glass_plate === 2;
+                    ind.base.wear = { head: 'bulb_ne' }; o.ne = cvBulbIs() && Math.abs(cvBulbDraw() - CV.bulbDraw * 0.7) < 1e-9; ind.base.wear = { head: 'bulb_kr' }; o.kr = cvBulbIs() && Math.abs(cvBulbDraw() - CV.bulbDraw * 0.4) < 1e-9; ind.base.wear = {};
+                    o.wall = IND_CRAFT.some(function (q) { return q.out === 'stone_wall' && q.in.dirt === 4 && q.in.grass === 2; }); o.felt = IND_ITEMS.felt_pad.chillCut === 2 && IND_ITEMS.felt_pad.wear === 'foot'; o.feed = IND_ANIMALS.sheep.food.indexOf('grass') >= 0 && IND_ANIMALS.cow.food.indexOf('grass') >= 0; return o; })()`);
+                if (!(r.modal && r.kept && r.noBottle && r.glass && r.ne && r.kr && r.wall && r.felt && r.feed)) bad.push('钠扔水先问、要空瓶，玻璃固化块、氖灯氪灯泡、土墙、毛毡垫、草喂羊牛 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.bag = { sodium: 1, bottle: 1 }; indSelect('sodium'); indTeleport(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z + 3.5); indLookAt(IND_BASE_ST.pool.x, IND_BASE_ST.pool.z); indUse(); let btns = document.querySelectorAll('#sys-modal button'); let go = Array.prototype.filter.call(btns, function (b) { return b.textContent === '扔'; })[0]; if (go) go.click(); return { h2: ind.bag.b_h2 || 0, na: ind.bag.sodium || 0, bottle: ind.bag.bottle || 0 }; })()`);
+                if (!(r.h2 === 1 && r.na === 0 && r.bottle === 0)) bad.push('确定了钠遇水出一瓶氢气 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND182 体检第二批：钠遇水氢气、玻璃固化块、氖灯氪灯泡、土墙、毛毡垫、草喂羊牛', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

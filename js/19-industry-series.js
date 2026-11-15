@@ -193,3 +193,31 @@
         })();
         const IND_PWDRINK0 = pwDrink;
         pwDrink = function (k) { let had = ind.bag.bottle || 0, r = IND_PWDRINK0(k); if (k === 'bandage' && (ind.bag.bottle || 0) > had) indBagDel('bottle', 1); return r; };   // 绷带不还瓶子
+        // 任务 142 第二批：钠扔水出氢气，核废料封进玻璃，氖灯氪灯泡，泥土加草做墙，羊毛做毛毡垫，草喂羊牛
+        (function () {
+            IND_ITEMS_RAW.glass_block = { name: '玻璃固化块', col: 0x80cbc4, use: '核废料封在玻璃里，凉了不再扩散，当建材放着' };
+            IND_CRAFT.push({ out: 'glass_block', in: { nuclear_waste: 1, glass_plate: 2 }, hard: true });
+            IND_ITEMS_RAW.bulb_ne = { later: '用氖气做的，体检看不到', name: '氖灯', col: 0xff7043, wear: 'head', warm: 0, use: '戴在头上，矿洞里照亮，橙红色，耗电比灯泡少三成' };
+            IND_ITEMS_RAW.bulb_kr = { later: '用氪气做的，体检看不到', name: '氪灯泡', col: 0xb3e5fc, wear: 'head', warm: 0, use: '戴在头上，矿洞里照亮，白光，耗电只有灯泡的四成' };
+            IND_CRAFT.push({ out: 'bulb_ne', in: { bulb_dead: 1, battery_li: 1, b_ne: 1 }, back: { bottle: 1 }, hard: true }, { out: 'bulb_kr', in: { bulb_dead: 1, battery_li: 1, b_kr: 1 }, back: { bottle: 1 }, hard: true });
+            IND_CRAFT.push({ out: 'stone_wall', in: { dirt: 4, grass: 2 }, hard: true });   // 土坯墙：做出来也是那件石墙，便宜
+            IND_ITEMS_RAW.felt_pad = { name: '毛毡垫', col: 0xd7ccc8, wear: 'foot', warm: 0, chillCut: 2, use: '垫在脚下，保暖，冷的门槛降 2 度，跟鞋二选一' };
+            IND_CRAFT.push({ out: 'felt_pad', in: { wool: 3, rope: 1 }, hard: true });
+            IND_ANIMALS.sheep.food.push('grass'); IND_ANIMALS.cow.food.push('grass');
+            IND_ITEMS_RAW.grass.later = '地上撒着捡的，体检看不到';
+        })();
+        function cvBulbIs() { let h = ind.base.wear.head; return h === 'bulb' || h === 'bulb_ar' || h === 'bulb_ne' || h === 'bulb_kr'; }
+        function cvBulbDraw() { return CV.bulbDraw * ({ bulb_ar: 0.5, bulb_ne: 0.7, bulb_kr: 0.4 }[ind.base.wear.head] || 1); }
+        // 钠对着水池或装水的桶右键：先问，确定了放出氢气（要有空瓶接，没有就不让）
+        const IND_USE0 = indUse;
+        indUse = function () {
+            if (ind && !ind.paused && !ind.panel && !ind.over && !ind.dead && indSel() === 'sodium') {
+                let a = indAim(), kc = null; Object.keys(ind.bag).forEach(function (q) { let c = indContOf(q); if (c && c.base && /^water/.test(c.base)) kc = q; });
+                if ((a && a.kind === 'pool') || kc) {
+                    if (!(ind.bag.bottle > 0)) { indFlash('钠遇水放氢气，要有空瓶接'); return false; }
+                    showSysModal('钠扔进水里', '钠遇水会放出氢气，旁边有火就炸，要远离火。确定吗', [{ label: '扔', color: '#d84315', onClick: function () { if (ind && ind.bag.sodium > 0 && ind.bag.bottle > 0) { indBagDel('sodium', 1); indBagDel('bottle', 1); indGive('b_h2', 1); indFlash('钠遇水冒出氢气，装了一瓶'); } } }, { label: '不扔', color: '#757575', onClick: function () { } }]);
+                    return true;
+                }
+            }
+            return IND_USE0.apply(this, arguments);
+        };
