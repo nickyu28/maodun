@@ -1,4 +1,4 @@
-# 猫盾の游戏 · 协调者交接手册（更新于 2026-11-08 下午）
+# 猫盾の游戏 · 协调者交接手册（更新于 2026-11-15）
 
 ## 一、你是谁、做什么
 你是"协调者"。作者 Marty（说中文，要直接、不绕弯的结论）。你不写游戏代码，做这几件事：
@@ -8,17 +8,17 @@
 - 看两个 Code 的汇报，核对；看 CI；维护任务文档。
 开工先 `git pull`，再读 CLAUDE.md（里面的规矩比这份更权威）。
 
-## 二、角色和会话
-| 谁 | 管什么 | 会话（send_message 用） | 夜班 |
+## 二、角色和会话（11-15）
+| 谁 | 管什么 | 会话（send_message 用） | 交接文档 |
 |---|---|---|---|
-| Code1 | 主游戏 + 测试 + 重玩验收；清单 docs/queue-code1.md | "code1猫盾"，session_01ESXCnpBss1Yohjk9C2Ewey（11-08 新开，旧的 session_012GqRevda9WmL8rPSVcUu5V 不再用） | **已关**（trig_01RMATYdMMSuijPUJ4Wh3YT6，11-08 为省用量关的；周四刷新后问 Marty 再开） |
-| Code2 | 猫盾工业 + 实验室；清单 docs/queue-code2.md | "code2猫盾工业"，session_01ESXCnobWdg9DPTcTvRxC9t（11-08 新开，旧的 session_01V89eT14a1jz1NxvPtuipH4 不再用，Marty 11-08 说先用新的） | **11-12 Marty 说"都开"，三个夜班都开着**：Code2 trig_015nMUQSrPSo6fY34RSCNZYp（北京 01:46）、Code1 trig_01RMATYdMMSuijPUJ4Wh3YT6（01:31）、测试员 trig_019zLxRQQ3atth6UVicsUwZE（04:29）；都是每次起全新会话，不绑旧会话。用量不够时先关 Code2 的 |
-| 测试员 | 只玩、查、报告，不改代码；报告在 docs/playtest-2026-11-06.md | "猫盾游戏测试"，session_01ESXCnsAAkA51os8fzPqjwy | 无，三轮做完，空闲 |
-分支 industry 不要碰。Code2 的文件（js/19-industry*.js、js/18-lab.js、docs/industry*.md、docs/lab-spec.md、docs/chem.md、tests/smoke.js 里 IND 和 LB 开头的检查）协调者不改，除非 Marty 点名某个文件某几行。
+| Code1 | 主游戏、CI、设置、教程；清单 docs/queue-code1.md | "code1猫盾" `session_01ESXCnpBss1Yohjk9C2Ewey` | docs/handoff-code1.md |
+| Code2 | 猫盾工业 + 实验室；清单 docs/queue-code2.md | "code2猫盾工业" `session_01ESXCnobWdg9DPTcTvRxC9t` | docs/handoff-code2.md |
+| 测试员 | 只玩、查、报告 | "猫盾游戏测试" `session_01ESXCnsAAkA51os8fzPqjwy` | docs/handoff-tester.md |
+| 协调者（我） | 听作者、拍板、写任务、发指令 | "猫盾游戏开发" `session_01ESXCnokz9VVaPopTrnjA4F` | 本文 |
+旧会话"猫盾"、"猫盾工业"、"猫盾开发"作者说不要用。分支 industry 不要碰。三个会话都是**做完一批就停，要发消息才继续**，所以每次作者提新需求，我写好任务后要 `send_message` 对应的会话；他们不会自己醒。
+**定时任务（11-15）**：只开两个——Code2 夜班（`trig_019DTc2eViE7Q8T7sgXCn59K`，北京 01:46 叫醒 Code2 会话）和每 5 天写交接文档（`trig_01EauCwQNfpDncxtzGdve4ZU`，每月 1、6、11、16、21、26、31 日 11:17，叫醒本会话）。Code1 夜班 `trig_01RMATYdMMSuijPUJ4Wh3YT6`、测试员夜班 `trig_019zLxRQQ3atth6UVicsUwZE`、旧 Code2 夜班 `trig_015nMUQSrPSo6fY34RSCNZYp` 都 disabled。**坑**：我用 `create_trigger` 建的"新起会话"类定时任务没有仓库授权和 add_repo，推不上去（11-14 傍晚的测试员报告就这么丢了）；要让它能推，要么绑已有会话（`persistent_session_id`），要么作者在 claude.ai Routines 页面建并选仓库和连接器。作者 Pro 订阅，**模型都是 Sonnet 5.5 + medium 档**，夜班定时任务也已指定 Sonnet。
 
-- **交接文档提醒（作者 11-13 定）**：trig_01EauCwQNfpDncxtzGdve4ZU，每月 1、6、11、16、21、26、31 日北京 11:17 叫协调者会话重写这份文档（月底 31 到下月 1 日只隔 1 天，不影响）；提醒绑在协调者会话 session_01ESXCnokz9VVaPopTrnjA4F，会话没了要重建。
-
-## 三、用量（最重要的新规矩）
+## 三、用量（最重要的新规矩；作者是 Pro 订阅，用量紧）
 - **11-12 晚 Marty 报已用 40%**（下午 20%、睡前预估 30%±5，结果 40%：一下午加晚上协调者、Code1、Code2 交互会话、CI 一共吃了约 20 个点，比预估多）。这是量夜班的基线：明早的数减 40 = 三个夜班加睡前剩余操作的用量。阈值不变：≥ 90 关 Code2 夜班，≥ 95 只回答问题。
 - **11-12 记录（量夜班用的基线）**：Marty 报现在已用约 20%，睡前估计约 30%（±5）；今晚三个夜班都开着。明早让他报一个数，差值减去睡前那个数 = 一晚的夜班用量；周期仍是周四 14:00 刷新。
 - Marty 要求**每周用量留 5% 不动**。我们看不到用量，只能让 Marty 报。
@@ -57,14 +57,13 @@
 - 协调者只改 docs，推 main 的办法：`git pull --rebase origin main` → `git push origin HEAD:main`。指定分支 claude/sweet-albattani-hr7zv8 要同步，否则一直报"有未推送提交"：`git fetch; git reset --hard origin/main; git merge -s ours origin/<分支>; git push origin HEAD:<分支>`（不强推）。
 - 这台机器连不上线上地址和 PeerJS，只能本地起服务（`python3 -m http.server`）用 Playwright 玩。
 
-## 八、现在的进度（11-08 下午）
-- 线上 **2026.11.5-36**，CI 绿。Code2 已做完推了：任务 73～75、78、79、80（冰淇淋冰棍）、81（空气分离塔）、82（月球固定地图）、83（选落点）、元素表、TNT。
-- **日程在 docs/queue-code2.md 最前面**（五批，一批一推）：第 1 批 85、88、89、94、106；第 2 批 92、96、98、87、101；第 3 批 84、86、90；第 4 批 93、104、103、105、95、99；第 5 批 102。
-- **草稿等 Marty 确认**：任务 91（脏水、过滤器、滤纸：脏水从哪来、过滤器出什么）、97（矿洞走进去选哪种）、100（熔池格、合金：先做前一半还是整套重做，我建议前一半）。
-- **等 Marty 回的**：账号跨设备要不要做"导出、导入存档"（建议做，Code1 做主存档、Code2 接工业存档）；月球图要不要也扩大（目前不扩，旗格 225）；任务 105 的"操作提示合并进顶部"他没反对就算默认。
-- 火箭：docs/rocket.md、docs/rocket-steps.md，第 1 期已做；第 2 期起（冷凝机、分馏塔、发动机、燃料罐、发射台、装配）还没拆任务。月球：docs/moon.md（M1、M2 做完，M3 起没拆）。第 2 章定了：先月球再火星、固定地图、选落点、资源不刷新、带物资有重量、货运火箭、月兔、插旗 225 格、月球上做电子电路、铜硝酸从地球带、求救信标和月球车接人（地窖徽章删了）、星球做成数据表（以后自定义行星）、第三类"分界星"设想在 docs/moon.md。
-- 成就总表 docs/achievements.md（Marty 在这里改名字）。
-- 我设了一个提醒（trig_01TRuoHuQBut3HErE9wPGcu2，10:17 UTC）：查 Code2 第 1 批推没推、CI、线上版本，再给 Code1 写重玩指令（Code1 夜班关着，要重玩就直接 send_message 它，会消耗用量，先看 Marty 报的用量）。
+## 八、现在的进度（11-15）
+- 线上最新 `GAME_VERSION` 2026.11.5-89（以 main 上 CI 绿加 deploy 成功为准）。**猫盾工业已对所有人开放**（11-14，按钮标"测试版"）；Boss 测试版（`?bossdebug=1`）作者还没测，别说开放；实验室（`?labdebug=1`）Code2 报告 docs/lab-ready.md 建议先别开，等 166 手动拼做完；开发者面板（`?dev=1`）永远不对玩家开放，只往设置页放了一个音效选项。
+- **近期做完**：Code1：CI 6 份并行 10 分钟、P1 去括号、P2 Esc、P3 设置页、P4 教程每个模式第一次进。Code2：143 走路体力、144 倍速 Z、145 进大厅不丢、146 背包 36 格、147 站原地、148 熔池、149 活塞风箱、150 风箱右键、151 蒸汽发电机自带炉膛、152 串联 J、153 烧制提速、154/155 块炼法 1100°C 加锻造、157 小图标、158 配方查询完整链加石锤冷锻、132/134 出生点和火山、136 煤变多、161 教程、163 开放、164 大窑 10 份、167 去上限。
+- **在做/排队**：Code1 P6（画质视野流畅度、pic1 是下拉、帧率显示、红色图标、自动降档、联机托管重连分第三批）；Code2 166（实验室粒子包给物品、手动拼合台、灶台要燃料）→168（接入画质设置）→159（点物品看合成方式来源，只显示下一步，替换写 a/b）→133 草和木制品当燃料→135 炉子面板分燃料和炉料→139 成品进储料槽→137 皮革→142 体检第二批→140 关面板锁鼠标→118+121 删怪→120 胶水锤子→131 说明改短不用括号→122+123+126 耐久条背包满提示快捷键→火箭 R2 到 R5（钛和液氢可选，载荷）→97 矿洞去传送门。
+- **等作者定**：夜班 Code2 重建（目前绑会话）；触屏按钮拖动摆放要不要做；实验室开放时机；Boss 测完再说；草稿 91（脏水过滤）、100（熔池格合金）没放行；想法清单 docs/ideas.md（水车、望远镜、磨盘面包等）作者没选。
+- **作者定过的大决定**：设计四条（docs/design-rules.md）；不存在的怪全删（任务 118 排队中）；铜不是一档只当原料；块炼法让铁钢不用风箱，钢镐必须走铸造（镍、耐火砖模具、熔池钢）；核链条不砍（离心机 4 轮）；通关用时目标一张图 <1h、全成就加通关 <2h、全做完 <3h，现估算 107/150/220 分钟（docs/pacing.md），采纳了大窑 10 份，电解槽不改。
+- 火箭本体还没做（R2 到 R5 排队），月球只有 M1、M2（固定地图、选落点、M 键地图、着陆标记），M3 起没拆；货运火箭 logic 门设想在 docs/moon.md M4 备忘，别做。
 
 ## 九、已知的坑
 - 读错过：四角（地块上摆 4 个设备）、pic1 草图、保湿度（宠物的）、群系（我读成井的容量）、遥感（摇杆）。
