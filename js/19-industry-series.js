@@ -166,3 +166,30 @@
             IND_ITEMS_RAW.pack_leather = { name: '皮背包', col: 0x8d5a3b, wear: 'back', slots: 9, warm: 0, use: '戴在背上，背包 +9 格（共 33 格）；脱下前多出来的格子要先清空' };
             IND_CRAFT.push({ out: 'pack_leather', in: { leather: 4, rope: 3 }, hard: true }, { out: 'pack_leather', in: { pleather: 4, rope: 3 }, hard: true, leather: true });
         })();
+        // 任务 142 第一批：绷带顶回血药；电炉电解槽要钢；粉碎机把矿磨成粉，粉炼出的锭多一半
+        (function () {
+            IND_ITEMS_RAW.bandage = { name: '绷带', col: 0xeceff1, potion: 'heal', use: '右键用：20 秒内回 60 点血，也能治拉肚子，用掉就没了' };
+            IND_CRAFT.push({ out: 'bandage', in: { cotton: 2, ash: 1 }, hard: true });
+            IND_RECIPES.forEach(function (r) { if (r.out && r.out.potion_speed) r.off = true; });   // 速度药不再出现在新配方，已有的仍能喝
+            IND_RECIPES.forEach(function (r) { if (r.out && r.out.potion_heal) r.off = true; });
+            IND_CRAFT.forEach(function (r) { if (r.out === 'dev_furnace' && !r.in.steel) r.in = Object.assign({}, r.in, { steel: 2 }); if (r.out === 'dev_el' && !r.in.steel) r.in = Object.assign({}, r.in, { steel: 2 }); });
+            let M = { cu: '铜', zn: '锌', sn: '锡', fe: '铁', ni: '镍', pb: '铅', al: '铝' }, add = {};
+            Object.keys(M).forEach(function (m) { if (!IND_ITEMS_RAW['ore_' + m]) return; add['dust_' + m] = { name: M[m] + '矿粉', col: IND_ITEMS_RAW['ore_' + m].col, use: '粉碎机磨出来的。2 份矿粉加 2 份木炭、煤或焦炭，炼出 3 块锭，比直接炼矿多一半' }; });
+            Object.keys(add).forEach(function (k) { add[k].later = '粉碎机磨出来的，体检看不到'; });
+            Object.assign(IND_ITEMS_RAW, add);
+            let base = IND_RECIPES.filter(function (r) { return r.cls === 'smelt' && r.in.charcoal === 1 && Object.keys(r.in).length === 2 && Object.keys(r.in).some(function (k) { return /^ore_(cu|zn|sn|fe|ni|pb|al)$/.test(k); }); });
+            base.forEach(function (r) {
+                let ok = Object.keys(r.in).filter(function (k) { return /^ore_/.test(k); })[0], m = ok.slice(4), h = Object.keys(r.out)[0]; if (!add['dust_' + m]) return;
+                ['charcoal', 'coal', 'char'].forEach(function (c) { IND_RECIPES.push({ in: { ['dust_' + m]: 2, [c]: 2 }, out: { [h]: 3 }, cls: 'smelt', minT: r.minT, time: r.time, hard: true }); });
+            });
+            let busy0 = IND_DEV_BUSY.crusher; IND_DEV_BUSY.crusher = function (d) { return busy0(d) || Object.keys(add).some(function (k) { return (d.st['ore_' + k.slice(5)] || 0) > 0; }); };
+            let tick0 = IND_DEV_TICK.crusher; IND_DEV_TICK.crusher = function (d, dt) {
+                if (d.pw && !((d.st.ore_u || 0) > 0 || (d.st.bone || 0) > 0 || (d.st.wheat || 0) >= 2)) {
+                    let k = Object.keys(add).filter(function (q) { return (d.st['ore_' + q.slice(5)] || 0) > 0; })[0];
+                    if (k) { d.ct = (d.ct || 0) + dt; if (d.ct >= NK.crushT) { d.ct = 0; let o = 'ore_' + k.slice(5); d.st[o]--; if (d.st[o] <= 0) delete d.st[o]; d.st[k] = (d.st[k] || 0) + 1; if (ind.panel === 'crusher') ind.panelDirty = true; indSave(); } return; }
+                }
+                return tick0(d, dt);
+            };
+        })();
+        const IND_PWDRINK0 = pwDrink;
+        pwDrink = function (k) { let had = ind.bag.bottle || 0, r = IND_PWDRINK0(k); if (k === 'bandage' && (ind.bag.bottle || 0) > had) indBagDel('bottle', 1); return r; };   // 绷带不还瓶子

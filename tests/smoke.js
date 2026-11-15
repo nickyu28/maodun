@@ -9920,7 +9920,7 @@ async function enterExit(tab, key) {
                 r = await el('furnace', false);
                 if (r.steel !== 0) bad.push('电炉没电不行 ' + JSON.stringify(r));
                 const rc = await J(`(function(){ let r = IND_CRAFT.find(function (x) { return x.out === 'dev_furnace'; }); return { steel: r.in.steel || 0, fe: r.in.ingot_fe }; })()`);
-                if (!(rc.steel === 0 && rc.fe >= 1)) bad.push('电炉配方不能再要钢（要钢就是死循环） ' + JSON.stringify(rc));
+                if (!(rc.steel === 2 && rc.fe >= 1)) bad.push('任务 142：电炉配方要钢 2（钢 1100°C 就能炼，不再是死循环） ' + JSON.stringify(rc));
                 // 手拉风箱：体力每秒 3；分几次拉（体力够就拉、没力气就歇），在小熔炉里炼出一炉钢
                 const pull = await J(`(function(){ ind.base.rule = 'hard'; ind.base.devs = []; ind.base.wires = []; ind.base.fires = [];
                     ind.base.cookers = [Object.assign(ckNewState(), { id: 5, ty: 'kiln', x: 30, z: 20, items: { clay_fire: 2 }, fuel: 5000, fire: 4, bellows: true, temp: 1200, spout: [] })];
@@ -14120,6 +14120,34 @@ async function enterExit(tab, key) {
             await T.close();
             report('GFX1 画质、视野、流畅度：各 4、4、3 行选中打对勾、存档刷新还在、接口数、画质低像素比和分段、视野改雾和相机、流畅度限帧、左上角帧率', bad.length === 0, bad.join(' / '));
         }
+        if (want('IND181')) {
+            // IND181 体检第一批（任务 142）：绷带回血药配方 off 但已有的仍能喝；电炉电解槽配方要钢；粉碎机磨矿出矿粉、矿粉炼出的锭多一半；老存档读档不丢
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); let o = {}; let rec = function (k) { return IND_RECIPES.filter(function (q) { return q.out[k]; }); };
+                    o.offs = rec('potion_heal').every(function (q) { return q.off; }) && rec('potion_speed').every(function (q) { return q.off; });
+                    ind.base.surv.hp = 40; ind.bag = { potion_heal: 1 }; indSelect('potion_heal'); indUse(); o.oldDrink = !ind.bag.potion_heal && ind.base.fx && ind.base.fx.heal > 0;
+                    ind.base.fx = {}; ind.bag = { bandage: 1 }; indSelect('bandage'); indUse(); o.bandage = !ind.bag.bandage && ind.base.fx.heal > 0 && !ind.bag.bottle;
+                    let c = IND_CRAFT.filter(function (q) { return q.out === 'bandage'; })[0]; o.bandageRec = !!c && c.in.cotton === 2 && c.in.ash === 1;
+                    o.furnace = IND_CRAFT.filter(function (q) { return q.out === 'dev_furnace'; })[0].in.steel; o.el = IND_CRAFT.filter(function (q) { return q.out === 'dev_el'; })[0].in.steel; return o; })()`);
+                if (!(r.offs && r.oldDrink && r.bandage && r.bandageRec && r.furnace === 2 && r.el === 2)) bad.push('绷带回血、老药水能喝、药配方 off、电炉电解槽要钢 2 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base; B.rule = 'hard'; let d = { id: 77, ty: 'crusher', x: 5, z: 5, bats: 0, u: 0, on: true, ft: 20, st: { ore_cu: 2 }, pw: true }; B.devs = [d]; B.wires = [];
+                    for (let i = 0; i < 25; i++) IND_DEV_TICK.crusher(d, 1); let dust = d.st.dust_cu || 0, left = d.st.ore_cu || 0;
+                    let rcp = IND_RECIPES.filter(function (q) { return q.in.dust_cu === 2 && q.in.charcoal === 2; })[0];
+                    B.off.stove = false; B.stove = Object.assign(ckNewState(), { items: { dust_cu: 2, charcoal: 2 }, fuel: 9999, fire: 3, temp: 1200, spoutTy: null }); ind.cookId = 'stove'; indAdvance(15); let S = B.stove, h = (S.out.hot_cu || 0) + (S.spout || []).length;
+                    return { dust: dust, left: left, rcp: !!rcp && rcp.out.hot_cu === 3, hot: h, name: IND_ITEMS.dust_cu.name }; })()`);
+                if (!(r.dust === 2 && r.left === 0 && r.rcp && r.hot === 3 && r.name === '铜矿粉')) bad.push('粉碎机磨铜矿出铜矿粉，2 粉 2 炭出 3 块锭 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND181 体检第一批：绷带、电炉电解槽要钢、粉碎机磨矿粉炼出多一半', bad.length === 0, bad.join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
