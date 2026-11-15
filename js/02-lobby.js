@@ -360,7 +360,7 @@
             selectControl(touch ? 'pad' : 'laptop');
             let rs = document.documentElement.style, ps = +SETTINGS.padScale, pa = +SETTINGS.padAlpha;
             rs.setProperty('--pad-scale', String(isFinite(ps) && ps >= 0.8 && ps <= 1.6 ? ps : 1)); rs.setProperty('--pad-alpha', String(isFinite(pa) && pa >= 0.3 && pa <= 1 ? pa : 1));
-            if (renderer) { renderer.setPixelRatio(SETTINGS.hq ? Math.min(2, window.devicePixelRatio || 1) : 1); renderer.setSize(window.innerWidth, window.innerHeight); }
+            if (renderer) { gfxApplyQuality(); }   // 像素比跟画质走（js/02c-graphics.js）
         }
         // 上下转的快慢跟左右分开：sensV 是上下相对左右的倍数
         function lookY() { let v = +SETTINGS.sensV; return (SETTINGS.invertY ? -1 : 1) * (isFinite(v) && v > 0 ? v : 1); }

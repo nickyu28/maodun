@@ -15,7 +15,7 @@ function settingsRegister(o) {
     if (!o || !o.id || !o.label) return false;
     if (SETREG.opts.some(function (x) { return x.id === o.id; })) return false;
     let t = o.type === 'toggle' || o.type === 'choice' ? o.type : 'slider';
-    SETREG.opts.push({ group: o.group || '游戏', id: o.id, label: o.label, type: t, def: o.def, min: o.min === undefined ? 0 : o.min, max: o.max === undefined ? 1 : o.max, step: o.step || 0.05, choices: o.choices || [], onChange: o.onChange || null });
+    SETREG.opts[o.first ? 'unshift' : 'push']({ group: o.group || '游戏', id: o.id, label: o.label, type: t, def: o.def, min: o.min === undefined ? 0 : o.min, max: o.max === undefined ? 1 : o.max, step: o.step || 0.05, choices: o.choices || [], onChange: o.onChange || null });
     if (o.onChange) { try { o.onChange(settingsGet(o.id)); } catch (e) { } }
     return true;
 }
@@ -202,11 +202,18 @@ function setChoiceSet(rid, i) {
     let o = settingsOpt(rid); if (!o || !o.choices[i]) return;
     settingsSet(rid, o.choices[i][0]); setRender();
 }
+// 选项列表（作者的 pic1 草图）：标题一行，下面每个选项一行，选中的那行右边打对勾；整行都能点，每行不低于 44 像素
+function setChoiceBlock(o, v) {
+    return '<div style="padding:6px 0; border-bottom:1px solid #eee;"><div style="font-size:14px; color:#444; padding:4px 0;">' + o.label + '</div>' + o.choices.map(function (c, i) {
+        let on = c[0] === v;
+        return '<div id="set-ch-' + o.id + '-' + i + '" onclick="setChoiceSet(\'' + o.id + '\', ' + i + ')" style="display:flex; align-items:center; justify-content:space-between; min-height:44px; padding:0 12px; margin:3px 0; border-radius:6px; cursor:pointer; font-size:14px; background:' + (on ? '#e8f5e9' : '#f5f5f5') + '; color:' + (on ? '#2e7d32' : '#555') + ';"><span>' + c[1] + '</span><span style="font-size:18px; font-weight:bold;">' + (on ? '✓' : '') + '</span></div>';
+    }).join('') + '</div>';
+}
 function setRegRows(group) {
     return SETREG.opts.filter(function (o) { return o.group === group; }).map(function (o) {
         let v = settingsGet(o.id), id = 'set-reg-' + o.id;
         if (o.type === 'toggle') return setRow(o.label, setToggle(id, !!v, '开', '关'));
-        if (o.type === 'choice') return setRow(o.label, '<span style="display:flex; gap:4px; flex-wrap:wrap;">' + o.choices.map(function (c, i) { return '<button onclick="setChoiceSet(\'' + o.id + '\', ' + i + ')" style="' + setBtnStyle(c[0] === v) + '">' + c[1] + '</button>'; }).join('') + '</span>');
+        if (o.type === 'choice') return setChoiceBlock(o, v);
         return setRow(o.label, setSlider(id, v, o.min, o.max, o.step, (+v).toFixed(2).replace(/\.?0+$/, '')));
     }).join('');
 }
@@ -253,7 +260,7 @@ function setTabHtml(t) {
             setRow('触屏按键', setToggle('set-touch', touchOn, '显示', '隐藏')) + setBuiltinRow('触屏按钮大小', 'set-padScale') + setBuiltinRow('触屏按钮透明度', 'set-padAlpha') + setRegRows('操作') + setKeyRows();
     }
     if (t === '显示') {
-        return setRow('画面', setToggle('set-hq', !!SETTINGS.hq, '清晰', '流畅')) + setRegRows('显示');
+        return setRegRows('显示');
     }
     return setRow('新手提示', setToggle('set-tips', SETTINGS.tips !== false, '开', '关')) + setRow('关面板后自动锁鼠标', setToggle('set-autoLock', SETTINGS.autoLock !== false, '开', '关')) +
         '<div style="font-size:12px; color:#888; padding:8px 0 2px;">重播新手教程，点哪个模式就播哪个</div>' + setTutRows() + setRow('快捷语', '<button onclick="openChatSetup()" style="' + setBtnStyle(false) + '">改一下</button>') + setRegRows('游戏');
@@ -286,7 +293,6 @@ keyRebuild();
 (function () {
     const B = function () { return document.body; };
     const cls = function (c, on) { if (B()) B().classList.toggle(c, !!on); };
-    let lastRender = 0;
     settingsRegister({ group: '显示', id: 'hud_scale', label: '界面大小', type: 'slider', def: 1, min: 0.8, max: 1.5, step: 0.05, onChange: function (v) { document.documentElement.style.setProperty('--hud-scale', String(v)); } });
     settingsRegister({ group: '显示', id: 'hotbar_pos', label: '快捷栏位置', type: 'choice', def: 'bottom', choices: [['bottom', '下边'], ['left', '左边']], onChange: function (v) { if (B()) B().dataset.hotbar = v; } });
     settingsRegister({ group: '显示', id: 'btn_pos', label: '工业右上那排按钮', type: 'choice', def: 'tr', choices: [['tr', '右上'], ['tl', '左上'], ['br', '右下'], ['bl', '左下']], onChange: function (v) { if (B()) B().dataset.btnpos = v; } });
@@ -294,29 +300,10 @@ keyRebuild();
     settingsRegister({ group: '显示', id: 'show_xhair', label: '准星', type: 'toggle', def: true, onChange: function (v) { cls('set-no-xhair', !v); } });
     settingsRegister({ group: '显示', id: 'show_nums', label: '血条体力条上的数字', type: 'toggle', def: true, onChange: function (v) { cls('set-no-nums', !v); } });
     settingsRegister({ group: '显示', id: 'show_info', label: '左上角信息条', type: 'toggle', def: true, onChange: function (v) { cls('set-no-info', !v); } });
-    settingsRegister({ group: '显示', id: 'fov', label: '视野，度数大看得宽', type: 'slider', def: 65, min: 50, max: 100, step: 1, onChange: function (v) { SETTINGS.fov = v; if (typeof camera !== 'undefined' && camera) { camera.fov = camFovFor(camera.aspect); camera.updateProjectionMatrix(); } } });
-    settingsRegister({ group: '显示', id: 'view_dist', label: '看多远，低端手机选近', type: 'choice', def: 'far', choices: [['near', '近'], ['mid', '中'], ['far', '远']], onChange: function (v) {
-        if (typeof camera === 'undefined' || !camera) return;
-        if (!camera.userData.far0) camera.userData.far0 = camera.far;
-        camera.far = camera.userData.far0 * (v === 'near' ? 0.35 : v === 'mid' ? 0.65 : 1); camera.updateProjectionMatrix();
-    } });
-    settingsRegister({ group: '显示', id: 'fps_cap', label: '帧率上限', type: 'choice', def: 0, choices: [[30, '30'], [60, '60'], [0, '不限']] });
-    // 帧率上限：只管画，逻辑照常跑。主画面这一帧离上一次画得太近就跳过
-    if (typeof THREE !== 'undefined' && THREE.WebGLRenderer) {
-        let r0 = THREE.WebGLRenderer.prototype.render;
-        THREE.WebGLRenderer.prototype.render = function () {
-            let cap = +settingsGet('fps_cap');
-            if (cap > 0 && typeof renderer !== 'undefined' && this === renderer) {
-                let now = performance.now();
-                if (now - lastRender < 1000 / cap - 2) return;
-                lastRender = now;
-            }
-            return r0.apply(this, arguments);
-        };
-    }
+    settingsRegister({ group: '显示', id: 'fov', label: '视角宽度，度数大看得宽', type: 'slider', def: 65, min: 50, max: 100, step: 1, onChange: function (v) { SETTINGS.fov = v; if (typeof camera !== 'undefined' && camera) { camera.fov = camFovFor(camera.aspect); camera.updateProjectionMatrix(); } } });
     // 显示项重新套一遍：相机刚建好、页面加载完时调
     window.settingsApplyDisplay = function () {
-        ['hud_scale', 'hotbar_pos', 'btn_pos', 'show_minimap', 'show_xhair', 'show_nums', 'show_info', 'fov', 'view_dist'].forEach(function (id) { let o = settingsOpt(id); if (o && o.onChange) { try { o.onChange(settingsGet(id)); } catch (e) { } } });
+        ['hud_scale', 'hotbar_pos', 'btn_pos', 'show_minimap', 'show_xhair', 'show_nums', 'show_info', 'fov'].forEach(function (id) { let o = settingsOpt(id); if (o && o.onChange) { try { o.onChange(settingsGet(id)); } catch (e) { } } });
     };
     window.addEventListener('load', window.settingsApplyDisplay);
 })();

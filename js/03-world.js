@@ -162,8 +162,9 @@
             // scene.remove 一律顺手释放（D1）
             scene.remove = function () { for (let i = 0; i < arguments.length; i++) { let o = arguments[i]; THREE.Scene.prototype.remove.call(this, o); disposeObject(o); } return this; };
             camera = new THREE.PerspectiveCamera(camFovFor(window.innerWidth / window.innerHeight), window.innerWidth / window.innerHeight, 0.5, 1600); camera.rotation.order = 'YXZ';
-            let canvas = document.getElementById('gameCanvas'); renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true }); renderer.setPixelRatio(SETTINGS.hq ? Math.min(2, window.devicePixelRatio || 1) : 1); renderer.setSize(window.innerWidth, window.innerHeight);
-            if (window.settingsApplyDisplay) window.settingsApplyDisplay();   // 视野、视距按设置套上
+            let canvas = document.getElementById('gameCanvas'); renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: graphicsQuality() >= 1 }); renderer.setPixelRatio(graphicsPixelRatio()); gfxHookRenderer(renderer); renderer.setSize(window.innerWidth, window.innerHeight);
+            if (window.settingsApplyDisplay) window.settingsApplyDisplay();   // 视角宽度等按设置套上
+            gfxApplyAll();   // 画质、视野按设置套上
             window.addEventListener('resize', function () { if (camera && renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.fov = camFovFor(camera.aspect); camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); } });
             clock = new THREE.Clock(); raycaster = new THREE.Raycaster();
             pVel = new THREE.Vector3();
@@ -1474,6 +1475,12 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026.11.5-89', date: '11 月 15 日', title: '最近更新', items: [
+                    '设置里能选画质、视野、流畅度，选中的那行打对勾',
+                    '左上角显示帧率，设置里能关'
+                ]
+            },
+            {
                 id: '2026.11.5-75', date: '11 月 14 日', title: '最近更新', items: [
                     '设置分成声音、操作、显示、游戏四页',
                     '按键能自己改，冲突会提示，能一键恢复默认',
@@ -1487,11 +1494,6 @@
                     '按着方向键时切走窗口，回来人物不会一直往前走了',
                     '提示和说明里的括号去掉了，读起来更顺',
                     '弹出来的窗口、背包、地图都能按 Esc 关，关掉鼠标自动锁回来'
-                ]
-            },
-            {
-                id: '2026.11.5-12', date: '10 月 31 日', title: '最近更新', items: [
-                    '地图 4 的药剂房有时走不到，修好了'
                 ]
             }
         ];

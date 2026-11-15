@@ -13718,22 +13718,22 @@ async function enterExit(tab, key) {
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} openSettings('显示'); true;`); await W(200);
             const txt = await T.eval(`document.getElementById('set-content').innerText`);
-            for (const w of ['界面大小', '快捷栏位置', '小地图', '准星', '视野', '帧率上限', '看多远', '左上角信息条', '工业右上那排按钮']) if (txt.indexOf(w) < 0) bad.push('显示组里没有 ' + w);
-            await T.eval(`(function(){ setSliderSet('set-reg-hud_scale', 1.3); settingsSet('hotbar_pos', 'left'); settingsSet('btn_pos', 'bl'); ['show_minimap', 'show_xhair', 'show_nums', 'show_info'].forEach(function (k) { settingsSet(k, false); }); settingsSet('fov', 80); settingsSet('view_dist', 'near'); })(); true;`);
+            for (const w of ['界面大小', '快捷栏位置', '小地图', '准星', '视角宽度', '画质', '视野', '流畅度', '左上角信息条', '工业右上那排按钮']) if (txt.indexOf(w) < 0) bad.push('显示组里没有 ' + w);
+            await T.eval(`(function(){ setSliderSet('set-reg-hud_scale', 1.3); settingsSet('hotbar_pos', 'left'); settingsSet('btn_pos', 'bl'); ['show_minimap', 'show_xhair', 'show_nums', 'show_info'].forEach(function (k) { settingsSet(k, false); }); settingsSet('fov', 80); settingsSet('gfx_view', 0); })(); true;`);
             const r = JSON.parse(await T.eval(`JSON.stringify({ sc: getComputedStyle(document.documentElement).getPropertyValue('--hud-scale').trim(), hb: document.body.dataset.hotbar, bp: document.body.dataset.btnpos,
                 mm: getComputedStyle(document.getElementById('minimap-container')).display, xh: getComputedStyle(document.getElementById('crosshair')).display, nums: getComputedStyle(document.querySelector('.bar-num')).display, info: getComputedStyle(document.querySelector('#stats-left > div')).display,
                 left: getComputedStyle(document.getElementById('bottom-ui-wrapper')).left, fov: camera.fov, far: camera.far, far0: camera.userData.far0 })`));
             if (r.sc !== '1.3' || r.hb !== 'left' || r.bp !== 'bl' || r.mm !== 'none' || r.xh !== 'none' || r.nums !== 'none' || r.info !== 'none' || r.left !== '12px') bad.push('显示项没生效 ' + JSON.stringify(r));
-            if (r.fov !== 80 || !(r.far0 > 0) || Math.abs(r.far - r.far0 * 0.35) > 1e-6) bad.push('视野、视距没套到相机 ' + JSON.stringify([r.fov, r.far, r.far0]));
-            await T.eval(`settingsSet('fps_cap', 30); true;`); await W(300);
+            if (r.fov !== 80 || !(r.far0 > 0)) bad.push('视角宽度没套到相机 ' + JSON.stringify([r.fov, r.far, r.far0]));
+            await T.eval(`settingsSet('gfx_fps', 0); true;`); await W(300);
             const f0 = await T.eval(`renderer.info.render.frame`); await W(1500); const f1 = await T.eval(`renderer.info.render.frame`);
             if (f1 - f0 > 50) bad.push('帧率上限 30 但 1.5 秒画了 ' + (f1 - f0) + ' 帧');
-            await T.eval(`settingsSet('fps_cap', 0); true;`);
+            await T.eval(`settingsSet('gfx_fps', 2); true;`);
             await T.send('Page.reload'); await W(3000);
             await T.eval(`document.getElementById('player-id').value = 'set3' + Date.now() % 100000; requestLobbyAccess(); true;`);
             await until(T, `camera && renderer`, 15000);
             const b = JSON.parse(await T.eval(`JSON.stringify({ fov: settingsGet('fov'), hb: document.body.dataset.hotbar, mm: document.body.classList.contains('set-no-minimap'), cam: camera ? camera.fov : null, far: camera ? camera.far : null })`));
-            if (b.fov !== 80 || b.hb !== 'left' || !b.mm || b.cam !== 80 || !(b.far < 1600)) bad.push('刷新后没读回来 ' + JSON.stringify(b));
+            if (b.fov !== 80 || b.hb !== 'left' || !b.mm || b.cam !== 80) bad.push('刷新后没读回来 ' + JSON.stringify(b));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('SET3 显示设置：界面大小、快捷栏位置、四个显示开关、工业按钮角、视野、视距、帧率上限，生效、存档、刷新还在', bad.length === 0, bad.join(' / '));
@@ -14068,6 +14068,58 @@ async function enterExit(tab, key) {
             report('IND180 皮革和皮背包：鞣制出皮革、风箱皮鞋要皮革、人造革代替、皮背包 +9 格、老存档不丢', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('GFX1')) {
+            // GFX1 画质、视野、流畅度（任务 P6 第一批）：设置页显示组里三项各 4、4、3 行，选中的右边打对勾、每行不低于 44 像素、点哪行选哪行；改了存档刷新还在；接口 graphicsFpsTarget 是 30、60、120、graphicsViewMul 是 1、1.4、2、3；画质低时像素比 1、分段数变少；视野改雾和相机 far；流畅度 30 时 1.5 秒画的帧数明显少；左上角帧率能开关
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} openSettings('显示'); true;`); await W(200);
+            const rows = JSON.parse(await T.eval(`JSON.stringify(['gfx_quality', 'gfx_view', 'gfx_fps'].map(function (id) { return document.querySelectorAll('[id^="set-ch-' + id + '-"]').length; }))`));
+            if (rows.join() !== '4,4,3') bad.push('三项行数 ' + rows.join() + '，该是 4,4,3');
+            const small = await T.eval(`[].filter.call(document.querySelectorAll('[id^="set-ch-"]'), function (d) { return d.getBoundingClientRect().height < 43.5; }).length`);
+            if (small) bad.push('有 ' + small + ' 行不到 44 像素');
+            // 选中的右边打对勾，点另一行换过去
+            await T.eval(`document.getElementById('set-ch-gfx_quality-2').click(); true;`);
+            const ck = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { return document.getElementById('set-ch-gfx_quality-' + i).innerText.indexOf('✓') >= 0; }))`));
+            if (ck.join() !== 'false,false,true,false' || (await T.eval(`graphicsQuality()`)) !== 2) bad.push('点高没选中或没打对勾 ' + ck.join());
+            await T.eval(`document.getElementById('set-ch-gfx_view-3').click(); document.getElementById('set-ch-gfx_fps-0').click(); true;`);
+            const g = JSON.parse(await T.eval(`JSON.stringify({ q: graphicsQuality(), v: graphicsView(), f: graphicsFps(), m: graphicsViewMul(), t: graphicsFpsTarget() })`));
+            if (g.q !== 2 || g.v !== 3 || g.f !== 0 || g.m !== 3 || g.t !== 30) bad.push('接口 ' + JSON.stringify(g));
+            const tt = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2].map(function (i) { settingsSet('gfx_fps', i); return graphicsFpsTarget(); }).concat([0, 1, 2, 3].map(function (i) { settingsSet('gfx_view', i); return graphicsViewMul(); })))`));
+            if (tt.join() !== '30,60,120,1,1.4,2,3') bad.push('档位对应的数 ' + tt.join());
+            // 画质：像素比和分段数
+            await T.eval(`settingsSet('gfx_quality', 0); true;`);
+            const q0 = JSON.parse(await T.eval(`JSON.stringify({ pr: renderer.getPixelRatio(), seg: new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments, cyl: new THREE.CylinderGeometry(1, 1, 2, 24).parameters.radialSegments, inst: new THREE.SphereGeometry(1, 8, 8) instanceof THREE.BufferGeometry })`));
+            if (q0.pr !== 1 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
+            await T.eval(`settingsSet('gfx_quality', 1); true;`);
+            if ((await T.eval(`new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments`)) !== 24) bad.push('画质中该原样');
+            // 视野：雾和相机 far
+            await T.eval(`settingsSet('gfx_view', 0); scene.fog = new THREE.Fog(0x888888, 100, 400); gfxApplyView(); true;`);
+            const f0 = JSON.parse(await T.eval(`JSON.stringify([scene.fog.near, scene.fog.far, camera.far])`));
+            await T.eval(`settingsSet('gfx_view', 2); true;`);
+            const f2 = JSON.parse(await T.eval(`JSON.stringify([scene.fog.near, scene.fog.far, camera.far])`));
+            if (f2[0] !== f0[0] * 2 || f2[1] !== f0[1] * 2 || Math.abs(f2[2] - f0[2] * 2) > 1e-6) bad.push('视野 ×2 没改雾和相机 ' + JSON.stringify([f0, f2]));
+            await T.eval(`settingsSet('gfx_view', 1); scene.fog = new THREE.Fog(0x888888, 100, 400); true;`);
+            if ((await T.eval(`scene.fog.far`)) !== 560) bad.push('新建的雾没按视野放大');
+            await T.eval(`scene.fog = new THREE.Fog(0x000000, 10, 40); gfxApplyView(); true;`);
+            if ((await T.eval(`scene.fog.far`)) !== 40) bad.push('纯黑的雾（暗室）不该放大');
+            // 流畅度：30 时画的帧明显少于 120
+            await T.eval(`document.getElementById('sys-modal').classList.add('hidden'); true;`);   // 设置窗开着时大厅不画 3D，没有帧可数
+            await T.eval(`settingsSet('gfx_view', 0); settingsSet('gfx_fps', 0); true;`); await W(300);
+            const a0 = await T.eval(`renderer.info.render.frame`); await W(1500); const a1 = await T.eval(`renderer.info.render.frame`);
+            if (a1 - a0 > 50) bad.push('流畅度 30 但 1.5 秒画了 ' + (a1 - a0) + ' 帧');
+            // 左上角帧率
+            await T.eval(`settingsSet('gfx_fps', 1); true;`);
+            if (!(await until(T, `document.getElementById('gfx-fps') && document.getElementById('gfx-fps').style.display === 'block' && /^FPS [0-9]+$/.test(document.getElementById('gfx-fps').innerText)`, 10000))) bad.push('左上角没有帧率 ' + await T.eval(`JSON.stringify([gfxFps(), renderer.info.render.frame, document.getElementById('gfx-fps') && document.getElementById('gfx-fps').style.display, graphicsFpsTarget(), document.hidden, sysModalVisible()])`));
+            await T.eval(`settingsSet('show_fps', false); true;`);
+            if (!(await until(T, `document.getElementById('gfx-fps').style.display === 'none'`, 5000))) bad.push('关了显示帧率还在');
+            await T.eval(`settingsSet('show_fps', true); settingsSet('gfx_quality', 3); settingsSet('gfx_view', 2); settingsSet('gfx_fps', 2); true;`);
+            await T.send('Page.reload'); await until(T, `typeof graphicsQuality === 'function'`, 20000);
+            const b = JSON.parse(await T.eval(`JSON.stringify({ q: graphicsQuality(), v: graphicsView(), f: graphicsFps() })`));
+            if (b.q !== 3 || b.v !== 2 || b.f !== 2) bad.push('刷新后没读回来 ' + JSON.stringify(b));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('GFX1 画质、视野、流畅度：各 4、4、3 行选中打对勾、存档刷新还在、接口数、画质低像素比和分段、视野改雾和相机、流畅度限帧、左上角帧率', bad.length === 0, bad.join(' / '));
+        }
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
