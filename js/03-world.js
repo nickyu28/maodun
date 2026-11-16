@@ -1475,9 +1475,9 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026.11.5-93', date: '11 月 16 日', title: '最近更新', items: [
+                id: '2026.11.5-94', date: '11 月 16 日', title: '最近更新', items: [
                     '设置里能选画质、视野、流畅度，点开选就行',
-                    '画质高是真实，超高比现实还好，中和低依次变糊',
+                    '画质高档起有影子，超高是最好的样子',
                     '左上角显示帧率，设置里能关',
                     '卡的时候左上角冒红色图标，太卡会自动降画质，单人局还会先暂停'
                 ]

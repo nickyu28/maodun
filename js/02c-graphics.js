@@ -1,11 +1,11 @@
 // 画质、视野、流畅度（任务 P6，作者 11-15）。放在 js/02b-settings.js 后面。三项都是设置页里的"选项列表"，一行一个、选中的打对勾，存在 SETTINGS.reg（TH_settings），跟着设备走。
-//   画质 低、中、高、超高：像素比和几何体分段，比例 50%、75%、100%、150%（球、圆柱、圆锥、圆环、圆的分段数）；现在游戏里没有阴影，所以档位里没有阴影这一项。抗锯齿只在建渲染器时定，改了要重开页面才生效。
+//   画质 低、中、高、超高：像素比、几何体分段和影子（球、圆柱、圆锥、圆环、圆的分段数）；现在游戏里没有阴影，所以档位里没有阴影这一项。抗锯齿只在建渲染器时定，改了要重开页面才生效。
 //   视野 正常、稍远、远、超远：相机 far 和雾的距离乘 1、1.4、2、3。
 //   流畅度 正常、流畅、高：帧率目标 30、60、120，限制渲染，逻辑照常跑；设备刷新率不到的，自然就到不了。
 //   左上角帧率小字（设置里有开关，默认开）。
 // 给别的文件读的接口：graphicsQuality() graphicsView() graphicsFps() 返回档位（0 到 3、0 到 3、0 到 2），graphicsViewMul() 视野倍数，graphicsFpsTarget() 目标帧率。说明在 docs/settings.md。
 const GFX_QUALITY_NAMES = ['低', '中', '高', '超高'], GFX_VIEW_NAMES = ['正常', '稍远', '远', '超远'], GFX_FPS_NAMES = ['正常，30', '流畅，60', '高，120'];
-const GFX_VIEW_MUL = [1, 1.4, 2, 3], GFX_FPS_TARGET = [30, 60, 120], GFX_SEG = [0.5, 0.75, 1, 1.5];   // 画质按跟现实比（作者 11-16）：低 50%，中 75%，高 100% 就是真实，超高 150% 比现实还好；像素比和分段数都按这个比例
+const GFX_VIEW_MUL = [1, 1.4, 2, 3], GFX_FPS_TARGET = [30, 60, 120], GFX_SEG = [0.6, 1, 1.25, 1.5];   // 作者 11-16：中 = 游戏默认的样子，低在它下面，高在它上面，超高 = 能做到的最好，超过现实
 // 设备差：核数不超过 4，或者内存不超过 4 GB（有的浏览器不报内存，那就只看核数）
 function gfxDeviceLow() {
     let c = navigator.hardwareConcurrency, m = navigator.deviceMemory;
@@ -18,8 +18,9 @@ function graphicsFps() { return gfxIdx('gfx_fps', 2, 1); }
 function graphicsViewMul() { return GFX_VIEW_MUL[graphicsView()]; }
 function graphicsFpsTarget() { return GFX_FPS_TARGET[graphicsFps()]; }
 function graphicsPixelRatio() {
-    // 100% = 设备原生像素比；超高 150% 是超采样，最多到 3，免得画布太大
-    return Math.max(0.5, Math.min(3, (window.devicePixelRatio || 1) * GFX_SEG[graphicsQuality()]));
+    // 低 1，中 min(1.5, 设备)，高 设备原生，超高 原生的 1.5 倍超采样（最多 3，免得画布太大）
+    let d = window.devicePixelRatio || 1, q = graphicsQuality();
+    return q === 0 ? 1 : q === 1 ? Math.min(1.5, d) : q === 2 ? d : Math.min(3, Math.max(d, 1) * 1.5);
 }
 
 // ── 画质：像素比马上生效，分段数下次建东西时生效 ──
@@ -83,9 +84,56 @@ function gfxHookRenderer(r) {
         let now = performance.now(), t = graphicsFpsTarget();
         if (now - gfxLastRender < 1000 / t - 2) return;
         gfxLastRender = now; gfxFrameTimes.push(now);
+        try { gfxShadowTick(r); } catch (e) { }
         while (gfxFrameTimes.length && now - gfxFrameTimes[0] > 1000) gfxFrameTimes.shift();
         return r0.apply(this, arguments);
     };
+}
+// ── 影子：按光照源。游戏里只有一个太阳（平行光）带影子，灯泡一类没有真的灯，所以只有太阳。
+// 低、中档关（中是默认的样子，本来就没有影子）；高档开，贴图 2048、柔边关；超高档贴图取显卡最大到 4096、柔边开、范围更大。
+// 影子相机跟着画面中心走，只管周围一圈；场景里的模型每 0.5 秒扫一遍：会受光的材质都接收影子，不透明又不大的模型投影，大块地面只接收。
+let gfxSun = null, gfxShadowOn = null, gfxShadowAt = 0, gfxShadowQ = -1;
+function gfxFindSun() {
+    if (gfxSun && gfxSun.parent) return gfxSun;
+    gfxSun = null;
+    if (typeof scene !== 'undefined' && scene) scene.traverse(function (o) { if (!gfxSun && o.isDirectionalLight) gfxSun = o; });
+    return gfxSun;
+}
+function gfxLit(m) { return m && (m.isMeshLambertMaterial || m.isMeshStandardMaterial || m.isMeshPhongMaterial || m.isMeshPhysicalMaterial); }
+function gfxShadowTick(r) {
+    if (typeof scene === 'undefined' || !scene || !r.shadowMap) return;
+    let q = graphicsQuality(), on = q >= 2, now = performance.now();
+    if (gfxShadowOn !== on) {
+        gfxShadowOn = on; r.shadowMap.enabled = on; gfxShadowAt = 0;
+        scene.traverse(function (o) { if (o.material) [].concat(o.material).forEach(function (m) { m.needsUpdate = true; }); });
+    }
+    let sun = gfxFindSun(); if (!sun) return;
+    if (!on) { sun.castShadow = false; return; }
+    if (gfxShadowQ !== q) {
+        gfxShadowQ = q; r.shadowMap.type = q === 3 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+        let sz = q === 3 ? Math.min(4096, r.capabilities.maxTextureSize || 2048) : 2048;
+        if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+        sun.shadow.mapSize.set(sz, sz);
+        let R = q === 3 ? 70 : 45, c = sun.shadow.camera; c.left = -R; c.right = R; c.top = R; c.bottom = -R; c.near = 1; c.far = 260; c.updateProjectionMatrix();
+        sun.shadow.bias = -0.0006; scene.traverse(function (o) { if (o.material) [].concat(o.material).forEach(function (m) { m.needsUpdate = true; }); });
+    }
+    sun.castShadow = true;
+    if (!sun.target.parent) scene.add(sun.target);
+    // 影子相机跟着画面中心，位置取整数格，免得影子边缘跟着晃
+    let cp = camera.position, tx = Math.round(cp.x / 2) * 2, tz = Math.round(cp.z / 2) * 2;
+    sun.target.position.set(tx, 0, tz); sun.position.set(tx + 40, 90, tz + 40); sun.target.updateMatrixWorld(); sun.updateMatrixWorld();
+    if (now - gfxShadowAt > 500) {
+        gfxShadowAt = now;
+        scene.traverse(function (o) {
+            if (!o.isMesh || o.userData.__gfxS) return;
+            let ms = [].concat(o.material), lit = ms.length && ms.every(gfxLit); o.userData.__gfxS = 1;
+            if (!lit) return;
+            o.receiveShadow = true;
+            let g = o.geometry, big = true;
+            if (g) { if (!g.boundingSphere) g.computeBoundingSphere(); big = g.boundingSphere && g.boundingSphere.radius * Math.max(o.scale.x, o.scale.y, o.scale.z) > 20; }
+            o.castShadow = !big && !ms.some(function (m) { return m.transparent; });
+        });
+    }
 }
 // 现在每秒画多少帧；最近 1 秒没画过就是 0
 function gfxFps() {

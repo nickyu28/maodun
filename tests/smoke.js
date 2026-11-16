@@ -14106,9 +14106,20 @@ async function enterExit(tab, key) {
             // 画质：像素比和分段数
             await T.eval(`settingsSet('gfx_quality', 0); true;`);
             const q0 = JSON.parse(await T.eval(`JSON.stringify({ dpr: window.devicePixelRatio || 1, pr: renderer.getPixelRatio(), seg: new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments, cyl: new THREE.CylinderGeometry(1, 1, 2, 24).parameters.radialSegments, inst: new THREE.SphereGeometry(1, 8, 8) instanceof THREE.BufferGeometry })`));
-            if (Math.abs(q0.pr - 0.5 * q0.dpr) > 1e-6 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
-            const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); return [renderer.getPixelRatio() / (window.devicePixelRatio || 1), new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
-            if (JSON.stringify(pct) !== '[[0.5,12],[0.75,18],[1,24],[1.5,36]]') bad.push('画质按现实 50、75、100、150 的像素比和分段数不对 ' + JSON.stringify(pct));
+            if (q0.pr !== 1 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
+            const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); let d = window.devicePixelRatio || 1; return [Math.abs(renderer.getPixelRatio() - [1, Math.min(1.5, d), d, Math.min(3, Math.max(d, 1) * 1.5)][i]) < 1e-6, new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
+            if (JSON.stringify(pct) !== '[[true,14],[true,24],[true,30],[true,36]]') bad.push('画质四档的像素比和分段数不对 ' + JSON.stringify(pct));
+            // 影子：低、中关，高开 2048，超高开更大加柔边；只太阳投影，大地面只接收
+            await T.eval(`${HIDE} (function () { let g = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 0xffffff })); g.name = 'gfxbox'; scene.add(g); let f = new THREE.Mesh(new THREE.BoxGeometry(400, 1, 400), new THREE.MeshLambertMaterial({ color: 0x888888 })); f.name = 'gfxfloor'; scene.add(f); })(); true;`);
+            const sh = [];
+            for (const i of [0, 1, 2, 3]) {
+                await T.eval(`settingsSet('gfx_quality', ${i}); gfxShadowAt = 0; renderer.render(scene, camera); window.gfxLastRender = 0; true;`); await W(700);
+                await T.eval(`gfxLastRender = 0; gfxShadowAt = 0; renderer.render(scene, camera); true;`);
+                sh.push(JSON.parse(await T.eval(`JSON.stringify((function () { let s = gfxFindSun(), b = scene.getObjectByName('gfxbox'), f = scene.getObjectByName('gfxfloor'); return [renderer.shadowMap.enabled, !!(s && s.castShadow), s ? s.shadow.mapSize.x : 0, renderer.shadowMap.type === THREE.PCFSoftShadowMap, b.castShadow, b.receiveShadow, f.castShadow, f.receiveShadow]; })())`)));
+            }
+            if (sh[0][0] || sh[0][1] || sh[1][0] || sh[1][1]) bad.push('低、中档不该有影子 ' + JSON.stringify(sh.slice(0, 2)));
+            if (!sh[2][0] || !sh[2][1] || sh[2][2] !== 2048 || sh[2][3] || !sh[2][4] || !sh[2][5] || sh[2][6] || !sh[2][7]) bad.push('高档影子不对 ' + JSON.stringify(sh[2]));
+            if (!sh[3][0] || !sh[3][1] || sh[3][2] <= 2048 || !sh[3][3]) bad.push('超高档影子贴图不比高大或没开柔边 ' + JSON.stringify(sh[3]));
             await T.eval(`settingsSet('gfx_quality', 1); true;`);
             // 视野：雾和相机 far
             await T.eval(`settingsSet('gfx_view', 0); scene.fog = new THREE.Fog(0x888888, 100, 400); gfxApplyView(); true;`);
