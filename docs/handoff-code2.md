@@ -1,6 +1,6 @@
 # Code2 交接文档（11-14 更新，交接员 11-15 补）
 
-**11-15 补**：版本现在 `2026.11.5-91`。夜班定时任务现在是 `trig_019DTc2eViE7Q8T7sgXCn59K`（01:46 北京，叫醒本会话），旧的 `trig_015nMUQSrPSo6fY34RSCNZYp` 已 disabled。11-15 早上已推：118 删怪、137 皮革、142 第一批第二批、120 胶水。166、168 之后接 Code1 的 P6 接口，在 `docs/settings.md`。其余以 `docs/queue-code2.md` 为准。
+**11-16 补**：版本现在 `2026.11.5-92`。**夜班定时任务现在全关**，新 Code2 夜班 `trig_013B24JvAD42HoTnDeshCe9s` enabled 是 false，要作者定重开。11-15 早上已推：118 删怪、137 皮革、142 第一批第二批、120 胶水。Code1 的 P6 已推完，接口在 `docs/settings.md`，168 可以接。会话 11-15 07:11 状态是 failed（最后一轮出错），没核实原因。其余以 `docs/queue-code2.md` 为准。
 
 接手的人先读：CLAUDE.md、docs/queue-code2.md（排队和最近一次汇报）、docs/code2-tasks.md（每个任务的原话要求）、docs/industry.md（每个系统的说明）。跟作者沟通用中文。
 
@@ -14,7 +14,7 @@ Code2 负责猫盾工业（硬核模式）+ 实验室：`js/19-industry*.js`、`
 4. 推之前看 `gh run list --branch main`：main 最近一次运行 smoke 和 deploy 都成功才推（deploy 不能是跳过）；还在跑就等；红的先不推，等 Code1 修。
 5. 推完盯这次运行到 smoke 和 deploy 都成功；红了先修，不堆新活。
 6. 推完在 `docs/queue-code2.md` 的"最近一次汇报"写：提交号、全量冒烟结果、CI 和 deploy 状态、线上版本号、没做的东西。
-7. 版本号：玩家能玩到的改动把 `index.html` 的 `GAME_VERSION` 的 N 加一（现在 `2026.11.5-75`）；不写 CHANGELOG；不动 `DATA_WIPE_VER`；联机消息格式没动，`NET_PROTO` 不动。
+7. 版本号：玩家能玩到的改动把 `index.html` 的 `GAME_VERSION` 的 N 加一（11-16 是 `2026.11.5-92`）；不写 CHANGELOG；不动 `DATA_WIPE_VER`；联机消息格式没动，`NET_PROTO` 不动。
 
 ## 本机环境
 - 跑冒烟要先 `export CHROME_PATH=/opt/pw-browsers/chromium`，不然报"Chrome 没起来"。起不来时 `pkill -f chromium` 再跑。
