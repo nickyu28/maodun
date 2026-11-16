@@ -14069,7 +14069,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('GFX1')) {
-            // GFX1 画质、视野、流畅度（任务 P6 第一批）：设置页显示组里三项是下拉：方框左边写现在选的右边向下箭头、点开纵向列出 4、4、3 行（选中的有对勾，每行不低于 44 像素）、点哪行选哪行选完收起、Esc 先收列表；改了存档刷新还在；接口 graphicsFpsTarget 是 30、60、120、graphicsViewMul 是 1、1.4、2、3；画质低时像素比 1、分段数变少；视野改雾和相机 far；流畅度 30 时 1.5 秒画的帧数明显少；左上角帧率能开关
+            // GFX1 画质、视野、流畅度（任务 P6 第一批）：设置页显示组里三项是下拉：方框左边写现在选的右边向下箭头、点开纵向列出 4、4、3 行（选中的有对勾，每行不低于 44 像素）、点哪行选哪行选完收起、Esc 先收列表；改了存档刷新还在；接口 graphicsFpsTarget 是 30、60、120、graphicsViewMul 是 1、1.4、2、3；画质低中高超高的像素比和分段数是现实的 50%、75%、100%、150%；视野改雾和相机 far；流畅度 30 时 1.5 秒画的帧数明显少；左上角帧率能开关
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} openSettings('显示'); true;`); await W(200);
@@ -14105,10 +14105,11 @@ async function enterExit(tab, key) {
             if (tt.join() !== '30,60,120,1,1.4,2,3') bad.push('档位对应的数 ' + tt.join());
             // 画质：像素比和分段数
             await T.eval(`settingsSet('gfx_quality', 0); true;`);
-            const q0 = JSON.parse(await T.eval(`JSON.stringify({ pr: renderer.getPixelRatio(), seg: new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments, cyl: new THREE.CylinderGeometry(1, 1, 2, 24).parameters.radialSegments, inst: new THREE.SphereGeometry(1, 8, 8) instanceof THREE.BufferGeometry })`));
-            if (q0.pr !== 1 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
+            const q0 = JSON.parse(await T.eval(`JSON.stringify({ dpr: window.devicePixelRatio || 1, pr: renderer.getPixelRatio(), seg: new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments, cyl: new THREE.CylinderGeometry(1, 1, 2, 24).parameters.radialSegments, inst: new THREE.SphereGeometry(1, 8, 8) instanceof THREE.BufferGeometry })`));
+            if (Math.abs(q0.pr - 0.5 * q0.dpr) > 1e-6 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
+            const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); return [renderer.getPixelRatio() / (window.devicePixelRatio || 1), new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
+            if (JSON.stringify(pct) !== '[[0.5,12],[0.75,18],[1,24],[1.5,36]]') bad.push('画质按现实 50、75、100、150 的像素比和分段数不对 ' + JSON.stringify(pct));
             await T.eval(`settingsSet('gfx_quality', 1); true;`);
-            if ((await T.eval(`new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments`)) !== 24) bad.push('画质中该原样');
             // 视野：雾和相机 far
             await T.eval(`settingsSet('gfx_view', 0); scene.fog = new THREE.Fog(0x888888, 100, 400); gfxApplyView(); true;`);
             const f0 = JSON.parse(await T.eval(`JSON.stringify([scene.fog.near, scene.fog.far, camera.far])`));

@@ -1,11 +1,11 @@
 // 画质、视野、流畅度（任务 P6，作者 11-15）。放在 js/02b-settings.js 后面。三项都是设置页里的"选项列表"，一行一个、选中的打对勾，存在 SETTINGS.reg（TH_settings），跟着设备走。
-//   画质 低、中、高、超高：像素比和几何体分段（球、圆柱、圆锥、圆环、圆的分段数）；现在游戏里没有阴影，所以档位里没有阴影这一项。抗锯齿只在建渲染器时定，改了要重开页面才生效。
+//   画质 低、中、高、超高：像素比和几何体分段，比例 50%、75%、100%、150%（球、圆柱、圆锥、圆环、圆的分段数）；现在游戏里没有阴影，所以档位里没有阴影这一项。抗锯齿只在建渲染器时定，改了要重开页面才生效。
 //   视野 正常、稍远、远、超远：相机 far 和雾的距离乘 1、1.4、2、3。
 //   流畅度 正常、流畅、高：帧率目标 30、60、120，限制渲染，逻辑照常跑；设备刷新率不到的，自然就到不了。
 //   左上角帧率小字（设置里有开关，默认开）。
 // 给别的文件读的接口：graphicsQuality() graphicsView() graphicsFps() 返回档位（0 到 3、0 到 3、0 到 2），graphicsViewMul() 视野倍数，graphicsFpsTarget() 目标帧率。说明在 docs/settings.md。
 const GFX_QUALITY_NAMES = ['低', '中', '高', '超高'], GFX_VIEW_NAMES = ['正常', '稍远', '远', '超远'], GFX_FPS_NAMES = ['正常，30', '流畅，60', '高，120'];
-const GFX_VIEW_MUL = [1, 1.4, 2, 3], GFX_FPS_TARGET = [30, 60, 120], GFX_SEG = [0.6, 1, 1.25, 1.5];
+const GFX_VIEW_MUL = [1, 1.4, 2, 3], GFX_FPS_TARGET = [30, 60, 120], GFX_SEG = [0.5, 0.75, 1, 1.5];   // 画质按跟现实比（作者 11-16）：低 50%，中 75%，高 100% 就是真实，超高 150% 比现实还好；像素比和分段数都按这个比例
 // 设备差：核数不超过 4，或者内存不超过 4 GB（有的浏览器不报内存，那就只看核数）
 function gfxDeviceLow() {
     let c = navigator.hardwareConcurrency, m = navigator.deviceMemory;
@@ -18,8 +18,8 @@ function graphicsFps() { return gfxIdx('gfx_fps', 2, 1); }
 function graphicsViewMul() { return GFX_VIEW_MUL[graphicsView()]; }
 function graphicsFpsTarget() { return GFX_FPS_TARGET[graphicsFps()]; }
 function graphicsPixelRatio() {
-    let d = window.devicePixelRatio || 1, q = graphicsQuality();
-    return q === 0 ? 1 : q === 1 ? Math.min(1.5, d) : q === 2 ? Math.min(2, d) : d;
+    // 100% = 设备原生像素比；超高 150% 是超采样，最多到 3，免得画布太大
+    return Math.max(0.5, Math.min(3, (window.devicePixelRatio || 1) * GFX_SEG[graphicsQuality()]));
 }
 
 // ── 画质：像素比马上生效，分段数下次建东西时生效 ──
