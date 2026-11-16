@@ -9601,7 +9601,7 @@ async function enterExit(tab, key) {
                 r = await J(`(function(){ let S = ind.base.surv, n = 0; for (let i = 0; i < 200; i++) { S.food = 50; S.water = 50; ind.bag = { meat_raw: 1 }; indEat('meat_raw'); if (S.water === 40) n++; } return [n, S.food]; })()`);
                 if (!(r[0] > 60 && r[0] < 140 && r[1] === 55)) bad.push('生肉一半肚子疼 ' + JSON.stringify(r));
                 const use = await J(`[IND_ITEMS.hide.use, IND_ITEMS.bone.use]`);
-                if (!(/风箱/.test(use[0]) && /粉碎机/.test(use[1]))) bad.push('皮、骨的说明 ' + JSON.stringify(use));
+                if (!(/皮革/.test(use[0]) && /粉碎机/.test(use[1]))) bad.push('皮、骨的说明 ' + JSON.stringify(use));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -9627,7 +9627,7 @@ async function enterExit(tab, key) {
                 const cr = await J(`(function(){ ind.bag = { plastic: 3, yarn: 2 }; indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pleather'; })); let a = JSON.parse(JSON.stringify(ind.bag)); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pipe' && r.in.plastic; })); return [a, ind.bag]; })()`);
                 if (!(cr[0].pleather === 2 && cr[0].plastic === 1 && !cr[0].yarn && cr[1].pipe === 6 && !cr[1].plastic)) bad.push('人造革、塑料管 ' + JSON.stringify(cr));
                 // 用皮的配方都有一条人造革的（数量一样）；拿一个假的用皮配方试 fmPleatherAlts
-                const alt = await J(`(function(){ let miss = IND_CRAFT.filter(function (r) { return r.in.hide; }).filter(function (r) { return !IND_CRAFT.some(function (q) { return q.out === r.out && q.in.pleather === r.in.hide && Object.keys(r.in).every(function (k) { return k === 'hide' || q.in[k] === r.in[k]; }); }); }).map(function (r) { return r.out; }); IND_CRAFT.push({ out: 'rope', in: { hide: 3, wood: 1 }, hard: true }); fmPleatherAlts(); let q = IND_CRAFT.filter(function (r) { return r.out === 'rope' && r.in.pleather === 3 && r.in.wood === 1; }).length; IND_CRAFT.splice(IND_CRAFT.length - 2, 2); return { miss: miss, q: q }; })()`);
+                const alt = await J(`(function(){ let miss = IND_CRAFT.filter(function (r) { return r.in.hide; }).filter(function (r) { return !IND_CRAFT.some(function (q) { return q.out === r.out && q.in.pleather === r.in.hide && Object.keys(r.in).every(function (k) { return k === 'hide' || q.in[k] === r.in[k]; }); }); }).map(function (r) { return r.out; }).filter(function (o) { return o !== 'leather' && o !== 'glue'; }); IND_CRAFT.push({ out: 'rope', in: { hide: 3, wood: 1 }, hard: true }); fmPleatherAlts(); let q = IND_CRAFT.filter(function (r) { return r.out === 'rope' && r.in.pleather === 3 && r.in.wood === 1; }).length; IND_CRAFT.splice(IND_CRAFT.length - 2, 2); return { miss: miss, q: q }; })()`);
                 if (!(alt.miss.length === 0 && alt.q === 1)) bad.push('用皮的配方要有人造革备选 ' + JSON.stringify(alt));
                 const use = await J(`IND_ITEMS.plastic.use`);
                 if (!(/人造革/.test(use) && /轮胎/.test(use))) bad.push('塑料说明写用途 ' + use);
@@ -10890,7 +10890,7 @@ async function enterExit(tab, key) {
                 if (!(Math.abs(r.p - 0.3) < 0.1 && Math.abs(r.lit - 0.7) < 0.1 && r.far === false)) bad.push('岩浆点火把 30% 烧焦、离远不行 ' + JSON.stringify(r));
                 // 火山边刷火苗仔（同一时刻最多 1 只）、基地里不刷
                 r = await run(`indTeleport(V.x + R + 4, V.z); for (let i = 0; i < 4; i++) { mbFlameSpawn(); ind.t += 1000; } let inR = ind.map.volc.filter(function (v) { return Math.hypot(ind.p.x - v.x, ind.p.z - v.z) <= v.r * 1.6 + 40; }).length, n = ind.mobs.filter(function (m) { return m.ty === 'flame'; }).length, mx = inR; indGoBase(null); mbTick(1); return { n: n, mx: mx, base: (ind.mobs || []).length };`);
-                if (!(r.n >= 1 && r.n <= r.mx && r.base === 0)) bad.push('火山边刷 1 只火苗仔、基地不刷 ' + JSON.stringify(r));
+                if (!(r.n === 0 && r.base === 0)) bad.push('任务 118：火苗仔不再刷，火山边也没有 ' + JSON.stringify(r));
                 // 地热发电机：离岩浆和水都在 3 米内 24 V，缺任何一个不发；配方
                 r = await J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; let B = ind.base, P = IND_BASE_ST.pool; B.off.pool = false; B.devs = []; B.wires = [];
                     let g = { id: 1, ty: 'geo', x: P.x + P.r + 1, z: P.z, bats: 0, u: 0, on: true, ft: 20, st: {} }; B.devs.push(g); B.lava = [{ x: g.x + 2, z: g.z, r: 1 }]; let both = indSrcVolt(g);
@@ -12087,7 +12087,7 @@ async function enterExit(tab, key) {
                     ind.mobs.forEach(mbDrop); ind.mobs = []; s = mbNew('slime:tame', ind.p.x + 1.2, ind.p.z); ind.tripGround = []; mbDamage(s, 1); out.hit = !!s.aggro; out.goo = ind.tripGround.filter(function (g) { return g.k === 'goo'; }).length; out.dead = s.dead;
                     ind.mobs.forEach(mbDrop); ind.mobs = []; s = mbNew('slime:tame', ind.p.x + 5, ind.p.z); indIsNight = function () { return true; }; mbTick(0.1); out.gone = s.dead; indIsNight = nt;
                     indGoBase(null); out.base = (ind.mobs || []).length; return out; })()`);
-                if (!(r.forest && r.beach && !r.desert && !r.mountain && !r.cave && !r.night)) bad.push('哪儿刷 ' + JSON.stringify(r));
+                if (!(!r.forest && !r.beach && !r.desert && !r.mountain && !r.cave && !r.night)) bad.push('任务 118：史莱姆不再自然刷出来 ' + JSON.stringify(r));
                 if (!(r.n === 2 && r.sz === 2 && r.hp === 1 && r.tame && r.alpha)) bad.push('同时 2 只、小号血 1、半透明 ' + JSON.stringify(r));
                 if (!(r.shared <= 5 && r.shared === 1 + 4)) bad.push('算进合计 5 只 ' + JSON.stringify(r));
                 if (!(r.hp30 === 100 && !r.aggro)) bad.push('站旁边 30 秒不掉血不主动蹭 ' + JSON.stringify(r));
