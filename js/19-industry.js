@@ -512,7 +512,7 @@
         // 炉子的状态（灶台和小熔炉、大窑通用）整理一遍
         // 出料槽：冶炼出来的烫锭进这里，每块自己 30 秒凉。[{ k: 烫锭, t: 还要几秒 }]，最多 10 块
         function indFixSpout(S) {
-            S.spout = Array.isArray(S.spout) ? S.spout.filter(function (e) { return e && IND_ITEMS_RAW[e.k] && IND_ITEMS_RAW[e.k].hot; }).slice(0, IND_SPOUT_CAP).map(function (e) { return { k: e.k, t: indNum(e.t, 0, 0, 120) }; }) : [];
+            S.spout = Array.isArray(S.spout) ? S.spout.filter(function (e) { return e && IND_ITEMS_RAW[e.k] && (IND_ITEMS_RAW[e.k].hot || e.p); }).slice(0, IND_SPOUT_CAP).map(function (e) { return e.p ? { k: e.k, t: 0, p: 1 } : { k: e.k, t: indNum(e.t, 0, 0, 120) }; }) : [];
             Object.keys(S.out || {}).forEach(function (k) {   // 老档：炉子里留着的烫锭挪进出料槽（放不下的当它凉了）；硬核没装槽的炉子烫锭就留在炉膛里
                 if (!IND_ITEMS_RAW[k] || !IND_ITEMS_RAW[k].hot || S.spoutTy === null) return;
                 for (let i = 0; i < S.out[k]; i++) { if (S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: k, t: IND_HOT_COOL }); else S.out[IND_ITEMS_RAW[k].hot] = (S.out[IND_ITEMS_RAW[k].hot] || 0) + 1; }
@@ -1807,7 +1807,7 @@
             c.C.spout = sp.filter(function (e) {
                 let hot = e.t > 0;
                 if (hot && !tongs) { hotLeft++; return true; }
-                let k = hot ? e.k : IND_ITEMS_RAW[e.k].hot;
+                let k = hot || e.p ? e.k : IND_ITEMS_RAW[e.k].hot;
                 if (indBagAdd(k, 1) > 0) { took.push(indName(k)); return false; }
                 full = true; return true;
             });
@@ -3175,8 +3175,8 @@
         function indSpoutPos(c) { return { x: c.x + IND_COOK[c.ty].r + 0.9, z: c.z }; }
         function indSpoutTxt(c) {
             let by = {}, order = [];
-            c.C.spout.forEach(function (e) { let k = IND_ITEMS_RAW[e.k].hot; if (!by[k]) { by[k] = { n: 0, t: 0 }; order.push(k); } by[k].n++; by[k].t = Math.max(by[k].t, e.t); });
-            return order.map(function (k) { let b = by[k]; return indName(k) + ' ×' + b.n + '　' + (b.t > 0 ? '烫，还要 ' + Math.ceil(b.t) + ' 秒' : '已凉'); }).join('　');
+            c.C.spout.forEach(function (e) { let k = e.p ? e.k : IND_ITEMS_RAW[e.k].hot; if (!by[k]) { by[k] = { n: 0, t: 0, p: !!e.p }; order.push(k); } by[k].n++; by[k].t = Math.max(by[k].t, e.t); });
+            return order.map(function (k) { let b = by[k]; return indName(k) + ' ×' + b.n + (b.p ? '' : '　' + (b.t > 0 ? '烫，还要 ' + Math.ceil(b.t) + ' 秒' : '已凉')); }).join('　');
         }
         function indCookTick(c, dt) {
             indSpoutTick(c, dt); ckTick(c, dt); rlCookWaterTick(c);   // 接了水管：空桶自动装生水（任务 58）
@@ -3230,7 +3230,9 @@
             let mats = indConsume(S.items, r, n), res = indCookResult(r, n, mats, burnt), out = res.out;   // 桶按用的材质还回去，陶罐有 1/10 碎掉
             Object.keys(out).forEach(function (k) {
                 if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) { for (let i = 0; i < out[k]; i++) { if (ckSpoutTakes(S, k)) S.spout.push({ k: k, t: ckSpoutDef(S).cool }); else S.out[k] = (S.out[k] || 0) + 1; } }   // 烫锭进出料槽；没槽或槽耐温不够就留在炉膛里
-                else S.out[k] = (S.out[k] || 0) + out[k];
+                else {   // 任务 139：别的成品也进出料槽（熔池里的熔融金属不走这里）；槽满了、槽被模具占着、没装槽的留在炉膛
+                    for (let i = 0; i < out[k]; i++) { if (ckSpoutTakes(S, k) && S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: k, t: 0, p: 1 }); else S.out[k] = (S.out[k] || 0) + 1; }
+                }
             });
             if (res.broke && !ind.sleeping) indFlash('陶罐碎了' + (res.broke > 1 ? '' + res.broke + ' 个' : ''));
             if (ind.panel === 'stove') ind.panelDirty = true;

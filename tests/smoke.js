@@ -14368,6 +14368,34 @@ async function enterExit(tab, key) {
             report('IND185 说明改短不用括号：实验室和工业里的字符串没有括号、物品说明不超过 30 个字', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND186')) {
+            // IND186 烧出来的成品都进出料槽（任务 139）：装了砖槽的炉子烧砖、烤肉，成品进槽、不烫、能直接取；烫锭照旧；没装槽的留在炉膛；槽满了溢出的留在炉膛总数不变；槽被模具占着留在炉膛；老存档里槽的条目读得回来
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.rule = 'hard'; let r = IND_RECIPES.find(function (q) { return q.out.brick === 1 && q.in.clay === 2; }); let mk = function (ty, n, pre) { let S = Object.assign(ckNewState(), { spoutTy: ty, items: { clay: 2 * n }, spout: pre || [], out: {} }); return { id: 9, ty: 'kiln', x: 0, z: 0, C: S }; }; ${body} })()`);
+                let r = await run(`let c = mk('brick', 4); indCookOut(c, r, 4, false); return { sp: c.C.spout.map(function (e) { return e.k + ':' + e.t + ':' + (e.p ? 1 : 0); }), out: c.C.out };`);
+                if (!(r.sp.length === 4 && r.sp.every((x) => x === 'brick:0:1') && !r.out.brick)) bad.push('装了砖槽，砖进槽、不烫 ' + JSON.stringify(r));
+                r = await run(`let c = mk(null, 4); indCookOut(c, r, 4, false); return { sp: c.C.spout.length, out: c.C.out.brick || 0 };`);
+                if (!(r.sp === 0 && r.out === 4)) bad.push('没装槽的炉子成品留在炉膛 ' + JSON.stringify(r));
+                r = await run(`let pre = []; for (let i = 0; i < IND_SPOUT_CAP - 2; i++) pre.push({ k: 'brick', t: 0, p: 1 }); let c = mk('brick', 5, pre); indCookOut(c, r, 5, false); return { sp: c.C.spout.length, out: c.C.out.brick || 0, cap: IND_SPOUT_CAP };`);
+                if (!(r.sp === r.cap && r.out === 3 && r.sp + r.out === r.cap - 2 + 5)) bad.push('槽满了溢出的留在炉膛、总数不变 ' + JSON.stringify(r));
+                r = await run(`let c = mk('brick', 2); c.C.mold = { s: 'knife', part: null, t: 0 }; indCookOut(c, r, 2, false); return { sp: c.C.spout.length, out: c.C.out.brick || 0 };`);
+                if (!(r.sp === 0 && r.out === 2)) bad.push('槽被模具占着，成品留在炉膛 ' + JSON.stringify(r));
+                r = await run(`let c = mk('brick', 3); indCookOut(c, r, 3, false); ind.base.cookers = [{ id: 9, ty: 'kiln', x: 20, z: 10, items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, spout: c.C.spout, spoutTy: 'brick' }]; let k = ind.base.cookers[0]; ind.bag = {}; indSpoutTake(indCookCur ? { C: k, x: 20, z: 10, ty: 'kiln', id: 9 } : null); let got = ind.bag.brick || 0; indFixSpout(k); return { got: got, left: (k.spout || []).length };`);
+                if (!(r.got === 3 && r.left === 0)) bad.push('槽里的砖能直接取、读档整理不报错 ' + JSON.stringify(r));
+                const t = await J(`(function(){ let S = Object.assign(ckNewState(), { spoutTy: 'brick', spout: [{ k: 'brick', t: 0, p: 1 }, { k: 'hot_cu', t: 20 }, { k: 'zzz', t: 0, p: 1 }], out: {} }); indFixSpout(S); return S.spout.map(function (e) { return e.k + ':' + (e.p ? 1 : 0); }); })()`);
+                if (t.join() !== 'brick:1,hot_cu:0') bad.push('老存档整理：成品条目保留、认不出的丢掉 ' + t.join());
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND186 成品进出料槽：砖进槽不烫、没装槽留炉膛、槽满溢出总数不变、模具占着留炉膛、能取、读档整理', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
