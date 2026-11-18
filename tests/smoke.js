@@ -14396,6 +14396,39 @@ async function enterExit(tab, key) {
             report('IND186 成品进出料槽：砖进槽不烫、没装槽留炉膛、槽满溢出总数不变、模具占着留炉膛、能取、读档整理', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND187')) {
+            // IND187 耐久条、背包刚满提示、C T H 快捷键（任务 122、123、126）：满耐久的格子没有条、300/600 约一半绿、低于 20% 红、断了的空红框、每种只在第一格；刚剩 2 格弹橙字一次、占满弹红字、腾出再满又弹；按 C T H 开关配方、元素表、成就，面板开着按别的键不报错，配方表里点配方背包不变
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.dura = {}; ind.bag = { pick_iron: 2, broken_pick_iron: 1, wood: 3 }; let SL = indSlots(), o = {}; o.full = indDuraFrac('pick_iron'); let mx = mbMax('pick_iron'); ind.base.dura.pick_iron = mx / 2; o.half = indDuraFrac('pick_iron'); ind.base.dura.pick_iron = mx * 0.6; o.barHtml = indDuraBar('pick_iron', 0, SL, true).indexOf('width:60%') >= 0 && indDuraBar('pick_iron', 0, SL, true).indexOf('#43a047') >= 0; ind.base.dura.pick_iron = mx / 2; o.yellow = indDuraBar('pick_iron', 0, SL, true).indexOf('#fbc02d') >= 0; o.second = indDuraBar('pick_iron', 1, SL, true) === ''; ind.base.dura.pick_iron = mx * 0.1; o.red = indDuraBar('pick_iron', 0, SL, true).indexOf('#e53935') >= 0; o.broken = indDuraFrac('broken_pick_iron'); o.brokenBar = indDuraBar('broken_pick_iron', SL.findIndex(function (s) { return s.k === 'broken_pick_iron'; }), SL, true).indexOf('outline') >= 0; o.none = indDuraBar('wood', 2, SL, true) === ''; o.mx = mx; return o; })()`);
+                if (!(r.full === null && r.half === 0.5 && r.barHtml && r.yellow && r.second && r.red && r.broken === 0 && r.brokenBar && r.none)) bad.push('耐久条 ' + JSON.stringify(r));
+                r = await J(`(function(){ let fl = [], f0 = indFlash; indFlash = function (t) { fl.push(String(t)); }; let N = indBagSlots(); ind.bagW = null; ind.bag = {}; let keys = Object.keys(IND_ITEMS).filter(function (k) { return !/[:@]|^(inst|cyl|broken_)/.test(k) && !IND_ITEMS[k].hot; }).slice(0, 60); let ok = keys.filter(function (k) { return IND_ITEMS[k]; }); let o = { ok: ok.length, N: N };
+                    let fill = function (n) { ind.bag = {}; for (let i = 0; i < n; i++) ind.bag[ok[i]] = 1; indBagWatch(); };
+                    fill(N - 3); fl.length = 0; fill(N - 2); o.warn = fl.slice(); fl.length = 0; fill(N - 1); o.warn2 = fl.slice(); fl.length = 0; fill(N); o.full = fl.slice(); fl.length = 0; fill(N); o.again = fl.slice(); fill(N - 4); fl.length = 0; fill(N); o.full2 = fl.slice(); indFlash = f0; return o; })()`);
+                if (r.ok < r.N) bad.push('测试物品不够 ' + JSON.stringify(r));
+                else if (!(r.warn.length === 1 && /快满了/.test(r.warn[0]) && r.warn2.length === 0 && r.full.length === 1 && /背包满了/.test(r.full[0]) && r.again.length === 0 && r.full2.length >= 1 && /背包满了/.test(r.full2[r.full2.length - 1]))) bad.push('背包快满了、满了各弹一次，腾出再满又弹 ' + JSON.stringify(r));
+                const key = async (ch) => { await T.eval(`indKeyDown({ key: '${ch}', target: document.body, preventDefault: function () { }, repeat: false }); true;`); };
+                for (const [ch, pn] of [['c', 'book'], ['t', 'elems'], ['h', 'ach']]) {
+                    await T.eval(`indPanelClose(); true;`);
+                    await key(ch); const a = await T.eval(`ind.panel`);
+                    await key(ch); const b = await T.eval(`ind.panel`);
+                    if (a !== pn || b) bad.push('按 ' + ch + ' 开关 ' + pn + ' ' + a + ' ' + b);
+                }
+                await T.eval(`indPanelClose(); indPanelBook(''); true;`); await key('t'); await key('h');
+                if (T.errors.length) bad.push('按键报错 ' + T.errors.slice(0, 1).join(' / '));
+                r = await J(`(function(){ indPanelClose(); ind.bag = { wood: 3 }; indPanelBook(''); let p = document.getElementById('ind-panel'); let b0 = JSON.stringify(ind.bag); let rows = p.querySelectorAll('[onclick]'); let n = 0; for (let i = 0; i < Math.min(rows.length, 6); i++) { try { rows[i].click(); n++; } catch (e) { } } return { same: JSON.stringify(ind.bag) === b0, n: n, hasMake: /合成/.test(p.innerText) && !!p.querySelector('button[onclick*="indCraft"]') }; })()`);
+                if (!r.same || r.hasMake) bad.push('配方查询里点配方背包不变、没有合成按钮 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND187 耐久条、背包刚满提示、C T H 快捷键', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

@@ -683,6 +683,28 @@
             let c = B[k] || 0, free = cap - indSlotsOf(B);
             let st = indStackOf(k); return Math.max(0, Math.min(n, (Math.ceil(c / st) + free) * st - c));
         }
+        // 任务 122：带耐久的东西，格子下面一条细耐久条。满的不显示，用过才出现；断了的是空红框。每种只在第一格显示，别的格是没用过的
+        function indDuraFrac(k) {
+            if (/^broken_/.test(k)) return 0;
+            let T = typeof mbDurTab === 'function' ? mbDurTab(k) : null; if (!T || !ind.base || !ind.base.dura) return null;
+            let cur = ind.base.dura[k]; if (!(cur > 0)) return null;
+            let mx = mbMax(k); if (!(mx > 0) || cur >= mx) return null;
+            return Math.max(0, Math.min(1, cur / mx));
+        }
+        function indDuraBar(k, i, SL, abs) {
+            for (let j = 0; j < i; j++) if (SL[j] && SL[j].k === k) return '';
+            let f = indDuraFrac(k); if (f === null) return '';
+            let col = f > 0.5 ? '#43a047' : f >= 0.2 ? '#fbc02d' : '#e53935';
+            return '<span class="ind-dura" style="' + (abs ? 'position:absolute;left:3px;right:3px;bottom:2px;' : 'display:block;margin-top:2px;') + 'height:3px;border-radius:2px;background:#e0e0e0;' + (f === 0 ? 'outline:1px solid #e53935;' : '') + '"><span style="display:block;height:3px;border-radius:2px;width:' + Math.round(f * 100) + '%;background:' + col + ';"></span></span>';
+        }
+        // 任务 123：背包刚变满的那一刻弹红字，剩 2 格弹一次橙字；回到有空位再满才再弹
+        function indBagWatch() {
+            let free = indBagSlots() - indSlots().length, W = ind.bagW = ind.bagW || { f: free, warned: false, fullShown: false };
+            if (free > 2) { W.warned = false; W.fullShown = false; }
+            else if (free > 0) { W.fullShown = false; if (free <= 2 && !W.warned && W.f > free) { W.warned = true; indFlash('<b style="color:#ef6c00">背包快满了</b>'); } }
+            else if (!W.fullShown) { W.fullShown = true; W.warned = true; if (W.f > free) indFlash('<b style="color:#e53935">背包满了</b>'); }
+            W.f = free;
+        }
         // 不认识的物品 key 跳过（任务 61）
         function indSlots() { let L = []; Object.keys(ind.bag).forEach(function (k) { if (!IND_ITEMS[k]) return; let c = ind.bag[k], st = indStackOf(k); while (c > 0) { L.push({ k: k, n: Math.min(st, c) }); c -= st; } }); return L; }
         function indBagAdd(k, n) {
@@ -1438,7 +1460,7 @@
             d.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 40px;text-align:center;"><div style="font-size:30px;font-weight:bold;color:#222;">已暂停</div>' +
                 '<div style="margin-top:20px;"><button id="ind-pause-go" style="' + IND_BTN + 'background:#2e7d32;font-size:20px;padding:12px 26px;" onclick="indResume()">继续</button>' +
                 '<button id="ind-pause-tut" style="' + IND_BTN + 'background:#546e7a;font-size:20px;padding:12px 26px;" onclick="indResume(); indTutPlay()">重播教程</button>' +
-                '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button>' + (ind.cave ? '<button id="ind-pause-cvback" style="' + IND_BTN + 'background:#5d4037;font-size:20px;padding:12px 26px;" onclick="indResume(); cvBackStart()">回到洞口</button>' : '') + '</div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续　Z 倍速，只在基地</div></div>';
+                '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button>' + (ind.cave ? '<button id="ind-pause-cvback" style="' + IND_BTN + 'background:#5d4037;font-size:20px;padding:12px 26px;" onclick="indResume(); cvBackStart()">回到洞口</button>' : '') + '</div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续　Z 倍速，只在基地　C 配方　T 元素表　H 成就</div></div>';
             document.body.appendChild(d);
         }
         function indResume() {
@@ -3427,7 +3449,7 @@
                 let on = indSelSet('bag').indexOf(i) >= 0, hot = IND_ITEMS[it.k].hot;
                 let pre = i === 0 ? '<div style="font-size:12px;color:#5e35b1;margin:2px 0;">快捷栏，1～9、0' + (ind.panel === 'bag' ? '　点一格：换到手上那格' : '') + '</div>' : i === IND_HOTBAR ? '<div style="font-size:12px;color:#888;margin:6px 0 2px;">其余</div>' : '';
                 return pre + '<span class="ind-slot" data-from="bag" data-i="' + i + '" onpointerdown="indDragDown(event,\'bag\',' + i + ')" style="display:inline-block;margin:2px;padding:3px 6px;border-radius:10px;cursor:grab;font-size:13px;user-select:none;touch-action:manipulation;border:2px solid ' + (on ? '#5e35b1' : hot ? '#c62828' : '#cfd8dc') + ';background:' + (on ? '#ede7f6' : hot ? '#ffcdd2' : '#fff') + ';">' + (i < IND_HOTBAR ? '<b style="color:#5e35b1;margin-right:3px;">' + (i === 9 ? 0 : i + 1) + '</b>' : '') + indIconImg(it.k, 28) + indName(it.k) + '×' + it.n +
-                    '<button style="' + IND_X_BTN + 'margin-left:3px;" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indItemInfo(\'' + it.k.replace(/'/g, '') + '\')">?</button>' + '<button class="ind-trash" style="' + IND_X_BTN + '" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indTrash(\'bag\',' + i + ')">销毁</button></span>';
+                    indDuraBar(it.k, i, SL, false) + '<button style="' + IND_X_BTN + 'margin-left:3px;" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indItemInfo(\'' + it.k.replace(/'/g, '') + '\')">?</button>' + '<button class="ind-trash" style="' + IND_X_BTN + '" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indTrash(\'bag\',' + i + ')">销毁</button></span>';
             }).join('');
         }
         function indPanelBox(id) {
@@ -3738,6 +3760,9 @@
             if (k === 'escape') { if (ind.carve && !ind.panel) { ctCarveExit(); return; } if (indCancelWire()) return; if (ind.panel) indPanelClose(); return; }   // 任务 138：Esc 退出雕模具   // 任务 104：连线状态下 Esc 先取消连线
             if (k === 'z' && !ind.panel && !e.ctrlKey && !e.metaKey) { spCycle(); return; }   // 倍速（任务 144）
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
+            if (k === 'c' && !e.ctrlKey && !e.metaKey && (!ind.panel || ind.panel === 'book')) { if (ind.panel) indPanelClose(); else indPanelBook(''); return; }   // 任务 126：C 配方查询，只能看，不能合成
+            if (k === 't' && !e.ctrlKey && !e.metaKey && (!ind.panel || ind.panel === 'elems')) { if (ind.panel) indPanelClose(); else indPanelElems(); return; }   // T 元素表
+            if (k === 'h' && !e.ctrlKey && !e.metaKey && (!ind.panel || ind.panel === 'ach')) { if (ind.panel) indPanelClose(); else achPanel(); return; }   // H 成就
             if (k === 'j' && !ind.panel) { srToggleAim(); return; }   // 任务 152：切并联串联
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）
             if (k === 'q' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); indTrashHand(); return; }   // Ctrl+Q：销毁手上那一格（5 秒能撤销）
@@ -3769,7 +3794,7 @@
             d.innerHTML =
                 '<div style="position:absolute;left:8px;top:8px;"><div id="ind-status" style="background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
                 '<div id="ind-wear" style="margin-top:4px;background:rgba(255,255,255,.92);padding:4px 10px;border-radius:8px;font-size:13px;pointer-events:auto;"></div></div>' +
-                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方</button><button id="ind-btn-bag" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-map" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) wdMapToggle()">地图</button><button id="ind-btn-speed" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="spCycle()">倍速 ×1　Z</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表</button><button id="ind-btn-ach" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="achPanel()">成就</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
+                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方　C</button><button id="ind-btn-bag" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-map" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) wdMapToggle()">地图</button><button id="ind-btn-speed" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="spCycle()">倍速 ×1　Z</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表　T</button><button id="ind-btn-ach" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="achPanel()">成就　H</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
                 '<div id="ind-hint" style="position:fixed;left:50%;top:6px;transform:translateX(-50%);max-width:70vw;color:#fff;padding:3px 12px;font-size:15px;line-height:1.35;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;background:rgba(0,0,0,.28);border-radius:8px;pointer-events:none;z-index:6;"></div>' +
                 '<div id="ind-cross" style="position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.7);pointer-events:none;z-index:6;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
@@ -3828,8 +3853,9 @@
                 let box = 'position:relative;display:inline-block;vertical-align:top;width:66px;height:46px;margin:1px;padding:14px 2px 0;box-sizing:border-box;border-radius:6px;font-size:11px;line-height:1.2;text-align:center;overflow:hidden;';
                 if (!it) { bag += '<span class="ind-hot" style="' + box + 'border:2px dashed #e0e0e0;color:#ccc;">' + lab + '</span>'; continue; }
                 let on = i === ind.selIdx, hotS = IND_ITEMS[it.k].hot ? Math.ceil(ind.hotT && ind.hotT[it.k] !== undefined ? ind.hotT[it.k] : IND_HOT_COOL) : 0;
-                bag += '<span class="ind-hot" onclick="ind.selIdx=' + i + '" style="' + box + 'cursor:pointer;border:2px solid ' + (on ? '#5e35b1' : hotS ? '#c62828' : '#cfd8dc') + ';background:' + (hotS ? '#ffcdd2;color:#b71c1c' : on ? '#ede7f6' : '#fff') + ';">' + lab + indIconImg(it.k, 32) + indName(it.k) + '<br>×' + it.n + (hotS ? ' 烫 ' + hotS + ' 秒' : '') + '</span>';
+                bag += '<span class="ind-hot" onclick="ind.selIdx=' + i + '" style="' + box + 'cursor:pointer;border:2px solid ' + (on ? '#5e35b1' : hotS ? '#c62828' : '#cfd8dc') + ';background:' + (hotS ? '#ffcdd2;color:#b71c1c' : on ? '#ede7f6' : '#fff') + ';">' + lab + indIconImg(it.k, 32) + indName(it.k) + '<br>×' + it.n + (hotS ? ' 烫 ' + hotS + ' 秒' : '') + indDuraBar(it.k, i, SL, true) + '</span>';
             }
+            indBagWatch();
             { let free = indBagSlots() - SL.length, warn = free <= 2;   // 任务 110：背包只剩 2 格以内变橙色，满了写红字
               if (SL.length > IND_HOTBAR || warn) bag += '<span id="ind-bag-free" style="display:inline-block;vertical-align:top;margin:1px 4px;font-size:12px;color:' + (free <= 0 ? '#e53935;font-weight:bold' : warn ? '#ef6c00;font-weight:bold' : '#888') + ';line-height:46px;">' + (SL.length > IND_HOTBAR ? '还有 ' + (SL.length - IND_HOTBAR) + ' 格，E' : '') + (free <= 0 ? '　背包满了' : warn ? '　只剩 ' + free + ' 格空' : '') + '</span>'; }
             let a = indAim(), hint = '';
