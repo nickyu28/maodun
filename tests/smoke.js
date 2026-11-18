@@ -9601,7 +9601,7 @@ async function enterExit(tab, key) {
                 r = await J(`(function(){ let S = ind.base.surv, n = 0; for (let i = 0; i < 200; i++) { S.food = 50; S.water = 50; ind.bag = { meat_raw: 1 }; indEat('meat_raw'); if (S.water === 40) n++; } return [n, S.food]; })()`);
                 if (!(r[0] > 60 && r[0] < 140 && r[1] === 55)) bad.push('生肉一半肚子疼 ' + JSON.stringify(r));
                 const use = await J(`[IND_ITEMS.hide.use, IND_ITEMS.bone.use]`);
-                if (!(/风箱/.test(use[0]) && /粉碎机/.test(use[1]))) bad.push('皮、骨的说明 ' + JSON.stringify(use));
+                if (!(/皮革/.test(use[0]) && /粉碎机/.test(use[1]))) bad.push('皮、骨的说明 ' + JSON.stringify(use));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -9627,7 +9627,7 @@ async function enterExit(tab, key) {
                 const cr = await J(`(function(){ ind.bag = { plastic: 3, yarn: 2 }; indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pleather'; })); let a = JSON.parse(JSON.stringify(ind.bag)); indCraft(IND_CRAFT.findIndex(function (r) { return r.out === 'pipe' && r.in.plastic; })); return [a, ind.bag]; })()`);
                 if (!(cr[0].pleather === 2 && cr[0].plastic === 1 && !cr[0].yarn && cr[1].pipe === 6 && !cr[1].plastic)) bad.push('人造革、塑料管 ' + JSON.stringify(cr));
                 // 用皮的配方都有一条人造革的（数量一样）；拿一个假的用皮配方试 fmPleatherAlts
-                const alt = await J(`(function(){ let miss = IND_CRAFT.filter(function (r) { return r.in.hide; }).filter(function (r) { return !IND_CRAFT.some(function (q) { return q.out === r.out && q.in.pleather === r.in.hide && Object.keys(r.in).every(function (k) { return k === 'hide' || q.in[k] === r.in[k]; }); }); }).map(function (r) { return r.out; }); IND_CRAFT.push({ out: 'rope', in: { hide: 3, wood: 1 }, hard: true }); fmPleatherAlts(); let q = IND_CRAFT.filter(function (r) { return r.out === 'rope' && r.in.pleather === 3 && r.in.wood === 1; }).length; IND_CRAFT.splice(IND_CRAFT.length - 2, 2); return { miss: miss, q: q }; })()`);
+                const alt = await J(`(function(){ let miss = IND_CRAFT.filter(function (r) { return r.in.hide; }).filter(function (r) { return !IND_CRAFT.some(function (q) { return q.out === r.out && q.in.pleather === r.in.hide && Object.keys(r.in).every(function (k) { return k === 'hide' || q.in[k] === r.in[k]; }); }); }).map(function (r) { return r.out; }).filter(function (o) { return o !== 'leather' && o !== 'glue'; }); IND_CRAFT.push({ out: 'rope', in: { hide: 3, wood: 1 }, hard: true }); fmPleatherAlts(); let q = IND_CRAFT.filter(function (r) { return r.out === 'rope' && r.in.pleather === 3 && r.in.wood === 1; }).length; IND_CRAFT.splice(IND_CRAFT.length - 2, 2); return { miss: miss, q: q }; })()`);
                 if (!(alt.miss.length === 0 && alt.q === 1)) bad.push('用皮的配方要有人造革备选 ' + JSON.stringify(alt));
                 const use = await J(`IND_ITEMS.plastic.use`);
                 if (!(/人造革/.test(use) && /轮胎/.test(use))) bad.push('塑料说明写用途 ' + use);
@@ -10890,7 +10890,7 @@ async function enterExit(tab, key) {
                 if (!(Math.abs(r.p - 0.3) < 0.1 && Math.abs(r.lit - 0.7) < 0.1 && r.far === false)) bad.push('岩浆点火把 30% 烧焦、离远不行 ' + JSON.stringify(r));
                 // 火山边刷火苗仔（同一时刻最多 1 只）、基地里不刷
                 r = await run(`indTeleport(V.x + R + 4, V.z); for (let i = 0; i < 4; i++) { mbFlameSpawn(); ind.t += 1000; } let inR = ind.map.volc.filter(function (v) { return Math.hypot(ind.p.x - v.x, ind.p.z - v.z) <= v.r * 1.6 + 40; }).length, n = ind.mobs.filter(function (m) { return m.ty === 'flame'; }).length, mx = inR; indGoBase(null); mbTick(1); return { n: n, mx: mx, base: (ind.mobs || []).length };`);
-                if (!(r.n >= 1 && r.n <= r.mx && r.base === 0)) bad.push('火山边刷 1 只火苗仔、基地不刷 ' + JSON.stringify(r));
+                if (!(r.n === 0 && r.base === 0)) bad.push('任务 118：火苗仔不再刷，火山边也没有 ' + JSON.stringify(r));
                 // 地热发电机：离岩浆和水都在 3 米内 24 V，缺任何一个不发；配方
                 r = await J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; let B = ind.base, P = IND_BASE_ST.pool; B.off.pool = false; B.devs = []; B.wires = [];
                     let g = { id: 1, ty: 'geo', x: P.x + P.r + 1, z: P.z, bats: 0, u: 0, on: true, ft: 20, st: {} }; B.devs.push(g); B.lava = [{ x: g.x + 2, z: g.z, r: 1 }]; let both = indSrcVolt(g);
@@ -12087,7 +12087,7 @@ async function enterExit(tab, key) {
                     ind.mobs.forEach(mbDrop); ind.mobs = []; s = mbNew('slime:tame', ind.p.x + 1.2, ind.p.z); ind.tripGround = []; mbDamage(s, 1); out.hit = !!s.aggro; out.goo = ind.tripGround.filter(function (g) { return g.k === 'goo'; }).length; out.dead = s.dead;
                     ind.mobs.forEach(mbDrop); ind.mobs = []; s = mbNew('slime:tame', ind.p.x + 5, ind.p.z); indIsNight = function () { return true; }; mbTick(0.1); out.gone = s.dead; indIsNight = nt;
                     indGoBase(null); out.base = (ind.mobs || []).length; return out; })()`);
-                if (!(r.forest && r.beach && !r.desert && !r.mountain && !r.cave && !r.night)) bad.push('哪儿刷 ' + JSON.stringify(r));
+                if (!(!r.forest && !r.beach && !r.desert && !r.mountain && !r.cave && !r.night)) bad.push('任务 118：史莱姆不再自然刷出来 ' + JSON.stringify(r));
                 if (!(r.n === 2 && r.sz === 2 && r.hp === 1 && r.tame && r.alpha)) bad.push('同时 2 只、小号血 1、半透明 ' + JSON.stringify(r));
                 if (!(r.shared <= 5 && r.shared === 1 + 4)) bad.push('算进合计 5 只 ' + JSON.stringify(r));
                 if (!(r.hp30 === 100 && !r.aggro)) bad.push('站旁边 30 秒不掉血不主动蹭 ' + JSON.stringify(r));
@@ -14069,7 +14069,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('GFX1')) {
-            // GFX1 画质、视野、流畅度（任务 P6 第一批）：设置页显示组里三项是下拉：方框左边写现在选的右边向下箭头、点开纵向列出 4、4、3 行（选中的有对勾，每行不低于 44 像素）、点哪行选哪行选完收起、Esc 先收列表；改了存档刷新还在；接口 graphicsFpsTarget 是 30、60、120、graphicsViewMul 是 1、1.4、2、3；画质低时像素比 1、分段数变少；视野改雾和相机 far；流畅度 30 时 1.5 秒画的帧数明显少；左上角帧率能开关
+            // GFX1 画质、视野、流畅度（任务 P6 第一批）：设置页显示组里三项是下拉：方框左边写现在选的右边向下箭头、点开纵向列出 4、4、3 行（选中的有对勾，每行不低于 44 像素）、点哪行选哪行选完收起、Esc 先收列表；改了存档刷新还在；接口 graphicsFpsTarget 是 30、60、120、graphicsViewMul 是 1、1.4、2、3；画质低中高超高的像素比和分段数是现实的 50%、75%、100%、150%；视野改雾和相机 far；流畅度 30 时 1.5 秒画的帧数明显少；左上角帧率能开关
             const bad = [];
             const T = await openTab(chrome, url);
             await T.eval(`${HIDE} openSettings('显示'); true;`); await W(200);
@@ -14105,10 +14105,22 @@ async function enterExit(tab, key) {
             if (tt.join() !== '30,60,120,1,1.4,2,3') bad.push('档位对应的数 ' + tt.join());
             // 画质：像素比和分段数
             await T.eval(`settingsSet('gfx_quality', 0); true;`);
-            const q0 = JSON.parse(await T.eval(`JSON.stringify({ pr: renderer.getPixelRatio(), seg: new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments, cyl: new THREE.CylinderGeometry(1, 1, 2, 24).parameters.radialSegments, inst: new THREE.SphereGeometry(1, 8, 8) instanceof THREE.BufferGeometry })`));
+            const q0 = JSON.parse(await T.eval(`JSON.stringify({ dpr: window.devicePixelRatio || 1, pr: renderer.getPixelRatio(), seg: new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments, cyl: new THREE.CylinderGeometry(1, 1, 2, 24).parameters.radialSegments, inst: new THREE.SphereGeometry(1, 8, 8) instanceof THREE.BufferGeometry })`));
             if (q0.pr !== 1 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
+            const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); let d = window.devicePixelRatio || 1; return [Math.abs(renderer.getPixelRatio() - [1, Math.min(1.5, d), d, Math.min(3, Math.max(d, 1) * 1.5)][i]) < 1e-6, new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
+            if (JSON.stringify(pct) !== '[[true,14],[true,24],[true,30],[true,36]]') bad.push('画质四档的像素比和分段数不对 ' + JSON.stringify(pct));
+            // 影子：低、中关，高开 2048，超高开更大加柔边；只太阳投影，大地面只接收
+            await T.eval(`${HIDE} (function () { let g = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 0xffffff })); g.name = 'gfxbox'; scene.add(g); let f = new THREE.Mesh(new THREE.BoxGeometry(400, 1, 400), new THREE.MeshLambertMaterial({ color: 0x888888 })); f.name = 'gfxfloor'; scene.add(f); })(); true;`);
+            const sh = [];
+            for (const i of [0, 1, 2, 3]) {
+                await T.eval(`settingsSet('gfx_quality', ${i}); gfxShadowAt = 0; renderer.render(scene, camera); window.gfxLastRender = 0; true;`); await W(700);
+                await T.eval(`gfxLastRender = 0; gfxShadowAt = 0; renderer.render(scene, camera); true;`);
+                sh.push(JSON.parse(await T.eval(`JSON.stringify((function () { let s = gfxFindSun(), b = scene.getObjectByName('gfxbox'), f = scene.getObjectByName('gfxfloor'); return [renderer.shadowMap.enabled, !!(s && s.castShadow), s ? s.shadow.mapSize.x : 0, renderer.shadowMap.type === THREE.PCFSoftShadowMap, b.castShadow, b.receiveShadow, f.castShadow, f.receiveShadow]; })())`)));
+            }
+            if (sh[0][0] || sh[0][1] || sh[1][0] || sh[1][1]) bad.push('低、中档不该有影子 ' + JSON.stringify(sh.slice(0, 2)));
+            if (!sh[2][0] || !sh[2][1] || sh[2][2] !== 2048 || sh[2][3] || !sh[2][4] || !sh[2][5] || sh[2][6] || !sh[2][7]) bad.push('高档影子不对 ' + JSON.stringify(sh[2]));
+            if (!sh[3][0] || !sh[3][1] || sh[3][2] <= 2048 || !sh[3][3]) bad.push('超高档影子贴图不比高大或没开柔边 ' + JSON.stringify(sh[3]));
             await T.eval(`settingsSet('gfx_quality', 1); true;`);
-            if ((await T.eval(`new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments`)) !== 24) bad.push('画质中该原样');
             // 视野：雾和相机 far
             await T.eval(`settingsSet('gfx_view', 0); scene.fog = new THREE.Fog(0x888888, 100, 400); gfxApplyView(); true;`);
             const f0 = JSON.parse(await T.eval(`JSON.stringify([scene.fog.near, scene.fog.far, camera.far])`));
@@ -14264,6 +14276,29 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND183 胶水新做法、锤子修工具：补耐久、铁要热炉子、断了的能补、补满不扣', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND184')) {
+            // IND184 工业接画质视野（任务 168）：视野超远时远征的雾和视野半径是正常的 3 倍；画质低时地形网格比中少、改画质后地形自己重建、高度不变；老存档读不到设置用默认
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ settingsSet('gfx_view', 0); settingsSet('gfx_quality', 1); indGoTrip(777); let o = {}; o.r0 = indViewR(0); o.fog0 = scene.fog.far; o.verts1 = ind.chunks[0].geometry.attributes.position.count; o.h1 = indHeight(ind.map, 31.3, -57.7);
+                    settingsSet('gfx_view', 3); gfxApplyView(); o.r3 = indViewR(0); indRender(); o.fog3 = scene.fog.far;
+                    settingsSet('gfx_quality', 0); wdTripTick(0.1); o.verts0 = ind.chunks[0].geometry.attributes.position.count; o.h0 = indHeight(ind.map, 31.3, -57.7); o.chunks = ind.chunks.length; o.objsOk = ind.objs.indexOf(ind.chunks[0]) >= 0;
+                    settingsSet('gfx_quality', 3); wdTripTick(0.1); o.verts3 = ind.chunks[0].geometry.attributes.position.count;
+                    settingsSet('gfx_view', 0); settingsSet('gfx_quality', 1); wdTripTick(0.1); return o; })()`);
+                if (!(r.r0 === 80 && Math.abs(r.r3 - 240) < 1e-6 && Math.abs(r.fog3 - 240) < 1e-6)) bad.push('视野超远是正常的 3 倍 ' + JSON.stringify(r));
+                if (!(r.verts0 < r.verts1 && r.verts3 > r.verts1 && r.chunks === 100 && r.objsOk)) bad.push('画质低地形网格比中少、超高比中多、改了自己重建 ' + JSON.stringify(r));
+                if (!(r.h0 === r.h1)) bad.push('网格变了高度不能变 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND184 工业接画质视野：超远 3 倍、低画质网格少、改画质重建地形、高度不变', bad.length === 0, bad.join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
