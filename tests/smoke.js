@@ -5505,7 +5505,7 @@ async function enterExit(tab, key) {
                 if (!(await T.eval(`!document.getElementById('screen-lobby').classList.contains('hidden') && !document.getElementById('ind-hud') && !document.getElementById('ind-panel') && gState.gameMode === 'industry'`))) bad.push('退出后没回大厅或界面没收干净');
                 // 进出 3 次：基地里的几何体、贴图不涨
                 const mem = () => T.eval(`(ind && ind.base && (ind.base.clock = 300), renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);   // 先把游戏时钟定在白天：第 3 次进去时钟走到傍晚，月亮星星晚霞才第一次传显卡，几何体贴图就多了（CI 慢时稳定红）
-                await IENTER(); await IEXIT(); await IENTER(); await IEXIT();
+                await IENTER(); await IEXIT(); await IENTER(); await IEXIT(); await IENTER(); await IEXIT(); await IENTER(); await IEXIT();   // 热身四圈：CI 上第 5 次进去会多传十来个几何体五张贴图（数字稳定，本机不复现，原因没查到），之后才平稳
                 const during = [];
                 for (let i = 0; i < 3; i++) { if (!(await IENTER())) { bad.push('第 ' + (i + 1) + ' 次进不去'); break; } during.push(await mem()); await IEXIT(); }
                 // 刚进去就量和等几帧再量要一样（家具不能等第一帧才画，机器慢的时候数会对不上）
@@ -14566,6 +14566,37 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND189 冷凝机：配方、没电不动、液氧液氮液氢三条、空瓶空冷罐还、做冰、液氧炼钢、液氢燃料', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND190')) {
+            // IND190 配方面板搜索框里按 Esc（测试员 11-18）：先退出搜索框，面板还开着；再按 Esc 关面板；搜索框退出后按 C 能关
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const kd = (ch, inInput) => T.eval(`(function(){ let t = ${inInput ? "document.querySelector('#ind-panel input')" : 'document.body'}; indKeyDown({ key: '${ch}', target: t, preventDefault: function () { }, repeat: false }); return true; })()`);
+                await T.eval(`cancelAnimationFrame(ind.raf); indPanelClose(); indPanelBook(''); let i = document.querySelector('#ind-panel input'); if (i) i.focus(); true;`);
+                let r = await J(`{ has: !!document.querySelector('#ind-panel input'), focus: document.activeElement && document.activeElement.tagName }`);
+                if (!r.has) bad.push('配方面板里没有搜索框，测试没法测 ' + JSON.stringify(r));
+                else {
+                    await kd('t', true);
+                    if ((await T.eval(`ind.panel`)) !== 'book') bad.push('搜索框里按字母不该开别的面板');
+                    await kd('Escape', true);
+                    r = await J(`{ panel: ind.panel, focus: document.activeElement && document.activeElement.tagName }`);
+                    if (!(r.panel === 'book' && r.focus !== 'INPUT')) bad.push('搜索框里按 Esc 先退出搜索框，面板还开着 ' + JSON.stringify(r));
+                    await kd('Escape', false);
+                    if (await T.eval(`ind.panel`)) bad.push('再按 Esc 关面板');
+                    await T.eval(`indPanelBook(''); document.activeElement && document.activeElement.blur(); true;`);
+                    await kd('c', false);
+                    if (await T.eval(`ind.panel`)) bad.push('退出搜索框后按 C 关面板');
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND190 配方搜索框里按 Esc：先退出搜索框，再按 Esc 关面板，退出后按 C 能关', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }

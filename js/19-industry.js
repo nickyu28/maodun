@@ -3747,7 +3747,7 @@
         const IND_KEYMAP = { w: 'w', a: 'a', s: 's', d: 'd', arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' };
         function indKeyDown(e) {
             if (!ind || ind.over || ind.dead || ind.tutOpen) return;
-            let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+            let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') { if ((e.key || '') === 'Escape' && !e.repeat) { try { e.target.blur(); } catch (x) { } e.preventDefault(); } return; }   // 输入框里按 Esc：先退出输入框，下一次 Esc 才关面板，一次关一层
             let k = (e.key || '').toLowerCase();
             if (ind.paused) { if (!e.repeat && (k === 'p' || k === 'escape')) indResume(); e.preventDefault(); return; }
             if (ind.relockWait && k !== 'escape' && !ind.panel) indRelock();   // 任务 140：Esc 关面板 Chrome 不让立刻锁，下一次按键补锁
