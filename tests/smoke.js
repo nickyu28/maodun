@@ -4099,7 +4099,7 @@ async function enterExit(tab, key) {
                 if (!back.lobby || !back.start || back.mode !== 'lab') bad.push('返回大厅后没回到大厅、开始游戏按钮不在 ' + JSON.stringify(back));
             }
             // 进出泄漏：先进出一次热身，再进出三次，几何体和贴图数量不涨
-            const mem = () => T.eval(`(renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);
+            const mem = () => T.eval(`(gfxLastRender = 0, renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);
             await LBENTER(T); await LBEXIT(T); await LBENTER(T); await LBEXIT(T);   // 热身两圈：回大厅会重搭广场，第一次的资源数不算
             await frames(T, 10);
             const m0 = await mem();   // 进去前的数，只用来确认"进去以后建了场景"
@@ -5266,14 +5266,14 @@ async function enterExit(tab, key) {
             const T = await LBTAB();
             await LBENTER(T);
             await T.eval(`${ELHELP} true;`);
-            const stat = () => T.eval(`(renderer.render(scene, camera), JSON.stringify({ calls: renderer.info.render.calls, geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures, kids: scene.children.length }))`);
+            const stat = () => T.eval(`(gfxLastRender = 0, renderer.render(scene, camera), JSON.stringify({ calls: renderer.info.render.calls, geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures, kids: scene.children.length }))`);
             await T.eval(`labAdvance(0.2, 0.1); true;`);   // 先推一下：镜头退到人身后，人物身上的几何体和贴图这时才传给显卡，不算设备的
             await frames(T, 3);
             const s0 = JSON.parse(await stat());
             await T.eval(`window.B = __d('bat', -4, 2); window.S = __d('switch', -2, 3); window.L1 = __d('bulb', 0, 2); window.L2 = __d('bulb', 2, 3); window.R = __d('resistor', 4, 2); window.K = __d('booster', 1, 0.5);
                 __w(B, S); __w(S, L1); __w(L1, L2); __w(L2, R); __w(R, K); __w(K, B); labAdvance(1, 0.1); lab.p.x = -3; lab.p.z = 3; labHudUpdate(); labDevLabels(); true;`);
             const s1 = JSON.parse(await stat());
-            if (s1.geo !== s0.geo || s1.tex !== s0.tex || s1.kids !== s0.kids) bad.push('放设备、连线不该新建几何体／贴图／场景物体 ' + JSON.stringify([s0, s1]));
+            if (s1.geo - s0.geo > 2 || s1.tex - s0.tex > 1 || s1.geo < s0.geo || s1.kids !== s0.kids) bad.push('放设备、连线不该新建几何体／贴图／场景物体 ' + JSON.stringify([s0, s1]));
             if (s1.calls - s0.calls > 12) bad.push('放了 6 个设备 + 6 根线，绘制调用多了 ' + (s1.calls - s0.calls) + ' 次（太多） ' + JSON.stringify([s0, s1]));
             // 发光：灯亮了颜色变亮 + 光晕；灭了变暗、光晕没了
             const lit = JSON.parse(await T.eval(`JSON.stringify({ run: L1.run, col: [].slice.call(lab.dm.bulb.instanceColor.array, 0, 3), halo: lab.halo.count })`));
@@ -5289,10 +5289,11 @@ async function enterExit(tab, key) {
             const d0 = await T.eval(`lab.labelDraws`);
             await T.eval(`labDevLabels(); labDevLabels(); true;`);
             if ((await T.eval(`lab.labelDraws`)) !== d0) bad.push('牌子内容没变不该重画');
-            // 反复放、收：资源数不涨
+            // 反复放、收：资源数不涨（牌子、光晕都画过以后再量）
+            const s1b = JSON.parse(await stat());
             await T.eval(`for (let i = 0; i < 30; i++) { let d = __d('resistor', -8 + (i % 6) * 0.9, -5 + Math.floor(i / 6) * 0.9); if (d) { __w(d, R); labDevRemove(d, false); } } labAdvance(0.5, 0.1); true;`);
             const s2 = JSON.parse(await stat());
-            if (s2.geo !== s0.geo || s2.tex !== s0.tex || s2.kids !== s0.kids) bad.push('反复放收设备资源数涨了 ' + JSON.stringify([s0, s2]));
+            if (s2.geo > s1b.geo || s2.tex > s1b.tex || s2.kids !== s0.kids) bad.push('反复放收设备资源数涨了 ' + JSON.stringify([s1b, s2]));   // 牌子贴图和光晕几何体第一次画才传显卡，所以第一次放置允许涨一点（几何体 2、贴图 1），以后反复放收不许再涨
             // 上限
             const cap = JSON.parse(await T.eval(`(function () { let n = lab.devs.length; for (let i = 0; i < 40; i++) __d('resistor', -10 + (i % 12) * 0.9, -6.5 + Math.floor(i / 12) * 0.9); return JSON.stringify({ n: lab.devs.length, cap: LAB_DEV_CAP }); })()`));
             if (cap.n !== cap.cap) bad.push('设备数应该封顶 ' + JSON.stringify(cap));
