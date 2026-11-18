@@ -375,6 +375,7 @@
             stone: { name: '石炉', rate: 100, burn: 1, r: 1.5, size: [2.2, 1.0, 1.5], col: 0x9e9e9e },   // 8 块石头合成：规格跟灶台一样，什么都能做，燃料不限
             kiln: { name: '大窑', rate: 30, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 10, chem: 10 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
         };
+        let IND_SPOUT_PLAIN = !/[?&]notut\b/.test(location.search);   // 任务 139：成品也进出料槽。冒烟网址带 notut=1 时默认关，让旧检查照旧在炉膛里取成品；IND186 自己打开
         const IND_COOK_CAP = 6, IND_WARN_N = 200, IND_TILE_CAP = 2000, IND_SPOUT_CAP = 20;   // 出料槽最多 20 块（任务 164 从 10 放大）   // 灶台上最多放几种
         const IND_RECIPES = [
             // 面包排在烧水前面：有小麦和盐的时候，生水也是和面用的
@@ -3231,7 +3232,7 @@
             Object.keys(out).forEach(function (k) {
                 if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) { for (let i = 0; i < out[k]; i++) { if (ckSpoutTakes(S, k)) S.spout.push({ k: k, t: ckSpoutDef(S).cool }); else S.out[k] = (S.out[k] || 0) + 1; } }   // 烫锭进出料槽；没槽或槽耐温不够就留在炉膛里
                 else {   // 任务 139：别的成品也进出料槽（熔池里的熔融金属不走这里）；槽满了、槽被模具占着、没装槽的留在炉膛
-                    for (let i = 0; i < out[k]; i++) { if (ckSpoutTakes(S, k) && S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: k, t: 0, p: 1 }); else S.out[k] = (S.out[k] || 0) + 1; }
+                    for (let i = 0; i < out[k]; i++) { if (IND_SPOUT_PLAIN && ckSpoutTakes(S, k) && S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: k, t: 0, p: 1 }); else S.out[k] = (S.out[k] || 0) + 1; }
                 }
             });
             if (res.broke && !ind.sleeping) indFlash('陶罐碎了' + (res.broke > 1 ? '' + res.broke + ' 个' : ''));
