@@ -5504,7 +5504,7 @@ async function enterExit(tab, key) {
                 if (JSON.stringify(after.box) !== boxBefore) bad.push('远征里回大厅后仓库箱变了（身上的东西应该丢掉） ' + boxBefore + ' → ' + JSON.stringify(after.box));
                 if (!(await T.eval(`!document.getElementById('screen-lobby').classList.contains('hidden') && !document.getElementById('ind-hud') && !document.getElementById('ind-panel') && gState.gameMode === 'industry'`))) bad.push('退出后没回大厅或界面没收干净');
                 // 进出 3 次：基地里的几何体、贴图不涨
-                const mem = () => T.eval(`(renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);
+                const mem = () => T.eval(`(ind && ind.base && (ind.base.clock = 300), renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);   // 先把游戏时钟定在白天：第 3 次进去时钟走到傍晚，月亮星星晚霞才第一次传显卡，几何体贴图就多了（CI 慢时稳定红）
                 await IENTER(); await IEXIT(); await IENTER(); await IEXIT();
                 const during = [];
                 for (let i = 0; i < 3; i++) { if (!(await IENTER())) { bad.push('第 ' + (i + 1) + ' 次进不去'); break; } during.push(await mem()); await IEXIT(); }
