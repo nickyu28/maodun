@@ -14539,6 +14539,35 @@ async function enterExit(tab, key) {
             report('IND188 分馏塔：配方、没炉子不出、每桶出三样还空桶、燃料值、汽油加满打火机、沥青熬胶水', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND189')) {
+            // IND189 冷凝机和液氧液氮液氢（任务 R3）：配方；没电不动；2 氧气瓶加空冷罐 15 秒出液氧罐还 2 空瓶；氮同理；4 氢气瓶加液氮罐出液氢罐还空冷罐；液氮配生水做冰 4 块；液氧助燃炼钢 15 秒；液氢能烧 500
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.devs = []; B.wires = []; B.cookers = []; B.fires = []; ind.bag = {}; indPanelClose(); ${body} })()`);
+                let r = await run(`let cr = function (o) { return IND_CRAFT.filter(function (q) { return q.out === o; })[0]; }; let a = cr('dev_cond'), t = cr('cold_tank'), ic = cr('ice');
+                    let d = { id: ++B.dseq, ty: 'cond', x: 5, z: 5, on: true, pw: false, st: { b_o2: 2, b_n2: 4, b_h2: 4, cold_tank: 2 } }; B.devs = [d];
+                    IND_DEV_TICK.cond(d, 100); let off = JSON.stringify(d.st); d.pw = true; IND_DEV_TICK.cond(d, 14); let mid = JSON.stringify(d.st); IND_DEV_TICK.cond(d, 1.5); let s1 = JSON.parse(JSON.stringify(d.st));
+                    IND_DEV_TICK.cond(d, 16); let s2 = JSON.parse(JSON.stringify(d.st)); IND_DEV_TICK.cond(d, 16); let s3 = JSON.parse(JSON.stringify(d.st));
+                    let st = IND_RECIPES.filter(function (q) { return q.in.tank_lox === 1 && q.out.hot_steel === 1; });
+                    return { rc: !!a && a.in.steel === 5 && a.in.dev_comp === 2 && a.in.coil === 2 && a.in.wire === 10 && a.hard === true, tk: !!t && t.hard === true, ice: !!ic && ic.n === 4 && ic.in.tank_ln2 === 1 && ic.in.water_raw === 1 && ic.back.cold_tank === 1, off: off, mid: mid, s1: s1, s2: s2, s3: s3, steel: st.length >= 2 && st[0].time > 0 && st[0].time <= (IND_RECIPES.filter(function (q) { return q.in.b_n2 === 1 && q.out.hot_steel === 1; })[0] || { time: 99 }).time && st[0].out.cold_tank === 1, fuel: IND_ITEMS.tank_lh2.fuel, text: /保底|必出/.test(JSON.stringify([IND_ITEMS_RAW.dev_cond, IND_ITEMS_RAW.cold_tank, IND_ITEMS_RAW.tank_lox, IND_ITEMS_RAW.tank_ln2, IND_ITEMS_RAW.tank_lh2])) };`);
+                if (!(r.rc && r.tk && r.ice && r.steel && r.fuel === 500 && !r.text)) bad.push('配方、冷罐、做冰、液氧炼钢、液氢燃料 500 ' + JSON.stringify(r));
+                if (r.off !== '{"b_o2":2,"b_n2":4,"b_h2":4,"cold_tank":2}' || r.mid !== r.off) bad.push('没电不动、15 秒以内不动 ' + JSON.stringify([r.off, r.mid]));
+                if (!(r.s1.tank_lox === 1 && r.s1.bottle === 2 && !r.s1.b_o2 && r.s1.cold_tank === 1)) bad.push('2 氧气瓶加空冷罐出液氧罐还 2 空瓶 ' + JSON.stringify(r.s1));
+                if (!(r.s2.tank_ln2 === 1 && r.s2.b_n2 === 2 && r.s2.bottle === 4 && !r.s2.cold_tank)) bad.push('氮气同理 ' + JSON.stringify(r.s2));
+                if (!(r.s3.tank_lh2 === 1 && r.s3.cold_tank === 1 && r.s3.bottle === 8)) bad.push('液氮罐接着加氢气瓶自动出液氢罐 ' + JSON.stringify(r.s3));
+                r = await run(`let d = { id: ++B.dseq, ty: 'cond', x: 5, z: 5, on: true, pw: true, st: { b_h2: 4, tank_ln2: 1 } }; B.devs = [d]; IND_DEV_TICK.cond(d, 15.5); return d.st;`);
+                if (!(r.tank_lh2 === 1 && r.cold_tank === 1 && r.bottle === 4 && !r.b_h2 && !r.tank_ln2)) bad.push('4 氢气瓶加液氮罐出液氢罐还空冷罐 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND189 冷凝机：配方、没电不动、液氧液氮液氢三条、空瓶空冷罐还、做冰、液氧炼钢、液氢燃料', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

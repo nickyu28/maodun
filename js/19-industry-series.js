@@ -53,7 +53,7 @@
         // 任务 153：炉子里的配方时间统一减半，最低 5 秒；升温速度也提高了（灶台、小熔炉、石炉每秒 100°C，大窑 30°C）。进行中的进度在 ckFix 里按比例换算
         const CK_TIME_OLD = IND_RECIPES.map(function (r) { return r.time; });
         IND_RECIPES.forEach(function (r) { r.time = Math.max(5, Math.round(r.time * 0.5 * 10) / 10); });
-        IND_RECIPES.forEach(function (r) { if (r.out.hot_steel && r.in.ingot_fe && !r.in.b_n2 && !r.in.b_ar) r.time = 20; });   // 任务 154 + 153：渗碳钢 60 秒减半还是 30，压到 20，主线上单次烧制 ≤ 20 秒
+        IND_RECIPES.forEach(function (r) { if (r.out.hot_steel && r.in.ingot_fe && !r.in.b_n2 && !r.in.b_ar && !r.in.tank_lox) r.time = 20; });   // 任务 154 + 153：渗碳钢 60 秒减半还是 30，压到 20，主线上单次烧制 ≤ 20 秒
         // 任务 158：石锤，一开始就能做。青铜工具冷锻要锤子，铁钢工具要锤子，石锤铁锤都行
         IND_ITEMS_RAW.hammer_stone = { name: '石锤', col: 0x9e9e9e, use: '放在背包里，工作台才打得了青铜、铁、钢的工具，不会用掉' };
         IND_CRAFT.push({ out: 'hammer_stone', in: { stone: 2, wood: 1 }, hard: true });
