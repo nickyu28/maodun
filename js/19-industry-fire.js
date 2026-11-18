@@ -131,10 +131,10 @@
         // 打火机加油：拿着打火机对着装石油的桶……这里简化成：拿着打火机右键，背包里有装石油的桶就加满（用掉一桶，还空桶）
         function fiFillLighter() {
             if (!(ind.bag.lighter > 0)) return false;
-            let k = Object.keys(ind.bag).filter(function (x) { let c = indContOf(x); return c && c.base === 'oil' && ind.bag[x] > 0; })[0];
+            let k = Object.keys(ind.bag).filter(function (x) { let c = indContOf(x); return c && c.base === 'oil' && ind.bag[x] > 0; })[0] || (ind.bag.gasoline > 0 ? 'gasoline' : null);   // 任务 R2：汽油也能加满
             if (!k) { indFlash('打火机还剩 ' + (ind.base.lighterN || 0) + ' 次'); return true; }
             if ((ind.base.lighterN || 0) >= FI.lighterN) { indFlash('打火机是满的，' + FI.lighterN + ' 次'); return true; }
-            indBagDel(k, 1); indGive(indEmptyKey(indContOf(k).mat), 1); ind.base.lighterN = FI.lighterN; indSave(); 
+            indBagDel(k, 1); if (indContOf(k)) indGive(indEmptyKey(indContOf(k).mat), 1); ind.base.lighterN = FI.lighterN; indSave(); 
             return true;
         }
         // 山地、古老岩层挖大石头 15% 多掉 1 个燧石

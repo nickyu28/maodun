@@ -14429,6 +14429,33 @@ async function enterExit(tab, key) {
             report('IND187 耐久条、背包刚满提示、C T H 快捷键', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND188')) {
+            // IND188 石油分馏塔和煤油汽油沥青（任务 R2）：配方钢 8 砖 20 铜锭 6；旁边没烧着的炉子不出；炉温够 20 秒一桶出煤油汽油沥青各 1、空桶还；燃料值；汽油给打火机加满；沥青熬胶水；说明没有保底
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.devs = []; B.wires = []; B.cookers = []; B.fires = []; ind.bag = {}; indPanelClose(); ${body} })()`);
+                let r = await run(`let rc = IND_CRAFT.filter(function (q) { return q.out === 'dev_frac'; })[0]; let d = { id: ++B.dseq, ty: 'frac', x: 5, z: 5, on: true, st: { oil: 2 } }; B.devs = [d];
+                    IND_DEV_TICK.frac(d, 100); let cold = JSON.stringify(d.st);
+                    B.cookers = [{ id: 7, ty: 'stove', x: 7, z: 5, C: Object.assign(ckNewState(), { fire: 2, temp: 600, spoutTy: null }) }]; IND_DEV_TICK.frac(d, 19); let mid = JSON.stringify(d.st); IND_DEV_TICK.frac(d, 1.5);
+                    return { rc: !!rc && rc.in.steel === 8 && rc.in.brick === 20 && rc.in.ingot_cu === 6 && rc.hard === true, cold: cold, mid: mid, st: d.st, fuel: [IND_ITEMS.kerosene.fuel, IND_ITEMS.gasoline.fuel, IND_ITEMS.asphalt.fuel], text: /保底|必出/.test(JSON.stringify([IND_ITEMS_RAW.kerosene, IND_ITEMS_RAW.gasoline, IND_ITEMS_RAW.asphalt, IND_ITEMS_RAW.dev_frac])) };`);
+                if (!r.rc) bad.push('配方钢 8 砖 20 铜锭 6 ' + JSON.stringify(r));
+                if (r.cold !== '{"oil":2}' || r.mid !== '{"oil":2}') bad.push('没烧着的炉子不出、20 秒以内不出 ' + JSON.stringify(r));
+                if (!(r.st.oil === 1 && r.st.kerosene === 1 && r.st.gasoline === 1 && r.st.asphalt === 1 && r.st.bucket === 1)) bad.push('每桶出煤油汽油沥青各 1、空桶还 ' + JSON.stringify(r.st));
+                if (r.fuel.join() !== '300,400,120' || r.text) bad.push('燃料值 300 400 120、说明不写保底 ' + JSON.stringify(r));
+                r = await run(`ind.bag = { lighter: 1, gasoline: 2 }; B.lighterN = 3; indSelect('lighter'); fiFillLighter(); let o = { n: B.lighterN, g: ind.bag.gasoline };
+                    let g = IND_RECIPES.filter(function (q) { return q.in.asphalt === 1 && q.out.glue === 2; }); o.glue = g.length === 1 && g[0].minT === 100 && g[0].hard === true; return o;`);
+                if (!(r.n === 50 && r.g === 1 && r.glue)) bad.push('汽油给打火机加满、沥青熬胶水 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND188 分馏塔：配方、没炉子不出、每桶出三样还空桶、燃料值、汽油加满打火机、沥青熬胶水', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
