@@ -14304,6 +14304,70 @@ async function enterExit(tab, key) {
             report('IND184 工业接画质视野：超远 3 倍、低画质网格少、改画质重建地形、高度不变', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND185')) {
+            // IND185 说明改短不用括号（任务 131）：js/18-lab.js 和 js/19-industry*.js 里带中文的字符串字面量不含 （）()【】[]；所有物品的固定说明不超过 30 个字；检测本身先用样例自测
+            const bad = [];
+            function txScan(src) {
+              const out = []; let i = 0, n = src.length, line = 1;
+              const isRegexStart = (prev) => !prev || /[(,=:[!&|?{};+\-*%<>~^]$/.test(prev) || /\b(return|typeof|case|in|of|delete|void|throw|new)$/.test(prev);
+              let prevTok = '';
+              const strs = [];
+              function readStr(q) {
+                let s = '', st = i, ln = line; i++;
+                while (i < n && src[i] !== q) { if (src[i] === '\\') { s += src[i] + src[i + 1]; i += 2; continue; } if (src[i] === '\n') line++; s += src[i++]; }
+                i++; strs.push({ s, ln, st }); prevTok = 'x';
+              }
+              function readTpl() {
+                let ln = line, st = i; i++; let cur = '';
+                while (i < n && src[i] !== '`') {
+                  if (src[i] === '\\') { cur += src[i] + src[i + 1]; i += 2; continue; }
+                  if (src[i] === '$' && src[i + 1] === '{') { strs.push({ s: cur, ln, st }); cur = ''; i += 2; let d = 1; const sub = i; while (i < n && d) { const c = src[i]; if (c === '{') d++; else if (c === '}') d--; else if (c === "'" || c === '"') { readStr(c); continue; } else if (c === '`') { readTpl(); continue; } else if (c === '\n') line++; i++; } continue; }
+                  if (src[i] === '\n') line++; cur += src[i++];
+                }
+                i++; strs.push({ s: cur, ln, st }); prevTok = 'x';
+              }
+              while (i < n) {
+                const c = src[i];
+                if (c === '\n') { line++; i++; continue; }
+                if (c === '/' && src[i + 1] === '/') { while (i < n && src[i] !== '\n') i++; continue; }
+                if (c === '/' && src[i + 1] === '*') { i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) { if (src[i] === '\n') line++; i++; } i += 2; continue; }
+                if (c === "'" || c === '"') { readStr(c); continue; }
+                if (c === '`') { readTpl(); continue; }
+                if (c === '/' && isRegexStart(prevTok)) { // regex literal
+                  i++; let inCls = false; while (i < n && (src[i] !== '/' || inCls)) { if (src[i] === '\\') i++; else if (src[i] === '[') inCls = true; else if (src[i] === ']') inCls = false; i++; } i++; while (/[a-z]/.test(src[i] || '')) i++; prevTok = 'x'; continue;
+                }
+                if (/\s/.test(c)) { i++; continue; }
+                if (/[A-Za-z0-9_$]/.test(c)) { let st = i; while (i < n && /[A-Za-z0-9_$]/.test(src[i])) i++; prevTok = src.slice(st, i); continue; }
+                prevTok = c; i++;
+              }
+              return strs;
+            }
+
+            const TX_CJK = /[\u4e00-\u9fff]/, TX_BR = /[（）【】]|[()\[\]]/;
+            const txVisible = (s) => {
+                let t = s; const gt = t.indexOf('>'), lt = t.indexOf('<');
+                if (gt >= 0 && (lt < 0 || gt < lt) && /["=]/.test(t.slice(0, gt))) t = t.slice(gt + 1);
+                t = t.replace(/<[^>]*>/g, ''); const l2 = t.lastIndexOf('<'); if (l2 >= 0 && t.indexOf('>', l2) < 0 && /["= ]/.test(t.slice(l2))) t = t.slice(0, l2);
+                return t;
+            };
+            const txHit = (s) => { const t = txVisible(s); return /[（）【】]/.test(t) || (TX_CJK.test(t) && TX_BR.test(t)); };
+
+            const self = txScan("let a = '提示（x）'; // 注释（x）\nlet r = /（/; let b = `你好${f(1)}（`; let c = '<a onclick=\"f(1)\">好</a>'; let d = '没括号';").map((x) => x.s).filter(txHit);
+            if (self.length !== 2) bad.push('检测自测不对 ' + JSON.stringify(self));
+            const fsx = require('fs'), pth = require('path');
+            fsx.readdirSync(pth.join(ROOT, 'js')).filter((f) => /^18-lab|^19-industry/.test(f)).forEach((f) => { const src = fsx.readFileSync(pth.join(ROOT, 'js', f), 'utf8'); txScan(src).filter((x) => txHit(x.s) && !/\son[a-z]+="/.test(x.s)).slice(0, 3).forEach((x) => bad.push(f + ':' + x.ln + ' ' + x.s.replace(/\n/g, ' ').slice(0, 40))); });
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const long = JSON.parse(await T.eval(`JSON.stringify(Object.keys(IND_ITEMS).filter(function (k) { let u = IND_ITEMS[k].use; return typeof u === 'string' && u.length > 30; }).map(function (k) { return k + ':' + IND_ITEMS[k].use; }))`));
+                if (long.length) bad.push('说明超过 30 个字 ' + long.slice(0, 80).join(' / '));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND185 说明改短不用括号：实验室和工业里的字符串没有括号、物品说明不超过 30 个字', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

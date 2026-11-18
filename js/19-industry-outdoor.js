@@ -12,12 +12,12 @@
         const OD_CHG = { geo: 1, wind: 1, crank: 1, solar: 1, turbine: 1, anchor: 1 };   // 有充电槽的设备
         const OD_TREES = { oak: 'sapling_oak', pine: 'sapling_pine', rubber: 'sapling_rubber' };
         Object.assign(IND_ITEMS_RAW, {
-            battery_rc: { name: '可充电电池（空）', col: 0x80cbc4, use: '放进发电设备的充电槽充电' },
-            battery_rc_full: { name: '可充电电池（满）', col: 0x00bfa5, later: '发电设备的充电槽里充满才有，体检看不到', cellU: 720, use: '装进电池组（3 V，720 U）；放进定位基站、发电设备的充电槽' },
+            battery_rc: { name: '可充电电池，空', col: 0x80cbc4, use: '放进发电设备的充电槽充电' },
+            battery_rc_full: { name: '可充电电池，满', col: 0x00bfa5, later: '发电设备的充电槽里充满才有，体检看不到', cellU: 720, use: '装进电池组，3 V，720 U，能充电' },
             blade: { name: '叶片', col: 0xcfd8dc, use: '做风力发电机' },
-            dev_wind: { name: '风力发电机', col: 0xeceff1, dev: 'wind', use: '12 V，按风速发电（山地海边最好，森林最差），有充电槽。户外放下钉住 3×3' },
-            dev_windmill: { name: '风转盘', col: 0xa1887f, dev: 'windmill', use: '不用电，带动旁边 2 米内的粉碎机、水泵，跟着风速。户外放下钉住 3×3' },
-            dev_anchor: { name: '定位基站', col: 0x607d8b, dev: 'anchor', use: '4 台摆成正方形的四个角，围出的 3×3 到 9×9 就钉住；每台放一节可充电电池' },
+            dev_wind: { name: '风力发电机', col: 0xeceff1, dev: 'wind', use: '12 V，按风速发电，山地海边最好' },
+            dev_windmill: { name: '风转盘', col: 0xa1887f, dev: 'windmill', use: '不用电，带动旁边 2 米内的粉碎机和水泵' },
+            dev_anchor: { name: '定位基站', col: 0x607d8b, dev: 'anchor', use: '4 台摆成正方形，围出的地方钉住' },
             sapling: { name: '小树苗', col: 0x66bb6a, later: '种着的树苗，不是物品', use: '种着的树苗' },
             sapling_oak: { name: '树苗', col: 0x81c784, later: '砍树掉的，体检看不到', use: '右键地面种下，3 个游戏日长成阔叶树' },
             sapling_pine: { name: '松树苗', col: 0x388e3c, later: '砍树掉的，体检看不到', use: '右键地面种下，3 个游戏日长成松树' },

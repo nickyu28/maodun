@@ -29,10 +29,10 @@
                 let T = TL_TOOL[k]; if (T.knife) return;
                 T.dura = TL_TIER[T.tier].dura; T.back = k === 'pick_ni' ? 'ingot_ni' : TL_TIER[T.tier].back;
                 let hard = T.tier !== 'stone';
-                add['broken_' + k] = { name: '坏了的' + ((add[k] || IND_ITEMS_RAW[k] || {}).name || k), col: 0x616161, use: '工作台：回收一半主料，或者加 1 胶水修好（耐久一半）' };
+                add['broken_' + k] = { name: '坏了的' + ((add[k] || IND_ITEMS_RAW[k] || {}).name || k), col: 0x616161, use: '工作台：回收一半主料，或者加 1 胶水修好，耐久一半' };
                 IND_CRAFT.push(Object.assign({ out: T.back, n: 1, in: { ['broken_' + k]: 1 } }, hard ? { hard: true } : {}), Object.assign({ out: k, fix: true, in: { ['broken_' + k]: 1, glue: 1 } }, hard ? { hard: true } : {}));
             });
-            Object.keys(add).forEach(function (k) { if (!/^broken_/.test(k)) { let T = TL_TOOL[k]; add[k].use = TL_KIND_NAME[T.kind] + '：干活时间 ×' + TL_TIER[T.tier].mul + '，耐久 ' + T.dura + (T.kind === 'shovel' ? '。挖泥土、沙子（对着地面左键）' : ''); } });
+            Object.keys(add).forEach(function (k) { if (!/^broken_/.test(k)) { let T = TL_TOOL[k]; add[k].use = TL_KIND_NAME[T.kind] + '：时间 ×' + TL_TIER[T.tier].mul + '，耐久 ' + T.dura; } });
             Object.assign(IND_ITEMS_RAW, add);
         })();
         function tlKind(k) { return k && TL_TOOL[k] ? TL_TOOL[k].kind : null; }

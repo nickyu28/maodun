@@ -24,7 +24,7 @@ def fix(lit):
                 if k<0: res.append(c); i+=1; continue
                 inner=s[j:k]
                 after=s[k+1:k+2]
-                lead = '' if (not res or res[-1] in '，。；：、,.;:>' or res[-1].isspace()) else '，'
+                lead = '' if (not res or ((res[-1] in '，。；：、,.;:>' or res[-1].isspace()) and not re.search(r'</[a-z]+>$',''.join(res[-8:])))) else '，'
                 tail = '' if (after=='' or after in '，。；：、,.;:！？<') else '，'
                 res.append(lead+inner+tail); i=k+1
             else:

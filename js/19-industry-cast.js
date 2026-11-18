@@ -17,10 +17,10 @@
             Object.keys(CT_SHAPE).forEach(function (s) {
                 let S = CT_SHAPE[s];
                 add['mold_' + s + '_raw'] = { name: S.n + '生模具', col: 0xbcaaa4, use: '放进炉子 600°C 30 秒烧硬' };
-                add['mold_' + s] = { name: S.n + '模具', col: 0x8d6e63, use: '炉子面板里放进出料槽，熔池里的金属流进来铸' + S.n + '（要 ' + S.need + ' 份）；黏土的，浇不了铁和钢' };
+                add['mold_' + s] = { name: S.n + '模具', col: 0x8d6e63, use: '放进出料槽，铸' + S.n + '要 ' + S.need + ' 份，浇不了铁钢' };
                 IND_RECIPES.push({ in: { ['mold_' + s + '_raw']: 1 }, out: { ['mold_' + s]: 1 }, cls: 'smelt', minT: 600, time: 30, hard: true });
-                add['mold_' + s + '_f_raw'] = { name: '耐火砖' + S.n + '生模具', col: 0xd7ccc8, use: '放进炉子 1500°C 以上烧 60 秒烧硬（要鼓风或电炉）' };   // 耐火砖模具（任务 4 铸造后半）；烧硬的配方在 19-industry-cast2.js（配方表只能往后加）
-                add['mold_' + s + '_f'] = { name: '耐火砖' + S.n + '模具', col: 0xa1887f, use: '炉子面板里放进出料槽，什么金属都能铸，包括铁和钢（要 ' + S.need + ' 份）' };
+                add['mold_' + s + '_f_raw'] = { name: '耐火砖' + S.n + '生模具', col: 0xd7ccc8, use: '放进炉子 1500°C 以上烧 60 秒烧硬，要鼓风或电炉' };   // 耐火砖模具（任务 4 铸造后半）；烧硬的配方在 19-industry-cast2.js（配方表只能往后加）
+                add['mold_' + s + '_f'] = { name: '耐火砖' + S.n + '模具', col: 0xa1887f, use: '炉子面板里放进出料槽，什么金属都能铸，包括铁和钢，要 ' + S.need + ' 份' };
                 Object.keys(CT_PART_METAL).forEach(function (m) {
                     let k = 'part_' + s + '_' + m, tool = S.tool + m;
                     add[k] = { name: CT_METAL[m].n + S.n, col: 0xb87333, use: '工作台装成' + CT_METAL[m].n + '的工具' };
@@ -145,7 +145,7 @@
             if (!indHard()) return '';
             let S = c.C, P = S.pool, M = S.mold, h = '<br>熔池：' + (P ? CT_METAL[P.m].n + ' ' + P.n + ' / ' + ctCap(c) + ' 份' : '空') + (S.meltT > 0 ? '　化锭 ' + Math.floor(S.meltT / CT.meltT * 100) + '%' : '') + (P ? '　<button style="' + IND_BTN + '" onclick="ctPour()">倒出来</button>' : '');
             { let nm = Object.keys(S.items).filter(function (k) { return CT_METAL[k] && !CT_PART_METAL[k] && S.items[k] > 0 && S.temp >= CT_METAL[k].melt; }).map(function (k) { return CT_METAL[k].n + '锭'; }); if (nm.length) h += '<br><span style="color:#888">' + nm.join('、') + '不熔，当炉料</span>'; }
-            if (M) h += '<br>模具：' + (M.f ? '耐火砖' : '') + CT_SHAPE[M.s].n + '（还能用 ' + M.dura + ' 次）' + (M.part ? '　' + indName(M.part) + (M.t > 0 ? ' 烫，还要 ' + Math.ceil(M.t) + ' 秒' : ' 凉了，左键出料槽取') : M.fill > 0 ? '　在流 ' + Math.floor(M.fill / CT_SHAPE[M.s].need * 100) + '%' : P && !CT_PART_METAL[P.m] ? '　<span style="color:#c62828">' + CT_METAL[P.m].n + '铸不了零件</span>' : '') + '　<button style="' + IND_BTN + '" onclick="ctMoldOut()">取下模具</button>';
+            if (M) h += '<br>模具：' + (M.f ? '耐火砖' : '') + CT_SHAPE[M.s].n + '，还能用 ' + M.dura + ' 次，' + (M.part ? '　' + indName(M.part) + (M.t > 0 ? ' 烫，还要 ' + Math.ceil(M.t) + ' 秒' : ' 凉了，左键出料槽取') : M.fill > 0 ? '　在流 ' + Math.floor(M.fill / CT_SHAPE[M.s].need * 100) + '%' : P && !CT_PART_METAL[P.m] ? '　<span style="color:#c62828">' + CT_METAL[P.m].n + '铸不了零件</span>' : '') + '　<button style="' + IND_BTN + '" onclick="ctMoldOut()">取下模具</button>';
             if (M && !M.part) { let pl = ctPlanTxt(c), w = ctWhy(c); if (pl) h += '<br>' + pl; if (w) h += '<br><span style="color:#c62828">' + w + '</span>'; }
             let ms = Object.keys(ind.bag).filter(function (k) { return /^mold_[a-z]+(_f)?$/.test(k) && CT_SHAPE[k.slice(5).replace(/_f$/, '')]; });
             if (!M && ms.length) h += '<br>' + ms.map(function (k) { return '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="ctMoldPut(\'' + k + '\')">' + indName(k) + ' 放进出料槽</button>'; }).join('');
@@ -157,8 +157,8 @@
             if (ind.carve) { return true; }
             let cl = (ind.bag.clay || 0) >= 2, br = (ind.bag.brick_fire || 0) >= 2;
             if (!cl && !br) return false;
-            indPanelShow('carve', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">雕模具（用 2 ' + (cl && br ? '黏土或耐火砖' : cl ? '黏土' : '耐火砖') + '）</div>' + Object.keys(CT_SHAPE).map(function (s) {
-                return indRow(CT_SHAPE[s].n + '模具（' + CT_SHAPE[s].cuts + ' 刀）', (cl ? '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="ctCarveStart(\'' + s + '\')">雕</button>' : '') + (br ? '<button style="' + IND_BTN + 'background:#a1887f;" onclick="ctCarveStart(\'' + s + '\',1)">雕耐火砖的</button>' : ''));
+            indPanelShow('carve', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">雕模具，用 2 ' + (cl && br ? '黏土或耐火砖' : cl ? '黏土' : '耐火砖') + '</div>' + Object.keys(CT_SHAPE).map(function (s) {
+                return indRow(CT_SHAPE[s].n + '模具，' + CT_SHAPE[s].cuts + ' 刀', (cl ? '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="ctCarveStart(\'' + s + '\')">雕</button>' : '') + (br ? '<button style="' + IND_BTN + 'background:#a1887f;" onclick="ctCarveStart(\'' + s + '\',1)">雕耐火砖的</button>' : ''));
             }).join('') + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
             return true;
         }
@@ -188,7 +188,7 @@
             if (C.score < CT_SHAPE[C.s].cuts) { ctBar(); return true; }
             indBagDel(mat, 2); indGive(rk, 1);
             let qk = C.s + (C.f ? '_f' : ''), Q = ind.base.moldQ = ind.base.moldQ || {}; (Q[qk] = Q[qk] || []).push(CT.qFixed);
-            indFlash('雕好了' + indName(rk) + '（烧硬以后能用 ' + CT.qFixed + ' 次）'); ind.carve = null; ctBar(); indSave();
+            indFlash('雕好了' + indName(rk) + '，烧硬以后能用 ' + CT.qFixed + ' 次'); ind.carve = null; ctBar(); indSave();
             return true;
         }
         // 圈：灰白红三段（取自 CALIB.zones），一根指针转

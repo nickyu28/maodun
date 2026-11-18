@@ -26,7 +26,7 @@
         };
         IND_DEV_HTML.asu = function (d) {
             let V = indDevVolt(d);
-            return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">空气分离塔</div><div style="line-height:1.7;">电压 <b>' + V.toFixed(1) + ' V</b>（额定 24 V）' + (d.pw && (d.st.bottle || 0) > 0 ? '　正在分 ' + Math.floor((d.at || 0) / AS.time * 100) + '%' : '') + '</div>' +
+            return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">空气分离塔</div><div style="line-height:1.7;">电压 <b>' + V.toFixed(1) + ' V</b>，额定 24 V' + (d.pw && (d.st.bottle || 0) > 0 ? '　正在分 ' + Math.floor((d.at || 0) / AS.time * 100) + '%' : '') + '</div>' +
                 '<div style="margin-top:4px;">里面：' + nkDevItems(d) + '</div><div style="margin-top:6px;font-weight:bold;">身上的东西</div>' + (nkPutRows(d, function (k) { return k === 'bottle'; }) || '<div style="color:#999;padding:6px 0;">身上没有空玻璃瓶</div>') + NK_FOOT(d);
         };
         IND_CRAFT.push({ out: 'dev_asu', in: { steel: 10, dev_comp: 1, motor: 1, wire: 10, glass_plate: 2 }, hard: true });

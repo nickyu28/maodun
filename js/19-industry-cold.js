@@ -11,13 +11,13 @@
         CL_LIFE.ice = CL.ice; CL_LIFE.fish_live = 600; CL_LIFE.fish_raw = CL.day;   // 活鱼在背包里 10 分钟死成生鱼；生鱼 1 天坏
         const CL_TO = { fish_live: 'fish_raw' };
         Object.assign(IND_ITEMS_RAW, {
-            ice: { name: '冰块', col: 0xb3e5fc, eat: { w: 5, cool: 1 }, use: '拿着右键吃一块：体温 −1°C、口渴 +5。放进冷藏箱保鲜。放在身上和普通箱子里 10 分钟就化了' },
+            ice: { name: '冰块', col: 0xb3e5fc, eat: { w: 5, cool: 1 }, use: '吃了降体温、解渴，放冷藏箱保鲜，不然会化' },
             rotfood: { name: '腐烂的食物', col: 0x6d4c41, eat: { f: 5, sick: 1 }, use: '吃了拉肚子。撒在农田里当肥料' },
             ice_cream: { name: '冰淇淋', col: 0xfff3e0, eat: { f: 20, cool: 1.5 }, use: '冰凉凉的甜食' },
             popsicle: { name: '冰棍', col: 0x81d4fa, eat: { f: 8, w: 8, cool: 1.5 }, use: '解渴解暑' },
-            b_freon: { name: '氟利昂瓶', col: 0xb3e5fc, use: '冰箱要用（制冷剂）' },
+            b_freon: { name: '氟利昂瓶', col: 0xb3e5fc, use: '冰箱要用，制冷剂' },
             chest_cold: { name: '冷藏箱', col: 0x90caf9, furn: 'chest', cold: true, use: '箱子里放冰块，每块撑一个游戏日，有冰的时候里面的食物不变质' },
-            dev_fridge: { name: '冰箱', col: 0xeceff1, dev: 'fridge', use: '30 格，接上 24 V 通电就不变质；里面放一桶生水，60 秒出 4 块冰' }
+            dev_fridge: { name: '冰箱', col: 0xeceff1, dev: 'fridge', use: '30 格，通 24 V 电就不变质，水能结冰' }
         });
         IND_DEVS.fridge = { name: '冰箱', col: 0xeceff1, rated: 24, minV: 18, draw: 0.5, size: [1, 1.8, 0.9] };
         IND_DEV_BUSY.fridge = function () { return true; };

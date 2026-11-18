@@ -45,7 +45,7 @@
             let B = rpB(), Q = B.repQ['broken_' + k], n = Q && Q.length ? Q.shift() : 0;
             if (Q && !Q.length) delete B.repQ['broken_' + k];
             (B.repQ[k] = B.repQ[k] || []).push(n + 1);
-            indFlash('修好了：' + indName(k) + '（修过 ' + (n + 1) + ' 次，耐久上限 ' + rpCap(mbMax0(k), n + 1) + '）');
+            indFlash('修好了：' + indName(k) + '，修过 ' + (n + 1) + ' 次，耐久上限 ' + rpCap(mbMax0(k), n + 1) + '');
         }
         // 修要的那份材料
         function rpFixMat(k) {
@@ -105,7 +105,7 @@
         // 确认窗：写清楚每种材料还几个
         function rpAsk(k, all) {
             if (!ind || !(ind.bag[k] > 0) || !rpCanDis(k)) return;
-            let cnt = all ? ind.bag[k] : 1, P = rpPlan(k, cnt), dur = all ? '' : '（耐久 ' + rpPieces(k)[0] + ' / ' + mbMax0(k) + '）';
+            let cnt = all ? ind.bag[k] : 1, P = rpPlan(k, cnt), dur = all ? '' : '耐久 ' + rpPieces(k)[0] + ' / ' + mbMax0(k) + '';
             indPanelShow('rpask', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">拆' + (all ? ' ' + cnt + ' 个' : '') + indName(k) + dur + '？</div>' +
                 '<div style="margin-bottom:8px;">会还：' + rpOutTxt(P.out) + '</div>' +
                 '<div style="text-align:right;"><button style="' + IND_BTN + 'background:#e65100;" onclick="rpDo(\'' + k + '\',' + (all ? 1 : 0) + ')">拆</button><button style="' + IND_BTN + '" onclick="indPanelBench()">不拆了</button></div>');
@@ -123,7 +123,7 @@
         function rpBenchHtml() {
             let ks = Object.keys(ind.bag).filter(function (k) { return ind.bag[k] > 0 && rpCanDis(k); });
             if (!ks.length) return '';
-            return '<div style="margin-top:8px;font-weight:bold;">拆（按剩下的耐久还材料）</div>' + ks.map(function (k) {
+            return '<div style="margin-top:8px;font-weight:bold;">拆，按剩下的耐久还材料</div>' + ks.map(function (k) {
                 return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + 'background:#e65100;" onclick="rpAsk(\'' + k + '\',0)">拆 1 个</button>' + (ind.bag[k] > 1 ? '<button style="' + IND_BTN + 'background:#bf360c;" onclick="rpAsk(\'' + k + '\',1)">全拆</button>' : ''));
             }).join('');
         }
@@ -144,7 +144,7 @@
                     if (r.fix && r.out === k && r.in[bk]) r.in[mat] = 1;
                     else if (!r.fix && !r.poison && r.in[bk] && Object.keys(r.in).length === 1) r.off = true;
                 });
-                IND_ITEMS_RAW[bk].use = '工作台加 1 胶水和 1 ' + indName(mat) + ' 修好，每修一次耐久上限少 10%' + (rpMetal(k) ? '；硬核里也能放进炉子熔了' : '');
+                IND_ITEMS_RAW[bk].use = '工作台加胶水和' + indName(mat) + '修好' + (rpMetal(k) ? '，也能熔' : '');
             });
         })();
         // 配方查询：熔坏工具
@@ -154,7 +154,7 @@
                 let L = b0.apply(this, arguments);
                 if (indHard()) Object.keys(IND_ITEMS_RAW).forEach(function (bk) {
                     let q = rpMeltOf(bk); if (!q) return;
-                    L.push({ ins: [bk], outs: [q.m], name: indName(bk), txt: indName(bk) + ' → 熔池里的' + CT_METAL[q.m].n + ' ' + q.n + ' 份（木柄烧掉）', where: '炉子，' + CT_METAL[q.m].melt + '°C 以上' });
+                    L.push({ ins: [bk], outs: [q.m], name: indName(bk), txt: indName(bk) + ' → 熔池里的' + CT_METAL[q.m].n + ' ' + q.n + ' 份，木柄烧掉', where: '炉子，' + CT_METAL[q.m].melt + '°C 以上' });
                 });
                 return L;
             };

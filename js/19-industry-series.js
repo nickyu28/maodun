@@ -47,7 +47,7 @@
             b.style.display = d ? '' : 'none';
             if (d) b.textContent = '接法：' + (srOn(d) ? '串联' : '并联') + '　J';
         }
-        IND_ITEMS_RAW.dev_furnace.use = '放在炉子 3 米内，炉温顶到 1800°C。要 24 V，两个 12 V 串联就行';   // 任务 152
+        IND_ITEMS_RAW.dev_furnace.use = '放炉子 3 米内，炉温到 1800°C，要 24 V';   // 任务 152
         // 任务 149：风箱不靠皮也能做。木箱活塞风箱（战国就有），羊毛当封条。配方加在表的最后，皮囊风箱的老配方不动
         IND_CRAFT.push({ out: 'bellows', in: { wood: 10, rope: 12, wool: 4, ingot_cu: 2, clay: 4 }, hard: true });
         // 任务 153：炉子里的配方时间统一减半，最低 5 秒；升温速度也提高了（灶台、小熔炉、石炉每秒 100°C，大窑 30°C）。进行中的进度在 ckFix 里按比例换算
@@ -62,7 +62,7 @@
             let N = { pick: '镐', axe: '斧', shovel: '铲', shears: '剪刀', knife: '刀' }, add = {};
             Object.keys(N).forEach(function (kind) {
                 let base = kind + '_bronze', cold = kind + '_cold', B = IND_ITEMS_RAW[base]; if (!B) return;
-                add[cold] = Object.assign({}, B, { name: '冷锻青铜' + N[kind], use: '敲出来的，不耐用，耐久只有铸造的 40%。' + (B.use || '') });
+                add[cold] = Object.assign({}, B, { name: '冷锻青铜' + N[kind], use: '冷锻的，耐久只有 40%' });
                 if (kind === 'knife') MB_KNIFE[cold] = Object.assign({}, MB_KNIFE[base], { dura: Math.round(MB_KNIFE[base].dura * 0.4), name: add[cold].name });
                 else TL_TOOL[cold] = Object.assign({}, TL_TOOL[base], { dura: Math.round(TL_TOOL[base].dura * 0.4) });
                 add['broken_' + cold] = { name: '坏了的' + add[cold].name, col: 0x616161, use: '工作台：回收一半主料，或者加 1 胶水修好' };
@@ -163,7 +163,7 @@
             IND_RECIPES.push({ in: { hide: 1, ash: 1, water_raw: 1 }, out: { leather: 1, bucket: 1 }, minT: 60, time: 30, burnT: 250, cls: 'bulk', hard: true, pri: true });   // 小火 200°C 熏不会焦
             IND_CRAFT.push({ out: 'leather', in: { hide: 1, ash: 1 }, casual: true });
             IND_CRAFT.forEach(function (r) { if (r.in && r.in.hide && !r.leather && !r.fix && !r.poison && /^(bellows|shoe_leather|wheel|seat)$/.test(r.out)) { r.in = Object.keys(r.in).reduce(function (o, k) { o[k === 'hide' ? 'leather' : k] = r.in[k]; return o; }, {}); } });
-            IND_ITEMS_RAW.pack_leather = { name: '皮背包', col: 0x8d5a3b, wear: 'back', slots: 9, warm: 0, use: '戴在背上，背包 +9 格（共 33 格）；脱下前多出来的格子要先清空' };
+            IND_ITEMS_RAW.pack_leather = { name: '皮背包', col: 0x8d5a3b, wear: 'back', slots: 9, warm: 0, use: '戴背上，背包 +9 格，脱下前先清空' };
             IND_CRAFT.push({ out: 'pack_leather', in: { leather: 4, rope: 3 }, hard: true }, { out: 'pack_leather', in: { pleather: 4, rope: 3 }, hard: true, leather: true });
         })();
         // 任务 142 第一批：绷带顶回血药；电炉电解槽要钢；粉碎机把矿磨成粉，粉炼出的锭多一半
@@ -174,7 +174,7 @@
             IND_RECIPES.forEach(function (r) { if (r.out && r.out.potion_heal) r.off = true; });
             IND_CRAFT.forEach(function (r) { if (r.out === 'dev_furnace' && !r.in.steel) r.in = Object.assign({}, r.in, { steel: 2 }); if (r.out === 'dev_el' && !r.in.steel) r.in = Object.assign({}, r.in, { steel: 2 }); });
             let M = { cu: '铜', zn: '锌', sn: '锡', fe: '铁', ni: '镍', pb: '铅', al: '铝' }, add = {};
-            Object.keys(M).forEach(function (m) { if (!IND_ITEMS_RAW['ore_' + m]) return; add['dust_' + m] = { name: M[m] + '矿粉', col: IND_ITEMS_RAW['ore_' + m].col, use: '粉碎机磨出来的。2 份矿粉加 2 份木炭、煤或焦炭，炼出 3 块锭，比直接炼矿多一半' }; });
+            Object.keys(M).forEach(function (m) { if (!IND_ITEMS_RAW['ore_' + m]) return; add['dust_' + m] = { name: M[m] + '矿粉', col: IND_ITEMS_RAW['ore_' + m].col, use: '粉碎机磨的，加木炭炼，比直接炼矿多一半' }; });
             Object.keys(add).forEach(function (k) { add[k].later = '粉碎机磨出来的，体检看不到'; });
             Object.assign(IND_ITEMS_RAW, add);
             let base = IND_RECIPES.filter(function (r) { return r.cls === 'smelt' && r.in.charcoal === 1 && Object.keys(r.in).length === 2 && Object.keys(r.in).some(function (k) { return /^ore_(cu|zn|sn|fe|ni|pb|al)$/.test(k); }); });
