@@ -14193,6 +14193,7 @@ async function enterExit(tab, key) {
             // 降画质、退出
             await feed(6, 19); if ((await T.eval(`graphicsQuality()`)) !== 1) bad.push('不到 10 秒就降画质');
             await feed(6, 1); if ((await T.eval(`graphicsQuality()`)) !== 0) bad.push('连续 10 秒低于 8 帧没降一档');
+            if ((await T.eval(`gfxTempQ === 0 && +settingsGet('gfx_quality') === 1`)) !== true) bad.push('自动降画质不该改存的设置，只临时降');
             await feed(3, 39); if ((await T.eval(`__ex`)) !== 0) bad.push('降完不到 20 秒就退出');
             await feed(3, 1); if ((await T.eval(`__ex`)) !== 1) bad.push('工业里降完连续 20 秒低于 5 帧没退出 ' + await T.eval(`__ex`));
             // 联机局只提示

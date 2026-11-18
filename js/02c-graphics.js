@@ -5,6 +5,8 @@
 //   左上角帧率小字（设置里有开关，默认开）。
 // 给别的文件读的接口：graphicsQuality() graphicsView() graphicsFps() 返回档位（0 到 3、0 到 3、0 到 2），graphicsViewMul() 视野倍数，graphicsFpsTarget() 目标帧率。说明在 docs/settings.md。
 const GFX_QUALITY_NAMES = ['低', '中', '高', '超高'], GFX_VIEW_NAMES = ['正常', '稍远', '远', '超远'], GFX_FPS_NAMES = ['正常，30', '流畅，60', '高，120'];
+// 设置页里每一档的说明，档位名还是上面那几个
+const GFX_QUALITY_DESC = ['低，最省', '中，默认', '高，有影子，吃性能', '超高，最清楚，最吃性能，卡就调低'];
 const GFX_VIEW_MUL = [1, 1.4, 2, 3], GFX_FPS_TARGET = [30, 60, 120], GFX_SEG = [0.6, 1, 1.25, 1.5];   // 作者 11-16：中 = 游戏默认的样子，低在它下面，高在它上面，超高 = 能做到的最好，超过现实
 // 设备差：核数不超过 4，或者内存不超过 4 GB（有的浏览器不报内存，那就只看核数）
 function gfxDeviceLow() {
@@ -12,7 +14,9 @@ function gfxDeviceLow() {
     return (c > 0 && c <= 4) || (m > 0 && m <= 4);
 }
 function gfxIdx(id, max, def) { let v = +settingsGet(id); return isFinite(v) ? Math.max(0, Math.min(max, Math.round(v))) : def; }
-function graphicsQuality() { return gfxIdx('gfx_quality', 3, 1); }
+// 自动降画质只在这次游戏里临时降，不改存的设置（测试员 11-18：超高被悄悄改成高，玩家以为设置没存上）。自己在设置里选了就清掉临时的
+let gfxTempQ = null;
+function graphicsQuality() { let q = gfxIdx('gfx_quality', 3, 1); return gfxTempQ === null ? q : Math.min(q, gfxTempQ); }
 function graphicsView() { return gfxIdx('gfx_view', 3, 0); }
 function graphicsFps() { return gfxIdx('gfx_fps', 2, 1); }
 function graphicsViewMul() { return GFX_VIEW_MUL[graphicsView()]; }
@@ -121,7 +125,7 @@ function gfxShadowTick(r) {
     if (!sun.target.parent) scene.add(sun.target);
     // 影子相机跟着画面中心，位置取整数格，免得影子边缘跟着晃
     let cp = camera.position, tx = Math.round(cp.x / 2) * 2, tz = Math.round(cp.z / 2) * 2;
-    sun.target.position.set(tx, 0, tz); sun.position.set(tx + 40, 90, tz + 40); sun.target.updateMatrixWorld(); sun.updateMatrixWorld();
+    sun.target.position.set(tx, 0, tz); sun.position.set(tx + 12, 90, tz + 12); sun.target.updateMatrixWorld(); sun.updateMatrixWorld();
     if (now - gfxShadowAt > 500) {
         gfxShadowAt = now;
         scene.traverse(function (o) {
@@ -182,7 +186,7 @@ function gfxPause() {
 }
 function gfxRecommend() { return gfxDeviceLow() ? { q: 0, v: 0, f: 1 } : { q: 2, v: 1, f: 1 }; }
 function gfxApplyRecommend() {
-    let r = gfxRecommend(); settingsSet('gfx_quality', r.q); settingsSet('gfx_view', r.v); settingsSet('gfx_fps', r.f);
+    let r = gfxRecommend(); gfxTempQ = null; settingsSet('gfx_quality', r.q); settingsSet('gfx_view', r.v); settingsSet('gfx_fps', r.f);
     gfxNotice = ''; gfxProbe = null; if (typeof setRender === 'function' && document.getElementById('set-content')) setRender();
 }
 function gfxNoticeHtml() {
@@ -216,7 +220,7 @@ function gfxSample(n) {
     if (gfxVlowS >= GFX.dropSecs) {
         gfxVlowS = 0;
         let q = graphicsQuality();
-        if (q > 0) { gfxCritS = 0; settingsSet('gfx_quality', q - 1); blazeFlash('太卡了，画质降到' + GFX_QUALITY_NAMES[q - 1]); }   // 降完重新数 20 秒
+        if (q > 0) { gfxCritS = 0; gfxTempQ = q - 1; gfxApplyQuality(); blazeFlash('太卡了，这次先把画质降到' + GFX_QUALITY_NAMES[q - 1] + '，设置里没改'); }   // 降完重新数 20 秒
     }
     if (gfxCritS >= GFX.exitSecs) { gfxCritS = 0; gfxAutoExit(); }
     if (gfxProbe) { gfxProbe.n++; gfxProbe.sum += n; if (gfxProbe.n >= GFX.probeSecs / dt) gfxProbeDone(gfxProbe.sum / gfxProbe.n); }
@@ -231,7 +235,7 @@ function gfxSample(n) {
         wn = document.createElement('div'); wn.id = 'gfx-warn'; wn.title = '画面卡了，可以到设置里调低画质或视野';
         wn.style.cssText = 'position:fixed; left:6px; top:6px; z-index:91; display:none; width:26px; height:22px; cursor:pointer; background:rgba(0,0,0,.35); border-radius:4px;';
         wn.innerHTML = '<svg width="26" height="22" viewBox="0 0 26 22"><rect x="3" y="14" width="3" height="5" fill="#ff5252"/><rect x="8" y="10" width="3" height="9" fill="#ff5252" opacity=".45"/><rect x="13" y="6" width="3" height="13" fill="#ff5252" opacity=".25"/><circle cx="21" cy="8" r="5" fill="#ff1744"/><rect x="20.3" y="4.6" width="1.4" height="4.2" fill="#fff"/><rect x="20.3" y="9.6" width="1.4" height="1.4" fill="#fff"/></svg>';
-        wn.onclick = function () { blazeFlash('画面卡了，可以到设置里调低画质或视野'); };
+        wn.onclick = function () { showSysModal('画面卡了', '这个红色小图标是说画面帧数太低了。可以去设置里把画质、视野或流畅度调低。', [{ label: '去设置', color: '#5cb85c', onClick: function () { openSettings('显示'); } }, { label: '知道了' }]); };
         document.body.appendChild(wn); return el;
     }
     window.gfxHudRefresh = function () {
@@ -248,5 +252,5 @@ function gfxSample(n) {
 settingsRegister({ group: '显示', id: 'show_fps', label: '左上角显示帧率', type: 'toggle', def: true, first: true });
 settingsRegister({ group: '显示', id: 'gfx_fps', label: '流畅度，帧率目标', type: 'choice', def: 1, choices: [[0, GFX_FPS_NAMES[0]], [1, GFX_FPS_NAMES[1]], [2, GFX_FPS_NAMES[2]]], first: true, onChange: function () { gfxCheckHigh(); } });
 settingsRegister({ group: '显示', id: 'gfx_view', label: '视野，能看多远', type: 'choice', def: 0, choices: GFX_VIEW_NAMES.map(function (n, i) { return [i, n]; }), first: true, onChange: function () { gfxApplyView(); gfxCheckHigh(); } });
-settingsRegister({ group: '显示', id: 'gfx_quality', label: '画质，抗锯齿重开页面才生效', type: 'choice', def: gfxDeviceLow() ? 0 : 1, choices: GFX_QUALITY_NAMES.map(function (n, i) { return [i, n]; }), first: true, onChange: function () { gfxApplyQuality(); gfxCheckHigh(); } });
+settingsRegister({ group: '显示', id: 'gfx_quality', label: '画质，抗锯齿重开页面才生效', type: 'choice', def: gfxDeviceLow() ? 0 : 1, choices: GFX_QUALITY_DESC.map(function (n, i) { return [i, n]; }), first: true, onChange: function () { gfxTempQ = null; gfxApplyQuality(); gfxCheckHigh(); } });
 window.addEventListener('load', function () { gfxApplyAll(); gfxReady = true; });
