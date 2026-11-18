@@ -4,9 +4,9 @@
 // 耐火砖槽（耐火砖 4）：耐 1700°C，锭 90 秒凉，铁、钢的烫锭也接得住（砖槽 1200、铁槽 1400 接不住），装了的炉子炼出来的烫铁锭、烫钢锭进槽。
 // 没做：耐火砖模具、铁钢工具改成铸造（铸造那条的后半）。
         Object.assign(IND_ITEMS_RAW, {
-            clay_fire: { name: '耐火黏土', col: 0xd7ccc8, use: '2 份放进炉子 1500°C 以上烧 40 秒成耐火砖（要鼓风或电炉）' },
+            clay_fire: { name: '耐火黏土', col: 0xd7ccc8, use: '放进炉子烧到 1500°C，成耐火砖' },
             brick_fire: { name: '耐火砖', col: 0xffccbc, use: '4 块做耐火砖槽，耐 1700°C，接得住烫铁烫钢' },
-            spout_fire: { name: '耐火砖槽', col: 0xff8a65, attach: 'spout', spoutTy: 'fire', use: '装在炉子旁，什么锭都接（包括铁和钢），耐 1700°C，锭 90 秒凉' }
+            spout_fire: { name: '耐火砖槽', col: 0xff8a65, attach: 'spout', spoutTy: 'fire', use: '装在炉子旁，什么锭都接，耐 1700°C' }
         });
         IND_NODES.clay_fire = { give: [2, 4], tool: 0, name: '耐火黏土' };
         IND_BIOMES.ancient.res.clay_fire = 1;

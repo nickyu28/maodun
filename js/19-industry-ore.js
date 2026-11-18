@@ -9,7 +9,7 @@
         const OR_ALL = Object.keys(OR_ORE).concat(['ore_li', 'ore_ge', 'ore_ga']);
         const OR_CAVE = { mountain: { ore_cu: 3, ore_zn: 2, ore_sn: 3, ore_fe: 2, ore_pb: 1, fluorite: 1, ore_al: 1, ore_ni: 1 }, ancient: { ore_u: 2, ore_fe: 2, fluorite: 2, ore_pb: 1, ore_ni: 1, ore_al: 1, ore_cu: 1 }, other: { ore_cu: 1, ore_fe: 1, ore_sn: 1 } };
         IND_NODES.rock_crack = { give: [0, 0], tool: 99, name: '裂纹岩' };
-        Object.assign(IND_ITEMS_RAW, { rock_crack: { name: '裂纹岩', col: 0x8d6e63, later: '地图上的大石头，不是物品', use: '地图上带裂纹的大石头，镐挖不动，用 TNT 炸开掉 3～6 个矿' }, tnt: { name: 'TNT', col: 0xd32f2f, use: '右键放下，4 秒后炸，半径 4 米：炸硬岩、裂纹岩出矿，炸树出木头，炸设备，基地空地上炸出一格水池。退远点' } });
+        Object.assign(IND_ITEMS_RAW, { rock_crack: { name: '裂纹岩', col: 0x8d6e63, later: '地图上的大石头，不是物品', use: '带裂纹的大石头，镐挖不动，用 TNT 炸开' }, tnt: { name: 'TNT', col: 0xd32f2f, use: '右键放下，4 秒后炸，炸岩出矿，退远点' } });
         IND_RECIPES.push({ in: { oil: 1, b_hno3: 2, b_h2so4: 1 }, out: { tnt: 3, bucket: 1, bottle: 3 }, cls: 'chem', pri: true, minT: 80, time: 30, hard: true });
         // 地面的矿露头只留 30%
         // 任务 96：铜锌锡铁（早期矿）地面不再砍，露头刷得更多（OR.early），地面占约 70%；铀、萤石、铅、铝、镍仍然偏洞里（留 OR.surf）

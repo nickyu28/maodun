@@ -3,18 +3,18 @@
 // 炸出 3～6 个矿：锂辉石最多、锗矿其次、镓矿最少；15% 顺带炸出天然气喷口（约 2 分钟），拿空钢瓶右键装天然气。
 // 天然气用途：①炉子燃料（一瓶 500，在炉子面板里"当柴烧"，钢瓶还你；石油一桶 250；任务 56 起）②做氢（天然气 + 水 + 3 瓶 → 3 瓶氢气）。喷口旁点着篝火会甲烷爆炸。
         Object.assign(IND_ITEMS_RAW, {
-            rock_hard: { name: '硬岩', col: 0x37474f, use: '地图上的大石头，镐挖不动，拿 2 份火药炸开掉锂辉石、锗矿、镓矿' },
+            rock_hard: { name: '硬岩', col: 0x37474f, use: '地图上的大石头，拿 2 份火药炸开出稀有矿' },
             vent_ng: { name: '天然气喷口', col: 0xeceff1, use: '炸硬岩时 15% 冒出，拿空钢瓶右键装天然气，别点火' },
-            gas_ng: { name: '天然气', col: 0xffe082, fuel: 500, back: 'cyl', use: '灌满的钢瓶。①炉子燃料，一瓶烧 500（在炉子面板"当柴烧"，钢瓶还你）②做氢：天然气 + 水 + 3 个玻璃瓶 → 3 瓶氢气' },
-            ore_li: { name: '锂辉石', col: 0xd1c4e9, use: '放进炉子炼锂；锂做锂电池、锂玻璃（沙子烧玻璃板助熔）' },
+            gas_ng: { name: '天然气', col: 0xffe082, fuel: 500, back: 'cyl', use: '灌满的钢瓶，能当柴烧，也能做氢' },
+            ore_li: { name: '锂辉石', col: 0xd1c4e9, use: '放进炉子炼锂；锂做锂电池、锂玻璃，沙子烧玻璃板助熔' },
             ore_ge: { name: '锗矿', col: 0x90a4ae, use: '放进炉子炼锗；锗是半导体，做时间加速器、以后的芯片' },
             ore_ga: { name: '镓矿', col: 0xb0bec5, use: '放进炉子炼镓；镓是半导体，以后做芯片' },
-            hot_li: { name: '锂锭（烫）', col: 0xff8a65, hot: 'ingot_li', needTool: 'tongs' },
-            hot_ge: { name: '锗锭（烫）', col: 0xff7043, hot: 'ingot_ge', needTool: 'tongs' },
-            hot_ga: { name: '镓锭（烫）', col: 0xff8a65, hot: 'ingot_ga', needTool: 'tongs' },
-            ingot_li: { name: '锂锭', col: 0xe1bee7, use: '做锂电池（3 V、720 U）、锂玻璃（2 沙 + 1 锂 → 2 玻璃板）' },
+            hot_li: { name: '锂锭，烫', col: 0xff8a65, hot: 'ingot_li', needTool: 'tongs' },
+            hot_ge: { name: '锗锭，烫', col: 0xff7043, hot: 'ingot_ge', needTool: 'tongs' },
+            hot_ga: { name: '镓锭，烫', col: 0xff8a65, hot: 'ingot_ga', needTool: 'tongs' },
+            ingot_li: { name: '锂锭', col: 0xe1bee7, use: '做锂电池和锂玻璃' },
             ingot_ge: { name: '锗锭', col: 0x78909c, use: '半导体：做时间加速器，以后做芯片' },
-            ingot_ga: { name: '镓锭', col: 0x90a4ae, use: '半导体：以后做芯片（电路第 1 期）' }
+            ingot_ga: { name: '镓锭', col: 0x90a4ae, use: '半导体：以后做芯片，电路第 1 期' }
         });
         IND_ELEM_OF.ore_li = 3; IND_ELEM_OF.ore_ge = 32; IND_ELEM_OF.ore_ga = 31; IND_ELEM_OF.gas_ng = 6;
         Object.assign(IND_NODES, { rock_hard: { give: [0, 0], tool: 99, name: '硬岩' }, vent_ng: { give: [1, 1], tool: 0, name: '天然气喷口' } });
@@ -62,7 +62,7 @@
         // 拿空钢瓶右键天然气喷口：装一瓶
         function rkFillVent(o) {
             if (!(ind.bag.cyl > 0)) return false;
-            indBagDel('cyl', 1); indGive('gas_ng', 1); indFlash('装了一瓶天然气（喷口还在冒，别点火）'); return true;
+            indBagDel('cyl', 1); indGive('gas_ng', 1); indFlash('装了一瓶天然气，喷口还在冒，别点火'); return true;
         }
         // 每帧（远征里）：引线倒数、喷口枯竭、喷口旁有火就爆炸
         function rkTick(dt) {

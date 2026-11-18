@@ -60,12 +60,12 @@
         }
         function stkCookState(t, i) {
             let S = t.o;
-            if (S.cook) { let r = IND_RECIPES[S.cook.i]; return i < (S.cook.n || 1) ? '在做' + indOutTxt(r, 1) : '空闲（这一炉份数不够）'; }
+            if (S.cook) { let r = IND_RECIPES[S.cook.i]; return i < (S.cook.n || 1) ? '在做' + indOutTxt(r, 1) : '空闲，这一炉份数不够'; }
             if (!(S.fuel > 0)) return Object.keys(S.items).length ? '缺燃料' : '空闲';
-            if (!Object.keys(S.items).length) return '空闲（没放料）';
+            if (!Object.keys(S.items).length) return '空闲，没放料';
             let ri = indCookFind(ckPool(S), indCookK(t.ty, S), undefined, S.items);
             if (ri < 0) return '缺料';
-            if (S.temp < IND_RECIPES[ri].minT) return '温度不够（要 ' + IND_RECIPES[ri].minT + '°C）';
+            if (S.temp < IND_RECIPES[ri].minT) return '温度不够，要 ' + IND_RECIPES[ri].minT + '°C';
             return '等着开始';
         }
         function stkDevState(t) { let d = t.o; return d.pw ? '在干活' : (d.v || 0) > 0 ? '空闲' : '没电'; }
@@ -85,7 +85,7 @@
             let t = stkFind(kind, id); if (!t) { indPanelClose(); return; }
             let nm = t.kind === 'cook' ? IND_COOK[t.ty].name : IND_DEVS[t.ty].name, rows = stkRows(t), bank = t.ty === 'bank';
             let open = t.kind === 'cook' ? 'indPanelStove(' + (id === 'stove' ? "'stove'" : id) + ')' : bank ? 'indPanelBank(' + id + ')' : 'indDevAct(indDev(' + id + '))';
-            let html = '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + nm + (bank ? '　一组 ' + rows.length + ' 个（并联）　' + indBankV(t.o).toFixed(1) + ' V　电量 ' + Math.ceil(stkBankU(t.o)) + ' / ' + stkBankMax(t.o) : '　×' + rows.length + '（' + rows.length + ' 台叠在一起）') + '</div>' +
+            let html = '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + nm + (bank ? '　一组 ' + rows.length + ' 个，并联，　' + indBankV(t.o).toFixed(1) + ' V　电量 ' + Math.ceil(stkBankU(t.o)) + ' / ' + stkBankMax(t.o) : '　×' + rows.length + '，' + rows.length + ' 台叠在一起') + '</div>' +
                 rows.map(function (r, i) {
                     return indRow(r.txt, (r.fill ? '<button style="' + IND_BTN + 'background:#2e7d32;" onclick="stkFill(' + id + ',' + i + ')">装电池</button>' : '') + '<button style="' + IND_BTN + 'background:#d84315;" onclick="stkTake(\'' + kind + '\',' + (id === 'stove' ? "'stove'" : id) + ',' + i + ')">收起这' + (bank ? '个' : '台') + '</button>');
                 }).join('') +
@@ -230,10 +230,10 @@
             if (m === 'same') return h + '<div style="font-size:13px;color:#888;">' + n + ' 座一起烧同一样：一炉 ' + n + ' 倍的份数</div>';
             if (m === 'avg') return h + '<div style="font-size:13px;color:#888;">' + (L.length ? L.length + ' 样一起烧，每样 ' + Math.round(n / L.length * 100) / 100 + ' 座的速度' : '放几样不同的东西进去，平分 ' + n + ' 座') + '</div>' + stkLaneTxt(S);
             let A = S.alloc || {}, used = Object.keys(A).reduce(function (t, k) { return t + (A[k] || 0); }, 0);
-            h += '<div style="font-size:13px;color:#888;">每样占几座（一共 ' + n + ' 座，还剩 ' + (n - used) + ' 座）</div>';
+            h += '<div style="font-size:13px;color:#888;">每样占几座，一共 ' + n + ' 座，还剩 ' + (n - used) + ' 座</div>';
             L.forEach(function (i) { h += indRow(indOutTxt(IND_RECIPES[i], 1), '<button style="' + IND_BTN + '" onclick="stkAlloc(' + i + ', -1)">−</button> ' + (A[i] || 0) + ' 座 <button id="stk-alloc-' + i + '" style="' + IND_BTN + '" onclick="stkAlloc(' + i + ', 1)">＋</button>'); });
             return h + stkLaneTxt(S);
         }
         function stkLaneTxt(S) {
-            return (S.lanes || []).map(function (l) { let r = IND_RECIPES[l.i]; return '<div style="font-size:13px;">正在做：' + indOutTxt(r, l.n) + ' ' + Math.floor(l.t / r.time * 100) + '%' + (l.full ? '（出料槽满了）' : '') + '</div>'; }).join('');
+            return (S.lanes || []).map(function (l) { let r = IND_RECIPES[l.i]; return '<div style="font-size:13px;">正在做：' + indOutTxt(r, l.n) + ' ' + Math.floor(l.t / r.time * 100) + '%' + (l.full ? '，出料槽满了' : '') + '</div>'; }).join('');
         }

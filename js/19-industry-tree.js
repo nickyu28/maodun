@@ -6,7 +6,7 @@
         WD_TREE.rubber = { th: 2.4, tw: 0.5, cy: 3.4, cs: [1.4, 1.7, 1.4], col: 0x7cb342 };
         WD_TREE_NAME.rubber = '橡胶树';
         Object.assign(IND_ITEMS_RAW, {
-            latex: { name: '乳胶', col: 0xfffde7, use: '2 份乳胶加 1 份硫，在灶台 150°C 熬 20 秒成橡胶' },
+            latex: { name: '乳胶', col: 0xfffde7, use: '加硫在灶台熬成橡胶' },
             rubber: { name: '橡胶', col: 0x212121, use: '以后做电线外皮、手柄' },
             resin: { name: '松脂', col: 0xffb300, use: '引火物' },
             coconut: { name: '椰子', col: 0x795548, eat: { w: 15, back: 'coconut_shell' }, use: '右键喝，口渴 +15，喝完剩椰壳' },
@@ -60,8 +60,8 @@
         wdNodeHint = function (o) {
             let h = wdNodeHint0(o);
             if (!o.tree) return h;
-            if (o.tree === 'pine') return h + '<br><small>右键：割松脂（还有 ' + trResinLeft(o) + ' 份，要小刀或斧子）</small>';
-            if (o.tree === 'rubber') return h + '<br><small>右键：割胶（还有 ' + (o.lx === undefined ? TR.latex : o.lx) + ' 份，要小刀或斧子）</small>';
-            if (o.tree === 'palm') return h + '<br><small>空手右键：摇椰子' + (o.sh && !(o.pin && ind.t - o.sh >= TR.resinT) ? '（摇过了）' : '') + '</small>';
+            if (o.tree === 'pine') return h + '<br><small>右键：割松脂，还有 ' + trResinLeft(o) + ' 份，要小刀或斧子</small>';
+            if (o.tree === 'rubber') return h + '<br><small>右键：割胶，还有 ' + (o.lx === undefined ? TR.latex : o.lx) + ' 份，要小刀或斧子</small>';
+            if (o.tree === 'palm') return h + '<br><small>空手右键：摇椰子' + (o.sh && !(o.pin && ind.t - o.sh >= TR.resinT) ? '，摇过了' : '') + '</small>';
             return h;
         };

@@ -10,7 +10,7 @@
         const CK = { oilFuel: 250, oilTotal: 20, funnelCap: 1200, funnelRate: 10, funnelKeep: 300, hearthCool: 150, kickR: 1.8, scatter: 1.5, kickCool: 60, oilMax: 4, oilRegen: 120 };
 
         Object.assign(IND_ITEMS_RAW, {
-            spout_brick: { name: '砖槽', col: 0xbf5b3a, attach: 'spout', spoutTy: 'brick', use: '装在炉子旁，接铜、青铜、黄铜、锌、锡、铅，耐 1200°C，锭 60 秒凉' },
+            spout_brick: { name: '砖槽', col: 0xbf5b3a, attach: 'spout', spoutTy: 'brick', use: '装在炉子旁，接铜锡铅锌，耐 1200°C' },
             funnel_brick: { name: '砖漏斗', col: 0xa1887f, attach: 'funnel', funnelTy: 'brick', use: '装在炉子旁，倒进去的油慢慢流进炉子' },
             funnel_iron: { name: '铁漏斗', col: 0x90a4ae, attach: 'funnel', funnelTy: 'iron', use: '装在炉子旁，倒进去的油慢慢流进炉子' }
         });
@@ -134,7 +134,7 @@
             if (!c) { indFlash(indHard() ? '对着炉子旁边的进料漏斗倒' : '对着灶台、小熔炉或大窑右键，把油倒进去'); return false; }
             let S = c.C;
             if (indHard()) {
-                if (a.kind !== 'funnel') { indFlash(S.funnel ? '得用进料漏斗：对着炉子旁的漏斗倒' : '这个炉子旁边没有进料漏斗：工作台做一个（3 块砖或 2 个铁锭）装在炉子旁，再对着漏斗倒'); return false; }
+                if (a.kind !== 'funnel') { indFlash(S.funnel ? '得用进料漏斗：对着炉子旁的漏斗倒' : '这个炉子旁边没有进料漏斗：工作台做一个，3 块砖或 2 个铁锭，装在炉子旁，再对着漏斗倒'); return false; }
                 if (!S.funnel) return false;
                 if (S.funnel.oil + CK.oilFuel > CK.funnelCap + 1e-6) { indFlash('漏斗装不下了，等它流一会儿'); return false; }
                 indBagDel(k, 1); indGive(indEmptyKey(cc.mat), 1); S.funnel.oil += CK.oilFuel;
@@ -155,7 +155,7 @@
             return o.n;
         }
         // 硬核第一次装到油：弹一次大点的提示，说清石油怎么烧
-        const CK_OIL_TIP = '石油要用进料漏斗：先在工作台做一个（3 块砖，或 2 个铁锭），装在炉子旁边，再拿装了油的桶对着漏斗右键倒。倒进去的油会慢慢流进炉子，空桶还你。';
+        const CK_OIL_TIP = '石油要用进料漏斗：先在工作台做一个，3 块砖，或 2 个铁锭，装在炉子旁边，再拿装了油的桶对着漏斗右键倒。倒进去的油会慢慢流进炉子，空桶还你。';
         function ckOilFirst() {
             if (!indHard()) return;
             let told = false; try { told = !!localStorage.getItem('maodun_oil_told'); } catch (e) { }
@@ -169,14 +169,14 @@
             if (o.n >= o.max) o.t0 = ind.t;
             o.n--; o.got = (o.got || 0) + 1; indBagDel(k, 1); indGive(indFilledKey('oil', m), 1);
             if (o.got >= CK.oilTotal) { o.dry = true; o.n = 0; }
-            ind.nodeDirty = true; indFlash(o.dry ? '装了一桶石油，这个油点采完了（干井）' : '装了一桶石油（油点还剩 ' + o.n + ' 桶，一共还能出 ' + (CK.oilTotal - o.got) + ' 桶）');
+            ind.nodeDirty = true; indFlash(o.dry ? '装了一桶石油，这个油点采完了，干井' : '装了一桶石油，油点还剩 ' + o.n + ' 桶，一共还能出 ' + (CK.oilTotal - o.got) + ' 桶');
             ckOilFirst();
             return true;
         }
         function ckOilHint(o) {
-            if (ckOilStock(o) < 1 && o.dry) return '干井　这个油点采完了（一个油点一共 ' + CK.oilTotal + ' 桶），去别处找';
+            if (ckOilStock(o) < 1 && o.dry) return '干井　这个油点采完了，一个油点一共 ' + CK.oilTotal + ' 桶，去别处找';
             let n = ckOilStock(o), left = n < o.max ? '　下一桶还要 ' + Math.max(1, Math.ceil(CK.oilRegen - (ind.t - o.t0))) + ' 秒' : '';
-            return '油点　剩 ' + n + ' 桶' + left + '<br><small>' + (n > 0 ? '拿空桶右键：装一桶' : '空了，过一会儿会冒出来') + '（空手装不了）</small>';
+            return '油点　剩 ' + n + ' 桶' + left + '<br><small>' + (n > 0 ? '拿空桶右键：装一桶' : '空了，过一会儿会冒出来') + '，空手装不了</small>';
         }
 
         // ── 踹炉子（硬核，按 V）──
@@ -188,7 +188,7 @@
             let best = null, bd = 1e9, a = indAim();
             indCooks().forEach(function (c) { let d = Math.hypot(ind.p.x - c.x, ind.p.z - c.z) - IND_COOK[c.ty].r; if (d < CK.kickR && d < bd) { bd = d; best = c; } });
             if (a && (a.kind === 'cook' || a.kind === 'stove')) best = ckCookOfAim(a) || best;
-            if (!best) { indFlash('旁边没有炉子（走到炉子旁边再踹）'); return false; }
+            if (!best) { indFlash('旁边没有炉子，走到炉子旁边再踹'); return false; }
             let S = best.C, T = S.temp, r0 = IND_COOK[best.ty].r, thrown = [];
             Object.keys(S.items).forEach(function (k) { for (let i = 0; i < S.items[k]; i++) thrown.push({ k: k }); });
             Object.keys(S.out).forEach(function (k) { for (let i = 0; i < S.out[k]; i++) thrown.push({ k: k, hot: !!ckHotOf(k) }); });
@@ -206,6 +206,6 @@
             let dmg = ckKickDmg(T);
             indFlash('踹！' + (n ? n + ' 样东西飞出来了' : '炉子里本来就没东西'));
             indSave();
-            if (dmg > 0) indHurt(dmg, 'kick', '踹了烫炉子（炉温 ' + Math.round(T) + '°C）', true);
+            if (dmg > 0) indHurt(dmg, 'kick', '踹了烫炉子，炉温 ' + Math.round(T) + '°C', true);
             return true;
         }

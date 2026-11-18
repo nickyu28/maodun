@@ -21,7 +21,7 @@
         // 任务 59：硅。电炉（3 米内的炉子顶到 1800°C）里沙子 2 + 木炭／煤／焦炭 1 → 烫硅，凉了是硅锭。现实：二氧化硅被碳还原
         // pri：沙子多的时候不被"3 沙 → 玻璃板（1700°C）"抢走
         Object.assign(IND_ITEMS_RAW, {
-            hot_si: { name: '硅（烫）', col: 0xff7043, hot: 'ingot_si', needTool: 'tongs' },
+            hot_si: { name: '硅，烫', col: 0xff7043, hot: 'ingot_si', needTool: 'tongs' },
             ingot_si: { name: '硅', col: 0x607d8b, useLater: '太阳能板、芯片', use: '以后做太阳能板的电池片、芯片的基片要用' }
         });
         IND_ELEM_OF.ingot_si = 14;
@@ -33,8 +33,8 @@
 
         // 任务 54：硝酸。大窑化学批次：硝石 2 + 硫酸 1 + 空瓶 1 → 硝酸 2 + 硫酸钾 1（120°C、20 秒）。钚改用硝酸提取（PUREX，在 19-industry-nuke.js 原位置改的）
         Object.assign(IND_ITEMS_RAW, {
-            b_hno3: { name: '硝酸瓶', col: 0xffcc80, corrosive: true, use: '后处理乏燃料出钚（乏燃料棒 + 2 瓶）；以后做芯片蚀刻也要用' },
-            k2so4: { name: '硫酸钾', col: 0xf5f5f5, use: '右键撒在有作物的农田上，这一季长得快 75%（比硝石弱）' }
+            b_hno3: { name: '硝酸瓶', col: 0xffcc80, corrosive: true, use: '后处理乏燃料出钚，乏燃料棒 + 2 瓶；以后做芯片蚀刻也要用' },
+            k2so4: { name: '硫酸钾', col: 0xf5f5f5, use: '右键撒在有作物的农田上，这一季长得快 75%，比硝石弱' }
         });
         IND_ELEM_OF.b_hno3 = 7;
         IND_RECIPES.push({ in: { saltpeter: 2, b_h2so4: 1, bottle: 1 }, out: { b_hno3: 2, k2so4: 1 }, cls: 'chem', pri: true, minT: 120, time: 20, hard: true });
@@ -92,7 +92,7 @@
             if (d.self) return D.name + (rlGenOn(d) ? ' 发电中 12 V' : ' 没在发电') + '　柴 ' + (rlGenFuelN(d) + (d.fu > 0 ? 1 : 0)) + ' 份' + (d.lit ? '　烧着' : indHard() ? '　没点火，拿火柴左键点' : '') + '　' + w;
             if (rlGenOn(d)) return D.name + ' 发电中 12 V　' + w;
             let c = rlGenCook(d);
-            return D.name + (c ? '（贴在' + IND_COOK[c.ty].name + '上）' : '') + ' 没在发电　' + w + (rlGenHot(d) ? '' : c ? '　' + IND_COOK[c.ty].name + '要中火以上' : '　对着炉子右键贴上去，或者放在点着的炉子（中火以上）5 米内');
+            return D.name + (c ? '，贴在' + IND_COOK[c.ty].name + '上' : '') + ' 没在发电　' + w + (rlGenHot(d) ? '' : c ? '　' + IND_COOK[c.ty].name + '要中火以上' : '　对着炉子右键贴上去，或者放在点着的炉子，中火以上，5 米内');
         }
         function rlGenAct(d, k) {
             if (d.self && k) {
@@ -110,9 +110,9 @@
             }
             let c = indContOf(k);
             if (c && !c.empty && c.base === 'water_raw') {
-                if (d.wt > 0) { indFlash('水箱还有水（剩 ' + Math.ceil(d.wt) + ' 秒），用完再装'); return false; }
+                if (d.wt > 0) { indFlash('水箱还有水，剩 ' + Math.ceil(d.wt) + ' 秒，用完再装'); return false; }
                 indBagDel(k, 1); indGive(indEmptyKey(c.mat), 1); d.wt = RL_GEN.tank; d.wm = c.mat; indSave();
-                indFlash('水箱装满了（能发 ' + RL_GEN.tank + ' 秒电）'); return true;
+                indFlash('水箱装满了，能发 ' + RL_GEN.tank + ' 秒电'); return true;
             }
             if (c && !c.empty) { indFlash('水箱只装生水'); return false; }
             indFlash(rlGenInfo(d)); return false;
@@ -126,10 +126,10 @@
         const RL_PIPE = { segLen: 2, maxSeg: 20, rate: 5, tower: 20, poolR: 2.5, tank: 20, elBuf: 2, cookBuf: 8, rxBuf: 0.5, rxUse: 1 / 30, gasLow: 300 };
         const RL_FLUID = { w: '水', o: '油', g: '天然气' };
         Object.assign(IND_ITEMS_RAW, {
-            pipe: { name: '钢管', col: 0x90a4ae, use: '接水、油、天然气：拿着先点源头（水塔、水泵、储油罐、储气罐）再点目的地，每 2 米 1 段；高处往低处流不要电，平着或往高要水泵' },
-            dev_tower: { name: '水塔', col: 0x4fc3f7, dev: 'tower', use: '高处的水箱，装 20 桶水：水泵往上抽，水靠重力流给地面的设备（不要电）；拿一桶生水左键也能倒进去' },
-            dev_oiltank: { name: '储油罐', col: 0x3e2723, dev: 'oiltank', use: '装 20 桶石油：拿油桶左键倒进去、拿空桶左键装出来（当仓库用，桶不碎、不占背包）；接管道和水泵送到炉子的进料漏斗' },
-            dev_gastank: { name: '储气罐', col: 0xffe082, dev: 'gastank', use: '装 20 瓶天然气：拿天然气钢瓶左键灌进去、拿空钢瓶左键装出来（当仓库用）；接管道和水泵送到炉子当燃料' }
+            pipe: { name: '钢管', col: 0x90a4ae, use: '先点源头再点目的地，高往低流，往高要水泵' },
+            dev_tower: { name: '水塔', col: 0x4fc3f7, dev: 'tower', use: '装 20 桶水，靠重力流给下面的设备' },
+            dev_oiltank: { name: '储油罐', col: 0x3e2723, dev: 'oiltank', use: '装 20 桶石油，当仓库用，接管道送炉子' },
+            dev_gastank: { name: '储气罐', col: 0xffe082, dev: 'gastank', use: '装 20 瓶天然气，当仓库用，接管道送炉子' }
         });
         Object.assign(IND_DEVS, {
             tower: { name: '水塔', col: 0x4fc3f7, always: true, nowire: true, rated: 1e9, minV: 1e9, draw: 0, size: [1.2, 6, 1.2], high: 1 },
@@ -159,7 +159,7 @@
         function rlPumpFluid(id) { let p = (ind.base.pipes || []).filter(function (q) { return q[1] === id; })[0]; return p ? p[3] : 'w'; }
         function rlFluidOf(a) { let s = RL_SRC[a.ty]; return s === '*' ? rlPumpFluid(a.id) : s; }
         function rlCanLink(a, b) {
-            if (!RL_SRC[a.ty]) return '先点源头（水塔、水泵、储油罐、储气罐），再点目的地';
+            if (!RL_SRC[a.ty]) return '先点源头，水塔、水泵、储油罐、储气罐，再点目的地';
             if (!RL_DST[b.ty]) return b.name + '不接管道';
             let f = rlFluidOf(a);
             if (RL_DST[b.ty].indexOf(f) < 0) return b.name + '不收' + RL_FLUID[f];
@@ -176,18 +176,18 @@
         // 拿着钢管点设备或炉子：先源头再目的地
         function rlPipeClick(id) {
             let B = ind.base, n = rlNode(id); if (!n) return false;
-            if (!ind.pipePend) { if (!RL_SRC[n.ty]) { indFlash('先点源头（水塔、水泵、储油罐、储气罐），再点目的地'); return false; } ind.pipePend = id; ind.devDirty = true; indFlash('选了' + n.name + '，再点要送去的地方'); return true; }
+            if (!ind.pipePend) { if (!RL_SRC[n.ty]) { indFlash('先点源头，水塔、水泵、储油罐、储气罐，再点目的地'); return false; } ind.pipePend = id; ind.devDirty = true; indFlash('选了' + n.name + '，再点要送去的地方'); return true; }
             if (ind.pipePend === id) { ind.pipePend = null; ind.devDirty = true; indFlash('取消了'); return true; }
             let a = rlNode(ind.pipePend); ind.pipePend = null; ind.devDirty = true;
             if (!a) return false;
             let why = rlCanLink(a, n); if (why) { indFlash(why); return false; }
             if (B.pipes.some(function (p) { return p[0] === a.id && p[1] === n.id; })) { indFlash('已经接了'); return false; }
             let k = rlPipeSegs(a, n);
-            if (k > RL_PIPE.maxSeg) { indFlash('太远了：一条管道最多 ' + RL_PIPE.maxSeg + ' 段（' + RL_PIPE.maxSeg * RL_PIPE.segLen + ' 米）'); return false; }
+            if (k > RL_PIPE.maxSeg) { indFlash('太远了：一条管道最多 ' + RL_PIPE.maxSeg + ' 段，' + RL_PIPE.maxSeg * RL_PIPE.segLen + ' 米'); return false; }
             if ((ind.bag.pipe || 0) < k) { indFlash('要 ' + k + ' 段管道，背包里只有 ' + (ind.bag.pipe || 0) + ' 段'); return false; }
             let f = rlFluidOf(a);
             indBagDel('pipe', k); B.pipes.push([a.id, n.id, k, f]); ind.wireDirty = true; indSave();
-            indFlash('接上了' + RL_FLUID[f] + '管：' + a.name + ' → ' + n.name + '（' + k + ' 段）' + (a.ty === 'pump' ? '，要水泵通电才流' : '，高处往低处流不要电'));
+            indFlash('接上了' + RL_FLUID[f] + '管：' + a.name + ' → ' + n.name + '，' + k + ' 段，' + (a.ty === 'pump' ? '，要水泵通电才流' : '，高处往低处流不要电'));
             return true;
         }
         function rlDevAct(d, k) {
@@ -196,32 +196,32 @@
             if (d.ty === 'tower') {
                 if (c && !c.empty && c.base === 'water_raw') {
                     if (d.wu > RL_PIPE.tower - 1) { indFlash('水塔满了'); return false; }
-                    indBagDel(k, 1); indGive(indEmptyKey(c.mat), 1); d.wu = (d.wu || 0) + 1; indSave(); indFlash('倒进水塔一桶（' + Math.floor(d.wu) + ' / ' + RL_PIPE.tower + '）'); return true;
+                    indBagDel(k, 1); indGive(indEmptyKey(c.mat), 1); d.wu = (d.wu || 0) + 1; indSave(); indFlash('倒进水塔一桶，' + Math.floor(d.wu) + ' / ' + RL_PIPE.tower + ''); return true;
                 }
-                indFlash(IND_DEVS.tower.name + '：水 ' + Math.floor(d.wu || 0) + ' / ' + RL_PIPE.tower + ' 桶（拿钢管接水泵和设备，拿一桶生水能倒进去）'); return false;
+                indFlash(IND_DEVS.tower.name + '：水 ' + Math.floor(d.wu || 0) + ' / ' + RL_PIPE.tower + ' 桶，拿钢管接水泵和设备，拿一桶生水能倒进去'); return false;
             }
             if (d.ty === 'oiltank') {
                 if (c && !c.empty && c.base === 'oil') {
                     if (d.oil > RL_PIPE.tank - 1) { indFlash('储油罐满了'); return false; }
-                    indBagDel(k, 1); indGive(indEmptyKey(c.mat), 1); d.oil = (d.oil || 0) + 1; indSave(); indFlash('倒进储油罐一桶（' + Math.floor(d.oil) + ' / ' + RL_PIPE.tank + '）'); return true;
+                    indBagDel(k, 1); indGive(indEmptyKey(c.mat), 1); d.oil = (d.oil || 0) + 1; indSave(); indFlash('倒进储油罐一桶，' + Math.floor(d.oil) + ' / ' + RL_PIPE.tank + ''); return true;
                 }
                 if (c && c.empty) {
                     if (!(d.oil >= 1)) { indFlash('储油罐里不够一桶'); return false; }
                     if (indFits(ind.bag, indBagSlots(), indFilledKey('oil', c.mat), 1) < 1 && ind.bag[k] > 1) { indFlash('背包满了'); return false; }
                     indBagDel(k, 1); indGive(indFilledKey('oil', c.mat), 1); d.oil -= 1; indSave(); indFlash('装出来一桶石油'); return true;
                 }
-                indFlash(IND_DEV_INFO.oiltank(d) + '（拿油桶左键倒进去，拿空桶装出来）'); return false;
+                indFlash(IND_DEV_INFO.oiltank(d) + '，拿油桶左键倒进去，拿空桶装出来'); return false;
             }
             if (d.ty === 'gastank') {
                 if (k === 'gas_ng') {
                     if (d.gas > RL_PIPE.tank - 1) { indFlash('储气罐满了'); return false; }
-                    indBagDel(k, 1); indGive('cyl', 1); d.gas = (d.gas || 0) + 1; indSave(); indFlash('灌进储气罐一瓶（' + Math.floor(d.gas) + ' / ' + RL_PIPE.tank + '），空钢瓶还你'); return true;
+                    indBagDel(k, 1); indGive('cyl', 1); d.gas = (d.gas || 0) + 1; indSave(); indFlash('灌进储气罐一瓶，' + Math.floor(d.gas) + ' / ' + RL_PIPE.tank + '，空钢瓶还你'); return true;
                 }
                 if (k === 'cyl') {
                     if (!(d.gas >= 1)) { indFlash('储气罐里不够一瓶'); return false; }
                     indBagDel('cyl', 1); indGive('gas_ng', 1); d.gas -= 1; indSave(); indFlash('装出来一瓶天然气'); return true;
                 }
-                indFlash(IND_DEV_INFO.gastank(d) + '（拿天然气钢瓶左键灌进去，拿空钢瓶装出来）'); return false;
+                indFlash(IND_DEV_INFO.gastank(d) + '，拿天然气钢瓶左键灌进去，拿空钢瓶装出来'); return false;
             }
             if (d.ty === 'snuke' && k !== 'wire') return fmSnukeAct(d, k);   // 小型核电（19-industry-farm.js，任务 49）
             return undefined;

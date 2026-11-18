@@ -55,8 +55,8 @@
         // 岩浆罐（任务 73）：钻石 4 + 钢锭 8 + 耐火砖 12。空罐对着岩浆右键装满；满罐拿在手上体温每秒 +0.05；对着火苗仔右键喂，寿命 +1，还空罐；
         // 放进基地的地热发电机当燃料（旁边 3 米内要有水），一罐发 24 V、持续 3 个游戏日，烧完还空罐
         Object.assign(IND_ITEMS_RAW, {
-            lava_tank: { name: '岩浆罐（空）', col: 0x78909c, use: '对着岩浆右键装满' },
-            lava_tank_full: { name: '岩浆罐（满）', col: 0xff5722, later: '对着岩浆装，体检看不到', use: '拿在手上发烫。对着火苗仔右键喂它，寿命 +1；放进基地的地热发电机当燃料，发 3 个游戏日的电' }
+            lava_tank: { name: '岩浆罐，空', col: 0x78909c, use: '对着岩浆右键装满' },
+            lava_tank_full: { name: '岩浆罐，满', col: 0xff5722, later: '对着岩浆装，体检看不到', use: '放进基地的地热发电机，发 3 个游戏日的电' }
         });
         IND_CRAFT.push({ out: 'lava_tank', in: { diamond: 4, steel: 8, brick_fire: 12 }, hard: true });
         const LV_FUEL = 3 * IND_DAY;

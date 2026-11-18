@@ -18,10 +18,10 @@
         const RC_INSIDE = { cand: 1, cor: 1, cnot: 1, cxor: 1, clatch: 1, cdelay: 1 };   // 能放进芯片的
         const RC_ITEM = { cbtn: 'dev_cbtn', clev: 'dev_clev', clamp: 'dev_clamp', cand: 'dev_cand', cor: 'dev_cor', cnot: 'dev_cnot', cxor: 'dev_cxor', clatch: 'dev_clatch', cdelay: 'dev_cdelay', cchip: 'dev_cchip' };
         const RC_ITEM_KIND = {}; Object.keys(RC_ITEM).forEach(function (k) { RC_ITEM_KIND[RC_ITEM[k]] = k; });
-        Object.assign(IND_ITEMS_RAW, { sigwire: { name: '信号线', col: 0x29b6f6, use: '连电路元件：拿着先点输出的、再点输入的（一个输出口最多 8 根，一个输入口 1 根）；不是电力线，不通电' } });
+        Object.assign(IND_ITEMS_RAW, { sigwire: { name: '信号线', col: 0x29b6f6, use: '先点输出再点输入，一个输入口 1 根，不通电' } });
         Object.keys(RC_KINDS).forEach(function (k) {
             let K = RC_KINDS[k];
-            IND_ITEMS_RAW[RC_ITEM[k]] = { name: K.name, col: K.col, dev: k, use: k === 'cchip' ? '左键开画布，最多放 8 个元件、4 进 4 出，封装后当一个块用；做延时开关、小控制器' : '电路元件：用信号线连起来' + (K.act ? '（要接电）' : '（不吃电）') + '；也能放进基础芯片里' + (RC_INSIDE[k] ? '' : '（不能放进芯片）') };
+            IND_ITEMS_RAW[RC_ITEM[k]] = { name: K.name, col: K.col, dev: k, use: k === 'cchip' ? '左键开画布，最多 8 个元件' : '电路元件，用信号线连' + (K.act ? '，要接电' : '') + (RC_INSIDE[k] ? '' : '，不进芯片') };
             IND_DEVS[k] = { name: K.name, col: K.col, rated: 24, minV: 1.5, draw: K.act ? 0.05 : 0, size: K.size, circ: true, nowire: !K.act, always: !K.act };
         });
         IND_CRAFT.push(
@@ -82,7 +82,7 @@
             if (d.ty === 'cbtn') { d.pt = 1; return true; }
             if (d.ty === 'clev') { d.on1 = d.on1 ? 0 : 1; indSave(); return true; }
             if (d.ty === 'cdelay' || d.ty === 'cchip') { rcPanel(d.id); return true; }
-            let st = d.ty === 'clamp' ? (d.out > 0 ? '亮着' : '灭着') : '输出 ' + d.out + (indDev(d.id).pw ? '' : '（没电）');
+            let st = d.ty === 'clamp' ? (d.out > 0 ? '亮着' : '灭着') : '输出 ' + d.out + (indDev(d.id).pw ? '' : '，没电');
             return true;
         }
         function rcFreeIn(id, n) { let used = {}; (ind.base.sig || []).forEach(function (w) { if (w[2] === id) used[w[3]] = 1; }); for (let i = 0; i < n; i++) if (!used[i]) return i; return -1; }
@@ -165,7 +165,7 @@
         function rcPanel(id) {
             let d = indDev(id); if (!d) return;
             if (d.ty === 'cdelay') {
-                indPanelShow('rc', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">延时</div><div style="line-height:1.7;">' + d.t + ' 刻（' + (d.t / 10).toFixed(1) + ' 秒），1～100 刻</div>' +
+                indPanelShow('rc', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">延时</div><div style="line-height:1.7;">' + d.t + ' 刻，' + (d.t / 10).toFixed(1) + ' 秒，1～100 刻</div>' +
                     '<div>' + [-10, -1, 1, 10].map(function (v) { return '<button style="' + IND_BTN + '" onclick="rcSetT(' + id + ',' + v + ')">' + (v > 0 ? '+' : '') + v + '</button>'; }).join('') + '</div>' +
                     '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
                 ind.rcId = id; return;
@@ -185,11 +185,11 @@
                 return '<td onclick="rcCell(' + d.id + ',' + x + ',' + y + ')" style="width:30px;height:30px;border:1px solid #ccc;text-align:center;font-size:11px;background:' + bg + ';cursor:pointer;">' + lab + '</td>';
             };
             let rows = ''; for (let y = 0; y < N; y++) { rows += '<tr>'; for (let x = 0; x < N; x++) rows += cell(x, y); rows += '</tr>'; }
-            let tools = Object.keys(RC_INSIDE).map(function (k) { return '<button style="' + IND_BTN + (S.tool === k ? 'background:#ef6c00;' : '') + '" onclick="rcTool(' + d.id + ',\'' + k + '\')">' + RC_KINDS[k].name + '（' + (ind.bag[RC_ITEM[k]] || 0) + '）</button>'; }).join('') +
+            let tools = Object.keys(RC_INSIDE).map(function (k) { return '<button style="' + IND_BTN + (S.tool === k ? 'background:#ef6c00;' : '') + '" onclick="rcTool(' + d.id + ',\'' + k + '\')">' + RC_KINDS[k].name + '，' + (ind.bag[RC_ITEM[k]] || 0) + '</button>'; }).join('') +
                 '<button style="' + IND_BTN + (S.tool === 'wire' ? 'background:#ef6c00;' : '') + '" onclick="rcTool(' + d.id + ',\'wire\')">连线</button><button style="' + IND_BTN + (S.tool === 'erase' ? 'background:#ef6c00;' : '') + '" onclick="rcTool(' + d.id + ',\'erase\')">拆</button>';
             let ports = '<div style="margin-top:6px;font-size:13px;">外面接信号线用的口：' + [0, 1, 2, 3].map(function (i) { return '<button style="' + IND_BTN + (ind.sigPort && ind.sigPort.id === d.id && ind.sigPort.kind === 'in' && ind.sigPort.port === i ? 'background:#ef6c00;' : '') + '" onclick="rcPort(' + d.id + ',\'in\',' + i + ')">入 ' + i + '</button>'; }).join('') + [0, 1, 2, 3].map(function (i) { return '<button style="' + IND_BTN + (ind.sigPort && ind.sigPort.id === d.id && ind.sigPort.kind === 'out' && ind.sigPort.port === i ? 'background:#ef6c00;' : '') + '" onclick="rcPort(' + d.id + ',\'out\',' + i + ')">出 ' + i + '</button>'; }).join('') + '</div>';
             indPanelShow('rc', '<div style="font-size:18px;font-weight:bold;margin-bottom:4px;">基础芯片　' + c.els.length + ' / ' + RC.chipEl + ' 个元件</div>' +
-                '<div>' + tools + '</div><table style="border-collapse:collapse;margin:6px 0;">' + rows + '</table>' + ports + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上（封装）</button></div>');
+                '<div>' + tools + '</div><table style="border-collapse:collapse;margin:6px 0;">' + rows + '</table>' + ports + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上，封装</button></div>');
             ind.rcId = d.id;
         }
         function rcTool(id, t) { let S = ind.rcSel; if (!S || S.id !== id) S = ind.rcSel = { id: id, tool: '', pend: null }; S.tool = S.tool === t ? '' : t; S.pend = null; rcPanel(id); }

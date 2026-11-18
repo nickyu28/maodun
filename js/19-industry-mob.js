@@ -53,28 +53,28 @@
             let add = {};
             Object.keys(MB_KNIFE).forEach(function (k) {
                 let K = MB_KNIFE[k];
-                if (K.name) add[k] = { name: K.name, col: K.col, use: '刀：左键对着怪挥，伤害 ' + K.dmg + '，耐久 ' + K.dura + '；右键狗或猫给它装上' };
-                add['broken_' + k] = { name: '断了的' + (K.name || '小刀'), col: 0x616161, use: '工作台：回收一半主料，或者加 1 胶水修好（耐久一半）' };
+                if (K.name) add[k] = { name: K.name, col: K.col, use: '刀：伤害 ' + K.dmg + '，耐久 ' + K.dura };
+                add['broken_' + k] = { name: '断了的' + (K.name || '小刀'), col: 0x616161, use: '工作台：回收一半主料，或者加 1 胶水修好，耐久一半' };
                 if (K.in) IND_CRAFT.push(Object.assign({ out: k, in: K.in }, K.hard ? { hard: true } : {}));
                 IND_CRAFT.push(Object.assign({ out: K.back[0], n: K.back[1], in: { ['broken_' + k]: 1 } }, K.hard ? { hard: true } : {}), Object.assign({ out: k, fix: true, in: { ['broken_' + k]: 1, glue: 1 } }, K.hard ? { hard: true } : {}));
                 IND_CRAFT.push(Object.assign({ out: k, poison: true, in: { [k]: 1, shroom_bad: 1 } }, K.hard ? { hard: true } : {}));   // 涂毒：刀原样还你，接下来 10 下带毒
             });
             Object.keys(MB_SHIELD).forEach(function (k) {
                 let S = MB_SHIELD[k];
-                add[k] = { name: S.name, col: S.col, use: '盾：选中点一下右键举 ' + S.up + ' 秒，正前方挡 ' + Math.round(S.cut * 100) + '% 伤害，冷却 ' + S.cd + ' 秒，耐久 ' + S.dura + '；右键狗或猫给它装上' };
-                add['broken_' + k] = { name: '断了的' + S.name, col: 0x616161, use: '工作台：回收一半主料，或者加 1 胶水修好（耐久一半）' };
+                add[k] = { name: S.name, col: S.col, use: '盾：右键举，挡 ' + Math.round(S.cut * 100) + '% 伤害，耐久 ' + S.dura };
+                add['broken_' + k] = { name: '断了的' + S.name, col: 0x616161, use: '工作台：回收一半主料，或者加 1 胶水修好，耐久一半' };
                 if (S.inCasual) IND_CRAFT.push({ out: k, in: S.in, hard: true }, { out: k, in: S.inCasual, casual: true });
                 else IND_CRAFT.push(Object.assign({ out: k, in: S.in }, S.hard ? { hard: true } : {}));
                 IND_CRAFT.push(Object.assign({ out: S.back[0], n: S.back[1], in: { ['broken_' + k]: 1 } }, S.hard ? { hard: true } : {}), Object.assign({ out: k, fix: true, in: { ['broken_' + k]: 1, glue: 1 } }, S.hard ? { hard: true } : {}));
             });
             Object.assign(add, {
-                goo: { name: '黏液', col: 0x69f0ae, fuel: 80, use: '①当燃料，一团烧 80 ②撒在农田当肥料（长得快 75%）③炉子里 2 团熬成胶水' },
-                glue: { name: '胶水', col: 0xfff9c4, use: '①修断了的刀和盾（工作台）②出门时对着地面右键倒一滩，怪踩上去慢 70%（留 60 秒）' },
+                goo: { name: '黏液', col: 0x69f0ae, fuel: 80, use: '烧 80，撒农田肥料，熬胶水' },
+                glue: { name: '胶水', col: 0xfff9c4, use: '修断了的木头和石头工具' },
                 shroom: { name: '蘑菇', col: 0xd7ccc8, use: '灶台烤熟能吃；2 个加一桶开水煮蘑菇汤' },
                 shroom_roast: { name: '烤蘑菇', col: 0x8d6e63, eat: { f: 8 } },
                 shroom_soup: { name: '蘑菇汤', col: 0xbcaaa4, eat: { f: 20, w: 10, hot: 1 } },
-                shroom_bad: { name: '毒蘑菇', col: 0xe53935, eat: { f: 2 }, use: '吃了中毒！工作台：毒蘑菇 + 刀 → 接下来 10 下让怪中毒' },
-                fluff: { name: '云絮', col: 0xffffff, eat: { f: 3 }, use: '吃了饱食 +3、体温 −0.5（甜甜的，像棉花糖）；拿着右键作物当浇一次水' },
+                shroom_bad: { name: '毒蘑菇', col: 0xe53935, eat: { f: 2 }, use: '吃了中毒，加刀给野猪下毒' },
+                fluff: { name: '云絮', col: 0xffffff, eat: { f: 3 }, use: '吃了饱食 +3，右键作物浇一次水' },
                 honey: { name: '蜂蜜', col: 0xffb300, eat: { f: 10, w: 3 }, use: '能吃；灶台 1 蜂蜜熬 2 糖' }
             });
             Object.assign(IND_ITEMS_RAW, add);
@@ -322,7 +322,7 @@
             let k = indSel(), S = MB_SHIELD[k]; if (!S) return false;
             let B = ind.mbBlock = ind.mbBlock || { t: 0, cd: 0, k: k };
             if (B.t > 0) return true;
-            if (B.cd > 0) { indFlash('盾还在冷却（' + Math.ceil(B.cd) + ' 秒）'); return true; }
+            if (B.cd > 0) { indFlash('盾还在冷却，' + Math.ceil(B.cd) + ' 秒'); return true; }
             B.k = k; B.t = S.up; B.cd = S.up + S.cd;
             return true;
         }

@@ -168,6 +168,7 @@ async function openTab(chrome, url, opts) {
     await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []).concat(opts && opts.blockHosts ? opts.blockHosts.map((h) => ({ urlPattern: '*' + h + '*' })) : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
     // 实验室开关会被 localStorage 记住（TH_labdebug）；同一个 Chrome 里所有标签页共用存档，所以每个新页面一开始先清掉，免得前一个标签页开了开关、后面不带参数的检查也看到实验室入口。测开关记忆本身的检查传 keepStorage: true。
+    if (!(opts && opts.limit)) await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__gfxNoLimit = true;' });   // 默认关掉渲染限帧，测限帧的检查传 limit: true
     if (!(opts && opts.keepStorage)) await send('Page.addScriptToEvaluateOnNewDocument', { source: "try{localStorage.removeItem('TH_labdebug');localStorage.removeItem('TH_bossdebug')}catch(e){}" });
     if (opts && opts.mobile) {   // 触屏设备：has_touch + is_mobile
         await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
@@ -4098,7 +4099,7 @@ async function enterExit(tab, key) {
                 if (!back.lobby || !back.start || back.mode !== 'lab') bad.push('返回大厅后没回到大厅、开始游戏按钮不在 ' + JSON.stringify(back));
             }
             // 进出泄漏：先进出一次热身，再进出三次，几何体和贴图数量不涨
-            const mem = () => T.eval(`(renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);
+            const mem = () => T.eval(`(gfxLastRender = 0, renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);
             await LBENTER(T); await LBEXIT(T); await LBENTER(T); await LBEXIT(T);   // 热身两圈：回大厅会重搭广场，第一次的资源数不算
             await frames(T, 10);
             const m0 = await mem();   // 进去前的数，只用来确认"进去以后建了场景"
@@ -4385,7 +4386,7 @@ async function enterExit(tab, key) {
             await T.eval(`labClear(); lab.bag = {}; labGive('coal', 3); labGive('sand', 2); labSel('coal'); true;`);
             await key('b');
             r = JSON.parse(await T.eval(`JSON.stringify({ p: lab.panel, txt: document.getElementById('lab-panel') ? document.getElementById('lab-panel').innerText : '' })`));
-            if (r.p !== 'bag' || !/煤（碳） ×3/.test(r.txt) || !/沙子 ×2/.test(r.txt) || !/2\/6/.test(r.txt)) bad.push('B 打开背包面板，写每样多少、几格 ' + JSON.stringify(r));
+            if (r.p !== 'bag' || !/煤，碳 ×3/.test(r.txt) || !/沙子 ×2/.test(r.txt) || !/2\/6/.test(r.txt)) bad.push('B 打开背包面板，写每样多少、几格 ' + JSON.stringify(r));
             await T.eval(`[].slice.call(document.querySelectorAll('#lab-panel button')).filter(function (b) { return b.innerText === '存进仓库'; })[1].click(); true;`);
             r = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, box: labSt().box, p: lab.panel })`));
             if (r.bag.sand || r.box.sand !== 2 || r.bag.coal !== 3 || r.p !== 'bag') bad.push('背包面板里存进仓库 ' + JSON.stringify(r));
@@ -4846,7 +4847,7 @@ async function enterExit(tab, key) {
             // 背包补快捷栏：4 种东西，快捷栏放满 3 个，第 4 个在背包；快捷栏第 1 格放完，第 4 个自动补到快捷栏
             await T.eval(`labClear(); lab.bag = {}; labGive('coal', 1); labGive('iron', 1); labGive('sand', 1); labGive('salt', 1); true;`);
             const h0 = await T.eval(`labBagHtml().replace(/<[^>]+>/g, '|').replace(/\\|+/g, '|')`);
-            if (!/1 煤（碳）×1.*2 铁块×1.*3 沙子×1.*4 食盐×1/.test(h0)) bad.push('界面应该是 1 煤 2 铁 3 沙 | 4 盐 ' + h0);
+            if (!/1 煤，碳×1.*2 铁块×1.*3 沙子×1.*4 食盐×1/.test(h0)) bad.push('界面应该是 1 煤 2 铁 3 沙 | 4 盐 ' + h0);
             await T.eval(`labSelIdx(0); labPut(true); true;`);
             const h1 = await T.eval(`labBagHtml().replace(/<[^>]+>/g, '|').replace(/\\|+/g, '|')`);
             if (!/1 铁块×1.*2 沙子×1.*3 食盐×1/.test(h1) || /煤/.test(h1)) bad.push('快捷栏第 1 格放完，背包里的东西应该补上来、不留空格 ' + h1);
@@ -5004,7 +5005,7 @@ async function enterExit(tab, key) {
             await T.eval(`labAdvance(LAB_T.glass + 0.5, 0.1); true;`);
             if (await T.eval(`lab.stove.items['b:melt'] !== 1`)) bad.push('烧够 5 秒应该得熔融食盐 ' + await T.eval(`JSON.stringify(lab.stove.items)`));
             const nm = JSON.parse(await T.eval(`JSON.stringify(['wire', 'bat', 'switch', 'bulb', 'resistor', 'motor', 'elec', 'booster', 'b:brine', 'b:melt', 'bat:42'].map(labName))`));
-            if (nm.join() !== '电线,电池,开关,灯泡,电阻,电动机,电解槽,升压器,盐水,熔融食盐,电池（剩 42 U）') bad.push('名字不对 ' + nm);
+            if (nm.join() !== '电线,电池,开关,灯泡,电阻,电动机,电解槽,升压器,盐水,熔融食盐,电池，剩 42 U') bad.push('名字不对 ' + nm);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
             report('LB20 器材配方：8 种器材在合成台按文档配方做、材料不够不让做；灶台做盐水和熔融食盐', bad.length === 0, bad.join(' / '));
@@ -5265,14 +5266,14 @@ async function enterExit(tab, key) {
             const T = await LBTAB();
             await LBENTER(T);
             await T.eval(`${ELHELP} true;`);
-            const stat = () => T.eval(`(renderer.render(scene, camera), JSON.stringify({ calls: renderer.info.render.calls, geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures, kids: scene.children.length }))`);
+            const stat = () => T.eval(`(gfxLastRender = 0, renderer.render(scene, camera), JSON.stringify({ calls: renderer.info.render.calls, geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures, kids: scene.children.length }))`);
             await T.eval(`labAdvance(0.2, 0.1); true;`);   // 先推一下：镜头退到人身后，人物身上的几何体和贴图这时才传给显卡，不算设备的
             await frames(T, 3);
             const s0 = JSON.parse(await stat());
             await T.eval(`window.B = __d('bat', -4, 2); window.S = __d('switch', -2, 3); window.L1 = __d('bulb', 0, 2); window.L2 = __d('bulb', 2, 3); window.R = __d('resistor', 4, 2); window.K = __d('booster', 1, 0.5);
                 __w(B, S); __w(S, L1); __w(L1, L2); __w(L2, R); __w(R, K); __w(K, B); labAdvance(1, 0.1); lab.p.x = -3; lab.p.z = 3; labHudUpdate(); labDevLabels(); true;`);
             const s1 = JSON.parse(await stat());
-            if (s1.geo !== s0.geo || s1.tex !== s0.tex || s1.kids !== s0.kids) bad.push('放设备、连线不该新建几何体／贴图／场景物体 ' + JSON.stringify([s0, s1]));
+            if (s1.geo - s0.geo > 2 || s1.tex - s0.tex > 1 || s1.geo < s0.geo || s1.kids !== s0.kids) bad.push('放设备、连线不该新建几何体／贴图／场景物体 ' + JSON.stringify([s0, s1]));
             if (s1.calls - s0.calls > 12) bad.push('放了 6 个设备 + 6 根线，绘制调用多了 ' + (s1.calls - s0.calls) + ' 次（太多） ' + JSON.stringify([s0, s1]));
             // 发光：灯亮了颜色变亮 + 光晕；灭了变暗、光晕没了
             const lit = JSON.parse(await T.eval(`JSON.stringify({ run: L1.run, col: [].slice.call(lab.dm.bulb.instanceColor.array, 0, 3), halo: lab.halo.count })`));
@@ -5288,10 +5289,11 @@ async function enterExit(tab, key) {
             const d0 = await T.eval(`lab.labelDraws`);
             await T.eval(`labDevLabels(); labDevLabels(); true;`);
             if ((await T.eval(`lab.labelDraws`)) !== d0) bad.push('牌子内容没变不该重画');
-            // 反复放、收：资源数不涨
+            // 反复放、收：资源数不涨（牌子、光晕都画过以后再量）
+            const s1b = JSON.parse(await stat());
             await T.eval(`for (let i = 0; i < 30; i++) { let d = __d('resistor', -8 + (i % 6) * 0.9, -5 + Math.floor(i / 6) * 0.9); if (d) { __w(d, R); labDevRemove(d, false); } } labAdvance(0.5, 0.1); true;`);
             const s2 = JSON.parse(await stat());
-            if (s2.geo !== s0.geo || s2.tex !== s0.tex || s2.kids !== s0.kids) bad.push('反复放收设备资源数涨了 ' + JSON.stringify([s0, s2]));
+            if (s2.geo > s1b.geo || s2.tex > s1b.tex || s2.kids !== s0.kids) bad.push('反复放收设备资源数涨了 ' + JSON.stringify([s1b, s2]));   // 牌子贴图和光晕几何体第一次画才传显卡，所以第一次放置允许涨一点（几何体 2、贴图 1），以后反复放收不许再涨
             // 上限
             const cap = JSON.parse(await T.eval(`(function () { let n = lab.devs.length; for (let i = 0; i < 40; i++) __d('resistor', -10 + (i % 12) * 0.9, -6.5 + Math.floor(i / 12) * 0.9); return JSON.stringify({ n: lab.devs.length, cap: LAB_DEV_CAP }); })()`));
             if (cap.n !== cap.cap) bad.push('设备数应该封顶 ' + JSON.stringify(cap));
@@ -5502,7 +5504,7 @@ async function enterExit(tab, key) {
                 if (JSON.stringify(after.box) !== boxBefore) bad.push('远征里回大厅后仓库箱变了（身上的东西应该丢掉） ' + boxBefore + ' → ' + JSON.stringify(after.box));
                 if (!(await T.eval(`!document.getElementById('screen-lobby').classList.contains('hidden') && !document.getElementById('ind-hud') && !document.getElementById('ind-panel') && gState.gameMode === 'industry'`))) bad.push('退出后没回大厅或界面没收干净');
                 // 进出 3 次：基地里的几何体、贴图不涨
-                const mem = () => T.eval(`(renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);
+                const mem = () => T.eval(`(ind && ind.base && (ind.base.clock = 300), renderer.render(scene, camera), JSON.stringify([renderer.info.memory.geometries, renderer.info.memory.textures, scene.children.length]))`);   // 先把游戏时钟定在白天：第 3 次进去时钟走到傍晚，月亮星星晚霞才第一次传显卡，几何体贴图就多了（CI 慢时稳定红）
                 await IENTER(); await IEXIT(); await IENTER(); await IEXIT();
                 const during = [];
                 for (let i = 0; i < 3; i++) { if (!(await IENTER())) { bad.push('第 ' + (i + 1) + ' 次进不去'); break; } during.push(await mem()); await IEXIT(); }
@@ -5762,7 +5764,7 @@ async function enterExit(tab, key) {
                 // 配方查询：搜"铁"能看到铁矿→铁锭和铁稿
                 await T.eval(`indPanelBook('铁'); true;`);
                 const bk = await T.eval(`document.getElementById('ind-book-list').innerText`);
-                if (!/铁矿×1 \+ 木炭×1 → 铁锭（烫）×1/.test(bk) || !/铁稿/.test(bk) || /小麦种子/.test(bk)) bad.push('配方查询搜"铁"不对 ' + bk.slice(0, 200));
+                if (!/铁矿×1 \+ 木炭×1 → 铁锭，烫×1/.test(bk) || !/铁稿/.test(bk) || /小麦种子/.test(bk)) bad.push('配方查询搜"铁"不对 ' + bk.slice(0, 200));
                 await T.eval(`indPanelClose(); true;`);
                 // 锡和青铜（A：铁矿要青铜稿，不再卡死）：锡只刷在山地、石稿挖；锡矿 232°C 15 秒出烫锡锭；3 铜锭 + 1 锡锭 950°C 30 秒出 4 青铜锭；青铜稿等级 2 挖铁矿；铁稿多拿 1 个
                 const tin = JSON.parse(await T.eval(`JSON.stringify({ where: Object.keys(IND_BIOMES).filter(function (b) { return IND_BIOMES[b].res.ore_sn; }), tool: IND_NODES.ore_sn.tool, give: IND_NODES.ore_sn.give, names: IND_TOOL_NAME.slice(0, 5), fe: IND_NODES.ore_fe.tool })`));
@@ -6288,7 +6290,7 @@ async function enterExit(tab, key) {
                 const kinds = ch0.kinds;
                 await T.eval(`indPickFurn({ ty: 'chest', o: ind.base.chests[0] }); true;`);
                 const held = await J(`{ keys: Object.keys(ind.bag), nm: Object.keys(ind.bag).map(indName), chests: ind.base.chests.length }`);
-                if (held.chests !== 0 || held.keys.length !== 1 || !/^inst:/.test(held.keys[0]) || held.nm[0] !== (kinds ? '仓库箱（装着 ' + kinds + ' 样）' : '仓库箱（空）')) bad.push('收起仓库箱不对（名字要写装着几样） ' + JSON.stringify(held) + ' 应该 ' + kinds);
+                if (held.chests !== 0 || held.keys.length !== 1 || !/^inst:/.test(held.keys[0]) || held.nm[0] !== (kinds ? '仓库箱，装着 ' + kinds + ' 样' : '仓库箱，空')) bad.push('收起仓库箱不对（名字要写装着几样） ' + JSON.stringify(held) + ' 应该 ' + kinds);
                 await face(5, 10, 5, 4);
                 await T.eval(`indSelect('${held.keys[0]}'); indUse(); true;`);
                 const back = await J(`{ chests: ind.base.chests.map(function (c) { return [c.big, Object.keys(c.items).length, Math.round(c.x * 10) / 10, Math.round(c.z * 10) / 10]; }), bag: Object.keys(ind.bag).length, box: Object.keys(ind.base.box).length }`);
@@ -6379,7 +6381,7 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.bag = {}; indPickFurn({ ty: 'chest', o: ind.base.chests[1] }); indSave(); true;`);
                 await until(T, `IND_SAVING === 0`, 5000);
                 const sv2 = await T.eval(`new Promise(function (r) { indLoad(function (b) { IND_CTX_BASE = b; let k = Object.keys(b.bag)[0]; let nm = k && IND_ITEMS[k] && IND_ITEMS[k].name; IND_CTX_BASE = null; r(JSON.stringify({ k: k, nm: nm, carried: Object.keys(b.carried).length, chests: b.chests.length })); }); })`).then(JSON.parse);
-                if (!sv2.k || !/^inst:/.test(sv2.k) || !/仓库箱（/.test(sv2.nm) || sv2.carried < 1 || sv2.chests !== 1) bad.push('搬着的箱子存档读不回来 ' + JSON.stringify(sv2));
+                if (!sv2.k || !/^inst:/.test(sv2.k) || !/仓库箱，/.test(sv2.nm) || sv2.carried < 1 || sv2.chests !== 1) bad.push('搬着的箱子存档读不回来 ' + JSON.stringify(sv2));
                 // ── 泥土和农田 ──
                 await T.eval(`${HIDE} indGoTrip(2024); ind.bag = {}; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodeDirty = true; (function(){ for (let r = 3; r < 60; r += 3) for (let a = 0; a < 6.3; a += 0.5) { let x = Math.cos(a) * r, z = Math.sin(a) * r; if (indBiome(ind.map, x, z) === 'plain' && indHeight(ind.map, x, z) > 0.5 && indHeight(ind.map, x + 2, z) > 0.5 && indBiome(ind.map, x + 2, z) === 'plain') { indTeleport(x, z); indLookAt(x + 10, z); return; } } })(); indAction(); indAdvance(3.2); true;`);
                 if ((await T.eval(`ind.bag.dirt || 0`)) !== 1) bad.push('空手对着平原地面左键挖 3 秒应该得 1 份泥土 ' + await T.eval(`JSON.stringify([ind.bag, ind.ch, ind.panel, ind.where, ind.dead, ind.over, indAim(), typeof __fl !== 'undefined' ? __fl.slice(-3) : 0, ind.p])`));
@@ -6444,7 +6446,7 @@ async function enterExit(tab, key) {
                 const near = (a, b, e) => Math.abs(a - b) <= (e === undefined ? 0.01 : e);
                 // 钢瓶的名字和压力
                 const nm = JSON.parse(await T.eval(`JSON.stringify([indName('cyl'), indName('cyl:h2=20'), indName('cyl:h2=3,o2=1'), indName('cyl:co2=60'), indName('cyl:co2=57'), indName('cyl:co2=58'), !!IND_ITEMS['cyl:h2=61'], !!IND_ITEMS['cyl:xx=3'], indCylP({ h2: 20 }, 20), indCylP({ h2: 20 }, 600)])`));
-                if (nm[0] !== '钢瓶（空）' || nm[1] !== '钢瓶（氢气 20 份，20 个大气压）' || nm[2] !== '钢瓶（氢气 3、氧气 1 份，4 个大气压）') bad.push('钢瓶名字不对 ' + JSON.stringify(nm.slice(0, 3)));
+                if (nm[0] !== '钢瓶，空' || nm[1] !== '钢瓶，氢气 20 份，20 个大气压' || nm[2] !== '钢瓶，氢气 3、氧气 1 份，4 个大气压') bad.push('钢瓶名字不对 ' + JSON.stringify(nm.slice(0, 3)));
                 if (!/液态二氧化碳 60 份，60 个大气压/.test(nm[3]) || /液态/.test(nm[4]) || !/液态二氧化碳 58 份/.test(nm[5])) bad.push('液态二氧化碳判断不对 ' + JSON.stringify(nm.slice(3, 6)));
                 if (nm[6] || nm[7]) bad.push('超过容量或乱写的钢瓶也认');
                 if (!near(nm[8], 20) || !near(nm[9], 20 * 873 / 293)) bad.push('压力公式不对 ' + nm[8] + ' / ' + nm[9]);
@@ -6697,7 +6699,7 @@ async function enterExit(tab, key) {
                 const stoveSet = (items, fire, temp) => T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null, spout: [] }; window.__fl = []; true;`);
                 // 名字
                 const nm = await J(`[indName('water_raw'), indName('water_raw@jar'), indName('water_boiled@fe'), indName('milk@cu'), indName('water_raw', true), indName('bucket'), indName('jar'), indName('bucket_fe'), indName('bucket_cu'), !!IND_ITEMS['water_raw@wood'], !!IND_ITEMS['sand@jar'], IND_ITEMS['water_raw@jar'].eat.back, IND_ITEMS['water_raw'].eat.back, IND_ITEMS['radish_soup@cu'].eat.back]`);
-                if (nm.slice(0, 9).join() !== '生水（木桶）,生水（陶罐）,开水（铁桶）,牛奶（黄铜桶）,生水,木桶,陶罐,铁桶,黄铜桶' || nm[9] || nm[10] || nm[11] !== 'jar' || nm[12] !== 'bucket' || nm[13] !== 'bucket_cu') bad.push('名字或还什么桶不对 ' + JSON.stringify(nm));
+                if (nm.slice(0, 9).join() !== '生水木桶,生水陶罐,开水铁桶,牛奶黄铜桶,生水,木桶,陶罐,铁桶,黄铜桶' || nm[9] || nm[10] || nm[11] !== 'jar' || nm[12] !== 'bucket' || nm[13] !== 'bucket_cu') bad.push('名字或还什么桶不对 ' + JSON.stringify(nm));
                 // 做：陶罐在灶台（600°C 以上，20 秒，悠闲也行）；铁桶、黄铜桶在工作台（硬核）
                 await stoveSet({ clay: 2 }, 1, 200); await T.eval(`indAdvance(30); true;`);
                 if (await T.eval(`!!ind.base.stove.out.jar`)) bad.push('200°C 也烧出陶罐');
@@ -6717,7 +6719,7 @@ async function enterExit(tab, key) {
                 if (put.items.water_raw || put.items.bucket || put.items['water_raw@jar'] !== 1 || put.fl.filter((t) => t === '木桶不能上火').length !== 2) bad.push('木桶不能上火 ' + JSON.stringify(put));
                 // 水池接水：桶是什么材质，水就装在什么材质里
                 const pool = await J(`{ x: IND_BASE_ST.pool.x, z: IND_BASE_ST.pool.z }`);
-                for (const [empty, full, label] of [['bucket', 'water_raw', '生水（木桶）'], ['jar', 'water_raw@jar', '生水（陶罐）'], ['bucket_fe', 'water_raw@fe', '生水（铁桶）'], ['bucket_cu', 'water_raw@cu', '生水（黄铜桶）']]) {
+                for (const [empty, full, label] of [['bucket', 'water_raw', '生水木桶'], ['jar', 'water_raw@jar', '生水陶罐'], ['bucket_fe', 'water_raw@fe', '生水铁桶'], ['bucket_cu', 'water_raw@cu', '生水黄铜桶']]) {
                     await T.eval(`ind.bag = { '${empty}': 1 }; indTeleport(${pool.x}, ${pool.z + 3.5}); indLookAt(${pool.x}, ${pool.z}); indSelect('${empty}'); indUse(); true;`);
                     const r = await J(`{ bag: ind.bag, nm: Object.keys(ind.bag).map(indName) }`);
                     if (r.bag[full] !== 1 || r.bag[empty] || r.nm[0] !== label) bad.push(empty + ' 接水不对 ' + JSON.stringify(r));
@@ -7763,7 +7765,7 @@ async function enterExit(tab, key) {
                 await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; ind.base.devs = []; true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const d = await J(`{ fuel: IND_ITEMS.oil.fuel, coal: IND_ITEMS.coal.fuel, jar: IND_ITEMS['oil@jar'].fuel, fe: IND_ITEMS['oil@fe'].fuel, cu: IND_ITEMS['oil@cu'].fuel, base: IND_CONT_BASES.indexOf('oil') >= 0, later: IND_ITEMS_RAW.oil.useLater || null, nm: [indName('oil'), indName('oil@jar'), indName('oil@fe'), indName('oil@cu')], use: IND_ITEMS.oil.use, node: !!IND_NODES.oil, desert: IND_BIOMES.desert.res.oil, lab: [LAB_FIXED.oil.name, LAB_FIXED.oil.col === IND_ITEMS_RAW.oil.col] }`);
-                if (d.fuel !== 250 || d.coal !== 150 || d.jar !== 250 || d.fe !== 250 || d.cu !== 250 || !d.base || d.later || !d.node || !d.desert || d.lab[0] !== '石油' || !d.lab[1] || d.nm.join() !== '石油（木桶）,石油（陶罐）,石油（铁桶）,石油（黄铜桶）' || !/桶/.test(d.use)) bad.push('石油的数据不对（桶装、一桶 600、四种材质、不再标后面的阶段、油点、实验室一致） ' + JSON.stringify(d));
+                if (d.fuel !== 250 || d.coal !== 150 || d.jar !== 250 || d.fe !== 250 || d.cu !== 250 || !d.base || d.later || !d.node || !d.desert || d.lab[0] !== '石油' || !d.lab[1] || d.nm.join() !== '石油木桶,石油陶罐,石油铁桶,石油黄铜桶' || !/桶/.test(d.use)) bad.push('石油的数据不对（桶装、一桶 600、四种材质、不再标后面的阶段、油点、实验室一致） ' + JSON.stringify(d));
                 // ── 油点：空桶右键装一桶；存量 4 桶；补得回来；空手装不了 ──
                 await T.eval(`indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodes.push({ key: 'oil', x: 0, z: -9, y: 0, n: 4, max: 4, t0: 0, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; ind.k = {}; indTeleport(0, -6.5); indLookAt(0, -9); ind.bag = {}; window.__fl = []; indAction(); true;`);
                 if (!(await T.eval(`!ind.bag.oil && __fl.some(function (t) { return /拿桶/.test(t); })`))) bad.push('空手点油点要提示得拿桶 ' + await T.eval(`JSON.stringify(__fl)`));
@@ -8275,7 +8277,7 @@ async function enterExit(tab, key) {
                 await setup(80, 80);
                 await T.eval(`for (let i = 0; i < 18; i++) ind.base.animals.push({ k: 'cow', x: -5 - i * 0.2, z: 5, food: 60, woolAt: 0, milkAt: 0 }); window.__fl = []; true;`);
                 await feed(0);
-                if (!(await T.eval(`ind.base.animals.length === 20 && !(ind.base.animals[0].love > 0) && ind.bag.wheat === 6 && __fl.some(function (t) { return /圈满了（20 只）/.test(t); })`))) bad.push('满 20 只该提示圈满了、不扣吃的 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
+                if (!(await T.eval(`ind.base.animals.length === 20 && !(ind.base.animals[0].love > 0) && ind.bag.wheat === 6 && __fl.some(function (t) { return /圈满了，20 只/.test(t); })`))) bad.push('满 20 只该提示圈满了、不扣吃的 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
                 // ── 6 出远征：不繁殖不长大 ──
                 await setup(80, 80);
                 await T.eval(`ind.base.animals.push({ k: 'sheep', x: 3, z: 3, food: 80, born: ind.base.clock - 100, woolAt: 0, milkAt: 0, love: 0, cd: 0, brk: 0 }); ind.base.animals[0].brk = 10; ind.base.animals[0].bx = 0; ind.base.animals[0].bz = 0; true;`);
@@ -9106,7 +9108,7 @@ async function enterExit(tab, key) {
                 if (!k.shown) bad.push('窑面板该写"这次出：" ' + JSON.stringify(k));
                 else {
                     // 面板写的每样东西 ×N 要等于实际拿到的
-                    const items = k.shown.replace(/（\d+ 份）/, '').split('、').map(function (x) { let m = x.trim().match(/^(.*) ×(\d+)$/); return m ? [m[1], +m[2]] : null; });
+                    const items = k.shown.replace(/，\d+ 份/, '').split('、').map(function (x) { let m = x.trim().match(/^(.*) ×(\d+)$/); return m ? [m[1], +m[2]] : null; });
                     const real = await J(`(function(){ let c = ind.base.cookers[0], o = {}; Object.keys(c.out).forEach(function (k) { o[indName(k, true)] = c.out[k]; }); return o; })()`);
                     const diff = items.filter(function (it) { return !it || real[it[0]] !== it[1]; });
                     if (diff.length || items.length !== Object.keys(real).length || !/3 份/.test(k.shown)) bad.push('面板写的产量要等于实际拿到的 ' + k.shown + ' / ' + JSON.stringify(real));
@@ -10255,7 +10257,7 @@ async function enterExit(tab, key) {
                 if (!(r.a.ice === 2 && r.a.t && r.b.m === 2 && r.b.rp === 2 && r.m === 0 && r.rc === 2)) bad.push('冷藏箱有冰不坏（一块一天）、没冰的箱子坏、冰没了接着坏 ' + JSON.stringify(r));
                 // 冰箱：通电不坏、断电接着坏；制冰
                 r = await run(`let d = { id: ++B.dseq, ty: 'fridge', x: 5, z: 5, on: true, pw: true, items: { meat_roast: 2 }, age: {} }, e = { id: ++B.dseq, ty: 'fridge', x: 8, z: 5, on: true, pw: false, items: { meat_roast: 2 }, age: {} }; B.devs = [d, e];
-                    clStep(6000, false, true); ind.bag = {}; let ok = clDevAct(d), tx = (document.getElementById('ind-panel') || { innerText: '' }).innerText; indPanelClose(); return { a: d.items.meat_roast || 0, ar: d.items.rotfood || 0, b: e.items.meat_roast || 0, br: e.items.rotfood || 0, ok: ok, tx: /冰箱（通电）/.test(tx) };`);
+                    clStep(6000, false, true); ind.bag = {}; let ok = clDevAct(d), tx = (document.getElementById('ind-panel') || { innerText: '' }).innerText; indPanelClose(); return { a: d.items.meat_roast || 0, ar: d.items.rotfood || 0, b: e.items.meat_roast || 0, br: e.items.rotfood || 0, ok: ok, tx: /冰箱，通电/.test(tx) };`);
                 if (!(r.a === 2 && r.ar === 0 && r.b === 0 && r.br === 2 && r.ok === true && r.tx)) bad.push('冰箱通电不坏、断电接着坏、点冰箱开面板 ' + JSON.stringify(r));
                 r = await run(`let d = { id: ++B.dseq, ty: 'fridge', x: 5, z: 5, on: true, pw: true, items: { water_raw: 1 }, age: {} }, e = { id: ++B.dseq, ty: 'fridge', x: 8, z: 5, on: true, pw: false, items: { water_raw: 1 }, age: {} }; B.devs = [d, e];
                     clStep(30, false, true); let half = d.items.ice || 0; clStep(31, false, true); return { half: half, ice: d.items.ice || 0, bk: d.items.bucket || 0, w: d.items.water_raw || 0, eice: e.items.ice || 0 };`);
@@ -11736,7 +11738,7 @@ async function enterExit(tab, key) {
                 const lab = await T.eval(`ind.badges && ind.badges.cookstove && ind.badges.cookstove.mesh.visible ? ind.badges.cookstove.text : ''`);
                 if (!/^面包 ×12　(4\d|5\d)%$/.test(lab)) bad.push('灶台上方的进度字不对 ' + lab);
                 await T.eval(`indPanelStove(); true;`);
-                if (!/正在做：面包 ×12（4 份）/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('面板"正在做"没写份数 ' + (await T.eval(`document.getElementById('ind-panel').innerText`)).slice(0, 80));
+                if (!/正在做：面包 ×12，4 份/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('面板"正在做"没写份数 ' + (await T.eval(`document.getElementById('ind-panel').innerText`)).slice(0, 80));
                 await T.eval(`indPanelClose(); indAdvance(21); true;`);
                 const b4 = JSON.parse(await T.eval(`JSON.stringify({ out: ind.base.stove.out, items: ind.base.stove.items, fl: __fl })`));
                 if (b4.out.bread !== 12 || b4.out.bucket !== 4 || b4.items.flour !== 3 || b4.items.salt !== 1) bad.push('一炉 4 份不对 ' + JSON.stringify(b4));
@@ -13715,7 +13717,7 @@ async function enterExit(tab, key) {
         if (want('SET3')) {
             // SET3 显示设置（任务 P3 第二批）：界面大小、快捷栏位置、小地图／准星／数字／信息条开关、工业那排按钮放哪个角、视野、视距、帧率上限都在“显示”那一组，改了马上生效、存档、刷新还在
             const bad = [];
-            const T = await openTab(chrome, url);
+            const T = await openTab(chrome, url, { limit: true });
             await T.eval(`${HIDE} openSettings('显示'); true;`); await W(200);
             const txt = await T.eval(`document.getElementById('set-content').innerText`);
             for (const w of ['界面大小', '快捷栏位置', '小地图', '准星', '视角宽度', '画质', '视野', '流畅度', '左上角信息条', '工业右上那排按钮']) if (txt.indexOf(w) < 0) bad.push('显示组里没有 ' + w);
@@ -14142,7 +14144,7 @@ async function enterExit(tab, key) {
             await T.eval(`settingsSet('show_fps', false); true;`);
             if (!(await until(T, `document.getElementById('gfx-fps').style.display === 'none'`, 5000))) bad.push('关了显示帧率还在');
             await T.eval(`settingsSet('show_fps', true); settingsSet('gfx_quality', 3); settingsSet('gfx_view', 2); settingsSet('gfx_fps', 2); true;`);
-            await T.send('Page.reload'); await until(T, `typeof graphicsQuality === 'function'`, 20000);
+            await T.eval(`window.__preReload = 1; true;`); await T.send('Page.reload'); if (!(await until(T, `!window.__preReload && typeof graphicsQuality === 'function' && typeof settingsGet === 'function'`, 90000))) bad.push('刷新后页面没起来');   // Page.reload 一发出去旧页面还活着，要先打个记号等新页面没有记号才算刷好
             const b = JSON.parse(await T.eval(`JSON.stringify({ q: graphicsQuality(), v: graphicsView(), f: graphicsFps() })`));
             if (b.q !== 3 || b.v !== 2 || b.f !== 2) bad.push('刷新后没读回来 ' + JSON.stringify(b));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
@@ -14192,6 +14194,7 @@ async function enterExit(tab, key) {
             // 降画质、退出
             await feed(6, 19); if ((await T.eval(`graphicsQuality()`)) !== 1) bad.push('不到 10 秒就降画质');
             await feed(6, 1); if ((await T.eval(`graphicsQuality()`)) !== 0) bad.push('连续 10 秒低于 8 帧没降一档');
+            if ((await T.eval(`gfxTempQ === 0 && +settingsGet('gfx_quality') === 1`)) !== true) bad.push('自动降画质不该改存的设置，只临时降');
             await feed(3, 39); if ((await T.eval(`__ex`)) !== 0) bad.push('降完不到 20 秒就退出');
             await feed(3, 1); if ((await T.eval(`__ex`)) !== 1) bad.push('工业里降完连续 20 秒低于 5 帧没退出 ' + await T.eval(`__ex`));
             // 联机局只提示
@@ -14299,6 +14302,158 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND184 工业接画质视野：超远 3 倍、低画质网格少、改画质重建地形、高度不变', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND185')) {
+            // IND185 说明改短不用括号（任务 131）：js/18-lab.js 和 js/19-industry*.js 里带中文的字符串字面量不含 （）()【】[]；所有物品的固定说明不超过 30 个字；检测本身先用样例自测
+            const bad = [];
+            function txScan(src) {
+              const out = []; let i = 0, n = src.length, line = 1;
+              const isRegexStart = (prev) => !prev || /[(,=:[!&|?{};+\-*%<>~^]$/.test(prev) || /\b(return|typeof|case|in|of|delete|void|throw|new)$/.test(prev);
+              let prevTok = '';
+              const strs = [];
+              function readStr(q) {
+                let s = '', st = i, ln = line; i++;
+                while (i < n && src[i] !== q) { if (src[i] === '\\') { s += src[i] + src[i + 1]; i += 2; continue; } if (src[i] === '\n') line++; s += src[i++]; }
+                i++; strs.push({ s, ln, st }); prevTok = 'x';
+              }
+              function readTpl() {
+                let ln = line, st = i; i++; let cur = '';
+                while (i < n && src[i] !== '`') {
+                  if (src[i] === '\\') { cur += src[i] + src[i + 1]; i += 2; continue; }
+                  if (src[i] === '$' && src[i + 1] === '{') { strs.push({ s: cur, ln, st }); cur = ''; i += 2; let d = 1; const sub = i; while (i < n && d) { const c = src[i]; if (c === '{') d++; else if (c === '}') d--; else if (c === "'" || c === '"') { readStr(c); continue; } else if (c === '`') { readTpl(); continue; } else if (c === '\n') line++; i++; } continue; }
+                  if (src[i] === '\n') line++; cur += src[i++];
+                }
+                i++; strs.push({ s: cur, ln, st }); prevTok = 'x';
+              }
+              while (i < n) {
+                const c = src[i];
+                if (c === '\n') { line++; i++; continue; }
+                if (c === '/' && src[i + 1] === '/') { while (i < n && src[i] !== '\n') i++; continue; }
+                if (c === '/' && src[i + 1] === '*') { i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) { if (src[i] === '\n') line++; i++; } i += 2; continue; }
+                if (c === "'" || c === '"') { readStr(c); continue; }
+                if (c === '`') { readTpl(); continue; }
+                if (c === '/' && isRegexStart(prevTok)) { // regex literal
+                  i++; let inCls = false; while (i < n && (src[i] !== '/' || inCls)) { if (src[i] === '\\') i++; else if (src[i] === '[') inCls = true; else if (src[i] === ']') inCls = false; i++; } i++; while (/[a-z]/.test(src[i] || '')) i++; prevTok = 'x'; continue;
+                }
+                if (/\s/.test(c)) { i++; continue; }
+                if (/[A-Za-z0-9_$]/.test(c)) { let st = i; while (i < n && /[A-Za-z0-9_$]/.test(src[i])) i++; prevTok = src.slice(st, i); continue; }
+                prevTok = c; i++;
+              }
+              return strs;
+            }
+
+            const TX_CJK = /[\u4e00-\u9fff]/, TX_BR = /[（）【】]|[()\[\]]/;
+            const txVisible = (s) => {
+                let t = s; const gt = t.indexOf('>'), lt = t.indexOf('<');
+                if (gt >= 0 && (lt < 0 || gt < lt) && /["=]/.test(t.slice(0, gt))) t = t.slice(gt + 1);
+                t = t.replace(/<[^>]*>/g, ''); const l2 = t.lastIndexOf('<'); if (l2 >= 0 && t.indexOf('>', l2) < 0 && /["= ]/.test(t.slice(l2))) t = t.slice(0, l2);
+                return t;
+            };
+            const txHit = (s) => { const t = txVisible(s); return /[（）【】]/.test(t) || (TX_CJK.test(t) && TX_BR.test(t)); };
+
+            const self = txScan("let a = '提示（x）'; // 注释（x）\nlet r = /（/; let b = `你好${f(1)}（`; let c = '<a onclick=\"f(1)\">好</a>'; let d = '没括号';").map((x) => x.s).filter(txHit);
+            if (self.length !== 2) bad.push('检测自测不对 ' + JSON.stringify(self));
+            const fsx = require('fs'), pth = require('path');
+            fsx.readdirSync(pth.join(ROOT, 'js')).filter((f) => /^18-lab|^19-industry/.test(f)).forEach((f) => { const src = fsx.readFileSync(pth.join(ROOT, 'js', f), 'utf8'); txScan(src).filter((x) => txHit(x.s) && !/\son[a-z]+="/.test(x.s)).slice(0, 3).forEach((x) => bad.push(f + ':' + x.ln + ' ' + x.s.replace(/\n/g, ' ').slice(0, 40))); });
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const long = JSON.parse(await T.eval(`JSON.stringify(Object.keys(IND_ITEMS).filter(function (k) { let u = IND_ITEMS[k].use; return typeof u === 'string' && u.length > 30; }).map(function (k) { return k + ':' + IND_ITEMS[k].use; }))`));
+                if (long.length) bad.push('说明超过 30 个字 ' + long.slice(0, 80).join(' / '));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND185 说明改短不用括号：实验室和工业里的字符串没有括号、物品说明不超过 30 个字', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND186')) {
+            // IND186 烧出来的成品都进出料槽（任务 139）：装了砖槽的炉子烧砖、烤肉，成品进槽、不烫、能直接取；烫锭照旧；没装槽的留在炉膛；槽满了溢出的留在炉膛总数不变；槽被模具占着留在炉膛；老存档里槽的条目读得回来
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ cancelAnimationFrame(ind.raf); IND_SPOUT_PLAIN = true; ind.base.rule = 'hard'; let r = IND_RECIPES.find(function (q) { return q.out.brick === 1 && q.in.clay === 2; }); let mk = function (ty, n, pre) { let S = Object.assign(ckNewState(), { spoutTy: ty, items: { clay: 2 * n }, spout: pre || [], out: {} }); return { id: 9, ty: 'kiln', x: 0, z: 0, C: S }; }; ${body} })()`);
+                let r = await run(`let c = mk('brick', 4); indCookOut(c, r, 4, false); return { sp: c.C.spout.map(function (e) { return e.k + ':' + e.t + ':' + (e.p ? 1 : 0); }), out: c.C.out };`);
+                if (!(r.sp.length === 4 && r.sp.every((x) => x === 'brick:0:1') && !r.out.brick)) bad.push('装了砖槽，砖进槽、不烫 ' + JSON.stringify(r));
+                r = await run(`let c = mk(null, 4); indCookOut(c, r, 4, false); return { sp: c.C.spout.length, out: c.C.out.brick || 0 };`);
+                if (!(r.sp === 0 && r.out === 4)) bad.push('没装槽的炉子成品留在炉膛 ' + JSON.stringify(r));
+                r = await run(`let pre = []; for (let i = 0; i < IND_SPOUT_CAP - 2; i++) pre.push({ k: 'brick', t: 0, p: 1 }); let c = mk('brick', 5, pre); indCookOut(c, r, 5, false); return { sp: c.C.spout.length, out: c.C.out.brick || 0, cap: IND_SPOUT_CAP };`);
+                if (!(r.sp === r.cap && r.out === 3 && r.sp + r.out === r.cap - 2 + 5)) bad.push('槽满了溢出的留在炉膛、总数不变 ' + JSON.stringify(r));
+                r = await run(`let c = mk('brick', 2); c.C.mold = { s: 'knife', part: null, t: 0 }; indCookOut(c, r, 2, false); return { sp: c.C.spout.length, out: c.C.out.brick || 0 };`);
+                if (!(r.sp === 0 && r.out === 2)) bad.push('槽被模具占着，成品留在炉膛 ' + JSON.stringify(r));
+                r = await run(`let c = mk('brick', 3); indCookOut(c, r, 3, false); ind.base.cookers = [{ id: 9, ty: 'kiln', x: 20, z: 10, items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, spout: c.C.spout, spoutTy: 'brick' }]; let k = ind.base.cookers[0]; ind.bag = {}; indSpoutTake(indCookCur ? { C: k, x: 20, z: 10, ty: 'kiln', id: 9 } : null); let got = ind.bag.brick || 0; indFixSpout(k); return { got: got, left: (k.spout || []).length };`);
+                if (!(r.got === 3 && r.left === 0)) bad.push('槽里的砖能直接取、读档整理不报错 ' + JSON.stringify(r));
+                const t = await J(`(function(){ let S = Object.assign(ckNewState(), { spoutTy: 'brick', spout: [{ k: 'brick', t: 0, p: 1 }, { k: 'hot_cu', t: 20 }, { k: 'zzz', t: 0, p: 1 }], out: {} }); indFixSpout(S); return S.spout.map(function (e) { return e.k + ':' + (e.p ? 1 : 0); }); })()`);
+                if (t.join() !== 'brick:1,hot_cu:0') bad.push('老存档整理：成品条目保留、认不出的丢掉 ' + t.join());
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND186 成品进出料槽：砖进槽不烫、没装槽留炉膛、槽满溢出总数不变、模具占着留炉膛、能取、读档整理', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND187')) {
+            // IND187 耐久条、背包刚满提示、C T H 快捷键（任务 122、123、126）：满耐久的格子没有条、300/600 约一半绿、低于 20% 红、断了的空红框、每种只在第一格；刚剩 2 格弹橙字一次、占满弹红字、腾出再满又弹；按 C T H 开关配方、元素表、成就，面板开着按别的键不报错，配方表里点配方背包不变
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.dura = {}; ind.bag = { pick_iron: 2, broken_pick_iron: 1, wood: 3 }; let SL = indSlots(), o = {}; o.full = indDuraFrac('pick_iron'); let mx = mbMax('pick_iron'); ind.base.dura.pick_iron = mx / 2; o.half = indDuraFrac('pick_iron'); ind.base.dura.pick_iron = mx * 0.6; o.barHtml = indDuraBar('pick_iron', 0, SL, true).indexOf('width:60%') >= 0 && indDuraBar('pick_iron', 0, SL, true).indexOf('#43a047') >= 0; ind.base.dura.pick_iron = mx / 2; o.yellow = indDuraBar('pick_iron', 0, SL, true).indexOf('#fbc02d') >= 0; o.second = indDuraBar('pick_iron', 1, SL, true) === ''; ind.base.dura.pick_iron = mx * 0.1; o.red = indDuraBar('pick_iron', 0, SL, true).indexOf('#e53935') >= 0; o.broken = indDuraFrac('broken_pick_iron'); o.brokenBar = indDuraBar('broken_pick_iron', SL.findIndex(function (s) { return s.k === 'broken_pick_iron'; }), SL, true).indexOf('outline') >= 0; o.none = indDuraBar('wood', 2, SL, true) === ''; o.mx = mx; return o; })()`);
+                if (!(r.full === null && r.half === 0.5 && r.barHtml && r.yellow && r.second && r.red && r.broken === 0 && r.brokenBar && r.none)) bad.push('耐久条 ' + JSON.stringify(r));
+                r = await J(`(function(){ let fl = [], f0 = indFlash; indFlash = function (t) { fl.push(String(t)); }; let N = indBagSlots(); ind.bagW = null; ind.bag = {}; let keys = Object.keys(IND_ITEMS).filter(function (k) { return !/[:@]|^(inst|cyl|broken_)/.test(k) && !IND_ITEMS[k].hot; }).slice(0, 60); let ok = keys.filter(function (k) { return IND_ITEMS[k]; }); let o = { ok: ok.length, N: N };
+                    let fill = function (n) { ind.bag = {}; for (let i = 0; i < n; i++) ind.bag[ok[i]] = 1; indBagWatch(); };
+                    fill(N - 3); fl.length = 0; fill(N - 2); o.warn = fl.slice(); fl.length = 0; fill(N - 1); o.warn2 = fl.slice(); fl.length = 0; fill(N); o.full = fl.slice(); fl.length = 0; fill(N); o.again = fl.slice(); fill(N - 4); fl.length = 0; fill(N); o.full2 = fl.slice(); indFlash = f0; return o; })()`);
+                if (r.ok < r.N) bad.push('测试物品不够 ' + JSON.stringify(r));
+                else if (!(r.warn.length === 1 && /快满了/.test(r.warn[0]) && r.warn2.length === 0 && r.full.length === 1 && /背包满了/.test(r.full[0]) && r.again.length === 0 && r.full2.length >= 1 && /背包满了/.test(r.full2[r.full2.length - 1]))) bad.push('背包快满了、满了各弹一次，腾出再满又弹 ' + JSON.stringify(r));
+                const key = async (ch) => { await T.eval(`indKeyDown({ key: '${ch}', target: document.body, preventDefault: function () { }, repeat: false }); true;`); };
+                for (const [ch, pn] of [['c', 'book'], ['t', 'elems'], ['h', 'ach']]) {
+                    await T.eval(`indPanelClose(); true;`);
+                    await key(ch); const a = await T.eval(`ind.panel`);
+                    await key(ch); const b = await T.eval(`ind.panel`);
+                    if (a !== pn || b) bad.push('按 ' + ch + ' 开关 ' + pn + ' ' + a + ' ' + b);
+                }
+                await T.eval(`indPanelClose(); indPanelBook(''); true;`); await key('t'); await key('h');
+                if (T.errors.length) bad.push('按键报错 ' + T.errors.slice(0, 1).join(' / '));
+                r = await J(`(function(){ indPanelClose(); ind.bag = { wood: 3 }; indPanelBook(''); let p = document.getElementById('ind-panel'); let b0 = JSON.stringify(ind.bag); let rows = p.querySelectorAll('[onclick]'); let n = 0; for (let i = 0; i < Math.min(rows.length, 6); i++) { try { rows[i].click(); n++; } catch (e) { } } return { same: JSON.stringify(ind.bag) === b0, n: n, hasMake: /合成/.test(p.innerText) && !!p.querySelector('button[onclick*="indCraft"]') }; })()`);
+                if (!r.same || r.hasMake) bad.push('配方查询里点配方背包不变、没有合成按钮 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND187 耐久条、背包刚满提示、C T H 快捷键', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND188')) {
+            // IND188 石油分馏塔和煤油汽油沥青（任务 R2）：配方钢 8 砖 20 铜锭 6；旁边没烧着的炉子不出；炉温够 20 秒一桶出煤油汽油沥青各 1、空桶还；燃料值；汽油给打火机加满；沥青熬胶水；说明没有保底
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const run = (body) => J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.devs = []; B.wires = []; B.cookers = []; B.fires = []; ind.bag = {}; indPanelClose(); ${body} })()`);
+                let r = await run(`let rc = IND_CRAFT.filter(function (q) { return q.out === 'dev_frac'; })[0]; let d = { id: ++B.dseq, ty: 'frac', x: 5, z: 5, on: true, st: { oil: 2 } }; B.devs = [d];
+                    IND_DEV_TICK.frac(d, 100); let cold = JSON.stringify(d.st);
+                    B.cookers = [{ id: 7, ty: 'stove', x: 7, z: 5, C: Object.assign(ckNewState(), { fire: 2, temp: 600, spoutTy: null }) }]; IND_DEV_TICK.frac(d, 19); let mid = JSON.stringify(d.st); IND_DEV_TICK.frac(d, 1.5);
+                    return { rc: !!rc && rc.in.steel === 8 && rc.in.brick === 20 && rc.in.ingot_cu === 6 && rc.hard === true, cold: cold, mid: mid, st: d.st, fuel: [IND_ITEMS.kerosene.fuel, IND_ITEMS.gasoline.fuel, IND_ITEMS.asphalt.fuel], text: /保底|必出/.test(JSON.stringify([IND_ITEMS_RAW.kerosene, IND_ITEMS_RAW.gasoline, IND_ITEMS_RAW.asphalt, IND_ITEMS_RAW.dev_frac])) };`);
+                if (!r.rc) bad.push('配方钢 8 砖 20 铜锭 6 ' + JSON.stringify(r));
+                if (r.cold !== '{"oil":2}' || r.mid !== '{"oil":2}') bad.push('没烧着的炉子不出、20 秒以内不出 ' + JSON.stringify(r));
+                if (!(r.st.oil === 1 && r.st.kerosene === 1 && r.st.gasoline === 1 && r.st.asphalt === 1 && r.st.bucket === 1)) bad.push('每桶出煤油汽油沥青各 1、空桶还 ' + JSON.stringify(r.st));
+                if (r.fuel.join() !== '300,400,120' || r.text) bad.push('燃料值 300 400 120、说明不写保底 ' + JSON.stringify(r));
+                r = await run(`ind.bag = { lighter: 1, gasoline: 2 }; B.lighterN = 3; indSelect('lighter'); fiFillLighter(); let o = { n: B.lighterN, g: ind.bag.gasoline };
+                    let g = IND_RECIPES.filter(function (q) { return q.in.asphalt === 1 && q.out.glue === 2; }); o.glue = g.length === 1 && g[0].minT === 100 && g[0].hard === true; return o;`);
+                if (!(r.n === 50 && r.g === 1 && r.glue)) bad.push('汽油给打火机加满、沥青熬胶水 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND188 分馏塔：配方、没炉子不出、每桶出三样还空桶、燃料值、汽油加满打火机、沥青熬胶水', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }

@@ -88,7 +88,7 @@
         }
         function hmHint() {
             let d = hmFenceDir(), x = hmExt(ind.base);
-            return d && indSel() === 'stone' ? '往' + HM_DIR[d] + (hmLeft(x, d) > 0 ? '还能扩 ' + hmLeft(x, d) + ' 次（下次 ' + hmCost(x) + ' 石头）' : '到头了') : '';
+            return d && indSel() === 'stone' ? '往' + HM_DIR[d] + (hmLeft(x, d) > 0 ? '还能扩 ' + hmLeft(x, d) + ' 次，下次 ' + hmCost(x) + ' 石头' : '到头了') : '';
         }
         function hmFixBase(b) {
             hmApply(b);

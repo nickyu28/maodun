@@ -4,12 +4,12 @@
 // 撞到树、石头、硬岩、水就停（不掉血）；在深水里自动下车；基地里能骑能开，不撞设备。
 // 骑着（自行车和车的司机）只能做单手的事：吃喝、拔刺、编织、扇扇子、看地图、扔东西；挖矿、砍树、放置设备、合成（编织除外）、烧炉子、搬东西提示"骑着没法用"。
         Object.assign(IND_ITEMS_RAW, {
-            wheel: { name: '轮子', col: 0x424242, use: '做自行车、车（皮 1 + 草绳 2，或者塑料 2）' },
+            wheel: { name: '轮子', col: 0x424242, use: '做自行车、车，皮 1 + 草绳 2，或者塑料 2' },
             chain: { name: '钢链条', col: 0x78909c, use: '做自行车、车的传动' },
-            seat: { name: '座椅', col: 0x8d6e63, use: '做自行车、车（皮或人造革 2 + 毛线 2）' },
-            motor: { name: '电机', col: 0x5d4037, use: '车的电机（额定 24 V、12 V 才启动）；以后自动驾驶也要用' },
-            veh_bike: { name: '自行车', col: 0x43a047, veh: 'bike', use: '选中右键上车／下车，左键开面板：2 × 冲刺速度，脚踏吃体力；撞树石头水就停；骑着只能做单手的事（吃喝、拔刺、编织、扇扇子、看地图、扔东西）' },
-            veh_car: { name: '车', col: 0x1e88e5, veh: 'car', seats: 2, use: '选中右键上车／下车，左键开面板放电池：3 × 冲刺速度，电池组 12～24 V 才启动；司机只能做单手的事；撞树石头水就停' }
+            seat: { name: '座椅', col: 0x8d6e63, use: '做自行车、车，皮或人造革 2 + 毛线 2' },
+            motor: { name: '电机', col: 0x5d4037, use: '车的电机，24 V，12 V 才启动' },
+            veh_bike: { name: '自行车', col: 0x43a047, veh: 'bike', use: '右键上下车，冲刺速度 ×2，踩着吃体力' },
+            veh_car: { name: '车', col: 0x1e88e5, veh: 'car', seats: 2, use: '右键上下车，冲刺速度 ×3，要 12 V 以上电池组' }
         });
         IND_CRAFT.push(
             { out: 'wheel', in: { hide: 1, rope: 2 }, hard: true },
@@ -35,9 +35,9 @@
         function rdCarOk() { let c = rdCar(), v = indBankV(c); return c.u > 0 && v >= RD.vmin - 1e-6 && v <= RD.vmax + 1e-6; }
         function rdCarWhy() {
             let c = rdCar(), v = indBankV(c);
-            if (!(c.bats > 0) || !(c.u > 0)) return '车里没电（左键点车打开面板放电池）';
+            if (!(c.bats > 0) || !(c.u > 0)) return '车里没电，左键点车打开面板放电池';
             if (v < RD.vmin - 1e-6) return '电池组只有 ' + v.toFixed(1) + ' V，要 ' + RD.vmin + '～' + RD.vmax + ' V 才启动';
-            if (v > RD.vmax + 1e-6) return '电池组 ' + v.toFixed(1) + ' V，超过 ' + RD.vmax + ' V，车不启动（不会炸，减几节电池）';
+            if (v > RD.vmax + 1e-6) return '电池组 ' + v.toFixed(1) + ' V，超过 ' + RD.vmax + ' V，车不启动，不会炸，减几节电池';
             return '';
         }
         function rdSpeed() { return IND_T.speed * IND_T.run; }   // 冲刺速度
@@ -97,14 +97,14 @@
         function rdPanel() {
             let k = indSel(); if (!k || !IND_ITEMS[k].veh) return;
             let ty = IND_ITEMS[k].veh, c = rdCar();
-            let body = ty === 'bike' ? '<div style="line-height:1.7;">2 × 冲刺速度，脚踏吃体力（没体力只有走路速度）。<br>撞树、石头、水就停；骑着只能做单手的事。</div>' :
+            let body = ty === 'bike' ? '<div style="line-height:1.7;">2 × 冲刺速度，脚踏吃体力，没体力只有走路速度。<br>撞树、石头、水就停；骑着只能做单手的事。</div>' :
                 '<div style="line-height:1.7;">电池槽：' + c.bats + ' 节　' + indBankV(c).toFixed(1) + ' V　电量 ' + Math.ceil(c.u) + ' / ' + c.um + '<br>' + (rdCarOk() ? '能开：3 × 冲刺速度，行驶每秒耗 ' + RD.draw + ' U' : '<span style="color:#c62828">' + rdCarWhy() + '</span>') + '<br>背包里有电池 ' + (ind.bag.battery || 0) + ' 节' + (ind.bag.battery_ni ? '，镍电池 ' + ind.bag.battery_ni : '') + (ind.bag.battery_li ? '，锂电池 ' + ind.bag.battery_li : '') + '</div>' +
                 '<div style="margin-top:6px;"><button style="' + IND_BTN + '" onclick="rdPutCells(1)">放 1 节</button><button style="' + IND_BTN + '" onclick="rdPutCells(99)">全放</button></div>' +
-                '<div style="margin-top:6px;">自动驾驶：' + (c.auto ? '装着（开着车按 M 点地图设目的地）' : '没装') + '<button style="' + IND_BTN + '" onclick="rdAutoToggle()">' + (c.auto ? '拆下来' : '装芯片') + '</button></div>';
+                '<div style="margin-top:6px;">自动驾驶：' + (c.auto ? '装着，开着车按 M 点地图设目的地' : '没装') + '<button style="' + IND_BTN + '" onclick="rdAutoToggle()">' + (c.auto ? '拆下来' : '装芯片') + '</button></div>';
             indPanelShow('veh', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + IND_ITEMS[k].name + '</div>' + body + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
         // ── 自动驾驶（任务 50）：车里装上自动驾驶芯片，在地图上点目的地，车自己开：直线 + 简单绕障（树、石头）；水、悬崖、动物、没电就停并提示；碰方向键就接管；耗电多一半 ──
-        Object.assign(IND_ITEMS_RAW, { chip_auto: { name: '自动驾驶芯片', col: 0x00e676, use: '装进车（左键点车开面板）：开着车按 M 点地图设目的地，车自己开；也是以后无人设备的控制芯片' } });
+        Object.assign(IND_ITEMS_RAW, { chip_auto: { name: '自动驾驶芯片', col: 0x00e676, use: '装进车，按 M 点地图，车自己开' } });
         IND_CRAFT.push({ out: 'chip_auto', in: { dev_cchip: 1, ingot_ge: 2, ingot_ga: 2, wire: 4 }, hard: true });
         function rdMapDest(x, z) {
             let R = ind.ride; if (!R || R.ty !== 'car' || !rdCar().auto) return false;

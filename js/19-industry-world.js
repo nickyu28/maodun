@@ -97,9 +97,9 @@
         // ── 地图（按 M）：走过的地方的地貌颜色，没走过的灰；看见过的撤离点；自己的位置 ──
         function wdMapToggle() {
             if (ind.panel === 'map') { indPanelClose(); return; }
-            if (!(ind.bag.map > 0)) { indFlash('要带着地图（工作台：指南针 + 2 张纸）'); return; }   // 任务 45：拿着才能看
+            if (!(ind.bag.map > 0)) { indFlash('要带着地图，工作台：指南针 + 2 张纸'); return; }   // 任务 45：拿着才能看
             if (ind.where !== 'trip') { indFlash('远征里按 M 看地图'); return; }
-            indPanelShow('map', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">地图　<small style="color:#888;font-weight:normal;">走过的地方有颜色，绿圈是撤离点，方块是家（出生点），小点是发现的资源，黄叉是记号（点地图加、再点去掉，最多 8 个）</small></div><canvas id="ind-map" width="300" height="300" style="width:min(80vw,300px);height:min(80vw,300px);display:block;margin:0 auto;border:1px solid #999;"></canvas><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+            { const a = '走过的地方有颜色，绿圈是撤离点，方块是家，出生点，小点是发现的资源，黄叉是记号，点地图加、再点去掉，最多 8 个'; indPanelShow('map', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">地图　<small style="color:#888;font-weight:normal;">' + (ind.map && ind.map.moon ? '走过的地方有颜色，黄叉是记号，点地图加、再点去掉，最多 8 个' : a) + '</small></div><canvas id="ind-map" width="300" height="300" style="width:min(80vw,300px);height:min(80vw,300px);display:block;margin:0 auto;border:1px solid #999;"></canvas><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>'); }
             wdMapDraw();
         }
         function wdMapDraw() {
@@ -120,11 +120,11 @@
 
         // ── 物品：仙人掌、小刀 ──
         Object.assign(IND_ITEMS_RAW, {
-            cactus: { name: '仙人掌', col: 0x2e7d32, eat: { w: 5 }, use: '有刺：选中点一下右键开始拔刺，再换上斧子、小刀、剪刀或钳子，边走边拔；R 是生吃' },
+            cactus: { name: '仙人掌', col: 0x2e7d32, eat: { w: 5 }, use: '有刺，右键拔刺，拿着右键生吃' },
             cactus_peeled: { name: '去刺仙人掌', col: 0x66bb6a, eat: { w: 8, f: 3 } },
             cactus_roast: { name: '烤仙人掌', col: 0x8bc34a, eat: { w: 8, f: 5 } },
-            knife: { name: '小刀', col: 0x90a4ae, use: '拔仙人掌的刺（拿在手上 10 秒），也能砍树（比斧子慢、木头少）' },
-            axe: { name: '斧子', col: 0x8d6e63, use: '砍树快（1.5 秒），每棵树的木头 ×1.5；拔刺最快（拿在手上 5 秒）；采仙人掌不扎手' },
+            knife: { name: '小刀', col: 0x90a4ae, use: '拔仙人掌的刺，拿在手上 10 秒，也能砍树，比斧子慢、木头少' },
+            axe: { name: '斧子', col: 0x8d6e63, use: '砍树快，拔刺最快，采仙人掌不扎手' },
             sharp_flint: { name: '尖石片', col: 0xcfd8dc }, twig: { name: '树枝', col: 0x8d6e63 }, grass: { name: '草', col: 0x9ccc65 }, rope: { name: '草绳', col: 0xa1887f }
         });
         // 悠闲保持简单：石头加木头；硬核更难：要尖石片、树枝、草绳（地上捡、自己敲、自己搓），普通石头做不了硬核的刀和斧
@@ -263,7 +263,7 @@
             if (!(ind.bag.cactus > 0)) return false;
             let P = ind.peel;
             if (P) {
-                if (P.q + 1 < ind.bag.cactus) { P.q++; indFlash('排上了，拔完这个接着拔（还排着 ' + P.q + ' 个）'); return true; }
+                if (P.q + 1 < ind.bag.cactus) { P.q++; indFlash('排上了，拔完这个接着拔，还排着 ' + P.q + ' 个'); return true; }
                 indFlash('仙人掌都排上了'); return false;
             }
             ind.peel = { p: 0, q: 0, tool: null };
@@ -285,7 +285,7 @@
         function wdPeelTxt() {
             let P = ind.peel; if (!P) return '';
             let need = wdPeelTime();
-            return '拔刺 ' + Math.min(99, Math.floor(P.p * 100)) + '%' + (P.q ? '（还排着 ' + P.q + ' 个）' : '') + (need ? '　拿着' + indName(indSel()) + '，' + Math.ceil((1 - P.p) * need) + ' 秒' : '　<b style="color:#c62828">停着：换上斧子、小刀、剪刀、钳子或仙人掌</b>');
+            return '拔刺 ' + Math.min(99, Math.floor(P.p * 100)) + '%' + (P.q ? '，还排着 ' + P.q + ' 个' : '') + (need ? '　拿着' + indName(indSel()) + '，' + Math.ceil((1 - P.p) * need) + ' 秒' : '　<b style="color:#c62828">停着：换上斧子、小刀、剪刀、钳子或仙人掌</b>');
         }
         const WD_TREE_NAME = { oak: '阔叶树', pine: '松树', palm: '椰子树' };
         function wdNodeHint(o) {
@@ -293,20 +293,20 @@
             if (o.key === 'oil') return ckOilHint(o);
             if (o.crack) return '裂纹岩<br><small>挖不动，得用 TNT 炸</small>';
             if (o.hard) return '硬岩<br><small>太硬，得炸：拿 2 份火药右键放下，退远点</small>';
-            if (o.key === 'vent_ng') return '天然气喷口<br><small>拿空钢瓶右键装一瓶；别点火' + (o.until ? '（还冒 ' + Math.max(0, Math.round(o.until - ind.t)) + ' 秒）' : '') + '</small>';
-            if (o.tree) return WD_TREE_NAME[o.tree] + '（' + o.n + ' 木头）<br><small>' + (indHard() && !tlCanChop() ? '空手砍不动，得有斧子或小刀' : '左键：砍（' + wdChopTool().need + ' 秒，站着别动）') + '</small>';
-            if (o.key === 'cactus') return '仙人掌：有刺<br><small>左键：采集（拿剪刀或稿子不扎手）</small>';
+            if (o.key === 'vent_ng') return '天然气喷口<br><small>拿空钢瓶右键装一瓶；别点火' + (o.until ? '，还冒 ' + Math.max(0, Math.round(o.until - ind.t)) + ' 秒' : '') + '</small>';
+            if (o.tree) return WD_TREE_NAME[o.tree] + '，' + o.n + ' 木头<br><small>' + (indHard() && !tlCanChop() ? '空手砍不动，得有斧子或小刀' : '左键：砍，' + wdChopTool().need + ' 秒，站着别动') + '</small>';
+            if (o.key === 'cactus') return '仙人掌：有刺<br><small>左键：采集，拿剪刀或稿子不扎手</small>';
             if (o.rock) return (o.black ? '黑石头' : '大石头') + ' ×' + o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：敲' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
-            if (o.out) return indName(o.key) + '矿脉　还剩 ' + indDigLeft(o) + ' 份<br><small>' + (indTool() >= nd.tool ? '左键：挖（一次 ' + (IND_DIG_N + indToolBonus(nd.tool)) + ' 个）' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
+            if (o.out) return indName(o.key) + '矿脉　还剩 ' + indDigLeft(o) + ' 份<br><small>' + (indTool() >= nd.tool ? '左键：挖，一次 ' + (IND_DIG_N + indToolBonus(nd.tool)) + ' 个' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
             let nm = o.key === 'seeds' ? '野生' + indName(o.seed) : (nd.name || indName(o.key));
             return nm + ' ×' + o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：采集' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
         }
         function wdBookLines() {
             return [
-                { ins: [], outs: ['dirt', 'sand', 'stone', 'sulfur'], name: '挖地', txt: '对着地面左键，站着别动：空手 3 秒、稿子 1 秒，每次 1 份。平原森林出泥土，海边沙漠出沙子，山地古老岩层出石头（要石稿），火山出石头（偶尔 1 份硫）', where: '远征' },
-                { ins: ['axe', 'knife'], outs: ['wood'], name: '砍树', txt: '树：左键砍，站着别动。斧子 1.5 秒（木头 ×1.5）、稿子 3 秒、小刀 5 秒（木头 ×1.25）、空手 8 秒（硬核空手砍不动，得有斧子或小刀），出 3～6 木头，倒下留树桩', where: '远征' },
-                { ins: ['cactus'], outs: ['cactus'], name: '仙人掌', txt: '仙人掌：空手采会扎手（硬核扣 60 血），拿剪刀或稿子采不扎；生吃口渴 +5（硬核扣 60 血）', where: '盐湖沙漠' },
-                { ins: ['cactus', 'axe', 'knife', 'shears', 'tongs'], outs: ['cactus_peeled'], name: '拔刺', txt: '仙人掌 → 去刺仙人掌（口渴 +8、饱食 +3）：选中仙人掌点一下右键开始，再点排下一个；看手上拿的：斧子 5 秒、小刀 10 秒、剪刀 30 秒、钳子 40 秒、拿着仙人掌 60 秒；能边走边拔，拿着别的就停着', where: '手上' },
+                { ins: [], outs: ['dirt', 'sand', 'stone', 'sulfur'], name: '挖地', txt: '对着地面左键，站着别动：空手 3 秒、稿子 1 秒，每次 1 份。平原森林出泥土，海边沙漠出沙子，山地古老岩层出石头，要石稿，火山出石头，偶尔 1 份硫', where: '远征' },
+                { ins: ['axe', 'knife'], outs: ['wood'], name: '砍树', txt: '树：左键砍，站着别动。斧子 1.5 秒，木头 ×1.5、稿子 3 秒、小刀 5 秒，木头 ×1.25、空手 8 秒，硬核空手砍不动，得有斧子或小刀，出 3～6 木头，倒下留树桩', where: '远征' },
+                { ins: ['cactus'], outs: ['cactus'], name: '仙人掌', txt: '仙人掌：空手采会扎手，硬核扣 60 血，拿剪刀或稿子采不扎；生吃口渴 +5，硬核扣 60 血', where: '盐湖沙漠' },
+                { ins: ['cactus', 'axe', 'knife', 'shears', 'tongs'], outs: ['cactus_peeled'], name: '拔刺', txt: '仙人掌 → 去刺仙人掌，口渴 +8、饱食 +3：选中仙人掌点一下右键开始，再点排下一个；看手上拿的：斧子 5 秒、小刀 10 秒、剪刀 30 秒、钳子 40 秒、拿着仙人掌 60 秒；能边走边拔，拿着别的就停着', where: '手上' },
                 { ins: ['shears'], outs: ['wool'], name: '剪羊毛', txt: '拿着剪刀对着羊左键：' + IND_SHEAR_T + ' 秒剪完出 2 份羊毛；能边走边剪，换走剪刀就停着，离羊超过 3 米就断了', where: '羊' }
             ].concat(typeof cvBookLines === 'function' ? cvBookLines() : []);   // 矿洞（19-industry-cave.js）
         }
@@ -491,14 +491,14 @@
         // 随手合成（背包面板里，不用工作台）：工作台 = 木头 6 + 草绳 2（硬核）／木头 6 + 石头 2（悠闲没有草绳）。
         // 远征图里拿着工作台右键放在面前（不能进深水、不能压在别的东西上），左键打开跟基地的一样用，长按右键 1 秒收回。这一趟结束没收回的留在外面（不进存档）。
         IND_CRAFT.push({ out: 'furn_bench', in: { wood: 6, rope: 2 }, hard: true, hand: true }, { out: 'furn_bench', in: { wood: 6, stone: 2 }, casual: true, hand: true });
-        IND_ITEMS_RAW.furn_bench.use = '右键放下，左键打开做东西。远征里也能放（长按右键收回）';
+        IND_ITEMS_RAW.furn_bench.use = '右键放下，左键打开做东西。远征里也能放，长按右键收回';
         function wdHandCraftHtml() {
             let rows = IND_CRAFT.map(function (r, i) {
                 if (!r.hand || !indCraftShow(r)) return '';
                 let can = indCraftCan(r), need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + (r.need ? ' + ' + indName(r.need) + '在身上' : '');
                 return indRow(indName(r.out) + '<br><small style="color:#888">' + need + '</small>', '<button id="ind-hand-' + i + '" style="' + IND_BTN + (can ? 'background:#2e7d32;' : 'background:#bbb;') + '" onclick="indCraft(' + i + ')">做</button>');
             }).join('');
-            return rows ? '<div style="margin-top:8px;font-weight:bold;">随手合成（不用工作台）</div>' + rows : '';
+            return rows ? '<div style="margin-top:8px;font-weight:bold;">随手合成，不用工作台</div>' + rows : '';
         }
         function wdBenchPlace() {
             let f = indFace(), x = ind.p.x + f.x * 2.2, z = ind.p.z + f.z * 2.2, L = ind.tripBench = ind.tripBench || [];

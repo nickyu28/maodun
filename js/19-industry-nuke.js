@@ -10,30 +10,30 @@
         // ── 动态物品：六氟化铀罐 uf6:台阶、二氧化铀芯块 pellet:台阶、燃料棒 rod:台阶 或 rod:台阶:已烧百分比 ──
         function nkLvTxt(i) { return NK_LV[i] + '%'; }
         function nkLvOf(s) { return /^\d+$/.test(s) && +s <= NK_LV_OLD ? +s : -1; }
-        IND_DYN.push({ prefix: 'uf6:', get: function (k) { let i = nkLvOf(k.slice(4)); return i < 0 ? undefined : { name: '六氟化铀罐（丰度 ' + nkLvTxt(i) + '）', col: 0xcddc39, rad: 'vweak', use: i < NK_LV_MAX ? '放进离心机' : '到头了' }; } });
-        IND_DYN.push({ prefix: 'pellet:', get: function (k) { let i = nkLvOf(k.slice(7)); return i < 0 ? undefined : { name: '二氧化铀芯块（丰度 ' + nkLvTxt(i) + '）', col: 0x9e9d24, rad: 'weak', use: '做燃料棒' }; } });
+        IND_DYN.push({ prefix: 'uf6:', get: function (k) { let i = nkLvOf(k.slice(4)); return i < 0 ? undefined : { name: '六氟化铀罐，丰度 ' + nkLvTxt(i) + '', col: 0xcddc39, rad: 'vweak', use: i < NK_LV_MAX ? '放进离心机' : '到头了' }; } });
+        IND_DYN.push({ prefix: 'pellet:', get: function (k) { let i = nkLvOf(k.slice(7)); return i < 0 ? undefined : { name: '二氧化铀芯块，丰度 ' + nkLvTxt(i) + '', col: 0x9e9d24, rad: 'weak', use: '做燃料棒' }; } });
         IND_DYN.push({ prefix: 'rod:', get: function (k) {
             let m = /^rod:(\d+)(?::(\d+))?$/.exec(k); if (!m) return undefined;
             let i = nkLvOf(m[1]), b = m[2] === undefined ? 0 : +m[2]; if (i < 0 || b > 99) return undefined;
-            return { name: '燃料棒（丰度 ' + nkLvTxt(i) + (b ? '，已烧 ' + b + '%' : '') + '）', col: 0xafb42b, rad: 'weak', use: '放进反应堆' };
+            return { name: '燃料棒，丰度 ' + nkLvTxt(i) + (b ? '，已烧 ' + b + '%' : '') + '', col: 0xafb42b, rad: 'weak', use: '放进反应堆' };
         } });
         function nkRod(k) { let m = /^rod:(\d+)(?::(\d+))?$/.exec(k); return m ? { i: +m[1], b: m[2] === undefined ? 0 : +m[2] / 100 } : null; }
         function nkRodKey(r) { let b = Math.min(99, Math.floor(r.b * 100)); return 'rod:' + r.i + (b > 0 ? ':' + b : ''); }
 
         // ── 物品 ──
         Object.assign(IND_ITEMS_RAW, {
-            fluorite: { name: '萤石', col: 0x80cbc4 }, ore_pb: { name: '方铅矿', col: 0x546e7a, use: '2 份加 1 份木炭／煤／焦炭进炉子，800°C 炼成铅锭（还出 1 份硫）' },
-            ingot_pb: { name: '铅锭', col: 0x78909c }, hot_pb: { name: '铅锭（烫）', col: 0xff8a65, hot: 'ingot_pb', needTool: 'tongs' },
-            b_so2: { name: '二氧化硫瓶', col: 0xfff59d, poison: '二氧化硫', use: '做硫酸（放掉是毒气）' },
+            fluorite: { name: '萤石', col: 0x80cbc4 }, ore_pb: { name: '方铅矿', col: 0x546e7a, use: '加木炭／煤／焦炭进炉子，800°C 炼铅' },
+            ingot_pb: { name: '铅锭', col: 0x78909c }, hot_pb: { name: '铅锭，烫', col: 0xff8a65, hot: 'ingot_pb', needTool: 'tongs' },
+            b_so2: { name: '二氧化硫瓶', col: 0xfff59d, poison: '二氧化硫', use: '做硫酸，放掉是毒气' },
             b_h2so4: { name: '硫酸瓶', col: 0xffee58, corrosive: true },
             b_hf: { name: '氟化氢瓶', col: 0xb2dfdb },
             ore_u_dust: { name: '铀矿粉', col: 0xaed581, rad: 'vweak' }, yellowcake: { name: '黄饼', col: 0xfdd835, rad: 'vweak' },
-            uf6_dep: { name: '贫铀罐（丰度 0.3%）', col: 0x9e9e9e, rad: 'vweak', use: '2 个氢气瓶 + 1 罐 → 贫铀芯块，做贫铀棒（放进反应堆增殖钚）' },
-            rod_spent: { name: '乏燃料棒', col: 0x33691e, rad: 'strong', use: '后处理出钚（放在铅箱里）' },
+            uf6_dep: { name: '贫铀罐，丰度 0.3%', col: 0x9e9e9e, rad: 'vweak', use: '加氢气瓶做贫铀芯块，再做贫铀棒' },
+            rod_spent: { name: '乏燃料棒', col: 0x33691e, rad: 'strong', use: '后处理出钚，放在铅箱里' },
             pellet_dep: { name: '贫铀芯块', col: 0x9e9e9e, rad: 'vweak', use: '2 个加 2 钢锭做贫铀棒' },
-            rod_dep: { name: '贫铀棒', col: 0x78909c, rad: 'vweak', use: '放进反应堆（旁边要有在烧的燃料棒、温度 ≥ 250°C），满 1 个游戏日变成辐照贫铀棒' },
-            rod_irr: { name: '辐照贫铀棒', col: 0x558b2f, rad: 'strong', use: '拿 2 硝酸瓶在炉子里提钚，没有核废料（放在铅箱里）' },
-            plutonium: { name: '钚', col: 0x7b1fa2, rad: 'strong', use: '做原子弹（放在铅箱里）' },
+            rod_dep: { name: '贫铀棒', col: 0x78909c, rad: 'vweak', use: '放反应堆里，满 1 个游戏日变辐照贫铀棒' },
+            rod_irr: { name: '辐照贫铀棒', col: 0x558b2f, rad: 'strong', use: '拿 2 硝酸瓶在炉子里提钚，没有核废料，放在铅箱里' },
+            plutonium: { name: '钚', col: 0x7b1fa2, rad: 'strong', use: '做原子弹，放在铅箱里' },
             nuclear_waste: { name: '核废料', col: 0x2e7d32, rad: 'strong', useLater: '后面的阶段' },
             saltpeter: { name: '硝石', col: 0xeceff1, use: '撒在农田上，作物长得快一倍；也能做火药' }, gunpowder: { name: '火药', col: 0x424242, explosive: true, use: '碰到爆炸或放进炉子就炸' },
             nuke: { name: '原子弹', col: 0x455a64, nuke: true, use: '右键放下，左键启动，30 秒后爆炸' },
@@ -126,7 +126,7 @@
         function nkCoolSrc(d) {
             let P = IND_BASE_ST.pool;
             if (!ind.base.off.pool && Math.hypot(P.x - d.x, P.z - d.z) <= NK.waterR + P.r) return '水池';
-            if (rlReactorWet(d)) return '管道送来的水（水塔）';
+            if (rlReactorWet(d)) return '管道送来的水，水塔';
             if (ind.base.devs.some(function (p) { return p.ty === 'pump' && p.pw && Math.hypot(p.x - d.x, p.z - d.z) <= NK.waterR; })) return '水泵';
             return '';
         }
@@ -176,26 +176,26 @@
         const NK_FOOT = function (d) { return '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + 'background:#2e7d32;" onclick="indDevTake(' + d.id + ')">全部拿出来</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>'; };
         IND_DEV_HTML.crusher = function (d) {
             let V = indDevVolt(d);
-            return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">粉碎机</div><div style="line-height:1.7;">电压 <b>' + V.toFixed(1) + ' V</b>（额定 12 V）' + (d.pw ? '　正在碎 ' + Math.floor((d.ct || 0) / NK.crushT * 100) + '%' : '') + '</div>' +
+            return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">粉碎机</div><div style="line-height:1.7;">电压 <b>' + V.toFixed(1) + ' V</b>，额定 12 V' + (d.pw ? '　正在碎 ' + Math.floor((d.ct || 0) / NK.crushT * 100) + '%' : '') + '</div>' +
                 '<div style="margin-top:4px;">里面：' + nkDevItems(d) + '</div><div style="margin-top:6px;color:#888;font-size:13px;">每 ' + NK.crushT + ' 秒 1 铀矿 → 2 铀矿粉；1 骨 → 2 骨粉；2 小麦 → 2 面粉。</div>' +
                 '<div style="margin-top:6px;font-weight:bold;">身上的东西</div>' + (nkPutRows(d, function (k) { return k === 'ore_u' || k === 'bone' || k === 'wheat'; }) || '<div style="color:#999;padding:6px 0;">身上没有铀矿、骨、小麦</div>') + NK_FOOT(d);
         };
         IND_DEV_HTML.centrifuge = function (d) {
             let V = indDevVolt(d), lv = nkCentriLv(d);
             let top = Object.keys(d.st).some(function (k) { return k.indexOf('uf6:') === 0 && +k.slice(4) === NK_LV_MAX && d.st[k] >= 2; });
-            return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">离心机</div><div style="line-height:1.7;">电压 <b>' + V.toFixed(1) + ' V</b>（额定 24 V）' + (d.pw ? '　正在转 ' + Math.floor((d.ct || 0) / NK.centriT * 100) + '%' : '') + (top && lv < 0 ? '　<b>到头了</b>（丰度最高 5%）' : '') + '</div>' +
+            return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">离心机</div><div style="line-height:1.7;">电压 <b>' + V.toFixed(1) + ' V</b>，额定 24 V' + (d.pw ? '　正在转 ' + Math.floor((d.ct || 0) / NK.centriT * 100) + '%' : '') + (top && lv < 0 ? '　<b>到头了</b>，丰度最高 5%' : '') + '</div>' +
                 '<div style="margin-top:4px;">里面：' + nkDevItems(d) + '</div><div style="margin-top:6px;color:#888;font-size:13px;">放 2 个丰度一样的罐，' + NK.centriT + ' 秒出 1 个丰度高一档的罐和 1 个贫铀罐。</div>' +
                 '<div style="margin-top:6px;font-weight:bold;">身上的东西</div>' + (nkPutRows(d, function (k) { return k.indexOf('uf6:') === 0; }) || '<div style="color:#999;padding:6px 0;">身上没有六氟化铀罐</div>') + NK_FOOT(d);
         };
         IND_DEV_HTML.reactor = function (d) {
             let heat = nkReactorHeat(d), cool = nkCoolNow(d), water = nkReactorCool(d);
-            let rods = d.rods.map(function (r, i) { return indRow(r.dep ? '贫铀棒（增殖 ' + Math.floor(r.b * 100) + '%）' : indName(nkRodKeyOf(r)), '<button style="' + IND_BTN + '" onclick="nkRodOut(' + d.id + ',' + i + ')">取出</button>'); }).join('') || '';
+            let rods = d.rods.map(function (r, i) { return indRow(r.dep ? '贫铀棒，增殖 ' + Math.floor(r.b * 100) + '%' : indName(nkRodKeyOf(r)), '<button style="' + IND_BTN + '" onclick="nkRodOut(' + d.id + ',' + i + ')">取出</button>'); }).join('') || '';
             let put = Object.keys(ind.bag).filter(function (k) { return nkRod(k) || k === 'rod_dep'; }).map(function (k) { return indRow(indName(k) + ' × ' + ind.bag[k], '<button style="' + IND_BTN + '" onclick="nkRodIn(' + d.id + ',\'' + k + '\')">放 1 根</button>'); }).join('');
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">反应堆</div>' +
                 '<div style="line-height:1.7;">温度 <b style="color:' + nkTempCol(d.T) + '">' + Math.round(d.T) + '°C</b>　<span style="display:inline-block;width:120px;height:10px;background:#ddd;vertical-align:middle;border-radius:5px;overflow:hidden;"><span style="display:block;height:100%;width:' + Math.min(100, d.T / 5) + '%;background:' + nkTempCol(d.T) + ';"></span></span><br>' +
-                '功率 <b>' + Math.round(heat) + '</b>　冷却 <b>' + Math.round(cool) + '</b>（' + (water ? '冷却水：' + nkCoolSrc(d) : '没有水，只靠空气') + '）　稳定在约 <b>' + Math.round(nkSteadyT(d)) + '°C</b>' + (d.T >= NK.turbineT ? '　≥ ' + NK.turbineT + '°C，' + (ind.base.devs.some(function (t) { return t.ty === 'turbine' && Math.hypot(t.x - d.x, t.z - d.z) <= NK.turbineR + 1.5; }) ? '汽轮发电机有电' : '但 ' + NK.turbineR + ' 米内没有汽轮发电机') : '') + (d.T >= 350 && d.melt <= 0 ? '<br><b style="color:#c62828">快到 ' + NK.meltT + '°C 了（超过 ' + NK.meltT + '°C 持续 ' + NK.meltS + ' 秒就熔毁），插控制棒或者加水冷</b>' : '') + (d.melt > 0 ? '<br><b style="color:#c62828">温度超过 ' + NK.meltT + '°C 已经 ' + Math.floor(d.melt) + ' 秒</b>' : '') + '</div>' +
-                '<div style="margin-top:6px;">控制棒插入 <b>' + Math.round(d.ctl * 100) + '%</b>（100% 停堆）　<button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',-0.1)">拔 10%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',-0.01)">拔 1%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',0.01)">插 1%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',0.1)">插 10%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',1)">全插</button></div>' +
-                '<div style="margin-top:6px;font-weight:bold;">燃料棒（最多 4 根）</div>' + rods +
+                '功率 <b>' + Math.round(heat) + '</b>　冷却 <b>' + Math.round(cool) + '</b>，' + (water ? '冷却水：' + nkCoolSrc(d) : '没有水，只靠空气') + '　稳定在约 <b>' + Math.round(nkSteadyT(d)) + '°C</b>' + (d.T >= NK.turbineT ? '　≥ ' + NK.turbineT + '°C，' + (ind.base.devs.some(function (t) { return t.ty === 'turbine' && Math.hypot(t.x - d.x, t.z - d.z) <= NK.turbineR + 1.5; }) ? '汽轮发电机有电' : '但 ' + NK.turbineR + ' 米内没有汽轮发电机') : '') + (d.T >= 350 && d.melt <= 0 ? '<br><b style="color:#c62828">快到 ' + NK.meltT + '°C 了，超过 ' + NK.meltT + '°C 持续 ' + NK.meltS + ' 秒就熔毁，插控制棒或者加水冷</b>' : '') + (d.melt > 0 ? '<br><b style="color:#c62828">温度超过 ' + NK.meltT + '°C 已经 ' + Math.floor(d.melt) + ' 秒</b>' : '') + '</div>' +
+                '<div style="margin-top:6px;">控制棒插入 <b>' + Math.round(d.ctl * 100) + '%</b>，100% 停堆，　<button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',-0.1)">拔 10%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',-0.01)">拔 1%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',0.01)">插 1%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',0.1)">插 10%</button><button style="' + IND_BTN + '" onclick="nkCtl(' + d.id + ',1)">全插</button></div>' +
+                '<div style="margin-top:6px;font-weight:bold;">燃料棒，最多 4 根</div>' + rods +
                 '<div style="margin-top:6px;font-weight:bold;">身上的燃料棒</div>' + (put || '<div style="color:#999;padding:6px 0;">身上没有燃料棒</div>') +
                 '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>';
         };
@@ -296,7 +296,7 @@
             let b = { id: 100 + (ind.bombSeq = (ind.bombSeq || 0) + 1), x: x, z: z, t: -1 };
             b.m = nkBombMesh(b); nkBombs().push(b);
             if (ind.where === 'base') indSave();
-            indFlash('放好了原子弹：左键启动（' + NK.bombT + ' 秒后爆炸，半径 ' + NK.bombR + ' 米）');
+            indFlash('放好了原子弹：左键启动，' + NK.bombT + ' 秒后爆炸，半径 ' + NK.bombR + ' 米');
             return true;
         }
         function nkBombMesh(b) {
@@ -391,7 +391,7 @@
         function nkBlastHurt(x, z) {
             if (!indHard()) return;
             let d = Math.hypot(ind.p.x - x, ind.p.z - z), dmg = indBoomDmg(d, NK.bombR, NK.bombNear, NK.bombClose) * (1 - indBlastCut());
-            if (dmg > 0) indHurt(dmg, 'boom', '原子弹，离爆炸点 ' + d.toFixed(0) + ' 米' + (indBlastCut() > 0 ? '（穿了防爆装备）' : ''), true);
+            if (dmg > 0) indHurt(dmg, 'boom', '原子弹，离爆炸点 ' + d.toFixed(0) + ' 米' + (indBlastCut() > 0 ? '，穿了防爆装备' : ''), true);
         }
         // 远征图上的地上东西（炸开的矿）：和基地的 base.ground 一个样
         function nkTripItemsSync() {
@@ -418,4 +418,4 @@
             indFlash('一团黄色的气飘出来了');
         }
         IND_DEV_INFO.reactor = function (d) { return '反应堆 ' + Math.round(d.T === undefined ? NK.amb : d.T) + '°C　' + (d.rods ? d.rods.length : 0) + ' 根燃料棒　控制棒插入 ' + Math.round((d.ctl === undefined ? 1 : d.ctl) * 100) + '%'; };
-        IND_DEV_INFO.turbine = function (d) { return '汽轮发电机 ' + (indSrcVolt(d) > 0 ? '发电中 48 V' : '没在发电（放在 250°C 以上的反应堆 3 米内）'); };
+        IND_DEV_INFO.turbine = function (d) { return '汽轮发电机 ' + (indSrcVolt(d) > 0 ? '发电中 48 V' : '没在发电，放在 250°C 以上的反应堆 3 米内'); };

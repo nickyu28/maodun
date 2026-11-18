@@ -12,9 +12,9 @@
         // 冒烟测试页（?notut=1）默认不用点火，免得几百处"直接调火候"的老检查全挂；IND95 关掉它测起火
         let IND_FIRE_FREE = /[?&]notut\b/.test(location.search);
         Object.assign(IND_ITEMS_RAW, {
-            wood_dry: { name: '干木头', col: 0xbcaaa4, fuel: 60, use: '选中点一下右键钻木取火（背包里要有草或松脂），拿着 15 秒得 1 个火种' },
+            wood_dry: { name: '干木头', col: 0xbcaaa4, fuel: 60, use: '点一下右键钻木取火，要有草或松脂' },
             ember: { name: '火种', col: 0xff6f00, use: '拿着左键点炉子、篝火就点着。60 秒就灭' },
-            flint: { name: '燧石', col: 0x37474f, use: '打火石：拿着左键点炉子，背包里要有铁锭和草／松脂，90% 点着' },
+            flint: { name: '燧石', col: 0x37474f, use: '拿着左键点炉子，要铁锭和草或松脂' },
             match: { name: '火柴', col: 0xd84315, use: '拿着左键点炉子、篝火，一根点一次' },
             lighter: { name: '打火机', col: 0xffd54f, use: '拿着左键点炉子、篝火。对着装石油的桶右键加满 50 次' }
         });
@@ -131,10 +131,10 @@
         // 打火机加油：拿着打火机对着装石油的桶……这里简化成：拿着打火机右键，背包里有装石油的桶就加满（用掉一桶，还空桶）
         function fiFillLighter() {
             if (!(ind.bag.lighter > 0)) return false;
-            let k = Object.keys(ind.bag).filter(function (x) { let c = indContOf(x); return c && c.base === 'oil' && ind.bag[x] > 0; })[0];
+            let k = Object.keys(ind.bag).filter(function (x) { let c = indContOf(x); return c && c.base === 'oil' && ind.bag[x] > 0; })[0] || (ind.bag.gasoline > 0 ? 'gasoline' : null);   // 任务 R2：汽油也能加满
             if (!k) { indFlash('打火机还剩 ' + (ind.base.lighterN || 0) + ' 次'); return true; }
-            if ((ind.base.lighterN || 0) >= FI.lighterN) { indFlash('打火机是满的（' + FI.lighterN + ' 次）'); return true; }
-            indBagDel(k, 1); indGive(indEmptyKey(indContOf(k).mat), 1); ind.base.lighterN = FI.lighterN; indSave(); 
+            if ((ind.base.lighterN || 0) >= FI.lighterN) { indFlash('打火机是满的，' + FI.lighterN + ' 次'); return true; }
+            indBagDel(k, 1); if (indContOf(k)) indGive(indEmptyKey(indContOf(k).mat), 1); ind.base.lighterN = FI.lighterN; indSave(); 
             return true;
         }
         // 山地、古老岩层挖大石头 15% 多掉 1 个燧石
