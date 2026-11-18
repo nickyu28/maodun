@@ -149,7 +149,6 @@ async function openTab(chrome, url, opts) {
             const d = msg.params.exceptionDetails;
             errors.push('exception: ' + ((d.exception && d.exception.description) || d.text).split('\n').slice(0, 3).join(' | '));
         }
-        if (msg.method === 'Inspector.targetCrashed' || msg.method === 'Runtime.executionContextsCleared' || (msg.method === 'Page.frameNavigated' && !msg.params.frame.parentId)) process.stderr.write('[TAB] ' + msg.method + ' ' + ((msg.params.frame && msg.params.frame.url) || '') + '\n');   // 诊断：页面崩了或被刷新会在日志里留一行
         if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {
             errors.push('console.error: ' + JSON.stringify(msg.params.args.map((a) => a.value || a.description)).slice(0, 300));
         }
@@ -14145,7 +14144,7 @@ async function enterExit(tab, key) {
             await T.eval(`settingsSet('show_fps', false); true;`);
             if (!(await until(T, `document.getElementById('gfx-fps').style.display === 'none'`, 5000))) bad.push('关了显示帧率还在');
             await T.eval(`settingsSet('show_fps', true); settingsSet('gfx_quality', 3); settingsSet('gfx_view', 2); settingsSet('gfx_fps', 2); true;`);
-            await T.send('Page.reload'); if (!(await until(T, `typeof graphicsQuality === 'function' && typeof settingsGet === 'function'`, 90000))) bad.push('刷新后页面没起来');
+            await T.eval(`window.__preReload = 1; true;`); await T.send('Page.reload'); if (!(await until(T, `!window.__preReload && typeof graphicsQuality === 'function' && typeof settingsGet === 'function'`, 90000))) bad.push('刷新后页面没起来');   // Page.reload 一发出去旧页面还活着，要先打个记号等新页面没有记号才算刷好
             const b = JSON.parse(await T.eval(`JSON.stringify({ q: graphicsQuality(), v: graphicsView(), f: graphicsFps() })`));
             if (b.q !== 3 || b.v !== 2 || b.f !== 2) bad.push('刷新后没读回来 ' + JSON.stringify(b));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
