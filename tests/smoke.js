@@ -168,6 +168,7 @@ async function openTab(chrome, url, opts) {
     await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []).concat(opts && opts.blockHosts ? opts.blockHosts.map((h) => ({ urlPattern: '*' + h + '*' })) : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
     // 实验室开关会被 localStorage 记住（TH_labdebug）；同一个 Chrome 里所有标签页共用存档，所以每个新页面一开始先清掉，免得前一个标签页开了开关、后面不带参数的检查也看到实验室入口。测开关记忆本身的检查传 keepStorage: true。
+    if (!(opts && opts.limit)) await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__gfxNoLimit = true;' });   // 默认关掉渲染限帧，测限帧的检查传 limit: true
     if (!(opts && opts.keepStorage)) await send('Page.addScriptToEvaluateOnNewDocument', { source: "try{localStorage.removeItem('TH_labdebug');localStorage.removeItem('TH_bossdebug')}catch(e){}" });
     if (opts && opts.mobile) {   // 触屏设备：has_touch + is_mobile
         await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
@@ -13715,7 +13716,7 @@ async function enterExit(tab, key) {
         if (want('SET3')) {
             // SET3 显示设置（任务 P3 第二批）：界面大小、快捷栏位置、小地图／准星／数字／信息条开关、工业那排按钮放哪个角、视野、视距、帧率上限都在“显示”那一组，改了马上生效、存档、刷新还在
             const bad = [];
-            const T = await openTab(chrome, url);
+            const T = await openTab(chrome, url, { limit: true });
             await T.eval(`${HIDE} openSettings('显示'); true;`); await W(200);
             const txt = await T.eval(`document.getElementById('set-content').innerText`);
             for (const w of ['界面大小', '快捷栏位置', '小地图', '准星', '视角宽度', '画质', '视野', '流畅度', '左上角信息条', '工业右上那排按钮']) if (txt.indexOf(w) < 0) bad.push('显示组里没有 ' + w);
@@ -14142,7 +14143,7 @@ async function enterExit(tab, key) {
             await T.eval(`settingsSet('show_fps', false); true;`);
             if (!(await until(T, `document.getElementById('gfx-fps').style.display === 'none'`, 5000))) bad.push('关了显示帧率还在');
             await T.eval(`settingsSet('show_fps', true); settingsSet('gfx_quality', 3); settingsSet('gfx_view', 2); settingsSet('gfx_fps', 2); true;`);
-            await T.send('Page.reload'); await until(T, `typeof graphicsQuality === 'function'`, 20000);
+            await T.send('Page.reload'); if (!(await until(T, `typeof graphicsQuality === 'function' && typeof settingsGet === 'function'`, 90000))) bad.push('刷新后页面没起来');
             const b = JSON.parse(await T.eval(`JSON.stringify({ q: graphicsQuality(), v: graphicsView(), f: graphicsFps() })`));
             if (b.q !== 3 || b.v !== 2 || b.f !== 2) bad.push('刷新后没读回来 ' + JSON.stringify(b));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));

@@ -82,7 +82,7 @@ function gfxHookRenderer(r) {
     let r0 = r.render;
     r.render = function () {
         let now = performance.now(), t = graphicsFpsTarget();
-        if (now - gfxLastRender < 1000 / t - 2) return;
+        if (!window.__gfxNoLimit && now - gfxLastRender < 1000 / t - 2) return;   // 冒烟里连着直接调 render 数绘制次数，要关掉限帧；测限帧本身的检查不关
         gfxLastRender = now; gfxFrameTimes.push(now);
         try { gfxShadowTick(r); } catch (e) { }
         while (gfxFrameTimes.length && now - gfxFrameTimes[0] > 1000) gfxFrameTimes.shift();
