@@ -63,6 +63,6 @@
             let b = document.getElementById('ind-btn-speed'); if (!b) return;
             let m = spMul(), off = !ind || ind.where !== 'base';
             b.textContent = '倍速 ×' + m + '　Z';
-            b.style.opacity = off ? '0.4' : '1'; b.style.background = m > 1 ? '#c62828' : '';
+            b.style.opacity = off ? '0.4' : '1'; b.style.background = m > 1 ? '#c62828' : '#455a64';
             b.disabled = !!off;
         }

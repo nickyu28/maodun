@@ -92,7 +92,7 @@
             if (d.self) return D.name + (rlGenOn(d) ? ' 发电中 12 V' : ' 没在发电') + '　柴 ' + (rlGenFuelN(d) + (d.fu > 0 ? 1 : 0)) + ' 份' + (d.lit ? '　烧着' : indHard() ? '　没点火，拿火柴左键点' : '') + '　' + w;
             if (rlGenOn(d)) return D.name + ' 发电中 12 V　' + w;
             let c = rlGenCook(d);
-            return D.name + (c ? '贴在' + IND_COOK[c.ty].name + '上' : '') + ' 没在发电　' + w + (rlGenHot(d) ? '' : c ? '　' + IND_COOK[c.ty].name + '要中火以上' : '　对着炉子右键贴上去，或者放在点着的炉子，中火以上，5 米内');
+            return D.name + (c ? '，贴在' + IND_COOK[c.ty].name + '上' : '') + ' 没在发电　' + w + (rlGenHot(d) ? '' : c ? '　' + IND_COOK[c.ty].name + '要中火以上' : '　对着炉子右键贴上去，或者放在点着的炉子，中火以上，5 米内');
         }
         function rlGenAct(d, k) {
             if (d.self && k) {
@@ -210,7 +210,7 @@
                     if (indFits(ind.bag, indBagSlots(), indFilledKey('oil', c.mat), 1) < 1 && ind.bag[k] > 1) { indFlash('背包满了'); return false; }
                     indBagDel(k, 1); indGive(indFilledKey('oil', c.mat), 1); d.oil -= 1; indSave(); indFlash('装出来一桶石油'); return true;
                 }
-                indFlash(IND_DEV_INFO.oiltank(d) + '拿油桶左键倒进去，拿空桶装出来'); return false;
+                indFlash(IND_DEV_INFO.oiltank(d) + '，拿油桶左键倒进去，拿空桶装出来'); return false;
             }
             if (d.ty === 'gastank') {
                 if (k === 'gas_ng') {
@@ -221,7 +221,7 @@
                     if (!(d.gas >= 1)) { indFlash('储气罐里不够一瓶'); return false; }
                     indBagDel('cyl', 1); indGive('gas_ng', 1); d.gas -= 1; indSave(); indFlash('装出来一瓶天然气'); return true;
                 }
-                indFlash(IND_DEV_INFO.gastank(d) + '拿天然气钢瓶左键灌进去，拿空钢瓶装出来'); return false;
+                indFlash(IND_DEV_INFO.gastank(d) + '，拿天然气钢瓶左键灌进去，拿空钢瓶装出来'); return false;
             }
             if (d.ty === 'snuke' && k !== 'wire') return fmSnukeAct(d, k);   // 小型核电（19-industry-farm.js，任务 49）
             return undefined;

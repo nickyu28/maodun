@@ -17,6 +17,8 @@ def fix(lit):
         res=[];i=0
         while i<len(s):
             c=s[i]
+            if c in '（【' and not res:
+                res.append(c); i+=1; continue
             if c in '（【':
                 j=i+1
                 close = '）' if c=='（' else '】'

@@ -82,7 +82,7 @@
             if (d.ty === 'cbtn') { d.pt = 1; return true; }
             if (d.ty === 'clev') { d.on1 = d.on1 ? 0 : 1; indSave(); return true; }
             if (d.ty === 'cdelay' || d.ty === 'cchip') { rcPanel(d.id); return true; }
-            let st = d.ty === 'clamp' ? (d.out > 0 ? '亮着' : '灭着') : '输出 ' + d.out + (indDev(d.id).pw ? '' : '没电');
+            let st = d.ty === 'clamp' ? (d.out > 0 ? '亮着' : '灭着') : '输出 ' + d.out + (indDev(d.id).pw ? '' : '，没电');
             return true;
         }
         function rcFreeIn(id, n) { let used = {}; (ind.base.sig || []).forEach(function (w) { if (w[2] === id) used[w[3]] = 1; }); for (let i = 0; i < n; i++) if (!used[i]) return i; return -1; }

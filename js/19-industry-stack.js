@@ -235,5 +235,5 @@
             return h + stkLaneTxt(S);
         }
         function stkLaneTxt(S) {
-            return (S.lanes || []).map(function (l) { let r = IND_RECIPES[l.i]; return '<div style="font-size:13px;">正在做：' + indOutTxt(r, l.n) + ' ' + Math.floor(l.t / r.time * 100) + '%' + (l.full ? '出料槽满了' : '') + '</div>'; }).join('');
+            return (S.lanes || []).map(function (l) { let r = IND_RECIPES[l.i]; return '<div style="font-size:13px;">正在做：' + indOutTxt(r, l.n) + ' ' + Math.floor(l.t / r.time * 100) + '%' + (l.full ? '，出料槽满了' : '') + '</div>'; }).join('');
         }

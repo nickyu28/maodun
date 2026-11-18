@@ -105,7 +105,7 @@
         // 确认窗：写清楚每种材料还几个
         function rpAsk(k, all) {
             if (!ind || !(ind.bag[k] > 0) || !rpCanDis(k)) return;
-            let cnt = all ? ind.bag[k] : 1, P = rpPlan(k, cnt), dur = all ? '' : '耐久 ' + rpPieces(k)[0] + ' / ' + mbMax0(k) + '';
+            let cnt = all ? ind.bag[k] : 1, P = rpPlan(k, cnt), dur = all ? '' : '，耐久 ' + rpPieces(k)[0] + ' / ' + mbMax0(k) + '';
             indPanelShow('rpask', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">拆' + (all ? ' ' + cnt + ' 个' : '') + indName(k) + dur + '？</div>' +
                 '<div style="margin-bottom:8px;">会还：' + rpOutTxt(P.out) + '</div>' +
                 '<div style="text-align:right;"><button style="' + IND_BTN + 'background:#e65100;" onclick="rpDo(\'' + k + '\',' + (all ? 1 : 0) + ')">拆</button><button style="' + IND_BTN + '" onclick="indPanelBench()">不拆了</button></div>');

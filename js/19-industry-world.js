@@ -99,7 +99,7 @@
             if (ind.panel === 'map') { indPanelClose(); return; }
             if (!(ind.bag.map > 0)) { indFlash('要带着地图，工作台：指南针 + 2 张纸'); return; }   // 任务 45：拿着才能看
             if (ind.where !== 'trip') { indFlash('远征里按 M 看地图'); return; }
-            indPanelShow('map', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">地图　<small style="color:#888;font-weight:normal;">走过的地方有颜色，绿圈是撤离点，方块是家，出生点，小点是发现的资源，黄叉是记号，点地图加、再点去掉，最多 8 个</small></div><canvas id="ind-map" width="300" height="300" style="width:min(80vw,300px);height:min(80vw,300px);display:block;margin:0 auto;border:1px solid #999;"></canvas><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+            { const a = '走过的地方有颜色，绿圈是撤离点，方块是家，出生点，小点是发现的资源，黄叉是记号，点地图加、再点去掉，最多 8 个'; indPanelShow('map', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">地图　<small style="color:#888;font-weight:normal;">' + (ind.map && ind.map.moon ? '走过的地方有颜色，黄叉是记号，点地图加、再点去掉，最多 8 个' : a) + '</small></div><canvas id="ind-map" width="300" height="300" style="width:min(80vw,300px);height:min(80vw,300px);display:block;margin:0 auto;border:1px solid #999;"></canvas><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>'); }
             wdMapDraw();
         }
         function wdMapDraw() {
@@ -285,7 +285,7 @@
         function wdPeelTxt() {
             let P = ind.peel; if (!P) return '';
             let need = wdPeelTime();
-            return '拔刺 ' + Math.min(99, Math.floor(P.p * 100)) + '%' + (P.q ? '还排着 ' + P.q + ' 个' : '') + (need ? '　拿着' + indName(indSel()) + '，' + Math.ceil((1 - P.p) * need) + ' 秒' : '　<b style="color:#c62828">停着：换上斧子、小刀、剪刀、钳子或仙人掌</b>');
+            return '拔刺 ' + Math.min(99, Math.floor(P.p * 100)) + '%' + (P.q ? '，还排着 ' + P.q + ' 个' : '') + (need ? '　拿着' + indName(indSel()) + '，' + Math.ceil((1 - P.p) * need) + ' 秒' : '　<b style="color:#c62828">停着：换上斧子、小刀、剪刀、钳子或仙人掌</b>');
         }
         const WD_TREE_NAME = { oak: '阔叶树', pine: '松树', palm: '椰子树' };
         function wdNodeHint(o) {
@@ -293,7 +293,7 @@
             if (o.key === 'oil') return ckOilHint(o);
             if (o.crack) return '裂纹岩<br><small>挖不动，得用 TNT 炸</small>';
             if (o.hard) return '硬岩<br><small>太硬，得炸：拿 2 份火药右键放下，退远点</small>';
-            if (o.key === 'vent_ng') return '天然气喷口<br><small>拿空钢瓶右键装一瓶；别点火' + (o.until ? '还冒 ' + Math.max(0, Math.round(o.until - ind.t)) + ' 秒' : '') + '</small>';
+            if (o.key === 'vent_ng') return '天然气喷口<br><small>拿空钢瓶右键装一瓶；别点火' + (o.until ? '，还冒 ' + Math.max(0, Math.round(o.until - ind.t)) + ' 秒' : '') + '</small>';
             if (o.tree) return WD_TREE_NAME[o.tree] + '，' + o.n + ' 木头<br><small>' + (indHard() && !tlCanChop() ? '空手砍不动，得有斧子或小刀' : '左键：砍，' + wdChopTool().need + ' 秒，站着别动') + '</small>';
             if (o.key === 'cactus') return '仙人掌：有刺<br><small>左键：采集，拿剪刀或稿子不扎手</small>';
             if (o.rock) return (o.black ? '黑石头' : '大石头') + ' ×' + o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：敲' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';

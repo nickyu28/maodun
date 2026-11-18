@@ -62,6 +62,6 @@
             if (!o.tree) return h;
             if (o.tree === 'pine') return h + '<br><small>右键：割松脂，还有 ' + trResinLeft(o) + ' 份，要小刀或斧子</small>';
             if (o.tree === 'rubber') return h + '<br><small>右键：割胶，还有 ' + (o.lx === undefined ? TR.latex : o.lx) + ' 份，要小刀或斧子</small>';
-            if (o.tree === 'palm') return h + '<br><small>空手右键：摇椰子' + (o.sh && !(o.pin && ind.t - o.sh >= TR.resinT) ? '摇过了' : '') + '</small>';
+            if (o.tree === 'palm') return h + '<br><small>空手右键：摇椰子' + (o.sh && !(o.pin && ind.t - o.sh >= TR.resinT) ? '，摇过了' : '') + '</small>';
             return h;
         };

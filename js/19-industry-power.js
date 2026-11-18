@@ -125,7 +125,7 @@
 
 // ── 时间加速器（任务 39）：6 米内的炉子和设备的计时 ×3（做东西、进出料、烧燃料、耗电都 ×3），两台重叠只算一次；反应堆、汽轮发电机、作物、动物不加速 ──
         Object.assign(IND_ITEMS_RAW, {
-            dev_accel: { name: '时间加速器', col: 0x00acc1, dev: 'accel', use: '放下接 24 V，旁边设备的时间 ×3，多耗电' }
+            dev_accel: { name: '时间加速器', col: 0x00acc1, dev: 'accel', use: '放下接 24 V，6 米内设备时间 ×3' }
         });
         Object.assign(IND_DEVS, { accel: { name: '时间加速器', col: 0x00acc1, rated: 24, minV: 18, draw: 16, size: [1.4, 1.5, 1.4] } });
         IND_CRAFT.push({ out: 'dev_accel', in: { steel: 16, brass: 8, wire: 80, glass_plate: 8, coil: 4, diamond: 2, 'uf6:0': 2, ingot_ge: 4, battery_li: 16 }, hard: true, off: true });

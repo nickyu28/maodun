@@ -4386,7 +4386,7 @@ async function enterExit(tab, key) {
             await T.eval(`labClear(); lab.bag = {}; labGive('coal', 3); labGive('sand', 2); labSel('coal'); true;`);
             await key('b');
             r = JSON.parse(await T.eval(`JSON.stringify({ p: lab.panel, txt: document.getElementById('lab-panel') ? document.getElementById('lab-panel').innerText : '' })`));
-            if (r.p !== 'bag' || !/煤（碳） ×3/.test(r.txt) || !/沙子 ×2/.test(r.txt) || !/2\/6/.test(r.txt)) bad.push('B 打开背包面板，写每样多少、几格 ' + JSON.stringify(r));
+            if (r.p !== 'bag' || !/煤，碳 ×3/.test(r.txt) || !/沙子 ×2/.test(r.txt) || !/2\/6/.test(r.txt)) bad.push('B 打开背包面板，写每样多少、几格 ' + JSON.stringify(r));
             await T.eval(`[].slice.call(document.querySelectorAll('#lab-panel button')).filter(function (b) { return b.innerText === '存进仓库'; })[1].click(); true;`);
             r = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, box: labSt().box, p: lab.panel })`));
             if (r.bag.sand || r.box.sand !== 2 || r.bag.coal !== 3 || r.p !== 'bag') bad.push('背包面板里存进仓库 ' + JSON.stringify(r));
@@ -4847,7 +4847,7 @@ async function enterExit(tab, key) {
             // 背包补快捷栏：4 种东西，快捷栏放满 3 个，第 4 个在背包；快捷栏第 1 格放完，第 4 个自动补到快捷栏
             await T.eval(`labClear(); lab.bag = {}; labGive('coal', 1); labGive('iron', 1); labGive('sand', 1); labGive('salt', 1); true;`);
             const h0 = await T.eval(`labBagHtml().replace(/<[^>]+>/g, '|').replace(/\\|+/g, '|')`);
-            if (!/1 煤（碳）×1.*2 铁块×1.*3 沙子×1.*4 食盐×1/.test(h0)) bad.push('界面应该是 1 煤 2 铁 3 沙 | 4 盐 ' + h0);
+            if (!/1 煤，碳×1.*2 铁块×1.*3 沙子×1.*4 食盐×1/.test(h0)) bad.push('界面应该是 1 煤 2 铁 3 沙 | 4 盐 ' + h0);
             await T.eval(`labSelIdx(0); labPut(true); true;`);
             const h1 = await T.eval(`labBagHtml().replace(/<[^>]+>/g, '|').replace(/\\|+/g, '|')`);
             if (!/1 铁块×1.*2 沙子×1.*3 食盐×1/.test(h1) || /煤/.test(h1)) bad.push('快捷栏第 1 格放完，背包里的东西应该补上来、不留空格 ' + h1);
@@ -5005,7 +5005,7 @@ async function enterExit(tab, key) {
             await T.eval(`labAdvance(LAB_T.glass + 0.5, 0.1); true;`);
             if (await T.eval(`lab.stove.items['b:melt'] !== 1`)) bad.push('烧够 5 秒应该得熔融食盐 ' + await T.eval(`JSON.stringify(lab.stove.items)`));
             const nm = JSON.parse(await T.eval(`JSON.stringify(['wire', 'bat', 'switch', 'bulb', 'resistor', 'motor', 'elec', 'booster', 'b:brine', 'b:melt', 'bat:42'].map(labName))`));
-            if (nm.join() !== '电线,电池,开关,灯泡,电阻,电动机,电解槽,升压器,盐水,熔融食盐,电池（剩 42 U）') bad.push('名字不对 ' + nm);
+            if (nm.join() !== '电线,电池,开关,灯泡,电阻,电动机,电解槽,升压器,盐水,熔融食盐,电池，剩 42 U') bad.push('名字不对 ' + nm);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await LBEXIT(T); await T.close();
             report('LB20 器材配方：8 种器材在合成台按文档配方做、材料不够不让做；灶台做盐水和熔融食盐', bad.length === 0, bad.join(' / '));
@@ -5764,7 +5764,7 @@ async function enterExit(tab, key) {
                 // 配方查询：搜"铁"能看到铁矿→铁锭和铁稿
                 await T.eval(`indPanelBook('铁'); true;`);
                 const bk = await T.eval(`document.getElementById('ind-book-list').innerText`);
-                if (!/铁矿×1 \+ 木炭×1 → 铁锭（烫）×1/.test(bk) || !/铁稿/.test(bk) || /小麦种子/.test(bk)) bad.push('配方查询搜"铁"不对 ' + bk.slice(0, 200));
+                if (!/铁矿×1 \+ 木炭×1 → 铁锭，烫×1/.test(bk) || !/铁稿/.test(bk) || /小麦种子/.test(bk)) bad.push('配方查询搜"铁"不对 ' + bk.slice(0, 200));
                 await T.eval(`indPanelClose(); true;`);
                 // 锡和青铜（A：铁矿要青铜稿，不再卡死）：锡只刷在山地、石稿挖；锡矿 232°C 15 秒出烫锡锭；3 铜锭 + 1 锡锭 950°C 30 秒出 4 青铜锭；青铜稿等级 2 挖铁矿；铁稿多拿 1 个
                 const tin = JSON.parse(await T.eval(`JSON.stringify({ where: Object.keys(IND_BIOMES).filter(function (b) { return IND_BIOMES[b].res.ore_sn; }), tool: IND_NODES.ore_sn.tool, give: IND_NODES.ore_sn.give, names: IND_TOOL_NAME.slice(0, 5), fe: IND_NODES.ore_fe.tool })`));
@@ -6290,7 +6290,7 @@ async function enterExit(tab, key) {
                 const kinds = ch0.kinds;
                 await T.eval(`indPickFurn({ ty: 'chest', o: ind.base.chests[0] }); true;`);
                 const held = await J(`{ keys: Object.keys(ind.bag), nm: Object.keys(ind.bag).map(indName), chests: ind.base.chests.length }`);
-                if (held.chests !== 0 || held.keys.length !== 1 || !/^inst:/.test(held.keys[0]) || held.nm[0] !== (kinds ? '仓库箱（装着 ' + kinds + ' 样）' : '仓库箱（空）')) bad.push('收起仓库箱不对（名字要写装着几样） ' + JSON.stringify(held) + ' 应该 ' + kinds);
+                if (held.chests !== 0 || held.keys.length !== 1 || !/^inst:/.test(held.keys[0]) || held.nm[0] !== (kinds ? '仓库箱，装着 ' + kinds + ' 样' : '仓库箱，空')) bad.push('收起仓库箱不对（名字要写装着几样） ' + JSON.stringify(held) + ' 应该 ' + kinds);
                 await face(5, 10, 5, 4);
                 await T.eval(`indSelect('${held.keys[0]}'); indUse(); true;`);
                 const back = await J(`{ chests: ind.base.chests.map(function (c) { return [c.big, Object.keys(c.items).length, Math.round(c.x * 10) / 10, Math.round(c.z * 10) / 10]; }), bag: Object.keys(ind.bag).length, box: Object.keys(ind.base.box).length }`);
@@ -6381,7 +6381,7 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.bag = {}; indPickFurn({ ty: 'chest', o: ind.base.chests[1] }); indSave(); true;`);
                 await until(T, `IND_SAVING === 0`, 5000);
                 const sv2 = await T.eval(`new Promise(function (r) { indLoad(function (b) { IND_CTX_BASE = b; let k = Object.keys(b.bag)[0]; let nm = k && IND_ITEMS[k] && IND_ITEMS[k].name; IND_CTX_BASE = null; r(JSON.stringify({ k: k, nm: nm, carried: Object.keys(b.carried).length, chests: b.chests.length })); }); })`).then(JSON.parse);
-                if (!sv2.k || !/^inst:/.test(sv2.k) || !/仓库箱（/.test(sv2.nm) || sv2.carried < 1 || sv2.chests !== 1) bad.push('搬着的箱子存档读不回来 ' + JSON.stringify(sv2));
+                if (!sv2.k || !/^inst:/.test(sv2.k) || !/仓库箱，/.test(sv2.nm) || sv2.carried < 1 || sv2.chests !== 1) bad.push('搬着的箱子存档读不回来 ' + JSON.stringify(sv2));
                 // ── 泥土和农田 ──
                 await T.eval(`${HIDE} indGoTrip(2024); ind.bag = {}; ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodeDirty = true; (function(){ for (let r = 3; r < 60; r += 3) for (let a = 0; a < 6.3; a += 0.5) { let x = Math.cos(a) * r, z = Math.sin(a) * r; if (indBiome(ind.map, x, z) === 'plain' && indHeight(ind.map, x, z) > 0.5 && indHeight(ind.map, x + 2, z) > 0.5 && indBiome(ind.map, x + 2, z) === 'plain') { indTeleport(x, z); indLookAt(x + 10, z); return; } } })(); indAction(); indAdvance(3.2); true;`);
                 if ((await T.eval(`ind.bag.dirt || 0`)) !== 1) bad.push('空手对着平原地面左键挖 3 秒应该得 1 份泥土 ' + await T.eval(`JSON.stringify([ind.bag, ind.ch, ind.panel, ind.where, ind.dead, ind.over, indAim(), typeof __fl !== 'undefined' ? __fl.slice(-3) : 0, ind.p])`));
@@ -6446,7 +6446,7 @@ async function enterExit(tab, key) {
                 const near = (a, b, e) => Math.abs(a - b) <= (e === undefined ? 0.01 : e);
                 // 钢瓶的名字和压力
                 const nm = JSON.parse(await T.eval(`JSON.stringify([indName('cyl'), indName('cyl:h2=20'), indName('cyl:h2=3,o2=1'), indName('cyl:co2=60'), indName('cyl:co2=57'), indName('cyl:co2=58'), !!IND_ITEMS['cyl:h2=61'], !!IND_ITEMS['cyl:xx=3'], indCylP({ h2: 20 }, 20), indCylP({ h2: 20 }, 600)])`));
-                if (nm[0] !== '钢瓶（空）' || nm[1] !== '钢瓶（氢气 20 份，20 个大气压）' || nm[2] !== '钢瓶（氢气 3、氧气 1 份，4 个大气压）') bad.push('钢瓶名字不对 ' + JSON.stringify(nm.slice(0, 3)));
+                if (nm[0] !== '钢瓶，空' || nm[1] !== '钢瓶，氢气 20 份，20 个大气压' || nm[2] !== '钢瓶，氢气 3、氧气 1 份，4 个大气压') bad.push('钢瓶名字不对 ' + JSON.stringify(nm.slice(0, 3)));
                 if (!/液态二氧化碳 60 份，60 个大气压/.test(nm[3]) || /液态/.test(nm[4]) || !/液态二氧化碳 58 份/.test(nm[5])) bad.push('液态二氧化碳判断不对 ' + JSON.stringify(nm.slice(3, 6)));
                 if (nm[6] || nm[7]) bad.push('超过容量或乱写的钢瓶也认');
                 if (!near(nm[8], 20) || !near(nm[9], 20 * 873 / 293)) bad.push('压力公式不对 ' + nm[8] + ' / ' + nm[9]);
@@ -6699,7 +6699,7 @@ async function enterExit(tab, key) {
                 const stoveSet = (items, fire, temp) => T.eval(`ind.base.stove = { items: ${JSON.stringify(items)}, out: {}, fuel: 3000, fire: ${fire}, temp: ${temp}, cook: null, spout: [] }; window.__fl = []; true;`);
                 // 名字
                 const nm = await J(`[indName('water_raw'), indName('water_raw@jar'), indName('water_boiled@fe'), indName('milk@cu'), indName('water_raw', true), indName('bucket'), indName('jar'), indName('bucket_fe'), indName('bucket_cu'), !!IND_ITEMS['water_raw@wood'], !!IND_ITEMS['sand@jar'], IND_ITEMS['water_raw@jar'].eat.back, IND_ITEMS['water_raw'].eat.back, IND_ITEMS['radish_soup@cu'].eat.back]`);
-                if (nm.slice(0, 9).join() !== '生水（木桶）,生水（陶罐）,开水（铁桶）,牛奶（黄铜桶）,生水,木桶,陶罐,铁桶,黄铜桶' || nm[9] || nm[10] || nm[11] !== 'jar' || nm[12] !== 'bucket' || nm[13] !== 'bucket_cu') bad.push('名字或还什么桶不对 ' + JSON.stringify(nm));
+                if (nm.slice(0, 9).join() !== '生水木桶,生水陶罐,开水铁桶,牛奶黄铜桶,生水,木桶,陶罐,铁桶,黄铜桶' || nm[9] || nm[10] || nm[11] !== 'jar' || nm[12] !== 'bucket' || nm[13] !== 'bucket_cu') bad.push('名字或还什么桶不对 ' + JSON.stringify(nm));
                 // 做：陶罐在灶台（600°C 以上，20 秒，悠闲也行）；铁桶、黄铜桶在工作台（硬核）
                 await stoveSet({ clay: 2 }, 1, 200); await T.eval(`indAdvance(30); true;`);
                 if (await T.eval(`!!ind.base.stove.out.jar`)) bad.push('200°C 也烧出陶罐');
@@ -6719,7 +6719,7 @@ async function enterExit(tab, key) {
                 if (put.items.water_raw || put.items.bucket || put.items['water_raw@jar'] !== 1 || put.fl.filter((t) => t === '木桶不能上火').length !== 2) bad.push('木桶不能上火 ' + JSON.stringify(put));
                 // 水池接水：桶是什么材质，水就装在什么材质里
                 const pool = await J(`{ x: IND_BASE_ST.pool.x, z: IND_BASE_ST.pool.z }`);
-                for (const [empty, full, label] of [['bucket', 'water_raw', '生水（木桶）'], ['jar', 'water_raw@jar', '生水（陶罐）'], ['bucket_fe', 'water_raw@fe', '生水（铁桶）'], ['bucket_cu', 'water_raw@cu', '生水（黄铜桶）']]) {
+                for (const [empty, full, label] of [['bucket', 'water_raw', '生水木桶'], ['jar', 'water_raw@jar', '生水陶罐'], ['bucket_fe', 'water_raw@fe', '生水铁桶'], ['bucket_cu', 'water_raw@cu', '生水黄铜桶']]) {
                     await T.eval(`ind.bag = { '${empty}': 1 }; indTeleport(${pool.x}, ${pool.z + 3.5}); indLookAt(${pool.x}, ${pool.z}); indSelect('${empty}'); indUse(); true;`);
                     const r = await J(`{ bag: ind.bag, nm: Object.keys(ind.bag).map(indName) }`);
                     if (r.bag[full] !== 1 || r.bag[empty] || r.nm[0] !== label) bad.push(empty + ' 接水不对 ' + JSON.stringify(r));
@@ -7765,7 +7765,7 @@ async function enterExit(tab, key) {
                 await T.eval(`${HIDE} indSetRule('hard'); let S = ind.base.surv; S.food = 100; S.water = 100; S.temp = 37; S.hp = 100; S.energy = 100; ind.bag = {}; window.__fl = []; indFlash = function (t) { __fl.push(t); }; ind.base.devs = []; true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const d = await J(`{ fuel: IND_ITEMS.oil.fuel, coal: IND_ITEMS.coal.fuel, jar: IND_ITEMS['oil@jar'].fuel, fe: IND_ITEMS['oil@fe'].fuel, cu: IND_ITEMS['oil@cu'].fuel, base: IND_CONT_BASES.indexOf('oil') >= 0, later: IND_ITEMS_RAW.oil.useLater || null, nm: [indName('oil'), indName('oil@jar'), indName('oil@fe'), indName('oil@cu')], use: IND_ITEMS.oil.use, node: !!IND_NODES.oil, desert: IND_BIOMES.desert.res.oil, lab: [LAB_FIXED.oil.name, LAB_FIXED.oil.col === IND_ITEMS_RAW.oil.col] }`);
-                if (d.fuel !== 250 || d.coal !== 150 || d.jar !== 250 || d.fe !== 250 || d.cu !== 250 || !d.base || d.later || !d.node || !d.desert || d.lab[0] !== '石油' || !d.lab[1] || d.nm.join() !== '石油（木桶）,石油（陶罐）,石油（铁桶）,石油（黄铜桶）' || !/桶/.test(d.use)) bad.push('石油的数据不对（桶装、一桶 600、四种材质、不再标后面的阶段、油点、实验室一致） ' + JSON.stringify(d));
+                if (d.fuel !== 250 || d.coal !== 150 || d.jar !== 250 || d.fe !== 250 || d.cu !== 250 || !d.base || d.later || !d.node || !d.desert || d.lab[0] !== '石油' || !d.lab[1] || d.nm.join() !== '石油木桶,石油陶罐,石油铁桶,石油黄铜桶' || !/桶/.test(d.use)) bad.push('石油的数据不对（桶装、一桶 600、四种材质、不再标后面的阶段、油点、实验室一致） ' + JSON.stringify(d));
                 // ── 油点：空桶右键装一桶；存量 4 桶；补得回来；空手装不了 ──
                 await T.eval(`indGoTrip(2024); ind.nodes.forEach(function (o) { o.dead = true; }); ind.wild = []; ind.nodes.push({ key: 'oil', x: 0, z: -9, y: 0, n: 4, max: 4, t0: 0, seed: 'seed_wheat', dead: false }); ind.nodeDirty = true; ind.k = {}; indTeleport(0, -6.5); indLookAt(0, -9); ind.bag = {}; window.__fl = []; indAction(); true;`);
                 if (!(await T.eval(`!ind.bag.oil && __fl.some(function (t) { return /拿桶/.test(t); })`))) bad.push('空手点油点要提示得拿桶 ' + await T.eval(`JSON.stringify(__fl)`));
@@ -8277,7 +8277,7 @@ async function enterExit(tab, key) {
                 await setup(80, 80);
                 await T.eval(`for (let i = 0; i < 18; i++) ind.base.animals.push({ k: 'cow', x: -5 - i * 0.2, z: 5, food: 60, woolAt: 0, milkAt: 0 }); window.__fl = []; true;`);
                 await feed(0);
-                if (!(await T.eval(`ind.base.animals.length === 20 && !(ind.base.animals[0].love > 0) && ind.bag.wheat === 6 && __fl.some(function (t) { return /圈满了（20 只）/.test(t); })`))) bad.push('满 20 只该提示圈满了、不扣吃的 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
+                if (!(await T.eval(`ind.base.animals.length === 20 && !(ind.base.animals[0].love > 0) && ind.bag.wheat === 6 && __fl.some(function (t) { return /圈满了，20 只/.test(t); })`))) bad.push('满 20 只该提示圈满了、不扣吃的 ' + await T.eval(`JSON.stringify([ind.bag, __fl])`));
                 // ── 6 出远征：不繁殖不长大 ──
                 await setup(80, 80);
                 await T.eval(`ind.base.animals.push({ k: 'sheep', x: 3, z: 3, food: 80, born: ind.base.clock - 100, woolAt: 0, milkAt: 0, love: 0, cd: 0, brk: 0 }); ind.base.animals[0].brk = 10; ind.base.animals[0].bx = 0; ind.base.animals[0].bz = 0; true;`);
@@ -9108,7 +9108,7 @@ async function enterExit(tab, key) {
                 if (!k.shown) bad.push('窑面板该写"这次出：" ' + JSON.stringify(k));
                 else {
                     // 面板写的每样东西 ×N 要等于实际拿到的
-                    const items = k.shown.replace(/（\d+ 份）/, '').split('、').map(function (x) { let m = x.trim().match(/^(.*) ×(\d+)$/); return m ? [m[1], +m[2]] : null; });
+                    const items = k.shown.replace(/，\d+ 份/, '').split('、').map(function (x) { let m = x.trim().match(/^(.*) ×(\d+)$/); return m ? [m[1], +m[2]] : null; });
                     const real = await J(`(function(){ let c = ind.base.cookers[0], o = {}; Object.keys(c.out).forEach(function (k) { o[indName(k, true)] = c.out[k]; }); return o; })()`);
                     const diff = items.filter(function (it) { return !it || real[it[0]] !== it[1]; });
                     if (diff.length || items.length !== Object.keys(real).length || !/3 份/.test(k.shown)) bad.push('面板写的产量要等于实际拿到的 ' + k.shown + ' / ' + JSON.stringify(real));
@@ -10257,7 +10257,7 @@ async function enterExit(tab, key) {
                 if (!(r.a.ice === 2 && r.a.t && r.b.m === 2 && r.b.rp === 2 && r.m === 0 && r.rc === 2)) bad.push('冷藏箱有冰不坏（一块一天）、没冰的箱子坏、冰没了接着坏 ' + JSON.stringify(r));
                 // 冰箱：通电不坏、断电接着坏；制冰
                 r = await run(`let d = { id: ++B.dseq, ty: 'fridge', x: 5, z: 5, on: true, pw: true, items: { meat_roast: 2 }, age: {} }, e = { id: ++B.dseq, ty: 'fridge', x: 8, z: 5, on: true, pw: false, items: { meat_roast: 2 }, age: {} }; B.devs = [d, e];
-                    clStep(6000, false, true); ind.bag = {}; let ok = clDevAct(d), tx = (document.getElementById('ind-panel') || { innerText: '' }).innerText; indPanelClose(); return { a: d.items.meat_roast || 0, ar: d.items.rotfood || 0, b: e.items.meat_roast || 0, br: e.items.rotfood || 0, ok: ok, tx: /冰箱（通电）/.test(tx) };`);
+                    clStep(6000, false, true); ind.bag = {}; let ok = clDevAct(d), tx = (document.getElementById('ind-panel') || { innerText: '' }).innerText; indPanelClose(); return { a: d.items.meat_roast || 0, ar: d.items.rotfood || 0, b: e.items.meat_roast || 0, br: e.items.rotfood || 0, ok: ok, tx: /冰箱，通电/.test(tx) };`);
                 if (!(r.a === 2 && r.ar === 0 && r.b === 0 && r.br === 2 && r.ok === true && r.tx)) bad.push('冰箱通电不坏、断电接着坏、点冰箱开面板 ' + JSON.stringify(r));
                 r = await run(`let d = { id: ++B.dseq, ty: 'fridge', x: 5, z: 5, on: true, pw: true, items: { water_raw: 1 }, age: {} }, e = { id: ++B.dseq, ty: 'fridge', x: 8, z: 5, on: true, pw: false, items: { water_raw: 1 }, age: {} }; B.devs = [d, e];
                     clStep(30, false, true); let half = d.items.ice || 0; clStep(31, false, true); return { half: half, ice: d.items.ice || 0, bk: d.items.bucket || 0, w: d.items.water_raw || 0, eice: e.items.ice || 0 };`);
@@ -11738,7 +11738,7 @@ async function enterExit(tab, key) {
                 const lab = await T.eval(`ind.badges && ind.badges.cookstove && ind.badges.cookstove.mesh.visible ? ind.badges.cookstove.text : ''`);
                 if (!/^面包 ×12　(4\d|5\d)%$/.test(lab)) bad.push('灶台上方的进度字不对 ' + lab);
                 await T.eval(`indPanelStove(); true;`);
-                if (!/正在做：面包 ×12（4 份）/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('面板"正在做"没写份数 ' + (await T.eval(`document.getElementById('ind-panel').innerText`)).slice(0, 80));
+                if (!/正在做：面包 ×12，4 份/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('面板"正在做"没写份数 ' + (await T.eval(`document.getElementById('ind-panel').innerText`)).slice(0, 80));
                 await T.eval(`indPanelClose(); indAdvance(21); true;`);
                 const b4 = JSON.parse(await T.eval(`JSON.stringify({ out: ind.base.stove.out, items: ind.base.stove.items, fl: __fl })`));
                 if (b4.out.bread !== 12 || b4.out.bucket !== 4 || b4.items.flour !== 3 || b4.items.salt !== 1) bad.push('一炉 4 份不对 ' + JSON.stringify(b4));

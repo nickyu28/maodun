@@ -111,7 +111,7 @@
             if (key === 'p') return '带正电；质子数 = 电子数才能拼原子';
             if (key === 'n') return '不带电；决定是哪种同位素';
             if (key === 'e') return '带负电；要和质子一样多';
-            if (d.pack) return '粒子包：' + d.pack[0] + ' 质子 + ' + d.pack[0] + ' 电子' + (d.pack[1] ? ' + ' + d.pack[1] + ' 中子' : '') + '右键拆开';
+            if (d.pack) return '粒子包：' + d.pack[0] + ' 质子 + ' + d.pack[0] + ' 电子' + (d.pack[1] ? ' + ' + d.pack[1] + ' 中子' : '') + '，右键拆开';
             if (d.atom) return '原子：质子 ' + d.atom[0] + '，中子 ' + d.atom[1] + '，电子 ' + d.atom[0];
             if (LAB_DEV_DESC[key]) return LAB_DEV_DESC[key];
             if (/^bat:/.test(key)) return LAB_DEV_DESC.bat;
@@ -1732,7 +1732,7 @@
             let on = Object.keys(S.items).map(function (k) { return labItemRow(k, S.items[k], '<button style="' + LAB_BTN2 + '" onclick="labStoveTake(\'' + k + '\')">拿回</button>'); }).join('') || '<div style="color:#888;">台面上没有东西</div>';
             let bag = Object.keys(lab.bag).map(function (k) { return labItemRow(k, lab.bag[k], '<button style="' + LAB_BTN2 + '" onclick="labStovePut(\'' + k + '\')">放 1 个</button><button style="' + LAB_BTN2 + '" onclick="labStovePut(\'' + k + '\',true)">全放</button>'); }).join('') || '<div style="color:#888;">身上没有东西</div>';
             let recs = LAB_RECIPES.filter(function (r) { return r.where === '灶台'; }).map(function (r) {
-                return '<div style="color:#555;">' + r.name + '：' + Object.keys(r.in).map(function (k) { return labName(k) + '×' + r.in[k]; }).join(' + ') + ' → ' + Object.keys(r.out).map(function (k) { return labName(k) + '×' + r.out[k]; }).join(' + ') + (r.time ? '烧 ' + r.time + ' 秒' : '') + '</div>';
+                return '<div style="color:#555;">' + r.name + '：' + Object.keys(r.in).map(function (k) { return labName(k) + '×' + r.in[k]; }).join(' + ') + ' → ' + Object.keys(r.out).map(function (k) { return labName(k) + '×' + r.out[k]; }).join(' + ') + (r.time ? '，烧 ' + r.time + ' 秒' : '') + '</div>';
             }).join('');
             let fuelOn = Object.keys(S.fuel || {}).map(function (k) { return labItemRow(k, S.fuel[k], '<button style="' + LAB_BTN2 + '" onclick="labStoveTakeFuel(\'' + k + '\')">拿回</button>'); }).join('') || '<div style="color:#888;">燃料格是空的</div>';
             let bagF = Object.keys(lab.bag).filter(function (k) { return LAB_STFUEL[k]; }).map(function (k) { return labItemRow(k, lab.bag[k], '<button style="' + LAB_BTN2 + '" onclick="labStovePutFuel(\'' + k + '\')">当燃料 1 个</button><button style="' + LAB_BTN2 + '" onclick="labStovePutFuel(\'' + k + '\',true)">全当燃料</button>'); }).join('');

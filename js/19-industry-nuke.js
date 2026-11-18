@@ -22,7 +22,7 @@
 
         // ── 物品 ──
         Object.assign(IND_ITEMS_RAW, {
-            fluorite: { name: '萤石', col: 0x80cbc4 }, ore_pb: { name: '方铅矿', col: 0x546e7a, use: '加木炭或煤进炉子，800°C 炼成铅锭，出硫' },
+            fluorite: { name: '萤石', col: 0x80cbc4 }, ore_pb: { name: '方铅矿', col: 0x546e7a, use: '加木炭／煤／焦炭进炉子，800°C 炼铅' },
             ingot_pb: { name: '铅锭', col: 0x78909c }, hot_pb: { name: '铅锭，烫', col: 0xff8a65, hot: 'ingot_pb', needTool: 'tongs' },
             b_so2: { name: '二氧化硫瓶', col: 0xfff59d, poison: '二氧化硫', use: '做硫酸，放掉是毒气' },
             b_h2so4: { name: '硫酸瓶', col: 0xffee58, corrosive: true },
@@ -391,7 +391,7 @@
         function nkBlastHurt(x, z) {
             if (!indHard()) return;
             let d = Math.hypot(ind.p.x - x, ind.p.z - z), dmg = indBoomDmg(d, NK.bombR, NK.bombNear, NK.bombClose) * (1 - indBlastCut());
-            if (dmg > 0) indHurt(dmg, 'boom', '原子弹，离爆炸点 ' + d.toFixed(0) + ' 米' + (indBlastCut() > 0 ? '穿了防爆装备' : ''), true);
+            if (dmg > 0) indHurt(dmg, 'boom', '原子弹，离爆炸点 ' + d.toFixed(0) + ' 米' + (indBlastCut() > 0 ? '，穿了防爆装备' : ''), true);
         }
         // 远征图上的地上东西（炸开的矿）：和基地的 base.ground 一个样
         function nkTripItemsSync() {

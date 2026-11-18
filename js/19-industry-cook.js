@@ -176,7 +176,7 @@
         function ckOilHint(o) {
             if (ckOilStock(o) < 1 && o.dry) return '干井　这个油点采完了，一个油点一共 ' + CK.oilTotal + ' 桶，去别处找';
             let n = ckOilStock(o), left = n < o.max ? '　下一桶还要 ' + Math.max(1, Math.ceil(CK.oilRegen - (ind.t - o.t0))) + ' 秒' : '';
-            return '油点　剩 ' + n + ' 桶' + left + '<br><small>' + (n > 0 ? '拿空桶右键：装一桶' : '空了，过一会儿会冒出来') + '空手装不了</small>';
+            return '油点　剩 ' + n + ' 桶' + left + '<br><small>' + (n > 0 ? '拿空桶右键：装一桶' : '空了，过一会儿会冒出来') + '，空手装不了</small>';
         }
 
         // ── 踹炉子（硬核，按 V）──
