@@ -149,6 +149,7 @@ async function openTab(chrome, url, opts) {
             const d = msg.params.exceptionDetails;
             errors.push('exception: ' + ((d.exception && d.exception.description) || d.text).split('\n').slice(0, 3).join(' | '));
         }
+        if (msg.method === 'Inspector.targetCrashed' || msg.method === 'Runtime.executionContextsCleared' || (msg.method === 'Page.frameNavigated' && !msg.params.frame.parentId)) process.stderr.write('[TAB] ' + msg.method + ' ' + ((msg.params.frame && msg.params.frame.url) || '') + '\n');   // 诊断：页面崩了或被刷新会在日志里留一行
         if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {
             errors.push('console.error: ' + JSON.stringify(msg.params.args.map((a) => a.value || a.description)).slice(0, 300));
         }
