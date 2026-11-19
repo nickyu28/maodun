@@ -3298,13 +3298,15 @@
         }
         // 设备、燃料棒、电池不是原料，炉子面板里没有「放」按钮，也放不进去（手摇发电机别放进大窑，任务 61）
         function indNotForStove(k) { let d = IND_ITEMS[k]; return !d || (!!d.dev || !!d.cellU || k === 'battery' || k === 'rod_spent' || k === 'rod_dep' || k === 'rod_irr' || /^rod:/.test(k) || (typeof nkRod === 'function' && !!nkRod(k))); }
+        // 水装在木桶里不能上火：告诉玩家换什么装、从哪来
+        function indWoodHint() { return '木桶不能上火，换陶罐、铁桶或黄铜桶装。陶罐用黏土烧，铁桶、黄铜桶在工作台做'; }
         function indStovePut(k, n) {
             if (!ind || !ind.bag[k]) return;
             if (k === 'gunpowder') { nkPowderInCooker(indCookCur()); return; }   // 火药放进炉子就炸
             if (indNotForStove(k)) { indFlash('这个不能放进炉子'); return; }
             let S = indCookCur().C, kc = indContOf(k);
             if (indHard() && kc && kc.base === 'oil') { indFlash('油桶得用进料漏斗：工作台做一个装在炉子旁，拿桶对着漏斗右键倒'); return; }   // 硬核：油桶不能直接放进炉子
-            if (kc && kc.mat === 'wood') { indFlash('木桶不能上火'); return; }
+            if (kc && kc.mat === 'wood') { indFlash(indWoodHint()); return; }
             if (indHard() && kc && kc.empty) { indFlash('空桶不用放进炉子'); return; }   // 装水、牛奶、汤的桶做菜还要放，不拦   // 硬核：油桶和空桶不能直接放进炉子（装水、牛奶、汤的桶做菜还要放，不拦）
             if (!S.items[k] && Object.keys(S.items).length >= IND_STOVE_CAP) { indFlash('放不下了'); return; }
             let t = indBagDel(k, n || 1); S.items[k] = (S.items[k] || 0) + t;
@@ -3326,7 +3328,10 @@
                     if (Object.keys(r.in).every(function (k) { return indBagFire(k) + indHave(pool, k) >= r.in[k]; })) ri = i;
                 }
             }
-            if (ri < 0) { indFlash('背包里的原料凑不出配方'); return; }
+            if (ri < 0) {
+                let woodOnly = IND_RECIPES.some(function (r) { return !((r.hard && !indHard()) || (K.only && (r.cls || 'food') !== K.only)) && Object.keys(r.in).every(function (k) { return IND_CONT_BASES.indexOf(k) >= 0 ? indHave(ind.bag, k) + indHave(pool, k) >= r.in[k] : indBagFire(k) + indHave(pool, k) >= r.in[k]; }); });
+                indFlash(woodOnly ? indWoodHint() : '背包里的原料凑不出配方'); return;
+            }
             let r = IND_RECIPES[ri], N = indBatchCap(K, r), hotPer = 0;
             Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) hotPer += r.out[k]; });
             if (hotPer) N = Math.min(N, Math.floor(IND_SPOUT_CAP * 50 / hotPer));

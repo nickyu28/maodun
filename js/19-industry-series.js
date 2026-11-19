@@ -159,7 +159,7 @@
         // 任务 137：皮革。皮 + 草木灰 + 一桶水在灶台低温熏 30 秒（悠闲工作台直接做）。风箱、皮鞋、自行车座和轮子原地改成要皮革，人造革的备选还是原来的数量；新增皮背包 +9 格
         (function () {
             IND_ITEMS_RAW.leather = { name: '皮革', col: 0x8d5a3b, use: '皮鞣过的，做风箱、皮背包、皮鞋、自行车座和轮子' };
-            IND_ITEMS_RAW.hide.use = '鞣成皮革才好用：皮 + 草木灰 + 一桶水，灶台低温熏';
+            IND_ITEMS_RAW.hide.use = '鞣成皮革才好用：皮 + 草木灰 + 一桶水，灶台低温熏。水要装在陶罐、铁桶或黄铜桶里，木桶不能上火';
             IND_RECIPES.push({ in: { hide: 1, ash: 1, water_raw: 1 }, out: { leather: 1, bucket: 1 }, minT: 60, time: 30, burnT: 250, cls: 'bulk', hard: true, pri: true });   // 小火 200°C 熏不会焦
             IND_CRAFT.push({ out: 'leather', in: { hide: 1, ash: 1 }, casual: true });
             IND_CRAFT.forEach(function (r) { if (r.in && r.in.hide && !r.leather && !r.fix && !r.poison && /^(bellows|shoe_leather|wheel|seat)$/.test(r.out)) { r.in = Object.keys(r.in).reduce(function (o, k) { o[k === 'hide' ? 'leather' : k] = r.in[k]; return o; }, {}); } });

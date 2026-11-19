@@ -6717,7 +6717,7 @@ async function enterExit(tab, key) {
                 // 木桶不能上火（空的、装了东西的都不行）
                 await stoveSet({}, 0, 20); await T.eval(`ind.bag = { water_raw: 1, bucket: 1, 'water_raw@jar': 1 }; indStovePut('water_raw', 1); indStovePut('bucket', 1); indStovePut('water_raw@jar', 1); indPanelClose(); true;`);
                 const put = await J(`{ items: ind.base.stove.items, fl: __fl }`);
-                if (put.items.water_raw || put.items.bucket || put.items['water_raw@jar'] !== 1 || put.fl.filter((t) => t === '木桶不能上火').length !== 2) bad.push('木桶不能上火 ' + JSON.stringify(put));
+                if (put.items.water_raw || put.items.bucket || put.items['water_raw@jar'] !== 1 || put.fl.filter((t) => t.indexOf('木桶不能上火，换陶罐、铁桶或黄铜桶装') === 0).length !== 2) bad.push('木桶不能上火 ' + JSON.stringify(put));
                 // 水池接水：桶是什么材质，水就装在什么材质里
                 const pool = await J(`{ x: IND_BASE_ST.pool.x, z: IND_BASE_ST.pool.z }`);
                 for (const [empty, full, label] of [['bucket', 'water_raw', '生水木桶'], ['jar', 'water_raw@jar', '生水陶罐'], ['bucket_fe', 'water_raw@fe', '生水铁桶'], ['bucket_cu', 'water_raw@cu', '生水黄铜桶']]) {
@@ -15082,6 +15082,27 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND208')) {
+            // IND208 皮革熏制：水只在木桶里时，放进去和一键放满都提示换陶罐、铁桶或黄铜桶；有陶罐水就能放满；皮的说明里写了
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (c) => JSON.parse(await T.eval(`JSON.stringify((function(){ ${c} })())`));
+                const r = await J(`indGoBase(null); let B = ind.base; B.rule = 'hard'; let o = {}, fl = []; let old = indFlash; indFlash = function (t) { fl.push(t); };
+                    ind.bag = { hide: 1, ash: 1, water_raw: 1 }; B.stove.items = {}; indPanelStove(); indStoveFill(); o.a = fl.pop() || '';
+                    ind.bag = { hide: 1, ash: 1, 'water_raw@jar': 1 }; B.stove.items = {}; indStoveFill(); o.b = JSON.stringify(B.stove.items);
+                    o.use = IND_ITEMS.hide.use; indFlash = old; return o;`);
+                if (r.a.indexOf('木桶不能上火，换陶罐、铁桶或黄铜桶装') !== 0) bad.push('木桶水一键放满的提示 ' + JSON.stringify(r));
+                if (!/water_raw@jar/.test(r.b)) bad.push('陶罐水能放满 ' + JSON.stringify(r));
+                if (r.use.indexOf('木桶不能上火') < 0) bad.push('皮的说明 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND208 皮革熏制：木桶水的提示、陶罐水能放满、说明里写了', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (want('IND207')) {
