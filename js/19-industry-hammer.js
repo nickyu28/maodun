@@ -18,7 +18,7 @@
             HMR.order.forEach(function (k) {
                 TL_TOOL[k] = { kind: 'hammer', tier: HMR.tier[k], dura: HMR.dura[k], back: HMR.back[k] };
                 IND_ITEMS_RAW['broken_' + k] = { name: '坏了的' + HMR.name[k], col: 0x616161, use: '工作台：回收一半主料' };
-                IND_CRAFT.push({ out: HMR.back[k], n: 1, in: { ['broken_' + k]: 1 }, hard: true });
+                IND_CRAFT.push({ out: HMR.back[k], n: 1, in: { ['broken_' + k]: 1 }, hard: true, off: HMR.tier[k] !== 'stone' });   // 金属的坏锤子不在工作台回收（跟别的金属工具一样放进炉子熔）
             });
             if (typeof TL_KIND_NAME !== 'undefined') TL_KIND_NAME.hammer = '锤子';
             IND_CRAFT.push({ out: 'hammer_bronze', in: { bronze: 2, handle: 1 }, need: 'hammer', hard: true }, { out: 'hammer_steel', in: { steel: 2, handle: 1 }, need: 'hammer', hard: true });
