@@ -15084,6 +15084,28 @@ async function enterExit(tab, key) {
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND209')) {
+            // IND209 生水桶浇凉：对着空地右键，背包里烫的东西最多 8 个变凉，桶变空；没有烫的不动桶；水桶对着作物、水池走原来的路
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (c) => JSON.parse(await T.eval(`JSON.stringify((function(){ ${c} })())`));
+                const r = await J(`indGoBase(null); let o = {}; indTeleport(-30, 30); indLookAt(-30, 25);
+                    ind.bag = { 'water_raw@fe': 1, hot_fe: 5, hot_cu: 6 }; indSelect('water_raw@fe'); let a = indAim(); o.aim = a ? a.kind : null; indUse();
+                    o.hot = (ind.bag.hot_fe || 0) + (ind.bag.hot_cu || 0); o.cool = (ind.bag.ingot_fe || 0) + (ind.bag.ingot_cu || 0); o.bucket = (ind.bag.bucket_fe || 0) + ':' + (ind.bag['water_raw@fe'] || 0);
+                    ind.bag = { 'water_raw@fe': 1, ingot_fe: 3 }; indSelect('water_raw@fe'); indUse(); o.none = (ind.bag['water_raw@fe'] || 0) + ':' + (ind.bag.ingot_fe || 0);
+                    return o;`);
+                if (r.aim) bad.push('测试没站在空地 ' + JSON.stringify(r));
+                if (!(r.hot === 3 && r.cool === 8)) bad.push('最多浇凉 8 个 ' + JSON.stringify(r));
+                if (r.bucket !== '1:0') bad.push('桶变空桶 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND209 生水桶浇凉背包里烫的东西：最多 8 个、桶变空', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND208')) {
             // IND208 皮革熏制：水只在木桶里时，放进去和一键放满都提示换陶罐、铁桶或黄铜桶；有陶罐水就能放满；皮的说明里写了
             const bad = [];

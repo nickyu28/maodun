@@ -1114,7 +1114,7 @@
             if (base.lostNew) { let nn = base.lostNew; setTimeout(function () { if (ind) indFlash('有 ' + nn + ' 件东西认不出来，先放在遗失物里'); }, 1800); delete base.lostNew; }
             if (typeof indTutMaybe === 'function' && indTutMaybe(base)) { } else if (!base.rule) indAskRule();
             else if (base.sawGoal === false) indGoalShow();
-            else if (gState.control !== 'pad') indFlash('左键，或 F，采集／拿／种／打开，右键 吃喝／浇水／接水，Q 放下，1～0 选快捷栏，E 背包，Shift 跑');
+            else if (gState.control !== 'pad') indFlash('左键，或 F，采集／拿／种／打开，右键 吃喝／浇水／接水／浇凉烫的东西，Q 放下，1～0 选快捷栏，E 背包，Shift 跑');
             ind.last = performance.now();
             ind.raf = requestAnimationFrame(indLoop);
         }
@@ -2035,6 +2035,7 @@
             if (kb === 'oil') return ckPourOil(k, a);   // 装了油的桶：硬核对着漏斗倒，悠闲对着炉子倒
             if ((kb === 'water_raw' || kb === 'water_boiled' || kb === 'water_sea') && a && a.kind === 'spout') return indQuenchSpout(a.o, k);
             if ((kb === 'water_raw' || kb === 'water_boiled') && a && a.kind === 'crop') return indWater(a.o, k);
+            if (kb === 'water_raw' && !a && indCoolBag(k)) return true;   // 拿生水桶对着空地：浇凉背包里烫的东西
             if (k === 'dry_ice') return indDryIceBucket();
             if (IND_ITEMS[k].hot) return indQuench(k);
             if (mbUse(k, a)) return true;   // 云絮浇地、胶水倒地上（任务 70）
@@ -3028,6 +3029,22 @@
                 g.ht = (g.ht === undefined ? IND_HOT_COOL : g.ht) - dt;
                 if (g.ht <= 0) { g.k = c; delete g.ht; ind.itemDirty = true; }
             });
+        }
+        // 一桶生水浇凉背包里烫的东西，最多 8 个，桶用完变空桶；没有烫的不动（作者 11-19）
+        function indCoolBag(k) {
+            let hot = Object.keys(ind.bag).filter(function (x) { return IND_ITEMS[x] && IND_ITEMS[x].hot && ind.bag[x] > 0; });
+            if (!hot.length) return false;
+            let left = 8, m = indContOf(k).mat, done = 0;
+            hot.forEach(function (x) {
+                if (left <= 0) return;
+                let n = Math.min(left, ind.bag[x]), c = IND_ITEMS[x].hot;
+                indBagDel(x, n); indGive(c, n); left -= n; done += n;
+                if (!ind.bag[x] && ind.hotT) delete ind.hotT[x];
+            });
+            indBagDel(k, 1); indGive(indEmptyKey(m), 1);
+            indFlash('滋——浇凉了 ' + done + ' 个烫的东西');
+            try { sfxNoise(0.25, 0.05, 3000, 800, 1.2); } catch (e) { }
+            return true;
         }
         function indQuench(k) {
             let a = indAim();
