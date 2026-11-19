@@ -1637,16 +1637,22 @@
         function indDie(cause, detail) {
             if (ind && ind.carve) ctCarveExit(true);
             if (!ind || ind.over || ind.dead) return;
-            let lost = Object.keys(ind.bag).length + Object.keys(ind.base.wear).length;
+            let lost = Object.keys(ind.bag).length + Object.keys(ind.base.wear).length, scattered = 0;
+            // 死亡规则（作者 11-19）：在基地里死，身上的东西散落在地上，回来能捡；在外面远征死，身上的东西直接没了
+            if (ind.where === 'base' && lost) {
+                let loot = {}; Object.keys(ind.bag).forEach(function (k) { if (IND_ITEMS[k] && ind.bag[k] > 0) loot[k] = (loot[k] || 0) + ind.bag[k]; });
+                Object.keys(ind.base.wear).forEach(function (sl) { let k = ind.base.wear[sl]; if (IND_ITEMS[k]) loot[k] = (loot[k] || 0) + 1; });
+                Object.keys(loot).forEach(function (k) { indDropAtFeet(indCool(k), loot[k]); scattered += loot[k]; });
+            }
             ind.bag = {}; ind.base.wear = {}; ind.hotT = {};
             let S = ind.base.surv; S.hp = 100; S.temp = 37; S.food = Math.max(S.food, 50); S.water = Math.max(S.water, 50); S.energy = Math.max(S.energy, 50);   // 任务 117：死了重置到能活的值（存档里也是这些）
-            ind.dead = { cause: cause, detail: detail || '', lost: lost };
+            ind.dead = { cause: cause, detail: detail || '', lost: lost, scattered: scattered };
             ind.rh = null; ind.hurt = null; ind.redT = 0; if (ind.panel) indPanelClose();
             if (document.pointerLockElement) document.exitPointerLock();
             let d = document.createElement('div'); d.id = 'ind-dead';
             d.style.cssText = 'position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.85);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;text-align:center;padding:20px;';
             d.innerHTML = '<div style="font-size:44px;font-weight:bold;color:#ff5252;">' + cause + '</div>' + (detail ? '<div style="font-size:22px;margin-top:12px;">' + detail + '</div>' : '') +
-                '<div style="font-size:18px;margin-top:14px;color:#ccc;">' + (lost ? '身上的东西都没了' : '身上没带东西') + '</div>' +
+                '<div style="font-size:18px;margin-top:14px;color:#ccc;">' + (!lost ? '身上没带东西' : scattered ? '身上的东西散落在地上，回去捡' : '身上的东西都没了') + '</div>' +
                 '<button onclick="indRespawn()" style="margin-top:26px;padding:12px 34px;font-size:20px;border:none;border-radius:8px;background:#fff;color:#222;cursor:pointer;">回基地</button>';
             document.body.appendChild(d);
             indSave();

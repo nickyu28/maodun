@@ -14599,6 +14599,31 @@ async function enterExit(tab, key) {
             report('IND190 配方搜索框里按 Esc：先退出搜索框，再按 Esc 关面板，退出后按 C 能关', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND191')) {
+            // IND191 死亡规则（作者 11-19）：在基地里死，身上的和穿着的东西散落在基地地上，回来能捡；在远征里死，身上的东西直接没了；死亡页面写得对；没带东西不报错；老存档没有地面数组也不报错
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ground = []; ind.bag = { wood: 5, stone: 3 }; B.wear = { body: 'coat' }; let hasCoat = !!IND_ITEMS.coat; if (!hasCoat) B.wear = {};
+                    ind.dead = null; ind.over = false; indDie('测试', '基地里'); let G = B.ground, c = {}; G.forEach(function (g) { c[g.k] = (c[g.k] || 0) + 1; });
+                    let o = { c: c, bag: Object.keys(ind.bag).length, wear: Object.keys(B.wear).length, sc: ind.dead.scattered, txt: document.getElementById('ind-dead').innerText, hasCoat: hasCoat };
+                    indRespawn(); o.after = B.ground.length; return o; })()`);
+                const want = r.hasCoat ? 9 : 8;
+                if (!(r.c.wood === 5 && r.c.stone === 3 && r.bag === 0 && r.wear === 0 && r.sc === want && /散落在地上/.test(r.txt) && r.after === want)) bad.push('基地里死：东西散落在地上、身上清空、页面写散落、回基地后还在 ' + JSON.stringify(r));
+                r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ground = []; indGoTrip(4242); ind.bag = { wood: 5, stone: 3 }; ind.tripGround = []; ind.dead = null; ind.over = false; indDie('测试', '远征里'); let o = { where: ind.where, bag: Object.keys(ind.bag).length, tg: ind.tripGround.length, g: B.ground.length, txt: document.getElementById('ind-dead').innerText }; indRespawn(); o.g2 = B.ground.length; return o; })()`);
+                if (!(r.bag === 0 && r.tg === 0 && r.g === 0 && r.g2 === 0 && /都没了/.test(r.txt) && !/散落/.test(r.txt))) bad.push('远征里死：东西直接没了、不落在任何地上 ' + JSON.stringify(r));
+                r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ground = []; ind.bag = {}; B.wear = {}; ind.dead = null; ind.over = false; indDie('测试', '空身'); let o = { g: B.ground.length, txt: document.getElementById('ind-dead').innerText }; indRespawn(); return o; })()`);
+                if (!(r.g === 0 && /没带东西/.test(r.txt))) bad.push('没带东西死：不报错、写没带东西 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND191 死亡规则：基地里死东西散落地上、远征里死东西没了、空身不报错', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
