@@ -1,7 +1,7 @@
 // 猫盾工业：农田中暑和基地里种树（作者 11-19）。放在 19-industry-grab.js 后面。
-// 夏天白天在农田边干活（离田 2.4 米内），没遮阴，体温每秒涨 0.06°C，比身体自己往回调的 0.02 快，喝过水（口渴 ≥ 60）慢三成，穿得厚涨得快；体温到 39.5 头晕、体力掉得快，到 41 中暑，硬核掉血，悠闲不死。
+// 夏天白天在农田边干活（离田 2.4 米内），没遮阴，体温每秒涨 0.1°C，身体自己往回调（0.02，过了 39 度是 0.06），喝足了水（口渴 ≥ 60）涨得慢三成，到不了 41，穿得厚涨得快；体温到 39.5 头晕、体力掉得快，到 41 中暑，硬核掉血，悠闲不死。
 // 树苗（砍树掉的，右键地面）能种在基地里，3 个游戏日长成树，长大了 3.2 米内有树荫：站在荫里不涨，体感气温低 3 度。喝水、泡池子本来就降体温。
-        const SH = { growT: 3 * IND_DAY, shadeR: 3.2, cap: 30, farmR: 2.4, rate: 0.06, dizzy: 39.5, stroke: 41, hp: 1.5, drain: 0.4, cool: 3, farmKeep: 20 };
+        const SH = { growT: 3 * IND_DAY, shadeR: 3.2, cap: 30, farmR: 2.4, rate: 0.1, dizzy: 39.5, stroke: 41, hp: 1.5, drain: 0.4, cool: 3, farmKeep: 20 };
         function shTrees() { return ind.base.btrees = Array.isArray(ind.base.btrees) ? ind.base.btrees : []; }
         function shGrowth(t) { return Math.max(0, Math.min(1, ((ind.base.clock || 0) - t.born) / SH.growT)); }
         function shShadeAt(x, z) { return shTrees().some(function (t) { return shGrowth(t) >= 1 && Math.hypot(x - t.x, z - t.z) < SH.shadeR; }); }
