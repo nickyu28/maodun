@@ -3241,6 +3241,8 @@
             c.C.spout.forEach(function (e) { let k = e.p ? e.k : IND_ITEMS_RAW[e.k].hot; if (!by[k]) { by[k] = { n: 0, t: 0, p: !!e.p }; order.push(k); } by[k].n++; by[k].t = Math.max(by[k].t, e.t); });
             return order.map(function (k) { let b = by[k]; return indName(k) + ' ×' + b.n + (b.p ? '' : '　' + (b.t > 0 ? '烫，还要 ' + Math.ceil(b.t) + ' 秒' : '已凉')); }).join('　');
         }
+        // 炉温比配方要的最低温度高，做得更快：1 + 高出来的度数 / 200，最多 ×3。烧焦的算法不变（作者 11-19）
+        function indHeatMul(T, r) { return Math.min(3, 1 + Math.max(0, T - (r.minT || 0)) / 200); }
         function indCookTick(c, dt) {
             indSpoutTick(c, dt); ckTick(c, dt); rlCookWaterTick(c);   // 接了水管：空桶自动装生水（任务 58）
             let S = c.C, K = indCookK(c.ty, c.C), F = fmFireEff(c, dt);   // 鼓风要有人拉风箱（任务 44），扇子扇到 1400
@@ -3274,7 +3276,7 @@
             }
             let r = IND_RECIPES[S.cook.i], n = S.cook.n || 1;
             { let pool = ckPool(S); if (Object.keys(r.in).some(function (k) { return indHave(pool, k) < r.in[k] * n; })) { S.cook = null; if (rlNeedReducer(S) && !ind.sleeping) indFlash('炼矿要加木炭、煤或焦炭'); indCookBadge(c); return; } }   // 原料被拿走了（老档里只放了矿的：停下提示，东西不丢）
-            if (S.temp >= r.minT) S.cook.t += dt;
+            if (S.temp >= r.minT) S.cook.t += dt * indHeatMul(S.temp, r);
             if (r.burnT && S.temp > r.burnT) S.cook.burn += dt;
             if (S.cook.t >= r.time || S.cook.burn >= IND_BURN_S) {
                 let burnt = S.cook.burn >= IND_BURN_S;

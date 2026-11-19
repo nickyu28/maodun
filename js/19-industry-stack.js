@@ -200,7 +200,7 @@
                 let l = lanes[j], r = IND_RECIPES[l.i], pool = ckPool(S);
                 l.s = sh[l.i];
                 if (Object.keys(r.in).some(function (k) { return indHave(pool, k) < r.in[k] * l.n; })) { lanes.splice(j, 1); continue; }
-                if (S.temp >= r.minT) l.t += dt * l.s;
+                if (S.temp >= r.minT) l.t += dt * l.s * indHeatMul(S.temp, r);
                 if (r.burnT && S.temp > r.burnT) l.burn += dt;
                 if (l.t >= r.time || l.burn >= IND_BURN_S) {
                     if (!indCookOut(c, r, l.n, l.burn >= IND_BURN_S)) { l.full = true; continue; }
