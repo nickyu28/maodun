@@ -1114,7 +1114,7 @@
             } else if (d.ty === 'centri') {
                 act = '<button id="lab-dev-go" style="' + LAB_BTN2 + '" onclick="labDevStart(' + id + ')">离心，3 个天然铀，10 秒</button>';
             } else if (d.ty === 'reactor') {
-                head += '<div style="margin:6px 0;color:#c62828;font-weight:bold;">⚠ 充电口只能接高级电池，接普通电池会爆炸</div><div>燃料槽 ' + labTotal(d.inv) + '/' + LAB_FUEL_SLOTS + '　充电口：' + (d.port ? labName(d.port) + ' <button style="' + LAB_BTN2 + '" onclick="labDevPort(' + id + ')">拿回</button>' : '空') + '</div>';
+                head += '<div style="margin:6px 0;color:#c62828;font-weight:bold;">注意：充电口只能接高级电池，接普通电池会爆炸</div><div>燃料槽 ' + labTotal(d.inv) + '/' + LAB_FUEL_SLOTS + '　充电口：' + (d.port ? labName(d.port) + ' <button style="' + LAB_BTN2 + '" onclick="labDevPort(' + id + ')">拿回</button>' : '空') + '</div>';
                 let bats = Object.keys(lab.bag).filter(function (k) { return labDevType(k) === 'bat'; }).map(function (k) { return '<button style="' + LAB_BTN2 + '" onclick="labDevPort(' + id + ',\'' + k + '\')">' + labName(k) + ' 接上充电口</button>'; }).join('');
                 act = (bats ? '<div>' + bats + '</div>' : '') + '<button id="lab-dev-go" style="' + LAB_BTN2 + '" onclick="labDevStart(' + id + ')">开始烧，每个 10 秒</button>';
                 head += '<div style="color:#666;font-size:12px;">每个燃料：铀-235 3000、钚-239 2000、天然铀 600、石油 60、煤 25、贫铀 20、别的会衰变的核素 40 U。烧煤和石油每个要 1 瓶氧气，2 米内，没有就冒一氧化碳。</div>';

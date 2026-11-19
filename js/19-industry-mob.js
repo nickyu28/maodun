@@ -86,10 +86,10 @@
                 { in: { honey: 1 }, out: { sugar: 2 }, minT: 100, time: 10 }
             );
             ACH.push(
-                { id: 'dogsword', hide: 1, ico: '🐕', name: '我的刀盾', desc: '给狗装上刀和盾' },
-                { id: 'catshield', hide: 1, ico: '🐈', name: '我的猫盾', desc: '给猫装上刀和盾' },
-                { id: 'bark3', hide: 1, ico: '📢', name: '大狗叫叫叫', desc: '同时三只狗在叫' },
-                { id: 'bark3arm', hide: 1, ico: '🛡️', name: '我的刀盾大狗叫叫叫', desc: '三只装着刀和盾的狗同时叫' }
+                { id: 'dogsword', hide: 1, name: '我的刀盾', desc: '给狗装上刀和盾' },
+                { id: 'catshield', hide: 1, name: '我的猫盾', desc: '给猫装上刀和盾' },
+                { id: 'bark3', hide: 1, name: '大狗叫叫叫', desc: '同时三只狗在叫' },
+                { id: 'bark3arm', hide: 1, name: '我的刀盾大狗叫叫叫', desc: '三只装着刀和盾的狗同时叫' }
             );
             ACH.slice(-4).forEach(function (a) { ACH_BY[a.id] = a; });
         })();

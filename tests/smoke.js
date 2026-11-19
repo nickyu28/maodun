@@ -14349,9 +14349,9 @@ async function enterExit(tab, key) {
             // EM1 游戏里不用 emoji（作者 11-19：任何情况都不要）：js/01～17 和 index.html 里的字符串不能有 emoji 和带 emoji 样子的符号（✔ ❤ ⚠ 这类）。18、19 开头的文件归 Code2，它清完以后把这里的范围放宽到全部
             const E = /[\u{1F000}-\u{1FAFF}\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u261D\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692-\u2697\u2699\u269B\u269C\u26A0\u26A1\u26A7\u26AA\u26AB\u26B0\u26B1\u26BD\u26BE\u26C4\u26C5\u26C8\u26CE\u26CF\u26D1\u26D3\u26D4\u26E9\u26EA\u26F0-\u26F5\u26F7-\u26FA\u26FD\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF\u2B05-\u2B07\u2B1B\u2B1C\u2B50\u2B55\uFE0F\u20E3]/u;
             const bad = [];
-            const files = fs.readdirSync(path.join(__dirname, '..', 'js')).filter((f) => /\.js$/.test(f) && !/^(18|19)-/.test(f)).map((f) => 'js/' + f).concat(['index.html']);
+            const files = fs.readdirSync(path.join(__dirname, '..', 'js')).filter((f) => /\.js$/.test(f)).map((f) => 'js/' + f).concat(['index.html']);
             files.forEach((f) => { fs.readFileSync(path.join(__dirname, '..', f), 'utf8').split('\n').forEach((l, i) => { const m = l.match(E); if (m) bad.push(f + ':' + (i + 1) + ' ' + m[0]); }); });
-            report('EM1 游戏里不用 emoji（js/01～17 和 index.html）', bad.length === 0, bad.slice(0, 6).join(' / '));
+            report('EM1 游戏里不用 emoji（js 全部和 index.html）', bad.length === 0, bad.slice(0, 6).join(' / '));
         }
 
         if (want('HT1')) {
@@ -15082,6 +15082,34 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND207')) {
+            // IND207 成就页散落在大画布上（作者 11-19）：位置固定种子每次一样、有轻微歪斜和大小不一、拖画布动成就不单独动、滚轮也能走、没有 emoji
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (c) => JSON.parse(await T.eval(`JSON.stringify((function(){ ${c} })())`));
+                const r = await J(`achPanel(); let g = function () { let o = {}; document.querySelectorAll('.ach-node').forEach(function (e) { o[e.getAttribute('data-ach')] = e.style.left + '|' + e.style.top + '|' + e.style.transform; }); return o; }; let a = g(); indPanelClose(); achPanel(); let b = g(); let same = JSON.stringify(a) === JSON.stringify(b), n = Object.keys(a).length;
+                    let rots = Object.keys(a).map(function (k) { return parseFloat((/rotate\\(([-\\d.]+)deg/.exec(a[k]) || [0, 0])[1]); }), mx = Math.max.apply(null, rots.map(Math.abs));
+                    let v = document.getElementById('ach-view'), c = document.getElementById('ach-canvas'), nd = document.querySelector('.ach-node'), r0 = nd.getBoundingClientRect(), c0 = c.getBoundingClientRect();
+                    achDragDown({ clientX: 200, clientY: 200, pointerId: 1, currentTarget: v }); achDragMove({ clientX: 150, clientY: 160, currentTarget: v }); achDragUp({ currentTarget: v });
+                    let r1 = nd.getBoundingClientRect(), c1 = c.getBoundingClientRect(), st1 = nd.style.left;
+                    achWheel({ deltaX: 0, deltaY: 30, preventDefault: function () { }, currentTarget: v }); let c2 = c.getBoundingClientRect();
+                    let wide = c.offsetWidth > v.clientWidth, drag = nd.getAttribute('draggable'), txt = document.getElementById('ind-panel').innerText; indPanelClose();
+                    return { same: same, n: n, mx: mx, moved: Math.round(c0.left - c1.left) + ',' + Math.round(c0.top - c1.top), nodeMoved: Math.round(r0.left - r1.left) + ',' + Math.round(r0.top - r1.top), st1: st1 === a[nd.getAttribute('data-ach')].split('|')[0], wheel: Math.round(c1.top - c2.top), wide: wide, drag: drag, cnt: /已获得 \\d+ \\/ \\d+/.test(txt) };`);
+                if (!r.same || r.n < 10) bad.push('位置每次要一样 ' + JSON.stringify(r));
+                if (!(r.mx > 0.5 && r.mx <= 6)) bad.push('要有轻微歪斜 ' + JSON.stringify(r));
+                if (r.moved !== '50,40' || r.nodeMoved !== '50,40') bad.push('拖画布整张走，成就跟着画布 ' + JSON.stringify(r));
+                if (!r.st1 || r.drag) bad.push('成就自己不能被拖 ' + JSON.stringify(r));
+                if (!r.wheel) bad.push('滚轮能走 ' + JSON.stringify(r));
+                if (!r.wide || !r.cnt) bad.push('画布比窗口大且有计数 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND207 成就页散落大画布：固定种子、歪斜、拖画布、滚轮', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (want('IND206')) {
