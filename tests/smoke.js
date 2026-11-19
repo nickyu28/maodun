@@ -14111,6 +14111,10 @@ async function enterExit(tab, key) {
             if (q0.pr !== 1 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
             const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); let d = window.devicePixelRatio || 1; return [Math.abs(renderer.getPixelRatio() - [1, Math.min(1.5, d), d, Math.min(3, Math.max(d, 1) * 1.5)][i]) < 1e-6, new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
             if (JSON.stringify(pct) !== '[[true,14],[true,24],[true,30],[true,36]]') bad.push('画质四档的像素比和分段数不对 ' + JSON.stringify(pct));
+            // 抗锯齿跟开页面时不一样：提示要重开页面才生效；一样就不提示
+            await T.eval(`window.__f = []; blazeFlash = function (t) { window.__f.push(t); }; settingsSet('gfx_quality', gfxAaBoot ? 1 : 0); settingsSet('gfx_quality', gfxAaBoot ? 0 : 1); true;`);
+            if ((await T.eval(`window.__f.filter(function (t) { return /抗锯齿/.test(t); }).length`)) !== 1) bad.push('抗锯齿改了该提示一次，没改不提示 ' + (await T.eval(`JSON.stringify(window.__f)`)));
+            if (!(await T.eval(`GFX_QUALITY_DESC[0].indexOf('默认') >= 0 === gfxDeviceLow()`))) bad.push('设备差时低档该写默认选这档');
             // 影子：低、中关，高开 2048，超高开更大加柔边；只太阳投影，大地面只接收
             await T.eval(`${HIDE} (function () { let g = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambertMaterial({ color: 0xffffff })); g.name = 'gfxbox'; scene.add(g); let f = new THREE.Mesh(new THREE.BoxGeometry(400, 1, 400), new THREE.MeshLambertMaterial({ color: 0x888888 })); f.name = 'gfxfloor'; scene.add(f); })(); true;`);
             const sh = [];

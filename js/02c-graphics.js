@@ -6,7 +6,7 @@
 // 给别的文件读的接口：graphicsQuality() graphicsView() graphicsFps() 返回档位（0 到 3、0 到 3、0 到 2），graphicsViewMul() 视野倍数，graphicsFpsTarget() 目标帧率。说明在 docs/settings.md。
 const GFX_QUALITY_NAMES = ['低', '中', '高', '超高'], GFX_VIEW_NAMES = ['正常', '稍远', '远', '超远'], GFX_FPS_NAMES = ['正常，30', '流畅，60', '高，120'];
 // 设置页里每一档的说明，档位名还是上面那几个
-const GFX_QUALITY_DESC = ['低，最省', '中，默认', '高，有影子，吃性能', '超高，最清楚，最吃性能，卡就调低'];
+const GFX_QUALITY_DESC = [gfxDeviceLow() ? '低，最省，这台设备默认选这档' : '低，最省', '中，默认', '高，有影子，吃性能', '超高，最清楚，最吃性能，卡就调低'];
 const GFX_VIEW_MUL = [1, 1.4, 2, 3], GFX_FPS_TARGET = [30, 60, 120], GFX_SEG = [0.6, 1, 1.25, 1.5];   // 作者 11-16：中 = 游戏默认的样子，低在它下面，高在它上面，超高 = 能做到的最好，超过现实
 // 设备差：核数不超过 4，或者内存不超过 4 GB（有的浏览器不报内存，那就只看核数）
 function gfxDeviceLow() {
@@ -79,10 +79,12 @@ function gfxApplyView() {
 function gfxApplyAll() { gfxApplyQuality(); gfxApplyView(); }
 
 // ── 流畅度：限制主画面渲染；同时数画了多少帧，给左上角的帧率用 ──
+let gfxAaBoot = null;   // 开页面时渲染器有没有开抗锯齿，抗锯齿改了要重开页面才生效
 let gfxLastRender = 0, gfxFrameTimes = [], gfxFpsNow = 0;
 // three r128 的 render 是建渲染器时挂在实例上的，不是原型上的，所以要在主渲染器建好以后包一层（03-world.js 里建完调 gfxHookRenderer）
 function gfxHookRenderer(r) {
     if (!r || r.__gfx) return; r.__gfx = true;
+    try { gfxAaBoot = !!r.getContext().getContextAttributes().antialias; } catch (e) { }
     let r0 = r.render;
     r.render = function () {
         let now = performance.now(), t = graphicsFpsTarget();
@@ -255,5 +257,5 @@ function gfxSample(n) {
 settingsRegister({ group: '显示', id: 'show_fps', label: '左上角显示帧率', type: 'toggle', def: true, first: true });
 settingsRegister({ group: '显示', id: 'gfx_fps', label: '流畅度，帧率目标', type: 'choice', def: 1, choices: [[0, GFX_FPS_NAMES[0]], [1, GFX_FPS_NAMES[1]], [2, GFX_FPS_NAMES[2]]], first: true, onChange: function () { gfxCheckHigh(); } });
 settingsRegister({ group: '显示', id: 'gfx_view', label: '视野，能看多远', type: 'choice', def: 0, choices: GFX_VIEW_NAMES.map(function (n, i) { return [i, n]; }), first: true, onChange: function () { gfxApplyView(); gfxCheckHigh(); } });
-settingsRegister({ group: '显示', id: 'gfx_quality', label: '画质，抗锯齿重开页面才生效', type: 'choice', def: gfxDeviceLow() ? 0 : 1, choices: GFX_QUALITY_DESC.map(function (n, i) { return [i, n]; }), first: true, onChange: function () { gfxTempQ = null; gfxApplyQuality(); gfxCheckHigh(); } });
+settingsRegister({ group: '显示', id: 'gfx_quality', label: '画质，抗锯齿重开页面才生效', type: 'choice', def: gfxDeviceLow() ? 0 : 1, choices: GFX_QUALITY_DESC.map(function (n, i) { return [i, n]; }), first: true, onChange: function () { gfxTempQ = null; if (gfxAaBoot !== null && (graphicsQuality() >= 1) !== gfxAaBoot && typeof blazeFlash === 'function') blazeFlash('画质改了，抗锯齿要重开页面才生效'); gfxApplyQuality(); gfxCheckHigh(); } });
 window.addEventListener('load', function () { gfxApplyAll(); gfxReady = true; });
