@@ -14914,7 +14914,7 @@ async function enterExit(tab, key) {
                     const t = r[q];
                     if (!(/风箱/.test(t) && /扇子/.test(t) && /鼓风机/.test(t))) bad.push('搜"' + q + '"搜得到风箱、扇子、电动鼓风机 ' + t.slice(0, 200));
                 }
-                r = await J(`(function(){ let L = IND_CRAFT.filter(function (q) { return q.out === 'bellows'; }); return { n: L.length, tags: L.map(function (q) { return q.tag || ''; }), first: !!(L[0].in.hide || L[0].in.pleather), wool: L.some(function (q) { return q.in.wool === 4; }) }; })()`);
+                r = await J(`(function(){ let L = IND_CRAFT.filter(function (q) { return q.out === 'bellows'; }); return { n: L.length, tags: L.map(function (q) { return q.tag || ''; }), first: !!(L[0].in.hide || L[0].in.leather || L[0].in.pleather), wool: L.some(function (q) { return q.in.wool === 4; }) }; })()`);
                 if (!(r.n >= 2 && r.first && r.wool && r.tags.every((t) => t.length > 0))) bad.push('风箱两条做法，皮革在前，各写清楚 ' + JSON.stringify(r));
                 await T.eval(`ind.bag = { wood: 20, rope: 20, wool: 8, ingot_cu: 4, clay: 8 }; indPanelBench(); true;`);
                 const txt = await T.eval(`document.getElementById('ind-panel').innerText`);
