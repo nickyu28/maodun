@@ -717,7 +717,7 @@ async function enterExit(tab, key) {
             if (g.labs.filter(function (x) { return /每日任务5/.test(x); }).length !== 3) bad.push('每个任务 +5 没都给 ' + JSON.stringify(g.labs));
             if (!/三个任务全做完10/.test(g.labs[2] || '') || g.labs.slice(0, 2).some(function (x) { return /全做完/.test(x); })) bad.push('+10 只该在第三个给 ' + JSON.stringify(g.labs));
             const ui = await T.eval(`(function(){ openQuests(); let t = document.getElementById('sys-modal-title').innerText + '|' + document.getElementById('sys-modal-text').innerText; return t; })()`);
-            if (!/今日任务 3\/3/.test(ui) || !/✔/.test(ui)) bad.push('任务弹窗 ' + ui);
+            if (!/今日任务 3\/3/.test(ui) || !/√/.test(ui)) bad.push('任务弹窗 ' + ui);
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('M2 每日任务：每天 3 个（模式不重复、≤1 寻宝队、≥1 超燃/惊魂夜）；做完 +5，全做完 +10；存档带着', bad.length === 0, bad.join(' / '));
