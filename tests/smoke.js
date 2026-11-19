@@ -6820,7 +6820,7 @@ async function enterExit(tab, key) {
                 if (it.flour !== 6 || it.salt !== 2 || it['water_boiled@fe'] !== 2) bad.push('放满一炉：炉子里已经有的算数 ' + JSON.stringify(it));
                 // 木桶装的水不能上火：凑不出配方
                 await stoveSet({}); await T.eval(`ind.bag = { flour: 15, salt: 5, water_boiled: 3 }; window.__fl = []; indStoveFill(); indPanelClose(); true;`);
-                if (!(await T.eval(`Object.keys(ind.base.stove.items).length === 0 && __fl.some(function (t) { return /凑不出/.test(t); })`))) bad.push('木桶的水不该被放进去 ' + await T.eval(`JSON.stringify([ind.base.stove.items, __fl])`));
+                if (!(await T.eval(`Object.keys(ind.base.stove.items).length === 0 && __fl.some(function (t) { return /凑不出|木桶不能上火/.test(t); })`))) bad.push('木桶的水不该被放进去 ' + await T.eval(`JSON.stringify([ind.base.stove.items, __fl])`));
                 // 冶炼一次 1 份（灶台）
                 await stoveSet({}); await T.eval(`ind.bag = { ore_cu: 5, charcoal: 5 }; indStoveFill(); indPanelClose(); true;`);
                 if ((await T.eval(`ind.base.stove.items.ore_cu`)) !== 1) bad.push('灶台冶炼一次 1 份');
