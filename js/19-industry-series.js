@@ -227,7 +227,7 @@
             IND_RECIPES.push({ in: { hide: 1, water_raw: 1 }, out: { glue: 2, bucket: 1 }, minT: 100, time: 10, cls: 'smelt', hard: true }, { in: { resin: 2, charcoal: 1 }, out: { glue: 2 }, minT: 150, time: 15, cls: 'smelt', hard: true });
             IND_CRAFT.push({ out: 'glue', n: 1, in: { hide: 1, ash: 1 }, casual: true });
         })();
-        function rpHammerHave() { return (ind.bag.hammer || 0) > 0 || (ind.bag.hammer_stone || 0) > 0; }
+        function rpHammerHave() { return typeof hmHave === 'function' ? hmHave() : (ind.bag.hammer || 0) > 0 || (ind.bag.hammer_stone || 0) > 0; }
         function rpHotNear() { return indCooks().some(function (c) { return c.C.temp >= 800 && Math.hypot(c.x - ind.p.x, c.z - ind.p.z) <= 3 + (IND_COOK[c.ty] ? IND_COOK[c.ty].r : 0); }); }
         function rpMendInfo(k) {   // 这把工具能不能用锤子补：返回 { ing: 用哪种锭, n: 主料份数, hot: 要不要热炉 } 或 null
             let kk = k.replace(/^broken_/, ''), T = typeof TL_TOOL !== 'undefined' && TL_TOOL[kk], K = MB_KNIFE[kk];
@@ -242,9 +242,10 @@
             if (!rpHammerHave()) { indFlash('要有锤子'); return false; }
             if (m.hot && !rpHotNear()) { indFlash('铁要烧红了才能补，找个点着的炉子'); return false; }
             if (!(ind.bag[m.ing] > 0)) { indFlash('要 1 个' + indName(m.ing, true)); return false; }
-            let max = mbMax(m.key), add = Math.max(1, Math.round(max * 0.5 / m.n));
+            let max = mbMax(m.key), add = Math.max(1, Math.round(max * 0.5 / m.n * (typeof hmBoost === 'function' ? hmBoost() : 1)));   // 锤子材质越好一个锭补得越多
             if (!broken) { let left = mbDura(m.key); if (left >= max) { indFlash('已经满了'); return false; } indBagDel(m.ing, 1); ind.base.dura[m.key] = Math.min(max, left + add); indFlash('补了 ' + add + '，现在 ' + ind.base.dura[m.key] + ' / ' + max); }
             else { if (indFits(ind.bag, indBagSlots(), m.key, 1) < 1 && ind.bag[k] < 1) return false; indBagDel(m.ing, 1); indBagDel(k, 1); indBagAdd(m.key, 1); ind.base.dura = ind.base.dura || {}; ind.base.dura[m.key] = Math.min(max, add); indFlash('修好了，耐久 ' + ind.base.dura[m.key] + ' / ' + max); }
+            if (typeof hmWear === 'function') hmWear();   // 补一次磨损锤子 1 点
             indSave(); ind.hudSig = ''; if (ind.panel === 'mend') indPanelMend(); return true;
         }
         function indPanelMend() {

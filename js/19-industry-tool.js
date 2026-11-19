@@ -70,7 +70,8 @@
         (function () {
             let c0 = indCraft;
             indCraft = function (i) {
-                let r = IND_CRAFT[i], k = r && r.out, had = k ? (ind.bag[k] || 0) : 0, res = c0.apply(this, arguments);
+                let r = IND_CRAFT[i], k = r && r.out, had = k ? (ind.bag[k] || 0) : 0, hamB = ind.bag.hammer_bronze || 0, hamK = typeof hmBest === 'function' ? hmBest() : null, res = c0.apply(this, arguments);
+                if (r && r.need === 'hammer' && k && (ind.bag[k] || 0) > had) { if (k === 'hammer_bronze' && hamB >= 1 && typeof indAch === 'function') indAch('nest'); if (hamK && typeof tlUse === 'function' && (ind.bag[hamK] || 0) > 0) tlUse(hamK); }   // 锻一次磨损用的那把锤子 1 点；用青铜锤做青铜锤得「套娃？」
                 if (k && had === 0 && (ind.bag[k] || 0) > 0 && mbDurTab(k) && ind.base.dura) delete ind.base.dura[k];
                 return res;
             };

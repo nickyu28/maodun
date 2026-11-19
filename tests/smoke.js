@@ -15084,6 +15084,34 @@ async function enterExit(tab, key) {
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND206')) {
+            // IND206 锤子分材质有耐久（作者 11-19）：石、青铜、铁、钢四档耐久递增；背包里有任一把工作台就认；锻一次磨损用的那把 1 点，用坏了变坏了的锤子；补耐久材质越好补得越多；青铜锤做青铜锤得「套娃？」
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); let o = { d: ['hammer_stone', 'hammer_bronze', 'hammer', 'hammer_steel'].map(function (k) { return mbMax(k); }), b: ['hammer_stone', 'hammer_bronze', 'hammer', 'hammer_steel'].map(function (k) { ind.bag = { [k]: 1 }; return hmBoost() + ':' + indHasNeed('hammer'); }), names: ['hammer_stone', 'hammer_bronze', 'hammer', 'hammer_steel'].map(function (k) { return indName(k); }) }; return o; })()`);
+                if (!(r.d[0] < r.d[1] && r.d[1] < r.d[2] && r.d[2] < r.d[3] && r.d[0] > 0)) bad.push('耐久石 < 青铜 < 铁 < 钢 ' + JSON.stringify(r));
+                if (r.b.join() !== '0.6:true,0.8:true,1:true,1.25:true') bad.push('补得多少、背包里有任一把工作台就认 ' + JSON.stringify(r));
+                if (r.names.join() !== '石锤,青铜锤,铁锤,钢锤') bad.push('名字 ' + r.names.join());
+                r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.dura = {}; B.repQ = {}; B.repCur = {}; B.ach = {}; let o = {}, ci = function (out, need) { return IND_CRAFT.findIndex(function (q) { return q.out === out && q.need === need && !q.fix && !q.off; }); };
+                    ind.bag = { hammer_stone: 1, ingot_fe: 2, wood: 1 }; indCraft(ci('knife_iron', 'hammer')); o.knife = ind.bag.knife_iron || 0; o.d1 = mbDura('hammer_stone'); o.mx = mbMax('hammer_stone');
+                    B.dura.hammer_stone = 1; ind.bag = { hammer_stone: 1, ingot_fe: 2, wood: 1 }; indCraft(ci('knife_iron', 'hammer')); o.broke = (ind.bag.broken_hammer_stone || 0) + ':' + (ind.bag.hammer_stone || 0);
+                    ind.bag = { hammer_stone: 1, bronze: 2, handle: 1 }; indCraft(ci('hammer_bronze', 'hammer')); o.made = ind.bag.hammer_bronze || 0; o.nest0 = !!B.ach.nest;
+                    ind.bag = { hammer_bronze: 1, bronze: 2, handle: 1 }; indCraft(ci('hammer_bronze', 'hammer')); o.nest1 = !!B.ach.nest; o.two = ind.bag.hammer_bronze || 0; o.wear = mbDura('hammer_bronze') + '/' + mbMax('hammer_bronze'); return o; })()`);
+                if (!(r.knife === 1 && r.d1 === r.mx - 1)) bad.push('石锤锻一次工具磨损 1 点 ' + JSON.stringify(r));
+                if (r.broke !== '1:0') bad.push('用坏了变成坏了的锤子 ' + JSON.stringify(r));
+                if (!(r.made === 1 && !r.nest0)) bad.push('石锤做青铜锤，没有套娃成就 ' + JSON.stringify(r));
+                if (!(r.nest1 && r.two === 2)) bad.push('有青铜锤时再做一把青铜锤得「套娃？」 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND206 锤子分材质有耐久：四档、磨损、用坏、补得多少、套娃成就', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND203')) {
             // IND203 新做的工具是满耐久（作者 11-19：新做的冷锻刀 116/120）：背包里一把都没有时，上一把剩下的耐久记录不能给新做的；背包里还有一把在用的，新做的是备用，手上这把照旧
             const bad = [];

@@ -3074,7 +3074,7 @@
             return true;
         }
         function indCraftShow(r) { return !r.off && (!r.hard || indHard()) && !(r.casual && indHard()); }   // off：换成别的做法了，留着下标   // casual：只在悠闲出现的简单配方
-        function indHasNeed(n) { return (ind.bag[n] || 0) > 0 || (n === 'hammer' && (ind.bag.hammer_stone || 0) > 0); }   // 任务 158：锤子类，铁锤石锤都行
+        function indHasNeed(n) { return (ind.bag[n] || 0) > 0 || (n === 'hammer' && typeof hmHave === 'function' && hmHave()); }   // 任务 158：锤子类，铁锤石锤都行
         function indCraftCan(r) { return indCraftShow(r) && (!r.need || indHasNeed(r.need)) && Object.keys(r.in).every(function (k) { return (ind.bag[k] || 0) >= r.in[k]; }) && !(r.gh && ind.base.gh) && !(r.glass && (!ind.base.gh || ind.base.glass)) && !(r.pot && ind.base.pot); }
         function indCraft(i) {
             if (!ind) return false;
