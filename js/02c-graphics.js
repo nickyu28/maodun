@@ -7,7 +7,7 @@
 const GFX_QUALITY_NAMES = ['低', '中', '高', '超高'], GFX_VIEW_NAMES = ['正常', '稍远', '远', '超远'], GFX_FPS_NAMES = ['正常，30', '流畅，60', '高，120'];
 // 设置页里每一档的说明，档位名还是上面那几个
 const GFX_QUALITY_DESC = [gfxDeviceLow() ? '低，最省，这台设备默认选这档' : '低，最省', '中，默认', '高，有影子，吃性能', '超高，最清楚，最吃性能，卡就调低'];
-const GFX_VIEW_MUL = [1, 1.4, 2, 3], GFX_FPS_TARGET = [30, 60, 120], GFX_SEG = [0.6, 1, 1.25, 1.5];   // 作者 11-16：中 = 游戏默认的样子，低在它下面，高在它上面，超高 = 能做到的最好，超过现实
+const GFX_VIEW_MUL = [1, 1.4, 2, 3], GFX_FPS_TARGET = [30, 60, 120], GFX_SEG = [0.6, 1, 1.25, 2];   // 作者 11-16：中 = 游戏默认的样子，低在它下面，高在它上面，超高 = 能做到的最好，超过现实
 // 设备差：核数不超过 4，或者内存不超过 4 GB（有的浏览器不报内存，那就只看核数）
 function gfxDeviceLow() {
     let c = navigator.hardwareConcurrency, m = navigator.deviceMemory;
@@ -24,7 +24,7 @@ function graphicsFpsTarget() { return GFX_FPS_TARGET[graphicsFps()]; }
 function graphicsPixelRatio() {
     // 低 1，中 min(1.5, 设备)，高 设备原生，超高 原生的 1.5 倍超采样（最多 3，免得画布太大）
     let d = window.devicePixelRatio || 1, q = graphicsQuality();
-    return q === 0 ? 1 : q === 1 ? Math.min(1.5, d) : q === 2 ? d : Math.min(3, Math.max(d, 1) * 1.5);
+    return q === 0 ? 1 : q === 1 ? Math.min(1.5, d) : q === 2 ? d : Math.min(3, Math.max(d, 1) * 2);
 }
 
 // ── 画质：像素比马上生效，分段数下次建东西时生效 ──
@@ -106,9 +106,35 @@ function gfxFindSun() {
     return gfxSun;
 }
 function gfxLit(m) { return m && (m.isMeshLambertMaterial || m.isMeshStandardMaterial || m.isMeshPhongMaterial || m.isMeshPhysicalMaterial); }
+// ── 观感（作者 11-19：高 = 跟现实差不多，超高 = 能做多好做多好，不用管性能；中 = 默认原样；低 = 差一些）──
+// 高和超高：降低平均的环境光、加一盏天空和地面的半球光、太阳换成偏暖的更亮，影子才有深浅；贴图各向异性过滤；超高再加大。
+// 只改亮堂堂的场景（环境光原本不低于 0.6，寻宝队这类）；惊魂夜那种本来就暗的不动，免得破坏气氛。切回中和低会还原。
+let gfxHemi = null, gfxLookQ = -1;   // 总亮度跟原来差不多（朝上的面约 1.2），深浅拉开
+function gfxLook(r, q) {
+    if (gfxLookQ === q) return;
+    gfxLookQ = q;
+    let on = q >= 2;   // 试过电影色调映射，颜色全发白发灰，不如不用，靠光影的深浅出效果
+    scene.traverse(function (o) {
+        if (!o.isLight || !(o.isAmbientLight || o.isDirectionalLight)) return;
+        let u = o.userData; if (!u.__gfx0) u.__gfx0 = { i: o.intensity, c: o.color.getHex() };
+        if (o.isAmbientLight && u.__gfx0.i < 0.6) return;
+        if (o.isDirectionalLight && !scene.children.some(function (x) { return x.isAmbientLight && x.userData.__gfx0 && x.userData.__gfx0.i >= 0.6; })) return;
+        if (!on) { o.intensity = u.__gfx0.i; o.color.setHex(u.__gfx0.c); return; }
+        if (o.isAmbientLight) o.intensity = u.__gfx0.i * 0.47;
+        else { o.intensity = q === 3 ? 0.85 : 0.75; o.color.setHex(0xfff0d8); }
+    });
+    let bright = scene.children.some(function (x) { return x.isAmbientLight && x.userData.__gfx0 && x.userData.__gfx0.i >= 0.6; });
+    if (!gfxHemi) gfxHemi = new THREE.HemisphereLight(0xcfe3ff, 0xa89c8a, 0.5);
+    gfxHemi.intensity = q === 3 ? 0.36 : 0.3;
+    if (on && bright && !gfxHemi.parent) scene.add(gfxHemi);
+    if ((!on || !bright) && gfxHemi.parent) scene.remove(gfxHemi);
+}
+function gfxAniso(q) { return q >= 3 ? 16 : q >= 2 ? 8 : 1; }
+
 function gfxShadowTick(r) {
     if (typeof scene === 'undefined' || !scene || !r.shadowMap) return;
     let q = graphicsQuality(), on = q >= 2, now = performance.now();
+    gfxLook(r, q);
     if (gfxShadowOn !== on) {
         gfxShadowOn = on; r.shadowMap.enabled = on; gfxShadowAt = 0;
         scene.traverse(function (o) { if (o.material) [].concat(o.material).forEach(function (m) { m.needsUpdate = true; }); });
@@ -131,8 +157,9 @@ function gfxShadowTick(r) {
     if (now - gfxShadowAt > 500) {
         gfxShadowAt = now;
         scene.traverse(function (o) {
-            if (!o.isMesh || o.userData.__gfxS) return;
-            let ms = [].concat(o.material), lit = ms.length && ms.every(gfxLit); o.userData.__gfxS = 1;
+            if (!o.isMesh || o.userData.__gfxS === q) return;
+            let ms = [].concat(o.material), lit = ms.length && ms.every(gfxLit); o.userData.__gfxS = q;
+            ms.forEach(function (m) { if (m && m.map && m.map.anisotropy !== Math.min(gfxAniso(q), r.capabilities.getMaxAnisotropy())) { m.map.anisotropy = Math.min(gfxAniso(q), r.capabilities.getMaxAnisotropy()); m.map.needsUpdate = true; } });
             if (!lit) return;
             o.receiveShadow = true;
             let g = o.geometry, big = true;

@@ -14109,8 +14109,12 @@ async function enterExit(tab, key) {
             await T.eval(`settingsSet('gfx_quality', 0); true;`);
             const q0 = JSON.parse(await T.eval(`JSON.stringify({ dpr: window.devicePixelRatio || 1, pr: renderer.getPixelRatio(), seg: new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments, cyl: new THREE.CylinderGeometry(1, 1, 2, 24).parameters.radialSegments, inst: new THREE.SphereGeometry(1, 8, 8) instanceof THREE.BufferGeometry })`));
             if (q0.pr !== 1 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
-            const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); let d = window.devicePixelRatio || 1; return [Math.abs(renderer.getPixelRatio() - [1, Math.min(1.5, d), d, Math.min(3, Math.max(d, 1) * 1.5)][i]) < 1e-6, new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
-            if (JSON.stringify(pct) !== '[[true,14],[true,24],[true,30],[true,36]]') bad.push('画质四档的像素比和分段数不对 ' + JSON.stringify(pct));
+            const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); let d = window.devicePixelRatio || 1; return [Math.abs(renderer.getPixelRatio() - [1, Math.min(1.5, d), d, Math.min(3, Math.max(d, 1) * 2)][i]) < 1e-6, new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
+            if (JSON.stringify(pct) !== '[[true,14],[true,24],[true,30],[true,48]]') bad.push('画质四档的像素比和分段数不对 ' + JSON.stringify(pct));
+            // 观感：高和超高在亮堂堂的场景里换成有深浅的灯光（环境光降下来、多一盏半球光、太阳偏暖），中和低还原
+            const lk = JSON.parse(await T.eval(`JSON.stringify([1, 2, 3, 1].map(function (i) { settingsSet('gfx_quality', i); gfxLook(renderer, i); let am = scene.children.filter(function (x) { return x.isAmbientLight; })[0]; let sun = gfxFindSun(); return [am ? +am.intensity.toFixed(3) : null, !!(gfxHemi && gfxHemi.parent), sun ? sun.color.getHex() : null]; }))`));
+            if (lk[0][0] === null) bad.push('场景里没有环境光，观感测不了');
+            else if (!(lk[1][0] < lk[0][0] && lk[1][1] && lk[2][1] && lk[1][2] === 0xfff0d8 && !lk[0][1] && !lk[3][1] && lk[3][0] === lk[0][0] && lk[3][2] === lk[0][2])) bad.push('高和超高该换灯光、中和低还原 ' + JSON.stringify(lk));
             // 抗锯齿跟开页面时不一样：提示要重开页面才生效；一样就不提示
             await T.eval(`window.__f = []; blazeFlash = function (t) { window.__f.push(t); }; settingsSet('gfx_quality', gfxAaBoot ? 1 : 0); settingsSet('gfx_quality', gfxAaBoot ? 0 : 1); true;`);
             if ((await T.eval(`window.__f.filter(function (t) { return /抗锯齿/.test(t); }).length`)) !== 1) bad.push('抗锯齿改了该提示一次，没改不提示 ' + (await T.eval(`JSON.stringify(window.__f)`)));
@@ -14233,6 +14237,24 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('GFX2 卡顿处理：连续低帧冒红色图标、恢复消失、10 秒低于 8 帧降画质、再 20 秒低于 5 帧退出、联机局只提示、单人局暂停、三项太高提示和调回推荐', bad.length === 0, bad.join(' / '));
+        }
+
+        if (process.env.SMOKE_SHOT && want('SHOT')) {
+            // SHOT 开发用截图：不进 CI（要设 SMOKE_SHOT=存图目录）。每档画质开一张寻宝图，截一张屏，存成 <目录>/<标签>-q<档>.png，肉眼看画质
+            const bad = [];
+            for (const q of (process.env.SMOKE_SHOT_Q || '1,2,3').split(',').map(Number)) {
+                const T = await openTab(chrome, url);
+                await T.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 600, deviceScaleFactor: 1, mobile: false });
+                await T.eval(`settingsSet('gfx_quality', ${q}); true;`);
+                await T.eval(BOSS_GO('easy', false, 777)); await until(T, `isPlaying`, 20000);
+                await T.eval(`HUNT_TEST_NOMOB = true; settingsSet('gfx_quality', ${q}); document.getElementById('sys-modal').classList.add('hidden'); sysModalSync(); true;`); await W(1500);
+                await T.eval(`camera.position.set(TILE * 3, 26, TILE * 3); camera.rotation.set(-0.85, 0.78, 0); document.getElementById('sys-modal').classList.add('hidden'); sysModalSync(); true;`); await W(700);
+                const res = await T.send('Page.captureScreenshot', { format: 'png' });
+                const dir = process.env.SMOKE_SHOT; fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(path.join(dir, (process.env.SMOKE_SHOT_TAG || 'a') + '-q' + q + '.png'), Buffer.from(res.result.data, 'base64'));
+                await T.close();
+            }
+            report('SHOT 截图', bad.length === 0, '');
         }
 
         if (want('HT1')) {
