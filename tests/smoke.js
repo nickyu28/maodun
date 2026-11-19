@@ -15084,6 +15084,32 @@ async function enterExit(tab, key) {
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND210')) {
+            // IND210 倍速：×4 时灶台里的活 4 倍快；停下的原因（饿了、渴了、冷、热、有怪）写在按钮上留着
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (c) => JSON.parse(await T.eval(`JSON.stringify((function(){ ${c} })())`));
+                const r = await J(`indGoBase(null); let B = ind.base, o = {}; B.rule = 'hard'; cancelAnimationFrame(ind.raf); ind.raf = 0;
+                    let run = function (sp) { B.stove.items = { water_raw: 1 }; B.stove.out = {}; B.stove.cook = null; B.stove.temp = 150; B.stove.fire = 2; B.stove.fuel = 200; ind.speed = sp; let c0 = B.clock; for (let i = 0; i < 40; i++) { indTick(0.05); spTick(0.05); } return { clock: B.clock - c0, cook: B.stove.cook ? B.stove.cook.t : -1, out: B.stove.out.water_boiled || 0 }; };
+                    o.a = run(1); o.b = run(4);
+                    let t = function (f) { ind.where = 'base'; ind.speed = 4; ind.sleeping = false; B.surv.hp = 100; B.surv.food = 80; B.surv.water = 80; B.surv.temp = 37; ind.mobs = []; ind.redT = 0; ind.coldWarn = 0; ind.heatHint = false; f(); spTick(0.05); let b = document.getElementById('ind-btn-speed'); return ind.speed + ':' + ind.spWhy + ':' + (b ? b.textContent : ''); };
+                    o.hungry = t(function () { B.surv.food = 10; }); o.thirsty = t(function () { B.surv.water = 10; }); o.cold = t(function () { B.surv.temp = 33; }); o.mob = t(function () { ind.mobs = [{ x: ind.p.x + 5, z: ind.p.z, dead: false }]; });
+                    return o;`);
+                if (!(r.b.clock / r.a.clock > 3.6 && r.b.clock / r.a.clock < 4.4)) bad.push('×4 时间快 4 倍 ' + JSON.stringify(r));
+                if (!(r.a.cook >= 0 ? r.b.cook >= 3 * r.a.cook || r.b.out : true)) bad.push('灶台跟着快 ' + JSON.stringify(r));
+                if (!/^1:你饿了.*停了：你饿了/.test(r.hungry)) bad.push('饿了的原因 ' + r.hungry);
+                if (!/^1:你渴了.*停了：你渴了/.test(r.thirsty)) bad.push('渴了的原因 ' + r.thirsty);
+                if (!/^1:你太冷了.*停了：你太冷了/.test(r.cold)) bad.push('冷的原因 ' + r.cold);
+                if (!/^1:附近有怪.*停了：附近有怪/.test(r.mob)) bad.push('有怪的原因 ' + r.mob);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND210 倍速：×4 时间和灶台快 4 倍，停下的原因留在按钮上', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND209')) {
             // IND209 生水桶浇凉：对着空地右键，背包里烫的东西最多 8 个变凉，桶变空；没有烫的不动桶；水桶对着作物、水池走原来的路
             const bad = [];

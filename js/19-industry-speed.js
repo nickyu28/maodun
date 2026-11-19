@@ -6,8 +6,14 @@
         function spMul() { return (ind && ind.speed) || 1; }
         function spReset(why) {
             if (!ind || !(ind.speed > 1)) return;
-            ind.speed = 1; spBtn();
+            ind.speed = 1; spNote(why); spBtn();
             if (why) indFlash('倍速停了：' + why);
+        }
+        // 停下的原因在按钮上留 8 秒，免得提示一闪就错过了（作者 11-19：倍速有时不起作用，要告诉玩家为什么）
+        function spNote(why) {
+            if (!ind) return;
+            ind.spWhy = why || ''; clearTimeout(ind.spWhyT);
+            if (why) ind.spWhyT = setTimeout(function () { if (ind) { ind.spWhy = ''; spBtn(); } }, 8000);
         }
         // 该不该停：返回原因，没有就返回空
         function spDanger() {
@@ -17,8 +23,10 @@
             // 开着面板不再算危险（作者 11-19：面板开着 Z 也要能调倍速）
             if (S.hp < SP.hp) return '你受伤了';
             if (ind.redT > 0) return '你受伤了';
-            if (S.food < 20 || S.water < 20) return '饿了或渴了';
-            if (S.temp < indChillT() || S.temp > 38.5 || (ind.coldWarn || 0) > 0 || ind.heatHint) return '体温不对';
+            if (S.food < 20) return '你饿了，先吃点东西';
+            if (S.water < 20) return '你渴了，先喝点水';
+            if (S.temp < indChillT() || (ind.coldWarn || 0) > 0) return '你太冷了';
+            if (S.temp > 38.5 || ind.heatHint) return '你太热了';
             if (ind.inGas || ind.radHurt) return '有危险';
             if ((ind.mobs || []).some(function (m) { return !m.dead && !m.tame && Math.hypot(m.x - ind.p.x, m.z - ind.p.z) < SP.mobR; })) return '附近有怪';
             return '';
@@ -55,14 +63,14 @@
             if (!ind || ind.over || ind.dead) return;
             if (ind.where !== 'base') { indFlash('倍速只能在基地里用'); return; }
             if (ind.paused) return;   // 作者 11-19：面板开着 Z 也管用（输入框里打字不触发，键盘那边挡掉了）
-            let i = SP.steps.indexOf(spMul()); ind.speed = SP.steps[(i + 1) % SP.steps.length];
-            if (ind.speed > 1) { let why = spDanger(); if (why) { ind.speed = 1; indFlash('现在不能加速：' + why); } }
+            let i = SP.steps.indexOf(spMul()); ind.speed = SP.steps[(i + 1) % SP.steps.length]; spNote('');
+            if (ind.speed > 1) { let why = spDanger(); if (why) { ind.speed = 1; spNote(why); indFlash('现在不能加速：' + why); } }
             spBtn();
         }
         function spBtn() {
             let b = document.getElementById('ind-btn-speed'); if (!b) return;
             let m = spMul(), off = !ind || ind.where !== 'base';
-            b.textContent = '倍速 ×' + m + '　Z';
+            b.textContent = '倍速 ×' + m + '　Z' + (m === 1 && ind && ind.spWhy ? '　停了：' + ind.spWhy : '');
             b.style.opacity = off ? '0.4' : '1'; b.style.background = m > 1 ? '#c62828' : '#455a64';
             b.disabled = !!off;
         }
