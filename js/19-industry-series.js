@@ -63,7 +63,7 @@
             Object.keys(N).forEach(function (kind) {
                 let base = kind + '_bronze', cold = kind + '_cold', B = IND_ITEMS_RAW[base]; if (!B) return;
                 add[cold] = Object.assign({}, B, { name: '冷锻青铜' + N[kind], use: '冷锻的，耐久只有 40%' });
-                if (kind === 'knife') MB_KNIFE[cold] = Object.assign({}, MB_KNIFE[base], { dura: Math.round(MB_KNIFE[base].dura * 0.4), name: add[cold].name });
+                if (kind === 'knife') { MB_KNIFE[cold] = Object.assign({}, MB_KNIFE[base], { dura: Math.round(MB_KNIFE[base].dura * 0.4), name: add[cold].name }); TL_TOOL[cold] = { kind: 'knife', tier: 'bronze', dura: MB_KNIFE[cold].dura, knife: true }; }   // 刀要在 TL_TOOL 里也有，不然认不出是刀：左键砍右键雕都没用（作者 11-19 卡住了）
                 else TL_TOOL[cold] = Object.assign({}, TL_TOOL[base], { dura: Math.round(TL_TOOL[base].dura * 0.4) });
                 add['broken_' + cold] = { name: '坏了的' + add[cold].name, col: 0x616161, use: '工作台：回收一半主料，或者加 1 胶水修好' };
                 IND_CRAFT.push({ out: 'bronze', n: 1, in: { ['broken_' + cold]: 1 }, hard: true, off: true }, { out: cold, fix: true, in: { ['broken_' + cold]: 1, glue: 1 }, hard: true });

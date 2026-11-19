@@ -14925,6 +14925,32 @@ async function enterExit(tab, key) {
             report('IND199 鼓风：搜鼓风搜得到、风箱两条做法写清楚、皮革在前', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND200')) {
+            // IND200 冷锻青铜工具都认得出来（作者 11-19 卡住了）：背包里只有冷锻青铜刀时 tlKind 是 knife，能雕模具、能砍树、能打怪（伤害跟青铜刀一样）；冷锻镐斧铲剪刀各干各的活；耐久是青铜的 40%；老存档的冷锻刀能用
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); let o = {}; ['knife', 'pick', 'axe', 'shovel', 'shears'].forEach(function (kd) { let c = kd + '_cold', b = kd + '_bronze'; o[kd] = { exists: !!IND_ITEMS[c], kind: tlKind(c), bronze: tlKind(b), dura: (mbDurTab(c) || {}).dura, bdura: (mbDurTab(b) || {}).dura }; }); return o; })()`);
+                for (const kd of ['knife', 'pick', 'axe', 'shovel', 'shears']) {
+                    const x = r[kd];
+                    if (!(x.exists && x.kind === kd && x.bronze === kd)) bad.push('冷锻' + kd + '认得出是 ' + kd + ' ' + JSON.stringify(x));
+                    else if (Math.abs(x.dura - Math.round(x.bdura * 0.4)) > 1) bad.push('冷锻' + kd + '耐久是青铜的 40% ' + JSON.stringify(x));
+                }
+                r = await J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; ind.bag = { knife_cold: 1, clay: 4 }; indSelect('knife_cold'); let o = { kind: tlKind(indSel()), can: tlCanChop() }; let t = wdChopTool(); o.chop = t && t.need; ind.bag = { knife_bronze: 1 }; indSelect('knife_bronze'); let t2 = wdChopTool(); o.chopB = t2 && t2.need; ind.bag = { knife_cold: 1 }; indSelect('knife_cold'); o.dmg = MB_KNIFE.knife_cold.dmg; o.dmgB = MB_KNIFE.knife_bronze.dmg; o.isKnife = mbIsKnife('knife_cold'); return o; })()`);
+                if (!(r.kind === 'knife' && r.can && r.chop > 0 && r.chop === r.chopB)) bad.push('只有冷锻刀能砍树，速度跟青铜刀一样 ' + JSON.stringify(r));
+                if (!(r.dmg === r.dmgB && r.isKnife)) bad.push('冷锻刀伤害跟青铜刀一样、打怪认得 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; ind.bag = { knife_cold: 1, clay: 4 }; indSelect('knife_cold'); ind.carve = null; let ok = false, msg = ''; let f0 = indFlash; indFlash = function (t) { msg = String(t); }; try { ok = ctCarveMenu(); } catch (e) { msg = 'ERR ' + e.message; } indFlash = f0; return { ok: ok, msg: msg, menu: !!document.querySelector('#sys-modal:not(.hidden)') || !!document.getElementById('ind-panel') }; })()`);
+                if (/拿上小刀|ERR/.test(r.msg)) bad.push('冷锻刀右键能雕模具 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND200 冷锻青铜工具都认得出来：刀镐斧铲剪刀、耐久 40%、冷锻刀能砍能雕', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
