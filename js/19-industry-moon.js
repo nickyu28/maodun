@@ -12,7 +12,7 @@
                 // 地貌表：区域占比（月海 40%、高地 40%，余下过渡）、撞击坑／月溪／天窗／永久阴影坑个数、平地要求
                 terrain: { regionLo: 0.4, regionHi: 0.6, craters: [14, 18], bigCraters: 3, rills: [2, 4], sky: [2, 3], pits: [6, 10], pitsSouth: [8, 12], poleZ: 240, flats: { w: 70, d: 55, n: 14 } },
                 // 资源表：区域（mare／high／crater／edge／scatter／pole）、露头个数、每个露头的份数 [最少, 最多]。份数按 docs/industry.md "月球地图"算出来的总量 ≥ 3 倍所需（改了配方表要重新算）
-                res: { ilmenite: { at: 'mare', patches: [6, 10], amt: [80, 120] }, anorthosite: { at: 'high', patches: [6, 10], amt: [40, 70] }, olivine: { at: 'crater', amt: [70, 110] }, kreep: { at: 'edge', patches: [4, 6], amt: [60, 100] }, meteor_fe: { at: 'crater', amt: [3, 6] }, troilite: { at: 'scatter', patches: [15, 25], amt: [15, 30] }, ice: { at: 'pole', amt: [60, 120] } },
+                res: { ilmenite: { at: 'mare', patches: [6, 10], amt: [100, 150] }, anorthosite: { at: 'high', patches: [6, 10], amt: [40, 70] }, olivine: { at: 'crater', amt: [70, 110] }, kreep: { at: 'edge', patches: [4, 6], amt: [60, 100] }, meteor_fe: { at: 'crater', amt: [3, 6] }, troilite: { at: 'scatter', patches: [15, 25], amt: [15, 30] }, ice: { at: 'pole', amt: [60, 120] } },
                 cellN: 30, creatures: []
             }
         };
