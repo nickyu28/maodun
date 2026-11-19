@@ -4501,7 +4501,7 @@
                 (!blaze.tomb && blaze.poisonT <= BLAZE.ffaPoisonDelay
                     ? '　毒圈 ' + Math.ceil(BLAZE.ffaPoisonDelay - blaze.poisonT) + 's 后开始收'
                     : '') +
-                (blaze.ffaFinal && !me.out ? '　决赛 ❤×' + Math.max(0, me.lives) : '') +
+                (blaze.ffaFinal && !me.out ? '　决赛 命×' + Math.max(0, me.lives) : '') +
                 (!me.out && !me.alive ? '　复活 ' + Math.ceil(Math.max(0, me.respawnT)) + 's' : '') +
                 '　钱 ' + blaze.ffaMoney;
             document.getElementById('blaze-roster').innerHTML = '';

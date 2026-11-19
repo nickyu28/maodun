@@ -1269,7 +1269,7 @@
             if (id === 'mark') { if (T.ring) T.ring.visible = false; tutSpawnMarker(); }
             if (id === 'table' && T.mark) T.mark.visible = false;
             tutBeaconFor(id);
-            blazeFlash('✔ 好，下一步');
+            blazeFlash('好，下一步');
             tutPanelRender();
         }
         function tutPanelRender() {

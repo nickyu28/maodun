@@ -1236,7 +1236,7 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
                 let mate = g.opt.kind === 'duo' ? g.actors.filter(function (b) { return b !== me; })[0] : null;
                 let flooded = g.lavaY > g.steps[me.cp || 0].y;
                 nmHudText('第 ' + me.best + ' / ' + total + ' 块　离岩浆 ' + gap + '　币 ' + (me.runCoins || 0) + '/' + TOWER.coins,
-                    (flooded && !me.out && !me.downed ? '⚠ 存档点被淹了，再掉下去' + towerLoseWord(g) + '　' : '存档点：' + (me.cp ? '第 ' + me.cp + ' 块' : '起点') + '　') +
+                    (flooded && !me.out && !me.downed ? '存档点被淹了，再掉下去' + towerLoseWord(g) + '　' : '存档点：' + (me.cp ? '第 ' + me.cp + ' 块' : '起点') + '　') +
                     kindTxt + (g.clock < TOWER.grace ? '　' + Math.ceil(TOWER.grace - g.clock) + ' 秒后岩浆开始涨' : '　岩浆在涨') +
                     (mate ? '　队友：' + mate.name + (mate.downed ? ' · 掉下去了' : mate.done ? ' · 到顶了' : '') : '') +
                     (me.downed ? '　掉下去了' : ''));

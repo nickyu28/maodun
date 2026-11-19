@@ -1768,7 +1768,7 @@
                     rows.map(function (ri) {
                         let r = ri[0];
                         return '<div style="color:' + (r === me ? '#80d8ff' : '#fff') + ';">' +
-                            (ri[1] + 1) + '. ' + r.name + (r.finished ? ' ✔' : '') + '</div>';
+                            (ri[1] + 1) + '. ' + r.name + (r.finished ? ' 完成' : '') + '</div>';
                     }).join('');
             }
         }

@@ -4238,7 +4238,7 @@
         function huntTaskHud() {
             let el = document.getElementById('hunt-task-txt'); if (!el) return;
             let t = gState.huntTask; if (!t) { el.innerText = ''; return; }
-            el.innerText = '任务：' + t.text + (t.done ? '　✔' : (t.n > 1 && t.id !== 'cash' ? '' + t.got + '/' + t.n + '' : '')) + '　+' + HUNT_TASK_REWARD;
+            el.innerText = '任务：' + t.text + (t.done ? '　完成' : (t.n > 1 && t.id !== 'cash' ? '' + t.got + '/' + t.n + '' : '')) + '　+' + HUNT_TASK_REWARD;
             el.style.color = t.done ? '#43a047' : '#e65100';
         }
 

@@ -413,13 +413,13 @@
             let q = questState();
             let rows = questToday().map(function (t, i) {
                 return '<div style="display:flex; align-items:center; gap:8px; padding:8px 4px; border-top:1px solid #eee; opacity:' + (q.done[i] ? 0.6 : 1) + ';">' +
-                    '<div style="font-size:18px; width:22px; color:' + (q.done[i] ? '#43a047' : '#bbb') + ';">' + (q.done[i] ? '✔' : '○') + '</div>' +
+                    '<div style="font-size:18px; width:22px; color:' + (q.done[i] ? '#43a047' : '#bbb') + ';">' + (q.done[i] ? '√' : '○') + '</div>' +
                     '<div style="flex:1; font-size:14px; text-align:left;">' + questText(t) + '</div>' +
                     '<div>' + coinBadgeHtml('+' + QUEST_COIN, 13) + '</div></div>';
             }).join('');
             let html = '<div style="font-size:12px; color:#777; margin-bottom:6px;">每天换一批。打完一局自动算，奖励自动发。</div>' + rows +
                 '<div style="padding:8px 4px; border-top:1px solid #eee; font-size:13px; color:' + (q.all ? '#43a047' : '#e6a23c') + ';">' +
-                (q.all ? '✔ 三个都做完了' : '三个都做完再 ' + coinBadgeHtml('+' + QUEST_ALL, 13)) + '</div>';
+                (q.all ? '三个都做完了' : '三个都做完再 ' + coinBadgeHtml('+' + QUEST_ALL, 13)) + '</div>';
             showSysModal('今日任务 ' + questDoneCount() + '/3', html, [{ label: '关闭', color: '#666' }]);
         }
 
