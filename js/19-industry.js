@@ -573,6 +573,7 @@
                 else indFixCook(c.st, b);
             });
             let bigC = b.chests.filter(function (c) { return c.big; })[0]; b.box = bigC ? bigC.items : {};
+            b.bin = Array.isArray(b.bin) ? b.bin.filter(function (e) { return e && IND_ITEMS[e.k] && e.n > 0; }).map(function (e) { return { k: e.k, n: Math.floor(e.n) }; }).slice(-IND_BIN_CAP) : [];   // 回收站（作者 11-19）：销毁的东西先进这里
             b.tiles = Array.isArray(b.tiles) ? b.tiles.filter(function (t) { return t && isFinite(t.x) && isFinite(t.z); }).slice(0, IND_TILE_CAP) : [];
             b.houses = Array.isArray(b.houses) ? b.houses.filter(function (h) { return h && IND_HOUSE[h.ty] && isFinite(h.x) && isFinite(h.z); }).slice(0, indHouseCap()) : [];
             b.houses.forEach(function (h) {
@@ -1558,7 +1559,7 @@
             indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); hmSync(); indHouseFadeTick(dt); indSyncTiles(); mbSync(); if (ind.carve) ctBar(); pdSync();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
-            ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); spBtn(); srBtn(); indSeasonLook(); }
+            ind.hudT -= dt; if (ind.hudT <= 0) { ind.hudT = 0.2; indHudUpdate(); spBtn(); srBtn(); indUndoBtnSync(); indSeasonLook(); }
         }
         // 生存值：饱食、口渴、精力按时间掉；拉肚子口渴掉 3 倍；夜里在外面精力掉 3 倍；
         // 到 0：悠闲只是变慢；硬核饿了每秒扣 1 血、渴了每秒扣 2 血，血到 0 就死
@@ -3379,23 +3380,35 @@
         function indNumHave(kind, id, k) { if (kind === 'box') { let c = indChestCur(); return c && c.items[k] || 0; } return ind.bag[k] || 0; }
         function indNumBox(kind, id, k, verb) {
             let nid = indNumId(kind, id, k), go = 'indNumGo(\'' + kind + '\',' + JSON.stringify(id).replace(/"/g, '&quot;') + ',\'' + k + '\')', have = indNumHave(kind, id, k);
-            return '<input id="' + nid + '" class="ind-num" data-def="' + have + '" value="' + have + '" type="text" inputmode="numeric" pattern="\\d*" maxlength="4" placeholder="几个" style="width:46px;padding:5px 4px;margin:3px 1px 3px 3px;font-size:14px;border:1px solid #bbb;border-radius:6px;" onpointerdown="event.stopPropagation()" onfocus="this.select()" onkeydown="if (event.key === \'Enter\') { event.preventDefault(); ' + go + '; }">' +
+            return '<input id="' + nid + '" class="ind-num" data-def="1" value="1" type="text" inputmode="numeric" pattern="\\d*" maxlength="4" placeholder="几个" style="width:46px;padding:5px 4px;margin:3px 1px 3px 3px;font-size:14px;border:1px solid #bbb;border-radius:6px;" onpointerdown="event.stopPropagation()" onfocus="this.select()" onkeydown="if (event.key === \'Enter\') { event.preventDefault(); ' + go + '; }">' +
                 '<button style="' + IND_BTN + 'margin-left:1px;" onpointerdown="event.stopPropagation()" onclick="' + go + '">' + verb + ' n</button>';
         }
         // 一行的三个选项：X 1、全 X、X n（自定义放最后）
         function indPutOpts(kind, id, k, v1, vAll, vN) {
-            let q = JSON.stringify(id).replace(/"/g, '&quot;'), go = function (n) { return 'indPutN(\'' + kind + '\',' + q + ',\'' + k + '\',' + n + ')'; };
-            return '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="' + go(1) + '">' + v1 + ' 1</button><button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="' + go("'all'") + '">' + vAll + '</button>' + indNumBox(kind, id, k, vN);
+            let q = JSON.stringify(id).replace(/"/g, '&quot;'), go = function (n) { return 'indPutN(\'' + kind + '\',' + q + ',\'' + k + '\',' + n + ')'; }, goAll = 'indPutAllBtn(\'' + kind + '\',' + q + ',\'' + k + '\')';
+            return '<button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="' + go(1) + '">' + v1 + ' 1</button><button style="' + IND_BTN + '" onpointerdown="event.stopPropagation()" onclick="' + goAll + '">' + vAll + '</button>' + indNumBox(kind, id, k, vN);
         }
         function indNumGo(kind, id, k) {
             if (!ind) return false;
             let el = document.getElementById(indNumId(kind, id, k)), raw = el ? String(el.value).trim() : '';
-            if (raw === '') return indPutN(kind, id, k, 'all');
+            if (raw === '') return indPutN(kind, id, k, 1);
             if (!/^\d+$/.test(raw)) { indFlash('填个数字'); return false; }
             let n = parseInt(raw, 10); if (!(n > 0)) { indFlash('填个数字'); return false; }
             return indPutN(kind, id, k, n);
         }
+        // 带数量的放、拿：全拿、全放要连点两次才生效（作者 11-19）；每次操作前后拍照，能 Ctrl+Z 撤销
         function indPutN(kind, id, k, n) {
+            if (!ind) return false;
+            let snap = indUSnap(), r = indPutN0(kind, id, k, n); indURecord(snap); return r;
+        }
+        // 全拿、全放的按钮：第一次点只提示，3 秒内再点同一个才生效
+        function indPutAllBtn(kind, id, k) {
+            if (!ind) return false;
+            let key = kind + '|' + id + '|' + k, A = ind.allArm;
+            if (!A || A.key !== key || Date.now() > A.until) { ind.allArm = { key: key, until: Date.now() + 3000 }; indFlash('再点一次才会全部放或拿'); return false; }
+            ind.allArm = null; return indPutN(kind, id, k, 'all');
+        }
+        function indPutN0(kind, id, k, n) {
             if (!ind) return false;
             let have = indNumHave(kind, id, k); if (!(have > 0)) return false;
             n = n === 'all' ? have : Math.min(n, have);
@@ -3478,7 +3491,7 @@
             indPanelShow('box', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + (c.ty === 'fridge' ? '冰箱' + (c.pw ? '，通电' : '，没电') : c.cold ? '冷藏箱' + (c.iceT > 0 ? '，有冰' : c.items.ice ? '' : '，没冰') : '仓库箱') + (c.big ? '' : '　' + indSlotsOf(box) + ' / ' + IND_CHEST_SLOTS + ' 格') + '</div>' +
                 '<div id="ind-box-zone" style="min-height:40px;border-radius:6px;">' + rows + '</div>' +
                 '<div style="margin-top:8px;font-weight:bold;">身上　<small style="color:#888;font-weight:normal;">按住一格拖进箱子；点一下选中再点按钮也行</small></div>' +
-                '<div id="ind-bag-zone" style="min-height:40px;border-radius:6px;padding:2px;">' + indBagChips() + '</div>' +
+                '<div id="ind-bag-zone" style="min-height:40px;border-radius:6px;padding:2px;">' + indBagChips() + '</div>' + indBinHtml() +
                 '<div style="margin-top:8px;text-align:right;">' + selBtn + '<button id="ind-box-putall" style="' + IND_BTN + 'background:#2e7d32;" onclick="indBoxPutAll()">全部放进去</button><button id="ind-box-putsame" style="' + IND_BTN + 'background:#00838f;" onclick="indBoxPutSame()">同类放进去</button><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
             ind.boxId = cid;
         }
@@ -3600,6 +3613,61 @@
 
         // ── 一键销毁（任务 14.2）：整格没了，5 秒内能撤销 ──
         const IND_UNDO_MS = 5000;
+        // ── 回收站和多步撤销（作者 11-19：老是误触，东西就毁了）──
+        const IND_BIN_CAP = 20, IND_UNDO_STEPS = 10, IND_UNDO_SECS = 60;
+        function indBinAdd(k, n) {
+            let B = ind.base.bin = ind.base.bin || [], e = B.filter(function (x) { return x.k === k; })[0];
+            if (e) e.n += n; else { B.push({ k: k, n: n }); while (B.length > IND_BIN_CAP) B.shift(); }   // 满了先进先出
+        }
+        function indBinTake(i) {
+            if (!ind) return false; let B = ind.base.bin || [], e = B[i]; if (!e) return false;
+            let r = indBoxAdd(e.k, e.n); B.splice(i, 1);
+            indFlash('拿回了 ' + indName(e.k) + ' × ' + e.n + (r.ground ? '，放不下的在脚下' : '')); indSave(); indPanelRefresh(); return true;
+        }
+        function indBinHtml() {
+            let B = (ind.base.bin || []);
+            return '<div style="margin-top:10px;font-weight:bold;">回收站　<small style="color:#888;font-weight:normal;">销毁的东西先到这里，最多 ' + IND_BIN_CAP + ' 种，满了先扔最早的</small></div>' +
+                (B.length ? B.map(function (e, i) { return indRow(indIconImg(e.k, 22) + indName(e.k) + ' × ' + e.n, '<button class="ind-bin-take" style="' + IND_BTN + 'background:#2e7d32;" onclick="indBinTake(' + i + ')">拿回</button>'); }).join('') : '<div style="color:#999;padding:4px 0;">空的</div>');
+        }
+        // 撤销：每个改变背包、箱子、设备里东西的操作前后各拍一张照，记下差；Ctrl+Z 把最近一步的差反过来做，最多 10 步、60 秒内
+        function indUSnap() {
+            let o = { bag: Object.assign({}, ind.bag), ch: {}, dv: {} };
+            (ind.base.chests || []).forEach(function (c) { o.ch[c.id] = Object.assign({}, c.items); });
+            (ind.base.devs || []).forEach(function (d) { if (d.st) o.dv[d.id] = Object.assign({}, d.st); });
+            return o;
+        }
+        function indUDiff(a, b) {
+            let d = { bag: {}, ch: {}, dv: {} }, any = false, one = function (x, y, out) { let ks = {}; Object.keys(x || {}).concat(Object.keys(y || {})).forEach(function (k) { ks[k] = 1; }); Object.keys(ks).forEach(function (k) { let v = ((y || {})[k] || 0) - ((x || {})[k] || 0); if (v) { out[k] = v; any = true; } }); };
+            one(a.bag, b.bag, d.bag);
+            ['ch', 'dv'].forEach(function (f) { let ids = {}; Object.keys(a[f]).concat(Object.keys(b[f])).forEach(function (i) { ids[i] = 1; }); Object.keys(ids).forEach(function (i) { let o = {}; one(a[f][i], b[f][i], o); if (Object.keys(o).length) d[f][i] = o; }); });
+            return any ? d : null;
+        }
+        function indURecord(before) {
+            if (!ind || !before) return;
+            let d = indUDiff(before, indUSnap()); if (!d) return;
+            let S = ind.ustack = ind.ustack || []; S.push({ d: d, t: Date.now() }); while (S.length > IND_UNDO_STEPS) S.shift();
+            indUndoBtnSync();
+        }
+        function indUndoStep() {
+            if (!ind || ind.over || ind.dead) return false;
+            let S = ind.ustack = (ind.ustack || []).filter(function (e) { return Date.now() - e.t <= IND_UNDO_SECS * 1000; });
+            let e = S.pop(); if (!e) { indFlash('没有能撤销的'); indUndoBtnSync(); return false; }
+            let d = e.d, ground = 0;
+            Object.keys(d.bag).forEach(function (k) { let v = d.bag[k]; if (v < 0) { let r = indBoxAdd(k, -v); ground += r.ground; } else { indBagDel(k, Math.min(v, ind.bag[k] || 0)); } });
+            ['ch', 'dv'].forEach(function (f) {
+                Object.keys(d[f]).forEach(function (id) {
+                    let c = f === 'ch' ? (ind.base.chests || []).filter(function (x) { return String(x.id) === id; })[0] : (ind.base.devs || []).filter(function (x) { return String(x.id) === id; })[0], store = c && (f === 'ch' ? c.items : c.st);
+                    Object.keys(d[f][id]).forEach(function (k) {
+                        let v = d[f][id][k];
+                        if (v < 0) { if (store && (f === 'dv' || indFits(store, indChestCap(c), k, -v) >= -v)) store[k] = (store[k] || 0) - v; else { let r = indBoxAdd(k, -v); ground += r.ground; } }
+                        else if (store) { store[k] = (store[k] || 0) - Math.min(v, store[k] || 0); if (store[k] <= 0) delete store[k]; }
+                    });
+                });
+            });
+            ind.hudSig = ''; indSave(); indPanelRefresh(); indUndoBtnSync(); indFlash('撤销了' + (ground ? '，放不下的在脚下' : ''));
+            return true;
+        }
+        function indUndoBtnSync() { let b = document.getElementById('ind-btn-undo'); if (b) { let n = (ind && ind.ustack || []).filter(function (e) { return Date.now() - e.t <= IND_UNDO_SECS * 1000; }).length; b.style.opacity = n ? '1' : '0.45'; b.textContent = '撤销　Ctrl+Z' + (n ? '　' + n : ''); } }
         // 销毁要先确认（作者 11-19：误触销毁太多）：弹窗写清东西名和数量，默认选"取消"，Esc 等于取消；确认以后 0.8 秒内不响应连点
         function indTrash(where, i) {
             if (!ind || ind.trashAsk) return false;
@@ -3633,6 +3701,7 @@
             if (where === 'bag') { it = indSlots()[i]; if (!it) return false; indBagDel(it.k, it.n); }
             else { c = indChestCur(); if (!c) return false; it = indSlotsIn(c.items)[i]; if (!it) return false; c.items[it.k] -= it.n; if (c.items[it.k] <= 0) delete c.items[it.k]; }
             if (ind.hotT && !ind.bag[it.k]) delete ind.hotT[it.k];
+            indBinAdd(it.k, it.n);
             ind.undo = { where: where, cid: c ? c.id : null, k: it.k, n: it.n, until: Date.now() + IND_UNDO_MS };
             indSelClear(); ind.hudSig = ''; indSave(); indPanelRefresh(); indUndoBar();
             return true;
@@ -3656,6 +3725,7 @@
                 if (indFits(c.items, indChestCap(c), U.k, U.n) < U.n) { indFlash('放不下了'); return false; }
                 c.items[U.k] = (c.items[U.k] || 0) + U.n;
             }
+            { let B = ind.base.bin || [], j = B.map(function (e) { return e.k; }).lastIndexOf(U.k); if (j >= 0) { B[j].n -= U.n; if (B[j].n <= 0) B.splice(j, 1); } }   // 撤销销毁，回收站里也扣掉
             ind.undo = null; ind.hudSig = ''; indSave(); indUndoBar(); indPanelRefresh(); indFlash('撤销了');
             return true;
         }
@@ -3792,6 +3862,7 @@
             if (k === 'shift') { ind.k.run = true; return; }
             if (e.repeat) return;
             if (k === 'escape') { if (ind.carve && !ind.panel) { ctCarveExit(); return; } if (indCancelWire()) return; if (ind.panel) indPanelClose(); return; }   // 任务 138：Esc 退出雕模具   // 任务 104：连线状态下 Esc 先取消连线
+            if (k === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (ind.undo && Date.now() < ind.undo.until && !((ind.ustack || []).length && ind.ustack[ind.ustack.length - 1].t > ind.undo.until - IND_UNDO_MS)) indUndo(); else indUndoStep(); return; }   // Ctrl+Z 撤销最近一步
             if (k === 'z' && !ind.panel && !e.ctrlKey && !e.metaKey) { spCycle(); return; }   // 倍速（任务 144）
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
             if (k === 'c' && !e.ctrlKey && !e.metaKey && (!ind.panel || ind.panel === 'book')) { if (ind.panel) indPanelClose(); else indPanelBook(''); return; }   // 任务 126：C 配方查询，只能看，不能合成
@@ -3828,7 +3899,7 @@
             d.innerHTML =
                 '<div style="position:absolute;left:8px;top:8px;"><div id="ind-status" style="background:rgba(255,255,255,.92);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:bold;line-height:1.55;"></div>' +
                 '<div id="ind-wear" style="margin-top:4px;background:rgba(255,255,255,.92);padding:4px 10px;border-radius:8px;font-size:13px;pointer-events:auto;"></div></div>' +
-                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方　C</button><button id="ind-btn-bag" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-map" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) wdMapToggle()">地图</button><button id="ind-btn-speed" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="spCycle()">倍速 ×1　Z</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表　T</button><button id="ind-btn-ach" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="achPanel()">成就　H</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
+                '<div style="position:absolute;right:8px;top:8px;pointer-events:auto;"><button id="ind-btn-book" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelBook(\'\')">配方　C</button><button id="ind-btn-bag" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包</button><button id="ind-btn-up" style="' + IND_BTN + 'background:#e65100;font-size:16px;padding:10px 14px;display:none;" onclick="indAskHard()">升级成硬核</button><button id="ind-btn-map" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="if (ind && !ind.paused) wdMapToggle()">地图</button><button id="ind-btn-speed" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="spCycle()">倍速 ×1　Z</button><button id="ind-btn-elems" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPanelElems()">元素表　T</button><button id="ind-btn-ach" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="achPanel()">成就　H</button><button id="ind-btn-undo" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;opacity:.45;" onclick="if (ind && !ind.paused) { if (ind.undo && Date.now() < ind.undo.until) indUndo(); else indUndoStep(); }">撤销　Ctrl+Z</button><button id="ind-btn-pause" style="' + IND_BTN + 'font-size:16px;padding:10px 14px;" onclick="indPause()">暂停</button><button id="ind-btn-exit" style="' + IND_BTN + 'background:#d84315;font-size:18px;padding:10px 16px;" onclick="indExit()">返回大厅</button></div>' +
                 '<div id="ind-hint" style="position:fixed;left:50%;top:6px;transform:translateX(-50%);max-width:70vw;color:#fff;padding:3px 12px;font-size:15px;line-height:1.35;white-space:nowrap;text-align:center;text-shadow:0 0 4px #000,0 0 4px #000;background:rgba(0,0,0,.28);border-radius:8px;pointer-events:none;z-index:6;"></div>' +
                 '<div id="ind-cross" style="position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.7);pointer-events:none;z-index:6;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +

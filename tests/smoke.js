@@ -8373,7 +8373,7 @@ async function enterExit(tab, key) {
                 const k0 = await T.eval(`ind.boxSel && indSlots()[ind.boxSel.i].k`);
                 const allBtn = `Array.prototype.filter.call(document.querySelectorAll('#ind-panel button'), function (b) { return b.textContent === '全放'; })[0]`;
                 if (!(await T.eval(`!!${allBtn}`))) bad.push('点一格该选中、出"全放"');
-                else { await T.eval(`${allBtn}.click(); true;`); if (!(await T.eval(`ind.bag['${k0}'] === undefined && indChestCur().items['${k0}'] > 0`))) bad.push('点选后"全放"没放'); }
+                else { await T.eval(`${allBtn}.click(); true;`); await T.eval(`${allBtn}.click(); true;`); if (!(await T.eval(`ind.bag['${k0}'] === undefined && indChestCur().items['${k0}'] > 0`))) bad.push('点选后"全放"没放'); }
                 // 箱子满了：拖不进、背包不变
                 await T.eval(`(function(){ let c = indChestCur(), ks = Object.keys(IND_ITEMS).filter(function (k) { return ['wood','stone','coal','salt','clay'].indexOf(k) < 0; }).slice(0, ${30}); c.items = {}; ks.forEach(function (k) { c.items[k] = 1; }); indPanelBox(); return true; })()`);
                 const before = await J(`ind.bag`);
@@ -12203,22 +12203,22 @@ async function enterExit(tab, key) {
                 if (!(r.stone && /^放 1\|全放\|放 n\|IN:3$|^放 1\|全放\|IN:3\|放 n$/.test(r.stone.replace(/\|放 n/, '|放 n')) )) { /* 下面按位置严格判 */ }
                 const pos = (txt, a) => a.map((w) => txt.indexOf(w));
                 const okOrder = (txt, words) => { const p = pos(txt, words); return p.every((v, i) => v >= 0 && (i === 0 || v > p[i - 1])); };
-                if (!(r.wood && r.woodFuel && okOrder(r.wood, ['放进去炼 1', '全放进去炼', 'IN:7', '放进去炼 n']) && okOrder(r.woodFuel, ['加柴 1', '全加柴', 'IN:7', '加柴 n']))) bad.push('任务 135：炉料放进去炼 1、全放、自定义最后（默认 7），燃料加柴 1、全加柴、加柴 n ' + JSON.stringify(r.wood));
-                if (!(r.stone && okOrder(r.stone, ['放进去炼 1', '全放进去炼', 'IN:3', '放进去炼 n']) && r.stone.indexOf('加柴') < 0)) bad.push('不是燃料的没有加燃料 ' + JSON.stringify(r.stone));
+                if (!(r.wood && r.woodFuel && okOrder(r.wood, ['放进去炼 1', '全放进去炼', 'IN:1', '放进去炼 n']) && okOrder(r.woodFuel, ['加柴 1', '全加柴', 'IN:1', '加柴 n']))) bad.push('任务 135：炉料放进去炼 1、全放、自定义最后（默认 7），燃料加柴 1、全加柴、加柴 n ' + JSON.stringify(r.wood));
+                if (!(r.stone && okOrder(r.stone, ['放进去炼 1', '全放进去炼', 'IN:1', '放进去炼 n']) && r.stone.indexOf('加柴') < 0)) bad.push('不是燃料的没有加燃料 ' + JSON.stringify(r.stone));
                 r = await J(`(function(){ let B = ind.base; ind.bag = { wood: 7 }; ind.cookId = 'stove'; B.stove.fuel = 0; indPutN('fuel', 0, 'wood', 1); let a = B.stove.fuel, wa = ind.bag.wood; ind.fuelOk = { k: 'wood', n: 6 }; indPutN('fuel', 0, 'wood', 'all'); ind.fuelOk = null; let b = B.stove.fuel, wb = ind.bag.wood || 0;
                     ind.bag = { wood: 5 }; B.stove.items = {}; indPutN('stove', 0, 'wood', 99); let over = B.stove.items.wood, left = ind.bag.wood || 0; ind.bag = { stone: 4 }; B.stove.items = {}; indPutN('stove', 0, 'stone', 'all'); let all = B.stove.items.stone;
                     ind.bag = { stone: 4 }; indPanelStove(); let inp = document.querySelector('#ind-panel input.ind-num'); let def = inp && inp.value; ind.bag.stone = 6; indPanelStove(); inp = document.querySelector('#ind-panel input.ind-num'); let def2 = inp && inp.value; inp.value = '2'; indPanelStove(); inp = document.querySelector('#ind-panel input.ind-num'); let kept = inp && inp.value;
                     return { a: a, wa: wa, b: b, wb: wb, over: over, left: left, all: all, def: def, def2: def2, kept: kept, per: IND_ITEMS.wood.fuel }; })()`);
                 if (!(r.a === r.per && r.wa === 6 && r.b === r.per * 7 && r.wb === 0)) bad.push('加 1 加一块、全加整堆 ' + JSON.stringify(r));
-                if (!(r.over === 5 && r.left === 0 && r.all === 4 && r.def === '4' && r.def2 === '6' && r.kept === '2')) bad.push('n 超过持有取全部、全放整堆、默认值跟着持有数、自己改过的不被刷掉 ' + JSON.stringify(r));
+                if (!(r.over === 5 && r.left === 0 && r.all === 4 && r.def === '1' && r.def2 === '1' && r.kept === '2')) bad.push('n 超过持有取全部、全放整堆、默认值是 1、自己改过的不被刷掉 ' + JSON.stringify(r));
                 r = await J(`(function(){ let B = ind.base; B.chests = [{ id: 1, x: 12, z: 12, big: true, items: { stone: 50 } }]; ind.boxId = 1; ind.bag = { wood: 9 }; indSelClear(); indSelToggle('bag', 0); indPanelBox(1);
                     let o = ${ord}; let btns = o(document.getElementById('ind-panel')); let sel = btns.slice(btns.indexOf('放 1'));
                     indPutN('boxput', 0, 'wood', 4); let a = [ind.bag.wood, B.chests[0].items.wood]; indPutN('boxput', 0, 'wood', 'all'); let b = [ind.bag.wood || 0, B.chests[0].items.wood]; indPutN('box', 0, 'stone', 3); let c = [ind.bag.stone, B.chests[0].items.stone]; indPutN('box', 0, 'stone', 'all'); let d = [ind.bag.stone, B.chests[0].items.stone || 0];
                     ind.bag = { stone: 10 }; B.ground = []; indPutN('drop', 0, 'stone', 3); let g = [ind.bag.stone, B.ground.length]; return { sel: sel, a: a, b: b, c: c, d: d, g: g }; })()`);
-                if (!(okOrder(r.sel, ['放 1', '全放', 'IN:9', '放 n']))) bad.push('箱子里选中一格：放 1、全放、放 n ' + JSON.stringify(r.sel));
+                if (!(okOrder(r.sel, ['放 1', '全放', 'IN:1', '放 n']))) bad.push('箱子里选中一格：放 1、全放、放 n ' + JSON.stringify(r.sel));
                 if (!(r.a.join() === '5,4' && r.b.join() === '0,9' && r.c.join() === '3,47' && r.d.join() === '50,0' && r.g.join() === '7,3')) bad.push('放进箱子 4、全放、拿 3、全拿、扔 3 ' + JSON.stringify(r));
                 r = await J(`(function(){ let B = ind.base; B.chests = [{ id: 1, x: 12, z: 12, big: true, items: { stone: 50 } }]; ind.boxId = 1; ind.bag = {}; indPanelBox(1); let o = ${ord}; let row = Array.prototype.filter.call(document.querySelectorAll('#ind-panel .ind-slot'), function (d) { return /石头 × 50/.test(d.textContent); })[0]; return { row: row ? o(row) : null }; })()`);
-                if (!(r.row && okOrder(r.row.replace('销毁', ''), ['拿 1', '全拿', 'IN:50', '拿 n']))) bad.push('箱子每行：拿 1、全拿、拿 n ' + JSON.stringify(r));
+                if (!(r.row && okOrder(r.row.replace('销毁', ''), ['拿 1', '全拿', 'IN:1', '拿 n']))) bad.push('箱子每行：拿 1、全拿、拿 n ' + JSON.stringify(r));
                 r = await J(`(function(){ let b = indFixBase({ ver: 12, rule: 'hard', bag: { wood: 3 } }); return { w: b.bag.wood }; })()`);
                 if (r.w !== 3) bad.push('老存档读档 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
@@ -14655,6 +14655,39 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND192 销毁要确认：弹窗写名字数量、取消和 Esc 不销毁、确定才销毁、连点不响应、按钮大小颜色距离', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND193')) {
+            // IND193 撤销和回收站（作者 11-19）：Ctrl+Z 撤销最近一步放、拿，最多 10 步、60 秒内；销毁的东西进回收站能拿回、最多 20 种先进先出；数量框默认 1；全拿全放第一次点只提示、再点才生效
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.chests = [{ id: 1, x: 12, z: 12, big: true, items: { stone: 50 } }]; ind.boxId = 1; ind.bag = { wood: 10 }; ind.ustack = []; indPanelBox(1);
+                    let o = {}; let defs = Array.prototype.map.call(document.querySelectorAll('#ind-panel input.ind-num'), function (e) { return e.value; }); o.defs = defs.every(function (v) { return v === '1'; }) && defs.length > 0;
+                    indPutN('box', 1, 'stone', 7); o.a = [ind.bag.stone, B.chests[0].items.stone]; indPutN('boxput', 0, 'wood', 4); o.b = [ind.bag.wood, B.chests[0].items.wood]; o.steps = ind.ustack.length;
+                    indUndoStep(); o.c = [ind.bag.wood, B.chests[0].items.wood || 0, ind.bag.stone, B.chests[0].items.stone]; indUndoStep(); o.d = [ind.bag.stone || 0, B.chests[0].items.stone, ind.bag.wood]; o.none = indUndoStep();
+                    for (let i = 0; i < 12; i++) indPutN('box', 1, 'stone', 1); o.cap = ind.ustack.length; ind.ustack.forEach(function (e) { e.t -= 61000; }); o.old = indUndoStep(); return o; })()`);
+                if (!r.defs) bad.push('数量框默认 1 ' + JSON.stringify(r));
+                if (!(r.a[0] === 7 && r.a[1] === 43 && r.b[0] === 6 && r.b[1] === 4 && r.steps === 2)) bad.push('拿、放各记一步 ' + JSON.stringify(r));
+                if (!(r.c.join() === '10,0,7,43' && r.d.join() === '0,50,10' && r.none === false)) bad.push('Ctrl+Z 一步步撤销回去，没得撤销就提示 ' + JSON.stringify(r));
+                if (!(r.cap === 10 && r.old === false)) bad.push('最多 10 步、超过 60 秒不能撤 ' + JSON.stringify(r));
+                r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.bin = []; B.chests = [{ id: 1, x: 12, z: 12, big: true, items: {} }]; ind.boxId = 1; ind.trashLast = 0; ind.trashAsk = null; ind.bag = { wood: 5 }; let o = {};
+                    indTrashDo('bag', 0); o.bin = JSON.stringify(B.bin); o.bagEmpty = Object.keys(ind.bag).length === 0; indPanelBox(1); o.html = !!document.querySelector('#ind-panel .ind-bin-take'); indBinTake(0); o.back = [ind.bag.wood, B.bin.length];
+                    B.bin = []; let keys = Object.keys(IND_ITEMS).filter(function (k) { return !/[:@]|^(inst|cyl|broken_)/.test(k); }).slice(0, 25); keys.forEach(function (k) { indBinAdd(k, 1); }); o.cap = B.bin.length; o.first = B.bin[0].k === keys[5];
+                    ind.bag = { stone: 4 }; ind.trashLast = 0; B.bin = []; indTrashDo('bag', 0); indUndo(); o.undoBin = B.bin.length; o.undoBag = ind.bag.stone; return o; })()`);
+                if (!(r.bin === '[{"k":"wood","n":5}]' && r.bagEmpty && r.html && r.back[0] === 5 && r.back[1] === 0)) bad.push('销毁进回收站、能拿回 ' + JSON.stringify(r));
+                if (!(r.cap === 20 && r.first && r.undoBin === 0 && r.undoBag === 4)) bad.push('回收站最多 20 种先进先出，5 秒撤销时回收站也扣掉 ' + JSON.stringify(r));
+                r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.chests = [{ id: 1, x: 12, z: 12, big: true, items: { stone: 50 } }]; ind.boxId = 1; ind.bag = {}; ind.allArm = null; let o = {};
+                    indPutAllBtn('box', 1, 'stone'); o.a = ind.bag.stone || 0; indPutAllBtn('box', 1, 'stone'); o.b = ind.bag.stone || 0; return o; })()`);
+                if (!(r.a === 0 && r.b === 50)) bad.push('全拿第一次只提示、再点才生效 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND193 撤销和回收站：Ctrl+Z 最多 10 步 60 秒、销毁进回收站能拿回、数量默认 1、全拿全放点两次', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
