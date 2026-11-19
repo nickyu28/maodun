@@ -8322,12 +8322,12 @@ async function enterExit(tab, key) {
                 // ── 14.2 背包销毁、撤销、过期 ──
                 await T.eval(`indPanelClose(); ind.bag = { wood: 5, stone: 7, coal: 3 }; indPanelBag(); true;`);
                 const i1 = await T.eval(`indSlots().findIndex(function (s) { return s.k === 'stone'; })`);
-                await T.eval(`document.querySelectorAll('#ind-panel .ind-slot[data-from="bag"]')[${i1}].querySelector('.ind-trash').click(); true;`);
+                await T.eval(`document.querySelectorAll('#ind-panel .ind-slot[data-from="bag"]')[${i1}].querySelector('.ind-trash').click(); document.getElementById('ind-trash-yes').click(); ind.trashLast = 0; true;`);
                 if (!(await T.eval(`ind.bag.stone === undefined && ind.bag.wood === 5 && ind.bag.coal === 3`))) bad.push('销毁中间那格，石头该没了 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 if (!(await T.eval(`!!document.getElementById('ind-undo-btn') && /销毁了 .*× 7/.test(document.getElementById('ind-undo').textContent)`))) bad.push('上方没出"销毁了 X × N　撤销"');
                 await T.eval(`document.getElementById('ind-undo-btn').click(); true;`);
                 if (!(await T.eval(`ind.bag.stone === 7 && !document.getElementById('ind-undo')`))) bad.push('5 秒内撤销该还原 ' + await T.eval(`JSON.stringify(ind.bag)`));
-                await T.eval(`indTrash('bag', indSlots().findIndex(function (s) { return s.k === 'coal'; })); true;`);
+                await T.eval(`indTrashDo('bag', indSlots().findIndex(function (s) { return s.k === 'coal'; })); true;`);
                 const t0 = Date.now();
                 if (!(await until(T, `!document.getElementById('ind-undo')`, 8000)) || Date.now() - t0 < 4000) bad.push('撤销条该 5 秒后才消失 ' + (Date.now() - t0));
                 if (!(await T.eval(`indUndo() === false && ind.bag.coal === undefined`))) bad.push('过了 5 秒撤销不该还原');
@@ -8345,7 +8345,7 @@ async function enterExit(tab, key) {
                 const cid = await T.eval(`(function(){ ind.base.chests.push({ id: 900, x: 3, z: 3, big: false, items: { wood: 10, iron: 4, coal: 2 } }); return 900; })()`);
                 await T.eval(`ind.bag = {}; indPanelBox(${cid}); true;`);
                 const bi = await T.eval(`indSlotsIn(indChestCur().items).findIndex(function (s) { return s.k === 'iron'; })`);
-                await T.eval(`document.querySelectorAll('#ind-panel .ind-slot[data-from="box"]')[${bi}].querySelector('.ind-trash').click(); true;`);
+                await T.eval(`document.querySelectorAll('#ind-panel .ind-slot[data-from="box"]')[${bi}].querySelector('.ind-trash').click(); document.getElementById('ind-trash-yes').click(); ind.trashLast = 0; true;`);
                 if (!(await T.eval(`indChestCur().id === 900 && indChestCur().items.iron === undefined && indChestCur().items.wood === 10`))) bad.push('箱子里销毁该没了');
                 await T.eval(`indUndo(); true;`);
                 if (!(await T.eval(`indChestCur().items.iron === 4 && Object.keys(ind.bag).length === 0`))) bad.push('箱子里撤销该回箱子');
@@ -14622,6 +14622,39 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND191 死亡规则：基地里死东西散落地上、远征里死东西没了、空身不报错', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND192')) {
+            // IND192 销毁要确认（作者 11-19）：点销毁先弹确认写东西名和数量；取消、Esc 后东西还在；确定才没；确认开着别的键不管用；刚确认完 0.8 秒内连点不响应；销毁按钮灰红、不小于 44 像素、离"拿 n"远；Ctrl+Q 不弹确认
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const esc = () => T.eval(`indKeyDown({ key: 'Escape', target: document.body, preventDefault: function () { }, repeat: false }); true;`);
+                await T.eval(`cancelAnimationFrame(ind.raf); indGoBase(null); ind.base.rule = 'hard'; ind.bag = { wood: 5, stone: 3 }; ind.trashLast = 0; indPanelBag(); true;`);
+                let r = await J(`(function(){ let b = document.querySelector('#ind-panel .ind-trash'); let rc = b.getBoundingClientRect(), st = getComputedStyle(b); b.click(); let a = document.getElementById('ind-trash-ask'); return { ask: !!a, txt: a ? a.innerText : '', focus: document.activeElement && document.activeElement.id, bag: JSON.stringify(ind.bag), h: rc.height, w: rc.width, bg: st.backgroundColor, ml: st.marginLeft }; })()`);
+                if (!(r.ask && /销毁 .* × \d+/.test(r.txt) && /取消/.test(r.txt) && /确定销毁/.test(r.txt) && r.focus === 'ind-trash-no' && r.bag === '{"wood":5,"stone":3}')) bad.push('点销毁先弹确认，写名字和数量，默认选取消，东西还在 ' + JSON.stringify(r));
+                if (!(r.h >= 44 && r.w >= 44 && r.bg !== 'rgb(229, 57, 53)' && parseFloat(r.ml) >= 12)) bad.push('销毁按钮不小于 44 像素、不是原来的鲜红、离别的按钮远 ' + JSON.stringify([r.h, r.w, r.bg, r.ml]));
+                await T.eval(`document.getElementById('ind-trash-no').click(); true;`);
+                if (await T.eval(`!!document.getElementById('ind-trash-ask') || ind.bag.wood !== 5 || ind.bag.stone !== 3`)) bad.push('取消后东西还在、确认窗关了');
+                await T.eval(`ind.trashLast = 0; document.querySelector('#ind-panel .ind-trash').click(); true;`); await esc();
+                if (await T.eval(`!!document.getElementById('ind-trash-ask') || ind.bag.wood !== 5`)) bad.push('Esc 等于取消');
+                await T.eval(`ind.trashLast = 0; document.querySelector('#ind-panel .ind-trash').click(); indKeyDown({ key: 'e', target: document.body, preventDefault: function () { }, repeat: false }); true;`);
+                if (!(await T.eval(`!!document.getElementById('ind-trash-ask') && ind.panel === 'bag'`))) bad.push('确认开着别的键不管用');
+                await T.eval(`document.getElementById('ind-trash-yes').click(); true;`);
+                r = await J(`{ wood: ind.bag.wood, stone: ind.bag.stone, ask: !!document.getElementById('ind-trash-ask'), undo: !!document.getElementById('ind-undo') }`);
+                if (!(r.wood === undefined && r.stone === 3 && !r.ask && r.undo)) bad.push('确定销毁以后才没，5 秒内能撤销 ' + JSON.stringify(r));
+                r = await J(`(function(){ let b = document.querySelector('#ind-panel .ind-trash'); b.click(); let a1 = !!document.getElementById('ind-trash-ask'); return a1; })()`);
+                if (r) bad.push('刚销毁完 0.8 秒内连点不响应 ' + r);
+                await T.eval(`ind.trashLast = 0; ind.bag = { sulfur: 2 }; ind.selIdx = 0; indTrashHand(); true;`);
+                if (!(await T.eval(`ind.bag.sulfur === undefined && !document.getElementById('ind-trash-ask')`))) bad.push('Ctrl+Q 手上那格不弹确认');
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND192 销毁要确认：弹窗写名字数量、取消和 Esc 不销毁、确定才销毁、连点不响应、按钮大小颜色距离', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }

@@ -3442,7 +3442,7 @@
         function indChestCap(c) { return c.big ? 0 : IND_CHEST_SLOTS; }
         // 格子：{ 物品: 总数 } 按 99 一格切开（和背包一样）
         function indSlotsIn(B) { let L = []; Object.keys(B).forEach(function (k) { let c = B[k], st = indStackOf(k); while (c > 0) { L.push({ k: k, n: Math.min(st, c) }); c -= st; } }); return L; }
-        const IND_X_BTN = 'margin-left:4px;padding:1px 6px;border:none;border-radius:8px;background:#e53935;color:#fff;font-size:12px;cursor:pointer;';
+        const IND_X_BTN = 'margin-left:16px;padding:6px 10px;min-width:44px;min-height:44px;border:none;border-radius:8px;background:#a1665f;color:#fff;font-size:12px;cursor:pointer;';   // 销毁按钮：灰红、离别的按钮远一点、触屏不小于 44 像素（作者 11-19）
         // 身上的格子（样子照屏幕下方的物品栏）；箱子面板和背包面板共用
         // 箱子面板多选（任务 93）：点一格选中，再点别的格也选中，再点已选中的取消；两边（背包、箱子）各自记
         function indSelSet(from) { let M = ind.boxMulti = ind.boxMulti || { bag: [], box: [] }; return M[from]; }
@@ -3600,7 +3600,34 @@
 
         // ── 一键销毁（任务 14.2）：整格没了，5 秒内能撤销 ──
         const IND_UNDO_MS = 5000;
+        // 销毁要先确认（作者 11-19：误触销毁太多）：弹窗写清东西名和数量，默认选"取消"，Esc 等于取消；确认以后 0.8 秒内不响应连点
         function indTrash(where, i) {
+            if (!ind || ind.trashAsk) return false;
+            if (Date.now() - (ind.trashLast || 0) < 800) return false;
+            let it = null, c = null;
+            if (where === 'bag') it = indSlots()[i]; else { c = indChestCur(); if (c) it = indSlotsIn(c.items)[i]; }
+            if (!it) return false;
+            ind.trashAsk = { where: where, i: i, k: it.k, n: it.n };
+            if (document.pointerLockElement) { try { document.exitPointerLock(); } catch (e) { } }
+            let d = document.createElement('div'); d.id = 'ind-trash-ask';
+            d.style.cssText = 'position:fixed;inset:0;z-index:130;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;';
+            d.innerHTML = '<div style="background:#fff;border-radius:12px;padding:20px 22px;max-width:86vw;text-align:center;"><div style="font-size:18px;font-weight:bold;margin-bottom:6px;">销毁 ' + indName(it.k) + ' × ' + it.n + '？</div><div style="font-size:13px;color:#888;margin-bottom:14px;">销毁后 5 秒内能撤销</div>' +
+                '<button id="ind-trash-no" style="margin:4px 10px;padding:10px 26px;min-height:44px;min-width:96px;font-size:16px;border:none;border-radius:8px;background:#455a64;color:#fff;cursor:pointer;" onclick="indTrashAnswer(false)">取消</button>' +
+                '<button id="ind-trash-yes" style="margin:4px 10px;padding:10px 26px;min-height:44px;min-width:96px;font-size:16px;border:none;border-radius:8px;background:#a1665f;color:#fff;cursor:pointer;" onclick="indTrashAnswer(true)">确定销毁</button></div>';
+            document.body.appendChild(d);
+            try { document.getElementById('ind-trash-no').focus(); } catch (e) { }
+            return true;
+        }
+        function indTrashAnswer(yes) {
+            let A = ind && ind.trashAsk; if (!A) return;
+            ind.trashAsk = null; ind.trashLast = Date.now();
+            let e = document.getElementById('ind-trash-ask'); if (e && e.parentNode) e.parentNode.removeChild(e);
+            if (!yes) return;
+            let it = A.where === 'bag' ? indSlots()[A.i] : (indChestCur() ? indSlotsIn(indChestCur().items)[A.i] : null);
+            if (!it || it.k !== A.k) { indFlash('东西变了，没销毁'); return; }
+            indTrashDo(A.where, A.i);
+        }
+        function indTrashDo(where, i) {
             if (!ind) return false;
             let it, c = null;
             if (where === 'bag') { it = indSlots()[i]; if (!it) return false; indBagDel(it.k, it.n); }
@@ -3610,7 +3637,7 @@
             indSelClear(); ind.hudSig = ''; indSave(); indPanelRefresh(); indUndoBar();
             return true;
         }
-        function indTrashHand() { let SL = indSlots(), i = ind ? ind.selIdx : -1; if (!SL[i]) { indFlash('手上没东西'); return false; } return indTrash('bag', i); }
+        function indTrashHand() { let SL = indSlots(), i = ind ? ind.selIdx : -1; if (!SL[i]) { indFlash('手上没东西'); return false; } return indTrashDo('bag', i); }   // Ctrl+Q 是自己按的快捷键，不弹确认，5 秒内能撤销
         function indUndoBar() {
             let U = ind && ind.undo, el = document.getElementById('ind-undo');
             if (!U || Date.now() >= U.until) { if (el && el.parentNode) el.parentNode.removeChild(el); if (ind && U) ind.undo = null; return; }
@@ -3755,6 +3782,7 @@
             if (!ind || ind.over || ind.dead || ind.tutOpen) return;
             let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') { if ((e.key || '') === 'Escape' && !e.repeat) { try { e.target.blur(); } catch (x) { } e.preventDefault(); } return; }   // 输入框里按 Esc：先退出输入框，下一次 Esc 才关面板，一次关一层
             let k = (e.key || '').toLowerCase();
+            if (ind.trashAsk) { if (!e.repeat && k === 'escape') indTrashAnswer(false); e.preventDefault(); return; }   // 销毁确认开着：Esc 等于取消，别的键不管用
             if (ind.paused) { if (!e.repeat && (k === 'p' || k === 'escape')) indResume(); e.preventDefault(); return; }
             if (ind.relockWait && k !== 'escape' && !ind.panel) indRelock();   // 任务 140：Esc 关面板 Chrome 不让立刻锁，下一次按键补锁
             if (k === 'p' && !e.repeat && !ind.panel) { indPause(); return; }
