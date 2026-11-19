@@ -4350,7 +4350,7 @@ async function enterExit(tab, key) {
             r = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, n: labCount('coal'), far: Math.max.apply(null, lab.ground.map(function (e) { return Math.hypot(e.x - lab.p.x, e.z - lab.p.z); })) })`));
             if (r.bag.coal || r.n !== 40 || r.far > 0.5) bad.push('Shift+Q：手上 40 个一次放在脚下 ' + JSON.stringify(r));
             await T.eval(`lab.bag = {}; labGive('sand', 5); labSel('sand'); lab.p.x = LAB_ST.trash.x - 2; lab.p.z = LAB_ST.trash.z; true;`);
-            await T.eval(`labInteractWith('trash'); true;`);
+            await T.eval(`labInteractWith('trash'); document.getElementById('lab-trash-yes').click(); true;`);
             r = JSON.parse(await T.eval(`JSON.stringify({ bag: lab.bag, box: labSt().box, near: labNearStation() })`));
             if (r.bag.sand || r.box.sand) bad.push('垃圾桶：手上的扔进去就没了 ' + JSON.stringify(r));
             if (r.near !== 'trash') bad.push('站在垃圾桶旁边，最近的台子该是垃圾桶 ' + JSON.stringify(r));
@@ -13960,6 +13960,40 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('LB31 手动拼原子、灶台燃料：粒子包给物品、拼合台、提示、没燃料不反应、有燃料自己反应', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('LB32')) {
+            // LB32 实验室垃圾桶防护（作者 11-19）：扔东西先弹确认写名字数量；取消和 Esc 不扔；确定才扔、进回收站（20 种先进先出）；背包面板里能拿回；Ctrl+Z 撤销；确认开着别的键不管用；连点不响应
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            try {
+                const J = async (e) => JSON.parse(await T.eval(`JSON.stringify(${e})`));
+                await T.eval(`labClear(); lab.bag = {}; labGive('sand', 5); labSel('sand'); labSt().bin = []; lab.trashLast = 0; lab.trashAsk = null; lab.ustack = []; true;`);
+                let r = await J(`(function(){ labTrash(); let a = document.getElementById('lab-trash-ask'); return { ask: !!a, txt: a ? a.innerText : '', focus: document.activeElement && document.activeElement.id, sand: lab.bag.sand }; })()`);
+                if (!(r.ask && /扔掉 .* × 5/.test(r.txt) && /取消/.test(r.txt) && /确定扔掉/.test(r.txt) && r.focus === 'lab-trash-no' && r.sand === 5)) bad.push('点垃圾桶先弹确认，写名字数量，默认取消，东西还在 ' + JSON.stringify(r));
+                await T.eval(`document.getElementById('lab-trash-no').click(); lab.trashLast = 0; labTrash(); labKeyDown({ key: 'Escape', target: document.body, preventDefault: function () { }, repeat: false }); true;`);
+                if (await T.eval(`!!document.getElementById('lab-trash-ask') || lab.bag.sand !== 5`)) bad.push('取消和 Esc 不扔');
+                await T.eval(`lab.trashLast = 0; labTrash(); labKeyDown({ key: 'b', target: document.body, preventDefault: function () { }, repeat: false }); true;`);
+                if (!(await T.eval(`!!document.getElementById('lab-trash-ask') && lab.panel !== 'bag'`))) bad.push('确认开着别的键不管用');
+                await T.eval(`document.getElementById('lab-trash-yes').click(); true;`);
+                r = await J(`{ sand: lab.bag.sand, bin: labSt().bin, ask: !!document.getElementById('lab-trash-ask') }`);
+                if (!(r.sand === undefined && JSON.stringify(r.bin) === '[{"k":"sand","n":5}]' && !r.ask)) bad.push('确定才扔，进回收站 ' + JSON.stringify(r));
+                r = await J(`(function(){ labTrash(); return !!document.getElementById('lab-trash-ask'); })()`);
+                if (r) bad.push('手上没东西不弹确认 / 刚扔完连点不响应');
+                await T.eval(`labPanelBag(); true;`);
+                if (!(await T.eval(`!!document.querySelector('#lab-panel .lab-bin-take')`))) bad.push('背包面板里有回收站和拿回按钮');
+                await T.eval(`document.querySelector('#lab-panel .lab-bin-take').click(); true;`);
+                r = await J(`{ sand: lab.bag.sand, bin: labSt().bin.length }`);
+                if (!(r.sand === 5 && r.bin === 0)) bad.push('拿回来 ' + JSON.stringify(r));
+                r = await J(`(function(){ lab.trashLast = 0; labTrash(); document.getElementById('lab-trash-yes').click(); let a = lab.bag.sand; labKeyDown({ key: 'z', ctrlKey: true, target: document.body, preventDefault: function () { }, repeat: false }); return { a: a, b: lab.bag.sand, bin: labSt().bin.length }; })()`);
+                if (!(r.a === undefined && r.b === 5 && r.bin === 0)) bad.push('Ctrl+Z 撤销扔掉 ' + JSON.stringify(r));
+                const full = await J(`(function(){ let B = labSt().bin = []; for (let i = 0; i < 25; i++) { lab.bag = {}; labGive('sand', 1); labSel('sand'); lab.trashLast = 0; labTrashDo('sand', 1); B = labSt().bin; if (i < 24) { labSt().bin[0].k = 'k' + i; } } return labSt().bin.length; })()`);
+                if (!(full <= 20)) bad.push('回收站最多 20 种 ' + full);
+            } catch (e) { bad.push('异常 ' + e.message); }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB32 实验室垃圾桶防护：确认、取消和 Esc、回收站拿回、Ctrl+Z、最多 20 种', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (want('IND177')) {

@@ -143,6 +143,7 @@
             if (!Array.isArray(L.orders)) L.orders = [];
             if (typeof L.lockUntil !== 'number') L.lockUntil = 0;
             if (typeof L.decayAt !== 'number') L.decayAt = 0;
+            L.bin = Array.isArray(L.bin) ? L.bin.filter(function (e) { return e && typeof e.k === 'string' && e.n > 0; }).map(function (e) { return { k: e.k, n: Math.floor(e.n) }; }).slice(-LAB_BIN_CAP) : [];   // 垃圾桶扔进去的先到回收站（作者 11-19）
             return L;
         }
         // 往仓库箱里放：满了（种类数到上限且是新种类）就放不进去，返回 false
@@ -478,6 +479,8 @@
             if (!lab || lab.over || lab.tutOpen) return;
             let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
             let k = (e.key || '').toLowerCase();
+            if (lab.trashAsk) { if (!e.repeat && k === 'escape') labTrashAnswer(false); e.preventDefault(); return; }   // 扔东西的确认开着：Esc 等于取消，别的键不管用
+            if (k === 'z' && (e.ctrlKey || e.metaKey) && !e.repeat) { e.preventDefault(); labUndoTrash(); return; }   // Ctrl+Z 撤销最近扔掉的
             if (LAB_KEYMAP[k]) { lab.k[LAB_KEYMAP[k]] = true; e.preventDefault(); return; }
             if (k === ' ') { lab.k.jump = true; e.preventDefault(); return; }
             if (e.repeat) return;
@@ -1517,7 +1520,9 @@
                 return '<div style="border-bottom:1px solid #eee;padding:5px 0;">' + (i < LAB_HOT ? '快捷栏 ' : '背包 ') + (i + 1) + '　<b>' + labName(k) + '</b> ×' + labN(lab.bag, k) + (lab.sel === k ? '　<span style="color:#1565c0;">手上</span>' : '') +
                     '<br><button style="' + LAB_BTN2 + '" onclick="labSel(\'' + k + '\');labPanelBag()">拿在手上</button><button style="' + LAB_BTN2 + '" onclick="labSel(\'' + k + '\');labPut(true);labPanelBag()">放下</button><button style="' + LAB_BTN2 + '" onclick="labSel(\'' + k + '\');labStoreHeld();labPanelBag()">存进仓库</button></div>';
             }).join('') || '<div style="color:#888;">身上没有东西</div>';
-            labPanelOpen('bag', '背包', '<div style="margin:4px 0;color:#666;">身上 ' + ks.length + '/' + LAB_BAG_CAP + ' 格，快捷栏 3 + 背包 3。存进仓库站在哪都行。</div>' + rows);
+            labPanelOpen('bag', '背包', '<div style="margin:4px 0;color:#666;">身上 ' + ks.length + '/' + LAB_BAG_CAP + ' 格，快捷栏 3 + 背包 3。存进仓库站在哪都行。</div>' + rows +
+                '<div style="margin-top:10px;font-weight:bold;">回收站　<small style="color:#888;font-weight:normal;">垃圾桶扔掉的先到这里，最多 ' + LAB_BIN_CAP + ' 种，满了先扔最早的</small></div>' +
+                (labSt().bin.length ? labSt().bin.map(function (e, i) { return '<div style="border-bottom:1px solid #eee;padding:5px 0;"><b>' + labName(e.k) + '</b> ×' + e.n + '　<button class="lab-bin-take" style="' + LAB_BTN2 + '" onclick="labBinTake(' + i + ')">拿回</button></div>'; }).join('') : '<div style="color:#999;padding:4px 0;">空的</div>'));
         }
         // 在 (x, z) 附近 maxR 米内随机找一个落点（东西落地都就近落在原处，不飞出去）
         function labNear(x, z, maxR) {
@@ -1556,12 +1561,53 @@
             labFlash('存进仓库：' + labName(k) + ' ×' + n);
             return true;
         }
-        // 垃圾桶：手上那一堆扔进去就没了
+        // 垃圾桶：手上那一堆扔进去，先弹确认（写名字数量，取消默认选中，Esc 取消），确认后进回收站，背包面板里能拿回，Ctrl+Z 也能撤销（作者 11-19）
+        const LAB_BIN_CAP = 20, LAB_UNDO_STEPS = 10, LAB_UNDO_SECS = 60;
         function labTrash() {
             labSyncSel();
             let k = lab.sel, n = labN(lab.bag, k); if (!k || !n) { labFlash('先选要扔的东西'); return false; }
+            if (lab.trashAsk) return false;
+            if (Date.now() - (lab.trashLast || 0) < 800) return false;
+            lab.trashAsk = { k: k, n: n };
+            if (document.pointerLockElement) { try { document.exitPointerLock(); } catch (e) { } }
+            let d = document.createElement('div'); d.id = 'lab-trash-ask';
+            d.style.cssText = 'position:fixed;inset:0;z-index:130;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;';
+            d.innerHTML = '<div style="background:#fff;border-radius:12px;padding:20px 22px;max-width:86vw;text-align:center;"><div style="font-size:18px;font-weight:bold;margin-bottom:6px;">扔掉 ' + labName(k) + ' × ' + n + '？</div><div style="font-size:13px;color:#888;margin-bottom:14px;">先进回收站，背包面板里能拿回</div>' +
+                '<button id="lab-trash-no" style="margin:4px 10px;padding:10px 26px;min-height:44px;min-width:96px;font-size:16px;border:none;border-radius:8px;background:#455a64;color:#fff;cursor:pointer;" onclick="labTrashAnswer(false)">取消</button>' +
+                '<button id="lab-trash-yes" style="margin:4px 10px;padding:10px 26px;min-height:44px;min-width:96px;font-size:16px;border:none;border-radius:8px;background:#a1665f;color:#fff;cursor:pointer;" onclick="labTrashAnswer(true)">确定扔掉</button></div>';
+            document.body.appendChild(d);
+            try { document.getElementById('lab-trash-no').focus(); } catch (e) { }
+            return true;
+        }
+        function labTrashAnswer(yes) {
+            let A = lab && lab.trashAsk; if (!A) return;
+            lab.trashAsk = null; lab.trashLast = Date.now();
+            let e = document.getElementById('lab-trash-ask'); if (e && e.parentNode) e.parentNode.removeChild(e);
+            if (!yes) return;
+            let n = Math.min(A.n, labN(lab.bag, A.k)); if (!(n > 0)) { labFlash('东西变了，没扔'); return; }
+            labTrashDo(A.k, n);
+        }
+        function labTrashDo(k, n) {
             labDel(lab.bag, k, n); labSyncSel(); lab.hudSig = '';
-            labFlash('扔掉了：' + labName(k) + ' ×' + n);
+            let B = labSt().bin, e = B.filter(function (x) { return x.k === k; })[0];
+            if (e) e.n += n; else { B.push({ k: k, n: n }); while (B.length > LAB_BIN_CAP) B.shift(); }
+            let U = lab.ustack = lab.ustack || []; U.push({ k: k, n: n, t: Date.now() }); while (U.length > LAB_UNDO_STEPS) U.shift();
+            labFlash('扔掉了：' + labName(k) + ' ×' + n + '，能撤销或到背包面板拿回');
+            if (lab.panel === 'bag') labPanelBag();
+            return true;
+        }
+        function labBinTake(i) {
+            let B = labSt().bin, e = B[i]; if (!e) return false;
+            B.splice(i, 1); labBagGive(e.k, e.n);
+            labFlash('拿回了：' + labName(e.k) + ' ×' + e.n); if (lab.panel === 'bag') labPanelBag();
+            return true;
+        }
+        function labUndoTrash() {
+            let U = lab.ustack = (lab.ustack || []).filter(function (e) { return Date.now() - e.t <= LAB_UNDO_SECS * 1000; });
+            let e = U.pop(); if (!e) { labFlash('没有能撤销的'); return false; }
+            let B = labSt().bin, j = B.map(function (x) { return x.k; }).lastIndexOf(e.k);
+            if (j >= 0) { B[j].n -= e.n; if (B[j].n <= 0) B.splice(j, 1); }
+            labBagGive(e.k, e.n); labFlash('撤销了：' + labName(e.k) + ' ×' + e.n); if (lab.panel === 'bag') labPanelBag();
             return true;
         }
         let labDrop = labPut;   // 老名字，测试和旧代码还在用
