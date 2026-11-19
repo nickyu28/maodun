@@ -1253,7 +1253,7 @@
             } else if (msg.type === 'POS_SYNC') {
                 if (msg.sender !== gState.id && entities) {
                     let p = entities.find(e => e.userData.type === 'ai' && e.userData.name === msg.sender);
-                    if (p) { p.position.x = msg.x; p.position.y = msg.y; p.position.z = msg.z; p.userData.isRealPlayer = true; p.userData.lastSync = performance.now(); if (p.userData.aiTakeover) { p.userData.aiTakeover = false; gState.peerState[msg.sender] = 'active'; } }
+                    if (p) { p.position.x = msg.x; p.position.y = msg.y; p.position.z = msg.z; p.userData.isRealPlayer = true; p.userData.lastSync = performance.now(); if (p.userData.aiTakeover) { p.userData.aiTakeover = false; try { chatPush('系统', dispNameText(msg.sender) + ' 回来了', false); blazeFlash(dispNameText(msg.sender) + ' 回来了'); } catch (e) { } gState.peerState[msg.sender] = 'active'; } }
                 }
             } else if (msg.type === 'HUNT_REVIVE') {
                 huntOnRevive(msg);

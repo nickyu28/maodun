@@ -739,28 +739,43 @@
         // 寻宝队里真人队友的那个身体，原来只是跟着他的 POS_SYNC 走；他活着离开或者掉线了，
         // 身体就原地僵住，还一直被当成"真人"（不会救你、不会搜刮）。改成交给 AI：
         // 每台机器的 AI 队友本来就是各自本地跑的，把 isRealPlayer 关掉，下一帧就按 AI 队友的逻辑动起来。
-        function huntPeerToAi(id, why) {
+        function huntPeerToAi(id, why, dropped) {
             if (!entities) return;
             let e = entities.find(function (x) { return x.userData.type === 'ai' && x.userData.name === id && x.userData.isRealPlayer; });
             if (!e) return;
-            e.userData.isRealPlayer = false; e.userData.aiTakeover = true;
+            e.userData.isRealPlayer = false; e.userData.aiTakeover = true; e.userData.takeoverAt = dropped ? performance.now() : 0; e.userData.goneForGood = false;
             e.userData.path = null; e.userData.chest = null; e.userData.openTimer = 0; e.userData.stuck = 0;
             if (e.userData.hp <= 0) e.userData.hp = 100;
-            chatPush('系统', dispNameText(id) + why + '，AI 接管了他的位置', false);
+            let msg = dropped ? dispNameText(id) + ' 卡掉了，人机托管中' : dispNameText(id) + why + '，AI 接管了他的位置';
+            chatPush('系统', msg, false);
+            if (dropped && typeof blazeFlash === 'function') blazeFlash(msg);
             updateDeathWaitStatus();
         }
-        const HUNT_DROP_MS = 6000;
-        setInterval(function () {
+        // 队友卡掉线：6 秒没收到他的位置，AI 先顶上，队友弹一句；3 分钟还没回来就按离开算。
+        // 他回来的那一刻（又收到位置）AI 交还，再弹一句。身体长什么样本来就是他自己的，所以顶上的 AI 也是他的样子。
+        // 这一套靠已有的 POS_SYNC 和 PLAYER_LEFT，没有新消息，NET_PROTO 不动。
+        const HUNT_DROP_MS = 6000, HUNT_GONE_MS = 180000;
+        function huntDropTick(now) {
             if (!isPlaying || !entities) return;
-            let now = performance.now();
+            now = now || performance.now();
             entities.forEach(function (e) {
                 let u = e.userData;
-                if (u.type !== 'ai' || !u.isRealPlayer || !u.lastSync) return;
+                if (u.type !== 'ai') return;
+                if (u.aiTakeover && !u.isRealPlayer && u.takeoverAt && !u.goneForGood) {
+                    if (now - u.takeoverAt > HUNT_GONE_MS) {
+                        u.goneForGood = true; gState.peerState[u.name] = 'left';
+                        chatPush('系统', dispNameText(u.name) + ' 3 分钟没回来，按离开算', false);
+                        if (typeof blazeFlash === 'function') blazeFlash(dispNameText(u.name) + ' 没回来，按离开算');
+                    }
+                    return;
+                }
+                if (!u.isRealPlayer || !u.lastSync) return;
                 let st = gState.peerState[u.name];
                 if (st === 'down' || st === 'left') return;   // 倒地/已离开的不算掉线
-                if (now - u.lastSync > HUNT_DROP_MS) huntPeerToAi(u.name, ' 掉线了');
+                if (now - u.lastSync > HUNT_DROP_MS) huntPeerToAi(u.name, ' 卡掉了', true);
             });
-        }, 1000);
+        }
+        setInterval(function () { huntDropTick(); }, 1000);
 
         function spectateTargets() { return entities.filter(function (e) { return e.userData.type === 'ai' && e.userData.hp > 0; }); }
 

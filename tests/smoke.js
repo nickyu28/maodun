@@ -14230,6 +14230,32 @@ async function enterExit(tab, key) {
             await T.close();
             report('GFX2 卡顿处理：连续低帧冒红色图标、恢复消失、10 秒低于 8 帧降画质、再 20 秒低于 5 帧退出、联机局只提示、单人局暂停、三项太高提示和调回推荐', bad.length === 0, bad.join(' / '));
         }
+
+        if (want('HT1')) {
+            // HT1 寻宝队队友卡掉线（任务 P6 第三批最小版）：6 秒没收到位置 AI 顶上并弹"卡掉了，人机托管中"；3 分钟没回来按离开算；回来时交还并弹"回来了"；主动离开的不走 3 分钟计时；没有新消息所以 NET_PROTO 不动
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} window.__flash = []; blazeFlash = function (t) { window.__flash.push(t); }; window.__chat = []; chatPush = function (a, t) { window.__chat.push(t); }; isPlaying = true; gState.peerState = {}; entities = [{ userData: { type: 'ai', name: 'peerA', isRealPlayer: true, lastSync: performance.now() - 7000, hp: 100 }, position: { x: 0, y: 0, z: 0 } }, { userData: { type: 'ai', name: 'peerB', isRealPlayer: true, lastSync: performance.now() - 7000, hp: 100 }, position: { x: 0, y: 0, z: 0 } }]; huntDropTick(); true;`);
+            const r1 = JSON.parse(await T.eval(`JSON.stringify({ a: entities[0].userData.isRealPlayer, tk: entities[0].userData.aiTakeover, hint: window.__flash.some(function (t) { return /卡掉了，人机托管中/.test(t); }), chat: window.__chat.length })`));
+            if (r1.a || !r1.tk || !r1.hint || r1.chat < 1) bad.push('6 秒没位置该换成 AI 并弹提示 ' + JSON.stringify(r1));
+            await T.eval(`entities[0].userData.takeoverAt = performance.now() - 170000; huntDropTick(); true;`);
+            if ((await T.eval(`gState.peerState.peerA`)) === 'left') bad.push('不到 3 分钟不该算离开');
+            await T.eval(`entities[0].userData.takeoverAt = performance.now() - 181000; huntDropTick(); true;`);
+            if ((await T.eval(`gState.peerState.peerA`)) !== 'left' || !(await T.eval(`window.__flash.some(function (t) { return /按离开算/.test(t); })`))) bad.push('3 分钟没回来该算离开并弹提示');
+            // 回来：收到位置就交还
+            await T.eval(`bc.onmessage({ data: { type: 'POS_SYNC', sender: 'peerB', x: 1, y: 0, z: 1 } }); true;`);
+            const r3 = JSON.parse(await T.eval(`JSON.stringify({ real: entities[1].userData.isRealPlayer, tk: entities[1].userData.aiTakeover, back: window.__flash.some(function (t) { return /回来了/.test(t); }) })`));
+            if (!r3.real || r3.tk || !r3.back) bad.push('B 被顶上后回来，该交还并弹提示 ' + JSON.stringify(r3));
+            await T.eval(`window.__flash = []; bc.onmessage({ data: { type: 'POS_SYNC', sender: 'peerA', x: 1, y: 0, z: 1 } }); true;`);
+            const r4 = JSON.parse(await T.eval(`JSON.stringify({ real: entities[0].userData.isRealPlayer, tk: entities[0].userData.aiTakeover, st: gState.peerState.peerA, back: window.__flash.some(function (t) { return /回来了/.test(t); }) })`));
+            if (!r4.real || r4.tk || r4.st !== 'active' || !r4.back) bad.push('A 算过离开后回来也该交还，状态回到活着 ' + JSON.stringify(r4));
+            // 主动离开的（PLAYER_LEFT 活着）不走 3 分钟计时
+            await T.eval(`entities[1].userData.isRealPlayer = true; entities[1].userData.aiTakeover = false; huntPeerToAi('peerB', ' 离开了'); true;`);
+            if ((await T.eval(`entities[1].userData.takeoverAt`)) !== 0) bad.push('主动离开不该有 3 分钟计时');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('HT1 寻宝队队友卡掉线：6 秒 AI 顶上并弹提示、3 分钟没回来算离开、回来交还并弹回来了、主动离开不计时', bad.length === 0, bad.join(' / '));
+        }
         if (want('IND182')) {
             // IND182 体检第二批（任务 142 的 5 和 6）：钠对着水先问再出氢气；核废料加玻璃出玻璃固化块；氖灯氪灯泡能戴、耗电不同；泥土加草做墙；羊毛做毛毡垫；草喂羊牛
             const bad = [];
