@@ -3468,7 +3468,7 @@
                 let on = indSelSet('bag').indexOf(i) >= 0, hot = IND_ITEMS[it.k].hot;
                 let pre = i === 0 ? '<div style="font-size:12px;color:#5e35b1;margin:2px 0;">快捷栏，1～9、0' + (ind.panel === 'bag' ? '　点一格：换到手上那格' : '') + '</div>' : i === IND_HOTBAR ? '<div style="font-size:12px;color:#888;margin:6px 0 2px;">其余</div>' : '';
                 return pre + '<span class="ind-slot" data-from="bag" data-i="' + i + '" onpointerdown="indDragDown(event,\'bag\',' + i + ')" style="display:inline-block;margin:2px;padding:3px 6px;border-radius:10px;cursor:grab;font-size:13px;user-select:none;touch-action:manipulation;border:2px solid ' + (on ? '#5e35b1' : hot ? '#c62828' : '#cfd8dc') + ';background:' + (on ? '#ede7f6' : hot ? '#ffcdd2' : '#fff') + ';">' + (i < IND_HOTBAR ? '<b style="color:#5e35b1;margin-right:3px;">' + (i === 9 ? 0 : i + 1) + '</b>' : '') + indIconImg(it.k, 28) + indName(it.k) + '×' + it.n +
-                    indDuraBar(it.k, i, SL, false) + '<button style="' + IND_X_BTN + 'margin-left:3px;" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indItemInfo(\'' + it.k.replace(/'/g, '') + '\')">?</button>' + '<button class="ind-trash" style="' + IND_X_BTN + '" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indTrash(\'bag\',' + i + ')">销毁</button></span>';
+                    indDuraBar(it.k, i, SL, false) + '<button style="' + IND_X_BTN + 'margin-left:3px;" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indItemInfo(\'' + it.k.replace(/'/g, '') + '\')">用途</button>' + '<button class="ind-trash" style="' + IND_X_BTN + '" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indTrash(\'bag\',' + i + ')">销毁</button></span>';
             }).join('');
         }
         function indPanelBox(id) {
@@ -3481,7 +3481,7 @@
             let rows = SL.length ? SL.map(function (it, i) {
                 let on = indSelSet('box').indexOf(i) >= 0;
                 return '<div class="ind-slot" data-from="box" data-i="' + i + '" onpointerdown="indDragDown(event,\'box\',' + i + ')" style="cursor:grab;user-select:none;touch-action:manipulation;' + (on ? 'background:#ede7f6;outline:2px solid #5e35b1;' : '') + '">' +
-                    indRow(indIconImg(it.k, 28) + indName(it.k) + ' × ' + it.n, indPutOpts('box', i, it.k, '拿', '全拿', '拿') + '<button style="' + IND_BTN + 'background:#78909c;" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indItemInfo(\'' + it.k.replace(/'/g, '') + '\')">?</button><button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
+                    indRow(indIconImg(it.k, 28) + indName(it.k) + ' × ' + it.n, indPutOpts('box', i, it.k, '拿', '全拿', '拿') + '<button style="' + IND_BTN + 'background:#78909c;" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();indItemInfo(\'' + it.k.replace(/'/g, '') + '\')">用途</button><button class="ind-trash" style="' + IND_BTN + 'background:#e53935;" onpointerdown="event.stopPropagation()" onclick="indTrash(\'box\',' + i + ')">销毁</button>') + '</div>';
             }).join('') : '<div style="color:#999;padding:8px 0;">空的</div>';
             let nb = ind.boxMulti.bag.length, nx = ind.boxMulti.box.length, selBtn = '';
             if (nb === 1) { let k1 = (indSlots()[ind.boxMulti.bag[0]] || {}).k; if (k1) selBtn += indPutOpts('boxput', 0, k1, '放', '全放', '放'); }   // 只选了一格：放 1、全放、放 n
@@ -3959,7 +3959,7 @@
                 let box = 'position:relative;display:inline-block;vertical-align:top;width:66px;height:46px;margin:1px;padding:14px 2px 0;box-sizing:border-box;border-radius:6px;font-size:11px;line-height:1.2;text-align:center;overflow:hidden;';
                 if (!it) { bag += '<span class="ind-hot" style="' + box + 'border:2px dashed #e0e0e0;color:#ccc;">' + lab + '</span>'; continue; }
                 let on = i === ind.selIdx, hotS = IND_ITEMS[it.k].hot ? Math.ceil(ind.hotT && ind.hotT[it.k] !== undefined ? ind.hotT[it.k] : IND_HOT_COOL) : 0;
-                bag += '<span class="ind-hot" onclick="ind.selIdx=' + i + '" style="' + box + 'cursor:pointer;border:2px solid ' + (on ? '#5e35b1' : hotS ? '#c62828' : '#cfd8dc') + ';background:' + (hotS ? '#ffcdd2;color:#b71c1c' : on ? '#ede7f6' : '#fff') + ';">' + lab + indIconImg(it.k, 32) + indName(it.k) + '<br>×' + it.n + (hotS ? ' 烫 ' + hotS + ' 秒' : '') + indDuraBar(it.k, i, SL, true) + '</span>';
+                bag += '<span class="ind-hot" onclick="ind.selIdx=' + i + '" style="' + box + 'cursor:pointer;border:2px solid ' + (on ? '#5e35b1' : hotS ? '#c62828' : '#cfd8dc') + ';background:' + (hotS ? '#ffcdd2;color:#b71c1c' : on ? '#ede7f6' : '#fff') + ';">' + lab + indIconImg(it.k, 32) + indName(it.k) + (hotS ? '<br>烫 ' + hotS + ' 秒' : '') + '<b class="ind-cnt" style="position:absolute;right:2px;bottom:3px;font-size:12px;line-height:1;padding:1px 4px;border-radius:7px;background:rgba(55,71,79,.88);color:#fff;">×' + it.n + '</b>' + indDuraBar(it.k, i, SL, true) + '</span>';   // 数量放右下角，格子装不下图标加名字再加数量，写在文字里会被裁掉
             }
             indBagWatch();
             { let free = indBagSlots() - SL.length, warn = free <= 2;   // 任务 110：背包只剩 2 格以内变橙色，满了写红字

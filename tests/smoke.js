@@ -14807,6 +14807,28 @@ async function enterExit(tab, key) {
             report('IND195 自取材料：开关关着没反应、开了能搜能放、Esc 关、T 还是元素表', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND196')) {
+            // IND196 快捷栏每格都看得到数量（作者 11-19）：每个有东西的格子有数量角标，写的数量对、整个在格子里面没被裁掉；数量大（200）也在格子里
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`cancelAnimationFrame(ind.raf); ind.bag = { wood: 7, stone: 200, coal: 35, tongs: 1 }; ind.hudSig = ''; indHudUpdate(); true;`);
+                const r = await J(`(function(){ let hs = Array.prototype.slice.call(document.querySelectorAll('.ind-hot')).filter(function (e) { return e.querySelector('.ind-cnt'); }); return hs.map(function (h) { let c = h.querySelector('.ind-cnt'), a = h.getBoundingClientRect(), b = c.getBoundingClientRect(); return { t: c.textContent, inside: b.left >= a.left - 0.5 && b.right <= a.right + 0.5 && b.top >= a.top - 0.5 && b.bottom <= a.bottom + 0.5 }; }); })()`);
+                const txt = r.map((x) => x.t).join(',');
+                if (!(r.length === 4 && /×7/.test(txt) && /×200/.test(txt) && /×35/.test(txt) && /×1(,|$)/.test(txt))) bad.push('每格有数量角标，数量对 ' + JSON.stringify(r));
+                if (!r.every((x) => x.inside)) bad.push('数量整个在格子里面，没被裁掉 ' + JSON.stringify(r));
+                const q = await J(`(function(){ indPanelBag(); let bs = Array.prototype.slice.call(document.querySelectorAll('#ind-panel .ind-slot button')).map(function (b) { return b.textContent; }); return { has: bs.indexOf('用途') >= 0, q: bs.indexOf('?') >= 0, n: bs.length }; })()`);
+                if (!(q.has && !q.q)) bad.push('每行的按钮写"用途"，不是"？" ' + JSON.stringify(q));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND196 快捷栏数量角标：每格都有、数量对、整个在格子里', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

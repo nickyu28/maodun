@@ -52,6 +52,12 @@
                 else if (kd === 'shears') { g.beginPath(); g.moveTo(8 * t, 6 * t); g.lineTo(24 * t, 26 * t); g.moveTo(24 * t, 6 * t); g.lineTo(8 * t, 26 * t); g.lineWidth = 3 * t; g.strokeStyle = hc; g.stroke(); }
                 else if (kd === 'shield') { g.beginPath(); g.moveTo(6 * t, 6 * t); g.lineTo(26 * t, 6 * t); g.lineTo(24 * t, 20 * t); g.lineTo(16 * t, 28 * t); g.lineTo(8 * t, 20 * t); g.closePath(); g.fill(); g.stroke(); }
                 else if (kd === 'knife') { g.beginPath(); g.moveTo(14 * t, 18 * t); g.lineTo(26 * t, 5 * t); g.lineTo(24 * t, 17 * t); g.closePath(); g.fill(); g.stroke(); }
+                else if (kd === 'tongs') {   // 钳子：两条臂在中间铰在一起，前端往里弯夹住
+                    g.beginPath(); g.moveTo(6 * t, 28 * t); g.lineTo(15 * t, 17 * t); g.lineTo(22 * t, 7 * t); g.lineTo(27 * t, 8 * t); g.lineWidth = 3 * t; g.strokeStyle = hc; g.stroke();
+                    g.beginPath(); g.moveTo(14 * t, 29 * t); g.lineTo(15 * t, 17 * t); g.lineTo(26 * t, 14 * t); g.lineTo(28 * t, 10 * t); g.stroke();
+                    g.fillStyle = '#263238'; g.beginPath(); g.arc(15 * t, 17 * t, 2.2 * t, 0, 7); g.fill();
+                }
+                else if (kd === 'hammer') { g.beginPath(); g.moveTo(11 * t, 5 * t); g.lineTo(28 * t, 11 * t); g.lineTo(25 * t, 18 * t); g.lineTo(8 * t, 12 * t); g.closePath(); g.fill(); g.stroke(); }   // 锤子：方头
                 else { g.beginPath(); g.arc(21 * t, 10 * t, 6 * t, 0, 7); g.fill(); g.stroke(); }
                 if (bk) { g.strokeStyle = '#c62828'; g.beginPath(); g.moveTo(4 * t, 6 * t); g.lineTo(28 * t, 28 * t); g.stroke(); }
             } else if (kind === 'bucket' || kind === 'bottle' || kind === 'cyl') {
