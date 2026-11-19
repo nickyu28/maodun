@@ -14838,6 +14838,38 @@ async function enterExit(tab, key) {
             report('IND196 快捷栏数量角标：每格都有、数量对、整个在格子里', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND197')) {
+            // IND197 农田中暑和基地种树（作者 11-19）：夏天白天在农田边没遮阴体温涨、到 39.5 头晕、到 41 硬核掉血悠闲不掉；冬天或夜里或离田远不涨；树苗种下去 3 个游戏日长成树、长大有荫、站荫里不涨、体感低 3 度；种太近种不了；老存档没有树列表不报错；树画出来
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.btrees = []; B.tiles = [{ x: 5, z: 5 }]; B.clock = IND_DAY * IND_SEASON_DAYS * 1 + 300; ind.guardT = 0; ind.p.x = 5; ind.p.z = 5; ind.farmT = 0; let S = B.surv; S.temp = 37; S.water = 50; S.hp = 100; S.energy = 100; let o = { season: indSeason(), night: indIsNight() };
+                    for (let i = 0; i < 100; i++) indBodyTick(1); o.hot = S.temp; o.dizzy = S.energy < 100; o.farmT = ind.farmT;
+                    S.temp = 37; ind.p.x = 25; ind.p.z = -15; for (let i = 0; i < 100; i++) indBodyTick(1); o.far = S.temp; return o; })()`);
+                if (!(r.season === 1 && !r.night && r.hot >= 39.5 && r.farmT > 0)) bad.push('夏天白天在农田边没遮阴体温涨到头晕 ' + JSON.stringify(r));
+                if (!(r.far < 37.5)) bad.push('离田远不涨 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base, S = B.surv; B.btrees = []; B.tiles = [{ x: 5, z: 5 }]; ind.p.x = 5; ind.p.z = 5; S.temp = 41.5; S.hp = 100; ind.guardT = 0; ind.farmT = 20; ind.hurt = null; let o = {}; shFarmHeat(1); o.hard = S.hp < 100; S.hp = 100; B.rule = 'casual'; S.temp = 41.5; ind.farmT = 20; shFarmHeat(1); o.casual = S.hp === 100; B.rule = 'hard'; return o; })()`);
+                if (!(r.hard && r.casual)) bad.push('41 度硬核掉血、悠闲不掉 ' + JSON.stringify(r));
+                r = await J(`(function(){ try { return (function(){ let B = ind.base, S = B.surv; B.clock = IND_DAY * IND_SEASON_DAYS * 1 + 300; B.btrees = []; B.tiles = [{ x: 5, z: 5 }]; ind.p.x = 5; ind.p.z = 5; ind.bag = { sapling_oak: 2 }; let f = indFace(); let o = {}; o.ok = shPlant('sapling_oak'); o.n = B.btrees.length; o.left = ind.bag.sapling_oak; o.near = shPlant('sapling_oak'); o.n2 = B.btrees.length;
+                    let t = B.btrees[0] || { x: 5, z: 5, born: 0 }; o.shade0 = shShadeAt(t.x, t.z); B.clock += SH.growT + 1; o.shade1 = shShadeAt(t.x, t.z); o.far = shShadeAt(t.x + 6, t.z);
+                    ind.p.x = t.x; ind.p.z = t.z; let a0 = (function(){ let c = B.clock; B.clock = c; return indAirTemp(); })(); ind.p.x = t.x + 8; let a1 = indAirTemp(); o.cool = a1 - a0; o.t = Math.round(a1 - a0);
+                    let S = B.surv; S.temp = 37; ind.p.x = t.x; ind.p.z = t.z; B.tiles = [{ x: t.x + 1, z: t.z }]; ind.farmT = 0; for (let i = 0; i < 100; i++) shFarmHeat(1); o.shadeTemp = S.temp; shDraw(); o.mesh = ind.btM.length; return o; })(); } catch (e) { return { err: String(e.stack).slice(0, 300) }; } })()`);
+                if (!(r.ok && r.n === 1 && r.left === 1)) bad.push('树苗种下去 ' + JSON.stringify(r));
+                if (!(!r.near && r.n2 === 1)) bad.push('离别的树太近种不了 ' + JSON.stringify(r));
+                if (!(!r.shade0 && r.shade1 && !r.far)) bad.push('长成树以后才有荫、荫外没有 ' + JSON.stringify(r));
+                if (!(r.t >= 3 && r.shadeTemp <= 37.1 && r.mesh === 2)) bad.push('站荫里体感低 3 度、体温不涨、树画出来 ' + JSON.stringify(r));
+                r = await J(`(function(){ let B = ind.base; delete B.btrees; shFixBase(B); let o = { n: B.btrees.length }; B.btrees = [{ k: 'zzz', x: 1, z: 1, born: 0 }, { k: 'oak', x: 2, z: 2, born: 0 }]; shFixBase(B); o.m = B.btrees.length; return o; })()`);
+                if (!(r.n === 0 && r.m === 1)) bad.push('老存档没有树列表不报错、坏数据丢掉 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND197 农田中暑和种树：夏天白天农田边体温涨、头晕中暑、悠闲不掉血、树苗长成树有荫、站荫里不涨', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

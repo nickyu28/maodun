@@ -573,6 +573,7 @@
                 else indFixCook(c.st, b);
             });
             let bigC = b.chests.filter(function (c) { return c.big; })[0]; b.box = bigC ? bigC.items : {};
+            if (typeof shFixBase === 'function') shFixBase(b);   // 基地里种的树（19-industry-shade.js）
             b.bin = Array.isArray(b.bin) ? b.bin.filter(function (e) { return e && IND_ITEMS[e.k] && e.n > 0; }).map(function (e) { return { k: e.k, n: Math.floor(e.n) }; }).slice(-IND_BIN_CAP) : [];   // 回收站（作者 11-19）：销毁的东西先进这里
             b.tiles = Array.isArray(b.tiles) ? b.tiles.filter(function (t) { return t && isFinite(t.x) && isFinite(t.z); }).slice(0, IND_TILE_CAP) : [];
             b.houses = Array.isArray(b.houses) ? b.houses.filter(function (h) { return h && IND_HOUSE[h.ty] && isFinite(h.x) && isFinite(h.z); }).slice(0, indHouseCap()) : [];
@@ -798,6 +799,7 @@
                 indCooks().forEach(function (c) { if (c.C.temp > 100 && Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < IND_BODY.fireR + (c.ty === 'kiln' ? 1 : 0)) hot = Math.max(hot, Math.min(12, c.C.temp / 80)); });
                 if (rlGenHeat(ind.p.x, ind.p.z)) hot = Math.max(hot, 600 / 80);   // 任务 151：自带炉膛的蒸汽发电机烧着，4 米内取暖，按中火 600°C 算
                 t += hot;
+                if (typeof shShadeAt === 'function' && !indIsNight() && shShadeAt(ind.p.x, ind.p.z)) t -= 3;   // 站在树荫里体感低 3 度
             }
             if (indFires().some(function (f) { return f.fuel > 0 && Math.hypot(ind.p.x - f.x, ind.p.z - f.z) < IND_BODY.fireR; })) t += IND_BODY.fireHeat;
             if (ind.where === 'base') {   // 屋里比外面暖；屋里 4 米内有火在烧，至少 18°C
@@ -838,6 +840,7 @@
             if (S.temp >= B.chill + 0.5) ind.coldWarn = 0;
             if (indInPondWater() && S.temp > IND_BODY.waterMin) S.temp = Math.max(IND_BODY.waterMin, S.temp - IND_BODY.waterCool * dt);   // 站在池子、井、浅水里体温每秒 −0.1°C，最低 36（任务 90）
             S.temp = Math.max(25, Math.min(ind.cave && typeof MB !== 'undefined' ? Math.max(38, MB.caveTempMax) : 45, S.temp));   // 任务 84：洞里体温最高 38
+            if (typeof shFarmHeat === 'function') shFarmHeat(dt);   // 夏天农田边干活会中暑（19-industry-shade.js）
             if (S.temp > 38.5 && !ind.heatHint) { ind.heatHint = true; indFlash('太热了，离窑远点，喝点水'); } else if (S.temp < 38) ind.heatHint = false;
         }
         // 基地外面的草地按季节换颜色（冬天是雪）
@@ -1556,6 +1559,7 @@
                 ind.exitT = inExit ? ind.exitT + dt : 0;
                 if (ind.exitT >= IND_T.extract) indGoBase(true);
             }
+            if (typeof shDraw === 'function') shDraw();
             indSyncItems(); indSyncNodes(); indSyncCrops(); indSyncFires(); indSyncAnimals(); indSyncDevs(); indSyncFurn(); hmSync(); indHouseFadeTick(dt); indSyncTiles(); mbSync(); if (ind.carve) ctBar(); pdSync();
             camera.position.set(ind.p.x, ind.p.y + IND_EYE, ind.p.z);
             ind.saveT -= dt; if (ind.saveT <= 0) { ind.saveT = 10; indSave(); }   // 每 10 秒存一次（生存值、时间、作物）
@@ -1983,6 +1987,7 @@
             let k = indSel(), a = indAim();
             if (k && IND_ITEMS[k].veh) return rdToggle(k);   // 右键：上车／下车
             if (k === 'tnt' && orTntPlace()) return true;   // TNT：右键放下（19-industry-ore.js）
+            if (typeof shUse === 'function' && shUse(k, a)) return true;   // 基地里种树苗（19-industry-shade.js）
             if (odUse(k, a)) return true;   // 户外：放设备钉一块、种树苗、空手收起（19-industry-outdoor.js）
             if (ind.ride && !rdOneHand(k, a)) { indFlash('骑着没法用'); return false; }
             if (k && IND_ITEMS[k].potion) return pwDrink(k);   // 右键喝药
