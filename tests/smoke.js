@@ -5396,7 +5396,7 @@ async function enterExit(tab, key) {
                         // 铸造：拿小刀 + 2 黏土雕生模具；熟模具 + 青铜锭 + 950°C + 出料槽 → 青铜零件
                         if (hard && typeof CT_SHAPE !== 'undefined' && have.clay && Object.keys(have).some(function (k) { return tlKind(k) === 'knife'; })) Object.keys(CT_SHAPE).forEach(function (s) { add('mold_' + s + '_raw'); if (have['mold_' + s] && have.bronze && maxT >= 950 && (have.spout_brick || have.spout_iron)) add('part_' + s + '_bronze'); });
                         // 铸造后半：拿小刀 + 2 耐火砖雕耐火砖生模具；≥1500°C 烧硬；熟模具 + 铁／钢锭 + 耐火砖槽 → 铁／钢零件
-                        if (hard && typeof CT_SHAPE !== 'undefined' && have.brick_fire && Object.keys(have).some(function (k) { return tlKind(k) === 'knife'; })) Object.keys(CT_SHAPE).forEach(function (s) { add('mold_' + s + '_f_raw'); if (have['mold_' + s + '_f'] && have.spout_fire) { if (have.ingot_fe && maxT >= 1538) add('part_' + s + '_ingot_fe'); if (have.steel && maxT >= 1550) add('part_' + s + '_steel'); } });
+                        if (hard && typeof CT_SHAPE !== 'undefined' && have.clay_fire && Object.keys(have).some(function (k) { return tlKind(k) === 'knife'; })) Object.keys(CT_SHAPE).forEach(function (s) { add('mold_' + s + '_f_raw'); if (have['mold_' + s + '_f'] && have.spout_fire) { if (have.ingot_fe && maxT >= 1538) add('part_' + s + '_ingot_fe'); if (have.steel && maxT >= 1550) add('part_' + s + '_steel'); } });
                         if (hard && typeof CT_SHAPE !== 'undefined' && maxT >= 1500) Object.keys(CT_SHAPE).forEach(function (s) { if (have['mold_' + s + '_f_raw']) add('mold_' + s + '_f'); });
                         // 怪（任务 70）：拿刀打出门的怪掉黏液、蘑菇、毒蘑菇、云絮、蜂蜜、木炭、仙人掌、肉、皮；刀盾用坏了变断的
                         if (typeof MB_KNIFE !== 'undefined') {
@@ -11338,10 +11338,10 @@ async function enterExit(tab, key) {
                 const run = (body) => J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.cookers = []; ind.bag = {}; indPanelClose(); ind.carve = null;
                     let cook = function (ty) { let c = Object.assign({ id: ++B.cseq, ty: ty, x: 5, z: 5 }, ckNewState()); B.cookers.push(c); return c; }, ent = function (c) { return indCooks().filter(function (x) { return x.id === c.id; })[0]; }, tick = function (c, secs, T0) { let e = ent(c); for (let i = 0; i < secs; i++) { if (T0) c.temp = T0; indCookTick(e, 1); } };
                     ${body} })()`);
-                // 雕耐火砖模具：2 耐火砖 + 小刀，雕够刀数得耐火砖生模具；黏土不够也能雕
-                let r = await run(`ind.bag = { brick_fire: 2, knife: 1 }; indSelect('knife'); let menu = ctCarveMenu(); let txt = document.getElementById('ind-panel').innerText; ctCarveStart('knife', 1); let cuts = CT_SHAPE.knife.cuts;
-                    for (let i = 0; i < 400 && ind.carve; i++) { ind.t = ind.carve.t0 + CALIB.sweep * 0.5 + CALIB.sweep * i; ctHit(); } return { menu: menu, both: /耐火砖/.test(txt), raw: ind.bag.mold_knife_f_raw || 0, brick: ind.bag.brick_fire || 0, q: ind.base.moldQ.knife_f && ind.base.moldQ.knife_f[0] };`);
-                if (!(r.menu && r.both && r.raw === 1 && r.brick === 0 && r.q >= 15 && r.q <= 30)) bad.push('雕耐火砖模具 ' + JSON.stringify(r));
+                // 雕耐火模具：2 耐火黏土（没烧的）+ 小刀，雕够刀数得耐火模具坯（11-19 改成先雕再烧）
+                let r = await run(`ind.bag = { clay_fire: 2, knife: 1 }; indSelect('knife'); let menu = ctCarveMenu(); let txt = document.getElementById('ind-panel').innerText; ctCarveStart('knife', 1); let cuts = CT_SHAPE.knife.cuts;
+                    for (let i = 0; i < 400 && ind.carve; i++) { ind.t = ind.carve.t0 + CALIB.sweep * 0.5 + CALIB.sweep * i; ctHit(); } return { menu: menu, both: /耐火黏土/.test(txt), raw: ind.bag.mold_knife_f_raw || 0, brick: ind.bag.clay_fire || 0, q: ind.base.moldQ.knife_f && ind.base.moldQ.knife_f[0] };`);
+                if (!(r.menu && r.both && r.raw === 1 && r.brick === 0 && r.q >= 15 && r.q <= 30)) bad.push('雕耐火模具坯 ' + JSON.stringify(r));
                 // 烧硬：1400°C 不行，1600°C 60 秒变熟模具；配方在表末尾之后
                 r = await run(`let c = cook('kiln'); c.fire = 4; c.blow = 999; c.fuel = 1e5; c.items = { mold_axe_f_raw: 1 }; tick(c, 70, 1400); let lo = c.out.mold_axe_f || 0; c.items = { mold_axe_f_raw: 1 }; c.out = {}; c.cook = null; tick(c, 50, 1600); let mid = c.out.mold_axe_f || 0; tick(c, 20, 1600); let hi = c.out.mold_axe_f || 0;
                     let rec = IND_RECIPES.filter(function (q) { return q.in.mold_axe_f_raw === 1; })[0]; return { lo: lo, mid: mid, hi: hi, rec: !!rec && rec.minT === 1500 && rec.time === 60 && rec.hard === true, after: IND_RECIPES.indexOf(rec) > IND_RECIPES.findIndex(function (q) { return q.out.tnt; }) };`);
@@ -12236,7 +12236,7 @@ async function enterExit(tab, key) {
             else { try {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
-                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; ind.bag = { knife: 1, clay: 9, brick_fire: 4 }; ind.base.moldQ = {}; ind.carve = null; indPanelClose(); indSelect('knife');
+                const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); ind.base.rule = 'hard'; ind.bag = { knife: 1, clay: 9, clay_fire: 4 }; ind.base.moldQ = {}; ind.carve = null; indPanelClose(); indSelect('knife');
                     let at = function (pos) { ind.carve.t0 = ind.t - CALIB.sweep * pos; }; ${body} } finally { blazeFlash = bf; } })()`);
                 let r = await run(`ctCarveStart('knife'); let C = ind.carve; let z = [0.5, 0.3, 0.1, 0.9].map(function (p) { at(p); return calibZoneAt(ctPos()); });
                     at(0.5); ctHit(); let a = C.score; at(0.3); ctHit(); let b = C.score; at(0.1); ctHit(); let c = C.score; at(0.1); ctHit(); ctHit(); let floor = C.score; ind.t += 50; let idle = C.score; return { z: z, a: a, b: b, c: c, floor: floor, idle: idle, still: !!ind.carve, fl: fl.join('|') };`);
@@ -12245,7 +12245,7 @@ async function enterExit(tab, key) {
                 if (!(r.presses === r.n / 2 && r.raw === 1 && r.clay === 7 && JSON.stringify(r.q) === '[20]')) bad.push('全红区 ' + (r.n / 2) + ' 下得生模具、扣 2 黏土、耐久固定 20 ' + JSON.stringify(r));
                 r = await run(`ctCarveStart('axe'); let C = ind.carve; for (let i = 0; i < 6; i++) { at(0.05); ctHit(); } at(0.3); ctHit(); at(0.3); ctHit(); at(0.5); ctHit(); return { still: !!ind.carve, score: C.score, clay: ind.bag.clay, red: C.red, tries: C.tries };`);
                 if (!(r.still && r.score === 4 && r.clay === 9 && r.red === 1 && r.tries === 9)) bad.push('连续偏了也不碎不扣黏土，红区比例照旧记 ' + JSON.stringify(r));
-                r = await run(`ctCarveStart('knife', 1); let n = CT_SHAPE.knife.cuts; for (let i = 0; i < n / 2; i++) { at(0.5); ctHit(); } return { f: ind.bag.mold_knife_f_raw || 0, brick: ind.bag.brick_fire, q: ind.base.moldQ.knife_f && ind.base.moldQ.knife_f[0] };`);
+                r = await run(`ctCarveStart('knife', 1); let n = CT_SHAPE.knife.cuts; for (let i = 0; i < n / 2; i++) { at(0.5); ctHit(); } return { f: ind.bag.mold_knife_f_raw || 0, brick: ind.bag.clay_fire, q: ind.base.moldQ.knife_f && ind.base.moldQ.knife_f[0] };`);
                 if (!(r.f === 1 && r.brick === 2 && r.q === 20)) bad.push('耐火砖的雕 ' + JSON.stringify(r));
                 await T.eval(`indGoBase(null); ind.bag = { knife: 1, clay: 9 }; ind.carve = null; indSelect('knife'); ctCarveStart('knife'); ind.carve.t0 = ind.t - CALIB.sweep * 0.5; true;`);
                 await T.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })); true;`);
