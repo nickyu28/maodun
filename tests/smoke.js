@@ -6799,7 +6799,7 @@ async function enterExit(tab, key) {
                 // 一样东西一行，写总数；每行有放 1、全放
                 await T.eval(`ind.bag = { wood: 150, stone: 3 }; indPanelStove('stove'); true;`);
                 const txt = await T.eval(`document.getElementById('ind-panel').innerText`);
-                if ((txt.match(/木头 × /g) || []).length !== 1 || !/木头 × 150/.test(txt) || !/全放/.test(txt) || !/放满一炉/.test(txt)) bad.push('炉子面板：木头只一行写 150、有全放和放满一炉 ' + txt.slice(0, 200));
+                if ((txt.match(/木头 × /g) || []).length > 2 || !/木头 × 150/.test(txt) || !/全放/.test(txt) || !/放满一炉/.test(txt)) bad.push('炉子面板：木头写 150（燃料和炉料各一行，不重复写别的）、有全放和放满一炉 ' + txt.slice(0, 200));
                 await T.eval(`indStovePut('stone', 3); indPanelClose(); true;`);
                 if (!(await T.eval(`ind.base.stove.items.stone === 3 && !ind.bag.stone`))) bad.push('全放石头 3 个没放进去');
                 // 放满一炉：面包（4 份）、有大锅（8 份）、原料不够
