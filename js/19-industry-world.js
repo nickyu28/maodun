@@ -294,7 +294,7 @@
             if (o.crack) return '裂纹岩<br><small>挖不动，得用 TNT 炸</small>';
             if (o.hard) return '硬岩<br><small>太硬，得炸：拿 2 份火药右键放下，退远点</small>';
             if (o.key === 'vent_ng') return '天然气喷口<br><small>拿空钢瓶右键装一瓶；别点火' + (o.until ? '，还冒 ' + Math.max(0, Math.round(o.until - ind.t)) + ' 秒' : '') + '</small>';
-            if (o.tree) return WD_TREE_NAME[o.tree] + '，' + o.n + ' 木头<br><small>' + (indHard() && !tlCanChop() ? '空手砍不动，得有斧子或小刀' : '左键：砍，' + wdChopTool().need + ' 秒，站着别动') + '</small>';
+            if (o.tree) return WD_TREE_NAME[o.tree] + '　能出 ' + o.n + ' 份木头<br><small>' + (indHard() && !tlCanChop() ? '空手砍不动，得有斧子或小刀' : '左键：砍，' + (Math.round(wdChopTool().need * 100) / 100) + ' 秒，站着别动') + '</small>';
             if (o.key === 'cactus') return '仙人掌：有刺<br><small>左键：采集，拿剪刀或稿子不扎手</small>';
             if (o.rock) return (o.black ? '黑石头' : '大石头') + ' ×' + o.n + '<br><small>' + (indTool() >= nd.tool ? '左键：敲' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';
             if (o.out) return indName(o.key) + '矿脉　还剩 ' + indDigLeft(o) + ' 份<br><small>' + (indTool() >= nd.tool ? '左键：挖，一次 ' + (IND_DIG_N + indToolBonus(nd.tool)) + ' 个' : '要' + IND_TOOL_NAME[nd.tool]) + '</small>';

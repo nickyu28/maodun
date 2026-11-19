@@ -51,7 +51,7 @@
         const IND_SEASONS = [{ name: '春', t: 18 }, { name: '夏', t: 28 }, { name: '秋', t: 15 }, { name: '冬', t: -5 }];
         // 体温：等效气温 = 气温 + 衣服保暖 × 2.5；低于 15°C 慢慢变冷、高于 30°C 慢慢变热，每差 1 度每秒变 0.0015°C；不冷不热时每秒回 37°C 0.02
         const IND_BODY = { warmMul: 2.5, cold: 15, hot: 30, rate: 0.0015, back: 0.02, chill: 35, freeze: 33, sweat: 39, boil: 41, fireR: 4, fireHeat: 20, waterCold: 10, waterCool: 0.1, waterMin: 36 };
-        const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 4 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, walkDrain: 4, walkRegenAdd: 0.5, regen: 0.3, starveHp: 0.25, thirstHp: 1, coldHp: 0.5 };   // 任务 125：掉血速度按"最坏情况下跑到最近的水／撤离点的时间 × 2"定（饿 400 秒、渴 100 秒、冻 200 秒死）
+        const IND_SURV = { food: 2 / 60, water: 4 / 60, energy: 4 / 60, runEnergy: 2, nightOut: 3, sick: 60, sickWater: 3, stamDrain: 28, stamRegen: 16, walkDrain: 4, walkRegenAdd: 2, regen: 0.3, starveHp: 0.25, thirstHp: 1, coldHp: 0.5 };   // 任务 125：掉血速度按"最坏情况下跑到最近的水／撤离点的时间 × 2"定（饿 400 秒、渴 100 秒、冻 200 秒死）
 
         // ── 物品 ──
         // tool：稿子等级；eat：吃喝的效果 { f 饱食, w 口渴, sick 拉肚子概率, back 吃完还回来什么 }
@@ -995,7 +995,10 @@
             if (!ind || !(ind.wirePend || ind.sigPend)) return false;
             ind.wirePend = null; ind.sigPend = null; ind.devDirty = true; indFlash('取消连线'); return true;
         }
+        // 提示里的数字不留长尾小数：三位以上小数一律四舍五入到两位，末尾的零去掉（1.0499999999999998 → 1.05）
+        function indTidyNum(s) { return typeof s === 'string' ? s.replace(/\d+\.\d{3,}/g, function (m) { return String(Math.round(parseFloat(m) * 100) / 100); }) : s; }
         function indFlash(t) {
+            t = indTidyNum(t);
             try {
                 let full = /^背包满了/.test(String(t)), now = performance.now();
                 if (!full && indFlash.fullUntil > now && indFlash.fullTxt) t = indFlash.fullTxt + '　' + t;
@@ -1019,11 +1022,12 @@
             let k = null, X = [];
             if (a.kind === 'item') k = a.o.k;
             else if (a.kind === 'node') { let nd = IND_NODES[a.o.key]; if (!nd) return X; k = a.o.tree ? 'wood' : a.o.key === 'seeds' ? a.o.seed : (nd.out || a.o.key); if (!a.o.tree && nd.tool >= 1 && !a.o.hard && !a.o.crack) X.push((indTool() >= nd.tool ? '' : '<b style="color:#ffab91">') + '要' + IND_TOOL_NAME[nd.tool] + '或更好' + (indTool() >= nd.tool ? '' : '</b>')); }
-            if (k && IND_ITEMS[k]) { let M = indMakes(k); if (M.length) X.unshift('能做：' + M.slice(0, 4).map(function (o) { return indSeen(o) || IND_MAINLINE.indexOf(indCool(o)) >= 0 && indSeen(indCool(o)) ? indName(o) : '？'; }).join('、') + (M.length > 4 ? '…' : '')); }
+            if (k && IND_ITEMS[k]) { let M = indMakes(k); if (M.length) { let known = M.filter(function (o) { return indSeen(o) || IND_MAINLINE.indexOf(indCool(o)) >= 0 && indSeen(indCool(o)); }), unk = M.length - known.length; X.unshift('能做：' + (known.length ? known.slice(0, 4).map(function (o) { return indName(o); }).join('、') + (known.length > 4 ? '等' : '') + (unk ? '，还有 ' + unk + ' 样没发现' : '') : '还有 ' + unk + ' 样没发现')); } }   // 没见过的不再写一串问号
             return X;
         }
         function indTopHtml(a, hint) {
             if (!hint) return '';
+            hint = indTidyNum(hint);
             let i = hint.indexOf('<br>'), head = i >= 0 ? hint.slice(0, i) : hint, ops = i >= 0 ? hint.slice(i + 4) : '';
             if (/^<small>/.test(head)) { ops = hint; head = ''; }
             ops = ops.replace(/<small>要[^<]*(稿|镐)<\/small>/g, '');   // 要什么镐写在信息那一行
@@ -1678,7 +1682,7 @@
             });
             if (ch) ind.cropDirty = true;
         }
-        // 任务 143：精神 ≥ 60 恢复 ×1，精神 0 恢复 ×0.4。站着恢复 stamRegen；走路每秒耗 walkDrain、恢复 walkDrain + 0.5（也乘精神系数）
+        // 任务 143：精神 ≥ 60 恢复 ×1，精神 0 恢复 ×0.4。站着恢复 stamRegen；走路每秒耗 walkDrain、恢复 walkDrain + walkRegenAdd（也乘精神系数）；11-19 作者说走路回得太慢，walkRegenAdd 从 0.5 改 2，走路净回每秒 2，从空到满约 50 秒
         function indStamF(energy) { return 0.4 + 0.6 * Math.min(1, Math.max(0, energy) / 60); }
         function indStamWalk(stam, moving, energy, dt) {
             let f = indStamF(energy), Q = IND_SURV;
@@ -1948,6 +1952,7 @@
         // 右键：对着能搬的东西，按住 1 秒收起来，没按够就松开是原来的右键（吃喝、浇水、接水）；别的东西按下就是右键
         function indRightDown() {
             if (!ind || ind.over || ind.dead || ind.panel) return;
+            { let pa = indAim(); if (pa && pa.kind === 'node' && pa.o.tree === 'palm' && trShake(pa.o)) return; }   // 右键摇椰子，手上拿什么都一样，比别的右键用法优先（任务 109，19-industry-tree.js）
             if (lvTankUse()) return;   // 岩浆罐：装满、喂火苗仔（19-industry-lava.js）
             if (lvTorchUse()) return;   // 没点着的火把：靠近火苗仔、岩浆点着（19-industry-lava.js）
             if (mbShieldDown()) return;   // 选中盾：举盾，不拉风箱（任务 70）
@@ -1958,7 +1963,6 @@
             if (f) { ind.rh = { f: f, t: 0, done: false, pump: fmPumpCook(indAim()) }; return; }   // 装了风箱的烧着的炉子：短按是拉风箱（任务 114），长按还是收起
             if (!ind.ride && pwCrankDown(indAim())) return;   // 手摇发电机：按住右键摇（19-industry-power.js）
             if (indSel() === 'cactus') { wdPeelStart(); return; }   // 选中仙人掌点一下右键开始拔刺（R 键是生吃）
-            { let pa = indAim(); if (pa && pa.kind === 'node' && pa.o.tree === 'palm' && trShake(pa.o)) return; }   // 空手右键摇椰子（任务 109，19-industry-tree.js）
             if (trTap(indAim())) return;   // 松树割松脂、橡胶树割胶（19-industry-tree.js）
             if (fmKillStart(indAim())) return;   // 拿着工具对着动物按住右键 1 秒：宰（19-industry-farm.js）
             indUse();
@@ -3369,6 +3373,7 @@
         // 面板换内容不回顶部（任务 14.1）：同一个面板刷新时记下自己和里面有滚动条的子元素的 scrollTop，换完还原；换了别的面板才回顶部
         function indPanelKey(kind) { return kind + '|' + (ind.boxId == null ? '' : ind.boxId) + '|' + (ind.cookId == null ? '' : ind.cookId); }
         function indPanelSet(p, html) {
+            html = indTidyNum(html);
             let keep = [{ i: -1, t: p.scrollTop }], all = p.querySelectorAll('*');
             for (let i = 0; i < all.length; i++) if (all[i].scrollTop > 0) keep.push({ i: i, t: all[i].scrollTop });
             // 填数字的框（任务 18）：刷新时打了一半的数字、光标都留着

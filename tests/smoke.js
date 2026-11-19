@@ -10433,10 +10433,10 @@ async function enterExit(tab, key) {
                     for (let k = 0; k < 3; k++) { trTap(aim(o)); trTick(8.1); } let c = ind.bag.latex || 0; let more = trTap(aim(o)); trTick(9); let d = ind.bag.latex;
                     let o2 = tree('rubber'); o2.x = 1; trTap(aim(o2)); trTick(3); indTeleport(10, 0); trTick(1); let cut = !ind.tap; trTick(9); return { a: a, b: b, c: c, d: d, cut: cut, left: o.lx, l2: ind.bag.latex, fl: fl.join('|') };`);
                 if (!(r.a === 0 && r.b === 1 && r.c === 4 && r.d === 4 && r.cut && r.left === 0 && /割完了/.test(r.fl))) bad.push('割胶 8 秒 1 份、一棵 4 份、走远断 ' + JSON.stringify(r));
-                // 椰子树：空手摇一次 1～2 个（任务 109 起改成右键，见 IND143）；拿着斧子是砍树不摇；喝了口渴 +15 剩椰壳
-                r = await run(`let o = tree('palm'); ind.bag = { axe: 1 }; indSelect('axe'); let a = trShake(o); ind.bag = {}; let b = trShake(o), n = ind.bag.coconut || 0; let keep = ind.bag.coconut || 0; ind.bag = {}; let c = trShake(o), n2 = keep + (ind.bag.coconut || 0); ind.bag = { coconut: keep }; ind.base.surv.water = 50; indEat('coconut');
-                    return { a: a, b: b, n: n, c: c, n2: n2, w: ind.base.surv.water, shell: ind.bag.coconut_shell || 0, left: ind.bag.coconut || 0 };`);
-                if (!(r.a === false && r.b === true && r.n >= 1 && r.n <= 2 && r.c === true && r.n2 === r.n && r.w === 65 && r.shell === 1 && r.left === r.n - 1)) bad.push('椰子树空手摇一次、拿斧子不摇、喝了 +15 剩椰壳 ' + JSON.stringify(r));
+                // 椰子树：右键摇一次 1～2 个，手上拿什么都一样（任务 109、11-19，见 IND143）；摇过的再摇不出；喝了口渴 +15 剩椰壳
+                r = await run(`let o = tree('palm'); ind.bag = { axe: 1 }; indSelect('axe'); let a = trShake(o), keep = ind.bag.coconut || 0; let c = trShake(o), keep2 = ind.bag.coconut || 0; ind.bag.coconut = keep; ind.base.surv.water = 50; indEat('coconut');
+                    return { a: a, keep: keep, c: c, same: keep2 === keep, w: ind.base.surv.water, shell: ind.bag.coconut_shell || 0, left: ind.bag.coconut || 0 };`);
+                if (!(r.a === true && r.keep >= 1 && r.keep <= 2 && r.c === true && r.same && r.w === 65 && r.shell === 1 && r.left === r.keep - 1)) bad.push('椰子树拿斧子也摇得下来、摇过再摇不出、喝了 +15 剩椰壳 ' + JSON.stringify(r));
                 // 乳胶 2 + 硫 1 → 橡胶；硫只有硬核有，配方标 hard
                 r = await J(`(function(){ let x = IND_RECIPES.filter(function (q) { return q.out.rubber === 1; })[0]; return { ok: !!x && x.in.latex === 2 && x.in.sulfur === 1 && x.minT === 150 && x.time === 20, hard: !!(x && x.hard), last: IND_RECIPES.indexOf(x) > IND_RECIPES.findIndex(function (q) { return q.in.rod_irr; }) }; })()`);
                 if (!(r.ok && r.hard && r.last)) bad.push('橡胶配方、只给硬核、加在配方表末尾 ' + JSON.stringify(r));
@@ -12632,7 +12632,7 @@ async function enterExit(tab, key) {
             report('IND142 外面的工作台：背包随手合成、远征放下打开做东西收回、深水和压东西拒绝、基地照旧', bad.length === 0, bad.join(' / '));
         }
         if (want('IND143')) {
-            // IND143 右键摇椰子（任务 109）：空手右键对着椰子树，背包多 1～2 个椰子；空手左键没反应；拿着斧子左键还是砍；摇过再摇提示"已经摇下来了"；准星提示写"空手右键：摇椰子"
+            // IND143 右键摇椰子（任务 109）：空手右键对着椰子树，背包多 1～2 个椰子；空手左键没反应；手拿什么右键都摇；拿着斧子左键还是砍；摇过再摇提示"已经摇下来了"；准星提示写"空手右键：摇椰子"
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -12648,7 +12648,13 @@ async function enterExit(tab, key) {
                     indRightDown(); indRightUp(); let n = ind.bag.coconut || 0; indHudUpdate(); let h = document.getElementById('ind-hint').innerHTML; ind.bag = {}; indRightDown(); indRightUp(); let n2 = n + (ind.bag.coconut || 0);
                     return { aim: a && a.kind === 'node' && a.o === o, left: left, n: n, n2: n2, h: h, fl: fl.join('|') };`);
                 if (!(r.aim && r.left.co === 0 && !r.left.ch && r.n >= 1 && r.n <= 2 && r.n2 === r.n && /已经摇下来了/.test(r.fl))) bad.push('空手左键没反应、右键摇下 1～2 个、再摇提示 ' + JSON.stringify(r));
-                if (!(/空手右键：摇椰子/.test(r.h) && !/左键：摇/.test(r.h))) bad.push('准星提示写"空手右键：摇椰子" ' + r.h);
+                if (!(/右键：摇椰子/.test(r.h) && !/空手右键/.test(r.h) && !/左键：摇/.test(r.h))) bad.push('准星提示写"右键：摇椰子"，不写空手 ' + r.h);
+                for (const held of ['axe', 'wood', 'bucket']) {
+                    r = await run(`ind.bag = { ${held}: 1 }; indSelect('${held}'); indRightDown(); indRightUp(); return { co: ind.bag.coconut || 0, held: ind.bag['${held}'] };`);
+                    if (!(r.co >= 1 && r.co <= 2 && r.held === 1)) bad.push('手拿 ' + held + ' 对着椰子树右键也摇得下来 ' + JSON.stringify(r));
+                }
+                r = await run(`ind.bag = { bucket: 1 }; indSelect('bucket'); indTeleport(o.x + 12, o.z); indLookAt(o.x, o.z); indRightDown(); indRightUp(); return { co: ind.bag.coconut || 0 };`);
+                if (r.co !== 0) bad.push('离树远（准星不对着树）右键不摇 ' + JSON.stringify(r));
                 r = await run(`ind.bag = { axe_bronze: 1 }; if (!IND_ITEMS.axe_bronze) ind.bag = { axe: 1 }; indSelect(Object.keys(ind.bag)[0]); indAction(); return { ch: ind.ch ? ind.ch.kind : null, co: ind.bag.coconut || 0 };`);
                 if (!(r.ch === 'chop' && r.co === 0)) bad.push('拿着斧子左键还是砍 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
@@ -13312,8 +13318,8 @@ async function enterExit(tab, key) {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const go = (en, stam, keys, secs) => `(function(){ cancelAnimationFrame(ind.raf); ind.panel = null; ind.paused = false; ind.ride = null; ind.effort = 0; ind.base.surv.energy = ${en}; ind.stam = ${stam}; ind.k.w = ${keys.w ? 'true' : 'false'}; ind.k.run = ${keys.run ? 'true' : 'false'}; for (let i = 0; i < ${secs * 20}; i++) { ind.base.surv.energy = ${en}; indMove(0.05); } ind.k.w = false; ind.k.run = false; return ind.stam; })()`;
-                let a = await J(go(100, 50, { w: 1 }, 10)); if (!(a >= 50 && a <= 60)) bad.push('精神 100 走 10 秒体力涨约 5 ' + a);
-                a = await J(go(0, 50, { w: 1 }, 10)); if (!(a > 24 && a < 32)) bad.push('精神 0 走 10 秒体力降到约 28 ' + a);
+                let a = await J(go(100, 50, { w: 1 }, 10)); if (!(a >= 68 && a <= 72)) bad.push('精神 100 走 10 秒体力涨约 20，走路净回每秒 2（11-19 改快） ' + a);
+                a = await J(go(0, 50, { w: 1 }, 10)); if (!(a > 31 && a < 37)) bad.push('精神 0 走 10 秒体力降到约 34 ' + a);
                 a = await J(go(0, 20, {}, 1)); if (!(Math.abs(a - 26.4) < 1)) bad.push('精神 0 站 1 秒恢复 6.4 ' + a);
                 a = await J(go(100, 20, {}, 1)); if (!(Math.abs(a - 36) < 1)) bad.push('精神 100 站 1 秒恢复 16 ' + a);
                 a = await J(go(30, 20, {}, 1)); if (!(Math.abs(a - (20 + 16 * 0.7)) < 1)) bad.push('精神 30 系数 0.7 ' + a);
@@ -14868,6 +14874,30 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND197 农田中暑和种树：夏天白天农田边体温涨、头晕中暑、悠闲不掉血、树苗长成树有荫、站荫里不涨', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND198')) {
+            // IND198 准星提示的数字和问号（作者 11-19）：长尾小数一律取整到两位，椰子树那行写"能出 N 份木头"，"能做"里没见过的不写问号写"还有几样没发现"；提示、面板文字里没有长小数和连续问号
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); return { a: indTidyNum('1.0499999999999998 秒'), b: indTidyNum('体温 37.123456°C，30%'), c: indTidyNum('2 秒，0.5 倍'), d: indTidyNum('<b>12.3456789</b>') }; })()`);
+                if (!(r.a === '1.05 秒' && r.b === '体温 37.12°C，30%' && r.c === '2 秒，0.5 倍' && r.d === '<b>12.35</b>')) bad.push('长小数取整 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoTrip(2222); ind.mbSpawn = 1e9; let p = null; for (let i = 0; i < 400 && !p; i++) { let x = (i % 20) * 3 - 30, z = Math.floor(i / 20) * 3 - 30; if (indWaterDepth(x, z) === 0 && !ind.nodes.some(function (o) { return !o.dead && Math.hypot(o.x - x, o.z - z) < 4; })) p = { x: x, z: z }; }
+                    let o = { key: 'wood', tree: 'palm', x: p.x, z: p.z, y: indGround(p.x, p.z), n: 6, seed: 'seed_wheat', dead: false }; ind.nodes.push(o); ind.nodeDirty = true; indTeleport(p.x, p.z + 1.4); indLookAt(p.x, p.z); ind.bag = {}; indSel();
+                    let a = indAim(), h = wdNodeHint(o), top = indTopHtml(a, h), txt = top.replace(/<[^>]+>/g, ' '); return { aim: !!a, h: h, txt: txt, long: /\d\.\d{3,}/.test(txt), q: /？[、，]?\s*？/.test(txt), six: /，6\b/.test(txt) }; })()`);
+                if (!(r.aim && /能出 6 份木头/.test(r.txt) && !r.six)) bad.push('椰子树那行写能出 6 份木头 ' + JSON.stringify(r));
+                if (r.long || r.q) bad.push('提示里没有长小数和连续问号 ' + JSON.stringify(r));
+                r = await J(`(function(){ ind.base.seenK = {}; ind.bag = {}; let M = indMakes('wood'); let a = { kind: 'item', o: { k: 'wood' } }; let X = indTopExtra(a).join(' '); return { n: M.length, X: X }; })()`);
+                if (!(r.n >= 1 && !/？/.test(r.X) && /没发现|能做：/.test(r.X))) bad.push('能做里没见过的写还有几样没发现，不写问号 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND198 准星提示：数字取整、椰子树写能出几份木头、能做里不写问号', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
