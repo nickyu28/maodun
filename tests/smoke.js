@@ -8323,7 +8323,7 @@ async function enterExit(tab, key) {
                 // ── 14.2 背包销毁、撤销、过期 ──
                 await T.eval(`indPanelClose(); ind.bag = { wood: 5, stone: 7, coal: 3 }; indPanelBag(); true;`);
                 const i1 = await T.eval(`indSlots().findIndex(function (s) { return s.k === 'stone'; })`);
-                await T.eval(`document.querySelectorAll('#ind-panel .ind-slot[data-from="bag"]')[${i1}].querySelector('.ind-trash').click(); document.getElementById('ind-trash-yes').click(); ind.trashLast = 0; true;`);
+                await T.eval(`ind.trashLast = 0; ind.trashAsk = null; (function(){ let q = document.getElementById('ind-trash-ask'); if (q) q.remove(); })(); document.querySelectorAll('#ind-panel .ind-slot[data-from="bag"]')[${i1}].querySelector('.ind-trash').click(); document.getElementById('ind-trash-yes').click(); ind.trashLast = 0; true;`);
                 if (!(await T.eval(`ind.bag.stone === undefined && ind.bag.wood === 5 && ind.bag.coal === 3`))) bad.push('销毁中间那格，石头该没了 ' + await T.eval(`JSON.stringify(ind.bag)`));
                 if (!(await T.eval(`!!document.getElementById('ind-undo-btn') && /销毁了 .*× 7/.test(document.getElementById('ind-undo').textContent)`))) bad.push('上方没出"销毁了 X × N　撤销"');
                 await T.eval(`document.getElementById('ind-undo-btn').click(); true;`);
@@ -8346,7 +8346,7 @@ async function enterExit(tab, key) {
                 const cid = await T.eval(`(function(){ ind.base.chests.push({ id: 900, x: 3, z: 3, big: false, items: { wood: 10, iron: 4, coal: 2 } }); return 900; })()`);
                 await T.eval(`ind.bag = {}; indPanelBox(${cid}); true;`);
                 const bi = await T.eval(`indSlotsIn(indChestCur().items).findIndex(function (s) { return s.k === 'iron'; })`);
-                await T.eval(`document.querySelectorAll('#ind-panel .ind-slot[data-from="box"]')[${bi}].querySelector('.ind-trash').click(); document.getElementById('ind-trash-yes').click(); ind.trashLast = 0; true;`);
+                await T.eval(`ind.trashLast = 0; ind.trashAsk = null; (function(){ let q = document.getElementById('ind-trash-ask'); if (q) q.remove(); })(); document.querySelectorAll('#ind-panel .ind-slot[data-from="box"]')[${bi}].querySelector('.ind-trash').click(); document.getElementById('ind-trash-yes').click(); ind.trashLast = 0; true;`);
                 if (!(await T.eval(`indChestCur().id === 900 && indChestCur().items.iron === undefined && indChestCur().items.wood === 10`))) bad.push('箱子里销毁该没了');
                 await T.eval(`indUndo(); true;`);
                 if (!(await T.eval(`indChestCur().items.iron === 4 && Object.keys(ind.bag).length === 0`))) bad.push('箱子里撤销该回箱子');
@@ -8374,7 +8374,7 @@ async function enterExit(tab, key) {
                 const k0 = await T.eval(`ind.boxSel && indSlots()[ind.boxSel.i].k`);
                 const allBtn = `Array.prototype.filter.call(document.querySelectorAll('#ind-panel button'), function (b) { return b.textContent === '全放'; })[0]`;
                 if (!(await T.eval(`!!${allBtn}`))) bad.push('点一格该选中、出"全放"');
-                else { await T.eval(`${allBtn}.click(); true;`); await T.eval(`${allBtn}.click(); true;`); if (!(await T.eval(`ind.bag['${k0}'] === undefined && indChestCur().items['${k0}'] > 0`))) bad.push('点选后"全放"没放'); }
+                else { await T.eval(`${allBtn}.click(); true;`); await T.eval(`Array.prototype.filter.call(document.querySelectorAll('#ind-panel button'), function (b) { return b.textContent === '再点一次确认'; })[0].click(); true;`); if (!(await T.eval(`ind.bag['${k0}'] === undefined && indChestCur().items['${k0}'] > 0`))) bad.push('点选后"全放"没放'); }
                 // 箱子满了：拖不进、背包不变
                 await T.eval(`(function(){ let c = indChestCur(), ks = Object.keys(IND_ITEMS).filter(function (k) { return ['wood','stone','coal','salt','clay'].indexOf(k) < 0; }).slice(0, ${30}); c.items = {}; ks.forEach(function (k) { c.items[k] = 1; }); indPanelBox(); return true; })()`);
                 const before = await J(`ind.bag`);
