@@ -316,7 +316,7 @@
             { out: 'campfire', in: { wood: 5, stone: 3 } }, { gh: true, name: '暖棚', in: { wood: 10 } }, { glass: true, name: '玻璃暖棚，先要有木暖棚', in: { glass_plate: 6, wood: 6 } },
             { out: 'pickle', in: { radish: 2, salt: 1, bottle: 1 } },
             { out: 'yarn', in: { wool: 2 } }, { out: 'sweater', in: { yarn: 3 } }, { out: 'wool_hat', in: { yarn: 1 } }, { out: 'wool_scarf', in: { yarn: 1 } },
-            { out: 'bellows', in: { wood: 6, clay: 4, ingot_cu: 2, rope: 10, hide: 2 }, hard: true },   // 任务 44：风箱要人拉，造价贵一点（钢要风箱才炼得出，用铜锭代替；皮或人造革）
+            { out: 'bellows', in: { wood: 6, clay: 4, ingot_cu: 2, rope: 10, hide: 2 }, hard: true, tag: '皮革做法' },   // 任务 44：风箱要人拉，造价贵一点（钢要风箱才炼得出，用铜锭代替；皮或人造革）
             { pot: true, name: '黄铜大锅，装在灶台上', in: { brass: 3 }, hard: true },
             { out: 'tongs', in: { ingot_cu: 2 }, hard: true },
             { out: 'battery', in: { ingot_cu: 1, ingot_zn: 1, salt: 1 }, hard: true }, { out: 'wire', n: 4, in: { ingot_cu: 1 }, hard: true },
@@ -3112,7 +3112,7 @@
             let rows = order.map(function (i) {
                 let r = IND_CRAFT[i];
                 if (!indCraftShow(r)) return '';
-                let nm = (canOf[i] ? '<b class="ind-can" style="color:#2e7d32;">✓</b> ' : '') + (r.gh ? r.name + (ind.base.gh ? '，已经盖了' : '') : r.glass ? r.name + (ind.base.glass ? '，已经盖了' : '') : r.pot ? r.name + (ind.base.pot ? '，已经装了' : '') : indName(r.out) + (IND_ITEMS[r.out].warm ? '，保暖 ' + IND_ITEMS[r.out].warm + '' : ''));
+                let nm = (canOf[i] ? '<b class="ind-can" style="color:#2e7d32;">✓</b> ' : '') + (r.gh ? r.name + (ind.base.gh ? '，已经盖了' : '') : r.glass ? r.name + (ind.base.glass ? '，已经盖了' : '') : r.pot ? r.name + (ind.base.pot ? '，已经装了' : '') : indName(r.out) + (r.tag ? '，' + r.tag : '') + (IND_ITEMS[r.out].warm ? '，保暖 ' + IND_ITEMS[r.out].warm + '' : ''));
                 let need = Object.keys(r.in).map(function (k) { return indName(k) + '×' + r.in[k]; }).join(' + ') + (r.need ? ' + ' + indName(r.need) + '在身上' : '') + (r.out && IND_ITEMS[r.out] ? '　→ ' + indName(r.out) + ' ×' + (r.n || 1) : '');
                 if (r.out && ind.bag[r.out] > 0) need += '　现有 ' + ind.bag[r.out];   // 任务 135：背包里现有几个
                 let can = indCraftCan(r), once = r.gh || r.glass || r.pot;   // 盖暖棚、装大锅只能一次
@@ -3841,12 +3841,15 @@
             });
             return L.concat(wdBookLines());
         }
+        // 搜索的别名：搜"鼓风"要搜到风箱、扇子、电动鼓风机（作者 11-19）
+        const IND_SEARCH_ALIAS = { '鼓风': ['bellows', 'fan', 'dev_blower'], '吹风': ['bellows', 'fan', 'dev_blower'] };
+        function indAliasHit(q, k) { let a = IND_SEARCH_ALIAS[q]; return !!a && a.indexOf(k) >= 0; }
         function indPanelBook(q) {
             if (!ind) return;
             q = (q || '').trim().replace(/镐/g, '稿');   // 任务 158：游戏里写的是稿，搜镐也能搜到
             let L = indBookLines().filter(function (l) {
                 if (!q) return true;
-                return (l.name || '').indexOf(q) >= 0 || l.ins.concat(l.outs).some(function (k) { return indName(k).indexOf(q) >= 0; });
+                return (l.name || '').indexOf(q) >= 0 || l.ins.concat(l.outs).some(function (k) { return indName(k).indexOf(q) >= 0 || indAliasHit(q, k); });
             });
             let rows = L.map(function (l) { return '<div style="padding:4px 0;border-bottom:1px solid #eee;"><div>' + l.txt + '</div><small style="color:#888">' + l.where + (l.red ? '　煤、木炭、焦炭在这里是还原剂，不是燃料' : '') + '</small></div>'; }).join('') || '<div style="color:#999;padding:8px 0;">没找到</div>';
             indPanelShow('book', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">配方</div>' +

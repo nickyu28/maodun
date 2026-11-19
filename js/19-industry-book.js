@@ -85,7 +85,7 @@
         function bkChainHtml(q) {
             if (!q) return '';
             q = q.replace(/镐/g, '稿');
-            let keys = Object.keys(IND_ITEMS_RAW).filter(function (k) { let n = IND_ITEMS_RAW[k].name || ''; return n && n.indexOf(q) >= 0 && bkSeen(k) && bkSources(k).length; });
+            let keys = Object.keys(IND_ITEMS_RAW).filter(function (k) { let n = IND_ITEMS_RAW[k].name || ''; return n && (n.indexOf(q) >= 0 || indAliasHit(q, k)) && bkSeen(k) && bkSources(k).length; });
             keys.sort(function (a, b) { return (IND_ITEMS_RAW[a].name === q ? 0 : 1) - (IND_ITEMS_RAW[b].name === q ? 0 : 1) || IND_ITEMS_RAW[a].name.length - IND_ITEMS_RAW[b].name.length; });
             let html = '';
             keys.slice(0, 2).forEach(function (k) { html += '<div style="margin:4px 0 8px;padding:6px;background:#f3e5f5;border-radius:6px;font-size:13px;line-height:1.6;">' + bkSources(k).map(function (e) { return '<div>' + bkLink(k) + ' = ' + e.txt + '</div>'; }).join('') + '</div>'; });

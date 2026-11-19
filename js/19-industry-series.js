@@ -49,7 +49,7 @@
         }
         IND_ITEMS_RAW.dev_furnace.use = '放炉子 3 米内到 1800°C，要 24 V 串联';   // 任务 152
         // 任务 149：风箱不靠皮也能做。木箱活塞风箱（战国就有），羊毛当封条。配方加在表的最后，皮囊风箱的老配方不动
-        IND_CRAFT.push({ out: 'bellows', in: { wood: 10, rope: 12, wool: 4, ingot_cu: 2, clay: 4 }, hard: true });
+        IND_CRAFT.push({ out: 'bellows', in: { wood: 10, rope: 12, wool: 4, ingot_cu: 2, clay: 4 }, hard: true, tag: '活塞做法，羊毛封条，不用皮' });   // 作者 11-13 要的（任务 149：皮革掉得太少）
         // 任务 153：炉子里的配方时间统一减半，最低 5 秒；升温速度也提高了（灶台、小熔炉、石炉每秒 100°C，大窑 30°C）。进行中的进度在 ckFix 里按比例换算
         const CK_TIME_OLD = IND_RECIPES.map(function (r) { return r.time; });
         IND_RECIPES.forEach(function (r) { r.time = Math.max(5, Math.round(r.time * 0.5 * 10) / 10); });

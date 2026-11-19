@@ -118,8 +118,8 @@
         // 风箱（不用电）：炉子开着"鼓风"档、人站在旁边按住右键拉，目标温度才是 1600°C；松手掉回大火（1200）。拉的时候每秒吃 3 体力（扇炉子 4、扇自己 2）。
         // 扇子：手里拿着按住右键。对着点着的炉子（3 米内）扇，目标 1400°C；不对着炉子是扇自己，体温往 37°C 拉（每秒 0.3°C）。没体力就停
         const FM_PULL = { near: 3, grace: 0.3, bellows: 3, fanCook: 4, fanSelf: 2, fanT: 1400, selfRate: 0.3 };
-        Object.assign(IND_ITEMS_RAW, { fan: { name: '扇子', col: 0xdce775, use: '按住右键扇，炉子扇到 1400°C，也能给自己降温' } });
-        IND_ITEMS_RAW.bellows.use = '装在炉子上，右键拉一下炉温 +10°C';
+        Object.assign(IND_ITEMS_RAW, { fan: { name: '扇子', col: 0xdce775, use: '按住右键扇，给炉子鼓风到 1400°C，也能降温' } });
+        IND_ITEMS_RAW.bellows.use = '装在炉子上鼓风，右键拉一下 +10°C';
         IND_CRAFT.push({ out: 'fan', in: { grass: 6, rope: 2, wood: 1 }, hard: true });
         function fmBlowerOn(c) { return typeof fmBlowerPw === 'function' && fmBlowerPw(c); }   // 电动鼓风机（任务 51）
         // 这一帧炉子实际按哪档烧：鼓风档没人拉、也没电动鼓风机，就按大火；扇子扇着的炉子目标 1400

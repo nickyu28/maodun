@@ -14900,6 +14900,31 @@ async function enterExit(tab, key) {
             report('IND198 准星提示：数字取整、椰子树写能出几份木头、能做里不写问号', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND199')) {
+            // IND199 鼓风（作者 11-19）：配方面板搜"鼓风"搜得到风箱、扇子、电动鼓风机；风箱有两条做法，一条皮革一条活塞（羊毛封条，作者 11-13 要的任务 149），工作台里各写清楚；皮革那条排前面
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.seenK = {}; ['bellows', 'fan', 'dev_blower'].forEach(function (k) { ind.base.seenK[k] = 1; }); let o = {}; ['鼓风', '风箱', '风'].forEach(function (q) { indPanelBook(q); o[q] = document.getElementById('ind-panel').innerText; }); return o; })()`);
+                for (const q of ['鼓风']) {
+                    const t = r[q];
+                    if (!(/风箱/.test(t) && /扇子/.test(t) && /鼓风机/.test(t))) bad.push('搜"' + q + '"搜得到风箱、扇子、电动鼓风机 ' + t.slice(0, 200));
+                }
+                r = await J(`(function(){ let L = IND_CRAFT.filter(function (q) { return q.out === 'bellows'; }); return { n: L.length, tags: L.map(function (q) { return q.tag || ''; }), first: !!L[0].in.hide, wool: L.some(function (q) { return q.in.wool === 4; }) }; })()`);
+                if (!(r.n >= 2 && r.first && r.wool && r.tags.every((t) => t.length > 0))) bad.push('风箱两条做法，皮革在前，各写清楚 ' + JSON.stringify(r));
+                await T.eval(`ind.bag = { wood: 20, rope: 20, wool: 8, ingot_cu: 4, clay: 8 }; indPanelBench(); true;`);
+                const txt = await T.eval(`document.getElementById('ind-panel').innerText`);
+                if (!(/风箱，皮革做法/.test(txt) && /风箱，活塞做法，羊毛封条，不用皮/.test(txt))) bad.push('工作台里风箱两条各写清楚 ' + txt.slice(0, 120));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND199 鼓风：搜鼓风搜得到、风箱两条做法写清楚、皮革在前', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉
