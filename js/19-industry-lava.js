@@ -4,7 +4,7 @@
 // 火苗仔（19-industry-mob.js）：不会死，点数 3（每 90 秒回 1）、寿命 5 次，右键点火把用掉 1 点 1 寿命；离岩浆 3 米内寿命每 60 秒 +1；用完"燃尽了"。
 // 地热发电机：汽轮发电机 1 + 钢锭 8 + 铜线 10；离岩浆和水（水池，或开着的水泵）都在 3 米内才发电，24 V。基地里没有岩浆（以后做了能装岩浆的容器，倒在基地里才有），
 // 所以现在只有测试里能让它发电；岩浆登记在 ind.base.lava（基地）和 ind.map 火山口（远征）两处。
-        const LV = { rK: 0.3, burnHard: 30, burnCasual: 10, torchR: 2, charP: 0.3, devR: 3, volt: 24 };
+        const LV = { hitK: 0.92, rK: 0.3, burnHard: 30, burnCasual: 10, torchR: 2, charP: 0.3, devR: 3, volt: 24 };
         Object.assign(IND_ITEMS_RAW, { dev_geo: { name: '地热发电机', col: 0xe65100, dev: 'geo', use: '放在离岩浆和水都在 3 米内的地方，不用燃料，24 V' } });
         IND_DEVS.geo = { name: '地热发电机', col: 0xe65100, src: true, volt: LV.volt, size: [1.4, 1.2, 1.2] };
         IND_CRAFT.push({ out: 'dev_geo', in: { dev_turbine: 1, steel: 8, wire: 10 }, hard: true });
@@ -14,7 +14,9 @@
             if (ind.where === 'base') return (ind.base.lava || []);
             return [];
         }
-        function lvDist(x, z) { let m = 1e9; lvPools().forEach(function (p) { m = Math.min(m, Math.hypot(x - p.x, z - p.z) - p.r); }); return m; }   // 离最近一池岩浆边缘的距离（里面是负的）
+        // 判定半径比画出来的圆小 8%：边缘宁可少烫一点，不冤枉人
+        function lvHitR(p) { return p.r * LV.hitK; }
+        function lvDist(x, z) { let m = 1e9; lvPools().forEach(function (p) { m = Math.min(m, Math.hypot(x - p.x, z - p.z) - lvHitR(p)); }); return m; }   // 离最近一池岩浆边缘的距离（里面是负的）
         function lvBuild() {
             if (ind.lvMap === ind.map) return; ind.lvMap = ind.map;
             if (ind.where !== 'trip' || !ind.map || !ind.map.volc || ind.cave) return;
@@ -26,8 +28,10 @@
                 ind.volcSmoke.push({ smoke: sm, glow: gl });
             });
             lvPools().forEach(function (v) {
-                let r = v.r, m = new THREE.Mesh(indGeo(new THREE.CircleGeometry(r, 24)), indMat(new THREE.MeshBasicMaterial({ color: 0xff3d00 })));
-                m.rotation.x = -Math.PI / 2; m.position.set(v.x, indHeight(ind.map, v.x, v.z) + 0.08, v.z); indAdd(m);
+                let r = v.r, top = indHeight(ind.map, v.x, v.z);   // 池口那圈地面比池底高一点：把圆盘抬到圈上，看到的整圈都是岩浆，不被地面盖住一块
+                for (let a = 0; a < 16; a++) top = Math.max(top, indHeight(ind.map, v.x + Math.cos(a * Math.PI / 8) * r, v.z + Math.sin(a * Math.PI / 8) * r));
+                let m = new THREE.Mesh(indGeo(new THREE.CircleGeometry(r, 64)), indMat(new THREE.MeshBasicMaterial({ color: 0xff3d00 })));   // 64 段，圆边不出棱角
+                m.rotation.x = -Math.PI / 2; m.position.set(v.x, top + 0.08, v.z); indAdd(m);
             });
         }
         // 烟柱的颜色：白天灰白，夜里发暗，底部红光亮起来（每帧画之前调）

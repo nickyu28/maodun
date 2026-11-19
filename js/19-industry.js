@@ -3785,7 +3785,7 @@
             { let pool = ckPool(S), K0 = indCookK(c.ty, S), ri = S.cook ? S.cook.i : indCookFind(pool, K0, undefined, S.items);   // 这次出多少（任务 36）：现在放进去的东西能做几份，连空瓶空桶一起写
               if (ri >= 0) { let r0 = IND_RECIPES[ri], n0 = S.cook ? (S.cook.n || 1) : indBatchN(r0, pool, K0); st += '<br>这次出：<b>' + indOutAll(r0, n0) + '</b>' + (n0 > 1 ? '，' + n0 + ' 份' : '') + (!S.cook && S.temp < r0.minT ? '<br><span style="color:#c62828">温度不够：要 ' + r0.minT + '°C，现在 ' + Math.round(S.temp) + '°C' + (r0.minT > 1200 ? '，要鼓风或者电炉' : '') + '</span>' : ''); } }
             // 任务 135：面板分"燃料"和"炉料"两块。煤、木炭、焦炭两块里都有，按钮字不一样：加柴、放进去炼
-            let isFuel = function (k) { return IND_ITEMS[k].fuel && k !== indSel() && !(indHard() && indContOf(k) && indContOf(k).base === 'oil'); };
+            let isFuel = function (k) { return IND_ITEMS[k].fuel && !(k === indSel() && IND_ITEMS[k].fuelMade) && !(indHard() && indContOf(k) && indContOf(k).base === 'oil'); };
             let fuelRows = Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k) && isFuel(k); }).map(function (k) {
                 return indRow(indName(k) + ' × ' + ind.bag[k], indPutOpts('fuel', 0, k, indContOf(k) ? '倒' : '加柴', indContOf(k) ? '全倒' : '全加柴', indContOf(k) ? '倒' : '加柴'));
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没有能烧的</div>';

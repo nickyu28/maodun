@@ -14011,9 +14011,9 @@ async function enterExit(tab, key) {
                 r = await J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.rule = 'hard'; ind.base.off.stove = false; ind.base.stove = Object.assign(ckNewState(), { fuel: 0 }); ind.cookId = 'stove'; ind.bag = { grass: 3, shield_wood: 1, twig: 2 }; let o = {};
                     indStoveFuel('grass'); o.fuel1 = ind.base.stove.fuel; indStoveFuel('shield_wood'); o.shield = ind.bag.shield_wood || 0; o.modal = !!document.querySelector('#sys-modal:not(.hidden)'); o.fuel2 = ind.base.stove.fuel;
                     indStoveFuel('shield_wood', true); o.shield2 = ind.bag.shield_wood || 0; o.fuel3 = ind.base.stove.fuel;
-                    ind.bag = { grass: 2, twig: 2 }; indSelect('twig'); indPanelStove(); let html = document.getElementById('ind-panel').innerHTML; o.heldListed = html.indexOf("indPutN('fuel',0,'twig'") >= 0; o.otherListed = html.indexOf("indPutN('fuel',0,'grass'") >= 0; return o; })()`);
+                    ind.bag = { grass: 2, shield_wood: 1, coal: 3 }; indSelect('shield_wood'); indPanelStove(); let html = document.getElementById('ind-panel').innerHTML; o.heldListed = html.indexOf("indPutN('fuel',0,'shield_wood'") >= 0; o.otherListed = html.indexOf("indPutN('fuel',0,'grass'") >= 0; indSelect('coal'); indPanelStove(); html = document.getElementById('ind-panel').innerHTML; o.coalHeld = html.indexOf("indPutN('fuel',0,'coal'") >= 0; return o; })()`);
                 if (!(r.fuel1 === 8 && r.shield === 1 && r.modal && r.fuel2 === 8 && r.shield2 === 0 && r.fuel3 > 8)) bad.push('草烧 8；烧木盾先弹确认，不确认不烧，确认才烧 ' + JSON.stringify(r));
-                if (!(r.otherListed && !r.heldListed)) bad.push('拿着的那一格不列在当柴烧里 ' + JSON.stringify(r));
+                if (!(r.otherListed && !r.heldListed && r.coalHeld)) bad.push('手上拿着的做好的木制品不列在当柴烧里，手上拿着的煤照样列 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -14722,6 +14722,31 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND193 撤销和回收站：Ctrl+Z 最多 10 步 60 秒、销毁进回收站能拿回、数量默认 1、全拿全放点两次', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND194')) {
+            // IND194 岩浆判定贴着看到的形状（作者 11-19）：判定半径是画出来的圆的 92%，站在边缘外一点点不烫、站进去才烫；画出来的圆盘比池口那圈地面高、整圈看得见；圆边 64 段
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); ind.base.rule = 'hard'; indGoTrip(2024); lvBuild(); let P = lvPools()[0], o = { n: lvPools().length, k: LV.hitK }; let hr = P.r * LV.hitK; o.hr = hr;
+                    let at = function (d, a) { return lvDist(P.x + Math.cos(a) * d, P.z + Math.sin(a) * d); };
+                    o.out = [at(hr + 0.3, 0), at(hr + 0.3, 2), at(hr + 0.3, 4)].every(function (v) { return v > 0; }); o.inn = [at(hr - 0.3, 0), at(hr - 0.3, 2), at(hr - 0.3, 4)].every(function (v) { return v < 0; });
+                    o.visible = P.r - hr > 0.3;
+                    let disc = ind.objs.filter(function (m) { return m.geometry && m.geometry.type === 'CircleGeometry' && Math.abs(m.position.x - P.x) < 0.01 && Math.abs(m.position.z - P.z) < 0.01; })[0]; o.disc = !!disc;
+                    if (disc) { o.seg = disc.geometry.parameters.segments; let mx = -1e9; for (let a = 0; a < 32; a++) mx = Math.max(mx, indHeight(ind.map, P.x + Math.cos(a * Math.PI / 16) * hr, P.z + Math.sin(a * Math.PI / 16) * hr)); o.cover = disc.position.y >= mx; }
+                    ind.p.x = P.x + hr + 0.3; ind.p.z = P.z; let s0 = ind.base.surv.hp; indTick(0.5); o.hpOut = ind.base.surv.hp >= s0; ind.p.x = P.x + hr - 0.3; let s1 = ind.base.surv.hp; indTick(0.5); o.hpIn = ind.base.surv.hp < s1; return o; })()`);
+                if (!(r.n >= 1 && r.out && r.inn && r.visible)) bad.push('站在边缘外一点点不烫、站进去才烫 ' + JSON.stringify(r));
+                if (!(r.disc && r.seg >= 36 && r.cover)) bad.push('圆盘 64 段、比池口那圈地面高 ' + JSON.stringify(r));
+                if (!(r.hpOut && r.hpIn)) bad.push('边缘外血量不掉、边缘里掉 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND194 岩浆判定：边缘外不烫里面烫、画出来的圆盘盖住池口、圆边 64 段', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
