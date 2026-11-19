@@ -725,15 +725,15 @@
             ]);
         }
 
-        function chooseLeave() {
+        function chooseLeave(quiet) {
             if (gState.tutorial) { tutLeave(false); return; }
             gState.hasLeft = true; gState.spectating = null;
             document.getElementById('death-wait-page').classList.add('hidden');
             document.getElementById('spectate-bar').classList.add('hidden');
-            bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*', alive: !!gState.leavingAlive });
+            if (!quiet) bc.postMessage({ type: 'PLAYER_LEFT', sender: gState.id, target: '*', alive: !!gState.leavingAlive });
             let alive = gState.leavingAlive; gState.leavingAlive = false;
             gState.quitNoPay = !!alive;   // 活着中途走的不给猫盾币
-            finishGame(false, alive && liveHumanTeammates().length ? "你中途离开了本局，携带的物资散落在地，你的位置交给 AI 队友接着打。" : "你选择离开本局，携带的物资散落在地。");
+            finishGame(false, quiet ? "画面太卡，先退出了。3 分钟内回大厅点开始游戏，能回到这一局，身上带的东西留在原地。" : alive && liveHumanTeammates().length ? "你中途离开了本局，携带的物资散落在地，你的位置交给 AI 队友接着打。" : "你选择离开本局，携带的物资散落在地。");
         }
 
         // 寻宝队里真人队友的那个身体，原来只是跟着他的 POS_SYNC 走；他活着离开或者掉线了，
@@ -754,6 +754,48 @@
         // 队友卡掉线：6 秒没收到他的位置，AI 先顶上，队友弹一句；3 分钟还没回来就按离开算。
         // 他回来的那一刻（又收到位置）AI 交还，再弹一句。身体长什么样本来就是他自己的，所以顶上的 AI 也是他的样子。
         // 这一套靠已有的 POS_SYNC 和 PLAYER_LEFT，没有新消息，NET_PROTO 不动。
+        // 卡掉线的人回来：他点"开始游戏"发 HUNT_REJOIN，队友里还在这一局的人把 huntLog 整份发回去（HUNT_REPLAY），
+        // 他照开局记录重开同一张图，再把记下的事一条条重放（开过的箱子、倒地、复活这些），然后又开始发位置，队友那边 AI 就交还给他。
+        // 身上带的东西不回来：他中途离开时就按"携带物资散落"算了。
+        function huntOnRejoin(msg) {
+            if (!isPlaying || gState.tutorial || !huntLog.length || !entities || !msg.sender || msg.sender === gState.id) return;
+            if (!entities.some(function (e) { return e.userData.type === 'ai' && e.userData.name === msg.sender; })) return;   // 不是这一局的人
+            bc.postMessage({ type: 'HUNT_REPLAY', target: msg.sender, sender: gState.id, log: huntLog });
+        }
+        let huntRejoinWait = null;
+        function huntOnReplay(msg) {
+            if (msg.target !== gState.id || !gState.rejoin || isPlaying || !Array.isArray(msg.log) || !msg.log.length) return;
+            let st = msg.log[0];
+            if (!st || st.type !== 'START_MAP' || !mapConfigs[st.mapDiff]) return;
+            if (huntRejoinWait) { clearTimeout(huntRejoinWait); huntRejoinWait = null; }
+            gState.rejoin = null; gState.rejoining = true;
+            gState.mapDifficulty = st.mapDiff; gState.extractTarget = mapConfigs[st.mapDiff].extr; huntBossRun = st.boss === true;
+            startGameMap(st.seed, st.spawns || undefined);
+            msg.log.slice(1).forEach(function (ev) { try { bc.onmessage({ data: Object.assign({}, ev, { target: '*' }) }); } catch (e) { } });
+            gState.rejoining = false;
+            if (typeof blazeFlash === 'function') blazeFlash('回到刚才的局了');
+        }
+        // 大厅点"开始游戏"时先问一声：刚才是卡到退出的、3 分钟内，就去找队友要这一局，别的事不做
+        function huntRejoinTry() {
+            let r = gState.rejoin;
+            if (!r) return false;
+            if (Date.now() - r.t > HUNT_GONE_MS) { gState.rejoin = null; return false; }
+            bc.postMessage({ type: 'HUNT_REJOIN', target: '*', sender: gState.id });
+            if (typeof blazeFlash === 'function') blazeFlash('正在回刚才的局…');
+            if (huntRejoinWait) clearTimeout(huntRejoinWait);
+            huntRejoinWait = setTimeout(function () {
+                huntRejoinWait = null;
+                if (gState.rejoin && !isPlaying) { gState.rejoin = null; if (typeof blazeFlash === 'function') blazeFlash('那一局找不到了，可能已经结束'); }
+            }, 6000);
+            return true;
+        }
+        // 卡到不行（联机局）：安静地退出，不发 PLAYER_LEFT，队友那边 6 秒没位置就 AI 顶上；记下时间，3 分钟内能回来
+        function huntLagLeave() {
+            if (!isPlaying || gState.tutorial || gState.hasLeft || gState.isDead) return false;
+            gState.rejoin = { t: Date.now() };
+            chooseLeave(true);
+            return true;
+        }
         const HUNT_DROP_MS = 6000, HUNT_GONE_MS = 180000;
         function huntDropTick(now) {
             if (!isPlaying || !entities) return;

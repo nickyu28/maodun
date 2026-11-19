@@ -177,7 +177,10 @@ function gfxExitNow(kind) {
 function gfxAutoExit() {
     let k = gfxKind();
     if (k === 'industry' || k === 'lab') { gfxExitNow(k); blazeFlash('画面太卡了，已经存档退出，可以到设置里调低画质或视野'); return k; }
-    if (k === 'multi') { blazeFlash('画面太卡了，联机局不会自动退出，可以自己退出或调低画质'); return k; }
+    if (k === 'multi') {
+        if (chatActiveModeKey() === 'hunt' && typeof huntLagLeave === 'function' && huntLagLeave()) return k;   // 寻宝队：安静退出，AI 顶上，3 分钟内能回来
+        blazeFlash('画面太卡了，联机局不会自动退出，可以自己退出或调低画质'); return k;
+    }
     if (k === 'single') { gfxPause(); return k; }
     return null;
 }

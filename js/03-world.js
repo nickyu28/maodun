@@ -191,6 +191,7 @@
             gameSeed = seed || 1; nav('none'); document.getElementById('ui-layer').classList.remove('hidden'); document.getElementById('ui-id').innerText = dispNameText(gState.id);
             gState.selectedSlot = 0; gState.selectedContainer = 'inv';   // 仓库和局内快捷栏共用这两个
             if (!gState.tutorial) { gState.huntRunActive = true; saveProgress(); }   // H5：没结算就关页面，下次读档按撤离失败算
+            huntLog = gState.tutorial ? [] : [{ type: 'START_MAP', seed: gameSeed, spawns: syncSpawns || null, mapDiff: gState.mapDifficulty, boss: huntBossRun === true }];   // 卡掉线回来要靠它重开同一张图
             isPlaying = true; gState.isDead = false; gState.submittedItems = []; gState.hp = 100; timeSecs = 8 * 3600; gState.totalSubmitted = 0; gState.runCash = 0; gState.aiSubmitted = 0; gState.aiChestsTaken = 0; stamina = 100;
             // abilityCd/abilityActive 之前是全局变量，从来没在开新一局的时候清零过——
             // 上一局技能刚用完、冷却还没走完就退出，下一局技能会一直显示"还在冷却"，
@@ -1475,12 +1476,12 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
-                id: '2026.11.5-101', date: '11 月 19 日', title: '最近更新', items: [
+                id: '2026.11.5-102', date: '11 月 19 日', title: '最近更新', items: [
                     '设置里能选画质、视野、流畅度，点开选就行',
                     '画质高档起有影子，超高是最好的样子',
                     '卡的时候左上角冒红色图标，点一下有说明',
                     '太卡会临时降画质，不改你选的设置',
-                    '联机寻宝队有人卡掉线，AI 先顶上，回来再还给他'
+                    '联机寻宝队有人卡掉线，AI 先顶上，3 分钟内能回到同一局'
                 ]
             },
             {

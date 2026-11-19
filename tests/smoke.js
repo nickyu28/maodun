@@ -4586,7 +4586,7 @@ async function enterExit(tab, key) {
             const st = JSON.parse(await T.eval(`(function(){ let s = {}; labAdd(s, 'coal'); labAdd(s, 'coal'); labAdd(s, 'coal', 3); labAdd(s, 'iron'); return JSON.stringify(s); })()`));
             if (st.coal !== 5 || st.iron !== 1 || Object.keys(st).length !== 2) bad.push('同名物品没叠在一起 ' + JSON.stringify(st));
             const ver = JSON.parse(await T.eval(`JSON.stringify({ sv: SAVE_VER, dw: typeof DATA_WIPE_VER !== 'undefined' ? DATA_WIPE_VER : null, np: NET_PROTO })`));
-            if (ver.sv !== 2 || ver.np !== 11) bad.push('SAVE_VER 或 NET_PROTO 变了 ' + JSON.stringify(ver));
+            if (ver.sv !== 2 || ver.np !== 12) bad.push('SAVE_VER 或 NET_PROTO 变了 ' + JSON.stringify(ver));
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('LB9 配方清单（现有 X / 需要 Y 红绿、筛现在能做的）、手册 6 页并标"用在哪些配方里"、仓库里能直接开、同名叠放', bad.length === 0, bad.join(' / '));
@@ -14255,6 +14255,37 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('HT1 寻宝队队友卡掉线：6 秒 AI 顶上并弹提示、3 分钟没回来算离开、回来交还并弹回来了、主动离开不计时', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('HT2')) {
+            // HT2 寻宝队卡掉线退出再回同一局：开局记录和开过的箱子记进 huntLog；队友收到 HUNT_REJOIN 把整份 HUNT_REPLAY 发回去；卡到退出是安静的（不发 PLAYER_LEFT）；回来重开同一张图并重放开过的箱子；超过 3 分钟回不去；NET_PROTO 12
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(BOSS_GO('easy', false, 777)); if (!(await until(T, `isPlaying`, 20000))) bad.push('没开起来');
+            else {
+                const r0 = JSON.parse(await T.eval(`JSON.stringify({ n: huntLog.length, t: huntLog[0] && huntLog[0].type, seed: huntLog[0] && window.__start && huntLog[0].seed === window.__start.seed, diff: huntLog[0] && huntLog[0].mapDiff === gState.mapDifficulty })`));
+                if (r0.n !== 1 || r0.t !== 'START_MAP' || !r0.seed || !r0.diff) bad.push('开局记录 ' + JSON.stringify(r0));
+                await T.eval(`window.__cx = (function () { let c = chests[0]; return { cx: Math.floor(c.position.x / TILE), cz: Math.floor(c.position.z / TILE), cf: Math.floor(c.position.y / TILE) }; })(); bc.onmessage({ data: { type: 'CHEST_OPENED', target: '*', sender: 'peerA', cx: __cx.cx, cz: __cx.cz, cf: __cx.cf } }); window.__seed0 = gameSeed; true;`);
+                if ((await T.eval(`huntLog.length`)) !== 2) bad.push('开箱没记进去');
+                // 队友这边：有人要回来，把整份记录发回去（先造一个叫 peerA 的队友身体）
+                await T.eval(`entities.push({ userData: { type: 'ai', name: 'peerA', isRealPlayer: false, aiTakeover: true, hp: 100 }, position: { x: 0, y: 0, z: 0 } }); window.__sent = []; let op = bc.postMessage.bind(bc); window.__op = op; bc.postMessage = function (m) { window.__sent.push(m); return op(m); }; bc.onmessage({ data: { type: 'HUNT_REJOIN', target: '*', sender: 'peerA' } }); bc.onmessage({ data: { type: 'HUNT_REJOIN', target: '*', sender: 'nobody' } }); true;`);
+                const rp = JSON.parse(await T.eval(`JSON.stringify(window.__sent.filter(function (m) { return m.type === 'HUNT_REPLAY'; }).map(function (m) { return { target: m.target, n: m.log.length }; }))`));
+                if (JSON.stringify(rp) !== '[{"target":"peerA","n":2}]') bad.push('队友该只给 peerA 发一份整记录 ' + JSON.stringify(rp));
+                // 自己这边：卡到退出，安静，不发 PLAYER_LEFT
+                await T.eval(`window.__sent = []; window.__replay = huntLog.slice(); entities = entities.filter(function (e) { return e.userData.name !== 'peerA'; }); huntLagLeave(); true;`);
+                const q = JSON.parse(await T.eval(`JSON.stringify({ left: window.__sent.some(function (m) { return m.type === 'PLAYER_LEFT'; }), rj: !!gState.rejoin, playing: isPlaying })`));
+                if (q.left || !q.rj || q.playing) bad.push('卡到退出该安静、记下回来的口子、局结束 ' + JSON.stringify(q));
+                // 回来：收到整记录，重开同一张图并重放开过的箱子
+                await T.eval(`bc.postMessage = window.__op; bc.onmessage({ data: { type: 'HUNT_REPLAY', target: gState.id, sender: 'peerA', log: window.__replay } }); true;`);
+                const back = JSON.parse(await T.eval(`JSON.stringify({ playing: isPlaying, same: gameSeed === window.__seed0, opened: chests.some(function (c) { return c.userData.opened && Math.floor(c.position.x / TILE) === __cx.cx && Math.floor(c.position.z / TILE) === __cx.cz; }), log: huntLog.length, rj: !!gState.rejoin })`));
+                if (!back.playing || !back.same || !back.opened || back.log !== 2 || back.rj) bad.push('回来该重开同一张图、箱子是开着的 ' + JSON.stringify(back));
+                // 超过 3 分钟回不去
+                await T.eval(`gState.rejoin = { t: Date.now() - 181000 }; window.__r = huntRejoinTry(); true;`);
+                if ((await T.eval(`window.__r || !!gState.rejoin`))) bad.push('超过 3 分钟不该能回');
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('HT2 寻宝队卡掉线退出再回同一局：开局和开箱记录、队友回发整记录、安静退出、回来重开同一张图重放箱子、3 分钟回不去', bad.length === 0, bad.join(' / '));
         }
         if (want('IND182')) {
             // IND182 体检第二批（任务 142 的 5 和 6）：钠对着水先问再出氢气；核废料加玻璃出玻璃固化块；氖灯氪灯泡能戴、耗电不同；泥土加草做墙；羊毛做毛毡垫；草喂羊牛

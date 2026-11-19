@@ -82,9 +82,17 @@
         let bcRaw = null;
         try { if (window.BroadcastChannel) bcRaw = new BroadcastChannel('th_network_v5'); } catch (e) { }
 
+        // 寻宝队这一局发生过的、决定局面的消息，记下来；卡掉线退出的人回来时，队友把它整份发回去，他照着重放就追上了。
+        const HUNT_LOG_TYPES = { CHEST_OPENED: 1, PLAYER_DOWN: 1, PLAYER_REVIVED: 1, PLAYER_LEFT: 1, HUNT_REVIVE: 1, HUNT_BIG_ACK: 1 };
+        let huntLog = [];   // 第 0 条是开局记录（startGameMap 写），后面是上面这些消息
+        function huntLogPush(m) {
+            if (!m || !HUNT_LOG_TYPES[m.type] || !huntLog.length || huntLog.length > 600) return;
+            try { huntLog.push(JSON.parse(JSON.stringify(m))); } catch (e) { }
+        }
         let bc = {
             onmessage: null,
             postMessage: function (m) {
+                huntLogPush(m);
                 if (bcRaw) { try { bcRaw.postMessage(m); } catch (e) { } }
                 netSend(m, null);
             }
@@ -254,8 +262,9 @@
         // v6：超燃镜猫换位的 'swap' 事件多了楼层字段、收到的一方开始照着换位（原来发了没人收）；
         //     同一版 ROOM_HELLO 去掉了 stats 字段（A6 删游玩记录）
         // v7：寻宝队多了 HUNT_BIG_REQ / HUNT_BIG_ACK（大金上限全队共用，H16b），返魂药水多了 HUNT_REVIVE（H24）
+        // v12：寻宝队卡掉线的人能回到同一局，新消息 HUNT_REJOIN、HUNT_REPLAY（P6 第三批后半）
         // v11：Boss 测试版——START_MAP 多了 boss 字段，新消息 BOSS_HIT / BOSS_HP，ROOM_HELLO 多了 mark（头顶皇冠）；地图 4 的 mapDiff 'map4' 也算在这一版
-        const NET_PROTO = 11;
+        const NET_PROTO = 12;
         const NET_PREFIX = 'maodun-v' + NET_PROTO + '-';
         const DEFAULT_ROOM_CODE = 'lobby';   // 没手动开过小房间的人，默认都进这一个，大厅才是真的"大家在一起"
         // 这一整套匹配等待（matchPool/matchLeader/night-wait 那个浮层）早就写好了，
@@ -757,6 +766,7 @@
             }
             if (m === 'lab') { labEnter(); return; }   // 实验室是单人的，不跟队伍走
             if (m === 'hunt' && huntBranch === 'chem' && huntBranchOn()) { chemHuntStart(); return; }   // 寻宝队选了化学分支：开始游戏 = 开化学寻宝队
+            if (gState.rejoin && typeof huntRejoinTry === 'function' && huntRejoinTry()) return;   // 卡到退出的，3 分钟内回同一局
             if (m === 'hunt' && lobbyParty.length === 0 && tutShouldPlay('hunt')) { tutorialStart(); return; }   // P4：第一次进寻宝队先走一遍教程小图，做完或跳过再点开始才是真局
             if (m !== 'night' && m !== 'cake' && lobbyParty.length > 0 && !peerIsHost) {
                 lobbySuggestModeToHost(m);
@@ -1246,6 +1256,9 @@
         bc.onmessage = function (ev) {
             let msg = netScrubIds(ev.data);
             if (!msg || typeof msg !== 'object') return;
+            huntLogPush(msg);
+            if (msg.type === 'HUNT_REJOIN') { huntOnRejoin(msg); return; }
+            if (msg.type === 'HUNT_REPLAY') { huntOnReplay(msg); return; }
             if (msg.type === 'CHECK_ID') {
                 if (gState.id === msg.id) { bc.postMessage({ type: 'ID_CONFLICT', target: '*' }); }
             } else if (msg.type === 'ID_CONFLICT') {
