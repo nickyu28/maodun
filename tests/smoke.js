@@ -6650,15 +6650,15 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.bag = { water_boiled: 1 }; ind.base.stove.spout = [{ k: 'hot_cu', t: 0 }]; indSelect('water_boiled'); indUse(); true;`);
                 if (!(await T.eval(`ind.bag.water_boiled === 1`))) bad.push('槽里没有烫的也浇水');
                 // 满了：10 块，炉子暂停出料，面板写出料槽满了；取走以后接着出
-                const ten = JSON.stringify(Array.from({ length: 20 }, () => ({ k: 'hot_cu', t: 30 })));
+                const fullN = await T.eval(`IND_SPOUT_CAP * indStackOf('ingot_cu')`), ten = JSON.stringify(Array.from({ length: fullN }, () => ({ k: 'hot_cu', t: 30 })));   // 出料槽 100 格按堆叠占格（作者 11-19），铜锭一摞多少就装多少块才算满
                 await stoveSet({ ore_cu: 1, charcoal: 1 }, 3, 1200, JSON.parse(ten)); await T.eval(`indAdvance(25); true;`);
                 st = await J(`{ n: ind.base.stove.spout.length, full: ind.base.stove.cook && ind.base.stove.cook.full, items: ind.base.stove.items }`);
-                if (st.n !== 20 || !st.full || st.items.ore_cu !== 1) bad.push('出料槽满了（20 块）应该暂停出料 ' + JSON.stringify(st));
+                if (st.n !== fullN || !st.full || st.items.ore_cu !== 1) bad.push('出料槽满了（100 格）应该暂停出料 ' + JSON.stringify(st));
                 await T.eval(`indPanelStove('stove'); true;`);
                 if (!/出料槽满了/.test(await T.eval(`document.getElementById('ind-panel').innerText`))) bad.push('面板没写"出料槽满了"');
                 await T.eval(`indPanelClose(); ind.base.stove.spout.pop(); indAdvance(1); true;`);
                 st = await J(`{ n: ind.base.stove.spout.length, items: ind.base.stove.items }`);
-                if (st.n !== 20 || st.items.ore_cu) bad.push('腾出位置以后应该接着出料 ' + JSON.stringify(st));
+                if (st.n !== fullN || st.items.ore_cu) bad.push('腾出位置以后应该接着出料 ' + JSON.stringify(st));
                 // 搬炉子：有烫的不能搬，凉了的连槽里的锭一起搬
                 await stoveSet({}, 0, 20, [{ k: 'hot_cu', t: 12 }, { k: 'hot_cu', t: 0 }]);
                 await T.eval(`indPickFurn({ ty: 'stove', o: null }); true;`);
