@@ -475,17 +475,27 @@
 
         // ── 键盘和按钮 ──
         const LAB_KEYMAP = { w: 'w', a: 'a', s: 's', d: 'd', arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' };
+        // Esc：一次关掉所有开着的东西（作者 11-19）。扔东西的确认关掉算取消
+        function labCloseAll() {
+            if (!lab) return false;
+            let any = false;
+            if (lab.trashAsk) { labTrashAnswer(false); any = true; }
+            if (lab.panel) { labPanelClose(); any = true; }
+            if (document.getElementById('lab-book')) { labBookClose(); any = true; }
+            try { let a = document.activeElement; if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) a.blur(); } catch (x) { }
+            return any;
+        }
         function labKeyDown(e) {
             if (!lab || lab.over || lab.tutOpen) return;
-            let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+            let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') { if ((e.key || '') === 'Escape' && !e.repeat) { try { e.target.blur(); } catch (x) { } e.preventDefault(); labCloseAll(); } return; }   // 输入框里按 Esc：输入框和所有窗口一起关（作者 11-19）
             let k = (e.key || '').toLowerCase();
-            if (lab.trashAsk) { if (!e.repeat && k === 'escape') labTrashAnswer(false); e.preventDefault(); return; }   // 扔东西的确认开着：Esc 等于取消，别的键不管用
+            if (lab.trashAsk) { if (!e.repeat && k === 'escape') labCloseAll(); e.preventDefault(); return; }   // 扔东西的确认开着：Esc 一次全关，确认算取消，别的键不管用
             if (k === 'z' && (e.ctrlKey || e.metaKey) && !e.repeat) { e.preventDefault(); labUndoTrash(); return; }   // Ctrl+Z 撤销最近扔掉的
             if (k === 't' && e.shiftKey && !e.repeat) { if (typeof labPanelGrab === 'function') labPanelGrab(); return; }   // Shift+T 自取材料，设置里的开关没开就什么也不做（19-industry-grab.js）
             if (LAB_KEYMAP[k]) { lab.k[LAB_KEYMAP[k]] = true; e.preventDefault(); return; }
             if (k === ' ') { lab.k.jump = true; e.preventDefault(); return; }
             if (e.repeat) return;
-            if (k === 'escape') { if (lab.panel) labPanelClose(); else if (document.getElementById('lab-book')) labBookClose(); return; }
+            if (k === 'escape') { labCloseAll(); return; }   // 作者 11-19：Esc 一次关掉所有窗口
             if (k === 'b' && lab.panel === 'bag') { labPanelClose(); return; }
             if (lab.panel || document.getElementById('lab-book')) return;
             if (k === 'b') { labPanelBag(); return; }

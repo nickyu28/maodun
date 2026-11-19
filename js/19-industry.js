@@ -3873,11 +3873,23 @@
 
         // ── 键盘、界面 ──
         const IND_KEYMAP = { w: 'w', a: 'a', s: 's', d: 'd', arrowup: 'w', arrowleft: 'a', arrowdown: 's', arrowright: 'd' };
+        // Esc：一次关掉所有开着的东西（作者 11-19，改了 11-13 一次关一层的规矩）。销毁确认关掉算取消
+        function indCloseAll() {
+            if (!ind) return false;
+            let any = false;
+            if (ind.trashAsk) { indTrashAnswer(false); any = true; }
+            if (ind.carve) { ctCarveExit(); any = true; }
+            if (indCancelWire()) any = true;
+            if (ind.panel) { indPanelClose(); any = true; }
+            try { let m = document.getElementById('sys-modal'); if (m && !m.classList.contains('hidden') && typeof sysModalCloseNormal === 'function') { sysModalCloseNormal(); any = true; } } catch (x) { }
+            try { let a = document.activeElement; if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) a.blur(); } catch (x) { }
+            return any;
+        }
         function indKeyDown(e) {
             if (!ind || ind.over || ind.dead || ind.tutOpen) return;
-            let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') { if ((e.key || '') === 'Escape' && !e.repeat) { try { e.target.blur(); } catch (x) { } e.preventDefault(); } return; }   // 输入框里按 Esc：先退出输入框，下一次 Esc 才关面板，一次关一层
+            let t = e.target && e.target.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') { if ((e.key || '') === 'Escape' && !e.repeat) { try { e.target.blur(); } catch (x) { } e.preventDefault(); indCloseAll(); } return; }   // 输入框里按 Esc：输入框和所有窗口一起关（作者 11-19 改了一次关一层）
             let k = (e.key || '').toLowerCase();
-            if (ind.trashAsk) { if (!e.repeat && k === 'escape') indTrashAnswer(false); e.preventDefault(); return; }   // 销毁确认开着：Esc 等于取消，别的键不管用
+            if (ind.trashAsk) { if (!e.repeat && k === 'escape') indCloseAll(); e.preventDefault(); return; }   // 销毁确认开着：Esc 一次全关，确认算取消，别的键不管用
             if (ind.paused) { if (!e.repeat && (k === 'p' || k === 'escape')) indResume(); e.preventDefault(); return; }
             if (ind.relockWait && k !== 'escape' && !ind.panel) indRelock();   // 任务 140：Esc 关面板 Chrome 不让立刻锁，下一次按键补锁
             if (k === 'p' && !e.repeat && !ind.panel) { indPause(); return; }
@@ -3886,9 +3898,9 @@
             if (k === ' ') { ind.k.jump = true; e.preventDefault(); return; }
             if (k === 'shift') { ind.k.run = true; return; }
             if (e.repeat) return;
-            if (k === 'escape') { if (ind.carve && !ind.panel) { ctCarveExit(); return; } if (indCancelWire()) return; if (ind.panel) indPanelClose(); return; }   // 任务 138：Esc 退出雕模具   // 任务 104：连线状态下 Esc 先取消连线
+            if (k === 'escape') { indCloseAll(); return; }   // 作者 11-19：Esc 一次关掉所有窗口（面板、弹窗、确认框、雕模具、连线、输入框），不再一层一层关
             if (k === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (ind.undo && Date.now() < ind.undo.until && !((ind.ustack || []).length && ind.ustack[ind.ustack.length - 1].t > ind.undo.until - IND_UNDO_MS)) indUndo(); else indUndoStep(); return; }   // Ctrl+Z 撤销最近一步
-            if (k === 'z' && !ind.panel && !e.ctrlKey && !e.metaKey) { spCycle(); return; }   // 倍速（任务 144）
+            if (k === 'z' && !e.ctrlKey && !e.metaKey) { spCycle(); return; }   // 倍速（任务 144）；11-19 起面板开着也管用，输入框里打字不触发（上面已经挡掉）
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
             if (k === 't' && e.shiftKey && !e.ctrlKey && !e.metaKey) { if (typeof indPanelGrab === 'function') indPanelGrab(); return; }   // Shift+T 自取材料，设置里的开关没开就什么也不做（19-industry-grab.js）
             if (k === 'c' && !e.ctrlKey && !e.metaKey && (!ind.panel || ind.panel === 'book')) { if (ind.panel) indPanelClose(); else indPanelBook(''); return; }   // 任务 126：C 配方查询，只能看，不能合成

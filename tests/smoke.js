@@ -13264,7 +13264,7 @@ async function enterExit(tab, key) {
                     t('panel', function () { ind.panel = 'bag'; }); t('ok', function () { }); t('red', function () { ind.redT = 1; });
                     ${SET.replace('cancelAnimationFrame(ind.raf); ', '')} ind.where = 'trip'; ind.speed = 4; spTick(0.05); o.push('trip:' + ind.speed); ind.speed = 1; spCycle(); o.push('tripcycle:' + ind.speed); ind.where = 'base';
                     return o; })()`);
-                if (stops.join() !== 'hp:1,food:1,cold:1,mob:1,far:4,panel:1,ok:4,red:1,trip:1,tripcycle:1') bad.push('危险自动回 ×1，远处的怪不停，出门灰着 ' + stops.join());
+                if (stops.join() !== 'hp:1,food:1,cold:1,mob:1,far:4,panel:4,ok:4,red:1,trip:1,tripcycle:1') bad.push('危险自动回 ×1，远处的怪不停，开着面板不停（11-19 改），出门灰着 ' + stops.join());
                 const cy = await J(`(function(){ ${SET} ind.where = 'base'; ind.speed = 1; let o = []; for (let i = 0; i < 6; i++) { spCycle(); o.push(ind.speed); } spCycle(); let b = document.getElementById('ind-btn-speed'); o.push(b ? b.textContent : 'nobtn'); ind.where = 'trip'; spBtn(); o.push(b && b.disabled ? 'dis' : 'en'); ind.where = 'base'; spBtn(); ind.speed = 1; spBtn(); return o; })()`);
                 if (cy.slice(0, 6).join() !== '2,4,8,16,1,2' || !/×4/.test(cy[6] || '') && !/×2/.test(cy[6] || '') || cy[7] !== 'dis') bad.push('按钮在 1 2 4 8 16 间转、出门灰 ' + cy.join());
                 const ac = await J(`(function(){ let r = IND_CRAFT.find(function (x) { return x.out === 'dev_accel'; }); return { off: !!(r && r.off), item: !!IND_ITEMS.dev_accel }; })()`);
@@ -14028,6 +14028,28 @@ async function enterExit(tab, key) {
             report('LB33 实验室自取材料：开关关着没反应、开了能搜能放、Esc 关', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('LB34')) {
+            // LB34 实验室 Esc 一次关所有窗口（作者 11-19）：背包面板开着再弹扔东西确认，按一次 Esc 面板和确认一起关，确认算取消东西还在；配方手册也一起关
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            try {
+                const J = async (e) => JSON.parse(await T.eval(`JSON.stringify(${e})`));
+                const esc = () => T.eval(`labKeyDown({ key: 'Escape', target: document.body, preventDefault: function () { }, repeat: false }); true;`);
+                await T.eval(`labClear(); lab.bag = {}; labGive('sand', 4); labSel('sand'); lab.trashLast = 0; lab.trashAsk = null; labPanelBag(); labTrash(); true;`);
+                let r = await J(`{ ask: !!document.getElementById('lab-trash-ask'), panel: lab.panel }`);
+                if (!(r.ask && r.panel === 'bag')) bad.push('背包面板加扔东西确认两层开着 ' + JSON.stringify(r));
+                await esc(); r = await J(`{ ask: !!document.getElementById('lab-trash-ask'), panel: lab.panel, sand: lab.bag.sand }`);
+                if (!(!r.ask && !r.panel && r.sand === 4)) bad.push('一次 Esc 全关，确认算取消东西还在 ' + JSON.stringify(r));
+                await T.eval(`labBook('list'); labPanelBag(); true;`);
+                await esc(); r = await J(`{ book: !!document.getElementById('lab-book'), panel: lab.panel }`);
+                if (r.book || r.panel) bad.push('配方手册和面板一起关 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB34 实验室 Esc 一次关所有窗口：面板、确认、手册', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND177')) {
             // IND177 草和木制品能当燃料（任务 133）：草 8、树枝 15、草绳 15、木柄 30；湿木头 40 干木头 60；青铜镐不能烧；烧做好的东西先确认；拿着的那一格不列
             const bad = [];
@@ -14644,7 +14666,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('IND190')) {
-            // IND190 配方面板搜索框里按 Esc（测试员 11-18）：先退出搜索框，面板还开着；再按 Esc 关面板；搜索框退出后按 C 能关
+            // IND190 配方面板搜索框里按 Esc（测试员 11-18）：一次 Esc 搜索框和面板一起关；退出后按 C 能开能关
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -14661,9 +14683,7 @@ async function enterExit(tab, key) {
                     if ((await T.eval(`ind.panel`)) !== 'book') bad.push('搜索框里按字母不该开别的面板');
                     await kd('Escape', true);
                     r = await J(`{ panel: ind.panel, focus: document.activeElement && document.activeElement.tagName }`);
-                    if (!(r.panel === 'book' && r.focus !== 'INPUT')) bad.push('搜索框里按 Esc 先退出搜索框，面板还开着 ' + JSON.stringify(r));
-                    await kd('Escape', false);
-                    if (await T.eval(`ind.panel`)) bad.push('再按 Esc 关面板');
+                    if (!(!r.panel && r.focus !== 'INPUT')) bad.push('搜索框里按一次 Esc，搜索框和面板一起关（作者 11-19 改成一次全关） ' + JSON.stringify(r));
                     await T.eval(`indPanelBook(''); document.activeElement && document.activeElement.blur(); true;`);
                     await kd('c', false);
                     if (await T.eval(`ind.panel`)) bad.push('退出搜索框后按 C 关面板');
@@ -14671,7 +14691,7 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND190 配方搜索框里按 Esc：先退出搜索框，再按 Esc 关面板，退出后按 C 能关', bad.length === 0, bad.slice(0, 8).join(' / '));
+            report('IND190 配方搜索框里按 Esc：一次全关，之后 C 能开能关', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (want('IND191')) {
@@ -15036,6 +15056,31 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND204 出料槽 100 格不限种类：按堆叠占格、满了停着不丢、一次全取、全放按钮变字', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND205')) {
+            // IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口（作者 11-19）：开着背包按 Z 倍速变；输入框里打 z 不变；背包加销毁确认加搜索框，按一次 Esc 全关、确认算取消东西还在；实验室同样
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const key = (k, extra) => T.eval(`indKeyDown(Object.assign({ key: '${k}', target: document.body, preventDefault: function () { }, repeat: false }, ${extra || '{}'})); true;`);
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); ind.base.rule = 'hard'; ind.speed = 1; ind.bag = { wood: 5 }; indPanelBag(); let o = { p: ind.panel }; return o; })()`);
+                await key('z'); r = await J(`{ sp: ind.speed, panel: ind.panel }`);
+                if (!(r.panel === 'bag' && r.sp > 1)) bad.push('开着背包按 Z 倍速变了 ' + JSON.stringify(r));
+                await T.eval(`ind.speed = 1; indPanelBook(''); let i = document.querySelector('#ind-panel input'); i.focus(); indKeyDown({ key: 'z', target: i, preventDefault: function () { }, repeat: false }); true;`);
+                if ((await T.eval(`ind.speed`)) !== 1) bad.push('输入框里打 z 不触发倍速');
+                r = await J(`(function(){ indPanelClose(); ind.bag = { wood: 5 }; indPanelBag(); ind.trashLast = 0; ind.trashAsk = null; document.querySelector('#ind-panel .ind-trash').click(); let a = !!document.getElementById('ind-trash-ask'); let o = { ask: a, panel: ind.panel }; return o; })()`);
+                if (!(r.ask && r.panel === 'bag')) bad.push('背包加销毁确认两层开着 ' + JSON.stringify(r));
+                await key('Escape'); r = await J(`{ ask: !!document.getElementById('ind-trash-ask'), panel: ind.panel, wood: ind.bag.wood }`);
+                if (!(!r.ask && !r.panel && r.wood === 5)) bad.push('一次 Esc 全关，确认算取消东西还在 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (want('IND203')) {

@@ -14,7 +14,7 @@
             let S = ind.base.surv;
             if (ind.where !== 'base') return '出门了';
             if (ind.dead || ind.paused || ind.sleeping || ind.carve) return '先停一下';
-            if (ind.panel) return '开着面板';
+            // 开着面板不再算危险（作者 11-19：面板开着 Z 也要能调倍速）
             if (S.hp < SP.hp) return '你受伤了';
             if (ind.redT > 0) return '你受伤了';
             if (S.food < 20 || S.water < 20) return '饿了或渴了';
@@ -54,7 +54,7 @@
         function spCycle() {
             if (!ind || ind.over || ind.dead) return;
             if (ind.where !== 'base') { indFlash('倍速只能在基地里用'); return; }
-            if (ind.panel || ind.paused) return;
+            if (ind.paused) return;   // 作者 11-19：面板开着 Z 也管用（输入框里打字不触发，键盘那边挡掉了）
             let i = SP.steps.indexOf(spMul()); ind.speed = SP.steps[(i + 1) % SP.steps.length];
             if (ind.speed > 1) { let why = spDanger(); if (why) { ind.speed = 1; indFlash('现在不能加速：' + why); } }
             spBtn();
