@@ -14737,6 +14737,7 @@ async function enterExit(tab, key) {
                 if (await T.eval(`!!document.getElementById('ind-trash-ask') || ind.bag.wood !== 5 || ind.bag.stone !== 3`)) bad.push('取消后东西还在、确认窗关了');
                 await T.eval(`ind.trashLast = 0; document.querySelector('#ind-panel .ind-trash').click(); true;`); await esc();
                 if (await T.eval(`!!document.getElementById('ind-trash-ask') || ind.bag.wood !== 5`)) bad.push('Esc 等于取消');
+                await T.eval(`indPanelBag(); true;`);   // Esc 现在一次关所有窗口，面板也关了，重新开
                 await T.eval(`ind.trashLast = 0; document.querySelector('#ind-panel .ind-trash').click(); indKeyDown({ key: 'e', target: document.body, preventDefault: function () { }, repeat: false }); true;`);
                 if (!(await T.eval(`!!document.getElementById('ind-trash-ask') && ind.panel === 'bag'`))) bad.push('确认开着别的键不管用');
                 await T.eval(`document.getElementById('ind-trash-yes').click(); true;`);
