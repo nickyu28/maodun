@@ -19,8 +19,8 @@
                 add['mold_' + s + '_raw'] = { name: S.n + '生模具', col: 0xbcaaa4, use: '放进炉子 600°C 30 秒烧硬' };
                 add['mold_' + s] = { name: S.n + '模具', col: 0x8d6e63, use: '放进出料槽，铸' + S.n + '要 ' + S.need + ' 份，浇不了铁钢' };
                 IND_RECIPES.push({ in: { ['mold_' + s + '_raw']: 1 }, out: { ['mold_' + s]: 1 }, cls: 'smelt', minT: 600, time: 30, hard: true });
-                add['mold_' + s + '_f_raw'] = { name: '耐火砖' + S.n + '生模具', col: 0xd7ccc8, use: '放进炉子 1500°C 以上烧 60 秒烧硬，要鼓风或电炉' };   // 耐火砖模具（任务 4 铸造后半）；烧硬的配方在 19-industry-cast2.js（配方表只能往后加）
-                add['mold_' + s + '_f'] = { name: '耐火砖' + S.n + '模具', col: 0xa1887f, use: '炉子面板里放进出料槽，什么金属都能铸，包括铁和钢，要 ' + S.need + ' 份' };
+                add['mold_' + s + '_f_raw'] = { name: '耐火' + S.n + '模具坯', col: 0xd7ccc8, use: '没烧，一碰会碎，1500°C 以上烧 60 秒烧硬' };   // 耐火砖模具（任务 4 铸造后半）；烧硬的配方在 19-industry-cast2.js（配方表只能往后加）
+                add['mold_' + s + '_f'] = { name: '耐火' + S.n + '模具', col: 0xa1887f, use: '炉子面板里放进出料槽，什么金属都能铸，包括铁和钢，要 ' + S.need + ' 份' };
                 Object.keys(CT_PART_METAL).forEach(function (m) {
                     let k = 'part_' + s + '_' + m, tool = S.tool + m;
                     add[k] = { name: CT_METAL[m].n + S.n, col: 0xb87333, use: '工作台装成' + CT_METAL[m].n + '的工具' };
@@ -126,7 +126,7 @@
             if (P && U && P.m !== U.m) return '熔池里是' + CT_METAL[P.m].n + '，先倒完再化' + CT_METAL[U.m].n;
             if (!CT_PART_METAL[mm]) return Mt.n + '铸不了零件';
             if (Mt.melt > sp.maxT) return '槽太低：要耐火砖槽，现在是' + sp.name;
-            if (Mt.melt > (M.f ? CT.fireMax : CT.clayMax)) return '模具不是耐火砖的，浇不了' + Mt.n;
+            if (Mt.melt > (M.f ? CT.fireMax : CT.clayMax)) return '模具不是耐火的，浇不了' + Mt.n;
             if (S.temp < Mt.melt) return '炉温 ' + Math.round(S.temp) + '°C，不到 ' + Mt.melt + '°C，' + (P ? '熔池要凝了' : '化不了锭');
             let have = (P ? P.n : 0) - (M.fill || 0);
             if (!P || have < need - 1e-9) {
@@ -145,7 +145,7 @@
             if (!indHard()) return '';
             let S = c.C, P = S.pool, M = S.mold, h = '<br>熔池：' + (P ? CT_METAL[P.m].n + ' ' + P.n + ' / ' + ctCap(c) + ' 份' : '空') + (S.meltT > 0 ? '　化锭 ' + Math.floor(S.meltT / CT.meltT * 100) + '%' : '') + (P ? '　<button style="' + IND_BTN + '" onclick="ctPour()">倒出来</button>' : '');
             { let nm = Object.keys(S.items).filter(function (k) { return CT_METAL[k] && !CT_PART_METAL[k] && S.items[k] > 0 && S.temp >= CT_METAL[k].melt; }).map(function (k) { return CT_METAL[k].n + '锭'; }); if (nm.length) h += '<br><span style="color:#888">' + nm.join('、') + '不熔，当炉料</span>'; }
-            if (M) h += '<br>模具：' + (M.f ? '耐火砖' : '') + CT_SHAPE[M.s].n + '，还能用 ' + M.dura + ' 次，' + (M.part ? '　' + indName(M.part) + (M.t > 0 ? ' 烫，还要 ' + Math.ceil(M.t) + ' 秒' : ' 凉了，左键出料槽取') : M.fill > 0 ? '　在流 ' + Math.floor(M.fill / CT_SHAPE[M.s].need * 100) + '%' : P && !CT_PART_METAL[P.m] ? '　<span style="color:#c62828">' + CT_METAL[P.m].n + '铸不了零件</span>' : '') + '　<button style="' + IND_BTN + '" onclick="ctMoldOut()">取下模具</button>';
+            if (M) h += '<br>模具：' + (M.f ? '耐火' : '') + CT_SHAPE[M.s].n + '，还能用 ' + M.dura + ' 次，' + (M.part ? '　' + indName(M.part) + (M.t > 0 ? ' 烫，还要 ' + Math.ceil(M.t) + ' 秒' : ' 凉了，左键出料槽取') : M.fill > 0 ? '　在流 ' + Math.floor(M.fill / CT_SHAPE[M.s].need * 100) + '%' : P && !CT_PART_METAL[P.m] ? '　<span style="color:#c62828">' + CT_METAL[P.m].n + '铸不了零件</span>' : '') + '　<button style="' + IND_BTN + '" onclick="ctMoldOut()">取下模具</button>';
             if (M && !M.part) { let pl = ctPlanTxt(c), w = ctWhy(c); if (pl) h += '<br>' + pl; if (w) h += '<br><span style="color:#c62828">' + w + '</span>'; }
             let ms = Object.keys(ind.bag).filter(function (k) { return /^mold_[a-z]+(_f)?$/.test(k) && CT_SHAPE[k.slice(5).replace(/_f$/, '')]; });
             if (!M && ms.length) h += '<br>' + ms.map(function (k) { return '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="ctMoldPut(\'' + k + '\')">' + indName(k) + ' 放进出料槽</button>'; }).join('');
@@ -155,10 +155,10 @@
         function ctCarveMenu() {
             if (!indHard()) return false;
             if (ind.carve) { return true; }
-            let cl = (ind.bag.clay || 0) >= 2, br = (ind.bag.brick_fire || 0) >= 2;
+            let cl = (ind.bag.clay || 0) >= 2, br = (ind.bag.clay_fire || 0) >= 2;   // 耐火模具先雕再烧：用没烧的耐火黏土雕模具坯，再烧成模具（作者 11-19，原来是先烧成耐火砖再雕，反了）
             if (!cl && !br) return false;
-            indPanelShow('carve', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">雕模具，用 2 ' + (cl && br ? '黏土或耐火砖' : cl ? '黏土' : '耐火砖') + '</div>' + Object.keys(CT_SHAPE).map(function (s) {
-                return indRow(CT_SHAPE[s].n + '模具，' + CT_SHAPE[s].cuts + ' 刀', (cl ? '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="ctCarveStart(\'' + s + '\')">雕</button>' : '') + (br ? '<button style="' + IND_BTN + 'background:#a1887f;" onclick="ctCarveStart(\'' + s + '\',1)">雕耐火砖的</button>' : ''));
+            indPanelShow('carve', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">雕模具，用 2 ' + (cl && br ? '黏土或耐火黏土' : cl ? '黏土' : '耐火黏土') + '</div>' + Object.keys(CT_SHAPE).map(function (s) {
+                return indRow(CT_SHAPE[s].n + '模具，' + CT_SHAPE[s].cuts + ' 刀', (cl ? '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="ctCarveStart(\'' + s + '\')">雕</button>' : '') + (br ? '<button style="' + IND_BTN + 'background:#a1887f;" onclick="ctCarveStart(\'' + s + '\',1)">雕耐火黏土的</button>' : ''));
             }).join('') + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
             return true;
         }
@@ -176,8 +176,8 @@
         function ctHit() {
             let C = ind.carve; if (!C) return false;
             if (tlKind(indSel()) !== 'knife') { indFlash('拿上小刀接着雕'); return true; }
-            let mat = C.f ? 'brick_fire' : 'clay';
-            if ((ind.bag[mat] || 0) < 2) { ind.carve = null; ctBar(); indFlash((C.f ? '耐火砖' : '黏土') + '不够了，不雕了'); return true; }
+            let mat = C.f ? 'clay_fire' : 'clay';
+            if ((ind.bag[mat] || 0) < 2) { ind.carve = null; ctBar(); indFlash((C.f ? '耐火黏土' : '黏土') + '不够了，不雕了'); return true; }
             C.tries++;
             let zone = calibZoneAt(ctPos());
             if (zone === 'red') C.red++;
@@ -209,7 +209,7 @@
             }
             let cc = document.getElementById('ind-carve-c'), tt = document.getElementById('ind-carve-t');
             if (cc) cc.style.transform = 'rotate(' + ctPos() * 360 + 'deg)';
-            if (tt) tt.textContent = '雕' + (C.f ? '耐火砖' : '') + CT_SHAPE[C.s].n + '模具 ' + C.score + ' / ' + CT_SHAPE[C.s].cuts + (tlKind(indSel()) !== 'knife' ? '　拿上小刀' : '　红区按空格');
+            if (tt) tt.textContent = '雕' + (C.f ? '耐火' : '') + CT_SHAPE[C.s].n + '模具 ' + C.score + ' / ' + CT_SHAPE[C.s].cuts + (tlKind(indSel()) !== 'knife' ? '　拿上小刀' : '　红区按空格');
         }
         // 任务 148：熔池里是没有零件的金属（锡、锌、铅、铜），老存档里被堵住的，读档时凝成烫锭放进炉膛，不丢
         let CT_OLDPOOL = '';

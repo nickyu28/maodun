@@ -65,6 +65,16 @@
             if (pk && indTool() >= 1) return { need: 1, k: pk };
             return { need: 3, k: null };
         }
+        // 刚做出来的工具是满耐久（作者 11-19：新做的冷锻刀写 116/120）：耐久按种类记在 base.dura 里，背包里一把都没有了的时候那条记录是上一把剩下的，
+        // 新做的一把不能接着用它，做出来就清掉；背包里还有一把在用的，新做的就是备用，手上这把照旧
+        (function () {
+            let c0 = indCraft;
+            indCraft = function (i) {
+                let r = IND_CRAFT[i], k = r && r.out, had = k ? (ind.bag[k] || 0) : 0, res = c0.apply(this, arguments);
+                if (k && had === 0 && (ind.bag[k] || 0) > 0 && mbDurTab(k) && ind.base.dura) delete ind.base.dura[k];
+                return res;
+            };
+        })();
         // 采矿（要镐的点）：采成一次镐耐久 −1
         (function () {
             let g0 = indGather;

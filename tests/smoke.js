@@ -13379,7 +13379,7 @@ async function enterExit(tab, key) {
                 r = await why({ temp: 1560, sp: 'fire', pool: { m: 'steel', n: 1 } }); if (!/只有 1 份，要 2 份，再放 1 块钢锭/.test(r.w)) bad.push('炉膛没锭写再放几块 ' + JSON.stringify(r));
                 r = await why({ temp: 1560, sp: 'fire', pool: { m: 'steel', n: 2 } }); if (!/缺 1 份镍锭，放进炉膛/.test(r.w)) bad.push('缺镍 ' + JSON.stringify(r));
                 r = await why({ temp: 1560, sp: 'fire', pool: { m: 'steel', n: 2 }, items: { ingot_ni: 1 } }); if (!/正在浇：0 \/ 2/.test(r.w) || !/本次要做：钢/.test(r.html) || !/镍锭 1 份/.test(r.html)) bad.push('条件齐了写正在浇、写本次要做什么 ' + JSON.stringify(r));
-                r = await why({ temp: 1560, sp: 'fire', pool: { m: 'steel', n: 2 }, f: false }); if (!/模具不是耐火砖的/.test(r.w)) bad.push('黏土模具浇不了钢 ' + JSON.stringify(r));
+                r = await why({ temp: 1560, sp: 'fire', pool: { m: 'steel', n: 2 }, f: false }); if (!/模具不是耐火的/.test(r.w)) bad.push('黏土模具浇不了钢 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
@@ -14980,6 +14980,53 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND201 耐久每把各算：两把用两次扣 2、一把坏了换下一把、修复只修一把、写还有几把备用', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND202')) {
+            // IND202 耐火模具先雕再烧（作者 11-19）：冷锻刀或青铜刀加 2 耐火黏土（没烧的）右键能雕，雕出来是耐火模具坯，烧 1500°C 以上才变耐火模具；2 耐火砖（烧过的）不再能雕；普通黏土的照旧
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                for (const knife of ['knife_cold', 'knife_bronze']) {
+                    const r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.moldQ = {}; ind.carve = null; indPanelClose(); ind.bag = { ${knife}: 1, clay_fire: 2 }; indSelect('${knife}'); let o = {}; o.menu = ctCarveMenu(); let txt = (document.getElementById('ind-panel') || { innerText: '' }).innerText; o.txt = /耐火黏土/.test(txt) && !/耐火砖/.test(txt);
+                        ctCarveStart('knife', 1); o.f = !!(ind.carve && ind.carve.f); let z0 = calibZoneAt; calibZoneAt = function () { return 'red'; }; ind.carve.score = CT_SHAPE.knife.cuts - 1; ctHit(); calibZoneAt = z0;
+                        o.raw = ind.bag.mold_knife_f_raw || 0; o.left = ind.bag.clay_fire || 0; o.name = IND_ITEMS.mold_knife_f_raw.name; o.use = IND_ITEMS.mold_knife_f_raw.use;
+                        let fire = IND_RECIPES.filter(function (q) { return q.in.mold_knife_f_raw === 1 && q.out.mold_knife_f === 1; })[0]; o.fire = fire ? fire.minT : 0; return o; })()`);
+                    if (!(r.menu && r.txt && r.f && r.raw === 1 && r.left === 0)) bad.push(knife + ' 加 2 耐火黏土能雕出耐火模具坯 ' + JSON.stringify(r));
+                    if (!(/模具坯/.test(r.name) && /没烧/.test(r.use) && r.fire >= 1500)) bad.push('模具坯写没烧、要烧到 1500°C 以上 ' + JSON.stringify(r));
+                }
+                const r2 = await J(`(function(){ ind.carve = null; indPanelClose(); ind.bag = { knife_bronze: 1, brick_fire: 2 }; indSelect('knife_bronze'); let a = ctCarveMenu(); indPanelClose(); ind.bag = { knife_bronze: 1, clay: 2 }; indSelect('knife_bronze'); let b = ctCarveMenu(); indPanelClose(); return { oldBrick: a, clay: b }; })()`);
+                if (!(r2.oldBrick === false && r2.clay === true)) bad.push('2 耐火砖不再能雕，普通黏土照旧 ' + JSON.stringify(r2));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND202 耐火模具先雕再烧：耐火黏土雕模具坯、烧硬才是模具、耐火砖不再能雕', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND203')) {
+            // IND203 新做的工具是满耐久（作者 11-19：新做的冷锻刀 116/120）：背包里一把都没有时，上一把剩下的耐久记录不能给新做的；背包里还有一把在用的，新做的是备用，手上这把照旧
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.repQ = {}; B.repCur = {}; let ci = IND_CRAFT.findIndex(function (q) { return q.out === 'knife_cold' && !q.fix; }), o = {};
+                    B.dura = { knife_cold: 116 }; ind.bag = { hammer_stone: 1, bronze: 2, wood: 1 }; indCraft(ci); o.fresh = mbDura('knife_cold') + '/' + mbMax('knife_cold');
+                    ind.bag = { knife_cold: 1, hammer_stone: 1, bronze: 2, wood: 1 }; B.dura = { knife_cold: 116 }; indCraft(ci); o.spare = mbDura('knife_cold') + '/' + mbMax('knife_cold') + ',' + ind.bag.knife_cold;
+                    ind.bag = { hammer_stone: 1, ingot_fe: 2, wood: 1 }; B.dura = { knife_iron: 150 }; let ii = IND_CRAFT.findIndex(function (q) { return q.out === 'knife_iron' && q.need === 'hammer' && !q.fix && !q.off; }); indCraft(ii); o.iron = mbDura('knife_iron') + '/' + mbMax('knife_iron'); return o; })()`);
+                if (r.fresh !== '120/120') bad.push('新做的冷锻刀满耐久 ' + JSON.stringify(r));
+                if (r.spare !== '116/120,2') bad.push('背包里还有一把在用的，新做的是备用 ' + JSON.stringify(r));
+                if (!/^(\d+)\/\1$/.test(r.iron)) bad.push('铁刀新做的也满耐久 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND203 新做的工具满耐久：旧记录不给新做的、背包里还有一把在用就是备用', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
