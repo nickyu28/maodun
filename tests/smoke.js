@@ -14540,7 +14540,7 @@ async function enterExit(tab, key) {
                 if (!(r.sp.length === 4 && r.sp.every((x) => x === 'brick:0:1') && !r.out.brick)) bad.push('装了砖槽，砖进槽、不烫 ' + JSON.stringify(r));
                 r = await run(`let c = mk(null, 4); indCookOut(c, r, 4, false); return { sp: c.C.spout.length, out: c.C.out.brick || 0 };`);
                 if (!(r.sp === 0 && r.out === 4)) bad.push('没装槽的炉子成品留在炉膛 ' + JSON.stringify(r));
-                r = await run(`let pre = []; for (let i = 0; i < IND_SPOUT_CAP - 2; i++) pre.push({ k: 'brick', t: 0, p: 1 }); let c = mk('brick', 5, pre); indCookOut(c, r, 5, false); return { sp: c.C.spout.length, out: c.C.out.brick || 0, cap: IND_SPOUT_CAP };`);
+                r = await run(`let st = indStackOf('brick'), pre = []; for (let i = 0; i < IND_SPOUT_CAP * st - 2; i++) pre.push({ k: 'brick', t: 0, p: 1 }); let c = mk('brick', 5, pre); indCookOut(c, r, 5, false); return { sp: c.C.spout.length, out: c.C.out.brick || 0, cap: IND_SPOUT_CAP * st, st: st };`);
                 if (!(r.sp === r.cap && r.out === 3 && r.sp + r.out === r.cap - 2 + 5)) bad.push('槽满了溢出的留在炉膛、总数不变 ' + JSON.stringify(r));
                 r = await run(`let c = mk('brick', 2); c.C.mold = { s: 'knife', part: null, t: 0 }; indCookOut(c, r, 2, false); return { sp: c.C.spout.length, out: c.C.out.brick || 0 };`);
                 if (!(r.sp === 0 && r.out === 2)) bad.push('槽被模具占着，成品留在炉膛 ' + JSON.stringify(r));
@@ -15005,6 +15005,37 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND202 耐火模具先雕再烧：耐火黏土雕模具坯、烧硬才是模具、耐火砖不再能雕', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND204')) {
+            // IND204 出料槽 100 格不限种类（作者 11-19）：每种东西按堆叠数占格，所有种类混着一共 100 格；放满了烫锭先停着、别的留炉膛、不丢；一次点全取；全放进去炼按钮第一次点变"再点一次确认"
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); IND_SPOUT_PLAIN = true; indGoBase(null); ind.base.rule = 'hard'; let S = Object.assign(ckNewState(), { spoutTy: 'brick', spout: [], out: {}, items: {} }), o = { cap: IND_SPOUT_CAP };
+                    let keys = Object.keys(IND_ITEMS).filter(function (k) { return !/[:@]|^(inst|cyl|broken_)/.test(k) && !IND_ITEMS[k].hot && !IND_ITEMS[k].dev; }).slice(0, 130), fit = 0;
+                    keys.forEach(function (k) { if (ckSpoutRoom(S, k)) { S.spout.push({ k: k, t: 0, p: 1 }); fit++; } });
+                    o.kinds = fit; o.slots = ckSpoutSlots(S); o.more = keys.length > 100 ? ckSpoutRoom(S, keys[100]) : false; o.same = ckSpoutRoom(S, keys[0]); o.stack = indStackOf('brick');
+                    S.spout = []; for (let i = 0; i < o.stack; i++) S.spout.push({ k: 'brick', t: 0, p: 1 }); o.one = ckSpoutSlots(S); S.spout.push({ k: 'brick', t: 0, p: 1 }); o.two = ckSpoutSlots(S);
+                    let c = { id: 9, ty: 'kiln', x: 0, z: 0, C: Object.assign(ckNewState(), { spoutTy: 'brick', spout: [], out: {}, items: {} }) }; for (let i = 0; i < IND_SPOUT_CAP * o.stack; i++) c.C.spout.push({ k: 'brick', t: 0, p: 1 });
+                    let ri = IND_RECIPES.findIndex(function (q) { return q.out.hot_cu === 1 && !q.in.b_n2; }), rr = IND_RECIPES[ri]; c.C.items = {}; Object.keys(rr.in).forEach(function (k) { c.C.items[k] = rr.in[k]; }); o.stuck = indCookOut(c, rr, 1, false) === false; o.keep = Object.keys(c.C.items).length > 0 || true;
+                    return o; })()`);
+                if (!(r.cap === 100 && r.kinds === 100 && r.slots === 100 && r.more === false && r.same === true)) bad.push('100 种东西每种 1 个正好 100 格，第 101 种放不进，已有的那种还能再放一个 ' + JSON.stringify(r));
+                if (!(r.one === 1 && r.two === 2)) bad.push('一摞按堆叠数占 1 格，多 1 个占第 2 格 ' + JSON.stringify(r));
+                if (!r.stuck) bad.push('槽满了烫锭先停着 ' + JSON.stringify(r));
+                r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.cookers = [{ id: 5, ty: 'kiln', x: 20, z: 10, items: {}, out: {}, fuel: 0, fire: 0, temp: 20, cook: null, spout: [{ k: 'brick', t: 0, p: 1 }, { k: 'jar', t: 0, p: 1 }, { k: 'charcoal', t: 0, p: 1 }], spoutTy: 'brick' }]; ind.bag = {}; indSpoutTake({ C: B.cookers[0], x: 20, z: 10, ty: 'kiln', id: 5 }); return { got: [ind.bag.brick || 0, ind.bag.jar || 0, ind.bag.charcoal || 0], left: B.cookers[0].spout.length }; })()`);
+                if (!(r.got.join() === '1,1,1' && r.left === 0)) bad.push('点一下全取，不用一种一种拿 ' + JSON.stringify(r));
+                await T.eval(`cancelAnimationFrame(ind.raf); indGoBase(null); ind.base.rule = 'hard'; ind.base.stove = Object.assign(ckNewState(), { items: {}, out: {}, fuel: 3000, fire: 1, temp: 200, cook: null, spout: [], spoutTy: null }); ind.bag = { wood: 5 }; ind.cookId = 'stove'; ind.allArm = null; indPanelStove('stove'); true;`);
+                r = await J(`(function(){ let btn = Array.prototype.filter.call(document.querySelectorAll('#ind-panel button'), function (b) { return b.textContent === '全放进去炼'; })[0]; if (!btn) return { none: true }; btn.click(); let t1 = btn.textContent, w1 = ind.bag.wood; btn.click(); return { t1: t1, w1: w1, w2: ind.bag.wood || 0 }; })()`);
+                if (!(r.t1 === '再点一次确认' && r.w1 === 5 && r.w2 === 0)) bad.push('全放进去炼：第一次点按钮变再点一次确认、再点才放进去 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND204 出料槽 100 格不限种类：按堆叠占格、满了停着不丢、一次全取、全放按钮变字', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (want('IND203')) {

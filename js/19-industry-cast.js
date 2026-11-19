@@ -79,7 +79,7 @@
             indFlash('倒出来了，凝成 ' + P.n + ' 块' + CT_METAL[P.m].n + '锭'); indSave(); indPanelStove();
         }
         // n 块烫锭落下来：槽接得住且还有地方就进槽，不然留在炉膛（规则同冶炼出来的烫锭，任务 94）
-        function ctSolid(S, h, n) { for (let i = 0; i < n; i++) { if (ckSpoutTakes(S, h) && S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: h, t: ckSpoutDef(S).cool }); else S.out[h] = (S.out[h] || 0) + 1; } }
+        function ctSolid(S, h, n) { for (let i = 0; i < n; i++) { if (ckSpoutTakes(S, h) && ckSpoutRoom(S, h)) S.spout.push({ k: h, t: ckSpoutDef(S).cool }); else S.out[h] = (S.out[h] || 0) + 1; } }
         function ctNeedNi(M, P) { return M.s === 'pick' && P.m === 'steel'; }   // 钢镐头多要 1 份镍锭（放进炉膛，流满时用掉）
         // 槽里放模具就不接锭
         function ctSpoutBusy(S) { return !!S.mold; }

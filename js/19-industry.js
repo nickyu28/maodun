@@ -376,7 +376,14 @@
             kiln: { name: '大窑', rate: 30, burn: 1 / 3, batch: { food: 16, bulk: 10, smelt: 10, chem: 10 }, r: 2.1, size: [3, 2, 3], col: 0x8d4b3a }
         };
         let IND_SPOUT_PLAIN = !/[?&]notut\b/.test(location.search);   // 任务 139：成品也进出料槽。冒烟网址带 notut=1 时默认关，让旧检查照旧在炉膛里取成品；IND186 自己打开
-        const IND_COOK_CAP = 6, IND_WARN_N = 200, IND_TILE_CAP = 2000, IND_SPOUT_CAP = 20;   // 出料槽最多 20 块（任务 164 从 10 放大）   // 灶台上最多放几种
+        // 出料槽按格算：每种东西按它的堆叠数占格（99 或 200 一格），所有种类混在一起一共 IND_SPOUT_CAP 格；烫锭按凉了的那种算
+        function ckSpoutSlots(S, extra) {
+            let cnt = {}; (S.spout || []).forEach(function (e) { let k = indCool(e.k); cnt[k] = (cnt[k] || 0) + 1; });
+            if (extra) Object.keys(extra).forEach(function (k) { cnt[k] = (cnt[k] || 0) + extra[k]; });
+            let n = 0; Object.keys(cnt).forEach(function (k) { n += Math.ceil(cnt[k] / indStackOf(k)); }); return n;
+        }
+        function ckSpoutRoom(S, k, n) { let e = {}; e[indCool(k)] = n || 1; return ckSpoutSlots(S, e) <= IND_SPOUT_CAP; }   // 再放 n 个 k 还放得下吗
+        const IND_COOK_CAP = 6, IND_WARN_N = 200, IND_TILE_CAP = 2000, IND_SPOUT_CAP = 100;   // 出料槽一共 100 格，不限种类，每格按物品的堆叠规则放（作者 11-19，原来最多 20 块）   // 灶台上最多放几种
         const IND_RECIPES = [
             // 面包排在烧水前面：有小麦和盐的时候，生水也是和面用的
             { in: { flour: 3, salt: 1, water_boiled: 1 }, out: { bread: 3, bucket: 1 }, minT: 200, time: 40, burnT: 300 },   // 任务 56：面包用面粉（原来是小麦 4），原位置改的
@@ -513,10 +520,10 @@
         // 炉子的状态（灶台和小熔炉、大窑通用）整理一遍
         // 出料槽：冶炼出来的烫锭进这里，每块自己 30 秒凉。[{ k: 烫锭, t: 还要几秒 }]，最多 10 块
         function indFixSpout(S) {
-            S.spout = Array.isArray(S.spout) ? S.spout.filter(function (e) { return e && IND_ITEMS_RAW[e.k] && (IND_ITEMS_RAW[e.k].hot || e.p); }).slice(0, IND_SPOUT_CAP).map(function (e) { return e.p ? { k: e.k, t: 0, p: 1 } : { k: e.k, t: indNum(e.t, 0, 0, 120) }; }) : [];
+            S.spout = Array.isArray(S.spout) ? S.spout.filter(function (e) { return e && IND_ITEMS_RAW[e.k] && (IND_ITEMS_RAW[e.k].hot || e.p); }).slice(0, 100000).map(function (e) { return e.p ? { k: e.k, t: 0, p: 1 } : { k: e.k, t: indNum(e.t, 0, 0, 120) }; }) : [];
             Object.keys(S.out || {}).forEach(function (k) {   // 老档：炉子里留着的烫锭挪进出料槽（放不下的当它凉了）；硬核没装槽的炉子烫锭就留在炉膛里
                 if (!IND_ITEMS_RAW[k] || !IND_ITEMS_RAW[k].hot || S.spoutTy === null) return;
-                for (let i = 0; i < S.out[k]; i++) { if (S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: k, t: IND_HOT_COOL }); else S.out[IND_ITEMS_RAW[k].hot] = (S.out[IND_ITEMS_RAW[k].hot] || 0) + 1; }
+                for (let i = 0; i < S.out[k]; i++) { if (ckSpoutRoom(S, k)) S.spout.push({ k: k, t: IND_HOT_COOL }); else S.out[IND_ITEMS_RAW[k].hot] = (S.out[IND_ITEMS_RAW[k].hot] || 0) + 1; }
                 delete S.out[k];
             });
         }
@@ -3180,7 +3187,7 @@
             let n = indBatchCap(K, r);
             Object.keys(r.in).forEach(function (k) { n = Math.min(n, Math.floor(indHave(items, k) / r.in[k])); });
             let hotPer = 0; Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) hotPer += r.out[k]; });
-            if (hotPer) n = Math.min(n, Math.floor(IND_SPOUT_CAP / hotPer));   // 一炉烫锭要放得进出料槽
+            if (hotPer) n = Math.min(n, Math.floor(IND_SPOUT_CAP * 50 / hotPer));   // 一炉烫锭要放得进出料槽（100 格够放好几千块，实际放不放得下在 indCookOut 里按格查）
             return Math.max(0, n);
         }
         // 做之前就写清楚出多少（连还回的空瓶、空桶）：任务 36
@@ -3262,15 +3269,15 @@
         // 一批做好：出料（烫锭进出料槽、别的进"做好的"）。出料槽放不下返回 false（先停着）。堆叠石炉的分开烧（任务 99）也用它
         function indCookOut(c, r, n, burnt) {
             let S = c.C;
-            let hotN = 0; if (!burnt) Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot && ckSpoutTakes(S, k)) hotN += r.out[k] * n; });   // 只算进得了出料槽的（没装槽、槽耐温不够的留在炉膛）
-            if (hotN && S.spout.length + hotN > IND_SPOUT_CAP) return false;
+            let hotN = 0, hotX = {}; if (!burnt) Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot && ckSpoutTakes(S, k)) { hotN += r.out[k] * n; hotX[indCool(k)] = (hotX[indCool(k)] || 0) + r.out[k] * n; } });   // 只算进得了出料槽的（没装槽、槽耐温不够的留在炉膛）
+            if (hotN && ckSpoutSlots(S, hotX) > IND_SPOUT_CAP) return false;   // 槽按格算放不下，先停着，炉子写出料槽满了，腾出位置再继续
             if (S.cook) S.cook.full = false;
             ckPullOut(S, r, n);
             let mats = indConsume(S.items, r, n), res = indCookResult(r, n, mats, burnt), out = res.out;   // 桶按用的材质还回去，陶罐有 1/10 碎掉
             Object.keys(out).forEach(function (k) {
                 if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) { for (let i = 0; i < out[k]; i++) { if (ckSpoutTakes(S, k)) S.spout.push({ k: k, t: ckSpoutDef(S).cool }); else S.out[k] = (S.out[k] || 0) + 1; } }   // 烫锭进出料槽；没槽或槽耐温不够就留在炉膛里
                 else {   // 任务 139：别的成品也进出料槽（熔池里的熔融金属不走这里）；槽满了、槽被模具占着、没装槽的留在炉膛
-                    for (let i = 0; i < out[k]; i++) { if (IND_SPOUT_PLAIN && ckSpoutTakes(S, k) && S.spout.length < IND_SPOUT_CAP) S.spout.push({ k: k, t: 0, p: 1 }); else S.out[k] = (S.out[k] || 0) + 1; }
+                    for (let i = 0; i < out[k]; i++) { if (IND_SPOUT_PLAIN && ckSpoutTakes(S, k) && ckSpoutRoom(S, k)) S.spout.push({ k: k, t: 0, p: 1 }); else S.out[k] = (S.out[k] || 0) + 1; }
                 }
             });
             if (res.broke && !ind.sleeping) indFlash('陶罐碎了' + (res.broke > 1 ? '' + res.broke + ' 个' : ''));
@@ -3322,7 +3329,7 @@
             if (ri < 0) { indFlash('背包里的原料凑不出配方'); return; }
             let r = IND_RECIPES[ri], N = indBatchCap(K, r), hotPer = 0;
             Object.keys(r.out).forEach(function (k) { if (IND_ITEMS_RAW[k] && IND_ITEMS_RAW[k].hot) hotPer += r.out[k]; });
-            if (hotPer) N = Math.min(N, Math.floor(IND_SPOUT_CAP / hotPer));
+            if (hotPer) N = Math.min(N, Math.floor(IND_SPOUT_CAP * 50 / hotPer));
             Object.keys(r.in).forEach(function (k) { N = Math.min(N, Math.floor((indBagFire(k) + indHave(pool, k)) / r.in[k])); });
             if (N <= 0) { indFlash('原料不够一份'); return; }
             Object.keys(r.in).forEach(function (k) {
@@ -3415,7 +3422,12 @@
         function indPutAllBtn(kind, id, k) {
             if (!ind) return false;
             let key = kind + '|' + id + '|' + k, A = ind.allArm;
-            if (!A || A.key !== key || Date.now() > A.until) { ind.allArm = { key: key, until: Date.now() + 3000 }; indFlash('再点一次才会全部放或拿'); return false; }
+            if (!A || A.key !== key || Date.now() > A.until) {
+                ind.allArm = { key: key, until: Date.now() + 3000 }; indFlash('再点一次才会全部放或拿');
+                // 按钮自己变字：第一次点只提示的话，看起来像按钮失效（作者 11-19），所以按钮上直接写"再点一次确认"，3 秒后变回去
+                let b = window.event && window.event.target; if (b && b.tagName === 'BUTTON') { let t0 = b.textContent, c0 = b.style.background; b.textContent = '再点一次确认'; b.style.background = '#e65100'; setTimeout(function () { if (b.isConnected && b.textContent === '再点一次确认') { b.textContent = t0; b.style.background = c0; } }, 3000); }
+                return false;
+            }
             ind.allArm = null; return indPutN(kind, id, k, 'all');
         }
         function indPutN0(kind, id, k, n) {
