@@ -14945,6 +14945,13 @@ async function enterExit(tab, key) {
                 if (!(r.dmg === r.dmgB && r.isKnife)) bad.push('冷锻刀伤害跟青铜刀一样、打怪认得 ' + JSON.stringify(r));
                 r = await J(`(function(){ indGoBase(null); ind.base.rule = 'hard'; ind.bag = { knife_cold: 1, clay: 4 }; indSelect('knife_cold'); ind.carve = null; let ok = false, msg = ''; let f0 = indFlash; indFlash = function (t) { msg = String(t); }; try { ok = ctCarveMenu(); } catch (e) { msg = 'ERR ' + e.message; } indFlash = f0; return { ok: ok, msg: msg, menu: !!document.querySelector('#sys-modal:not(.hidden)') || !!document.getElementById('ind-panel') }; })()`);
                 if (/拿上小刀|ERR/.test(r.msg)) bad.push('冷锻刀右键能雕模具 ' + JSON.stringify(r));
+                // 真实流程：锤子加青铜锭加木头在工作台做出冷锻刀，再用这把刀左键砍树、右键雕模具
+                r = await J(`(function(){ indPanelClose(); if (document.getElementById('sys-modal')) document.getElementById('sys-modal').classList.add('hidden'); indGoBase(null); ind.base.rule = 'hard'; ind.bag = { hammer_stone: 1, bronze: 2, wood: 1 }; let ci = IND_CRAFT.findIndex(function (q) { return q.out === 'knife_cold' && !q.fix; }); indCraft(ci); let made = ind.bag.knife_cold || 0;
+                    indGoTrip(2222); ind.mbSpawn = 1e9; ind.ch = null; let p = null; for (let i = 0; i < 400 && !p; i++) { let x = (i % 20) * 3 - 30, z = Math.floor(i / 20) * 3 - 30; if (indWaterDepth(x, z) === 0 && !ind.nodes.some(function (o) { return !o.dead && Math.hypot(o.x - x, o.z - z) < 4; })) p = { x: x, z: z }; }
+                    let o = { key: 'wood', tree: 'oak', x: p.x, z: p.z, y: indGround(p.x, p.z), n: 4, seed: 'seed_wheat', dead: false }; ind.nodes.push(o); ind.nodeDirty = true; indTeleport(p.x, p.z + 1.4); indLookAt(p.x, p.z);
+                    ind.bag = { knife_cold: 1, clay: 4 }; indSelect('knife_cold'); indAction(); let chop = ind.ch ? ind.ch.kind : null; ind.ch = null;
+                    indPanelClose(); indTeleport(p.x + 20, p.z); indLookAt(p.x + 21, p.z); ind.carve = null; indRightDown(); indRightUp(); let txt = document.body.innerText; return { made: made, chop: chop, carve: /小刀刃/.test(txt) || !!ind.carve }; })()`);
+                if (!(r.made === 1 && r.chop === 'chop' && r.carve)) bad.push('真实流程：锤子做出冷锻刀，左键砍树、右键雕模具 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
