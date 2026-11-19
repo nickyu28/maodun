@@ -13996,6 +13996,31 @@ async function enterExit(tab, key) {
             report('LB32 实验室垃圾桶防护：确认、取消和 Esc、回收站拿回、Ctrl+Z、最多 20 种', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('LB33')) {
+            // LB33 实验室自取材料（作者 11-19）：Shift+T；设置开关关着且没带 labdebug 时什么也不做；开着能搜、按数量放进背包；Esc 关
+            const bad = [];
+            const T = await LBTAB();
+            await LBENTER(T);
+            try {
+                const J = async (e) => JSON.parse(await T.eval(`JSON.stringify(${e})`));
+                const key = (ch, shift) => T.eval(`labKeyDown({ key: '${ch}', shiftKey: ${!!shift}, target: document.body, preventDefault: function () { }, repeat: false }); true;`);
+                await T.eval(`window.__ld = labDebugOn; labDebugOn = function () { return false; }; settingsSet('dev_grab', false); labPanelClose(); true;`);
+                await key('T', true);
+                if (await T.eval(`!!lab.panel`)) bad.push('开关关着 Shift+T 什么也不做');
+                await T.eval(`settingsSet('dev_grab', true); true;`);
+                await key('T', true);
+                if ((await T.eval(`lab.panel`)) !== 'grab') bad.push('开关打开 Shift+T 开面板');
+                let r = await J(`(function(){ let q = document.getElementById('lab-grab-q'); q.value = '煤'; grabFilter(true); let rows = document.querySelectorAll('#lab-grab-list .grab-give').length; let b = document.querySelector('#lab-grab-list .grab-give'); let inp = document.querySelector('#lab-grab-list input'); inp.value = '3'; lab.bag = {}; b.click(); return { rows: rows, coal: lab.bag.coal }; })()`);
+                if (!(r.rows >= 1 && r.coal === 3)) bad.push('搜煤、放 3 个进背包 ' + JSON.stringify(r));
+                await T.eval(`labKeyDown({ key: 'Escape', target: document.body, preventDefault: function () { }, repeat: false }); true;`);
+                if (await T.eval(`!!lab.panel`)) bad.push('Esc 关面板');
+                await T.eval(`labDebugOn = window.__ld; settingsSet('dev_grab', false); true;`);
+            } catch (e) { bad.push('异常 ' + e.message); }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await LBEXIT(T); await T.close();
+            report('LB33 实验室自取材料：开关关着没反应、开了能搜能放、Esc 关', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND177')) {
             // IND177 草和木制品能当燃料（任务 133）：草 8、树枝 15、草绳 15、木柄 30；湿木头 40 干木头 60；青铜镐不能烧；烧做好的东西先确认；拿着的那一格不列
             const bad = [];
@@ -14747,6 +14772,38 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND194 岩浆判定：边缘外不烫里面烫、画出来的圆盘盖住池口、圆边 64 段', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND195')) {
+            // IND195 自取材料面板（作者 11-19）：Shift+T；设置里的开关关着、网址也不带 hcdebug 时什么也不做；开着能搜、按数量放进背包；放进去的是正常物品；Esc 关；实验室同样
+            const bad = [];
+            const T = await openTab(chrome, url);
+            await T.eval(`${HIDE} localStorage.removeItem('TH_hcdebug'); true;`);
+            await T.eval(`localStorage.setItem('TH_hcdebug', '1'); indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const key = (ch, shift) => T.eval(`indKeyDown({ key: '${ch}', shiftKey: ${!!shift}, target: document.body, preventDefault: function () { }, repeat: false }); true;`);
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); localStorage.removeItem('TH_hcdebug'); indDebugRead = function () { return false; }; settingsSet('dev_grab', false); indPanelClose(); return { reg: settingsGet('dev_grab'), on: grabOnInd() }; })()`);
+                if (r.on) bad.push('开关关着、没带 hcdebug 时不该开 ' + JSON.stringify(r));
+                await key('T', true);
+                if (await T.eval(`!!ind.panel`)) bad.push('开关关着 Shift+T 什么也不做');
+                await T.eval(`settingsSet('dev_grab', true); true;`);
+                await key('T', true);
+                if ((await T.eval(`ind.panel`)) !== 'grab') bad.push('开关打开 Shift+T 开面板');
+                r = await J(`(function(){ let q = document.getElementById('ind-grab-q'); q.value = '煤'; grabFilter(false); let rows = document.querySelectorAll('#ind-grab-list .grab-give').length; let b = document.querySelector('#ind-grab-list .grab-give'); let inp = document.querySelector('#ind-grab-list input'); inp.value = '7'; ind.bag = {}; b.click(); return { rows: rows, bag: JSON.stringify(ind.bag), box: JSON.stringify(ind.base.chests.map(function (c) { return c.items; })) }; })()`);
+                if (!(r.rows >= 1 && r.rows < 80)) bad.push('搜"煤"能筛出东西 ' + JSON.stringify(r));
+                if (!/7/.test(r.bag + r.box)) bad.push('点放进背包放 7 个 ' + JSON.stringify(r));
+                await T.eval(`indKeyDown({ key: 'Escape', target: document.body, preventDefault: function () { }, repeat: false }); true;`);
+                if (await T.eval(`!!ind.panel`)) bad.push('Esc 关面板');
+                await key('t', false);
+                if ((await T.eval(`ind.panel`)) !== 'elems') bad.push('不按 Shift 的 T 还是元素表');
+                await T.eval(`indPanelClose(); true;`);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND195 自取材料：开关关着没反应、开了能搜能放、Esc 关、T 还是元素表', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }

@@ -3865,8 +3865,9 @@
             if (k === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (ind.undo && Date.now() < ind.undo.until && !((ind.ustack || []).length && ind.ustack[ind.ustack.length - 1].t > ind.undo.until - IND_UNDO_MS)) indUndo(); else indUndoStep(); return; }   // Ctrl+Z 撤销最近一步
             if (k === 'z' && !ind.panel && !e.ctrlKey && !e.metaKey) { spCycle(); return; }   // 倍速（任务 144）
             if (k === 'm' && (!ind.panel || ind.panel === 'map')) { wdMapToggle(); return; }
+            if (k === 't' && e.shiftKey && !e.ctrlKey && !e.metaKey) { if (typeof indPanelGrab === 'function') indPanelGrab(); return; }   // Shift+T 自取材料，设置里的开关没开就什么也不做（19-industry-grab.js）
             if (k === 'c' && !e.ctrlKey && !e.metaKey && (!ind.panel || ind.panel === 'book')) { if (ind.panel) indPanelClose(); else indPanelBook(''); return; }   // 任务 126：C 配方查询，只能看，不能合成
-            if (k === 't' && !e.ctrlKey && !e.metaKey && (!ind.panel || ind.panel === 'elems')) { if (ind.panel) indPanelClose(); else indPanelElems(); return; }   // T 元素表
+            if (k === 't' && !e.shiftKey && !e.ctrlKey && !e.metaKey && (!ind.panel || ind.panel === 'elems')) { if (ind.panel) indPanelClose(); else indPanelElems(); return; }   // T 元素表
             if (k === 'h' && !e.ctrlKey && !e.metaKey && (!ind.panel || ind.panel === 'ach')) { if (ind.panel) indPanelClose(); else achPanel(); return; }   // H 成就
             if (k === 'j' && !ind.panel) { srToggleAim(); return; }   // 任务 152：切并联串联
             if (k === 'v' && !ind.panel) { ckKick(); return; }   // 踹炉子（硬核）

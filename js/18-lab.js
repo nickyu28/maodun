@@ -481,6 +481,7 @@
             let k = (e.key || '').toLowerCase();
             if (lab.trashAsk) { if (!e.repeat && k === 'escape') labTrashAnswer(false); e.preventDefault(); return; }   // 扔东西的确认开着：Esc 等于取消，别的键不管用
             if (k === 'z' && (e.ctrlKey || e.metaKey) && !e.repeat) { e.preventDefault(); labUndoTrash(); return; }   // Ctrl+Z 撤销最近扔掉的
+            if (k === 't' && e.shiftKey && !e.repeat) { if (typeof labPanelGrab === 'function') labPanelGrab(); return; }   // Shift+T 自取材料，设置里的开关没开就什么也不做（19-industry-grab.js）
             if (LAB_KEYMAP[k]) { lab.k[LAB_KEYMAP[k]] = true; e.preventDefault(); return; }
             if (k === ' ') { lab.k.jump = true; e.preventDefault(); return; }
             if (e.repeat) return;
