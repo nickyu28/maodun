@@ -14958,6 +14958,30 @@ async function enterExit(tab, key) {
             report('IND200 冷锻青铜工具都认得出来：刀镐斧铲剪刀、耐久 40%、冷锻刀能砍能雕', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND201')) {
+            // IND201 耐久每把各算（作者 11-19 说两把工具用两次扣了 4，查不出，代码里每次用只扣手上这一把 1 点）：两把青铜镐挖两次，总共只少 2，挖、砍、铲各扣 1；一把坏了换下一把满的；修复只修坏的那一把；耐久条和准星下的字写手上这把加还有几把备用
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.dura = {}; B.repQ = {}; B.repCur = {}; let k = 'pick_bronze', mx = mbMax(k), o = { mx: mx };
+                    ind.bag = {}; ind.bag[k] = 2; mbDura(k); tlUse(k); tlUse(k); o.two = mx - B.dura[k]; o.bag = ind.bag[k];
+                    indSelect(k); indHudUpdate(); o.hud = (document.getElementById('ind-hud').innerText.match(/耐久[^\\n]*/) || [''])[0];
+                    B.dura[k] = 1; tlUse(k); o.bag2 = ind.bag[k]; o.broken = ind.bag['broken_' + k] || 0; o.next = mbDura(k) === mbMax(k);
+                    ind.bag = { glue: 4, bronze: 4, hammer_stone: 1 }; ind.bag[k] = 1; ind.bag['broken_' + k] = 2; B.dura = {}; let fi = IND_CRAFT.findIndex(function (q) { return q.fix && q.out === k; }); if (fi >= 0) indCraft(fi); o.fixed = ind.bag['broken_' + k] === 1 && ind.bag[k] === 2; return o; })()`);
+                if (!(r.two === 2 && r.bag === 2)) bad.push('两把镐用两次总共只扣 2 ' + JSON.stringify(r));
+                if (!/还有 1 把备用/.test(r.hud)) bad.push('准星下的字写还有 1 把备用 ' + JSON.stringify(r.hud));
+                if (!(r.bag2 === 1 && r.broken === 1 && r.next)) bad.push('一把坏了换下一把满的 ' + JSON.stringify(r));
+                if (!r.fixed) bad.push('修复只修坏的那一把 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND201 耐久每把各算：两把用两次扣 2、一把坏了换下一把、修复只修一把、写还有几把备用', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (wantCur) { WANT_TIMES[wantCur] = (Date.now() - wantAt) / 1000; wantCur = null; }
         if (want('IND155')) {
             // IND155 雕模具能退出（任务 138）：开始雕后按 Esc 退出、圈消失、黏土不变；圈旁边有"不雕了"按钮；换成别的东西 3 秒后自动退出；暂停、回基地、出门、死亡、开面板都清掉

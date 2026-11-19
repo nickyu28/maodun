@@ -466,7 +466,7 @@
         }
         function mbHud() {
             let k = indSel(), D = mbDurTab(k); if (!D) return '';
-            let s = indName(k) + ' 耐久 ' + mbDura(k) + ' / ' + mbMax(k);
+            let s = indName(k) + ' 耐久 ' + mbDura(k) + ' / ' + mbMax(k) + ((ind.bag[k] || 0) > 1 ? '，还有 ' + (ind.bag[k] - 1) + ' 把备用' : '');   // 耐久只算手上这一把，别的是没用过的备用（作者 11-19）
             if (MB_SHIELD[k] && ind.mbBlock && ind.mbBlock.cd > 0) s += ind.mbBlock.t > 0 ? '　<b>举着</b>' : '　冷却 ' + Math.ceil(ind.mbBlock.cd) + ' 秒';
             let P = ind.base.poisonK; if (P && P.k === k) s += '　带毒还剩 ' + P.n + ' 下';
             return s;
