@@ -93,6 +93,8 @@
             indSave(); if (ind.panel === 'stove') ind.panelDirty = true;
             return true;
         }
+        // 做好的模具（不含生模具坯，坯是普通炉料）：跟别的材料一样在放入列表里放，放进去自动装到出料槽位置（作者 11-20）
+        function ctIsMold(k) { return typeof k === 'string' && /^mold_[a-z]+(_f)?$/.test(k) && !!CT_SHAPE[k.slice(5).replace(/_f$/, '')]; }
         function ctMoldPut(k) {
             let c = indCookCur(), S = c.C, f = /_f$/.test(k), s = k.replace(/^mold_/, '').replace(/_f$/, '');
             if (!CT_SHAPE[s] || !(ind.bag[k] > 0)) return;
@@ -145,10 +147,8 @@
             if (!indHard()) return '';
             let S = c.C, P = S.pool, M = S.mold, h = '<br>熔池：' + (P ? CT_METAL[P.m].n + ' ' + P.n + ' / ' + ctCap(c) + ' 份' : '空') + (S.meltT > 0 ? '　化锭 ' + Math.floor(S.meltT / CT.meltT * 100) + '%' : '') + (P ? '　<button style="' + IND_BTN + '" onclick="ctPour()">倒出来</button>' : '');
             { let nm = Object.keys(S.items).filter(function (k) { return CT_METAL[k] && !CT_PART_METAL[k] && S.items[k] > 0 && S.temp >= CT_METAL[k].melt; }).map(function (k) { return CT_METAL[k].n + '锭'; }); if (nm.length) h += '<br><span style="color:#888">' + nm.join('、') + '不熔，当炉料</span>'; }
-            if (M) h += '<br>模具：' + (M.f ? '耐火' : '') + CT_SHAPE[M.s].n + '，还能用 ' + M.dura + ' 次，' + (M.part ? '　' + indName(M.part) + (M.t > 0 ? ' 烫，还要 ' + Math.ceil(M.t) + ' 秒' : ' 凉了，左键出料槽取') : M.fill > 0 ? '　在流 ' + Math.floor(M.fill / CT_SHAPE[M.s].need * 100) + '%' : P && !CT_PART_METAL[P.m] ? '　<span style="color:#c62828">' + CT_METAL[P.m].n + '铸不了零件</span>' : '') + '　<button style="' + IND_BTN + '" onclick="ctMoldOut()">取下模具</button>';
+            if (M) h += '<br>模具：' + (M.f ? '耐火' : '') + CT_SHAPE[M.s].n + '，还能用 ' + M.dura + ' 次，' + (M.part ? '　' + indName(M.part) + (M.t > 0 ? ' 烫，还要 ' + Math.ceil(M.t) + ' 秒' : ' 凉了，左键出料槽取') : M.fill > 0 ? '　在流 ' + Math.floor(M.fill / CT_SHAPE[M.s].need * 100) + '%' : P && !CT_PART_METAL[P.m] ? '　<span style="color:#c62828">' + CT_METAL[P.m].n + '铸不了零件</span>' : '');
             if (M && !M.part) { let pl = ctPlanTxt(c), w = ctWhy(c); if (pl) h += '<br>' + pl; if (w) h += '<br><span style="color:#c62828">' + w + '</span>'; }
-            let ms = Object.keys(ind.bag).filter(function (k) { return /^mold_[a-z]+(_f)?$/.test(k) && CT_SHAPE[k.slice(5).replace(/_f$/, '')]; });
-            if (!M && ms.length) h += '<br>' + ms.map(function (k) { return '<button style="' + IND_BTN + 'background:#6d4c41;" onclick="ctMoldPut(\'' + k + '\')">' + indName(k) + ' 放进出料槽</button>'; }).join('');
             return h;
         }
         // ── 雕模具 ──

@@ -13571,7 +13571,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('IND223')) {
-            // IND223 模具放进出料槽的按钮（作者 11-20「按钮失效了」）：槽里放着做好的成品（砖、面包）不挡，能放；只有烫的锭挡着，给提示；点面板里的按钮真的放进去
+            // IND223 模具跟别的材料一样放进炉子的放入列表（作者 11-20）：没有专门的"放进出料槽"按钮；点列表里的放进去炼 1／全放／放 n 都只装一个到出料槽位置；槽里有成品不挡、有烫锭挡着给提示；拿出来走列表里的普通按钮；全部拿出来也拿模具
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -13579,20 +13579,26 @@ async function enterExit(tab, key) {
             else { try {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
-                const set = (spout) => `cancelAnimationFrame(ind.raf); let St = IND_BASE_ST.stove; ind.base.rule = 'hard'; ind.base.off.stove = false; ind.base.stove = Object.assign(ckNewState(), { spout: ${spout}, spoutTy: 'brick', fuel: 0, fire: 0, temp: 20 }); ind.cookId = 'stove'; ind.bag = { mold_knife: 1, mold_knife_f: 1 }; indTeleport(St.x, St.z + 2.5); indLookAt(St.x, St.z); indPanelStove(); let fl = [], f0 = indFlash; indFlash = function (t) { fl.push(t); };`;
-                const click = `let bs = [...document.querySelectorAll('#ind-panel button')].filter(function (b) { return b.textContent.indexOf('放进出料槽') >= 0; }); let n = bs.length; if (bs[0]) bs[0].click(); indFlash = f0;`;
-                let r = await J(`(function(){ ${set("[{ k: 'brick', t: 0, p: 1 }, { k: 'bread', t: 0, p: 1 }]")} ${click} let S = ind.base.stove; return { n: n, mold: !!S.mold, keep: S.spout.length, bag: ind.bag.mold_knife || 0 }; })()`);
-                if (!(r.n === 2 && r.mold && r.keep === 2 && r.bag === 0)) bad.push('槽里有砖面包也能放模具、东西还在 ' + JSON.stringify(r));
-                r = await J(`(function(){ ${set("[{ k: 'hot_cu', t: 20 }]")} ${click} let S = ind.base.stove; return { mold: !!S.mold, bag: ind.bag.mold_knife || 0, hint: /烫的锭/.test(fl.join('|')) }; })()`);
-                if (!(!r.mold && r.bag === 1 && r.hint)) bad.push('槽里有烫锭时给提示、模具还在 ' + JSON.stringify(r));
-                r = await J(`(function(){ ${set('[]')} ${click} let S = ind.base.stove; return { mold: !!S.mold }; })()`);
-                if (!r.mold) bad.push('空槽放模具 ' + JSON.stringify(r));
+                const set = (spout) => `cancelAnimationFrame(ind.raf); let St = IND_BASE_ST.stove; ind.base.rule = 'hard'; ind.base.off.stove = false; ind.base.stove = Object.assign(ckNewState(), { spout: ${spout}, spoutTy: 'brick', fuel: 0, fire: 0, temp: 20 }); ind.cookId = 'stove'; ind.bag = { mold_knife: 2, mold_knife_f: 1 }; indTeleport(St.x, St.z + 2.5); indLookAt(St.x, St.z); indPanelStove(); let fl = [], f0 = indFlash; indFlash = function (t) { fl.push(t); };`;
+                const rowBtn = (name, label) => `let row = [...document.querySelectorAll('#ind-panel div')].filter(function (d) { return d.children.length < 6 && d.textContent.trim().indexOf(${JSON.stringify(name)}) === 0 && d.querySelector('button'); }).pop(); let bt = row && [...row.querySelectorAll('button')].find(function (b) { return b.textContent.indexOf(${JSON.stringify(label)}) >= 0; }); if (bt) bt.click();`;
+                let r = await J(`(function(){ ${set("[{ k: 'brick', t: 0, p: 1 }]")} let old = [...document.querySelectorAll('#ind-panel button')].some(function (b) { return b.textContent.indexOf('放进出料槽') >= 0; }); ${rowBtn('小刀刃模具 × 2', '放进去炼 1')} indFlash = f0; let S = ind.base.stove; return { old: old, mold: !!S.mold && !S.mold.f, keep: S.spout.length, bag: ind.bag.mold_knife || 0 }; })()`);
+                if (r.old) bad.push('不该再有专门的放进出料槽按钮');
+                if (!(r.mold && r.keep === 1 && r.bag === 1)) bad.push('列表里放 1 个，槽里有成品也能放 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set("[]")} let b = document.querySelectorAll('#ind-panel'); indStovePut('mold_knife', 2); indStovePut('mold_knife', 2); indFlash = f0; let S = ind.base.stove; return { mold: !!S.mold, bag: ind.bag.mold_knife || 0, hint: /已经有模具/.test(fl.join('|')) }; })()`);
+                if (!(r.mold && r.bag === 1 && r.hint)) bad.push('放 2 也只装一个，已经有模具给提示 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set("[{ k: 'hot_cu', t: 20 }]")} indStovePut('mold_knife', 1); indFlash = f0; let S = ind.base.stove; return { mold: !!S.mold, bag: ind.bag.mold_knife || 0, hint: /烫的锭/.test(fl.join('|')) }; })()`);
+                if (!(!r.mold && r.bag === 2 && r.hint)) bad.push('槽里有烫锭挡着给提示 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set("[]")} indStovePut('mold_knife_f', 1); indPanelStove(); ${rowBtn('耐火小刀刃模具，在出料槽里', '拿出来')} indFlash = f0; let S = ind.base.stove; return { mold: !!S.mold, bag: ind.bag.mold_knife_f || 0 }; })()`);
+                if (!(!r.mold && r.bag === 1)) bad.push('列表里的拿出来能取出模具 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set("[]")} indStovePut('mold_knife', 1); indStoveTakeAll(); indFlash = f0; let S = ind.base.stove; return { mold: !!S.mold, bag: ind.bag.mold_knife || 0 }; })()`);
+                if (!(!r.mold && r.bag === 2)) bad.push('全部拿出来也拿模具 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set("[]")} ind.base.stove.mold = { s: 'axe', dura: 20, fill: 0 }; indPanelStove(); let t = document.getElementById('ind-panel').innerText; indFlash = f0; return { row: /斧头模具，在出料槽里/.test(t) }; })()`);
+                if (!r.row) bad.push('老存档槽里的模具在列表里看得见 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND223 模具放进出料槽的按钮：成品不挡、烫锭挡着给提示、点按钮真的放进去', bad.length === 0, bad.slice(0, 8).join(' / '));
+            report('IND223 模具跟别的材料一样放进炉子：没有专门按钮、只装一个、成品不挡烫锭挡、拿出来、老存档', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
-
         if (want('IND222')) {
             // IND222 电风扇：通电才起作用；三个效果——降自己体温（热天）、对着烧着的炉子慢慢多涨温度、风里烫的东西（出料槽、地上、身上）凉得快；风向外面没用；转向；叶片通电才转；不跟手摇扇子混名
             const bad = [];

@@ -3351,6 +3351,7 @@
         function indWoodHint() { return '木桶不能上火，换陶罐、铁桶或黄铜桶装。陶罐用黏土烧，铁桶、黄铜桶在工作台做'; }
         function indStovePut(k, n) {
             if (!ind || !ind.bag[k]) return;
+            if (typeof ctIsMold === 'function' && ctIsMold(k)) { ctMoldPut(k); return; }   // 模具跟别的材料一样放，自动装到出料槽位置（19-industry-cast.js）
             if (k === 'gunpowder') { nkPowderInCooker(indCookCur()); return; }   // 火药放进炉子就炸
             if (indNotForStove(k)) { indFlash('这个不能放进炉子'); return; }
             let S = indCookCur().C, kc = indContOf(k);
@@ -3421,6 +3422,7 @@
                 if (st === S.out && ckHotOf(k) && !ind.bag.tongs) { hotLeft += st[k]; return; }   // 炉膛里烫着的锭只能用钳子取，等炉火灭了凉下来就能直接取
                 let t = indBagAdd(k, st[k]); st[k] -= t; if (st[k] <= 0) delete st[k]; else left += st[k];
             }); });
+            if (S.mold && typeof ctMoldOut === 'function') ctMoldOut();   // 全部拿出来也包括槽里的模具
             S.cook = null;
             if (hotLeft) indFlash('炉膛里的锭还烫着：拿钳子取，或者等炉火灭了凉下来');
             if (left) indFlash('背包满了，还剩 ' + left + ' 个在' + IND_COOK[indCookCur().ty].name + '上');
@@ -3871,7 +3873,8 @@
                 });
                 if (S.funnel) fuelRows += '<div style="font-size:13px;color:#666;">漏斗里还有 ' + Math.round(S.funnel.oil) + ' / ' + CK.funnelCap + ' 份油，一桶 ' + CK.oilFuel + ' 份</div>';
             }
-            let put = Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k); }).map(function (k) {
+            let moldRow = ''; if (S.mold && typeof CT_SHAPE !== 'undefined' && CT_SHAPE[S.mold.s]) { let mk = 'mold_' + S.mold.s + (S.mold.f ? '_f' : ''); moldRow = indRow(indName(mk) + '，在出料槽里' + (S.mold.part ? '，' + indName(S.mold.part) : ''), '<button style="' + IND_BTN + '" onclick="ctMoldOut(); indPanelStove()">拿出来</button>'); }   // 模具在槽里的样子，取出走普通的拿出来
+            let put = moldRow + Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k); }).map(function (k) {
                 return indRow(indName(k) + ' × ' + ind.bag[k], indPutOpts('stove', 0, k, '放进去炼', '全放进去炼', '放进去炼'));
             }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + D.name + '</div><div style="line-height:1.7;">' + st + '</div><div>' + fire + '</div>' +
