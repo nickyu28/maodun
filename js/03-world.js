@@ -159,11 +159,16 @@
         }
         function ensureScene() {
             if (scene) return;
+            if (GFXDEAD.dead) throw gfxDeadError();
+            // 渲染器先建：画面打不开时不留一个没有渲染器的半个场景，免得下次调用以为好了、开局又撞第二个错
+            let rendererNew = null;
+            try { rendererNew = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: graphicsQuality() >= 1 }); }
+            catch (e) { gfxDeadMark(e); throw gfxDeadError(); }
             scene = new THREE.Scene(); scene.background = new THREE.Color(0xf0f0f5); scene.fog = new THREE.FogExp2(0xf0f0f5, 0.004);
             // scene.remove 一律顺手释放（D1）
             scene.remove = function () { for (let i = 0; i < arguments.length; i++) { let o = arguments[i]; THREE.Scene.prototype.remove.call(this, o); disposeObject(o); } return this; };
             camera = new THREE.PerspectiveCamera(camFovFor(window.innerWidth / window.innerHeight), window.innerWidth / window.innerHeight, 0.5, 1600); camera.rotation.order = 'YXZ';
-            let canvas = document.getElementById('gameCanvas'); renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: graphicsQuality() >= 1 }); renderer.setPixelRatio(graphicsPixelRatio()); gfxHookRenderer(renderer); gfxFitCanvas(true);
+            renderer = rendererNew; renderer.setPixelRatio(graphicsPixelRatio()); gfxHookRenderer(renderer); gfxFitCanvas(true);
             if (window.settingsApplyDisplay) window.settingsApplyDisplay();   // 视角宽度等按设置套上
             gfxApplyAll();   // 画质、视野按设置套上
             // 缩放和转屏由 02c-graphics.js 的 gfxFitCanvas 管

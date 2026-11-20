@@ -2621,6 +2621,7 @@
 
         let nightErrShown = '';
         function nightShowError(e) {
+            if (e && e.gfxDead) return;   // 画面打不开：只给一条短提示（gfxDeadUI），堆栈在控制台
             let msg = (e && e.stack) ? e.stack : String(e && e.message ? e.message : e);
             if (msg === nightErrShown) return;
             nightErrShown = msg;

@@ -179,6 +179,7 @@ async function openTab(chrome, url, opts) {
     await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []).concat(opts && opts.blockHosts ? opts.blockHosts.map((h) => ({ urlPattern: '*' + h + '*' })) : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
     // 实验室开关会被 localStorage 记住（TH_labdebug）；同一个 Chrome 里所有标签页共用存档，所以每个新页面一开始先清掉，免得前一个标签页开了开关、后面不带参数的检查也看到实验室入口。测开关记忆本身的检查传 keepStorage: true。
+    if (opts && opts.init) await send('Page.addScriptToEvaluateOnNewDocument', { source: opts.init });   // 页面脚本之前先跑的一段（模拟 WebGL 打不开之类）
     if (!(opts && opts.limit)) await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__gfxNoLimit = true;' });   // 默认关掉渲染限帧，测限帧的检查传 limit: true
     if (!(opts && opts.keepStorage)) await send('Page.addScriptToEvaluateOnNewDocument', { source: "try{localStorage.removeItem('TH_labdebug');localStorage.removeItem('TH_bossdebug')}catch(e){}" });
     if (opts && opts.mobile) {   // 触屏设备：has_touch + is_mobile
@@ -13156,6 +13157,43 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND154 煤产量：每张图总量够、出生点附近够、平原森林有煤', bad.length === 0, bad.join(' / '));
         }
+        if (want('GL1')) {
+            // GL1 画面（WebGL）打不开：大厅菜单照常能用、开始游戏置灰、玩家只看到一条短提示、页面上没有堆栈、堆栈在控制台；开局入口不再撞第二个错；正常浏览器照常能开局
+            const bad = [];
+            const T = await openTab(chrome, url, { init: "(function(){ var g = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (t) { if (/webgl/i.test(String(t))) return null; return g.apply(this, arguments); }; })();" });
+            const r = JSON.parse(await T.eval(`(function(){ let out = {};
+                out.lobby = !document.getElementById('screen-lobby').classList.contains('hidden');
+                let b = document.getElementById('lobby-start-btn'); out.dis = !!(b && b.disabled);
+                let n = document.getElementById('gfx-dead-note'); out.note = n ? n.innerText : '';
+                out.dead = !!window.__webglDead;
+                try { lobbyPrimaryStart(); out.startOk = true; } catch (e) { out.startOk = false; out.startErr = String(e && e.message); }
+                try { nightEnterWith('survivor', 1, 0); out.enterThrew = 'no'; } catch (e) { out.enterThrew = e && e.gfxDead ? 'dead' : String(e && e.message); }
+                let er = document.getElementById('night-err'); out.errShown = !!(er && er.style.display === 'block');
+                out.pageText = document.body.innerText.indexOf('出错了') >= 0 || /at .*\.js/.test(document.body.innerText);
+                openShop(); out.shop = !document.getElementById('screen-shop').classList.contains('hidden');
+                return JSON.stringify(out); })()`));
+            if (!r.lobby) bad.push('大厅菜单没出来 ' + JSON.stringify(r));
+            if (!r.dis) bad.push('开始游戏没置灰');
+            if (!r.note || r.note.length > 40) bad.push('提示不对 ' + r.note);
+            if (!r.dead) bad.push('没标记画面失败');
+            if (!r.startOk) bad.push('点开始游戏又出错 ' + r.startErr);
+            if (r.enterThrew !== 'dead') bad.push('别的开局入口没挡住 ' + r.enterThrew);
+            if (r.errShown || r.pageText) bad.push('页面上出现了错误浮层或堆栈');
+            if (!r.shop) bad.push('商店打不开，菜单不能用了');
+            const logged = T.errors.filter((e) => /webgl 画面初始化失败/.test(e)).length, other = T.errors.filter((e) => !/webgl 画面初始化失败|Error creating WebGL context/.test(e));   // three.js 自己也会往控制台写一句，算正常
+            if (!logged) bad.push('控制台里没有 webgl 堆栈');
+            if (other.length) bad.push('还有别的报错 ' + other.slice(0, 2).join(' / '));
+            await T.close();
+            // 正常浏览器能开局
+            const T2 = await openTab(chrome, url);
+            await T2.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+            if (!(await until(T2, `isPlaying && !window.__webglDead`, 30000))) bad.push('正常浏览器没开起来局');
+            if (await T2.eval(`!!document.getElementById('gfx-dead-note')`)) bad.push('正常浏览器也出了画面失败提示');
+            if (T2.errors.length) bad.push(T2.errors.slice(0, 2).join(' / '));
+            await T2.close();
+            report('GL1 画面打不开：菜单能用、开始游戏置灰、只一条短提示、页面无堆栈、控制台有；正常浏览器能开局', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('ES3')) {
             // ES3 每个模式的规则卡片都能按 Esc 关：选这个模式、开规则、按真的 Esc，卡片要关掉（超燃的规则卡片 Esc 关不掉，测试员 -133 报的）
             const bad = [];

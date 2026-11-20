@@ -721,7 +721,7 @@
             if (park) { try { parkExit(); } catch (e) { } }
             if (cake) { try { cakeExit(); } catch (e) { } }
             if (nm) { try { nmTeardown(); } catch (e) { } }
-            ensureScene();
+            try { ensureScene(); } catch (e) { if (e && e.gfxDead) return; throw e; }   // 画面打不开：大厅菜单照常，开始游戏置灰，见 02c-graphics.js
             clearMazeMeshes();   // 保险：万一某个模式退出时没清干净，进大厅前兜底扫一遍
             sceneSweep();
             scene.background = new THREE.Color(0x8fd3f4);

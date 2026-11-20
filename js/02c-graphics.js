@@ -27,6 +27,30 @@ function graphicsPixelRatio() {
     return q === 0 ? 1 : q === 1 ? Math.min(1.5, d) : q === 2 ? d : Math.min(3, Math.max(d, 1) * 2);
 }
 
+
+// ── 画面（WebGL）打不开 ──
+// 建渲染器失败（设备不支持、被禁用、显卡出错）时：大厅菜单照常能用，「开始游戏」置灰，玩家只看到一条短提示；
+// 堆栈只写进开发者控制台（console.error），不显示在页面上。走到 ensureScene 的各个入口会拿到一个带 gfxDead 标记的错误，页面上的错误浮层不显示它。
+const GFXDEAD = { dead: false, text: '这台设备的画面打不开，换个浏览器试试。' };
+function gfxDeadMark(e) {
+    if (GFXDEAD.dead) return;
+    GFXDEAD.dead = true; window.__webglDead = true;
+    try { console.error('webgl 画面初始化失败', e && e.stack ? e.stack : e); } catch (x) { }
+    gfxDeadUI();
+}
+function gfxDeadError() { let e = new Error('webgl-dead'); e.gfxDead = true; return e; }
+function gfxDeadUI() {
+    if (!GFXDEAD.dead) return;
+    let b = document.getElementById('lobby-start-btn');
+    if (b) { b.disabled = true; b.style.background = '#9e9e9e'; b.style.cursor = 'not-allowed'; b.title = GFXDEAD.text; }
+    let n = document.getElementById('gfx-dead-note');
+    if (!n) {
+        n = document.createElement('div'); n.id = 'gfx-dead-note';
+        n.style.cssText = 'position:fixed; left:50%; top:64px; transform:translateX(-50%); z-index:200; max-width:min(86vw,420px); background:rgba(183,28,28,0.92); color:#fff; padding:8px 14px; border-radius:8px; font-size:14px; line-height:1.5; text-align:center; pointer-events:none;';
+        n.innerText = GFXDEAD.text; document.body.appendChild(n);
+    }
+}
+
 // ── 画质：像素比马上生效，分段数下次建东西时生效 ──
 function gfxApplyQuality() {
     if (typeof renderer !== 'undefined' && renderer) { renderer.setPixelRatio(graphicsPixelRatio()); gfxFitCanvas(true); }
