@@ -13629,6 +13629,39 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND229')) {
+            // IND229 触屏 1180x820 尺寸（测试员 11-20）：猫盾工业所有按钮高 ≥ 44、面板里的按钮和叉也 ≥ 44、右上一排不盖住左上状态栏、快捷栏 10 格在同一行
+            const bad = [];
+            const M = await openTab(chrome, url, { mobile: true, query: 'hcdebug=1' });
+            try {
+                if (!(await indTouchEnter(M))) bad.push('触屏进不去');
+                else {
+                    const J = async (e) => JSON.parse(await M.eval(`JSON.stringify(${e})`));
+                    await M.eval(`document.body.removeAttribute('data-btnpos'); document.documentElement.style.setProperty('--pad-scale', '1'); ind.bag = { wood: 3, stone: 2, torch: 4, coal: 1, clay: 3, shears: 1, pick_stone: 1, bucket: 2, seed_wheat: 3, salt: 1 }; ind.aimT = 0; indHudUpdate(); true;`); await W(400);
+                    const r = await J(`(function(){ let small = []; document.querySelectorAll('#ind-hud button').forEach(function (b) { if (!b.offsetParent) return; let q = b.getBoundingClientRect(); if (q.height < 43.5 || q.width < 43.5) small.push(b.id || b.textContent.slice(0, 6)); });
+                        let st = document.getElementById('ind-status').getBoundingClientRect(), tr = document.getElementById('ind-toprow').getBoundingClientRect(), over = !(tr.right <= st.left || tr.left >= st.right || tr.bottom <= st.top || tr.top >= st.bottom);
+                        let slots = [...document.querySelectorAll('#ind-bag .ind-hot')], ys = slots.map(function (e) { return Math.round(e.getBoundingClientRect().y); }), uniq = ys.filter(function (y, i) { return ys.indexOf(y) === i; });
+                        return { small: small, over: over, n: slots.length, rows: uniq.length }; })()`);
+                    if (r.small.length) bad.push('按钮高或宽不到 44：' + r.small.join('、'));
+                    if (r.over) bad.push('右上一排盖住了左上状态栏');
+                    if (!(r.n >= 8 && r.rows === 1)) bad.push('快捷栏要在同一行 ' + JSON.stringify([r.n, r.rows]));
+                    for (const open of ['indPanelBag()', 'indPanelBook(\'\')', 'achPanel()']) {
+                        await M.eval(`${open}; true;`); await W(250);
+                        const q = await J(`(function(){ let small = []; document.querySelectorAll('#ind-panel button').forEach(function (b) { if (!b.offsetParent) return; let q = b.getBoundingClientRect(); if (q.height < 43.5) small.push((b.textContent || b.className).slice(0, 6) + ':' + Math.round(q.height)); }); let x = document.querySelector('#ind-panel .ind-x'); let xr = x && x.getBoundingClientRect(); return { small: small.slice(0, 5), x: xr && [Math.round(xr.width), Math.round(xr.height)] }; })()`);
+                        if (q.small.length) bad.push('面板按钮高不到 44（' + open + '）：' + q.small.join('、'));
+                        if (!q.x || q.x[0] < 44 || q.x[1] < 44) bad.push('面板的叉不到 44 ' + JSON.stringify(q.x));
+                        await M.eval(`indCloseAll(); true;`); await W(100);
+                    }
+                    await M.eval(`indPause(); true;`); await W(250);
+                    const p2 = await J(`(function(){ let a = []; document.querySelectorAll('#ind-pause button').forEach(function (b) { let q = b.getBoundingClientRect(); if (q.height < 43.5) a.push(b.textContent.slice(0, 4) + ':' + Math.round(q.height)); }); return a; })()`);
+                    if (p2.length) bad.push('暂停菜单按钮高不到 44：' + p2.join('、'));
+                }
+            } catch (e) { bad.push('异常 ' + e.message); }
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('IND229 触屏尺寸：按钮高 ≥ 44、面板和叉 ≥ 44、右上一排不盖状态栏、快捷栏一行', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND228')) {
             // IND228 测试员 11-20 三条：背包面板里也有回收站、撤销条消失时说东西在回收站、死亡画面文字准、脚下的东西一次全捡
             const bad = [];
