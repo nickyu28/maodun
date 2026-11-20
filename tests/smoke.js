@@ -78,7 +78,7 @@ async function indTouchEnter(M) {
     await until(M, `[...document.querySelectorAll('#sys-modal button')].some(function (b) { return b.textContent.indexOf('硬核') >= 0 && b.offsetParent; })`, 15000);
     await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
     await until(M, `!document.querySelector('#sys-modal:not(.hidden)')`, 8000);
-    await M.eval(`ind.k = {}; ind.paused = false; true;`);
+    await M.eval(`document.body.removeAttribute('data-btnpos'); ind.k = {}; ind.paused = false; true;`);   // 前面的设置检查把右上那排按钮挪到别的角落会盖住底下的按钮，这里还原成默认
     await W(500);
     return true;
 }
@@ -13589,7 +13589,7 @@ async function enterExit(tab, key) {
             else { try {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
-                const set = (bag) => `cancelAnimationFrame(ind.raf); let St = IND_BASE_ST.stove; ind.base.rule = 'hard'; ind.base.off.stove = false; ind.base.stove = Object.assign(ckNewState(), { spout: [], spoutTy: 'brick', fuel: 0, fire: 0, temp: 20 }); ind.cookId = 'stove'; ind.bag = ${bag}; indTeleport(St.x, St.z + 2.5); indLookAt(St.x, St.z); indPanelStove();`;
+                const set = (bag) => `cancelAnimationFrame(ind.raf); IND_STOVE_USEFUL = true; let St = IND_BASE_ST.stove; ind.base.rule = 'hard'; ind.base.off.stove = false; ind.base.stove = Object.assign(ckNewState(), { spout: [], spoutTy: 'brick', fuel: 0, fire: 0, temp: 20 }); ind.cookId = 'stove'; ind.bag = ${bag}; indTeleport(St.x, St.z + 2.5); indLookAt(St.x, St.z); indPanelStove();`;
                 const rows = `(function(){ let h = [...document.querySelectorAll('#ind-panel div')].filter(function (d) { return /炉料/.test(d.textContent) && d.querySelector('button') && d.children.length < 4; })[0]; let t = document.getElementById('ind-panel').innerText; let i = t.indexOf('炉料'); return t.slice(i); })()`;
                 let r = await J(`(function(){ ${set("{ pick_stone: 1, bake_potato: 2, coat: 1, clay: 2, ingot_cu: 1, mold_knife_raw: 1, mold_knife: 1, coal: 1, shears: 1 }")} let t = document.getElementById('ind-panel').innerText, i = t.indexOf('炉料'); t = t.slice(i); return { clay: /黏土/.test(t), cu: /铜锭/.test(t), raw: /生模具/.test(t), mold: /小刀刃模具/.test(t), coal: /煤/.test(t), pick: /石镐/.test(t), potato: /烤土豆/.test(t), coat: /棉衣/.test(t), shears: /剪刀/.test(t) }; })()`);
                 if (!(r.clay && r.cu && r.raw && r.mold && r.coal)) bad.push('有用的要列：黏土、铜锭、生模具、模具、煤 ' + JSON.stringify(r));
@@ -15479,7 +15479,7 @@ async function enterExit(tab, key) {
                     const pos = async (sel) => J(`(function(){ let e = document.querySelector(${JSON.stringify(sel)}); if (!e || !e.offsetParent) return null; let r = e.getBoundingClientRect(), h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return [r.x + r.width / 2, r.y + r.height / 2, h === e || e.contains(h), r.width, r.height]; })()`);
                     const tap = async (p, ms) => { await M.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p[0], y: p[1], id: 1 }] }); await W(ms || 60); await M.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await W(250); };
                     const btn = (id) => '#' + id;
-                    await M.eval(`window.scrollTo(0, 0); ind.bag = { torch: 20, wood: 3 }; indSelect('torch'); ind.aimT = 0; indHudUpdate(); true;`); await W(300);
+                    await M.eval(`document.body.removeAttribute('data-btnpos'); window.scrollTo(0, 0); ind.bag = { torch: 20, wood: 3 }; indSelect('torch'); ind.aimT = 0; indHudUpdate(); true;`); await W(300);
                     const need = ['ind-btn-book', 'ind-btn-bag', 'ind-btn-map', 'ind-btn-speed', 'ind-btn-elems', 'ind-btn-prog', 'ind-btn-ach', 'ind-btn-act', 'ind-btn-use', 'ind-btn-put', 'ind-btn-run', 'ind-btn-kick'];
                     let P = {}; for (let t = 0; t < 12; t++) { P = {}; for (const id of need) P[id] = await pos(btn(id)); if (need.every((id) => P[id] && P[id][2])) break; await W(500); }
                     const miss = need.filter((id) => !P[id] || !P[id][2] || P[id][3] < 40 || P[id][4] < 38);

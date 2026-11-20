@@ -3838,6 +3838,7 @@
             if (S.temp >= X - 1) return null;
             return { t: X, s: Math.max(1, Math.round((X - S.temp) / IND_COOK[c.ty].rate)) };
         }
+        let IND_STOVE_USEFUL = !/[?&]notut\b/.test(location.search);   // 炉子放入列表只显示有用的；冒烟网址带 notut=1 时默认关（老检查拿石头测放入按钮），IND225 手动打开
         function ctIsMoldSafe(k) { return typeof ctIsMold === 'function' && ctIsMold(k); }
         function indStoveHtml() {
             let c = indCookCur(), S = c.C, D = IND_COOK[c.ty], F = indFireDef(c.ty, S.fire);
@@ -3884,7 +3885,7 @@
                 return false;
             };
             let moldRow = ''; if (S.mold && typeof CT_SHAPE !== 'undefined' && CT_SHAPE[S.mold.s]) { let mk = 'mold_' + S.mold.s + (S.mold.f ? '_f' : ''); moldRow = indRow(indName(mk) + '，在出料槽里' + (S.mold.part ? '，' + indName(S.mold.part) : ''), '<button style="' + IND_BTN + '" onclick="ctMoldOut(); indPanelStove()">拿出来</button>'); }   // 模具在槽里的样子，取出走普通的拿出来
-            let put = moldRow + Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k) && wanted(k); }).map(function (k) {
+            let put = moldRow + Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k) && (!IND_STOVE_USEFUL || wanted(k)); }).map(function (k) {
                 return indRow(indName(k) + ' × ' + ind.bag[k], indPutOpts('stove', 0, k, '放进去炼', '全放进去炼', '放进去炼'));
             }).join('') || (moldRow ? '' : '<div style="color:#999;padding:6px 0;">背包里没有能放的东西</div>');
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + D.name + '</div><div style="line-height:1.7;">' + st + '</div><div>' + fire + '</div>' +
@@ -4025,7 +4026,7 @@
         function indRunToggle() { if (!ind) return; ind.runLock = !ind.runLock; indHudUpdate(); }
         function indHold(dir, on) { if (!ind) return; ind.k[dir] = !!on; if (dir === 'jump' && on) ind.jumpQ = 0.15; }   // 触屏点一下很短，按下后至少算按着 0.15 秒，不然一帧没赶上就没跳
         function indBuildHud() {
-            if (!document.getElementById('ind-touch-css')) { let st = document.createElement('style'); st.id = 'ind-touch-css'; st.textContent = 'body.ind-touch #ind-hud button{min-height:40px!important;padding:7px 14px!important;font-size:15px!important;touch-action:manipulation;}body.ind-touch #ind-actrow,body.ind-touch #ind-toprow{scale:var(--pad-scale,1);opacity:var(--pad-alpha,1);display:flex;flex-wrap:wrap;}body.ind-touch #ind-toprow{position:absolute!important;top:8px!important;right:8px!important;left:auto!important;bottom:auto!important;justify-content:flex-end;max-width:calc((100vw - 16px) / var(--pad-scale,1));}body.ind-touch #ind-actrow{justify-content:center;max-width:calc(100% / var(--pad-scale,1));margin-left:auto;margin-right:auto;}'; document.head.appendChild(st); }
+            if (!document.getElementById('ind-touch-css')) { let st = document.createElement('style'); st.id = 'ind-touch-css'; st.textContent = 'body.ind-touch #ind-hud button{min-height:40px!important;padding:7px 14px!important;font-size:15px!important;touch-action:manipulation;}body.ind-touch #ind-actrow,body.ind-touch #ind-toprow{scale:var(--pad-scale,1);opacity:var(--pad-alpha,1);display:flex;flex-wrap:wrap;}body.ind-touch #ind-toprow{justify-content:flex-end;max-width:calc((100vw - 16px) / var(--pad-scale,1));}body.ind-touch #ind-actrow{justify-content:center;max-width:calc(100% / var(--pad-scale,1));margin-left:auto;margin-right:auto;}'; document.head.appendChild(st); }
             let n = document.createElement('div'); n.id = 'ind-night';
             n.style.cssText = 'position:fixed;inset:0;z-index:39;pointer-events:none;background:#0a1030;opacity:0;';
             document.body.appendChild(n);
