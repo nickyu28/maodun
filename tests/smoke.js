@@ -7167,7 +7167,7 @@ async function enterExit(tab, key) {
                 await T.eval(`ind.base.surv.hp = 8; indAdvance(2); true;`);
                 const d1 = await J(`{ d: ind.dead, el: document.getElementById('ind-dead') ? document.getElementById('ind-dead').innerText : '' }`);
                 if (!d1.d || d1.d.cause !== '烫伤' || !/铜锭/.test(d1.d.detail) || d1.d.lost < 1) bad.push('烫死应该有死亡画面、死因烫伤、写背包里有烫的铜锭 ' + JSON.stringify(d1));
-                if (!/烫伤/.test(d1.el) || !/铜锭/.test(d1.el) || !/身上的东西(都没了|散落在地上)/.test(d1.el) || !/回基地/.test(d1.el)) bad.push('死亡画面字不对 ' + d1.el);
+                if (!/烫伤/.test(d1.el) || !/铜锭/.test(d1.el) || !/身上的东西(都没了|散落在你倒下的地方)/.test(d1.el) || !/回基地/.test(d1.el)) bad.push('死亡画面字不对 ' + d1.el);
                 // 游戏暂停：时间不走、动不了
                 const t0 = await J(`[ind.t, ind.base.clock, ind.p.x, ind.p.z]`);
                 await T.eval(`ind.k.w = true; indAdvance(2); ind.k.w = false; indAction(); true;`);
@@ -15029,7 +15029,7 @@ async function enterExit(tab, key) {
                     let o = { c: c, bag: Object.keys(ind.bag).length, wear: Object.keys(B.wear).length, sc: ind.dead.scattered, txt: document.getElementById('ind-dead').innerText, hasCoat: hasCoat };
                     indRespawn(); o.after = B.ground.length; return o; })()`);
                 const want = r.hasCoat ? 9 : 8;
-                if (!(r.c.wood === 5 && r.c.stone === 3 && r.bag === 0 && r.wear === 0 && r.sc === want && /散落在地上/.test(r.txt) && r.after === want)) bad.push('基地里死：东西散落在地上、身上清空、页面写散落、回基地后还在 ' + JSON.stringify(r));
+                if (!(r.c.wood === 5 && r.c.stone === 3 && r.bag === 0 && r.wear === 0 && r.sc === want && /散落在你倒下的地方/.test(r.txt) && r.after === want)) bad.push('基地里死：东西散落在地上、身上清空、页面写散落、回基地后还在 ' + JSON.stringify(r));
                 r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ground = []; indGoTrip(4242); ind.bag = { wood: 5, stone: 3 }; ind.tripGround = []; ind.dead = null; ind.over = false; indDie('测试', '远征里'); let o = { where: ind.where, bag: Object.keys(ind.bag).length, tg: ind.tripGround.length, g: B.ground.length, txt: document.getElementById('ind-dead').innerText }; indRespawn(); o.g2 = B.ground.length; return o; })()`);
                 if (!(r.bag === 0 && r.tg === 0 && r.g === 0 && r.g2 === 0 && /都没了/.test(r.txt) && !/散落/.test(r.txt))) bad.push('远征里死：东西直接没了、不落在任何地上 ' + JSON.stringify(r));
                 r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ground = []; ind.bag = {}; B.wear = {}; ind.dead = null; ind.over = false; indDie('测试', '空身'); let o = { g: B.ground.length, txt: document.getElementById('ind-dead').innerText }; indRespawn(); return o; })()`);
