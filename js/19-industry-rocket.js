@@ -7,13 +7,13 @@
             rutile: { name: '金红石', col: 0xa1523f, use: '钛的矿，放进大窑加氯气和木炭烧成四氯化钛' },
             b_ticl4: { name: '四氯化钛瓶', col: 0xeceff1, use: '加钠一起烧，还原出钛锭' },
             ingot_ti: { name: '钛锭', col: 0xa7b4c2, use: '做钛的发动机，也做钛甲，比铁轻比钢硬' },
-            eng_kero: { name: '煤油发动机', col: 0x90a4ae, use: '火箭一级用，推力大，钛的轻', rkt: { isp: 300, thrust: 800, mass: 2.0 } },
-            eng_kero_s: { name: '钢铝煤油发动机', col: 0x78909c, use: '不用钛的煤油发动机，重 30%；也能装在车上', rkt: { isp: 300, thrust: 800, mass: 2.6 } },
-            eng_vac: { name: '真空煤油发动机', col: 0x8d6e63, use: '火箭二级用，没有液氢时烧煤油，比冲高一点', rkt: { isp: 340, thrust: 300, mass: 2.4 } },
-            eng_h2: { name: '氢氧发动机', col: 0xf8bbd0, use: '火箭二级用，烧液氢，比冲最高，推力小', rkt: { isp: 450, thrust: 250, mass: 1.8 } },
-            tank_fuel: { name: '燃料罐', col: 0xb0bec5, use: '火箭的燃料罐，也能拆给冷罐用', rkt: { cap: 20, mass: 1.0 } },
-            capsule: { name: '舱体', col: 0xe0e0e0, use: '火箭的舱体，载一个人，也能当小屋放下来', rkt: { seats: 1, mass: 1.5 } },
-            fairing: { name: '整流罩', col: 0xcfd8dc, use: '火箭顶上的罩，也能拆成 2 个池塘盖', rkt: { mass: 0.6 } }
+            eng_kero: { name: '煤油发动机', col: 0x90a4ae, use: '火箭一级用，推力大，钛的轻', rkt: { isp: 300, thrust: 800, mass: 2.5 } },
+            eng_kero_s: { name: '钢铝煤油发动机', col: 0x78909c, use: '不用钛的煤油发动机，重 30%；也能装在车上', rkt: { isp: 300, thrust: 800, mass: 3.25 } },
+            eng_vac: { name: '真空煤油发动机', col: 0x8d6e63, use: '火箭二级用，没有液氢时烧煤油，比冲高一点', rkt: { isp: 340, thrust: 300, mass: 3.0 } },
+            eng_h2: { name: '氢氧发动机', col: 0xf8bbd0, use: '火箭二级用，烧液氢，比冲最高，推力小', rkt: { isp: 450, thrust: 250, mass: 2.2 } },
+            tank_fuel: { name: '燃料罐', col: 0xb0bec5, use: '火箭的燃料罐，也能拆给冷罐用', rkt: { cap: 20, mass: 1.2 } },
+            capsule: { name: '舱体', col: 0xe0e0e0, use: '火箭的舱体，载一个人，也能当小屋放下来', rkt: { seats: 1, mass: 1.8 } },
+            fairing: { name: '整流罩', col: 0xcfd8dc, use: '火箭顶上的罩，也能拆成 2 个池塘盖', rkt: { mass: 0.8 } }
         });
         IND_ELEM_OF.ingot_ti = 22;
         // 矿：山地露头、山地河边的金红石砂（空手捡）

@@ -15084,6 +15084,58 @@ async function enterExit(tab, key) {
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND215')) {
+            // IND215 发射台 R5：放置要空地和只能一个、装配算数、最少的几种配置都能过 9.4、推重比不够起不来、Δv 不够炸坏要重修、入轨通关出结算页、Tab 进度表
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (c) => JSON.parse(await T.eval(`JSON.stringify((function(){ ${c} })())`));
+                const r = await J(`indGoBase(null); let B = ind.base, o = {}; B.rule = 'hard'; cancelAnimationFrame(ind.raf); ind.raf = 0; B.ach = {}; B.devs = [];
+                    o.rec = IND_CRAFT.some(function (q) { return q.out === 'dev_pad' && q.in.steel === 10 && q.in.brick === 20 && q.in.wire === 10; });
+                    let mk = function (a, t1) { let st = Object.assign({ capsule: 1, fairing: 1, kerosene: 99, tank_lox: 99, tank_lh2: 99 }, a); return { st: st, cfg: { t1: t1, f1: 1, f2: 1 } }; };
+                    let best = mk({ eng_kero: 2, eng_h2: 1, tank_fuel: 4 }, 1), mid = mk({ eng_kero: 3, eng_vac: 1, tank_fuel: 10 }, 6), worst = mk({ eng_kero_s: 3, eng_vac: 1, tank_fuel: 10 }, 6), few = mk({ eng_kero: 2, eng_h2: 1, tank_fuel: 3 }, 1), low = mk({ eng_kero: 1, eng_h2: 1, tank_fuel: 4 }, 1);
+                    let c = function (x) { return rkCalc(x.st, x.cfg, 0); };
+                    o.best = c(best).ok; o.bestDv = +c(best).dv.toFixed(2); o.mid = c(mid).ok; o.worst = c(worst).ok; o.few = c(few).ok; o.fewDv = +c(few).dv.toFixed(2); o.low = c(low).twr < 1; o.pay = rocketPayload(best.st, best.cfg);
+                    o.noEng = rkCalc({ capsule: 1, fairing: 1, tank_fuel: 2 }, { t1: 1 }, 0).err.join('，');
+                    o.missing = rkCalc({ eng_kero: 2, eng_h2: 1, tank_fuel: 4, capsule: 1, fairing: 1, kerosene: 1 }, { t1: 1, f1: 1, f2: 1 }, 0).err.join('，');
+                    indTeleport(0, 0); ind.bag = { dev_pad: 2 }; indSelect('dev_pad'); indLookAt(IND_BASE.x0 + 8, 0); indTeleport(IND_BASE.x0 + 12, 0); indLookAt(IND_BASE.x0 + 20, 0);
+                    let bx = ind.p.x, bz = ind.p.z; B.devs.push({ id: ++B.dseq, ty: 'dev_zz', x: bx + 4, z: bz }); B.devs.pop();
+                    o.near = rkPadOk(ind.p.x + 1.6, ind.p.z);
+                    return o;`);
+                if (!r.rec) bad.push('发射台配方 钢 10 砖 20 铜线 10 ' + JSON.stringify(r));
+                if (!(r.best && r.bestDv >= 9.4 && r.mid && r.worst)) bad.push('三种配置都能过 9.4 ' + JSON.stringify(r));
+                if (r.few || !(r.fewDv < 9.4)) bad.push('少一个罐不够 ' + JSON.stringify(r));
+                if (!r.low) bad.push('一台发动机推重比不到 1 ' + JSON.stringify(r));
+                if (!(r.pay > 0)) bad.push('最大载荷 ' + JSON.stringify(r));
+                if (!/缺/.test(r.noEng) || !/少/.test(r.missing)) bad.push('缺什么写出来 ' + JSON.stringify(r));
+                const f = await J(`let B = ind.base, o = {}; B.devs = []; let spot = null, fl0 = indFlash; indFlash = function () { }; for (let x = -26; x <= 26 && !spot; x += 2) for (let z = -18; z <= 18 && !spot; z += 2) { if (rkPadOk(x + 1.6, z)) spot = [x, z]; } indFlash = fl0; o.spot = spot; indBagAdd('dev_pad', 1); if (spot) { indTeleport(spot[0], spot[1]); indLookAt(spot[0] + 10, spot[1]); } indSelect('dev_pad'); indUse(); let pad = rkPad(); o.placed = !!pad;
+                    if (pad) {
+                        pad.st = { eng_kero: 2, eng_h2: 1, tank_fuel: 3, capsule: 1, fairing: 1, kerosene: 20, tank_lox: 20, tank_lh2: 20 }; pad.cfg = { t1: 1, f1: 1, f2: 1 };
+                        o.html = IND_DEV_HTML.pad(pad).indexOf('发射台') >= 0;
+                        rkLaunch(pad.id); o.cd = ind.rkL ? ind.rkL.t : -1; ind.rkL.t = 0.01; indTick(0.05); o.fail = pad.broken === true && !pad.st.eng_kero;
+                        o.htmlBroken = /炸坏/.test(IND_DEV_HTML.pad(pad)); ind.bag = { steel: 5, brick: 10 }; rkPadFix(pad.id); o.fixed = pad.broken === false;
+                        pad.st = { eng_kero: 2, eng_h2: 1, tank_fuel: 4, capsule: 1, fairing: 1, kerosene: 20, tank_lox: 20, tank_lh2: 20 }; pad.cfg = { t1: 1, f1: 1, f2: 1 };
+                        rkLaunch(pad.id); ind.rkL.t = 0.01; indTick(0.05); o.win = !!B.rocket && !!B.ach.rocket; o.end = !!document.getElementById('ind-end'); o.endTx = (document.getElementById('ind-end') || { innerText: '' }).innerText.replace(/\\s+/g, ' ');
+                        o.eaten = !pad.st.eng_kero; rkEndClose();
+                    }
+                    ind.base.wear = ind.base.wear || {}; rkProgress(); let t = document.getElementById('ind-panel') ? document.getElementById('ind-panel').innerText : ''; o.prog = /进度　去外太空　发现 \\d+ \\/ \\d+/.test(t) && /？？？/.test(t.replace(/\\s+/g, ' ')) || /发现/.test(t); indPanelClose();
+                    rkProgToggle(); o.tab = ind.panel === 'prog'; rkProgToggle(); o.tab2 = !ind.panel; o.btn = !!document.getElementById('ind-btn-prog');
+                    return o;`);
+                if (!f.placed) bad.push('发射台放得下 ' + JSON.stringify(f));
+                else {
+                    if (!f.html || f.cd !== 10) bad.push('面板和 10 秒倒计时 ' + JSON.stringify(f));
+                    if (!f.fail || !f.htmlBroken || !f.fixed) bad.push('Δv 不够炸坏、东西没了、重修 ' + JSON.stringify(f));
+                    if (!f.win || !f.end || !/入轨成功/.test(f.endTx) || !/第 1 章\s*完/.test(f.endTx) || !f.eaten) bad.push('入轨通关出结算页 ' + JSON.stringify(f));
+                    if (!f.prog || !f.tab || !f.tab2 || !f.btn) bad.push('Tab 进度表和按钮 ' + JSON.stringify(f));
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND215 发射台 R5：装配算数、三种配置过 9.4、炸坏重修、入轨结算页、Tab 进度表', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND214')) {
             // IND214 火箭部件（R4）：金红石在山地、四氯化钛和钛锭的两步（副产盐）、发动机四种、燃料罐舱体整流罩、每样的第二个用处、钛甲
             const bad = [];
