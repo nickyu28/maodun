@@ -15124,7 +15124,7 @@ async function enterExit(tab, key) {
                         o.htmlBroken = /炸坏/.test(IND_DEV_HTML.pad(pad)); ind.bag = { steel: 5, brick: 10 }; rkPadFix(pad.id); o.fixed = pad.broken === false;
                         pad.st = { eng_kero: 2, eng_h2: 1, tank_fuel: 4, capsule: 1, fairing: 1, kerosene: 20, tank_lox: 20, tank_lh2: 20 }; pad.cfg = { t1: 1, f1: 1, f2: 1 };
                         rkLaunch(pad.id); ind.rkL.t = 0.01; indTick(0.05); o.win = !!B.rocket && !!B.ach.rocket; o.end = !!document.getElementById('ind-end'); o.endTx = (document.getElementById('ind-end') || { innerText: '' }).innerText.replace(/\\s+/g, ' ');
-                        o.eaten = !pad.st.eng_kero; rkEndClose();
+                        o.eaten = !pad.st.eng_kero; o.title = typeof titleGrant !== 'function' || !!(gState.titles && gState.titles.rocket); rkEndClose();
                     }
                     ind.base.wear = ind.base.wear || {}; rkProgress(); let t = document.getElementById('ind-panel') ? document.getElementById('ind-panel').innerText : ''; o.prog = /进度　去外太空　发现 \\d+ \\/ \\d+/.test(t) && /？？？/.test(t.replace(/\\s+/g, ' ')) || /发现/.test(t); indPanelClose();
                     rkProgToggle(); o.tab = ind.panel === 'prog'; rkProgToggle(); o.tab2 = !ind.panel; o.btn = !!document.getElementById('ind-btn-prog');
@@ -15133,7 +15133,7 @@ async function enterExit(tab, key) {
                 else {
                     if (!f.html || f.cd !== 10) bad.push('面板和 10 秒倒计时 ' + JSON.stringify(f));
                     if (!f.fail || !f.htmlBroken || !f.fixed) bad.push('Δv 不够炸坏、东西没了、重修 ' + JSON.stringify(f));
-                    if (!f.win || !f.end || !/入轨成功/.test(f.endTx) || !/第 1 章\s*完/.test(f.endTx) || !f.eaten) bad.push('入轨通关出结算页 ' + JSON.stringify(f));
+                    if (!f.win || !f.end || !/入轨成功/.test(f.endTx) || !/第 1 章\s*完/.test(f.endTx) || !f.eaten || !f.title) bad.push('入轨通关出结算页、送称号 ' + JSON.stringify(f));
                     if (!f.prog || !f.tab || !f.tab2 || !f.btn) bad.push('Tab 进度表和按钮 ' + JSON.stringify(f));
                 }
             } catch (e) { bad.push('异常 ' + e.message); } }
