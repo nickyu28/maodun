@@ -81,7 +81,7 @@
             IND_FERTS.goo = 3;
             IND_RECIPES.push(
                 { in: { goo: 2 }, out: { glue: 1 }, cls: 'smelt', minT: 80, time: 10 },   // 胶水：灶台、小熔炉、大窑都能熬（小熔炉只做"冶炼"这一类，所以归这类）
-                { in: { shroom: 1 }, out: { shroom_roast: 2 }, minT: 150, time: 15, burnT: 350 },   // 作者 11-20：烤蘑菇饱食 8 太低，提到 20（跟蘑菇汤一个档次），1 个蘑菇烤出 2 个
+                { in: { shroom: 1 }, out: { shroom_roast: 1 }, minT: 150, time: 15, burnT: 350 },   // 作者 11-20：烤蘑菇饱食 8 太低，提到 20（跟蘑菇汤一个档次），野外蘑菇多生成一倍，烤的份数不动
                 { in: { shroom: 2, water_boiled: 1 }, out: { shroom_soup: 1, bucket: 1 }, minT: 100, time: 20, burnT: 400 },   // 汤盛出来，桶还你
                 { in: { honey: 1 }, out: { sugar: 2 }, minT: 100, time: 10 }
             );
