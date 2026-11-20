@@ -15145,7 +15145,7 @@ async function enterExit(tab, key) {
             else { try {
                 const J = async (c) => JSON.parse(await T.eval(`JSON.stringify((function(){ ${c} })())`));
                 const r = await J(`indGoBase(null); let B = ind.base, o = {}; B.rule = 'hard'; cancelAnimationFrame(ind.raf); ind.raf = 0;
-                    o.node = !!IND_NODES.rutile && !!IND_NODES.sand_ti && IND_BIOMES.mountain.res.rutile > 0;
+                    o.node = !!IND_NODES.rutile && !!IND_NODES.sand_ti && IND_BIOMES.mountain.res.rutile > 0 && !!IND_NODE_COL.sand_ti;
                     let rec = function (inK, outK) { return IND_RECIPES.filter(function (q) { return q.in[inK] && q.out[outK]; })[0]; };
                     let a = rec('rutile', 'b_ticl4'), b = rec('b_ticl4', 'ingot_ti');
                     o.a = a ? a.in.b_cl2 + ':' + a.in.charcoal + ':' + a.minT : null; o.b = b ? b.in.sodium + ':' + (b.out.salt || 0) : null;
@@ -15156,10 +15156,10 @@ async function enterExit(tab, key) {
                     o.tank = make('tank_fuel', null, { ingot_al: 5, plastic: 2 }); o.cap = make('capsule', null, { ingot_al: 6, glass_plate: 4, plastic: 3 }); o.fair = make('fairing', null, { ingot_al: 4, plastic: 3 });
                     o.cold = make('cold_tank', 'tank_fuel', { tank_fuel: 1, glass_plate: 1 }); o.hut = make('house_hut', 'capsule', { capsule: 1, wood: 10 }); o.lid = make('pond_lid', 'fairing', { fairing: 1 }); o.car = make('veh_car', 'eng_kero_s', { steel: 8, wheel: 4, eng_kero_s: 1, seat: 1, chain: 2 });
                     o.tiHelm = make('helm_ti', null, { ingot_ti: 4 });
-                    o.rkt = ['eng_kero', 'eng_kero_s', 'eng_vac', 'eng_h2', 'tank_fuel', 'capsule', 'fairing'].every(function (k) { return IND_ITEMS_RAW[k].rkt; });
+                    o.nodeCol = Object.keys(IND_NODES).filter(function (k) { return !IND_NODE_COL[k] && !IND_ITEMS[k]; }); o.rkt = ['eng_kero', 'eng_kero_s', 'eng_vac', 'eng_h2', 'tank_fuel', 'capsule', 'fairing'].every(function (k) { return IND_ITEMS_RAW[k].rkt; });
                     o.heavy = IND_ITEMS_RAW.eng_kero_s.rkt.mass / IND_ITEMS_RAW.eng_kero.rkt.mass;
                     return o;`);
-                if (!r.node) bad.push('金红石在山地 ' + JSON.stringify(r));
+                if (!r.node || r.nodeCol.length) bad.push('金红石在山地、每种点都有颜色 ' + JSON.stringify(r));
                 if (r.a !== '2:1:800' || r.b !== '4:4') bad.push('两步烧：四氯化钛、钛锭副产盐 ' + JSON.stringify(r));
                 if (!(r.kero === 1 && r.keroS === 1 && r.vac === 1 && r.h2 === 1)) bad.push('四种发动机能做 ' + JSON.stringify(r));
                 if (!(r.tank === 1 && r.cap === 1 && r.fair === 1 && r.rkt)) bad.push('燃料罐舱体整流罩能做、带火箭数据 ' + JSON.stringify(r));

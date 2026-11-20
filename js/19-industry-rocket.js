@@ -18,7 +18,7 @@
         IND_ELEM_OF.ingot_ti = 22;
         // 矿：山地露头、山地河边的金红石砂（空手捡）
         Object.assign(IND_NODES, { rutile: { give: [1, 2], tool: 2 }, sand_ti: { give: [1, 1], tool: 0, out: 'rutile', name: '金红石砂' } });
-        IND_OUTCROP.rutile = 1; IND_BIOMES.mountain.res.rutile = 2;
+        IND_NODE_COL.sand_ti = 0xa1523f; IND_OUTCROP.rutile = 1; IND_BIOMES.mountain.res.rutile = 2;
         // 大窑里：金红石 + 氯气 + 木炭 → 四氯化钛；四氯化钛 + 钠 → 钛锭 + 盐
         IND_RECIPES.push(
             { in: { rutile: 2, b_cl2: 2, charcoal: 1 }, out: { b_ticl4: 1, bottle: 1 }, cls: 'chem', pri: true, minT: 800, time: 30, hard: true },
