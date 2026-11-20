@@ -13580,6 +13580,34 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND228')) {
+            // IND228 测试员 11-20 三条：背包面板里也有回收站、撤销条消失时说东西在回收站、死亡画面文字准、脚下的东西一次全捡
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ cancelAnimationFrame(ind.raf); indGoBase(null); let B = ind.base; B.rule = 'hard'; B.bin = []; ind.bag = { wood: 3 }; let fl = [], f0 = indFlash; indFlash = function (t) { fl.push(t); };
+                    indTrashDo('bag', 0); indPanelBag(); let t = document.getElementById('ind-panel').innerText; let hasBin = /回收站/.test(t) && /拿回/.test(t) && /木头/.test(t);
+                    ind.undo.until = Date.now() - 1; indUndoBar(); let said = /还在回收站里/.test(fl.join('|')); indFlash = f0; return { hasBin: hasBin, said: said }; })()`);
+                if (!r.hasBin) bad.push('背包面板里也有回收站和拿回 ' + JSON.stringify(r));
+                if (!r.said) bad.push('撤销条消失时说东西在回收站 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ground = []; ind.bag = {}; indPanelClose(); let n0 = 0;
+                    for (let i = 0; i < 9; i++) B.ground.push({ k: i % 2 ? 'wood' : 'stone', x: ind.p.x + 0.3 * i - 1, z: ind.p.z + 0.5 }); B.ground.push({ k: 'wood', x: ind.p.x + 40, z: ind.p.z });
+                    let near = indGroundNear().length; ind.aimT = 0; ind.pickT = 0; indHudUpdate(); let show = document.getElementById('ind-btn-pickall').style.display !== 'none';
+                    let ok = indPickAllNear(); return { near: near, show: show, ok: ok, left: B.ground.length, bag: (ind.bag.wood || 0) + (ind.bag.stone || 0) }; })()`);
+                if (!(r.near === 9 && r.show && r.ok && r.left === 1 && r.bag === 9)) bad.push('脚下 9 个一次全捡、远处的不动、按钮出现 ' + JSON.stringify(r));
+                r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; B.ground = []; ind.bag = { wood: 3, stone: 2 }; indDie('测试', '');
+                    let t = document.getElementById('ind-dead') ? document.getElementById('ind-dead').innerText : ''; let ok = /倒下的地方/.test(t) && /全捡/.test(t); indRespawn(); return { ok: ok, ground: ind.base.ground.length }; })()`);
+                if (!(r.ok && r.ground >= 2)) bad.push('死亡画面文字写准、散落的东西在 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND228 回收站在背包面板里、撤销条说去哪了、死亡画面文字准、脚下一次全捡', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND227')) {
             // IND227 分馏塔认出生的灶台当热源（测试员 11-20）：灶台烧到 400°C 以上、塔在 5 米内就出东西；灶台灭了或太远不出
             const bad = [];

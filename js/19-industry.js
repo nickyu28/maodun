@@ -1694,7 +1694,7 @@
             let d = document.createElement('div'); d.id = 'ind-dead';
             d.style.cssText = 'position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.85);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;text-align:center;padding:20px;';
             d.innerHTML = '<div style="font-size:44px;font-weight:bold;color:#ff5252;">' + cause + '</div>' + (detail ? '<div style="font-size:22px;margin-top:12px;">' + detail + '</div>' : '') +
-                '<div style="font-size:18px;margin-top:14px;color:#ccc;">' + (!lost ? '身上没带东西' : scattered ? '身上的东西散落在地上，回去捡' : '身上的东西都没了') + '</div>' +
+                '<div style="font-size:18px;margin-top:14px;color:#ccc;">' + (!lost ? '身上没带东西' : scattered ? '身上的东西散落在你倒下的地方，点回基地后就在脚下，点全捡一次拿完' : '身上的东西都没了') + '</div>' +
                 '<button onclick="indRespawn()" style="margin-top:26px;padding:12px 34px;font-size:20px;border:none;border-radius:8px;background:#fff;color:#222;cursor:pointer;">回基地</button>';
             document.body.appendChild(d);
             indSave();
@@ -2134,6 +2134,22 @@
             if (indBagAdd(o.k, 1) <= 0) { indFlash('背包满了'); return; }
             let G = ind.where === 'trip' ? (ind.tripGround || []) : ind.base.ground, i = G.indexOf(o); if (i >= 0) G.splice(i, 1);
             ind.itemDirty = true; indSave();
+        }
+        // 一次全捡（测试员 11-20：死后散落的 9 个东西要一个一个点）：脚下 3 米内的东西一起捡，背包满了就停，烫的没钳子不捡
+        function indGroundNear() { let G = ind.where === 'trip' ? (ind.tripGround || []) : ind.base.ground; return G.filter(function (o) { return Math.hypot(o.x - ind.p.x, o.z - ind.p.z) <= 3; }); }
+        function indPickAllNear() {
+            if (!ind || ind.over || ind.dead || ind.panel) return false;
+            let L = indGroundNear(), n = 0, full = false, hot = 0;
+            L.forEach(function (o) {
+                if (full) return;
+                if (indHard() && ckHotOf(o.k) && !ind.bag.tongs) { hot++; return; }
+                if (indBagAdd(o.k, 1) <= 0) { full = true; return; }
+                let G = ind.where === 'trip' ? (ind.tripGround || []) : ind.base.ground, i = G.indexOf(o); if (i >= 0) G.splice(i, 1);
+                n++;
+            });
+            if (n) { ind.itemDirty = true; indSave(); }
+            indFlash(n ? '捡了 ' + n + ' 个' + (full ? '，背包满了' : '') + (hot ? '，' + hot + ' 个太烫要钳子' : '') : (full ? '背包满了' : hot ? '太烫了，得有钳子才能捡' : '脚下没东西'));
+            return n > 0;
         }
         function indPlant(k) {
             let f = indFace(), x = ind.p.x + f.x * 1.4, z = ind.p.z + f.z * 1.4;
@@ -3577,7 +3593,7 @@
         function indPanelBag() {
             if (!ind) return;
             indPanelShow('bag', '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">背包　' + indSlots().length + ' / ' + indBagSlots() + ' 格</div><div id="ind-bag-zone">' + indBagChips() + '</div>' +
-                (function () { let hk = indSel(); return hk && IND_ITEMS[hk] && !IND_ITEMS[hk].dev && !IND_ITEMS[hk].gas ? '<div style="margin-top:6px;">手上：' + indName(hk) + '　' + indPutOpts('drop', 0, hk, '扔', '全扔', '扔') + '</div>' : ''; })() + '' + wdHandCraftHtml() + (function () { let L = ind.base.lost || {}, ks = Object.keys(L); return ks.length ? '<div style="margin-top:6px;color:#c62828;font-size:13px;">遗失物，认不出来的：' + ks.map(function (k) { return k + ' ×' + L[k]; }).join('，') + '</div>' : ''; })() + '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div><div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
+                (function () { let hk = indSel(); return hk && IND_ITEMS[hk] && !IND_ITEMS[hk].dev && !IND_ITEMS[hk].gas ? '<div style="margin-top:6px;">手上：' + indName(hk) + '　' + indPutOpts('drop', 0, hk, '扔', '全扔', '扔') + '</div>' : ''; })() + '' + wdHandCraftHtml() + (function () { let L = ind.base.lost || {}, ks = Object.keys(L); return ks.length ? '<div style="margin-top:6px;color:#c62828;font-size:13px;">遗失物，认不出来的：' + ks.map(function (k) { return k + ' ×' + L[k]; }).join('，') + '</div>' : ''; })() + '<div style="margin-top:6px;color:#888;font-size:13px;">Ctrl+Q：销毁手上那一格　点销毁后 5 秒内能撤销</div>' + indBinHtml() + '<div style="margin-top:8px;text-align:right;"><button style="' + IND_BTN + '" onclick="indPanelClose()">关上</button></div>');
         }
         // 背包格子换位置（任务 17）：背包存的是"种类 → 数量"，格子按种类放进来的先后排，所以换两格 = 换两种东西在里面的先后（存档格式不变）
         function indBagSwap(i, j) {
@@ -3787,7 +3803,7 @@
         function indTrashHand() { let SL = indSlots(), i = ind ? ind.selIdx : -1; if (!SL[i]) { indFlash('手上没东西'); return false; } return indTrashDo('bag', i); }   // Ctrl+Q 是自己按的快捷键，不弹确认，5 秒内能撤销
         function indUndoBar() {
             let U = ind && ind.undo, el = document.getElementById('ind-undo');
-            if (!U || Date.now() >= U.until) { if (el && el.parentNode) el.parentNode.removeChild(el); if (ind && U) ind.undo = null; return; }
+            if (!U || Date.now() >= U.until) { if (el && el.parentNode) el.parentNode.removeChild(el); if (ind && U) { ind.undo = null; indFlash(indName(U.k) + ' 还在回收站里，打开背包或箱子能拿回'); } return; }   // 撤销条消失时说一声东西在哪（测试员 11-20）
             if (!el) { el = document.createElement('div'); el.id = 'ind-undo'; el.style.cssText = 'position:fixed;left:50%;top:44px;transform:translateX(-50%);z-index:75;background:rgba(0,0,0,.8);color:#fff;font-family:"Microsoft YaHei",sans-serif;font-size:16px;padding:6px 10px 6px 16px;border-radius:18px;'; document.body.appendChild(el); }
             el.innerHTML = '销毁了 ' + indName(U.k) + ' × ' + U.n + '　<button id="ind-undo-btn" style="' + IND_BTN + 'background:#ffb300;color:#000;" onclick="indUndo()">撤销</button>';
             clearTimeout(indUndoBar.t); indUndoBar.t = setTimeout(indUndoBar, U.until - Date.now() + 20);
@@ -4045,7 +4061,7 @@
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
                 '<div style="display:flex;align-items:stretch;gap:4px;"><div id="ind-bag" style="flex:1;background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div><button id="ind-btn-bag2" style="' + IND_BTN + 'margin:0;font-size:15px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包　E</button></div>' +
-                '<div id="ind-actrow" style="margin-top:2px;transform-origin:50% 100%;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onpointerdown="indRightDown()" onpointerup="indRightUp()" onpointercancel="indRightUp()">右键</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下　Q</button><button id="ind-btn-ser" style="' + IND_BTN + 'display:none;background:#00838f;" onclick="srToggleAim()">接法</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子　V</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线　Esc</button>' +
+                '<div id="ind-actrow" style="margin-top:2px;transform-origin:50% 100%;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onpointerdown="indRightDown()" onpointerup="indRightUp()" onpointercancel="indRightUp()">右键</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下　Q</button><button id="ind-btn-pickall" style="' + IND_BTN + 'display:none;background:#2e7d32;" onclick="indPickAllNear()">全捡</button><button id="ind-btn-ser" style="' + IND_BTN + 'display:none;background:#00838f;" onclick="srToggleAim()">接法</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子　V</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线　Esc</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'jump\',true)" ontouchend="indHold(\'jump\',false)" onmousedown="indHold(\'jump\',true)" onmouseup="indHold(\'jump\',false)">跳</button>' +
                 '<button id="ind-btn-run" style="' + IND_BTN + '" onclick="indRunToggle()">跑　Shift</button></div></div>';
             document.body.appendChild(d);
@@ -4063,6 +4079,7 @@
             wdCompassTick(); if (R.panel === 'map') wdMapDraw();   // 指南针、地图（19-industry-world.js）
             { let rb = document.getElementById('ind-btn-run'); if (rb) { rb.textContent = R.runLock ? '跑　开' : '跑　Shift'; rb.style.background = R.runLock ? '#2e7d32' : '#455a64'; }
               if (!R.aimT || R.t - R.aimT > 0.2 || R.t < R.aimT) { R.aimT = R.t; if (typeof indTouchHud === 'function') indTouchHud(); let ab = document.getElementById('ind-btn-act'); if (ab) { let on = false; try { on = !R.panel && !!indAim(); } catch (e) { } ab.style.background = on ? '#2e7d32' : '#455a64'; } }
+              if (!R.pickT || R.t - R.pickT > 0.3 || R.t < R.pickT) { R.pickT = R.t; let pb = document.getElementById('ind-btn-pickall'); if (pb) { let n = 0; try { n = indGroundNear().length; } catch (e) { } pb.style.display = n >= 2 ? '' : 'none'; } }
               document.body.classList.toggle('ind-touch', gState.control === 'pad'); }   // 靠近能动的东西时左键动作亮绿；触屏时按钮放大，跟着手柄大小和透明度设置
             let kb2 = document.getElementById('ind-btn-kick'); if (kb2) kb2.style.display = R.base.rule === 'hard' && R.where === 'base' ? '' : 'none';
             if (R.panel === 'bench') { let sig = JSON.stringify(R.bag); if (sig !== R.benchSig) { R.benchSig = sig; indPanelBench(); } }   // 任务 103：背包变了，工作台的排序跟着变
