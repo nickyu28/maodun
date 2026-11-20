@@ -3735,7 +3735,11 @@ async function enterExit(tab, key) {
             if (!(await until(M, `document.getElementById('pouch-cells').style.display === 'none'`, 3000))) bad.push('触屏：没腰包也有小格');
             await M.eval(`(function(){ let S = function (n) { return n ? Object.assign({}, shopItems[n], { isShop: true }) : null; }; gState.inv = [S('鱼叉'), null, null, Object.assign(S('腰包'), { bag: [S('医疗包'), null, S('肾上腺素')] }), null, null]; selectSlot(0); updateHUD(); })(); true;`);
             if (!(await until(M, `document.getElementById('pouch-cells').style.display === 'flex'`, 3000))) bad.push('触屏：有腰包没出小格');
-            await until(M, `Array.prototype.slice.call(document.querySelectorAll('#pouch-cells .pouch-cell')).every(function (c) { const r = c.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!(e && e.closest('.pouch-cell')); })`, 15000);   // 小格中心点最上层得是小格本身
+            // 机器慢时提示卡片会晚一点才弹出来盖住小格：等的时候遇到弹窗就关掉，直到小格都点得到
+            for (let i = 0; i < 50; i++) {
+                if (await M.eval(`Array.prototype.slice.call(document.querySelectorAll('#pouch-cells .pouch-cell')).every(function (c) { const r = c.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!(e && e.closest('.pouch-cell')); })`)) break;
+                await M.eval(`${HIDE} true;`); await W(300);
+            }
             const cg = JSON.parse(await M.eval(`JSON.stringify((function(){ const cs = Array.prototype.slice.call(document.querySelectorAll('#pouch-cells .pouch-cell')), hb = document.getElementById('hud-hotbar-container').getBoundingClientRect();
                 return { n: cs.length, sizes: cs.map(function (c) { const r = c.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }), txt: cs.map(function (c) { return c.innerText.trim(); }), side: cs[0].getBoundingClientRect().left >= hb.right - 2,
                     free: cs.map(function (c) { const r = c.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!(e && e.closest('.pouch-cell')); }), cover: cs.map(function (c) { const r = c.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return e ? (e.id || e.className || e.tagName) : null; }) }; })())`));
