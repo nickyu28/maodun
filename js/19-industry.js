@@ -1734,7 +1734,8 @@
             if (R.where === 'base' && R.base.houses.length) indHouseCollide(R.p);
             if (R.where === 'base') hmCollide(R.p);   // 石墙挡路（19-industry-home.js）
             let gy = R.cave ? cvFloorY(R.cave, R.p.z - R.cave.z) : indGround(R.p.x, R.p.z);   // 洞里走洞底（19-industry-cave.js）
-            if (k.jump && R.p.y <= gy + 0.001 && !blocked && !R.onRaft) R.p.vy = 9;
+            if (R.jumpQ > 0) R.jumpQ -= dt;
+            if ((k.jump || R.jumpQ > 0) && R.p.y <= gy + 0.001 && !blocked && !R.onRaft) { R.p.vy = 9; R.jumpQ = 0; }
             R.p.vy -= 25 * dt; R.p.y += R.p.vy * dt;
             if (R.p.y < gy) { R.p.y = gy; R.p.vy = 0; }
             R.me.position.set(R.p.x, R.p.y, R.p.z);
@@ -3948,7 +3949,7 @@
         function indUnbindKeys() { window.removeEventListener('keydown', indKeyDown); window.removeEventListener('keyup', indKeyUp); window.removeEventListener('wheel', indWheel); }
         // 鼠标滚轮：只在快捷栏 10 格里转（任务 17）；开着面板不转
         function indWheel(e) { if (!ind || ind.over || ind.paused || ind.panel || !e.deltaY) return; let n = Math.max(1, Math.min(IND_HOTBAR, indSlots().length)); ind.selIdx = ((Math.min(ind.selIdx, n - 1) + (e.deltaY > 0 ? 1 : -1)) % n + n) % n; }
-        function indHold(dir, on) { if (ind) ind.k[dir] = !!on; }
+        function indHold(dir, on) { if (!ind) return; ind.k[dir] = !!on; if (dir === 'jump' && on) ind.jumpQ = 0.15; }   // 触屏点一下很短，按下后至少算按着 0.15 秒，不然一帧没赶上就没跳
         function indBuildHud() {
             let n = document.createElement('div'); n.id = 'ind-night';
             n.style.cssText = 'position:fixed;inset:0;z-index:39;pointer-events:none;background:#0a1030;opacity:0;';

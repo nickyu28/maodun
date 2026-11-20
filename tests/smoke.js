@@ -13956,11 +13956,11 @@ async function enterExit(tab, key) {
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 let r = await J(`{ card: !!document.getElementById('tut-cards'), open: !!ind.tutOpen, txt: (document.getElementById('tut-cards') || { innerText: '' }).innerText }`);
                 if (!(r.card && r.open && !/[（）()]/.test(r.txt))) bad.push('新号第一次进工业出卡片、不用括号 ' + JSON.stringify(r));
-                r = await J(`(function(){ let n = 0; while (document.getElementById('tut-next') && n < 10) { document.getElementById('tut-next').click(); n++; } return { n: n, gone: !document.getElementById('tut-cards'), seen: gState.tutSeen && gState.tutSeen.industry === true, open: !!ind.tutOpen, rule: !!document.querySelector('#sys-modal:not(.hidden)') }; })()`);
+                r = await J(`(function(){ let n = 0; while (document.querySelector('#tut-cards .tc-next') && n < 10) { document.querySelector('#tut-cards .tc-next').click(); n++; } return { n: n, gone: !document.getElementById('tut-cards'), seen: gState.tutSeen && gState.tutSeen.industry === true, open: !!ind.tutOpen, rule: !!document.querySelector('#sys-modal:not(.hidden)') }; })()`);
                 if (!(r.n === 5 && r.gone && r.seen && !r.open)) bad.push('点完 5 张卡片关掉、记成看过 ' + JSON.stringify(r));
                 r = await J(`(function(){ gState.tutSeen = {}; let a = indTutMaybe({ rule: 'hard', trips: 0 }), b = gState.tutSeen.industry === true, c = !document.getElementById('tut-cards'); gState.tutSeen = {}; let d = indTutMaybe({ rule: null, trips: 3 }); let e = gState.tutSeen.industry === true; gState.tutSeen = { industry: true }; let f = indTutMaybe({ rule: null, trips: 0 }); return [a, b, c, d, e, f]; })()`);
                 if (r.join() !== 'false,true,true,false,true,false') bad.push('老存档不教、看过的不再教 ' + r.join());
-                r = await J(`(function(){ tutReplay('industry'); let a = !!document.getElementById('tut-cards'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); let b = !document.getElementById('tut-cards'); tutReplay('industry'); document.getElementById('tut-skip').click(); let c = !document.getElementById('tut-cards'); tutReplay('lab'); let d = !!document.getElementById('tut-cards') && document.getElementById('tut-cards').innerText.indexOf('1 / 3') >= 0; document.getElementById('tut-skip').click(); return [a, b, c, d]; })()`);
+                r = await J(`(function(){ tutReplay('industry'); let a = !!document.getElementById('tut-cards'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); let b = !document.getElementById('tut-cards'); tutReplay('industry'); document.querySelector('#tut-cards .tc-skip').click(); let c = !document.getElementById('tut-cards'); tutReplay('lab'); let d = !!document.getElementById('tut-cards') && document.getElementById('tut-cards').innerText.indexOf('1 / 3') >= 0; document.querySelector('#tut-cards .tc-skip').click(); return [a, b, c, d]; })()`);
                 if (r.join() !== 'true,true,true,true') bad.push('重播能出、Esc 和跳过能关、实验室的教程 ' + r.join());
                 r = await J(`(function(){ indPause(); let b = !!document.getElementById('ind-pause-tut'); indResume(); return b; })()`);
                 if (!r) bad.push('暂停菜单里要有重播教程');
@@ -15137,6 +15137,59 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
+        if (want('IND216')) {
+            // IND216 触屏猫盾工业（作者 11-20 严重 bug）：用真实触屏事件，进工业后拖右半屏转视角、点跳（短点也跳）、按住跑、点左键动作都有反应；新手教程有"退出教程"按钮，点一下关掉并记成看过，Esc 也能关
+            const bad = [];
+            const M = await openTab(chrome, url, { mobile: true, query: 'hcdebug=1' });
+            try {
+                await M.eval(`selectGameMode('industry'); lobbyPrimaryStart(); true;`);
+                if (!(await until(M, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 20000))) bad.push('触屏进不去');
+                else {
+                    await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
+                    await W(1500); await M.eval(`let m = document.getElementById('sys-modal'); if (m) m.remove(); ind.k = {}; ind.paused = false; true;`);
+                    const J = async (e) => JSON.parse(await M.eval(`JSON.stringify(${e})`));
+                    const pos = async (t) => J(`(function(){ let e = [...document.querySelectorAll('#ind-hud button')].find(function (x) { return x.textContent.indexOf(${JSON.stringify(t)}) === 0 && x.offsetParent; }); if (!e) return null; let r = e.getBoundingClientRect(), h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return [r.x + r.width / 2, r.y + r.height / 2, h === e]; })()`);
+                    const ts = (x, y, id) => M.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: id || 1 }] });
+                    const tm = (x, y, id) => M.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y, id: id || 1 }] });
+                    const te = () => M.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+                    const pj = await pos('跳'), pr = await pos('跑'), pa = await pos('左键动作');
+                    if (!(pj && pj[2] && pr && pr[2] && pa && pa[2])) bad.push('跳、跑、左键动作按钮没画出来或被盖住 ' + JSON.stringify([pj, pr, pa]));
+                    else {
+                        // 短点一下也要跳
+                        await M.eval(`window.__maxY = 0; setInterval(function () { if (ind) window.__maxY = Math.max(window.__maxY, ind.p.y); }, 16); true;`);
+                        await ts(pj[0], pj[1]); await W(30); await te(); await W(700);
+                        const y1 = await M.eval(`window.__maxY`);
+                        if (!(y1 > 0.3)) bad.push('触屏点一下跳没跳起来 ' + y1);
+                        await ts(pr[0], pr[1]); await W(100); const kr = await J(`ind.k.run === true`); await te(); await W(100);
+                        if (!kr) bad.push('按住跑没反应');
+                        await M.eval(`window.__act = 0; let o = indAction; indAction = function () { window.__act++; return o.apply(this, arguments); }; true;`);
+                        await ts(pa[0], pa[1]); await W(60); await te(); await W(150);
+                        if (!(await M.eval(`window.__act >= 1`))) bad.push('点左键动作没反应');
+                        const yaw0 = await M.eval(`camera.rotation.y`), sx = 1180 * 0.75, sy = 820 * 0.4;
+                        await ts(sx, sy, 2); for (let i = 1; i <= 10; i++) { await tm(sx + i * 20, sy, 2); await W(20); } await te(); await W(100);
+                        const yaw1 = await M.eval(`camera.rotation.y`);
+                        if (!(Math.abs(yaw1 - yaw0) > 0.1)) bad.push('触屏拖右半屏转不了视角 ' + yaw0 + ' → ' + yaw1);
+                    }
+                    // 新手教程：退出教程按钮和 Esc
+                    await M.eval(`gState.tutSeen = {}; indTutPlay(); true;`);
+                    const tb = await J(`(function(){ let e = document.querySelector('#tut-cards .tc-skip'); if (!e) return null; let r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2, e.textContent]; })()`);
+                    if (!tb || tb[2] !== '退出教程') bad.push('教程没有退出教程按钮 ' + JSON.stringify(tb));
+                    else {
+                        await ts(tb[0], tb[1]); await W(40); await te(); await W(300);
+                        const o = await J(`({ gone: !document.getElementById('tut-cards'), seen: !!(gState.tutSeen && gState.tutSeen.industry), open: !!ind.tutOpen })`);
+                        if (!(o.gone && o.seen && !o.open)) bad.push('点退出教程要关掉并记成看过 ' + JSON.stringify(o));
+                    }
+                    await M.eval(`gState.tutSeen = {}; indTutPlay(); true;`);
+                    await M.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); true;`); await W(200);
+                    const o2 = await J(`({ gone: !document.getElementById('tut-cards'), seen: !!(gState.tutSeen && gState.tutSeen.industry) })`);
+                    if (!(o2.gone && o2.seen)) bad.push('Esc 要能关教程 ' + JSON.stringify(o2));
+                }
+            } catch (e) { bad.push('异常 ' + e.message); }
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('IND216 触屏猫盾工业：拖屏转视角、点跳、按住跑、点左键动作、教程退出按钮和 Esc', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (want('IND215')) {

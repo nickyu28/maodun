@@ -56,6 +56,7 @@
             if (dodge && !dodge.over) return true;
             if (hub) return true;
             if (lab && !lab.over) return true;   // 实验室
+            if (typeof ind !== 'undefined' && ind && !ind.over && !ind.loading) return true;   // 猫盾工业：之前漏了，触屏进去转不了视角（作者 11-20）
             if (cake && !cake.over) return true;
             if (escapeRoom && !escapeRoom.over) return true;   // 合作密室之前也漏了，平板上转不了视角
             if (park && !park.over) return true;
