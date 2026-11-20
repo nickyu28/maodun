@@ -15170,6 +15170,66 @@ async function enterExit(tab, key) {
             report('IND217 存档导出导入接猫盾工业：登记、导出、导入、版本、不写回旧档', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND218')) {
+            // IND218 触屏只有点和按钮（作者 11-20）：键盘上的每个动作都有屏幕按钮，用真实触屏事件点：配方 C、背包 E、地图 M、倍速 Z、元素表 T、进度 Tab、成就 H、暂停 P、跳 空格、跑 Shift（点一下开关）、左键动作 F、右键 R（按住也行）、放下 Q、踹炉子 V、快捷栏 1～0
+            const bad = [];
+            const M = await openTab(chrome, url, { mobile: true, query: 'hcdebug=1' });
+            try {
+                await M.eval(`selectGameMode('industry'); lobbyPrimaryStart(); true;`);
+                if (!(await until(M, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 20000))) bad.push('触屏进不去');
+                else {
+                    await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
+                    await W(1500); await M.eval(`let m = document.getElementById('sys-modal'); if (m) m.remove(); ind.k = {}; ind.paused = false; ind.base.rule = 'hard'; indHudUpdate(); true;`);
+                    const J = async (e) => JSON.parse(await M.eval(`JSON.stringify(${e})`));
+                    const pos = async (sel) => J(`(function(){ let e = document.querySelector(${JSON.stringify(sel)}); if (!e || !e.offsetParent) return null; let r = e.getBoundingClientRect(), h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return [r.x + r.width / 2, r.y + r.height / 2, h === e || e.contains(h), r.width, r.height]; })()`);
+                    const tap = async (p, ms) => { await M.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p[0], y: p[1], id: 1 }] }); await W(ms || 60); await M.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await W(250); };
+                    const btn = (id) => '#' + id;
+                    const need = ['ind-btn-book', 'ind-btn-bag', 'ind-btn-map', 'ind-btn-speed', 'ind-btn-elems', 'ind-btn-prog', 'ind-btn-ach', 'ind-btn-act', 'ind-btn-use', 'ind-btn-put', 'ind-btn-run', 'ind-btn-kick'];
+                    const P = {}; for (const id of need) P[id] = await pos(btn(id));
+                    const miss = need.filter((id) => !P[id] || !P[id][2] || P[id][3] < 40 || P[id][4] < 38);
+                    if (miss.length) bad.push('这些按钮没画出来、被盖住或小于 40 像素：' + miss.join('、') + ' ' + JSON.stringify(miss.map((id) => P[id])));
+                    const pj = await J(`(function(){ let e = [...document.querySelectorAll('#ind-hud button')].find(function (x) { return x.textContent.indexOf('跳') === 0; }); let r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
+                    const pp = await J(`(function(){ let e = [...document.querySelectorAll('#ind-hud button')].find(function (x) { return x.textContent.indexOf('暂停') === 0; }); if (!e) return null; let r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
+                    const st = async (e) => J(e);
+                    // 面板类：点一下开
+                    for (const [id, panel] of [['ind-btn-book', 'book'], ['ind-btn-bag', 'bag'], ['ind-btn-elems', 'elems'], ['ind-btn-ach', 'ach'], ['ind-btn-prog', 'prog']]) {
+                        if (!P[id]) continue; await tap(P[id]); const o = await st(`ind.panel`); if (o !== panel) bad.push('点 ' + id + ' 要开 ' + panel + '，现在是 ' + o);
+                        await M.eval(`indCloseAll(); true;`); await W(100);
+                    }
+                    // 倍速
+                    if (P['ind-btn-speed']) { await tap(P['ind-btn-speed']); const sp = await st(`ind.speed`); await M.eval(`ind.speed = 1; spBtn(); true;`); if (sp !== 2) bad.push('点倍速要变 ×2 ' + sp); }
+                    // 跑
+                    if (P['ind-btn-run']) { await tap(P['ind-btn-run']); const a = await st(`ind.runLock === true && /开/.test(document.getElementById('ind-btn-run').textContent)`); await tap(P['ind-btn-run']); const b = await st(`ind.runLock === false`); if (!a || !b) bad.push('跑要点一下开、再点一下关并写出开 ' + a + ' ' + b); }
+                    // 左键动作、放下、右键
+                    await M.eval(`window.__n = { act: 0, drop: 0, rd: 0, ru: 0, kick: 0 }; let a = indAction; indAction = function () { window.__n.act++; return a.apply(this, arguments); }; let d = indDrop; indDrop = function () { window.__n.drop++; return d.apply(this, arguments); }; let rd = indRightDown; indRightDown = function () { window.__n.rd++; return rd.apply(this, arguments); }; let ru = indRightUp; indRightUp = function () { window.__n.ru++; return ru.apply(this, arguments); }; let k = ckKick; ckKick = function () { window.__n.kick++; return k.apply(this, arguments); }; true;`);
+                    if (P['ind-btn-act']) await tap(P['ind-btn-act']);
+                    if (P['ind-btn-put']) await tap(P['ind-btn-put']);
+                    if (P['ind-btn-use']) await tap(P['ind-btn-use'], 400);   // 按住 0.4 秒再松：按下和松开都要走到
+                    if (P['ind-btn-kick']) await tap(P['ind-btn-kick']);
+                    const n = await J(`window.__n`);
+                    if (n.act < 1 || n.drop < 1) bad.push('左键动作、放下按钮没反应 ' + JSON.stringify(n));
+                    if (n.rd < 1 || n.ru < 1) bad.push('右键按钮要按下和松开都走到（按住拉风箱、摇发电机、宰动物才行）' + JSON.stringify(n));
+                    if (n.kick < 1) bad.push('踹炉子按钮没反应 ' + JSON.stringify(n));
+                    // 暂停
+                    if (pp) { await tap(pp); const pz = await st(`!!ind.paused`); await M.eval(`indResume(); true;`); if (!pz) bad.push('点暂停没暂停'); } else bad.push('没有暂停按钮');
+                    // 快捷栏：点第 2 格
+                    await M.eval(`ind.bag = { wood: 3, stone: 3, coal: 3 }; ind.selIdx = 0; indHudUpdate(); true;`); await W(300);
+                    const hp = await pos('.ind-hot:nth-child(2)');
+                    if (!hp) bad.push('快捷栏没有第 2 格'); else { await tap(hp); const si = await st(`ind.selIdx`); if (si !== 1) bad.push('点快捷栏第 2 格要选中 ' + si); }
+                    // 靠近能动的东西时左键动作亮：站到灶台前对着它
+                    await M.eval(`let St = IND_BASE_ST.stove; indTeleport(St.x, St.z + 2.4); indLookAt(St.x, St.z); true;`);
+                    await W(500);
+                    const lit = await J(`(function(){ ind.aimT = 0; indHudUpdate(); return document.getElementById('ind-btn-act').style.background; })()`);
+                    if (!/rgb\(46, 125, 50\)|#2e7d32/.test(lit)) bad.push('对着灶台左键动作要亮绿 ' + lit);
+                    const unlit = await J(`(function(){ indLookAt(ind.p.x, ind.p.z + 50); ind.aimT = 0; indHudUpdate(); return document.getElementById('ind-btn-act').style.background; })()`);
+                    if (/rgb\(46, 125, 50\)|#2e7d32/.test(unlit)) bad.push('对着空地左键动作不该亮 ' + unlit);
+                }
+            } catch (e) { bad.push('异常 ' + e.message); }
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('IND218 触屏按钮齐全：键盘每个动作都有按钮，真实触屏点得动，跑点一下开关，右键能按住，对着东西左键动作亮', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND216')) {
             // IND216 触屏猫盾工业（作者 11-20 严重 bug）：用真实触屏事件，进工业后拖右半屏转视角、点跳（短点也跳）、按住跑、点左键动作都有反应；新手教程有"退出教程"按钮，点一下关掉并记成看过，Esc 也能关
             const bad = [];
@@ -15193,8 +15253,9 @@ async function enterExit(tab, key) {
                         await ts(pj[0], pj[1]); await W(30); await te(); await W(700);
                         const y1 = await M.eval(`window.__maxY`);
                         if (!(y1 > 0.3)) bad.push('触屏点一下跳没跳起来 ' + y1);
-                        await ts(pr[0], pr[1]); await W(100); const kr = await J(`ind.k.run === true`); await te(); await W(100);
-                        if (!kr) bad.push('按住跑没反应');
+                        await ts(pr[0], pr[1]); await W(40); await te(); await W(150); const kr = await J(`ind.runLock === true`);
+                        await ts(pr[0], pr[1]); await W(40); await te(); await W(150); const kr2 = await J(`ind.runLock === false`);
+                        if (!kr || !kr2) bad.push('点一下跑开、再点一下关 ' + kr + ' ' + kr2);
                         await M.eval(`window.__act = 0; let o = indAction; indAction = function () { window.__act++; return o.apply(this, arguments); }; true;`);
                         await ts(pa[0], pa[1]); await W(60); await te(); await W(150);
                         if (!(await M.eval(`window.__act >= 1`))) bad.push('点左键动作没反应');
@@ -15220,7 +15281,7 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); }
             if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
             await M.close();
-            report('IND216 触屏猫盾工业：拖屏转视角、点跳、按住跑、点左键动作、教程退出按钮和 Esc', bad.length === 0, bad.slice(0, 8).join(' / '));
+            report('IND216 触屏猫盾工业：拖屏转视角、点跳、点一下切换跑、点左键动作、教程退出按钮和 Esc', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (want('IND215')) {
