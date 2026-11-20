@@ -806,6 +806,29 @@ async function enterExit(tab, key) {
             report('M4 超燃角色熟练度：记场数/胜场；赢 10 场熟手称号、30 场金环外观、100 场大师称号；存档带着', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('CV1')) {
+            // CV1：3D 画布跟着页面实际大小走：窗口大小变了、可视区域和 innerHeight 对不上时，画布也跟着变，不留一片灰
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(async function(){ let c = renderer.domElement, out = {};
+                let fit = function () { let r = c.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), c.width, c.height, Math.round(renderer.getPixelRatio() * 100)]; };
+                out.a = fit();
+                // 模拟平板：页面实际高度和 innerHeight 差一截（把画布的 CSS 高度改成别的，看它能不能自己量回来）
+                c.style.height = '60vh'; await new Promise(function (r) { setTimeout(r, 1300); });
+                out.b = fit(); out.fix = c.style.height === '';
+                // 窗口变了
+                window.dispatchEvent(new Event('resize')); await new Promise(function (r) { setTimeout(r, 100); });
+                out.vw = window.innerWidth; out.vh = window.innerHeight; out.asp = Math.abs(camera.aspect - c.clientWidth / c.clientHeight) < 0.01;
+                return JSON.stringify(out); })()`));
+            if (r.a[0] !== r.vw || r.a[1] !== r.vh) bad.push('一开始画布不是满屏 ' + JSON.stringify(r));
+            if (r.b[1] !== r.vh || !r.fix) bad.push('画布被改小后没自己恢复 ' + JSON.stringify(r));
+            if (Math.abs(r.b[2] - Math.round(r.b[0] * r.b[4] / 100)) > 2) bad.push('画布像素和显示大小对不上 ' + JSON.stringify(r));
+            if (!r.asp) bad.push('相机比例没跟着变 ' + JSON.stringify(r));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('CV1 3D 画布大小：满屏、被改小自己恢复、像素跟着显示大小、相机比例对', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('SP1')) {
             // SP1：存档导出导入（换设备）：打包能原样导回；别人的文字、旧版本、坏文字拒绝；同名要先问；别的存档能接进来；设置页有四个按钮
             const bad = [];
