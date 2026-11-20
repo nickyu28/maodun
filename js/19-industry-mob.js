@@ -71,7 +71,7 @@
                 goo: { name: '黏液', col: 0x69f0ae, fuel: 80, use: '烧 80，撒农田肥料，熬胶水' },
                 glue: { name: '胶水', col: 0xfff9c4, use: '修断了的木头和石头工具' },
                 shroom: { name: '蘑菇', col: 0xd7ccc8, use: '灶台烤熟能吃；2 个加一桶开水煮蘑菇汤' },
-                shroom_roast: { name: '烤蘑菇', col: 0x8d6e63, eat: { f: 8 } },
+                shroom_roast: { name: '烤蘑菇', col: 0x8d6e63, eat: { f: 20 } },
                 shroom_soup: { name: '蘑菇汤', col: 0xbcaaa4, eat: { f: 20, w: 10, hot: 1 } },
                 shroom_bad: { name: '毒蘑菇', col: 0xe53935, eat: { f: 2 }, use: '吃了中毒，加刀给野猪下毒' },
                 fluff: { name: '云絮', col: 0xffffff, eat: { f: 3 }, use: '吃了饱食 +3，右键作物浇一次水' },
@@ -81,7 +81,7 @@
             IND_FERTS.goo = 3;
             IND_RECIPES.push(
                 { in: { goo: 2 }, out: { glue: 1 }, cls: 'smelt', minT: 80, time: 10 },   // 胶水：灶台、小熔炉、大窑都能熬（小熔炉只做"冶炼"这一类，所以归这类）
-                { in: { shroom: 1 }, out: { shroom_roast: 1 }, minT: 150, time: 15, burnT: 350 },
+                { in: { shroom: 1 }, out: { shroom_roast: 2 }, minT: 150, time: 15, burnT: 350 },   // 作者 11-20：烤蘑菇饱食 8 太低，提到 20（跟蘑菇汤一个档次），1 个蘑菇烤出 2 个
                 { in: { shroom: 2, water_boiled: 1 }, out: { shroom_soup: 1, bucket: 1 }, minT: 100, time: 20, burnT: 400 },   // 汤盛出来，桶还你
                 { in: { honey: 1 }, out: { sugar: 2 }, minT: 100, time: 10 }
             );

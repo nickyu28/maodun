@@ -13580,6 +13580,22 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND226')) {
+            // IND226 烤蘑菇（作者 11-20）：饱食 +20（跟蘑菇汤一个档次），1 个蘑菇烤出 2 个
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const r = JSON.parse(await T.eval(`JSON.stringify((function(){ let rc = IND_RECIPES.filter(function (q) { return q.in.shroom === 1 && q.out.shroom_roast; })[0]; return { f: IND_ITEMS.shroom_roast.eat.f, soup: IND_ITEMS.shroom_soup ? IND_ITEMS.shroom_soup.eat.f : null, n: rc ? rc.out.shroom_roast : 0 }; })())`));
+                if (r.f !== 20 || r.n !== 2) bad.push('烤蘑菇饱食 20、1 个蘑菇烤出 2 个 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND226 烤蘑菇饱食 +20，一个蘑菇烤出 2 个', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND225')) {
             // IND225 炉子放入列表只显示有用的（作者 11-20）：配方原料、煤木炭焦炭、模具、能熔的锭才列；工具、食物、衣服不出现（不是灰的）；没有有用的写一句短话；新加配方自动跟着变
             const bad = [];
