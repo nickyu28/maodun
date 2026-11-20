@@ -15084,6 +15084,30 @@ async function enterExit(tab, key) {
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND212')) {
+            // IND212 耐火黏土和普通黏土看着不一样：颜色、写的字都不同，也不跟耐火模具坯撞；锭、矿、烫锭、桶、粉末里没有两样长得一模一样
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (c) => JSON.parse(await T.eval(`JSON.stringify((function(){ ${c} })())`));
+                const r = await J(`let m = {}, o = {}; Object.keys(IND_ITEMS).forEach(function (k) { try { indIcon(k, 32); } catch (e) { } let v = IC_META[k]; if (v) (m[v] = m[v] || []).push(k); });
+                    o.clay = IC_META.clay; o.fire = IC_META.clay_fire; o.mold = IC_META.mold_knife_f_raw;
+                    o.dup = Object.keys(m).filter(function (v) { return m[v].length > 1 && /\\|(ore|ingot|hot|bucket)\\|/.test(v); }).map(function (v) { return v + ':' + m[v].join(','); });
+                    o.txt = [IND_ITEMS.clay.use || '', IND_ITEMS.clay_fire.use || ''];
+                    return o;`);
+                if (!r.clay || !r.fire || r.clay === r.fire) bad.push('黏土和耐火黏土图标一样 ' + JSON.stringify(r));
+                if (r.fire === r.mold) bad.push('耐火黏土和耐火模具坯撞了 ' + JSON.stringify(r));
+                if (r.clay.split('|')[0] === r.fire.split('|')[0]) bad.push('颜色要不同 ' + JSON.stringify(r));
+                if (r.dup.length) bad.push('长得一模一样 ' + r.dup.join(' / '));
+                if (!/浅灰白/.test(r.txt[1])) bad.push('说明写浅灰白色 ' + JSON.stringify(r.txt));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND212 耐火黏土和黏土图标颜色字都不同，锭矿桶没有一模一样的', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND211')) {
             // IND211 炉温越高做得越快：刚到最低温度是 ×1，高 200°C 是 ×2，最多 ×3；温度不到不走；烧焦照旧按秒算
             const bad = [];

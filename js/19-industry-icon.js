@@ -33,7 +33,18 @@
             let txt = function (str, x, y, px, c) { g.font = 'bold ' + Math.max(7, Math.round(px * t)) + 'px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; IC_TXT[str] = 1; IC_LAST = str; g.lineWidth = 2 * t; g.strokeStyle = 'rgba(0,0,0,.65)'; g.strokeText(str, x, y); g.fillStyle = c || '#fff'; g.fillText(str, x, y); };
             g.lineJoin = 'round'; g.lineWidth = 1.5 * t; g.strokeStyle = '#263238';
             let suffix = k.replace(/^(ore|ingot|hot)_/, '').replace(/@.*/, '');
-            if (kind === 'ore') {
+            if (k === 'clay' || k === 'clay_fire') {   // 黏土是一团棕灰的泥；耐火黏土是浅灰白的块，带淡黄斑和细纹，字也不同（作者 11-19）
+                let fire = k === 'clay_fire';
+                g.fillStyle = col; g.beginPath(); g.moveTo(4 * t, 22 * t); g.quadraticCurveTo(3 * t, 10 * t, 14 * t, 8 * t); g.quadraticCurveTo(26 * t, 5 * t, 28 * t, 16 * t); g.quadraticCurveTo(30 * t, 26 * t, 16 * t, 27 * t); g.quadraticCurveTo(6 * t, 28 * t, 4 * t, 22 * t); g.closePath(); g.fill(); g.stroke();
+                if (fire) {
+                    g.fillStyle = 'rgba(244,224,140,.75)'; g.beginPath(); g.ellipse(21 * t, 12 * t, 5 * t, 3.5 * t, 0.4, 0, 7); g.fill();
+                    g.strokeStyle = 'rgba(90,90,90,.45)'; g.lineWidth = 0.8 * t; for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo((7 + i * 5) * t, 11 * t); g.lineTo((6 + i * 5) * t, 24 * t); g.stroke(); }
+                    txt('耐', 16 * t, 19 * t, 12);
+                } else {
+                    g.fillStyle = 'rgba(0,0,0,.14)'; g.beginPath(); g.ellipse(13 * t, 21 * t, 7 * t, 3 * t, 0, 0, 7); g.fill();
+                    txt('黏', 16 * t, 17 * t, 12);
+                }
+            } else if (kind === 'ore') {
                 g.fillStyle = col; g.beginPath(); g.moveTo(4 * t, 22 * t); g.lineTo(8 * t, 9 * t); g.lineTo(17 * t, 5 * t); g.lineTo(27 * t, 11 * t); g.lineTo(28 * t, 23 * t); g.lineTo(16 * t, 28 * t); g.closePath(); g.fill(); g.stroke();
                 g.fillStyle = 'rgba(255,255,255,.35)'; for (let i = 0; i < 4; i++) { g.fillRect((8 + (icHash(k + i) % 14)) * t, (9 + (icHash(k + 'y' + i) % 12)) * t, 3 * t, 3 * t); }
                 txt(IC_SYM[suffix] || icZh(k), 16 * t, 18 * t, 14);
