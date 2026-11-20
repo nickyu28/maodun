@@ -30,7 +30,7 @@
             for (let i = 0; i < n; i++) {
                 let p = indRand() * tot, key = ks[0]; for (let j = 0; j < ks.length; j++) { p -= W[ks[j]]; if (p <= 0) { key = ks[j]; break; } }
                 let m = 10 + Math.floor(indRand() * 21), d = 12 + indRand() * (CV.len - 20);
-                ind.nodes.push({ key: key, cave: c.i, out: true, x: c.cx + d, z: c.cz + (indRand() * 2 - 1) * (CV.w - 3), y: CV.floor, n: m, n0: m, seed: IND_SEED_KINDS[0], dead: false });
+                ind.nodes.push({ key: key, cave: c.i, out: true, x: c.x + (indRand() * 2 - 1) * (CV.w - 3), z: c.z + d, y: CV.floor, n: m, n0: m, seed: IND_SEED_KINDS[0], dead: false });
             }
         }
         // 平原、森林、沙漠偶尔多一个洞口（cvGen 里调，用同一个随机数）
@@ -40,8 +40,9 @@
                 let x = (r() * 2 - 1) * (IND_MAP - 20), z = (r() * 2 - 1) * (IND_MAP - 20), bm = indBiome(M, x, z);
                 if (bm !== 'plain' && bm !== 'forest' && bm !== 'desert') continue;
                 if (indHeight(M, x, z) < 0.3 || Math.hypot(x, z) < 30 || ind.caves.some(function (c) { return Math.hypot(c.x - x, c.z - z) < 60; })) continue;
+                let y = indHeight(M, x, z), F = cvPlan(M, x, z, y); if (F === null) continue;
                 let i = ind.caves.length;
-                ind.caves.push({ i: i, x: x, z: z, y: indHeight(M, x, z), bm: bm, cx: CV.x0, cz: (i - 2) * CV.gapZ, built: false, gas: false }); return;
+                ind.caves.push({ i: i, x: x, z: z, y: y, bm: bm, cx: x, cz: z, F: F, built: false, gas: false }); return;
             }
         }
         // ── TNT ──

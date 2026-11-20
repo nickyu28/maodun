@@ -474,7 +474,6 @@
         function indMoist(M, x, z) { return indFbm(x / (90 * IND_ZOOM), z / (90 * IND_ZOOM), M.seed + 101); }
         function indBiome(M, x, z) {
             if (M.moon) return moonBiome(M.moon, x, z);   // 月球（19-industry-moon.js）
-            if (x > IND_MAP + 50) return cvBiome(x, z);   // 矿洞跟洞口一样
             if (M.pins) { let pb = odPinBiome(M, x, z); if (pb) return pb; }
             for (let i = 0; i < M.volc.length; i++) { let v = M.volc[i]; if (Math.hypot(x - v.x, z - v.z) < v.r) return 'volcano'; }
             let e = indElev(M, x, z), m = indMoist(M, x, z), rr = Math.hypot(x, z) / IND_MAP;
@@ -486,7 +485,6 @@
         }
         function indHeight(M, x, z) {
             if (M.moon) return moonHeight(M.moon, x, z);   // 月球（19-industry-moon.js）
-            if (x > IND_MAP + 50) return CV.floor;   // 地图外面是矿洞（19-industry-cave.js，任务 66），地面平的
             let e0 = indElev(M, x, z), h = e0 * 9 + Math.max(0, e0 - 0.32) * 26;   // 山地更陡
             if (M.riv) h = wdRiverCarve(M, x, z, h);   // 河（19-industry-world.js）
             for (let i = 0; i < M.volc.length; i++) {
@@ -1475,7 +1473,7 @@
             d.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 40px;text-align:center;"><div style="font-size:30px;font-weight:bold;color:#222;">已暂停</div>' +
                 '<div style="margin-top:20px;"><button id="ind-pause-go" style="' + IND_BTN + 'background:#2e7d32;font-size:20px;padding:12px 26px;" onclick="indResume()">继续</button>' +
                 '<button id="ind-pause-tut" style="' + IND_BTN + 'background:#546e7a;font-size:20px;padding:12px 26px;" onclick="indResume(); indTutPlay()">重播教程</button>' +
-                '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button>' + (ind.cave ? '<button id="ind-pause-cvback" style="' + IND_BTN + 'background:#5d4037;font-size:20px;padding:12px 26px;" onclick="indResume(); cvBackStart()">回到洞口</button>' : '') + '</div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续　Z 倍速，只在基地　C 配方　T 元素表　H 成就</div></div>';
+                '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button>' + '' + '</div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续　Z 倍速，只在基地　C 配方　T 元素表　H 成就</div></div>';
             document.body.appendChild(d);
         }
         function indResume() {
@@ -1735,7 +1733,7 @@
             }
             if (R.where === 'base' && R.base.houses.length) indHouseCollide(R.p);
             if (R.where === 'base') hmCollide(R.p);   // 石墙挡路（19-industry-home.js）
-            let gy = indGround(R.p.x, R.p.z);
+            let gy = R.cave ? cvFloorY(R.cave, R.p.z - R.cave.z) : indGround(R.p.x, R.p.z);   // 洞里走洞底（19-industry-cave.js）
             if (k.jump && R.p.y <= gy + 0.001 && !blocked && !R.onRaft) R.p.vy = 9;
             R.p.vy -= 25 * dt; R.p.y += R.p.vy * dt;
             if (R.p.y < gy) { R.p.y = gy; R.p.vy = 0; }
@@ -3970,7 +3968,7 @@
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
                 '<div id="ind-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div>' +
-                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水　R</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下　Q</button><button id="ind-btn-ser" style="' + IND_BTN + 'display:none;background:#00838f;" onclick="srToggleAim()">接法</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子　V</button><button id="ind-btn-cvback" style="' + IND_BTN + 'display:none;background:#5d4037;" onclick="cvBackStart()">回到洞口</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线　Esc</button>' +
+                '<div style="margin-top:2px;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onclick="indUse()">吃喝/浇水　R</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下　Q</button><button id="ind-btn-ser" style="' + IND_BTN + 'display:none;background:#00838f;" onclick="srToggleAim()">接法</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子　V</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线　Esc</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'jump\',true)" ontouchend="indHold(\'jump\',false)" onmousedown="indHold(\'jump\',true)" onmouseup="indHold(\'jump\',false)">跳</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'run\',true)" ontouchend="indHold(\'run\',false)" onmousedown="indHold(\'run\',true)" onmouseup="indHold(\'run\',false)">跑</button></div></div>';
             document.body.appendChild(d);
@@ -3989,7 +3987,6 @@
             let kb2 = document.getElementById('ind-btn-kick'); if (kb2) kb2.style.display = R.base.rule === 'hard' && R.where === 'base' ? '' : 'none';
             if (R.panel === 'bench') { let sig = JSON.stringify(R.bag); if (sig !== R.benchSig) { R.benchSig = sig; indPanelBench(); } }   // 任务 103：背包变了，工作台的排序跟着变
             { let uw = document.getElementById('ind-btn-unwire'); if (uw) uw.style.display = R.wirePend || R.sigPend ? '' : 'none'; }
-            let cb2 = document.getElementById('ind-btn-cvback'); if (cb2) cb2.style.display = R.cave ? '' : 'none';   // 洞里才有（任务 112）
             let upb = document.getElementById('ind-btn-up'); if (upb) upb.style.display = R.base.rule === 'casual' ? '' : 'none';
             let S = R.base.surv, rule = R.base.rule === 'hard' ? '硬核' : R.base.rule === 'casual' ? '悠闲' : '未选';
             let st = indClockTxt() + (indIsNight() ? '，夜里' : '') + '　' + indSeasonTxt() + '　' + rule + '<br>';

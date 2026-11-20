@@ -114,6 +114,7 @@
             }
             g.lineWidth = 2; g.strokeStyle = '#00c853';
             ind.exits.forEach(function (e) { if (!e.seen) return; g.beginPath(); g.arc((e.x + IND_MAP) * px, (e.z + IND_MAP) * px, 6, 0, 7); g.stroke(); });
+            g.lineWidth = 2; g.strokeStyle = '#5d4037'; (ind.caves || []).forEach(function (c) { g.beginPath(); g.moveTo((c.x - 5 + IND_MAP) * px, (c.z + IND_MAP) * px); g.lineTo((c.x + IND_MAP) * px, (c.z - 6 + IND_MAP) * px); g.lineTo((c.x + 5 + IND_MAP) * px, (c.z + IND_MAP) * px); g.closePath(); g.stroke(); });   // 洞口画个小三角（作者 11-12：洞里走错了看地图走回去）
             fmMapDrawMore(g, px);
             g.fillStyle = '#e53935'; g.beginPath(); g.arc((ind.p.x + IND_MAP) * px, (ind.p.z + IND_MAP) * px, 4, 0, 7); g.fill();
         }
@@ -337,6 +338,7 @@
             let see = function (o) { return !trip || Math.hypot(o.x - ind.p.x, o.z - ind.p.z) <= vr; };
             ind.nodes.forEach(function (o, i) {
                 if (o.dead || !see(o)) return;
+                if (ind.cave ? o.cave !== ind.cave.i : o.cave !== undefined) return;   // 洞里只画洞里的，洞外只画洞外的（19-industry-cave.js）
                 if (o.tree) { let T = WD_TREE[o.tree]; set(W.trunk, c.t, o.x, o.y + T.th / 2, o.z, T.tw, T.th, T.tw, 0, 0x6d4c41); set(W.crown, c.t, o.x, o.y + T.cy, o.z, T.cs[0], T.cs[1], T.cs[2], i, T.col); c.t++; }
                 else if (o.key === 'cactus') { set(W.trunk, c.t, o.x, o.y + 0.85, o.z, 0.5, 1.7, 0.5, 0, 0x2e7d32); set(W.crown, c.t, o.x, o.y + 1.8, o.z, 0.45, 0.35, 0.45, i, 0x43a047); c.t++; }
                 else if (o.rock) { set(W.rock, c.r, o.x, o.y + 0.5, o.z, 1.3, 1.0, 1.3, i, o.black ? 0x2b2522 : o.crack ? 0x8d6e63 : o.hard ? 0x37474f : 0x7a7a7a); c.r++; }
@@ -459,6 +461,7 @@
         function wdChunkSync(vr) {
             if (!ind.chunks) return;
             ind.chunks.forEach(function (m) {
+                if (ind.cave) return;   // 洞里地面不画（19-industry-cave.js 已经收起来了）
                 let B = m.userData.box, dx = Math.max(B.x0 - ind.p.x, 0, ind.p.x - B.x1), dz = Math.max(B.z0 - ind.p.z, 0, ind.p.z - B.z1);
                 m.visible = Math.hypot(dx, dz) <= vr + 10;
             });
