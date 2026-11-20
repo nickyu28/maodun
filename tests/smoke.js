@@ -15170,6 +15170,53 @@ async function enterExit(tab, key) {
             report('IND217 存档导出导入接猫盾工业：登记、导出、导入、版本、不写回旧档', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND220')) {
+            // IND220 触屏补充：快捷栏旁边有背包按钮（= E）、面板和弹窗右上角的叉（= Esc，一次关掉所有）、右键按钮的字按准星指着的东西现算（两到四个字，没得做就藏起来）
+            const bad = [];
+            const M = await openTab(chrome, url, { mobile: true, query: 'hcdebug=1' });
+            try {
+                await M.eval(`selectGameMode('industry'); lobbyPrimaryStart(); true;`);
+                if (!(await until(M, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 20000))) bad.push('触屏进不去');
+                else {
+                    await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
+                    await W(1500); await M.eval(`let m = document.getElementById('sys-modal'); if (m) m.remove(); ind.k = {}; ind.paused = false; indHudUpdate(); true;`);
+                    const J = async (e) => JSON.parse(await M.eval(`JSON.stringify(${e})`));
+                    const pos = async (sel) => J(`(function(){ let e = document.querySelector(${JSON.stringify(sel)}); if (!e || !e.offsetParent) return null; let r = e.getBoundingClientRect(), h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return [r.x + r.width / 2, r.y + r.height / 2, h === e || e.contains(h)]; })()`);
+                    const tap = async (p) => { await M.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p[0], y: p[1], id: 1 }] }); await W(60); await M.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await W(300); };
+                    // 背包按钮
+                    const bp = await pos('#ind-btn-bag2'); const hb = await J(`(function(){ let a = document.getElementById('ind-bag').getBoundingClientRect(), b = document.getElementById('ind-btn-bag2').getBoundingClientRect(); return Math.abs(a.right - b.left) < 20 || Math.abs(a.left - b.right) < 20; })()`);
+                    if (!(bp && bp[2] && hb)) bad.push('快捷栏旁边没有背包按钮或被盖住 ' + JSON.stringify([bp, hb]));
+                    else { await tap(bp); const o1 = await J(`ind.panel`); await tap(bp); const o2 = await J(`ind.panel`); if (o1 !== 'bag' || o2 !== null) bad.push('背包按钮点一下开、再点一下关 ' + o1 + ' ' + o2); }
+                    // 叉
+                    for (const open of ['indPanelBag()', "indPanelBook('')", 'indPanelElems()', 'achPanel()', 'rkProgress()']) {
+                        await M.eval(`${open}; true;`); await W(200);
+                        const xp = await pos('#ind-panel .ind-x');
+                        if (!xp || !xp[2]) { bad.push('面板没有叉或被盖住 ' + open + ' ' + JSON.stringify(xp)); await M.eval(`indCloseAll(); true;`); continue; }
+                        await tap(xp); const pn = await J(`ind.panel`); if (pn !== null) bad.push('点叉要关面板 ' + open + ' ' + pn);
+                    }
+                    await M.eval(`indPause(); true;`); await W(200);
+                    const px = await pos('#ind-pause .ind-x'); if (!px) bad.push('暂停菜单没有叉'); else { await tap(px); const pz = await J(`!!ind.paused`); if (pz) bad.push('点叉要继续'); }
+                    await M.eval(`gState.tutSeen = {}; indTutPlay(); true;`); await W(200);
+                    const tx = await pos('#tut-cards .tc-x'); if (!tx) bad.push('教程没有叉'); else { await tap(tx); const tg = await J(`!document.getElementById('tut-cards')`); if (!tg) bad.push('点叉要关教程'); }
+                    // 右键按钮的字
+                    const L = await J(`(function(){ let o = {}, R = ind, st = function (bag, sel, aim, extra) { ind.bag = bag; if (sel) indSelect(sel); indAim = aim || function () { return null; }; return indRightLabel(); };
+                        let ia = indAim; o.torch = st({ torch: 1 }, 'torch'); o.wood = st({ wood: 3 }, 'wood'); o.food = st({ bake_potato: 2 }, 'bake_potato');
+                        o.palm = st({ wood: 1 }, 'wood', function () { return { kind: 'node', o: { tree: 'palm' } }; }); o.pine = st({ wood: 1 }, 'wood', function () { return { kind: 'node', o: { tree: 'pine' } }; });
+                        o.pool = st({ bucket: 1 }, 'bucket', function () { return { kind: 'pool' }; }); o.cool = st({ water_raw: 1, hot_cu: 2 }, 'water_raw'); o.spout = st({ water_raw: 1 }, 'water_raw', function () { return { kind: 'spout', o: {} }; });
+                        o.bare = st({}, null); o.knife = st({ knife: 1, clay: 2 }, 'knife'); o.shirt = st({ coat: 1 }, 'coat');
+                        indAim = ia; ind.bag = { torch: 2 }; indSelect('torch'); ind.aimT = 0; indHudUpdate(); let b = document.getElementById('ind-btn-use'); o.btn = b.textContent + ':' + b.style.display;
+                        ind.bag = { wood: 3 }; indSelect('wood'); ind.aimT = 0; indHudUpdate(); o.btnHide = document.getElementById('ind-btn-use').style.display; return o; })()`);
+                    const exp = { torch: '点火把', wood: '', food: '吃东西', palm: '摇椰子', pine: '割松脂', pool: '装水', cool: '浇凉', spout: '浇凉', bare: '', knife: '雕模具', shirt: '穿上' };
+                    Object.keys(exp).forEach((key) => { if (L[key] !== exp[key]) bad.push('右键按钮的字 ' + key + ' 应该是「' + exp[key] + '」，现在是「' + L[key] + '」'); });
+                    Object.keys(L).forEach((key) => { if (key !== 'btn' && key !== 'btnHide' && L[key] && !(L[key].length >= 2 && L[key].length <= 4)) bad.push('右键字要两到四个字 ' + key + ' ' + L[key]); });
+                    if (L.btn !== '点火把:' || L.btnHide !== 'none') bad.push('右键按钮显示文字、没得做时藏起来 ' + JSON.stringify([L.btn, L.btnHide]));
+                }
+            } catch (e) { bad.push('异常 ' + e.message); }
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('IND220 触屏补充：背包按钮、面板弹窗的叉、右键按钮的字跟着准星变', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND219')) {
             // IND219 触屏万能点：右半屏短点 = 左键动作（自动判断）、按住不动一直挖、拖动不算点只转视角、左半屏是摇杆不算、点按钮和面板不穿透、教程开着不算
             const bad = [];
@@ -15179,7 +15226,7 @@ async function enterExit(tab, key) {
                 if (!(await until(M, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 20000))) bad.push('触屏进不去');
                 else {
                     await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
-                    await W(1500); await M.eval(`let m = document.getElementById('sys-modal'); if (m) m.remove(); ind.k = {}; ind.paused = false; indHudUpdate(); window.__n = { act: 0, hold: 0, stop: 0 }; let a = indAction; indAction = function () { window.__n.act++; return a.apply(this, arguments); }; let hh = indDigHoldStart; indDigHoldStart = function () { window.__n.hold++; return hh.apply(this, arguments); }; let sp = indDigStop; indDigStop = function () { window.__n.stop++; return sp.apply(this, arguments); }; true;`);
+                    await W(1500); await M.eval(`let m = document.getElementById('sys-modal'); if (m) m.remove(); ind.k = {}; ind.paused = false; indHudUpdate(); IND_TAP_MS.hold = 3000; IND_TAP_MS.tap = 2900; window.__n = { act: 0, hold: 0, stop: 0 }; let a = indAction; indAction = function () { window.__n.act++; return a.apply(this, arguments); }; let hh = indDigHoldStart; indDigHoldStart = function () { window.__n.hold++; return hh.apply(this, arguments); }; let sp = indDigStop; indDigStop = function () { window.__n.stop++; return sp.apply(this, arguments); }; true;`);
                     const J = async (e) => JSON.parse(await M.eval(`JSON.stringify(${e})`));
                     const send = (type, x, y, id) => M.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: id || 1 }] });
                     const n = () => J(`window.__n`), reset = () => M.eval(`window.__n = { act: 0, hold: 0, stop: 0 }; true;`);
@@ -15192,8 +15239,9 @@ async function enterExit(tab, key) {
                     await reset(); await send('touchStart', RX, RY); await send('touchMove', RX + 70, RY); for (let i = 2; i <= 8; i++) { await send('touchMove', RX + 70 + i * 15, RY); } await send('touchEnd'); await W(250);
                     r = await n(); const yaw1 = await M.eval(`camera.rotation.y`);
                     if (!(r.act === 0 && Math.abs(yaw1 - yaw0) > 0.05)) bad.push('拖动只转视角不算点 ' + JSON.stringify(r) + ' ' + yaw0 + ' → ' + yaw1);
-                    await reset(); await send('touchStart', RX, RY); await W(600); const mid = await n(); await send('touchEnd'); await W(200); r = await n();
+                    await M.eval(`IND_TAP_MS.hold = 350; IND_TAP_MS.tap = 260; true;`); await reset(); await send('touchStart', RX, RY); await W(900); const mid = await n(); await send('touchEnd'); await W(200); r = await n();
                     if (!(mid.act === 1 && mid.hold === 1 && r.stop >= 1)) bad.push('按住不动 0.35 秒起一直挖、松开停 ' + JSON.stringify([mid, r]));
+                    await M.eval(`IND_TAP_MS.hold = 3000; IND_TAP_MS.tap = 2900; true;`);
                     // 点按钮不穿透：点"放下"，左键动作不增加
                     const pb = await J(`(function(){ let e = document.getElementById('ind-btn-put'); let r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
                     await reset(); await send('touchStart', pb[0], pb[1]); await W(50); await send('touchEnd'); await W(200);
@@ -15232,6 +15280,7 @@ async function enterExit(tab, key) {
                     const pos = async (sel) => J(`(function(){ let e = document.querySelector(${JSON.stringify(sel)}); if (!e || !e.offsetParent) return null; let r = e.getBoundingClientRect(), h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return [r.x + r.width / 2, r.y + r.height / 2, h === e || e.contains(h), r.width, r.height]; })()`);
                     const tap = async (p, ms) => { await M.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p[0], y: p[1], id: 1 }] }); await W(ms || 60); await M.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await W(250); };
                     const btn = (id) => '#' + id;
+                    await M.eval(`ind.bag = { torch: 2, wood: 3 }; indSelect('torch'); ind.aimT = 0; indHudUpdate(); true;`); await W(200);
                     const need = ['ind-btn-book', 'ind-btn-bag', 'ind-btn-map', 'ind-btn-speed', 'ind-btn-elems', 'ind-btn-prog', 'ind-btn-ach', 'ind-btn-act', 'ind-btn-use', 'ind-btn-put', 'ind-btn-run', 'ind-btn-kick'];
                     const P = {}; for (const id of need) P[id] = await pos(btn(id));
                     const miss = need.filter((id) => !P[id] || !P[id][2] || P[id][3] < 40 || P[id][4] < 38);

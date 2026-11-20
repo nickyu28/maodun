@@ -21,11 +21,11 @@
             window.addEventListener('keydown', onKey, true);
             let draw = function () {
                 let last = i === pages.length - 1;
-                d.innerHTML = '<div style="background:#fff;border-radius:14px;padding:24px 34px;max-width:min(520px,86vw);text-align:center;"><div style="font-size:' + (last ? 30 : 20) + 'px;font-weight:bold;color:#222;line-height:1.6;">' + pages[i] + '</div>' +
+                d.innerHTML = '<div style="position:relative;background:#fff;border-radius:14px;padding:24px 34px;max-width:min(520px,86vw);text-align:center;"><button class="tc-x ind-x" style="' + IND_X_STYLE + '" aria-label="退出教程">×</button><div style="font-size:' + (last ? 30 : 20) + 'px;font-weight:bold;color:#222;line-height:1.6;">' + pages[i] + '</div>' +
                     '<div style="margin-top:18px;"><button class="tc-next" style="padding:10px 26px;font-size:18px;border:0;border-radius:10px;background:#2e7d32;color:#fff;cursor:pointer;">' + (last ? '开始' : '下一张') + '</button>' + '<button class="tc-skip" style="margin-left:10px;padding:10px 20px;font-size:16px;border:0;border-radius:10px;background:#9e9e9e;color:#fff;cursor:pointer;">退出教程</button>' + '</div>' +
                     '<div style="margin-top:8px;font-size:12px;color:#999;">' + (i + 1) + ' / ' + pages.length + '　' + (gState.control === 'pad' ? '点退出教程关掉' : 'Esc 或点退出教程关掉') + '</div></div>';
                 d.querySelector('.tc-next').onclick = function () { if (last) close(); else { i++; draw(); } };
-                let sk = d.querySelector('.tc-skip'); if (sk) sk.onclick = close;   // 不用 id：主游戏教程面板也有 tut-next、tut-skip，getElementById 会拿到那个藏着的，点了没反应（作者 11-20）
+                d.querySelectorAll('.tc-skip, .tc-x').forEach(function (sk) { sk.onclick = close; });   // 不用 id：主游戏教程面板也有 tut-next、tut-skip，getElementById 会拿到那个藏着的，点了没反应（作者 11-20）
             };
             draw();
         }

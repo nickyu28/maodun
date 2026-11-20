@@ -1498,7 +1498,7 @@
             if (document.pointerLockElement) document.exitPointerLock();
             let d = document.createElement('div'); d.id = 'ind-pause';
             d.style.cssText = 'position:fixed;inset:0;z-index:130;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;';
-            d.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 40px;text-align:center;"><div style="font-size:30px;font-weight:bold;color:#222;">已暂停</div>' +
+            d.innerHTML = '<div style="position:relative;background:#fff;border-radius:14px;padding:26px 40px;text-align:center;">' + (typeof indCrossBtn === 'function' ? indCrossBtn('indResume()') : '') + '<div style="font-size:30px;font-weight:bold;color:#222;">已暂停</div>' +
                 '<div style="margin-top:20px;"><button id="ind-pause-go" style="' + IND_BTN + 'background:#2e7d32;font-size:20px;padding:12px 26px;" onclick="indResume()">继续</button>' +
                 '<button id="ind-pause-tut" style="' + IND_BTN + 'background:#546e7a;font-size:20px;padding:12px 26px;" onclick="indResume(); indTutPlay()">重播教程</button>' +
                 '<button id="ind-pause-exit" style="' + IND_BTN + 'background:#d84315;font-size:20px;padding:12px 26px;" onclick="indExit()">返回大厅</button>' + '' + '</div><div style="margin-top:12px;font-size:14px;color:#888;">按 P 或 Esc 继续　Z 倍速，只在基地　C 配方　T 元素表　H 成就</div></div>';
@@ -3439,7 +3439,7 @@
             // 填数字的框（任务 18）：刷新时打了一半的数字、光标都留着
             let vals = {}, act = document.activeElement, focus = act && act.id && p.contains(act) && act.tagName === 'INPUT' ? { id: act.id, a: act.selectionStart, b: act.selectionEnd } : null;
             p.querySelectorAll('input[id]').forEach(function (e) { if (e.getAttribute('data-def') === null || e.value !== e.getAttribute('data-def')) vals[e.id] = e.value; });   // 没改过的数量框用新的默认值（任务 93）
-            p.innerHTML = html;
+            p.innerHTML = (typeof indPanelCross === 'function' ? indPanelCross() : '') + html;
             all = p.querySelectorAll('*');
             keep.forEach(function (o) { let e = o.i < 0 ? p : all[o.i]; if (e) e.scrollTop = o.t; });
             Object.keys(vals).forEach(function (id) { let e = document.getElementById(id); if (e && p.contains(e)) e.value = vals[id]; });
@@ -3522,7 +3522,7 @@
             indPanelClose(); if (!ind) return;
             if (document.pointerLockElement) document.exitPointerLock();
             ind.panel = kind; ind.panelDirty = false; ind.panelKey = key;
-            let p = document.createElement('div'); p.id = 'ind-panel'; p.style.cssText = IND_PANEL_CSS; p.innerHTML = html;
+            let p = document.createElement('div'); p.id = 'ind-panel'; p.style.cssText = IND_PANEL_CSS; p.innerHTML = (typeof indPanelCross === 'function' ? indPanelCross() : '') + html;
             document.body.appendChild(p);
         }
         function indRow(left, right) { return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 0;border-bottom:1px solid #eee;"><span style="flex:1;min-width:0;">' + left + '</span><span style="white-space:nowrap;">' + right + '</span></div>'; }
@@ -3754,7 +3754,7 @@
             if (document.pointerLockElement) { try { document.exitPointerLock(); } catch (e) { } }
             let d = document.createElement('div'); d.id = 'ind-trash-ask';
             d.style.cssText = 'position:fixed;inset:0;z-index:130;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;';
-            d.innerHTML = '<div style="background:#fff;border-radius:12px;padding:20px 22px;max-width:86vw;text-align:center;"><div style="font-size:18px;font-weight:bold;margin-bottom:6px;">销毁 ' + indName(it.k) + ' × ' + it.n + '？</div><div style="font-size:13px;color:#888;margin-bottom:14px;">销毁后 5 秒内能撤销</div>' +
+            d.innerHTML = '<div style="position:relative;background:#fff;border-radius:12px;padding:20px 22px;max-width:86vw;text-align:center;">' + (typeof indCrossBtn === 'function' ? indCrossBtn('indCloseAll()') : '') + '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">销毁 ' + indName(it.k) + ' × ' + it.n + '？</div><div style="font-size:13px;color:#888;margin-bottom:14px;">销毁后 5 秒内能撤销</div>' +
                 '<button id="ind-trash-no" style="margin:4px 10px;padding:10px 26px;min-height:44px;min-width:96px;font-size:16px;border:none;border-radius:8px;background:#455a64;color:#fff;cursor:pointer;" onclick="indTrashAnswer(false)">取消</button>' +
                 '<button id="ind-trash-yes" style="margin:4px 10px;padding:10px 26px;min-height:44px;min-width:96px;font-size:16px;border:none;border-radius:8px;background:#a1665f;color:#fff;cursor:pointer;" onclick="indTrashAnswer(true)">确定销毁</button></div>';
             document.body.appendChild(d);
@@ -3975,7 +3975,7 @@
         }
         // 触屏的万能点（作者 11-20）：右半屏短点一下（不拖）= 左键动作，对着准星指的东西自动判断，能交互就交互，不能就挖、砍、打、放、拿；
         // 按住不动 0.35 秒 = 一直挖（跟按住左键一样）；拖动是转视角，不算点；左半屏是摇杆；按钮、面板、教程上的点不穿透。有歧义用"换动作"按钮（右键），不做双击。
-        let IND_TAP = null;
+        let IND_TAP = null; const IND_TAP_MS = { hold: 350, tap: 260 };   // 按住多久算按住、多短算点（冒烟机器慢，测试里会放宽）
         function indTapOk(el) { return !(el && el.closest && el.closest('button, input, select, textarea, #ind-panel, #sys-modal, #ind-bag, #ind-toprow, #ind-actrow, .joystick-zone, #tut-cards, #ind-end, #ind-count, #ind-moonpick, #ind-carve, #ind-undo, #ind-hud .ind-hot')); }
         function indTapOn() { return !!ind && !ind.over && !ind.dead && !ind.paused && !ind.tutOpen && !ind.panel && !ind.carve; }   // 只有触屏才有 touch 事件，不用看 gState.control
         function indTapStart(e) {
@@ -3984,7 +3984,7 @@
                 let t = e.changedTouches[i];
                 if (t.clientX < window.innerWidth / 2 || !indTapOk(t.target)) continue;
                 let T = IND_TAP = { id: t.identifier, x: t.clientX, y: t.clientY, t: performance.now(), moved: false, hold: false };
-                T.timer = setTimeout(function () { if (IND_TAP === T && !T.moved && indTapOn()) { T.hold = true; indAction(); indDigHoldStart(); } }, 350);
+                T.timer = setTimeout(function () { if (IND_TAP === T && !T.moved && indTapOn()) { T.hold = true; indAction(); indDigHoldStart(); } }, IND_TAP_MS.hold);
                 return;
             }
         }
@@ -3998,7 +3998,7 @@
                 let t = e.changedTouches[i]; if (t.identifier !== IND_TAP.id) continue;
                 let T = IND_TAP; IND_TAP = null; clearTimeout(T.timer);
                 if (T.hold) { indDigStop(); return; }
-                if (!T.moved && performance.now() - T.t < 260 && indTapOn()) indAction();
+                if (!T.moved && performance.now() - T.t < IND_TAP_MS.tap && indTapOn()) indAction();
                 return;
             }
         }
@@ -4028,8 +4028,8 @@
                 '<div id="ind-cross" style="position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.7);pointer-events:none;z-index:6;"></div>' +
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
-                '<div id="ind-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div>' +
-                '<div id="ind-actrow" style="margin-top:2px;transform-origin:50% 100%;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onpointerdown="indRightDown()" onpointerup="indRightUp()" onpointercancel="indRightUp()">换动作　右键</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下　Q</button><button id="ind-btn-ser" style="' + IND_BTN + 'display:none;background:#00838f;" onclick="srToggleAim()">接法</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子　V</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线　Esc</button>' +
+                '<div style="display:flex;align-items:stretch;gap:4px;"><div id="ind-bag" style="flex:1;background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div><button id="ind-btn-bag2" style="' + IND_BTN + 'margin:0;font-size:15px;" onclick="if (ind && !ind.paused) { if (ind.panel === \'bag\') indPanelClose(); else indPanelBag(); }">背包　E</button></div>' +
+                '<div id="ind-actrow" style="margin-top:2px;transform-origin:50% 100%;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onpointerdown="indRightDown()" onpointerup="indRightUp()" onpointercancel="indRightUp()">右键</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下　Q</button><button id="ind-btn-ser" style="' + IND_BTN + 'display:none;background:#00838f;" onclick="srToggleAim()">接法</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子　V</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线　Esc</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'jump\',true)" ontouchend="indHold(\'jump\',false)" onmousedown="indHold(\'jump\',true)" onmouseup="indHold(\'jump\',false)">跳</button>' +
                 '<button id="ind-btn-run" style="' + IND_BTN + '" onclick="indRunToggle()">跑　Shift</button></div></div>';
             document.body.appendChild(d);
@@ -4046,7 +4046,7 @@
             if ((R.panel === 'comp' || R.panel === 'press') && (R.panelDirty || tick)) { let p = document.getElementById('ind-panel'), d = indDev(R.panelEl); if (p && d) { indPanelSet(p, R.panel === 'comp' ? indCompHtml(d) : indPressHtml(d)); R.panelDirty = false; } }
             wdCompassTick(); if (R.panel === 'map') wdMapDraw();   // 指南针、地图（19-industry-world.js）
             { let rb = document.getElementById('ind-btn-run'); if (rb) { rb.textContent = R.runLock ? '跑　开' : '跑　Shift'; rb.style.background = R.runLock ? '#2e7d32' : '#455a64'; }
-              if (!R.aimT || R.t - R.aimT > 0.2 || R.t < R.aimT) { R.aimT = R.t; let ab = document.getElementById('ind-btn-act'); if (ab) { let on = false; try { on = !R.panel && !!indAim(); } catch (e) { } ab.style.background = on ? '#2e7d32' : '#455a64'; } }
+              if (!R.aimT || R.t - R.aimT > 0.2 || R.t < R.aimT) { R.aimT = R.t; if (typeof indTouchHud === 'function') indTouchHud(); let ab = document.getElementById('ind-btn-act'); if (ab) { let on = false; try { on = !R.panel && !!indAim(); } catch (e) { } ab.style.background = on ? '#2e7d32' : '#455a64'; } }
               document.body.classList.toggle('ind-touch', gState.control === 'pad'); }   // 靠近能动的东西时左键动作亮绿；触屏时按钮放大，跟着手柄大小和透明度设置
             let kb2 = document.getElementById('ind-btn-kick'); if (kb2) kb2.style.display = R.base.rule === 'hard' && R.where === 'base' ? '' : 'none';
             if (R.panel === 'bench') { let sig = JSON.stringify(R.bag); if (sig !== R.benchSig) { R.benchSig = sig; indPanelBench(); } }   // 任务 103：背包变了，工作台的排序跟着变

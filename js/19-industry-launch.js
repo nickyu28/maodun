@@ -108,7 +108,7 @@
         function rkEnding(o) {
             let B = ind.base, ach = Object.keys(B.ach || {}).length, tot = ACH.filter(function (a) { return !a.hide; }).length, m = Math.floor((B.clock || 0) / 60), tt = Math.floor(m / 60) + ' 小时 ' + (m % 60) + ' 分';
             let e = document.createElement('div'); e.id = 'ind-end'; e.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:70;background:rgba(10,10,30,.88);color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;';
-            e.innerHTML = '<div style="max-width:420px;padding:20px;line-height:1.9;"><div style="font-size:34px;font-weight:bold;">入轨成功</div><div style="margin-top:10px;">总 Δv ' + o.dv.toFixed(2) + ' 千米/秒，乘客：你</div><div>用时 ' + tt + '，成就 ' + ach + ' / ' + tot + '</div><div style="margin-top:14px;font-size:22px;">第 1 章　完</div><div style="margin-top:18px;"><button style="' + IND_BTN + '" onclick="rkEndClose()">接着玩</button></div></div>';
+            e.innerHTML = '<div style="position:relative;max-width:420px;padding:20px;line-height:1.9;">' + indCrossBtn('rkEndClose()') + '<div style="font-size:34px;font-weight:bold;">入轨成功</div><div style="margin-top:10px;">总 Δv ' + o.dv.toFixed(2) + ' 千米/秒，乘客：你</div><div>用时 ' + tt + '，成就 ' + ach + ' / ' + tot + '</div><div style="margin-top:14px;font-size:22px;">第 1 章　完</div><div style="margin-top:18px;"><button style="' + IND_BTN + '" onclick="rkEndClose()">接着玩</button></div></div>';
             document.body.appendChild(e); if (document.pointerLockElement) document.exitPointerLock();
         }
         function rkEndClose() { let e = document.getElementById('ind-end'); if (e && e.parentNode) e.parentNode.removeChild(e); }
