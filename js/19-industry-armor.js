@@ -1,17 +1,17 @@
 // 猫盾工业：盔甲（作者 11-19「加入盔甲」）。放在 19-industry-hammer.js 后面。
-// 头盔、胸甲、护腿、护靴四件，皮、青铜、铁、钢四档，穿在自己的四个格子里（ahead、abody、aleg、afoot），跟衣服、鞋、灯泡不抢格子。
+// 头盔、胸甲、护腿、护靴四件，皮、青铜、铁、钛、钢五档（钛用钛锭，比铁硬比钢轻；钛锭在 19-industry-rocket.js），穿在自己的四个格子里（ahead、abody、aleg、afoot），跟衣服、鞋、灯泡不抢格子。
 // 挨打（怪、爆炸、仙人掌）按身上盔甲的减伤值少掉血，穿着的每件掉 1 点耐久，用坏了变成坏了的盔甲，工作台加胶水修好（耐久一半）。
 // 走得慢一点、跑步更费体力：越重越明显。身上和第三人称模型看得见，颜色按材质。
         const AR = {
-            tiers: ['lth', 'bz', 'fe', 'st'],
-            tn: { lth: '皮', bz: '青铜', fe: '铁', st: '钢' },
-            col: { lth: 0x8d5a3b, bz: 0xb87333, fe: 0x78909c, st: 0xcfd8dc },
-            mat: { lth: 'leather', bz: 'bronze', fe: 'ingot_fe', st: 'steel' },
-            mult: { lth: 1, bz: 1.6, fe: 2.2, st: 3 },       // 减伤倍数
-            dura: { lth: 80, bz: 160, fe: 320, st: 640 },
-            walk: { lth: 0.004, bz: 0.012, fe: 0.02, st: 0.028 },   // 每份"重量"让走路慢多少
-            stam: { lth: 0.01, bz: 0.03, fe: 0.05, st: 0.07 },      // 每份重量让跑步多耗多少体力
-            part: { helm: { sl: 'ahead', name: ['皮盔', '青铜盔', '铁盔', '钢盔'], cut: 0.04, w: 1, n: 4 }, chest: { sl: 'abody', name: ['皮甲', '青铜胸甲', '铁胸甲', '钢胸甲'], cut: 0.10, w: 2.5, n: 8 }, legs: { sl: 'aleg', name: ['皮护腿', '青铜护腿', '铁护腿', '钢护腿'], cut: 0.06, w: 1.5, n: 6 }, boot: { sl: 'afoot', name: ['皮护靴', '青铜护靴', '铁护靴', '钢护靴'], cut: 0.04, w: 1, n: 4 } },
+            tiers: ['lth', 'bz', 'fe', 'ti', 'st'],
+            tn: { lth: '皮', bz: '青铜', fe: '铁', ti: '钛', st: '钢' },
+            col: { lth: 0x8d5a3b, bz: 0xb87333, fe: 0x78909c, ti: 0xa7b4c2, st: 0xcfd8dc },
+            mat: { lth: 'leather', bz: 'bronze', fe: 'ingot_fe', ti: 'ingot_ti', st: 'steel' },
+            mult: { lth: 1, bz: 1.6, fe: 2.2, ti: 2.7, st: 3 },       // 减伤倍数
+            dura: { lth: 80, bz: 160, fe: 320, ti: 480, st: 640 },
+            walk: { lth: 0.004, bz: 0.012, fe: 0.02, ti: 0.01, st: 0.028 },   // 每份"重量"让走路慢多少
+            stam: { lth: 0.01, bz: 0.03, fe: 0.05, ti: 0.03, st: 0.07 },      // 每份重量让跑步多耗多少体力
+            part: { helm: { sl: 'ahead', name: ['皮盔', '青铜盔', '铁盔', '钛盔', '钢盔'], cut: 0.04, w: 1, n: 4 }, chest: { sl: 'abody', name: ['皮甲', '青铜胸甲', '铁胸甲', '钛胸甲', '钢胸甲'], cut: 0.10, w: 2.5, n: 8 }, legs: { sl: 'aleg', name: ['皮护腿', '青铜护腿', '铁护腿', '钛护腿', '钢护腿'], cut: 0.06, w: 1.5, n: 6 }, boot: { sl: 'afoot', name: ['皮护靴', '青铜护靴', '铁护靴', '钛护靴', '钢护靴'], cut: 0.04, w: 1, n: 4 } },
             slots: ['ahead', 'abody', 'aleg', 'afoot'],
             maxCut: 0.75
         };

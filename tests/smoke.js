@@ -15084,8 +15084,44 @@ async function enterExit(tab, key) {
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND214')) {
+            // IND214 火箭部件（R4）：金红石在山地、四氯化钛和钛锭的两步（副产盐）、发动机四种、燃料罐舱体整流罩、每样的第二个用处、钛甲
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (c) => JSON.parse(await T.eval(`JSON.stringify((function(){ ${c} })())`));
+                const r = await J(`indGoBase(null); let B = ind.base, o = {}; B.rule = 'hard'; cancelAnimationFrame(ind.raf); ind.raf = 0;
+                    o.node = !!IND_NODES.rutile && !!IND_NODES.sand_ti && IND_BIOMES.mountain.res.rutile > 0;
+                    let rec = function (inK, outK) { return IND_RECIPES.filter(function (q) { return q.in[inK] && q.out[outK]; })[0]; };
+                    let a = rec('rutile', 'b_ticl4'), b = rec('b_ticl4', 'ingot_ti');
+                    o.a = a ? a.in.b_cl2 + ':' + a.in.charcoal + ':' + a.minT : null; o.b = b ? b.in.sodium + ':' + (b.out.salt || 0) : null;
+                    let ci = function (out, inK) { return IND_CRAFT.findIndex(function (r) { return r.out === out && !r.fix && (!inK || r.in[inK]); }); };
+                    let make = function (out, inK, bag) { ind.bag = Object.assign({ hammer: 1 }, bag); let i = ci(out, inK); if (i < 0) return -1; indCraft(i); return ind.bag[out] || 0; };
+                    o.kero = make('eng_kero', 'ingot_ti', { steel: 5, ingot_ti: 3, ingot_cu: 8, motor: 2, brass: 2 }); o.keroS = make('eng_kero_s', null, { steel: 8, ingot_al: 6, ingot_cu: 8, motor: 2, brass: 2 });
+                    o.vac = make('eng_vac', null, { steel: 8, ingot_al: 6, ingot_cu: 10, motor: 2, brass: 3 }); o.h2 = make('eng_h2', null, { steel: 5, ingot_ti: 3, ingot_cu: 8, motor: 2, brass: 2, coil: 2 });
+                    o.tank = make('tank_fuel', null, { ingot_al: 5, plastic: 2 }); o.cap = make('capsule', null, { ingot_al: 6, glass_plate: 4, plastic: 3 }); o.fair = make('fairing', null, { ingot_al: 4, plastic: 3 });
+                    o.cold = make('cold_tank', 'tank_fuel', { tank_fuel: 1, glass_plate: 1 }); o.hut = make('house_hut', 'capsule', { capsule: 1, wood: 10 }); o.lid = make('pond_lid', 'fairing', { fairing: 1 }); o.car = make('veh_car', 'eng_kero_s', { steel: 8, wheel: 4, eng_kero_s: 1, seat: 1, chain: 2 });
+                    o.tiHelm = make('helm_ti', null, { ingot_ti: 4 });
+                    o.rkt = ['eng_kero', 'eng_kero_s', 'eng_vac', 'eng_h2', 'tank_fuel', 'capsule', 'fairing'].every(function (k) { return IND_ITEMS_RAW[k].rkt; });
+                    o.heavy = IND_ITEMS_RAW.eng_kero_s.rkt.mass / IND_ITEMS_RAW.eng_kero.rkt.mass;
+                    return o;`);
+                if (!r.node) bad.push('金红石在山地 ' + JSON.stringify(r));
+                if (r.a !== '2:1:800' || r.b !== '4:4') bad.push('两步烧：四氯化钛、钛锭副产盐 ' + JSON.stringify(r));
+                if (!(r.kero === 1 && r.keroS === 1 && r.vac === 1 && r.h2 === 1)) bad.push('四种发动机能做 ' + JSON.stringify(r));
+                if (!(r.tank === 1 && r.cap === 1 && r.fair === 1 && r.rkt)) bad.push('燃料罐舱体整流罩能做、带火箭数据 ' + JSON.stringify(r));
+                if (!(r.cold === 2 && r.hut === 1 && r.lid === 2 && r.car === 1)) bad.push('第二个用处：冷罐、小屋、池塘盖、车 ' + JSON.stringify(r));
+                if (r.tiHelm !== 1) bad.push('钛甲 ' + JSON.stringify(r));
+                if (!(r.heavy > 1.25 && r.heavy < 1.35)) bad.push('钢铝发动机重 30% ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND214 火箭部件 R4：金红石、两步出钛、四种发动机、罐舱罩、第二用处、钛甲', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND213')) {
-            // IND213 盔甲：四件四档、穿在自己的格子里不跟衣服灯泡抢、挨打按总减伤少掉血且每件掉 1 点耐久、用坏变坏了的、胶水修好、重了走得慢跑步耗体力、模型上看得见、能做
+            // IND213 盔甲：四件五档、穿在自己的格子里不跟衣服灯泡抢、挨打按总减伤少掉血且每件掉 1 点耐久、用坏变坏了的、胶水修好、重了走得慢跑步耗体力、模型上看得见、能做
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -15106,7 +15142,7 @@ async function enterExit(tab, key) {
                     B.surv.hp = 100; indHurt(10, 'starve', '测试'); o.starve = B.surv.hp;
                     B.surv.hp = 100; indHurt(10, 'boom', '测试', true); o.boom = B.surv.hp;
                     return o;`);
-                if (r.items !== 16) bad.push('四件四档共 16 样 ' + JSON.stringify(r));
+                if (r.items !== 20) bad.push('四件五档共 20 样 ' + JSON.stringify(r));
                 if (r.craftL !== 1 || r.craftB !== 1) bad.push('能做 ' + JSON.stringify(r));
                 if (!/ahead/.test(r.wear) || !/coat/.test(r.wear) || !/bulb/.test(r.wear)) bad.push('穿在自己的格子里不挤掉衣服灯泡 ' + r.wear);
                 if (!(Math.abs(r.cut - 0.72) < 0.02)) bad.push('钢甲全套减伤 72% ' + JSON.stringify(r));
@@ -15120,7 +15156,7 @@ async function enterExit(tab, key) {
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND213 盔甲：四件四档、格子、减伤、耐久、坏了变断的、重量体力、模型', bad.length === 0, bad.slice(0, 8).join(' / '));
+            report('IND213 盔甲：四件五档、格子、减伤、耐久、坏了变断的、重量体力、模型', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (want('IND212')) {
