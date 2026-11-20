@@ -806,6 +806,37 @@ async function enterExit(tab, key) {
             report('M4 超燃角色熟练度：记场数/胜场；赢 10 场熟手称号、30 场金环外观、100 场大师称号；存档带着', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('SP1')) {
+            // SP1：存档导出导入（换设备）：打包能原样导回；别人的文字、旧版本、坏文字拒绝；同名要先问；别的存档能接进来；设置页有四个按钮
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(async function(){ let out = {};
+                gState.money = 12345; saveProgress();
+                let txt = await saveportBuild(), box = JSON.parse(txt);
+                out.fmt = box.app === 'maodun' && box.id === saveportName() && typeof box.main === 'string';
+                let key = 'TH_save_' + saveportName(); localStorage.removeItem(key);   // 导入落在不带设备小尾巴的名字下，换设备输同一个名字就找得到
+                out.parsed = saveportParse(txt).ok;
+                await saveportApply(saveportParse(txt).box);
+                out.back = JSON.parse(localStorage.getItem(key)).money === 12345;
+                out.bad1 = saveportParse('不是json').ok; out.bad2 = saveportParse('{"app":"x"}').ok;
+                let old = JSON.parse(txt); old.main = JSON.stringify({ ver: 1 }); out.bad3 = saveportParse(JSON.stringify(old)).ok;
+                let ev = JSON.parse(txt); ev.id = '<b>'; out.bad4 = saveportParse(JSON.stringify(ev)).ok;
+                let got = null; saveportRegister('测试', { out: function () { return { n: 7 }; }, inn: function (d) { got = d; } });
+                let t2 = JSON.parse(await saveportBuild()); out.ext = !!(t2.ext && t2.ext['测试'] && t2.ext['测试'].n === 7);
+                await saveportApply(saveportParse(JSON.stringify(t2)).box); out.extBack = !!(got && got.n === 7);
+                out.dup = saveportRegister('测试', { out: function () { }, inn: function () { } });
+                openSettings('游戏'); out.ui = ['导出文件', '复制存档文字', '导入文件', '粘贴导入'].every(function (w) { return document.getElementById('set-content').innerText.indexOf(w) >= 0; });
+                return JSON.stringify(out); })()`));
+            if (!r.fmt) bad.push('打包格式不对');
+            if (!r.parsed || !r.back) bad.push('导回来不一样 ' + JSON.stringify(r));
+            if (r.bad1 || r.bad2 || r.bad3 || r.bad4) bad.push('该拒绝的收了 ' + JSON.stringify(r));
+            if (!r.ext || !r.extBack || r.dup) bad.push('别的存档接不进来 ' + JSON.stringify(r));
+            if (!r.ui) bad.push('设置页没有四个按钮');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('SP1 存档导出导入：打包原样导回、坏的和旧的拒绝、别的存档能接进来、设置页有按钮', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('M4b')) {
             // M4b：别的模式能送称号：titleGrant('rocket') 送一次「火箭工程师」，能戴，称号页不报错，存档带着
             const bad = [];

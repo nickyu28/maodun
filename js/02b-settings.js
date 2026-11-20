@@ -272,7 +272,7 @@ function setTabHtml(t) {
         return setRegRows('显示');
     }
     return setRow('新手提示', setToggle('set-tips', SETTINGS.tips !== false, '开', '关')) + setRow('关面板后自动锁鼠标', setToggle('set-autoLock', SETTINGS.autoLock !== false, '开', '关')) +
-        '<div style="font-size:12px; color:#888; padding:8px 0 2px;">重播新手教程，点哪个模式就播哪个</div>' + setTutRows() + setRow('快捷语', '<button onclick="openChatSetup()" style="' + setBtnStyle(false) + '">改一下</button>') + setRegRows('游戏');
+        '<div style="font-size:12px; color:#888; padding:8px 0 2px;">重播新手教程，点哪个模式就播哪个</div>' + setTutRows() + setRow('快捷语', '<button onclick="openChatSetup()" style="' + setBtnStyle(false) + '">改一下</button>') + setRegRows('游戏') + (typeof saveportHtml === 'function' ? saveportHtml() : '');
 }
 function setTutRows() {
     let list = MODE_NAME_LIST.slice(); [['industry', '猫盾工业'], ['lab', '实验室']].forEach(function (x) { if (TUT_PLAYERS[x[0]]) list.push(x); });

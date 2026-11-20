@@ -87,3 +87,11 @@ SET1 设置页和存档，SET2 按键绑定和登记，SET3 显示设置，GFX1 
 - 试过 ACES 电影色调映射，颜色全发白发灰，不用了。
 - 开发用截图：`SMOKE_SHOT=存图目录 SMOKE_SHOT_TAG=标签 SMOKE_SHOT_Q=1,2,3 SMOKE_ONLY=SHOT node tests/smoke.js`，给每档画质截一张寻宝图（不进 CI）。
 - **没做**：后期处理（泛光、环境遮蔽）要额外的 three.js 文件，现在只有核心；换成 PBR 材质会改变整个游戏的样子。想再提升可以从这两条里选。
+
+## 存档导出、导入（换设备，js/02d-saveport.js）
+存档只在各自浏览器里，换设备要靠这个。设置页「游戏」组最下面四个按钮：导出文件、复制存档文字、导入文件、粘贴导入。
+- 文件是 JSON：`{ app: 'maodun', v: 1, id: 名字, t: 时间, main: 主存档文本, ext: { 名字: 东西 } }`。`id` 是去掉设备小尾巴的名字，导入后写在 `TH_save_名字` 下，所以另一台设备输同样的名字就找得到（`resolvePlayerId`）。
+- 导入会检查 `app`、存档版本 `SAVE_VER`、名字；同名存档在这台设备上已有就先问，说明覆盖了回不来。导入完自动刷新，不然内存里的旧号会把它盖掉。
+- **给 Code2 的接口**：`saveportRegister('industry', { out: function () { return 要带走的东西; }, inn: function (东西) { 写回去; } })`，`out` 和 `inn` 可以返回 Promise。猫盾工业存在 IndexedDB `maodun_industry`，还没接，要接请在 19-industry 里登记。实验室同理。
+- 好友名单、设置不带，设置跟着设备走。冒烟 SP1。
+- 没做：真账号。要服务器和登录，现在项目没有后端；作者 11-20 说有空再做。
