@@ -53,7 +53,7 @@
             indMoonPickClose();
             let MG = moonGen(), N = 600 / MP.px, d = document.createElement('div'); d.id = 'ind-moonpick';
             d.style.cssText = 'position:fixed;inset:0;z-index:140;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;color:#fff;';
-            d.innerHTML = '<canvas id="mp-canvas" width="' + N + '" height="' + N + '" style="width:min(80vh,92vw);height:min(80vh,92vw);border:1px solid #888;cursor:crosshair;"></canvas>' +
+            d.innerHTML = (typeof indCrossBtn === 'function' ? indCrossBtn('indMoonPickClose()') : '') + '<canvas id="mp-canvas" width="' + N + '" height="' + N + '" style="width:min(80vh,92vw);height:min(80vh,92vw);border:1px solid #888;cursor:crosshair;"></canvas>' +
                 '<div style="margin-top:8px;font-size:13px;color:#ccc;"><span style="color:#3a3f44;text-shadow:0 0 2px #fff;">■</span> 月海　<span style="color:#7d8185;">■</span> 丘陵　<span style="color:#b0b4b8;">■</span> 高地　<span style="color:#cfd8dc;">■</span> 极地　<span style="color:#1e88e5;">○</span> 水冰坑　<span style="color:#6d4c41;">━</span> 月溪　<span>●</span> 天窗　◯ 撞击坑</div>' +
                 '<div id="mp-info" style="margin-top:6px;font-size:16px;min-height:22px;"></div>' +
                 '<div style="margin-top:8px;"><button id="mp-ok" disabled style="' + IND_BTN + 'background:#2e7d32;font-size:18px;padding:10px 24px;opacity:.5;" onclick="mpConfirm()">定在这里</button><button id="mp-close" style="' + IND_BTN + 'font-size:18px;padding:10px 24px;" onclick="indMoonPickClose()">关上</button></div>';

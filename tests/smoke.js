@@ -13551,6 +13551,25 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND224')) {
+            // IND224 月球选落点界面 Esc 能关、右上角有叉能关（测试员 11-20）
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ indGoBase(null); let B = ind.base; B.rule = 'hard'; delete B.moon; indMoonPick(); let a = !!document.getElementById('ind-moonpick'); let x = !!document.querySelector('#ind-moonpick .ind-x');
+                    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); let b = !document.getElementById('ind-moonpick');
+                    indMoonPick(); document.querySelector('#ind-moonpick .ind-x').click(); let c = !document.getElementById('ind-moonpick'); return { a: a, x: x, b: b, c: c }; })()`);
+                if (!(r.a && r.x && r.b && r.c)) bad.push('选落点开着，Esc 关、叉关 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND224 月球选落点：Esc 能关、右上角有叉', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND223')) {
             // IND223 模具放进出料槽的按钮（作者 11-20「按钮失效了」）：槽里放着做好的成品（砖、面包）不挡，能放；只有烫的锭挡着，给提示；点面板里的按钮真的放进去
             const bad = [];

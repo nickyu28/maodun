@@ -3933,6 +3933,7 @@
             let any = false;
             if (ind.trashAsk) { indTrashAnswer(false); any = true; }
             if (ind.carve) { ctCarveExit(); any = true; }
+            if (document.getElementById('ind-moonpick') && typeof indMoonPickClose === 'function') { indMoonPickClose(); any = true; }   // 月球选落点界面 Esc 也关（测试员 11-20）
             if (indCancelWire()) any = true;
             if (ind.panel) { indPanelClose(); any = true; }
             try { let m = document.getElementById('sys-modal'); if (m && !m.classList.contains('hidden') && typeof sysModalCloseNormal === 'function') { sysModalCloseNormal(); any = true; } } catch (x) { }
