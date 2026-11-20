@@ -117,7 +117,12 @@
         // 卡片开着时别的弹窗也盖不掉它（规则见 01-core.js 的 showSysModal / sysModalSync）。
         // introOpen 由 sysModalSync 维护：弹窗开着、而且开着的是卡片才是 true，不管弹窗是怎么关的都会回到 false
         let introQ = [], introOpen = false;
-        function introPush(title, html) { introQ.push({ title: title, html: html }); introPump(); }
+        function introPush(title, html) {
+            // 同一张卡片已经排着或开着就不再排第二张：点模式后 0.4 秒内又点"规则"，会弹出两张一样的规则卡片，按一下 Esc 只关掉第一张，看着像 Esc 没反应
+            if (introQ.some(function (q) { return q.title === title; })) return;
+            if (introOpen && document.getElementById('sys-modal-title') && document.getElementById('sys-modal-title').innerText === title) return;
+            introQ.push({ title: title, html: html }); introPump();
+        }
         function introPump() {
             if (!introQ.length) return;
             // R1：多人局里卡片不挡操作也不暂停，改成屏幕上方的提示条；单人局（和不在局里）还是弹窗，开着的时候这一局静止

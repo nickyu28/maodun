@@ -13152,6 +13152,31 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND154 煤产量：每张图总量够、出生点附近够、平原森林有煤', bad.length === 0, bad.join(' / '));
         }
+        if (want('ES3')) {
+            // ES3 每个模式的规则卡片都能按 Esc 关：选这个模式、开规则、按真的 Esc，卡片要关掉（超燃的规则卡片 Esc 关不掉，测试员 -133 报的）
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const esc = async () => { await T.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await T.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await W(150); };
+            const keys = JSON.parse(await T.eval(`JSON.stringify(Object.keys(MODE_RULES))`));
+            for (const k of keys) {
+                await T.eval(`${HIDE} selectGameMode('${k}'); openRules('${k}'); true;`);
+                await W(200);
+                if (!(await T.eval(`sysModalVisible()`))) continue;   // 这个模式没弹卡片的不算
+                await esc();
+                if (await T.eval(`sysModalVisible()`)) bad.push(k + ' 的规则卡片 Esc 没关');
+            }
+            // 第一次点开模式会自动弹规则，0.4 秒内又点"规则"按钮：不能弹出两张一样的，一次 Esc 就关干净（测试员 -133：竞速、惊魂夜、超燃要按两次）
+            for (const k of ['race', 'night', 'blaze']) {
+                await T.eval(`${HIDE} gState.modeIntroShown = {}; modePick('${k}'); openRules('${k}'); true;`);
+                await W(900);
+                await esc(); await W(300);
+                if (await T.eval(`sysModalVisible()`)) bad.push(k + ' 点模式再点规则，一次 Esc 没关干净');
+            }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('ES3 每个模式的规则卡片都能按 Esc 关', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('ES1')) {
             // ES1 所有弹出的东西能按 Esc 关（任务 P2）：系统弹窗（只有一个按钮点它、取消／确定点取消、确定／清除这种全动东西的不动）、图鉴、两个记录榜、背包、大地图、商店、仓库、校准练习；一次只关最上面一层；鼠标还锁着时不关
             const bad = [];
