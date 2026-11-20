@@ -4011,7 +4011,7 @@
         function indRunToggle() { if (!ind) return; ind.runLock = !ind.runLock; indHudUpdate(); }
         function indHold(dir, on) { if (!ind) return; ind.k[dir] = !!on; if (dir === 'jump' && on) ind.jumpQ = 0.15; }   // 触屏点一下很短，按下后至少算按着 0.15 秒，不然一帧没赶上就没跳
         function indBuildHud() {
-            if (!document.getElementById('ind-touch-css')) { let st = document.createElement('style'); st.id = 'ind-touch-css'; st.textContent = 'body.ind-touch #ind-hud button{min-height:40px!important;padding:7px 14px!important;font-size:15px!important;touch-action:manipulation;}body.ind-touch #ind-actrow,body.ind-touch #ind-toprow{scale:var(--pad-scale,1);opacity:var(--pad-alpha,1);}'; document.head.appendChild(st); }
+            if (!document.getElementById('ind-touch-css')) { let st = document.createElement('style'); st.id = 'ind-touch-css'; st.textContent = 'body.ind-touch #ind-hud button{min-height:40px!important;padding:7px 14px!important;font-size:15px!important;touch-action:manipulation;}body.ind-touch #ind-actrow,body.ind-touch #ind-toprow{scale:var(--pad-scale,1);opacity:var(--pad-alpha,1);display:flex;flex-wrap:wrap;}body.ind-touch #ind-toprow{justify-content:flex-end;max-width:calc((100vw - 16px) / var(--pad-scale,1));}body.ind-touch #ind-actrow{justify-content:center;max-width:calc(100% / var(--pad-scale,1));margin-left:auto;margin-right:auto;}'; document.head.appendChild(st); }
             let n = document.createElement('div'); n.id = 'ind-night';
             n.style.cssText = 'position:fixed;inset:0;z-index:39;pointer-events:none;background:#0a1030;opacity:0;';
             document.body.appendChild(n);

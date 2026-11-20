@@ -15386,6 +15386,13 @@ async function enterExit(tab, key) {
                     const pj = await J(`(function(){ let e = [...document.querySelectorAll('#ind-hud button')].find(function (x) { return x.textContent.indexOf('跳') === 0; }); let r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
                     const pp = await J(`(function(){ let e = [...document.querySelectorAll('#ind-hud button')].find(function (x) { return x.textContent.indexOf('暂停') === 0; }); if (!e) return null; let r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
                     const st = async (e) => J(e);
+                    // 手柄大小设置放大以后（--pad-scale 最大 1.6），所有按钮也要在屏幕里、点得到
+                    for (const sc of [1, 1.3, 1.6]) {
+                        await M.eval(`document.documentElement.style.setProperty('--pad-scale', '${sc}'); indHudUpdate(); true;`); await W(300);
+                        const off = await J(`(function(){ let bad = []; document.querySelectorAll('#ind-toprow button, #ind-actrow button').forEach(function (e) { if (!e.offsetParent) return; let r = e.getBoundingClientRect(), h = document.elementFromPoint(Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2))); if (r.left < -0.5 || r.right > innerWidth + 0.5 || r.top < -0.5 || r.bottom > innerHeight + 0.5 || h !== e) bad.push(e.id + ':' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.right) + ',' + Math.round(r.bottom)); }); return bad; })()`);
+                        if (off.length) bad.push('手柄大小 ' + sc + ' 时按钮跑出屏幕或被盖住 ' + off.slice(0, 6).join(' '));
+                    }
+                    await M.eval(`document.documentElement.style.setProperty('--pad-scale', '1'); indHudUpdate(); true;`); await W(300);
                     // 面板类：点一下开
                     for (const [id, panel] of [['ind-btn-book', 'book'], ['ind-btn-bag', 'bag'], ['ind-btn-elems', 'elems'], ['ind-btn-ach', 'ach'], ['ind-btn-prog', 'prog']]) {
                         if (!P[id]) continue; await tap(P[id]); const o = await st(`ind.panel`); if (o !== panel) bad.push('点 ' + id + ' 要开 ' + panel + '，现在是 ' + o);
