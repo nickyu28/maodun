@@ -15378,9 +15378,9 @@ async function enterExit(tab, key) {
                     const pos = async (sel) => J(`(function(){ let e = document.querySelector(${JSON.stringify(sel)}); if (!e || !e.offsetParent) return null; let r = e.getBoundingClientRect(), h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return [r.x + r.width / 2, r.y + r.height / 2, h === e || e.contains(h), r.width, r.height]; })()`);
                     const tap = async (p, ms) => { await M.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p[0], y: p[1], id: 1 }] }); await W(ms || 60); await M.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await W(250); };
                     const btn = (id) => '#' + id;
-                    await M.eval(`ind.bag = { torch: 2, wood: 3 }; indSelect('torch'); ind.aimT = 0; indHudUpdate(); true;`); await W(200);
+                    await M.eval(`window.scrollTo(0, 0); ind.bag = { torch: 20, wood: 3 }; indSelect('torch'); ind.aimT = 0; indHudUpdate(); true;`); await W(300);
                     const need = ['ind-btn-book', 'ind-btn-bag', 'ind-btn-map', 'ind-btn-speed', 'ind-btn-elems', 'ind-btn-prog', 'ind-btn-ach', 'ind-btn-act', 'ind-btn-use', 'ind-btn-put', 'ind-btn-run', 'ind-btn-kick'];
-                    const P = {}; for (const id of need) P[id] = await pos(btn(id));
+                    let P = {}; for (let t = 0; t < 12; t++) { P = {}; for (const id of need) P[id] = await pos(btn(id)); if (need.every((id) => P[id] && P[id][2])) break; await W(500); }
                     const miss = need.filter((id) => !P[id] || !P[id][2] || P[id][3] < 40 || P[id][4] < 38);
                     if (miss.length) bad.push('这些按钮没画出来、被盖住或小于 40 像素：' + miss.join('、') + ' ' + JSON.stringify(miss.map((id) => P[id])));
                     const pj = await J(`(function(){ let e = [...document.querySelectorAll('#ind-hud button')].find(function (x) { return x.textContent.indexOf('跳') === 0; }); let r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
@@ -15399,7 +15399,7 @@ async function enterExit(tab, key) {
                     await M.eval(`window.__n = { act: 0, drop: 0, rd: 0, ru: 0, kick: 0 }; let a = indAction; indAction = function () { window.__n.act++; return a.apply(this, arguments); }; let d = indDrop; indDrop = function () { window.__n.drop++; return d.apply(this, arguments); }; let rd = indRightDown; indRightDown = function () { window.__n.rd++; return rd.apply(this, arguments); }; let ru = indRightUp; indRightUp = function () { window.__n.ru++; return ru.apply(this, arguments); }; let k = ckKick; ckKick = function () { window.__n.kick++; return k.apply(this, arguments); }; true;`);
                     if (P['ind-btn-act']) await tap(P['ind-btn-act']);
                     if (P['ind-btn-put']) await tap(P['ind-btn-put']);
-                    if (P['ind-btn-use']) await tap(P['ind-btn-use'], 400);   // 按住 0.4 秒再松：按下和松开都要走到
+                    await M.eval(`ind.bag.torch = 20; indSelect('torch'); ind.aimT = 0; indHudUpdate(); true;`); await W(300); if (P['ind-btn-use']) await tap(P['ind-btn-use'], 400);   // 按住 0.4 秒再松：按下和松开都要走到
                     if (P['ind-btn-kick']) await tap(P['ind-btn-kick']);
                     const n = await J(`window.__n`);
                     if (n.act < 1 || n.drop < 1) bad.push('左键动作、放下按钮没反应 ' + JSON.stringify(n));
