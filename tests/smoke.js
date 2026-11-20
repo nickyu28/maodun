@@ -806,6 +806,24 @@ async function enterExit(tab, key) {
             report('M4 超燃角色熟练度：记场数/胜场；赢 10 场熟手称号、30 场金环外观、100 场大师称号；存档带着', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('M4b')) {
+            // M4b：别的模式能送称号：titleGrant('rocket') 送一次「火箭工程师」，能戴，称号页不报错，存档带着
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){ let a = titleGrant('rocket'), b = titleGrant('rocket'), c = titleGrant('没有这个');
+                let own = titleOwned('rocket'); titleWear('rocket'); let worn = myTitle();
+                saveProgress(); gState.titles = {}; gState.title = null; loadProgress(gState.id); let back = !!(gState.titles && gState.titles.rocket);
+                openAchievements('title'); let txt = document.getElementById('sys-modal-text') ? document.getElementById('sys-modal-text').innerText : '';
+                return JSON.stringify({ a: a, b: b, c: c, own: own, worn: worn, back: back, shown: /火箭工程师/.test(document.body.innerText) }); })()`));
+            if (r.a !== true || r.b !== false || r.c !== false) bad.push('送称号 ' + JSON.stringify(r));
+            if (!r.own || r.worn !== 'rocket') bad.push('没戴上 ' + JSON.stringify(r));
+            if (!r.back) bad.push('称号存档没带着');
+            if (!r.shown) bad.push('称号页看不到火箭工程师');
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('M4b 别的模式送称号：titleGrant 只送一次、能戴、称号页看得到、存档带着', bad.length === 0, bad.join(' / '));
+        }
+
                 if (want('M5')) {
             // M5：加成图鉴——全部加成卡（现在 66 张）出现在你的三选一里就点亮；选过几次、选了赢了几次；全点亮有「超燃百科」称号；存档带着
             const bad = [];

@@ -469,7 +469,8 @@
             shield: { name: '猫盾本盾', col: '#fff176', buy: 200 },
             legend: { name: '传说', col: '#ff5252', buy: 400 },
             bzbook: { name: '超燃百科', col: '#ff7043', book: 1 },
-            nighthunter: { name: '夜间猎手', col: '#ef5350', night: 'catch' }
+            nighthunter: { name: '夜间猎手', col: '#ef5350', night: 'catch' },
+            rocket: { name: '火箭工程师', col: '#b39ddb', grant: '猫盾工业火箭入轨送' }
         };
         // ── 惊魂夜奖励（M7）──
         // 逃出 10 次（逃生者撤离成功）解锁「发光眼」表情；当追捕者累计抓 30 人解锁称号「夜间猎手」。
@@ -550,6 +551,14 @@
             saveProgress(); roomHello();
             openAchievements('title');
         }
+        // 别的模式送称号：猫盾工业火箭入轨时调 titleGrant('rocket')
+        function titleGrant(k) {
+            if (!TITLES[k] || (gState.titles && gState.titles[k])) return false;
+            if (!gState.titles) gState.titles = {};
+            gState.titles[k] = 1; saveProgress();
+            if (typeof blazeFlash === 'function') blazeFlash('得到称号「' + TITLES[k].name + '」');
+            return true;
+        }
         function titleWear(k) {
             if (k && !titleOwned(k)) return;
             gState.title = k || null; saveProgress(); roomHello();
@@ -595,6 +604,7 @@
                                 T.buy ? '<button onclick="titleBuy(\'' + k + '\')" style="margin:0; padding:4px 10px; font-size:12px; background:#e6a23c; color:#fff; border:none;">' + coinBadgeHtml(T.buy, 13) + '</button>' :
                                     T.night ? '<span style="font-size:11px; color:#9e9e9e;">惊魂夜当追捕者累计抓 ' + NIGHT_CATCH_GOAL + ' 人送，' + Math.min(NIGHT_CATCH_GOAL, nightStatOf().catch) + '/' + NIGHT_CATCH_GOAL + '</span>' :
                                 T.book ? '<span style="font-size:11px; color:#9e9e9e;">超燃加成图鉴点满送，' + perkBookLit() + '/' + BLAZE_PERKS.length + '</span>' :
+                                    T.grant ? '<span style="font-size:11px; color:#9e9e9e;">' + T.grant + '</span>' :
                                     T.bz ? '<span style="font-size:11px; color:#9e9e9e;">' + BLAZE_CHARS[T.bz].name + '赢 ' + T.need + ' 场送，' + Math.min(T.need, blazeMasteryOf(T.bz).w) + '/' + T.need + '</span>' :
                                         '<span style="font-size:11px; color:#9e9e9e;">成就「' + ACH_LIST.filter(function (a) { return a.id === T.ach; })[0].name + '」送</span>';
                         return '<div style="display:flex; align-items:center; gap:8px; padding:6px 4px; border-top:1px solid #eee;">' +
