@@ -13517,6 +13517,30 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND221')) {
+            // IND221 右键放置优先于鼓风（作者 11-20）：拿着出料槽对着有风箱的炉子右键能装上；已经有槽放不下时给提示再鼓风；空手或拿别的东西右键仍然鼓风
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const set = (bell, fire, temp, spoutTy) => `cancelAnimationFrame(ind.raf); ind.panel = null; ind.bag = {}; ind.base.rule = 'hard'; ind.base.off.stove = false; ind.base.stove = Object.assign(ckNewState(), { fuel: 9000, fire: ${fire}, temp: ${temp}, bellows: ${bell}, spout: [], spoutTy: ${spoutTy} }); ind.cookId = 'stove'; ind.stam = 100; indTeleport(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z + 3); indLookAt(IND_BASE_ST.stove.x, IND_BASE_ST.stove.z); ind.rh = null; ind.pumpHold = null; let fl = [], f0 = indFlash; indFlash = function (t) { fl.push(t); };`;
+                let r = await J(`(function(){ ${set(true, 3, 600, 'null')} let sk = Object.keys(IND_ITEMS).filter(function (k) { return IND_ITEMS[k].attach === 'spout'; })[0]; ind.bag[sk] = 1; indSelect(sk); let t0 = ind.base.stove.temp; indRightDown(); let hd = !!ind.pumpHold || !!(ind.rh && ind.rh.pump); for (let i = 0; i < 20; i++) indTick(0.05); indRightUp(); indFlash = f0; return { sk: sk, placed: ind.base.stove.spoutTy !== null && ind.base.stove.spoutTy !== undefined, left: ind.bag[sk] || 0, pump: hd, fl: fl.join('|') }; })()`);
+                if (!(r.placed && r.left === 0 && !r.pump)) bad.push('拿出料槽对着风箱炉子右键要放下、不鼓风 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set(true, 3, 600, "'brick'")} let sk = Object.keys(IND_ITEMS).filter(function (k) { return IND_ITEMS[k].attach === 'spout'; })[0]; ind.bag[sk] = 1; indSelect(sk); let t0 = ind.base.stove.temp; indRightDown(); let hd = !!ind.pumpHold || !!(ind.rh && ind.rh.pump); for (let i = 0; i < 20; i++) indTick(0.05); indRightUp(); indFlash = f0; return { left: ind.bag[sk] || 0, hint: /已经有出料槽/.test(fl.join('|')), pump: hd, fl: fl.join('|') }; })()`);
+                if (!(r.left === 1 && r.hint && r.pump)) bad.push('已经有槽放不下：给提示、东西还在、再鼓风 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set(true, 3, 600, 'null')} let t0 = ind.base.stove.temp; indRightDown(); let hd = !!ind.pumpHold || !!(ind.rh && ind.rh.pump); for (let i = 0; i < 20; i++) indTick(0.05); indRightUp(); indFlash = f0; return { pump: hd }; })()`);
+                if (!r.pump) bad.push('空手右键仍然鼓风 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set(true, 3, 600, 'null')} ind.bag.wood = 2; indSelect('wood'); let t0 = ind.base.stove.temp; indRightDown(); let hd = !!ind.pumpHold || !!(ind.rh && ind.rh.pump); for (let i = 0; i < 20; i++) indTick(0.05); indRightUp(); indFlash = f0; return { pump: hd }; })()`);
+                if (!r.pump) bad.push('拿别的东西右键仍然鼓风 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND221 右键放置优先于鼓风：拿出料槽能装上、放不下提示再鼓风、空手和拿别的仍鼓风', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND167')) {
             // IND167 装了风箱的炉子右键优先鼓风（任务 150）：烧着的炉子按住右键 1.5 秒不被收起、温度涨、不耗体力；灭着的不收起；面板里"收起炉子"能收；没装风箱的长按右键还是收起
             const bad = [];
