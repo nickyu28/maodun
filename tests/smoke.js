@@ -13165,6 +13165,13 @@ async function enterExit(tab, key) {
                 await esc();
                 if (await T.eval(`sysModalVisible()`)) bad.push(k + ' 的规则卡片 Esc 没关');
             }
+            // 第一次点开模式会自动弹规则，0.4 秒内又点"规则"按钮：不能弹出两张一样的，一次 Esc 就关干净（测试员 -133：竞速、惊魂夜、超燃要按两次）
+            for (const k of ['race', 'night', 'blaze']) {
+                await T.eval(`${HIDE} gState.modeIntroShown = {}; modePick('${k}'); openRules('${k}'); true;`);
+                await W(900);
+                await esc(); await W(300);
+                if (await T.eval(`sysModalVisible()`)) bad.push(k + ' 点模式再点规则，一次 Esc 没关干净');
+            }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('ES3 每个模式的规则卡片都能按 Esc 关', bad.length === 0, bad.join(' / '));
