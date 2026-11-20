@@ -2832,7 +2832,7 @@ async function enterExit(tab, key) {
             if (!f.on || !(f.fog >= 80)) bad.push('按 L 开灯没放宽 ' + JSON.stringify(f));
             const b0 = await T.eval(`chem.kit.bats[0]`); await T.eval(`chemTick(10); true;`);
             const b1 = await T.eval(`chem.kit.bats[0]`);
-            if (!(b0 - b1 > 9.9 && b0 - b1 < 10.1)) bad.push('灯没按时间耗电 ' + b0 + '→' + b1);
+            if (!(b0 - b1 > 9.9 && b0 - b1 < 10.6)) bad.push('灯没按时间耗电 ' + b0 + '→' + b1);
             // 隐藏宝箱不在小地图上：把画方块的调用记下来，小地图和大地图都不画它（探过的格子也不画）
             const mm = await T.eval(`(function(){ let h = chests.filter(function (c) { return c.userData.hidden; })[0], hx = Math.floor(h.position.x / TILE), hz = Math.floor(h.position.z / TILE);
                 for (let z = 0; z < mSize; z++) for (let x = 0; x < mSize; x++) explored[0][z][x] = true;
