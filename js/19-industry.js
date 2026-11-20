@@ -1989,6 +1989,7 @@
             if (lvTorchUse()) return;   // 没点着的火把：靠近火苗仔、岩浆点着（19-industry-lava.js）
             if (mbShieldDown()) return;   // 选中盾：举盾，不拉风箱（任务 70）
             { let aa = indAim(); if (aa && aa.kind === 'animal' && (mbPetUse(aa.o, indSel()) || mbBark(aa.o))) return; }   // 右键狗猫：装刀盾、喂水，不然就叫一声
+            { let ks = indSel(), pk = ks && IND_ITEMS[ks]; if (pk && (pk.attach || pk.dev || pk.furn || pk.cook || pk.house || pk.raft || pk.nuke) && indUse()) return; }   // 手上拿着能放的东西（出料槽、漏斗、设备这些）：右键先放，放得下就放，放不下再往下走鼓风（作者 11-20：出料槽和鼓风的右键冲突）
             if (fmPullDown(indAim())) return;   // 拉风箱、扇扇子（任务 44）：要在"按住收起炉子"前面
             if (fmPumpDown(indAim())) return;   // 任务 150：装了风箱的炉子，右键一律是鼓风，按住连着拉，不再长按收起
             let f = ind.ride ? null : indFurnOf(indAim());   // 骑着不能搬东西
