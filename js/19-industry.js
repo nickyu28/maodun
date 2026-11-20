@@ -861,7 +861,7 @@
             return wlList().some(function (w) { return Math.abs(x - w.i) <= 0.5 && Math.abs(z - w.j) <= 0.5; });
         }
         function indBodyTick(dt) {
-            let S = ind.base.surv, B = IND_BODY, eff = indAirTemp() + indWarmth() * B.warmMul;
+            let S = ind.base.surv, B = IND_BODY, eff = indAirTemp() + indWarmth() * B.warmMul; if (typeof fnEff === 'function') { eff = fnEff(eff); fnBodyCool(S, dt); }   // 电风扇（19-industry-fan.js）
             if (eff < B.cold) S.temp -= (B.cold - eff) * B.rate * dt;
             else if (eff > B.hot) S.temp += (eff - B.hot) * B.rate * dt;
             else { let bk = B.back * (S.temp > 39 ? 3 : 1) * dt; S.temp += Math.max(-bk, Math.min(bk, 37 - S.temp)); }
@@ -2380,7 +2380,7 @@
             if (IND_ITEMS[k].dev === 'pad' && typeof rkPadOk === 'function' && !rkPadOk(x, z)) return false;   // 发射台：周围 8 米空地、只能一个（19-industry-launch.js）
             if (IND_ITEMS[k].dev === 'reactor' && !indSpotFree(x, z, 2.2)) { indFlash('反应堆占 3×3 米，这里放不下，换个空地'); return false; }
             indBagDel(k, 1);
-            { let nd = { id: ++ind.base.dseq, ty: IND_ITEMS[k].dev, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} }; if (nd.ty === 'gen') { nd.self = true; nd.fi = {}; nd.fu = 0; nd.lit = false; nd.wt = 0; nd.wm = 'wood'; } ind.base.devs.push(nd); }   // 任务 151：新放的蒸汽发电机自带炉膛
+            { let nd = { id: ++ind.base.dseq, ty: IND_ITEMS[k].dev, x: x, z: z, bats: 0, u: 0, on: true, ft: 20, st: {} }; if (nd.ty === 'fan' && typeof fnPlaced === 'function') fnPlaced(nd, f); if (nd.ty === 'gen') { nd.self = true; nd.fi = {}; nd.fu = 0; nd.lit = false; nd.wt = 0; nd.wm = 'wood'; } ind.base.devs.push(nd); }   // 任务 151：新放的蒸汽发电机自带炉膛
             ind.devDirty = true; indSave(); 
             return true;
         }
@@ -3048,14 +3048,14 @@
                 let c = IND_ITEMS[k] && IND_ITEMS[k].hot; if (!c) return;   // 不认识的东西（老档里删掉的、测试塞的）跳过，别让整帧报错
                 hot = true;
                 if (ind.hotT[k] === undefined) ind.hotT[k] = IND_HOT_COOL;
-                ind.hotT[k] -= dt;
+                ind.hotT[k] -= dt * (typeof fnCoolMul === 'function' ? fnCoolMul(ind.p.x, ind.p.z) : 1);
                 if (ind.hotT[k] <= 0) { let n = ind.bag[k]; delete ind.bag[k]; delete ind.hotT[k]; indGive(c, n); }
             });
             Object.keys(ind.hotT).forEach(function (k) { if (!ind.bag[k]) delete ind.hotT[k]; });
             if (hot && indHard() && !ind.bag.tongs) indHurt(IND_HOT_DPS * dt, 'burn', indHotDetail());
             if (ind && ind.where === 'base') ind.base.ground.forEach(function (g) {
                 let c = IND_ITEMS[g.k] && IND_ITEMS[g.k].hot; if (!c) return;
-                g.ht = (g.ht === undefined ? IND_HOT_COOL : g.ht) - dt;
+                g.ht = (g.ht === undefined ? IND_HOT_COOL : g.ht) - dt * (typeof fnCoolMul === 'function' ? fnCoolMul(g.x, g.z) : 1);
                 if (g.ht <= 0) { g.k = c; delete g.ht; ind.itemDirty = true; }
             });
         }
@@ -3274,7 +3274,7 @@
         let IND_HEAT_FAST = !/[?&]notut\b/.test(location.search);   // 冒烟网址带 notut=1 时默认关，旧检查的秒数照旧；检查炉温加速时手动打开
         function indHeatMul(T, r) { if (!IND_HEAT_FAST) return 1; return Math.min(3, 1 + Math.max(0, T - (r.minT || 0)) / 200); }
         function indCookTick(c, dt) {
-            indSpoutTick(c, dt); ckTick(c, dt); rlCookWaterTick(c);   // 接了水管：空桶自动装生水（任务 58）
+            indSpoutTick(c, dt * (typeof fnCoolMul === 'function' ? fnCoolMul(indSpoutPos(c).x, indSpoutPos(c).z) : 1)); ckTick(c, dt); rlCookWaterTick(c);   // 接了水管：空桶自动装生水（任务 58）
             let S = c.C, K = indCookK(c.ty, c.C), F = fmFireEff(c, dt);   // 鼓风要有人拉风箱（任务 44），扇子扇到 1400
             if (S.fire > 0) {
                 let burn = F.burn * K.burn * dt * (c.ty === 'kiln' && S.cook && IND_RECIPES[S.cook.i] && (IND_RECIPES[S.cook.i].cls === 'smelt' || IND_RECIPES[S.cook.i].cls === 'chem') ? (S.cook.n || 1) : 1);   // 任务 164：大窑一炉冶炼、化工多份，燃料按份数扣
@@ -3283,7 +3283,7 @@
                 if (S.ashT >= IND_ASH_PER * 60) { S.ashT -= IND_ASH_PER * 60; S.out.ash = (S.out.ash || 0) + 1; }
                 if (S.fuel <= 0) { S.fuel = 0; S.fire = 0; if (ind.panel === 'stove') ind.panelDirty = true; }
             }
-            let target = Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20);
+            let target = Math.max(F.t, indElecBoost(c.x, c.z) ? IND_FURNACE_T : 20) + (typeof fnTargetAdd === 'function' ? fnTargetAdd(c, dt) : 0);   // 电风扇慢慢吹旺炉子
             if (S.temp < target) S.temp = Math.min(target, S.temp + K.rate * dt); else S.temp = Math.max(target, S.temp - (S.fire > 0 ? (S.bellows && S.pumpT !== undefined ? FM_PUMP.decay : K.rate) : Math.min(K.rate, 10)) * dt);   // 风箱拉上去的温度慢慢掉回火候（任务 114）
             if (S.pumpT !== undefined && S.temp <= target) delete S.pumpT;
             if (S.flare > 0) S.flare = Math.max(0, S.flare - dt);

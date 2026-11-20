@@ -13551,6 +13551,52 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND222')) {
+            // IND222 电风扇：通电才起作用；三个效果——降自己体温（热天）、对着烧着的炉子慢慢多涨温度、风里烫的东西（出料槽、地上、身上）凉得快；风向外面没用；转向；叶片通电才转；不跟手摇扇子混名
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const r = await J(`(function(){ try { cancelAnimationFrame(ind.raf); let B = ind.base, o = {}; B.rule = 'hard'; B.devs = []; indPanelClose();
+                    o.names = IND_ITEMS.dev_fan.name + '|' + IND_ITEMS.fan.name; o.rec = IND_CRAFT.filter(function (q) { return q.out === 'dev_fan'; }).map(function (q) { return !!q.in.motor && !!(q.in.ingot_al || q.in.plastic) && !!q.in.wire && !!q.in.ingot_fe; }).join();
+                    let St = IND_BASE_ST.stove; B.off.stove = false; let c = indCookById('stove'), S = c.C;
+                    let mk = function (dx, dz, dir, pw) { B.devs = [{ id: ++B.dseq, ty: 'fan', x: St.x + dx, z: St.z + dz, bats: 0, u: 0, on: true, ft: 20, st: {}, pw: pw, dir: dir }]; return B.devs[0]; };
+                    let stoveRun = function () { S.fire = 2; S.fuel = 9000; S.temp = 200; S.fanW = 0; S.items = {}; S.cook = null; for (let i = 0; i < 120; i++) indCookTick(c, 1); return Math.round(S.temp); };
+                    B.devs = []; o.t0 = stoveRun();
+                    mk(-4, 0, 0, true); o.t1 = stoveRun();
+                    mk(-4, 0, 0, false); o.tOff = stoveRun();
+                    mk(4, 0, 0, true); o.tBehind = stoveRun();
+                    let fan = mk(-4, 0, 0, true);
+                    S.fire = 0; S.spout = [{ k: 'hot_cu', t: 30 }]; S.spoutTy = 'brick'; let sp = indSpoutPos(c); fan.x = sp.x - 4; fan.z = sp.z; fan.dir = 0; indSpoutTick(c, 10 * fnCoolMul(sp.x, sp.z)); o.spoutWind = Math.round(S.spout[0].t);
+                    S.spout = [{ k: 'hot_cu', t: 30 }]; fan.pw = false; indSpoutTick(c, 10 * fnCoolMul(sp.x, sp.z)); o.spoutNo = Math.round(S.spout[0].t); fan.pw = true;
+                    B.ground = [{ k: 'hot_cu', x: fan.x + 3, z: fan.z }, { k: 'hot_cu', x: fan.x - 3, z: fan.z }]; indHotTick(12); o.ground = B.ground.map(function (g) { return g.k; }).join();
+                    ind.p.x = fan.x + 3; ind.p.z = fan.z; ind.bag = { hot_cu: 1, tongs: 1 }; ind.hotT = {}; indHotTick(12); o.bagWind = !!ind.bag.ingot_cu && !ind.bag.hot_cu; ind.bag = {}; ind.hotT = {};
+                    let air = indAirTemp; indAirTemp = function () { return 40; }; let S2 = B.surv; let run = function (pw) { fan.pw = pw; ind.p.x = fan.x + 3; ind.p.z = fan.z; S2.temp = 37; for (let i = 0; i < 20; i++) indBodyTick(1); return S2.temp; }; o.bodyOn = Math.round(run(true) * 100) / 100; o.bodyOff = Math.round(run(false) * 100) / 100; indAirTemp = air; fan.pw = true;
+                    let cool = function (hot) { S2.temp = 39; indAirTemp = function () { return 25; }; ind.p.x = fan.x + 3; ind.p.z = fan.z; fan.pw = hot; for (let i = 0; i < 20; i++) indBodyTick(1); indAirTemp = air; return S2.temp; }; o.cool1 = Math.round(cool(true) * 100) / 100; o.cool0 = Math.round(cool(false) * 100) / 100; fan.pw = true;
+                    let d0 = fan.dir; fnTurn(fan.id, 1); o.turn = Math.round((fan.dir - d0) * 1000) / 1000; fan.dir = 0;
+                    o.html = IND_DEV_HTML.fan(fan).indexOf('左转 45 度') >= 0;
+                    fnSync(0.1); let g = ind.fanG[fan.id]; let r0 = g.userData.rotor.rotation.x; fnSync(0.1); let r1 = g.userData.rotor.rotation.x; fan.pw = false; fnSync(0.1); let r2 = g.userData.rotor.rotation.x; o.spin = r1 > r0 && r2 === r1;
+                    return o; } catch (e) { return { err: String(e.stack).slice(0, 400) }; }})()`);
+                if (r.names !== '电风扇|扇子') bad.push('名字不混 ' + r.names);
+                if (!/^true,true$/.test(r.rec)) bad.push('配方要电机、线、铁、铝或塑料 ' + r.rec);
+                if (!(r.t1 - r.t0 >= 60 && r.t1 - r.t0 <= 140)) bad.push('对着烧着的炉子吹慢慢多涨 60～140 度 ' + JSON.stringify([r.t0, r.t1]));
+                if (!(r.tOff === r.t0 && r.tBehind === r.t0)) bad.push('没通电、风向外面没用 ' + JSON.stringify([r.t0, r.tOff, r.tBehind]));
+                if (!(r.spoutWind <= 1 && r.spoutNo >= 19)) bad.push('出料槽里烫的锭风里凉得快 ' + JSON.stringify([r.spoutWind, r.spoutNo]));
+                if (r.ground !== 'ingot_cu,hot_cu') bad.push('地上的在风里凉、不在风里还烫 ' + r.ground);
+                if (!r.bagWind) bad.push('身上带的烫的在风里凉得快');
+                if (!(r.bodyOn < r.bodyOff - 0.02)) bad.push('热天站在风里体温升得慢 ' + JSON.stringify([r.bodyOn, r.bodyOff]));
+                if (!(r.cool1 < r.cool0 - 0.3)) bad.push('体温高站在风里降得更快 ' + JSON.stringify([r.cool1, r.cool0]));
+                if (Math.abs(r.turn - 0.785) > 0.01 || !r.html) bad.push('转向 45 度、面板有按钮 ' + JSON.stringify([r.turn, r.html]));
+                if (!r.spin) bad.push('叶片通电才转 ' + r.spin);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND222 电风扇：通电才有用、降自己体温、慢慢吹旺炉子、风里烫的东西凉得快、转向、叶片通电才转', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND221')) {
             // IND221 右键放置优先于鼓风（作者 11-20）：拿着出料槽对着有风箱的炉子右键能装上；已经有槽放不下时给提示再鼓风；空手或拿别的东西右键仍然鼓风
             const bad = [];
