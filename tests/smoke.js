@@ -13581,7 +13581,7 @@ async function enterExit(tab, key) {
         }
 
         if (want('IND226')) {
-            // IND226 烤蘑菇（作者 11-20）：饱食 +20（跟蘑菇汤一个档次），烤的份数不动，野外蘑菇多生成一倍（140 处）
+            // IND226 烤蘑菇（作者 11-20）：饱食 +15（作者定的），烤的份数和野外蘑菇生成数量都不动
             const bad = [];
             const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
             await T.eval(`indEnter(); true;`);
@@ -13589,11 +13589,11 @@ async function enterExit(tab, key) {
             else { try {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const r = JSON.parse(await T.eval(`JSON.stringify((function(){ let rc = IND_RECIPES.filter(function (q) { return q.in.shroom === 1 && q.out.shroom_roast; })[0]; return { f: IND_ITEMS.shroom_roast.eat.f, n: rc ? rc.out.shroom_roast : 0, spawn: WD_SC.shroom.n }; })())`));
-                if (r.f !== 20 || r.n !== 1 || r.spawn !== 140) bad.push('烤蘑菇饱食 20、烤的份数还是 1、野外蘑菇 140 处 ' + JSON.stringify(r));
+                if (r.f !== 15 || r.n !== 1 || r.spawn !== 70) bad.push('烤蘑菇饱食 15、烤的份数还是 1、野外蘑菇还是 70 处 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND226 烤蘑菇饱食 +20，野外蘑菇多生成一倍，烤的份数不动', bad.length === 0, bad.slice(0, 8).join(' / '));
+            report('IND226 烤蘑菇饱食 +15，烤的份数和野外蘑菇数量不动', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
         if (want('IND225')) {
