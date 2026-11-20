@@ -103,7 +103,7 @@
             if (o.twr < 1) { indFlash('推力不够，火箭起不来，多装发动机或少装燃料'); return; }
             let eat = function () { RK5.parts.concat(RK5.fuels).forEach(function (k) { delete d.st[k]; }); };
             if (o.dv < RK5.dv) { eat(); d.broken = true; indSave(); indFlash('升到半空烧完了，火箭掉下来炸了，发射台要重修'); return; }
-            eat(); let B = ind.base; B.rocket = { clock: B.clock, t: Date.now() }; indAch('rocket'); indSave(); rkEnding(o);
+            eat(); let B = ind.base; B.rocket = { clock: B.clock, t: Date.now() }; indAch('rocket'); if (typeof titleGrant === 'function') titleGrant('rocket'); indSave(); rkEnding(o);
         }
         function rkEnding(o) {
             let B = ind.base, ach = Object.keys(B.ach || {}).length, tot = ACH.filter(function (a) { return !a.hide; }).length, m = Math.floor((B.clock || 0) / 60), tt = Math.floor(m / 60) + ' 小时 ' + (m % 60) + ' 分';
