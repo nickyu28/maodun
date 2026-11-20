@@ -38,7 +38,11 @@ function gfxDeadMark(e) {
     try { console.error('webgl 画面初始化失败', e && e.stack ? e.stack : e); } catch (x) { }
     gfxDeadUI();
 }
-function gfxDeadError() { let e = new Error('webgl-dead'); e.gfxDead = true; return e; }
+function gfxDeadError() {
+    let e = new Error('webgl-dead'); e.gfxDead = true;
+    if (!GFXDEAD.quiet && typeof blazeFlash === 'function') blazeFlash(GFXDEAD.text);   // 点了会开局的按钮：给一句话，不是什么都不发生（进大厅那次不弹，大厅顶上已经有提示条）
+    return e;
+}
 function gfxDeadUI() {
     if (!GFXDEAD.dead) return;
     let b = document.getElementById('lobby-start-btn');

@@ -13171,7 +13171,18 @@ async function enterExit(tab, key) {
                 let er = document.getElementById('night-err'); out.errShown = !!(er && er.style.display === 'block');
                 out.pageText = document.body.innerText.indexOf('出错了') >= 0 || /at .*\.js/.test(document.body.innerText);
                 openShop(); out.shop = !document.getElementById('screen-shop').classList.contains('hidden');
+                nav('screen-lobby');
+                // 竞速固定赛道、乐园编辑器试玩也是直接开局的入口：要么挡住，要么回编辑界面，积木还在
+                try { raceStart(false, null, null, 0); out.race = 'no'; } catch (e) { out.race = e && e.gfxDead ? 'dead' : String(e && e.message); }
+                out.raceLobby = !document.getElementById('screen-lobby').classList.contains('hidden');
+                gState.parkDraft = [{ type: 'win', score: 8 }]; makerOpen('park');
+                let inp = document.querySelector('#mk-stack .mk-num'); inp.value = '3'; inp.dispatchEvent(new Event('change', { bubbles: true }));
+                try { makerTest(); out.mk = 'ok'; } catch (e) { out.mk = 'threw ' + String(e && e.message); }
+                out.mkOpen = !document.getElementById('maker').classList.contains('hidden'); out.mkRet = makerReturn;
+                makerOpen('park'); out.mkVal = document.querySelector('#mk-stack .mk-num').value;
                 return JSON.stringify(out); })()`));
+            if (r.race !== 'dead' || !r.raceLobby) bad.push('竞速固定赛道没挡住 ' + JSON.stringify([r.race, r.raceLobby]));
+            if (r.mk !== 'ok' || !r.mkOpen || r.mkRet !== null || r.mkVal !== '3') bad.push('乐园试玩失败后没回编辑界面或积木丢了 ' + JSON.stringify([r.mk, r.mkOpen, r.mkRet, r.mkVal]));
             if (!r.lobby) bad.push('大厅菜单没出来 ' + JSON.stringify(r));
             if (!r.dis) bad.push('开始游戏没置灰');
             if (!r.note || r.note.length > 40) bad.push('提示不对 ' + r.note);
