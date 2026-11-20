@@ -7,7 +7,7 @@
 const GFX_QUALITY_NAMES = ['低', '中', '高', '超高'], GFX_VIEW_NAMES = ['正常', '稍远', '远', '超远'], GFX_FPS_NAMES = ['正常，30', '流畅，60', '高，120'];
 // 设置页里每一档的说明，档位名还是上面那几个
 const GFX_QUALITY_DESC = [gfxDeviceLow() ? '低，最省，这台设备默认选这档' : '低，最省', '中，默认', '高，有影子，吃性能', '超高，最清楚，最吃性能，卡就调低'];
-const GFX_VIEW_MUL = [1, 1.4, 2, 3], GFX_FPS_TARGET = [30, 60, 120], GFX_SEG = [0.6, 1, 1.25, 2];   // 作者 11-16：中 = 游戏默认的样子，低在它下面，高在它上面，超高 = 能做到的最好，超过现实
+const GFX_VIEW_MUL = [1, 1.4, 2, 3], GFX_FPS_TARGET = [30, 60, 120], GFX_SEG = [0.35, 1, 1.25, 2];   // 作者 11-16：中 = 游戏默认的样子，低在它下面，高在它上面，超高 = 能做到的最好，超过现实
 // 设备差：核数不超过 4，或者内存不超过 4 GB（有的浏览器不报内存，那就只看核数）
 function gfxDeviceLow() {
     let c = navigator.hardwareConcurrency, m = navigator.deviceMemory;
@@ -22,9 +22,9 @@ function graphicsFps() { return gfxIdx('gfx_fps', 2, 1); }
 function graphicsViewMul() { return GFX_VIEW_MUL[graphicsView()]; }
 function graphicsFpsTarget() { return GFX_FPS_TARGET[graphicsFps()]; }
 function graphicsPixelRatio() {
-    // 低 1，中 min(1.5, 设备)，高 设备原生，超高 原生的 1.5 倍超采样（最多 3，免得画布太大）
+    // 低 0.6（画面放大着看，糊一点，换帧率），中 min(1.5, 设备)，高 设备原生，超高 原生的 2 倍超采样（最多 3，免得画布太大）
     let d = window.devicePixelRatio || 1, q = graphicsQuality();
-    return q === 0 ? 1 : q === 1 ? Math.min(1.5, d) : q === 2 ? d : Math.min(3, Math.max(d, 1) * 2);
+    return q === 0 ? 0.6 : q === 1 ? Math.min(1.5, d) : q === 2 ? d : Math.min(3, Math.max(d, 1) * 2);
 }
 
 
@@ -174,6 +174,43 @@ function gfxLook(r, q) {
     gfxHemi.intensity = q === 3 ? 0.36 : 0.3;
     if (on && bright && !gfxHemi.parent) scene.add(gfxHemi);
     if ((!on || !bright) && gfxHemi.parent) scene.remove(gfxHemi);
+    // 超高独有（作者 11-20：高已经够好，超高要明显比高好）：背光的冷色补光让物体有明暗层次，太阳有光晕，材质带高光（见 gfxShadowTick）
+    if (!gfxRim) { gfxRim = new THREE.DirectionalLight(0xa9c8ff, 0.24); gfxRim.userData.__gfxOwn = true; }
+    if (!gfxGlow) gfxGlow = gfxMakeGlow();
+    let ultra = q === 3 && bright;
+    if (ultra && !gfxRim.parent) scene.add(gfxRim);
+    if (!ultra && gfxRim.parent) scene.remove(gfxRim);
+    if (ultra && !gfxGlow.parent) scene.add(gfxGlow);
+    if (!ultra && gfxGlow.parent) scene.remove(gfxGlow);
+}
+let gfxRim = null, gfxGlow = null, gfxPhongOn = false;
+// 太阳光晕：一张径向渐变的大贴图，加色混合，挂在太阳方向很远的地方，跟着镜头走
+function gfxMakeGlow() {
+    let c = document.createElement('canvas'); c.width = c.height = 256; let g = c.getContext('2d');
+    let gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+    gr.addColorStop(0, 'rgba(255,248,220,1)'); gr.addColorStop(0.12, 'rgba(255,240,200,0.75)'); gr.addColorStop(0.4, 'rgba(255,225,170,0.22)'); gr.addColorStop(1, 'rgba(255,220,160,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+    let sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, fog: false, transparent: true }));
+    sp.scale.set(520, 520, 1); sp.renderOrder = 999; sp.frustumCulled = false; sp.userData.__gfxOwn = true; return sp;
+}
+// 超高：会受光的 Lambert 材质换成带高光的 Phong（颜色、贴图、自发光是同一个对象，游戏里改颜色照样跟着变）；离开超高换回来
+const GFX_PHONG_KEYS = ['transparent', 'opacity', 'side', 'vertexColors', 'flatShading', 'fog', 'depthWrite', 'depthTest', 'alphaTest', 'polygonOffset', 'polygonOffsetFactor', 'polygonOffsetUnits', 'visible'];
+function gfxPhongOf(m) {
+    if (!m.userData) m.userData = {};
+    if (m.userData.__gfxP) return m.userData.__gfxP;
+    let p = new THREE.MeshPhongMaterial({ specular: 0x262626, shininess: 45 });
+    p.color = m.color; if (m.map) p.map = m.map; if (m.alphaMap) p.alphaMap = m.alphaMap; if (m.emissive) p.emissive = m.emissive; p.emissiveIntensity = m.emissiveIntensity;
+    GFX_PHONG_KEYS.forEach(function (k) { if (m[k] !== undefined) p[k] = m[k]; });
+    p.userData.__gfxFrom = m; m.userData.__gfxP = p; return p;
+}
+function gfxUpgradeMesh(o, up) {
+    if (up) {
+        if (o.userData.__gfxM0) return;
+        let ms = [].concat(o.material); if (!ms.some(function (m) { return m && m.isMeshLambertMaterial; })) return;
+        o.userData.__gfxM0 = o.material; gfxPhongOn = true;
+        let n = ms.map(function (m) { return m && m.isMeshLambertMaterial ? gfxPhongOf(m) : m; });
+        o.material = Array.isArray(o.material) ? n : n[0];
+    } else if (o.userData.__gfxM0) { o.material = o.userData.__gfxM0; o.userData.__gfxM0 = null; }
 }
 function gfxAniso(q) { return q >= 3 ? 16 : q >= 2 ? 8 : 1; }
 
@@ -181,6 +218,7 @@ function gfxShadowTick(r) {
     if (typeof scene === 'undefined' || !scene || !r.shadowMap) return;
     let q = graphicsQuality(), on = q >= 2, now = performance.now();
     gfxLook(r, q);
+    if (q !== 3 && gfxPhongOn) { gfxPhongOn = false; scene.traverse(function (o) { if (o.isMesh) gfxUpgradeMesh(o, false); }); }   // 离开超高：材质换回来（低、中档没有影子，走不到下面的扫描）
     if (gfxShadowOn !== on) {
         gfxShadowOn = on; r.shadowMap.enabled = on; gfxShadowAt = 0;
         scene.traverse(function (o) { if (o.material) [].concat(o.material).forEach(function (m) { m.needsUpdate = true; }); });
@@ -188,11 +226,12 @@ function gfxShadowTick(r) {
     let sun = gfxFindSun(); if (!sun) return;
     if (!on) { sun.castShadow = false; return; }
     if (gfxShadowQ !== q) {
-        gfxShadowQ = q; r.shadowMap.type = q === 3 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+        gfxShadowQ = q; r.shadowMap.type = THREE.PCFShadowMap;   // 超高用 PCF 加半径把边缘糊开（PCFSoft 不认半径）
         let sz = q === 3 ? Math.min(4096, r.capabilities.maxTextureSize || 2048) : 2048;
         if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
         sun.shadow.mapSize.set(sz, sz);
-        let R = q === 3 ? 70 : 45, c = sun.shadow.camera; c.left = -R; c.right = R; c.top = R; c.bottom = -R; c.near = 1; c.far = 260; c.updateProjectionMatrix();
+        sun.shadow.radius = q === 3 ? 4 : 1;
+        let R = q === 3 ? 42 : 45, c = sun.shadow.camera; c.left = -R; c.right = R; c.top = R; c.bottom = -R; c.near = 1; c.far = 260; c.updateProjectionMatrix();
         sun.shadow.bias = -0.0006; scene.traverse(function (o) { if (o.material) [].concat(o.material).forEach(function (m) { m.needsUpdate = true; }); });
     }
     sun.castShadow = true;
@@ -200,10 +239,13 @@ function gfxShadowTick(r) {
     // 影子相机跟着画面中心，位置取整数格，免得影子边缘跟着晃
     let cp = camera.position, tx = Math.round(cp.x / 2) * 2, tz = Math.round(cp.z / 2) * 2;
     sun.target.position.set(tx, 0, tz); sun.position.set(tx + 12, 90, tz + 12); sun.target.updateMatrixWorld(); sun.updateMatrixWorld();
+    if (q === 3 && gfxRim && gfxRim.parent) { gfxRim.position.set(tx - 40, 30, tz - 40); gfxRim.target.position.set(tx, 0, tz); if (!gfxRim.target.parent) scene.add(gfxRim.target); }
+    if (q === 3 && gfxGlow && gfxGlow.parent) gfxGlow.position.set(cp.x + 380, cp.y + 560, cp.z + 380);   // 太阳方向：跟 sun.position 相对 target 的方向一致（12, 90, 12），放远
     if (now - gfxShadowAt > 500) {
         gfxShadowAt = now;
         scene.traverse(function (o) {
             if (!o.isMesh || o.userData.__gfxS === q) return;
+            gfxUpgradeMesh(o, q === 3);
             let ms = [].concat(o.material), lit = ms.length && ms.every(gfxLit); o.userData.__gfxS = q;
             ms.forEach(function (m) { if (m && m.map && m.map.anisotropy !== Math.min(gfxAniso(q), r.capabilities.getMaxAnisotropy())) { m.map.anisotropy = Math.min(gfxAniso(q), r.capabilities.getMaxAnisotropy()); m.map.needsUpdate = true; } });
             if (!lit) return;

@@ -153,7 +153,7 @@
         function sceneSweep() {
             if (!scene) return;
             scene.children.slice().forEach(function (c) {
-                if (c.isLight || c.isCamera) return;
+                if (c.isLight || c.isCamera || (c.userData && c.userData.__gfxOwn)) return;   // __gfxOwn：画质超高的太阳光晕，不能被清掉再释放
                 scene.remove(c);
             });
         }
@@ -1482,6 +1482,14 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026.11.5-140', date: '11 月 20 日', title: '最近更新', items: [
+                    '画质低更糊更省，超高多了高光、补光和太阳光晕，影子更细',
+                    '画面打不开时大厅菜单还能用，开始游戏会置灰并有提示',
+                    '规则卡片按一下 Esc 就关',
+                    '猫盾工业触屏能用了，新加电风扇'
+                ]
+            },
+            {
                 id: '2026.11.5-126', date: '11 月 20 日', title: '最近更新', items: [
                     '设置的游戏页能导出、导入存档，换设备带着走',
                     '猫盾工业加了盔甲，皮、青铜、铁、钢四档',
@@ -1496,15 +1504,6 @@
                     '卡的时候左上角冒红色图标，点一下有说明',
                     '太卡会临时降画质，不改你选的设置',
                     '联机寻宝队有人卡掉线，AI 先顶上，3 分钟内能回到同一局'
-                ]
-            },
-            {
-                id: '2026.11.5-75', date: '11 月 14 日', title: '最近更新', items: [
-                    '设置分成声音、操作、显示、游戏四页',
-                    '按键能自己改，冲突会提示，能一键恢复默认',
-                    '左右上下转视角的快慢分开调了，触屏按钮大小和透明度也能调',
-                    '显示里能调界面大小、快捷栏位置、视野、帧率上限，小地图和准星能关',
-                    '新手教程改成第一次进每个模式时出现，设置里能重播'
                 ]
             }
         ];

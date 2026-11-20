@@ -14505,9 +14505,9 @@ async function enterExit(tab, key) {
             // 画质：像素比和分段数
             await T.eval(`settingsSet('gfx_quality', 0); true;`);
             const q0 = JSON.parse(await T.eval(`JSON.stringify({ dpr: window.devicePixelRatio || 1, pr: renderer.getPixelRatio(), seg: new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments, cyl: new THREE.CylinderGeometry(1, 1, 2, 24).parameters.radialSegments, inst: new THREE.SphereGeometry(1, 8, 8) instanceof THREE.BufferGeometry })`));
-            if (q0.pr !== 1 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
-            const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); let d = window.devicePixelRatio || 1; return [Math.abs(renderer.getPixelRatio() - [1, Math.min(1.5, d), d, Math.min(3, Math.max(d, 1) * 2)][i]) < 1e-6, new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
-            if (JSON.stringify(pct) !== '[[true,14],[true,24],[true,30],[true,48]]') bad.push('画质四档的像素比和分段数不对 ' + JSON.stringify(pct));
+            if (q0.pr !== 0.6 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
+            const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); let d = window.devicePixelRatio || 1; return [Math.abs(renderer.getPixelRatio() - [0.6, Math.min(1.5, d), d, Math.min(3, Math.max(d, 1) * 2)][i]) < 1e-6, new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
+            if (JSON.stringify(pct) !== '[[true,8],[true,24],[true,30],[true,48]]') bad.push('画质四档的像素比和分段数不对 ' + JSON.stringify(pct));
             // 观感：高和超高在亮堂堂的场景里换成有深浅的灯光（环境光降下来、多一盏半球光、太阳偏暖），中和低还原
             const lk = JSON.parse(await T.eval(`JSON.stringify([1, 2, 3, 1].map(function (i) { settingsSet('gfx_quality', i); gfxLook(renderer, i); let am = scene.children.filter(function (x) { return x.isAmbientLight; })[0]; let sun = gfxFindSun(); return [am ? +am.intensity.toFixed(3) : null, !!(gfxHemi && gfxHemi.parent), sun ? sun.color.getHex() : null]; }))`));
             if (lk[0][0] === null) bad.push('场景里没有环境光，观感测不了');
@@ -14522,11 +14522,19 @@ async function enterExit(tab, key) {
             for (const i of [0, 1, 2, 3]) {
                 await T.eval(`settingsSet('gfx_quality', ${i}); gfxShadowAt = 0; renderer.render(scene, camera); window.gfxLastRender = 0; true;`); await W(700);
                 await T.eval(`gfxLastRender = 0; gfxShadowAt = 0; renderer.render(scene, camera); true;`);
-                sh.push(JSON.parse(await T.eval(`JSON.stringify((function () { let s = gfxFindSun(), b = scene.getObjectByName('gfxbox'), f = scene.getObjectByName('gfxfloor'); return [renderer.shadowMap.enabled, !!(s && s.castShadow), s ? s.shadow.mapSize.x : 0, renderer.shadowMap.type === THREE.PCFSoftShadowMap, b.castShadow, b.receiveShadow, f.castShadow, f.receiveShadow]; })())`)));
+                sh.push(JSON.parse(await T.eval(`JSON.stringify((function () { let s = gfxFindSun(), b = scene.getObjectByName('gfxbox'), f = scene.getObjectByName('gfxfloor'); return [renderer.shadowMap.enabled, !!(s && s.castShadow), s ? s.shadow.mapSize.x : 0, s ? s.shadow.radius > 1 : false, b.castShadow, b.receiveShadow, f.castShadow, f.receiveShadow]; })())`)));
             }
             if (sh[0][0] || sh[0][1] || sh[1][0] || sh[1][1]) bad.push('低、中档不该有影子 ' + JSON.stringify(sh.slice(0, 2)));
             if (!sh[2][0] || !sh[2][1] || sh[2][2] !== 2048 || sh[2][3] || !sh[2][4] || !sh[2][5] || sh[2][6] || !sh[2][7]) bad.push('高档影子不对 ' + JSON.stringify(sh[2]));
             if (!sh[3][0] || !sh[3][1] || sh[3][2] <= 2048 || !sh[3][3]) bad.push('超高档影子贴图不比高大或没开柔边 ' + JSON.stringify(sh[3]));
+            // 超高独有：材质换成带高光的 Phong、冷色补光、太阳光晕；回到高全还原；低档像素比 0.6
+            const ux = [];
+            for (const i of [3, 2, 3, 0]) {
+                await T.eval(`settingsSet('gfx_quality', ${i}); gfxLookQ = -1; gfxShadowAt = 0; window.gfxLastRender = 0; renderer.render(scene, camera); true;`); await W(300);
+                await T.eval(`gfxLastRender = 0; gfxShadowAt = 0; renderer.render(scene, camera); true;`);
+                ux.push(JSON.parse(await T.eval(`JSON.stringify([!!scene.getObjectByName('gfxbox').material.isMeshPhongMaterial, !!(gfxRim && gfxRim.parent), !!(gfxGlow && gfxGlow.parent), renderer.getPixelRatio()])`)));
+            }
+            if (!(ux[0][0] && ux[0][1] && ux[0][2]) || ux[1][0] || ux[1][1] || ux[1][2] || !(ux[2][0] && ux[2][1] && ux[2][2]) || ux[3][0] || ux[3][1] || ux[3][3] !== 0.6) bad.push('超高的高光材质、补光、光晕没开或没还原 ' + JSON.stringify(ux));
             await T.eval(`settingsSet('gfx_quality', 1); true;`);
             // 视野：雾和相机 far
             await T.eval(`settingsSet('gfx_view', 0); scene.fog = new THREE.Fog(0x888888, 100, 400); gfxApplyView(); true;`);
@@ -14643,6 +14651,14 @@ async function enterExit(tab, key) {
                 const T = await openTab(chrome, url);
                 await T.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 600, deviceScaleFactor: 1, mobile: false });
                 await T.eval(`settingsSet('gfx_quality', ${q}); true;`);
+                if (process.env.SMOKE_SHOT_SCENE === 'lobby') {   // 大厅广场：露天、有太阳、树和路牌，看光影最清楚
+                    await T.eval(`settingsSet('gfx_quality', ${q}); document.getElementById('lobby-tl').style.display = 'none'; document.getElementById('lobby-tr').style.display = 'none'; document.getElementById('lobby-bottom').style.display = 'none'; true;`); await W(2500);
+                    await T.eval(`camera.position.set(hub.pos ? hub.pos.x - 14 : -14, 6, hub.pos ? hub.pos.z + 16 : 16); camera.lookAt(hub.pos ? hub.pos.x : 0, 2, hub.pos ? hub.pos.z : 0); true;`).catch(() => { }); await W(1500);
+                    const res0 = await T.send('Page.captureScreenshot', { format: 'png' });
+                    const dir0 = process.env.SMOKE_SHOT; fs.mkdirSync(dir0, { recursive: true });
+                    fs.writeFileSync(path.join(dir0, (process.env.SMOKE_SHOT_TAG || 'a') + '-lobby-q' + q + '.png'), Buffer.from(res0.result.data, 'base64'));
+                    await T.close(); continue;
+                }
                 await T.eval(BOSS_GO('easy', false, 777)); await until(T, `isPlaying`, 20000);
                 await T.eval(`HUNT_TEST_NOMOB = true; settingsSet('gfx_quality', ${q}); document.getElementById('sys-modal').classList.add('hidden'); sysModalSync(); true;`); await W(1500);
                 await T.eval(`camera.position.set(TILE * 3, 26, TILE * 3); camera.rotation.set(-0.85, 0.78, 0); document.getElementById('sys-modal').classList.add('hidden'); sysModalSync(); true;`); await W(700);
