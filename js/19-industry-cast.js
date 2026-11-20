@@ -98,7 +98,7 @@
             if (!CT_SHAPE[s] || !(ind.bag[k] > 0)) return;
             if (!ckSpoutOn(S)) { indFlash('先装出料槽'); return; }
             if (S.mold) { indFlash('槽里已经有模具了'); return; }
-            if (S.spout.length) { indFlash('先把槽里的锭取走'); return; }
+            if (S.spout.some(function (e) { return !e.p; })) { indFlash('槽里还有烫的锭，先等凉了取走'); return; }   // 槽里放着做好的成品（砖、面包这些）不挡，只有锭挡着（出料槽 100 格以后成品也在槽里，原来一律挡着，放模具的按钮点了没反应）
             let qk = s + (f ? '_f' : ''), Q = ind.base.moldQ = ind.base.moldQ || {}, q = (Q[qk] || []).shift(); if (Q[qk] && !Q[qk].length) delete Q[qk];
             indBagDel(k, 1); S.mold = { s: s, dura: q || CT.q0 }; if (f) S.mold.f = true; indSave(); indPanelStove();
         }
