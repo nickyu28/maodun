@@ -15084,6 +15084,45 @@ async function enterExit(tab, key) {
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND213')) {
+            // IND213 盔甲：四件四档、穿在自己的格子里不跟衣服灯泡抢、挨打按总减伤少掉血且每件掉 1 点耐久、用坏变坏了的、胶水修好、重了走得慢跑步耗体力、模型上看得见、能做
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (c) => JSON.parse(await T.eval(`JSON.stringify((function(){ ${c} })())`));
+                const r = await J(`indGoBase(null); let B = ind.base, o = {}; B.rule = 'hard'; B.dura = {}; B.repQ = {}; B.repCur = {}; cancelAnimationFrame(ind.raf); ind.raf = 0;
+                    o.items = Object.keys(AR_ITEM).length; o.names = ['helm_lth', 'chest_bz', 'legs_fe', 'boot_st'].map(function (k) { return indName(k); }).join('/');
+                    let ci = function (out) { return IND_CRAFT.findIndex(function (r) { return r.out === out && !r.fix && !r.n; }); };
+                    ind.bag = { leather: 4, rope: 1 }; indCraft(ci('helm_lth')); o.craftL = ind.bag.helm_lth || 0;
+                    ind.bag = { bronze: 8, hammer: 1 }; indCraft(ci('chest_bz')); o.craftB = ind.bag.chest_bz || 0;
+                    B.wear = { body: 'coat', head: 'bulb' }; ind.bag = { helm_st: 1, chest_st: 1, legs_st: 1, boot_st: 1, helm_lth: 1 };
+                    ['helm_st', 'chest_st', 'legs_st', 'boot_st'].forEach(function (k) { indWear(k); });
+                    o.wear = JSON.stringify(B.wear); o.cut = arCut(); o.heavy = indHeavy(); o.stam = indArStam();
+                    arSync(); o.mesh = ind.me && ind.me.userData.arMesh ? ind.me.userData.arMesh.length : -1;
+                    B.surv.hp = 100; ind.guardT = 0; indHurt(10, 'mob_slime', '测试', true); o.hp = B.surv.hp; o.dura = mbDura('chest_st') + '/' + mbMax('chest_st');
+                    B.dura.helm_st = 1; indHurt(10, 'mob_slime', '测试', true); o.broke = (B.wear.ahead || '') + ':' + ((ind.bag.broken_helm_st || 0) + (B.box && B.box.broken_helm_st || 0));
+                    B.surv.hp = 100; indHurt(10, 'starve', '测试'); o.starve = B.surv.hp;
+                    B.surv.hp = 100; indHurt(10, 'boom', '测试', true); o.boom = B.surv.hp;
+                    return o;`);
+                if (r.items !== 16) bad.push('四件四档共 16 样 ' + JSON.stringify(r));
+                if (r.craftL !== 1 || r.craftB !== 1) bad.push('能做 ' + JSON.stringify(r));
+                if (!/ahead/.test(r.wear) || !/coat/.test(r.wear) || !/bulb/.test(r.wear)) bad.push('穿在自己的格子里不挤掉衣服灯泡 ' + r.wear);
+                if (!(Math.abs(r.cut - 0.72) < 0.02)) bad.push('钢甲全套减伤 72% ' + JSON.stringify(r));
+                if (!(r.heavy < 0.95 && r.heavy > 0.8 && r.stam > 1.3)) bad.push('重了走得慢跑步更费体力 ' + JSON.stringify(r));
+                if (!(r.mesh >= 5)) bad.push('模型上画出来 ' + JSON.stringify(r));
+                if (!(r.hp > 96.5 && r.hp < 98)) bad.push('挨 10 点按 72% 减伤只掉 2.8 ' + JSON.stringify(r));
+                if (!/^\d+\/640$/.test(r.dura) || r.dura.split('/')[0] >= 640) bad.push('每挨一下掉 1 点耐久 ' + r.dura);
+                if (!/^:1$/.test(r.broke)) bad.push('用坏了脱掉变成坏了的盔甲 ' + r.broke);
+                if (r.starve !== 90) bad.push('饿不减伤 ' + r.starve);
+                if (!(r.boom > 92 && r.boom < 95)) bad.push('爆炸只减一半的减伤 ' + r.boom);
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND213 盔甲：四件四档、格子、减伤、耐久、坏了变断的、重量体力、模型', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND212')) {
             // IND212 耐火黏土和普通黏土看着不一样：颜色、写的字都不同，也不跟耐火模具坯撞；锭、矿、烫锭、桶、粉末里没有两样长得一模一样
             const bad = [];

@@ -98,7 +98,7 @@
         function mbIsKnife(k) { return !!MB_KNIFE[k]; }
         // 手上那把刀／盾剩的耐久（同一种叠在一起，只记正在用的那一把）
         // 耐久上限：刀、盾、工具（19-industry-tool.js）；悠闲 ×2
-        function mbDurTab(k) { return MB_KNIFE[k] || MB_SHIELD[k] || (typeof TL_TOOL !== 'undefined' && TL_TOOL[k]) || null; }
+        function mbDurTab(k) { return MB_KNIFE[k] || MB_SHIELD[k] || (typeof TL_TOOL !== 'undefined' && TL_TOOL[k]) || (typeof AR_ITEM !== 'undefined' && AR_ITEM[k] && { dura: AR.dura[AR_ITEM[k].tier] }) || null; }
         // 原始满耐久（不算修过降的上限）；mbMax 是正在用的那一把的上限（修过 N 次少 N × 10%，任务 78，19-industry-repair.js）
         function mbMax0(k) { let T = mbDurTab(k); return T ? T.dura * (indHard() ? 1 : 2) : 0; }
         function mbMax(k) { return rpCap(mbMax0(k), rpCurN(k)); }

@@ -1709,7 +1709,7 @@
             R.running = canRun;
             if (R.ride && R.ride.ty === 'bike') { R.stillT = 0; R.stam = moving ? Math.max(0, R.stam - RD.pedal * dt) : Math.min(100, R.stam + IND_SURV.stamRegen * dt); }   // 脚踏吃体力
             else if (R.effort > 0) { R.stillT = 0; R.stam = Math.max(0, R.stam - R.effort * dt); }   // 拉风箱、扇扇子吃体力（任务 44）
-            else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * dt) : indStamWalk(R.stam, moving, S.energy, dt); }   // 任务 143：走路也耗体力，恢复略高于消耗；精神影响恢复
+            else { R.stillT = 0; R.stam = canRun ? Math.max(0, R.stam - IND_SURV.stamDrain * (typeof indArStam === 'function' ? indArStam() : 1) * dt) : indStamWalk(R.stam, moving, S.energy, dt); }   // 任务 143：走路也耗体力，恢复略高于消耗；精神影响恢复
             let sp = IND_T.speed * (canRun ? IND_T.run : 1) * (indSlow() ? 0.5 : 1) * (indShiver() ? 0.7 : 1) * indHeavy() * (R.where === 'trip' ? indWaterSpeed() : 1) * pwMoveMul() * mbMoveMul();   // 举着盾 ×0.6   // 鞋和药的跑速加成，合起来不超过 ×2.0（19-industry-power.js）
             if (R.ride) sp = rdMoveSpeed(dt, moving);   // 载具速度固定，鞋药不乘（19-industry-ride.js）
             if (moving) {
@@ -4074,7 +4074,7 @@
             else if (sel === 'dry_ice') hint = '<small>拿在手上体温每秒 −0.05°C　右键：放进装水的桶</small>';
             else if (sel && IND_ITEMS[sel].dev) hint = '<small>右键或 Q：放下' + indName(sel) + '</small>';
             else if (sel === 'wire' && R.wirePend) hint = '<small>再点另一个设备接线</small>';
-            let wr = ['body', 'head', 'neck', 'foot', 'back'].filter(function (sl) { return R.base.wear[sl]; }).map(function (sl) { return '<span onclick="indTakeOff(\'' + sl + '\')" style="cursor:pointer;margin-right:6px;border-bottom:1px dashed #999;">' + indName(R.base.wear[sl]) + '</span>'; }).join('');
+            let wr = ['body', 'head', 'neck', 'foot', 'back', 'ahead', 'abody', 'aleg', 'afoot'].filter(function (sl) { return R.base.wear[sl]; }).map(function (sl) { return '<span onclick="indTakeOff(\'' + sl + '\')" style="cursor:pointer;margin-right:6px;border-bottom:1px dashed #999;">' + indName(R.base.wear[sl]) + '</span>'; }).join('');
             wr = '穿着：' + (wr || '<span style="color:#999">什么都没穿</span>') + (wr ? '<small style="color:#999">点一下脱下</small>' : '');
             let sig = st + '|' + bag + '|' + hint + '|' + wr + '|' + (R.panel ? 1 : 0);
             if (sig === R.hudSig) return; R.hudSig = sig;

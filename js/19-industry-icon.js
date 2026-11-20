@@ -12,6 +12,7 @@
         function icKind(k, d) {
             let base = k.split('@')[0], c = typeof indContOf === 'function' ? indContOf(k) : null;
             if (/^hot_/.test(k) || d.hot) return 'hot';
+            if (typeof AR_ITEM !== 'undefined' && AR_ITEM[k.replace(/^broken_/, '')]) return 'wear';
             if (/^ore_/.test(k)) return 'ore';
             if (/^ingot_/.test(k) || /^(steel|bronze|brass)$/.test(k)) return 'ingot';
             if (/^broken_/.test(k) || (typeof tlKind === 'function' && tlKind(k))) return 'tool';
