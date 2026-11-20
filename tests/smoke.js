@@ -15084,6 +15084,29 @@ async function enterExit(tab, key) {
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND211')) {
+            // IND211 炉温越高做得越快：刚到最低温度是 ×1，高 200°C 是 ×2，最多 ×3；温度不到不走；烧焦照旧按秒算
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const J = async (c) => JSON.parse(await T.eval(`JSON.stringify((function(){ ${c} })())`));
+                const r = await J(`IND_HEAT_FAST = true; let o = {}, r = { minT: 100 };
+                    o.m0 = indHeatMul(100, r); o.m1 = indHeatMul(300, r); o.m2 = indHeatMul(1000, r); o.low = indHeatMul(50, r);
+                    IND_HEAT_FAST = false; o.off = indHeatMul(1000, r); IND_HEAT_FAST = true;
+                    indGoBase(null); let B = ind.base; B.rule = 'hard'; cancelAnimationFrame(ind.raf); ind.raf = 0;
+                    let rc = IND_RECIPES.find(function (q) { return q.in.clay === 2 && q.out.jar === 1; }), run = function (T0) { let S = B.stove; S.items = { clay: 2 }; S.out = {}; S.cook = { i: IND_RECIPES.indexOf(rc), t: 0, burn: 0, n: 1 }; S.temp = T0; S.fire = 2; S.fuel = 500; let c = indCooks()[0]; for (let i = 0; i < 40; i++) { S.temp = T0; indCookTick(c, 0.5); } return S.cook ? S.cook.t : -1; };
+                    o.rc = !!rc; if (rc) { o.minT = rc.minT; o.slow = run(rc.minT); o.fast = run(rc.minT + 200); }
+                    return o;`);
+                if (!(r.m0 === 1 && r.m1 === 2 && r.m2 === 3 && r.low === 1 && r.off === 1)) bad.push('倍数 1 + 高出的度数/200，最多 3 ' + JSON.stringify(r));
+                if (r.rc && !(r.fast === -1 || r.slow === -1 || r.fast > r.slow * 1.8 || r.fast === -1)) bad.push('高 200°C 做得快一倍 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND211 炉温越高做得越快：×1 到 ×3', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND210')) {
             // IND210 倍速：×4 时灶台里的活 4 倍快；停下的原因（饿了、渴了、冷、热、有怪）写在按钮上留着
             const bad = [];

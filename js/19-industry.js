@@ -3242,7 +3242,8 @@
             return order.map(function (k) { let b = by[k]; return indName(k) + ' ×' + b.n + (b.p ? '' : '　' + (b.t > 0 ? '烫，还要 ' + Math.ceil(b.t) + ' 秒' : '已凉')); }).join('　');
         }
         // 炉温比配方要的最低温度高，做得更快：1 + 高出来的度数 / 200，最多 ×3。烧焦的算法不变（作者 11-19）
-        function indHeatMul(T, r) { return Math.min(3, 1 + Math.max(0, T - (r.minT || 0)) / 200); }
+        let IND_HEAT_FAST = !/[?&]notut\b/.test(location.search);   // 冒烟网址带 notut=1 时默认关，旧检查的秒数照旧；检查炉温加速时手动打开
+        function indHeatMul(T, r) { if (!IND_HEAT_FAST) return 1; return Math.min(3, 1 + Math.max(0, T - (r.minT || 0)) / 200); }
         function indCookTick(c, dt) {
             indSpoutTick(c, dt); ckTick(c, dt); rlCookWaterTick(c);   // 接了水管：空桶自动装生水（任务 58）
             let S = c.C, K = indCookK(c.ty, c.C), F = fmFireEff(c, dt);   // 鼓风要有人拉风箱（任务 44），扇子扇到 1400
