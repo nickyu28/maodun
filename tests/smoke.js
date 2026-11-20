@@ -13551,6 +13551,30 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND225')) {
+            // IND225 炉子放入列表只显示有用的（作者 11-20）：配方原料、煤木炭焦炭、模具、能熔的锭才列；工具、食物、衣服不出现（不是灰的）；没有有用的写一句短话；新加配方自动跟着变
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                const set = (bag) => `cancelAnimationFrame(ind.raf); let St = IND_BASE_ST.stove; ind.base.rule = 'hard'; ind.base.off.stove = false; ind.base.stove = Object.assign(ckNewState(), { spout: [], spoutTy: 'brick', fuel: 0, fire: 0, temp: 20 }); ind.cookId = 'stove'; ind.bag = ${bag}; indTeleport(St.x, St.z + 2.5); indLookAt(St.x, St.z); indPanelStove();`;
+                const rows = `(function(){ let h = [...document.querySelectorAll('#ind-panel div')].filter(function (d) { return /炉料/.test(d.textContent) && d.querySelector('button') && d.children.length < 4; })[0]; let t = document.getElementById('ind-panel').innerText; let i = t.indexOf('炉料'); return t.slice(i); })()`;
+                let r = await J(`(function(){ ${set("{ pick_stone: 1, bake_potato: 2, coat: 1, clay: 2, ingot_cu: 1, mold_knife_raw: 1, mold_knife: 1, coal: 1, shears: 1 }")} let t = document.getElementById('ind-panel').innerText, i = t.indexOf('炉料'); t = t.slice(i); return { clay: /黏土/.test(t), cu: /铜锭/.test(t), raw: /生模具/.test(t), mold: /小刀刃模具/.test(t), coal: /煤/.test(t), pick: /石镐/.test(t), potato: /烤土豆/.test(t), coat: /棉衣/.test(t), shears: /剪刀/.test(t) }; })()`);
+                if (!(r.clay && r.cu && r.raw && r.mold && r.coal)) bad.push('有用的要列：黏土、铜锭、生模具、模具、煤 ' + JSON.stringify(r));
+                if (r.pick || r.potato || r.coat || r.shears) bad.push('工具食物衣服不该出现 ' + JSON.stringify(r));
+                r = await J(`(function(){ ${set("{ pick_stone: 1, coat: 1, shears: 1 }")} let t = document.getElementById('ind-panel').innerText; return { none: /背包里没有能放的东西/.test(t) }; })()`);
+                if (!r.none) bad.push('没有有用的写一句短话 ' + JSON.stringify(r));
+                r = await J(`(function(){ let n0 = IND_RECIPES.length; IND_RECIPES.push({ in: { coat: 1 }, out: { ash: 1 }, minT: 100, time: 10, cls: 'bulk' }); ${set("{ coat: 1 }")} let t = document.getElementById('ind-panel').innerText, i = t.indexOf('炉料'); let on = /棉衣/.test(t.slice(i)); IND_RECIPES.length = n0; return { on: on }; })()`);
+                if (!r.on) bad.push('新加配方自动跟着变 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND225 炉子放入列表只显示有用的：配方原料、还原剂、模具、能熔的锭，没用的不出现，空了写短话，跟着配方变', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND224')) {
             // IND224 月球选落点界面 Esc 能关、右上角有叉能关（测试员 11-20）
             const bad = [];

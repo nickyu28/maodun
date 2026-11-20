@@ -3838,6 +3838,7 @@
             if (S.temp >= X - 1) return null;
             return { t: X, s: Math.max(1, Math.round((X - S.temp) / IND_COOK[c.ty].rate)) };
         }
+        function ctIsMoldSafe(k) { return typeof ctIsMold === 'function' && ctIsMold(k); }
         function indStoveHtml() {
             let c = indCookCur(), S = c.C, D = IND_COOK[c.ty], F = indFireDef(c.ty, S.fire);
             let sn = stkN(S), st = fiPanelLine(S) + stkModeHtml(c) + (sn > 1 ? '<b>×' + sn + '，' + sn + ' 台叠在一起</b><br>' : '') + '火候：<b>' + F.name + '</b>　温度 <b>' + Math.round(S.temp) + '°C</b>　燃料 ' + Math.ceil(S.fuel) + (sn > 1 ? '　每秒烧 ×' + sn : '') + '<br>';
@@ -3873,10 +3874,19 @@
                 });
                 if (S.funnel) fuelRows += '<div style="font-size:13px;color:#666;">漏斗里还有 ' + Math.round(S.funnel.oil) + ' / ' + CK.funnelCap + ' 份油，一桶 ' + CK.oilFuel + ' 份</div>';
             }
+            // 作者 11-20：炉子的放入列表只显示放进去有用的（直接用现有配方、燃料、铸造数据判断，新加配方自动跟着变）：配方原料、还原剂（煤、木炭、焦炭）、模具、能熔的锭和坏工具
+            let K1 = indCookK(c.ty, S), wanted = function (k) {
+                if (ctIsMoldSafe(k)) return true;
+                if (k === 'coal' || k === 'charcoal' || k === 'char') return true;
+                let q = indContOf(k), base = q && q.base ? q.base : k;
+                if (IND_RECIPES.some(function (r) { return !((r.hard && !indHard()) || (K1.only && (r.cls || 'food') !== K1.only)) && (r.in[k] > 0 || r.in[base] > 0); })) return true;
+                try { if (indHard() && typeof ctMeltUnit === 'function' && ctMeltUnit({ items: (function () { let o = {}; o[k] = 1; return o; })() })) return true; } catch (e) { }
+                return false;
+            };
             let moldRow = ''; if (S.mold && typeof CT_SHAPE !== 'undefined' && CT_SHAPE[S.mold.s]) { let mk = 'mold_' + S.mold.s + (S.mold.f ? '_f' : ''); moldRow = indRow(indName(mk) + '，在出料槽里' + (S.mold.part ? '，' + indName(S.mold.part) : ''), '<button style="' + IND_BTN + '" onclick="ctMoldOut(); indPanelStove()">拿出来</button>'); }   // 模具在槽里的样子，取出走普通的拿出来
-            let put = moldRow + Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k); }).map(function (k) {
+            let put = moldRow + Object.keys(ind.bag).filter(function (k) { return !indNotForStove(k) && wanted(k); }).map(function (k) {
                 return indRow(indName(k) + ' × ' + ind.bag[k], indPutOpts('stove', 0, k, '放进去炼', '全放进去炼', '放进去炼'));
-            }).join('') || '<div style="color:#999;padding:6px 0;">身上没东西</div>';
+            }).join('') || (moldRow ? '' : '<div style="color:#999;padding:6px 0;">背包里没有能放的东西</div>');
             return '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + D.name + '</div><div style="line-height:1.7;">' + st + '</div><div>' + fire + '</div>' +
                 '<div style="margin-top:6px;">锅里：' + on + '<br>做好的：' + out + '<br>出料槽：' + spt + '</div>' +
                 '<div style="margin-top:6px;font-weight:bold;">燃料　烧火用的　<button style="' + IND_BTN + 'background:#8d6e63;" onclick="indStoveFuelOut()">取出燃料</button></div>' + fuelRows +
