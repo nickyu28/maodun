@@ -172,7 +172,7 @@
         function mbSpawnTry() {
             let n = mbCount(); if (n >= MB.cap) return null;
             let cave = ind.cave, x, z;
-            if (cave) { x = cave.cx + 15 + indRand() * (CV.len - 18); z = cave.cz + (indRand() * 2 - 1) * (CV.w - 2); if (Math.hypot(x - ind.p.x, z - ind.p.z) < 8) return null; }
+            if (cave) { x = cave.x + (indRand() * 2 - 1) * (CV.w - 2); z = cave.z + 15 + indRand() * (CV.len - 18); if (Math.hypot(x - ind.p.x, z - ind.p.z) < 8) return null; }
             else { let a = indRand() * Math.PI * 2, d = MB.r0 + indRand() * (MB.r1 - MB.r0); x = ind.p.x + Math.cos(a) * d; z = ind.p.z + Math.sin(a) * d; if (Math.abs(x) > IND_MAP - 4 || Math.abs(z) > IND_MAP - 4 || indHeight(ind.map, x, z) < IND_WATER_Y + 0.3) return null; }
             let dead = ind.mbDead || {}, key = mbCellKey(x, z); if (dead[key] !== undefined && ind.t - dead[key] < MB.respawn) return null;
             let L = mbKinds(indBiome(ind.map, x, z), cave, x, z); if (!L.length) return null;

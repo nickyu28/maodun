@@ -10460,16 +10460,16 @@ async function enterExit(tab, key) {
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
                 const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { ind.base.rule = 'hard'; let s = 1; for (; s < 60; s++) { indGoTrip(s * 131); if (ind.caves.length) break; } ind.bag = {}; ind.base.wear = {}; ind.torchT = 0; ind.base.surv.hp = 100; delete ind.base.bulbU;
                     let day = function () { ind.base.clock = IND_DAY * 3 + 300; }, night = function () { ind.base.clock = IND_DAY * 3 + IND_DUSK + 100; }, c = ind.caves[0];
-                    let at = function (d) { indTeleport(c.cx + d, c.cz); return cvViewR(); };
+                    let at = function (d) { indTeleport(c.x, c.z + d); return cvViewR(); };
                     ${body} } finally { blazeFlash = bf; } })()`);
                 // 洞口在山地／古老岩层；悠闲没有
                 let r = await J(`(function(){ let n = 0, badB = 0; for (let s = 1; s <= 8; s++) { indGoTrip(s * 977); ind.caves.forEach(function (c) { n++; if (c.bm !== 'mountain' && c.bm !== 'ancient') badB++; }); } ind.base.rule = 'casual'; indGoTrip(977); let cas = ind.caves.length; ind.base.rule = 'hard'; return { n: n, badB: badB, cas: cas }; })()`);
                 if (!(r.n >= 4 && r.badB <= 8 && r.cas === 0)) bad.push('硬核山地古老岩层有洞口（平原森林沙漠每张图最多多 1 个，任务 75）、悠闲没有 ' + JSON.stringify(r));
                 // 走进洞口进洞；不带光：白天洞口 5 米看得见、8 米还看得见、20 米全黑；夜里洞口也黑；走回洞口出洞
-                r = await run(`day(); indTeleport(c.x, c.z); cvTick(0.1); let inn = ind.cave === c, gone = Math.hypot(ind.p.x - c.x, ind.p.z - c.z) > 100;
+                r = await run(`day(); indTeleport(c.x, c.z); cvTick(0.1); let inn = ind.cave === c, gone = Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < 2;
                     let v5 = at(5), v8 = at(8), v12 = at(12), v20 = at(20); night(); let n2 = at(2); day();
-                    at(10); cvTick(0.1); indTeleport(c.cx - 0.5, c.cz); cvTick(0.1); return { inn: inn, gone: gone, v5: v5, v8: v8, v12: v12, v20: v20, n2: n2, out: !ind.cave, back: Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < 4 };`);
-                if (!(r.inn && r.gone && r.v5 >= 8 && r.v8 >= 8 && r.v12 > 0 && r.v12 < r.v8 && r.v20 === 4 && r.n2 === 4 && r.out && r.back)) bad.push('进洞、白天 8 米内看得见、超 15 米只剩身边 4 米、夜里洞口也只剩 4 米、走回洞口出洞 ' + JSON.stringify(r));
+                    at(10); cvTick(0.1); indTeleport(c.x, c.z - 0.5); cvTick(0.1); return { inn: inn, gone: gone, v5: v5, v8: v8, v12: v12, v20: v20, n2: n2, out: !ind.cave, back: Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < 4 };`);
+                if (!(r.inn && r.gone && r.v5 >= 8 && r.v8 >= 8 && r.v12 > 0 && r.v12 < r.v8 && r.v20 === 4 && r.n2 === 4 && r.out && r.back)) bad.push('进洞没有瞬移、白天 8 米内看得见、超 15 米只剩身边 4 米、夜里洞口也只剩 4 米、走回洞口出洞 ' + JSON.stringify(r));
                 // 火把：木 1 + 煤 1 → 2 根；点一根 8 米、烧 90 秒后熄
                 r = await run(`let rc = IND_CRAFT.filter(function (q) { return q.out === 'torch'; }); cvEnter(c); c.gas = false; night(); at(30); ind.bag = { torch: 2 }; indSelect('torch'); indUse();
                     let a = cvViewR(), left = ind.bag.torch; for (let i = 0; i < 89; i++) cvTick(1); let b = cvViewR(); cvTick(1.1); return { rc: rc.length, n: rc[0] && rc[0].n, coal: !!rc[0] && rc[0].in.wood === 1 && rc[0].in.coal === 1, a: a, left: left, b: b, c: cvViewR(), fl: fl.join('|') };`);
@@ -12482,25 +12482,31 @@ async function enterExit(tab, key) {
                 const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { ind.base.rule = 'hard'; let s = 1; for (; s < 60; s++) { indGoTrip(s * 131); if (ind.caves.length) break; } ind.mbSpawn = 1e9; ind.bag = {}; ind.base.wear = {}; ind.torchT = 0; ind.base.surv.hp = 100; ind.k = {};
                     let c = ind.caves[0];
                     ${body} } finally { blazeFlash = bf; ind.k = {}; } })()`);
-                let r = await run(`let badN = 0, n = 0; for (let i = 0; i < 300; i++) { cvEnter(c); ind.nodes.filter(function (o) { return o.cave === c.i; }).forEach(function (o) { n++; if (o.x - c.cx < 8) badN++; }); cvLeave(); } return { badN: badN, n: n };`);
+                let r = await run(`let badN = 0, n = 0; for (let i = 0; i < 300; i++) { cvEnter(c); ind.nodes.filter(function (o) { return o.cave === c.i; }).forEach(function (o) { n++; if (o.z - c.z < 8) badN++; }); cvLeave(); } return { badN: badN, n: n };`);
                 if (!(r.n > 300 && r.badN === 0)) bad.push('出口 8 米内、进洞点到出口一路没有东西（300 次） ' + JSON.stringify(r));
-                r = await run(`let fails = 0; for (let i = 0; i < 100; i++) { ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); if (ind.cave !== c) { fails += 100; break; } indLookAt(c.cx - 10, c.cz + (i % 7 - 3) * 0.2); ind.k = { w: true }; for (let j = 0; j < 40 && ind.cave; j++) indAdvance(0.05); ind.k = {}; if (ind.cave) { fails++; cvLeave(); } }
+                r = await run(`let fails = 0; for (let i = 0; i < 100; i++) { ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); if (ind.cave !== c) { fails += 100; break; } indLookAt(c.x + (i % 7 - 3) * 0.2, c.z - 10); ind.k = { w: true }; for (let j = 0; j < 60 && ind.cave; j++) indAdvance(0.05); ind.k = {}; if (ind.cave) { fails++; cvLeave(); } }
                     return { fails: fails };`);
                 if (r.fails !== 0) bad.push('进洞直接掉头走回洞口，100 次都一次出去 ' + JSON.stringify(r));
-                r = await run(`ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); indTeleport(c.cx + 30, c.cz + 5); indHudUpdate(); let btnIn = document.getElementById('ind-btn-cvback').style.display !== 'none';
-                    indPause(); let pauseBtn = !!document.getElementById('ind-pause-cvback'); document.getElementById('ind-pause-cvback').click(); let paused = !!ind.paused;
-                    indAdvance(1.5); let mid = !!ind.cave; indAdvance(1.6); let out = !ind.cave && Math.hypot(ind.p.x - c.x, ind.p.z - c.z) < 4; indHudUpdate(); let btnOut = document.getElementById('ind-btn-cvback').style.display !== 'none';
-                    indPause(); let pauseOut = !!document.getElementById('ind-pause-cvback'); indResume();
-                    return { btnIn: btnIn, pauseBtn: pauseBtn, paused: paused, mid: mid, out: out, btnOut: btnOut, pauseOut: pauseOut };`);
-                if (!(r.btnIn && r.pauseBtn && !r.paused && r.mid && r.out && !r.btnOut && !r.pauseOut)) bad.push('点"回到洞口"站 3 秒回洞外；按钮只在洞里有 ' + JSON.stringify(r));
-                r = await run(`ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); indTeleport(c.cx + 30, c.cz + 5); cvBackStart(); indAdvance(1); ind.p.x += 1; indAdvance(3); return { still: ind.cave === c, cancel: /动了/.test(fl.join('|')) };`);
-                if (!(r.still && r.cancel)) bad.push('中途动了取消 ' + JSON.stringify(r));
-                r = await run(`ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); indTeleport(c.cx - 0.5, c.cz); cvTick(0.05); let out = !ind.cave; indAdvance(0.5); indTeleport(c.x, c.z); cvTick(0.05); let re = !!ind.cave; return { out: out, re: re };`);
+                r = await run(`let o = { btn: !!document.getElementById('ind-btn-cvback'), fn: typeof cvBackStart };
+                    ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); indPause(); o.pause = !!document.getElementById('ind-pause-cvback'); indResume();
+                    return o;`);
+                if (!(!r.btn && r.fn === 'undefined' && !r.pause)) bad.push('没有"回到洞口"按钮和传送了 ' + JSON.stringify(r));
+                r = await run(`ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); indTeleport(c.x, c.z - 0.5); cvTick(0.05); let out = !ind.cave; indAdvance(0.5); indTeleport(c.x, c.z); cvTick(0.05); let re = !!ind.cave; return { out: out, re: re };`);
                 if (!(r.out && !r.re)) bad.push('出洞后马上站回洞口不会又进去 ' + JSON.stringify(r));
+                // 没有传送：从洞口一路走到最深处，每一帧位置只动一点点，高度一路降到洞底，没有换背景；再走回来
+                r = await run(`ind.caveCool = 0; indTeleport(c.x, c.z); cvTick(0.05); let o = { inn: ind.cave === c, y0: ind.p.y }; indLookAt(c.x, c.z + 50); ind.k = { w: true, run: true }; let jump = 0, last = { x: ind.p.x, z: ind.p.z }, bg0 = scene.background.getHex(), bgOk = true, maxZ = 0;
+                    for (let j = 0; j < 1500 && ind.cave; j++) { indAdvance(0.05); if (Math.hypot(ind.p.x - last.x, ind.p.z - last.z) > 2) jump++; last = { x: ind.p.x, z: ind.p.z }; if (scene.background.getHex() !== bg0) bgOk = false; maxZ = Math.max(maxZ, ind.p.z - c.z); if (ind.p.z - c.z > c.F + 100) break; if (maxZ >= CV.len - 2) break; }
+                    ind.k = {}; o.jump = jump; o.bgOk = bgOk; o.depth = Math.round(maxZ); o.yEnd = Math.round(ind.p.y * 10) / 10; o.F = Math.round(c.F * 10) / 10; o.still = ind.cave === c;
+                    indLookAt(c.x, c.z - 50); ind.k = { w: true, run: true }; for (let j = 0; j < 1500 && ind.cave; j++) indAdvance(0.05); ind.k = {}; o.out = !ind.cave; o.yOut = Math.abs(ind.p.y - Math.max(IND_WATER_Y, indHeight(ind.map, ind.p.x, ind.p.z))) < 0.5;
+                    return o;`);
+                if (!(r.inn && r.jump === 0 && r.bgOk && r.depth >= 60 && Math.abs(r.yEnd - r.F) < 0.6 && r.out && r.yOut)) bad.push('从洞口走到最深处再走回来，没有瞬移、背景不变、高度跟着洞底 ' + JSON.stringify(r));
+                // 洞身在山肚子里：每张图的每个洞，洞底比头上的地面至少低 3 米
+                r = await run(`let bad = 0, n = 0; for (let s = 1; s <= 6; s++) { indGoTrip(s * 211); ind.caves.forEach(function (q) { n++; for (let d = 6; d <= CV.len; d += 4) for (let u = -12; u <= 12; u += 12) { if (indHeight(ind.map, q.x + u, q.z + d) < cvFloorY(q, d) + 2.9) bad++; } }); } return { bad: bad, n: n };`);
+                if (!(r.n >= 6 && r.bad === 0)) bad.push('洞底比头上的地面低 3 米以上 ' + JSON.stringify(r));
             } catch (e) { bad.push('异常 ' + e.message); } }
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
-            report('IND138 矿洞出得去：出口附近没东西挡、进洞直接走回去就出、回到洞口按钮 3 秒、动了取消、出洞不马上又进', bad.length === 0, bad.join(' / '));
+            report('IND138 矿洞在图里：出口附近没东西挡、进洞直接走回去就出、没有回到洞口按钮、出洞不马上又进、从洞口走到最深再走回没有瞬移', bad.length === 0, bad.join(' / '));
         }
         if (want('IND139')) {
             // IND139 拿得起出料槽里的东西（任务 115）：三种槽（出料槽、砖槽、耐火砖槽）× 各种锭：凉了的左键取进背包；烫的没钳子取不出并提示，有钳子能取；
