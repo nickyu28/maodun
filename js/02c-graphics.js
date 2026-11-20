@@ -29,8 +29,26 @@ function graphicsPixelRatio() {
 
 // ── 画质：像素比马上生效，分段数下次建东西时生效 ──
 function gfxApplyQuality() {
-    if (typeof renderer !== 'undefined' && renderer) { renderer.setPixelRatio(graphicsPixelRatio()); renderer.setSize(window.innerWidth, window.innerHeight); }
+    if (typeof renderer !== 'undefined' && renderer) { renderer.setPixelRatio(graphicsPixelRatio()); gfxFitCanvas(true); }
 }
+// 画布大小跟着页面里画布的实际大小走（CSS 是 100vw x 100vh），不再写死 window.innerHeight。
+// 平板浏览器工具栏收起、转屏以后 innerHeight 会和页面实际高度差一截，画面就只占上面一块、下面一片灰。
+// 缩放、转屏、可视区域变化时重量一次，另外每秒查一次，不一样就改。
+function gfxFitCanvas(force) {
+    if (typeof renderer === 'undefined' || !renderer) return;
+    let c = renderer.domElement, w = c.clientWidth || window.innerWidth, h = c.clientHeight || window.innerHeight;
+    if (!force && c.__fitW === w && c.__fitH === h && c.__fitR === renderer.getPixelRatio()) return;
+    c.__fitW = w; c.__fitH = h; c.__fitR = renderer.getPixelRatio();
+    renderer.setSize(w, h, false);
+    c.style.width = ''; c.style.height = '';
+    if (typeof camera !== 'undefined' && camera) { camera.aspect = w / h; if (typeof camFovFor === 'function') camera.fov = camFovFor(camera.aspect); camera.updateProjectionMatrix(); }
+}
+(function () {
+    let go = function () { gfxFitCanvas(false); };
+    window.addEventListener('resize', go); window.addEventListener('orientationchange', function () { setTimeout(go, 200); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', go);
+    setInterval(go, 1000);
+})();
 (function () {
     if (typeof THREE === 'undefined') return;
     // 球、圆柱、圆锥、圆环、圆建出来的时候按画质缩分段数；中档（默认）原样放过

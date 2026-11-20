@@ -163,10 +163,10 @@
             // scene.remove 一律顺手释放（D1）
             scene.remove = function () { for (let i = 0; i < arguments.length; i++) { let o = arguments[i]; THREE.Scene.prototype.remove.call(this, o); disposeObject(o); } return this; };
             camera = new THREE.PerspectiveCamera(camFovFor(window.innerWidth / window.innerHeight), window.innerWidth / window.innerHeight, 0.5, 1600); camera.rotation.order = 'YXZ';
-            let canvas = document.getElementById('gameCanvas'); renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: graphicsQuality() >= 1 }); renderer.setPixelRatio(graphicsPixelRatio()); gfxHookRenderer(renderer); renderer.setSize(window.innerWidth, window.innerHeight);
+            let canvas = document.getElementById('gameCanvas'); renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: graphicsQuality() >= 1 }); renderer.setPixelRatio(graphicsPixelRatio()); gfxHookRenderer(renderer); gfxFitCanvas(true);
             if (window.settingsApplyDisplay) window.settingsApplyDisplay();   // 视角宽度等按设置套上
             gfxApplyAll();   // 画质、视野按设置套上
-            window.addEventListener('resize', function () { if (camera && renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.fov = camFovFor(camera.aspect); camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); } });
+            // 缩放和转屏由 02c-graphics.js 的 gfxFitCanvas 管
             clock = new THREE.Clock(); raycaster = new THREE.Raycaster();
             pVel = new THREE.Vector3();
             viewFrustum = new THREE.Frustum(); viewProjMatrix = new THREE.Matrix4();
