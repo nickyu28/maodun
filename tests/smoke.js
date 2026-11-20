@@ -179,6 +179,7 @@ async function openTab(chrome, url, opts) {
     await send('Fetch.enable', { patterns: [{ urlPattern: '*peerjs*' }, { urlPattern: '*three*' }].concat(opts && opts.failUrl ? [{ urlPattern: '*' + opts.failUrl + '*' }] : []).concat(opts && opts.delayUrl ? [{ urlPattern: '*' + opts.delayUrl + '*' }] : []).concat(opts && opts.blockHosts ? opts.blockHosts.map((h) => ({ urlPattern: '*' + h + '*' })) : []) });
     await send('Emulation.setFocusEmulationEnabled', { enabled: true });
     // 实验室开关会被 localStorage 记住（TH_labdebug）；同一个 Chrome 里所有标签页共用存档，所以每个新页面一开始先清掉，免得前一个标签页开了开关、后面不带参数的检查也看到实验室入口。测开关记忆本身的检查传 keepStorage: true。
+    if (opts && opts.init) await send('Page.addScriptToEvaluateOnNewDocument', { source: opts.init });   // 页面脚本之前先跑的一段（模拟 WebGL 打不开之类）
     if (!(opts && opts.limit)) await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__gfxNoLimit = true;' });   // 默认关掉渲染限帧，测限帧的检查传 limit: true
     if (!(opts && opts.keepStorage)) await send('Page.addScriptToEvaluateOnNewDocument', { source: "try{localStorage.removeItem('TH_labdebug');localStorage.removeItem('TH_bossdebug')}catch(e){}" });
     if (opts && opts.mobile) {   // 触屏设备：has_touch + is_mobile
@@ -13156,6 +13157,54 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND154 煤产量：每张图总量够、出生点附近够、平原森林有煤', bad.length === 0, bad.join(' / '));
         }
+        if (want('GL1')) {
+            // GL1 画面（WebGL）打不开：大厅菜单照常能用、开始游戏置灰、玩家只看到一条短提示、页面上没有堆栈、堆栈在控制台；开局入口不再撞第二个错；正常浏览器照常能开局
+            const bad = [];
+            const T = await openTab(chrome, url, { init: "(function(){ var g = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (t) { if (/webgl/i.test(String(t))) return null; return g.apply(this, arguments); }; })();" });
+            const r = JSON.parse(await T.eval(`(function(){ let out = {};
+                out.lobby = !document.getElementById('screen-lobby').classList.contains('hidden');
+                let b = document.getElementById('lobby-start-btn'); out.dis = !!(b && b.disabled);
+                let n = document.getElementById('gfx-dead-note'); out.note = n ? n.innerText : '';
+                out.dead = !!window.__webglDead;
+                try { lobbyPrimaryStart(); out.startOk = true; } catch (e) { out.startOk = false; out.startErr = String(e && e.message); }
+                try { nightEnterWith('survivor', 1, 0); out.enterThrew = 'no'; } catch (e) { out.enterThrew = e && e.gfxDead ? 'dead' : String(e && e.message); }
+                let er = document.getElementById('night-err'); out.errShown = !!(er && er.style.display === 'block');
+                out.pageText = document.body.innerText.indexOf('出错了') >= 0 || /at .*\.js/.test(document.body.innerText);
+                openShop(); out.shop = !document.getElementById('screen-shop').classList.contains('hidden');
+                nav('screen-lobby');
+                // 竞速固定赛道、乐园编辑器试玩也是直接开局的入口：要么挡住，要么回编辑界面，积木还在
+                try { raceStart(false, null, null, 0); out.race = 'no'; } catch (e) { out.race = e && e.gfxDead ? 'dead' : String(e && e.message); }
+                out.raceLobby = !document.getElementById('screen-lobby').classList.contains('hidden');
+                gState.parkDraft = [{ type: 'win', score: 8 }]; makerOpen('park');
+                let inp = document.querySelector('#mk-stack .mk-num'); inp.value = '3'; inp.dispatchEvent(new Event('change', { bubbles: true }));
+                try { makerTest(); out.mk = 'ok'; } catch (e) { out.mk = 'threw ' + String(e && e.message); }
+                out.mkOpen = !document.getElementById('maker').classList.contains('hidden'); out.mkRet = makerReturn;
+                makerOpen('park'); out.mkVal = document.querySelector('#mk-stack .mk-num').value;
+                return JSON.stringify(out); })()`));
+            if (r.race !== 'dead' || !r.raceLobby) bad.push('竞速固定赛道没挡住 ' + JSON.stringify([r.race, r.raceLobby]));
+            if (r.mk !== 'ok' || !r.mkOpen || r.mkRet !== null || r.mkVal !== '3') bad.push('乐园试玩失败后没回编辑界面或积木丢了 ' + JSON.stringify([r.mk, r.mkOpen, r.mkRet, r.mkVal]));
+            if (!r.lobby) bad.push('大厅菜单没出来 ' + JSON.stringify(r));
+            if (!r.dis) bad.push('开始游戏没置灰');
+            if (!r.note || r.note.length > 40) bad.push('提示不对 ' + r.note);
+            if (!r.dead) bad.push('没标记画面失败');
+            if (!r.startOk) bad.push('点开始游戏又出错 ' + r.startErr);
+            if (r.enterThrew !== 'dead') bad.push('别的开局入口没挡住 ' + r.enterThrew);
+            if (r.errShown || r.pageText) bad.push('页面上出现了错误浮层或堆栈');
+            if (!r.shop) bad.push('商店打不开，菜单不能用了');
+            const logged = T.errors.filter((e) => /webgl 画面初始化失败/.test(e)).length, other = T.errors.filter((e) => !/webgl 画面初始化失败|Error creating WebGL context/.test(e));   // three.js 自己也会往控制台写一句，算正常
+            if (!logged) bad.push('控制台里没有 webgl 堆栈');
+            if (other.length) bad.push('还有别的报错 ' + other.slice(0, 2).join(' / '));
+            await T.close();
+            // 正常浏览器能开局
+            const T2 = await openTab(chrome, url);
+            await T2.eval(`${HIDE} selectGameMode('hunt'); ${MODES.hunt.start}; true;`);
+            if (!(await until(T2, `isPlaying && !window.__webglDead`, 30000))) bad.push('正常浏览器没开起来局');
+            if (await T2.eval(`!!document.getElementById('gfx-dead-note')`)) bad.push('正常浏览器也出了画面失败提示');
+            if (T2.errors.length) bad.push(T2.errors.slice(0, 2).join(' / '));
+            await T2.close();
+            report('GL1 画面打不开：菜单能用、开始游戏置灰、只一条短提示、页面无堆栈、控制台有；正常浏览器能开局', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('ES3')) {
             // ES3 每个模式的规则卡片都能按 Esc 关：选这个模式、开规则、按真的 Esc，卡片要关掉（超燃的规则卡片 Esc 关不掉，测试员 -133 报的）
             const bad = [];
@@ -14517,9 +14566,9 @@ async function enterExit(tab, key) {
             // 画质：像素比和分段数
             await T.eval(`settingsSet('gfx_quality', 0); true;`);
             const q0 = JSON.parse(await T.eval(`JSON.stringify({ dpr: window.devicePixelRatio || 1, pr: renderer.getPixelRatio(), seg: new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments, cyl: new THREE.CylinderGeometry(1, 1, 2, 24).parameters.radialSegments, inst: new THREE.SphereGeometry(1, 8, 8) instanceof THREE.BufferGeometry })`));
-            if (q0.pr !== 1 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
-            const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); let d = window.devicePixelRatio || 1; return [Math.abs(renderer.getPixelRatio() - [1, Math.min(1.5, d), d, Math.min(3, Math.max(d, 1) * 2)][i]) < 1e-6, new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
-            if (JSON.stringify(pct) !== '[[true,14],[true,24],[true,30],[true,48]]') bad.push('画质四档的像素比和分段数不对 ' + JSON.stringify(pct));
+            if (q0.pr !== 0.6 || !(q0.seg < 24) || !(q0.cyl < 24) || !q0.inst) bad.push('画质低没生效 ' + JSON.stringify(q0));
+            const pct = JSON.parse(await T.eval(`JSON.stringify([0, 1, 2, 3].map(function (i) { settingsSet('gfx_quality', i); let d = window.devicePixelRatio || 1; return [Math.abs(renderer.getPixelRatio() - [0.6, Math.min(1.5, d), d, Math.min(3, Math.max(d, 1) * 2)][i]) < 1e-6, new THREE.SphereGeometry(1, 24, 16).parameters.widthSegments]; }))`));
+            if (JSON.stringify(pct) !== '[[true,8],[true,24],[true,30],[true,48]]') bad.push('画质四档的像素比和分段数不对 ' + JSON.stringify(pct));
             // 观感：高和超高在亮堂堂的场景里换成有深浅的灯光（环境光降下来、多一盏半球光、太阳偏暖），中和低还原
             const lk = JSON.parse(await T.eval(`JSON.stringify([1, 2, 3, 1].map(function (i) { settingsSet('gfx_quality', i); gfxLook(renderer, i); let am = scene.children.filter(function (x) { return x.isAmbientLight; })[0]; let sun = gfxFindSun(); return [am ? +am.intensity.toFixed(3) : null, !!(gfxHemi && gfxHemi.parent), sun ? sun.color.getHex() : null]; }))`));
             if (lk[0][0] === null) bad.push('场景里没有环境光，观感测不了');
@@ -14534,11 +14583,19 @@ async function enterExit(tab, key) {
             for (const i of [0, 1, 2, 3]) {
                 await T.eval(`settingsSet('gfx_quality', ${i}); gfxShadowAt = 0; renderer.render(scene, camera); window.gfxLastRender = 0; true;`); await W(700);
                 await T.eval(`gfxLastRender = 0; gfxShadowAt = 0; renderer.render(scene, camera); true;`);
-                sh.push(JSON.parse(await T.eval(`JSON.stringify((function () { let s = gfxFindSun(), b = scene.getObjectByName('gfxbox'), f = scene.getObjectByName('gfxfloor'); return [renderer.shadowMap.enabled, !!(s && s.castShadow), s ? s.shadow.mapSize.x : 0, renderer.shadowMap.type === THREE.PCFSoftShadowMap, b.castShadow, b.receiveShadow, f.castShadow, f.receiveShadow]; })())`)));
+                sh.push(JSON.parse(await T.eval(`JSON.stringify((function () { let s = gfxFindSun(), b = scene.getObjectByName('gfxbox'), f = scene.getObjectByName('gfxfloor'); return [renderer.shadowMap.enabled, !!(s && s.castShadow), s ? s.shadow.mapSize.x : 0, s ? s.shadow.radius > 1 : false, b.castShadow, b.receiveShadow, f.castShadow, f.receiveShadow]; })())`)));
             }
             if (sh[0][0] || sh[0][1] || sh[1][0] || sh[1][1]) bad.push('低、中档不该有影子 ' + JSON.stringify(sh.slice(0, 2)));
             if (!sh[2][0] || !sh[2][1] || sh[2][2] !== 2048 || sh[2][3] || !sh[2][4] || !sh[2][5] || sh[2][6] || !sh[2][7]) bad.push('高档影子不对 ' + JSON.stringify(sh[2]));
             if (!sh[3][0] || !sh[3][1] || sh[3][2] <= 2048 || !sh[3][3]) bad.push('超高档影子贴图不比高大或没开柔边 ' + JSON.stringify(sh[3]));
+            // 超高独有：材质换成带高光的 Phong、冷色补光、太阳光晕；回到高全还原；低档像素比 0.6
+            const ux = [];
+            for (const i of [3, 2, 3, 0]) {
+                await T.eval(`settingsSet('gfx_quality', ${i}); gfxLookQ = -1; gfxShadowAt = 0; window.gfxLastRender = 0; renderer.render(scene, camera); true;`); await W(300);
+                await T.eval(`gfxLastRender = 0; gfxShadowAt = 0; renderer.render(scene, camera); true;`);
+                ux.push(JSON.parse(await T.eval(`JSON.stringify([!!scene.getObjectByName('gfxbox').material.isMeshPhongMaterial, !!(gfxRim && gfxRim.parent), !!(gfxGlow && gfxGlow.parent), renderer.getPixelRatio()])`)));
+            }
+            if (!(ux[0][0] && ux[0][1] && ux[0][2]) || ux[1][0] || ux[1][1] || ux[1][2] || !(ux[2][0] && ux[2][1] && ux[2][2]) || ux[3][0] || ux[3][1] || ux[3][3] !== 0.6) bad.push('超高的高光材质、补光、光晕没开或没还原 ' + JSON.stringify(ux));
             await T.eval(`settingsSet('gfx_quality', 1); true;`);
             // 视野：雾和相机 far
             await T.eval(`settingsSet('gfx_view', 0); scene.fog = new THREE.Fog(0x888888, 100, 400); gfxApplyView(); true;`);
@@ -14655,6 +14712,14 @@ async function enterExit(tab, key) {
                 const T = await openTab(chrome, url);
                 await T.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 600, deviceScaleFactor: 1, mobile: false });
                 await T.eval(`settingsSet('gfx_quality', ${q}); true;`);
+                if (process.env.SMOKE_SHOT_SCENE === 'lobby') {   // 大厅广场：露天、有太阳、树和路牌，看光影最清楚
+                    await T.eval(`settingsSet('gfx_quality', ${q}); document.getElementById('lobby-tl').style.display = 'none'; document.getElementById('lobby-tr').style.display = 'none'; document.getElementById('lobby-bottom').style.display = 'none'; true;`); await W(2500);
+                    await T.eval(`camera.position.set(hub.pos ? hub.pos.x - 14 : -14, 6, hub.pos ? hub.pos.z + 16 : 16); camera.lookAt(hub.pos ? hub.pos.x : 0, 2, hub.pos ? hub.pos.z : 0); true;`).catch(() => { }); await W(1500);
+                    const res0 = await T.send('Page.captureScreenshot', { format: 'png' });
+                    const dir0 = process.env.SMOKE_SHOT; fs.mkdirSync(dir0, { recursive: true });
+                    fs.writeFileSync(path.join(dir0, (process.env.SMOKE_SHOT_TAG || 'a') + '-lobby-q' + q + '.png'), Buffer.from(res0.result.data, 'base64'));
+                    await T.close(); continue;
+                }
                 await T.eval(BOSS_GO('easy', false, 777)); await until(T, `isPlaying`, 20000);
                 await T.eval(`HUNT_TEST_NOMOB = true; settingsSet('gfx_quality', ${q}); document.getElementById('sys-modal').classList.add('hidden'); sysModalSync(); true;`); await W(1500);
                 await T.eval(`camera.position.set(TILE * 3, 26, TILE * 3); camera.rotation.set(-0.85, 0.78, 0); document.getElementById('sys-modal').classList.add('hidden'); sysModalSync(); true;`); await W(700);

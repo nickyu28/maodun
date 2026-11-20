@@ -758,6 +758,7 @@
             return !!nightAway;
         }
         function lobbyPrimaryStart() {
+            if (typeof GFXDEAD !== 'undefined' && GFXDEAD.dead) { gfxDeadUI(); return; }   // 画面打不开：不开局
             let m = gState.gameMode;
             if (nightAwayActive() && lobbyParty.length > 0) {
                 let min = Math.max(1, Math.ceil((nightAway.until - performance.now()) / 60000));

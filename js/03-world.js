@@ -153,17 +153,22 @@
         function sceneSweep() {
             if (!scene) return;
             scene.children.slice().forEach(function (c) {
-                if (c.isLight || c.isCamera) return;
+                if (c.isLight || c.isCamera || (c.userData && c.userData.__gfxOwn)) return;   // __gfxOwn：画质超高的太阳光晕，不能被清掉再释放
                 scene.remove(c);
             });
         }
         function ensureScene() {
             if (scene) return;
+            if (GFXDEAD.dead) throw gfxDeadError();
+            // 渲染器先建：画面打不开时不留一个没有渲染器的半个场景，免得下次调用以为好了、开局又撞第二个错
+            let rendererNew = null;
+            try { rendererNew = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: graphicsQuality() >= 1 }); }
+            catch (e) { gfxDeadMark(e); throw gfxDeadError(); }
             scene = new THREE.Scene(); scene.background = new THREE.Color(0xf0f0f5); scene.fog = new THREE.FogExp2(0xf0f0f5, 0.004);
             // scene.remove 一律顺手释放（D1）
             scene.remove = function () { for (let i = 0; i < arguments.length; i++) { let o = arguments[i]; THREE.Scene.prototype.remove.call(this, o); disposeObject(o); } return this; };
             camera = new THREE.PerspectiveCamera(camFovFor(window.innerWidth / window.innerHeight), window.innerWidth / window.innerHeight, 0.5, 1600); camera.rotation.order = 'YXZ';
-            let canvas = document.getElementById('gameCanvas'); renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: graphicsQuality() >= 1 }); renderer.setPixelRatio(graphicsPixelRatio()); gfxHookRenderer(renderer); gfxFitCanvas(true);
+            renderer = rendererNew; renderer.setPixelRatio(graphicsPixelRatio()); gfxHookRenderer(renderer); gfxFitCanvas(true);
             if (window.settingsApplyDisplay) window.settingsApplyDisplay();   // 视角宽度等按设置套上
             gfxApplyAll();   // 画质、视野按设置套上
             // 缩放和转屏由 02c-graphics.js 的 gfxFitCanvas 管
@@ -1477,6 +1482,14 @@
         (function () { let v = document.getElementById('lobby-version'); if (v) v.innerText = '版本 ' + GAME_VERSION; })();
         const CHANGELOG = [
             {
+                id: '2026.11.5-140', date: '11 月 20 日', title: '最近更新', items: [
+                    '画质低更糊更省，超高多了高光、补光和太阳光晕，影子更细',
+                    '画面打不开时大厅菜单还能用，开始游戏会置灰并有提示',
+                    '规则卡片按一下 Esc 就关',
+                    '猫盾工业触屏能用了，新加电风扇'
+                ]
+            },
+            {
                 id: '2026.11.5-126', date: '11 月 20 日', title: '最近更新', items: [
                     '设置的游戏页能导出、导入存档，换设备带着走',
                     '猫盾工业加了盔甲，皮、青铜、铁、钢四档',
@@ -1491,15 +1504,6 @@
                     '卡的时候左上角冒红色图标，点一下有说明',
                     '太卡会临时降画质，不改你选的设置',
                     '联机寻宝队有人卡掉线，AI 先顶上，3 分钟内能回到同一局'
-                ]
-            },
-            {
-                id: '2026.11.5-75', date: '11 月 14 日', title: '最近更新', items: [
-                    '设置分成声音、操作、显示、游戏四页',
-                    '按键能自己改，冲突会提示，能一键恢复默认',
-                    '左右上下转视角的快慢分开调了，触屏按钮大小和透明度也能调',
-                    '显示里能调界面大小、快捷栏位置、视野、帧率上限，小地图和准星能关',
-                    '新手教程改成第一次进每个模式时出现，设置里能重播'
                 ]
             }
         ];

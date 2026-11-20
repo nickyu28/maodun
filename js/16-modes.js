@@ -1426,7 +1426,12 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
             let kind = maker.kind, D = maker.D, list = maker.list;
             document.getElementById('maker').classList.add('hidden');
             maker = null; makerReturn = kind;
-            D.test(list);
+            try { D.test(list); }
+            catch (e) {
+                // 画面打不开、试玩开不起来：回到编辑界面，积木原样还在（makerSave 已存），不要把玩家扔回大厅
+                if (e && e.gfxDead) { makerReturn = null; makerOpen(kind); return; }
+                throw e;
+            }
         }
         function makerShare() {
             if (!maker.list.length) { blazeFlash('先拖一块积木进来'); return; }
