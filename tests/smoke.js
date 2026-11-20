@@ -71,6 +71,17 @@ async function until(T, expr, ms) {
     while (Date.now() - t0 < (ms || 10000)) { if (await T.eval(`!!(${expr})`)) return true; await W(80); }
     return false;
 }
+// 触屏猫盾工业：从大厅点开始进工业，等玩法选择卡片出来点硬核，再等卡片消失（机器慢时卡片出得晚，不能固定等）
+async function indTouchEnter(M) {
+    await M.eval(`selectGameMode('industry'); lobbyPrimaryStart(); true;`);
+    if (!(await until(M, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 40000))) return false;
+    await until(M, `[...document.querySelectorAll('#sys-modal button')].some(function (b) { return b.textContent.indexOf('硬核') >= 0 && b.offsetParent; })`, 15000);
+    await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
+    await until(M, `!document.querySelector('#sys-modal:not(.hidden)')`, 8000);
+    await M.eval(`ind.k = {}; ind.paused = false; true;`);
+    await W(500);
+    return true;
+}
 // 等页面真的画了 n 帧（"过一会儿还是没变"这类反向检查用，帧率低就多等一会儿；最多 20 秒）
 async function frames(T, n) {
     return T.eval(`new Promise(function (res) { let k = 0, t = setTimeout(function () { res(false); }, 20000); (function f() { if (++k >= ${n}) { clearTimeout(t); res(true); } else requestAnimationFrame(f); })(); })`);
@@ -15199,11 +15210,9 @@ async function enterExit(tab, key) {
             const bad = [];
             const M = await openTab(chrome, url, { mobile: true, query: 'hcdebug=1' });
             try {
-                await M.eval(`selectGameMode('industry'); lobbyPrimaryStart(); true;`);
-                if (!(await until(M, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 20000))) bad.push('触屏进不去');
+                if (!(await indTouchEnter(M))) bad.push('触屏进不去');
                 else {
-                    await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
-                    await W(1500); await M.eval(`let m = document.getElementById('sys-modal'); if (m) m.remove(); ind.k = {}; ind.paused = false; indHudUpdate(); true;`);
+                    await M.eval(`ind.k = {}; ind.paused = false; indHudUpdate(); true;`);
                     const J = async (e) => JSON.parse(await M.eval(`JSON.stringify(${e})`));
                     const pos = async (sel) => J(`(function(){ let e = document.querySelector(${JSON.stringify(sel)}); if (!e || !e.offsetParent) return null; let r = e.getBoundingClientRect(), h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return [r.x + r.width / 2, r.y + r.height / 2, h === e || e.contains(h)]; })()`);
                     const tap = async (p) => { await M.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p[0], y: p[1], id: 1 }] }); await W(60); await M.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await W(300); };
@@ -15246,11 +15255,9 @@ async function enterExit(tab, key) {
             const bad = [];
             const M = await openTab(chrome, url, { mobile: true, query: 'hcdebug=1' });
             try {
-                await M.eval(`selectGameMode('industry'); lobbyPrimaryStart(); true;`);
-                if (!(await until(M, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 20000))) bad.push('触屏进不去');
+                if (!(await indTouchEnter(M))) bad.push('触屏进不去');
                 else {
-                    await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
-                    await W(1500); await M.eval(`let m = document.getElementById('sys-modal'); if (m) m.remove(); ind.k = {}; ind.paused = false; indHudUpdate(); IND_TAP_MS.hold = 3000; IND_TAP_MS.tap = 2900; window.__n = { act: 0, hold: 0, stop: 0 }; let a = indAction; indAction = function () { window.__n.act++; return a.apply(this, arguments); }; let hh = indDigHoldStart; indDigHoldStart = function () { window.__n.hold++; return hh.apply(this, arguments); }; let sp = indDigStop; indDigStop = function () { window.__n.stop++; return sp.apply(this, arguments); }; true;`);
+                    await M.eval(`ind.k = {}; ind.paused = false; indHudUpdate(); IND_TAP_MS.hold = 3000; IND_TAP_MS.tap = 2900; window.__n = { act: 0, hold: 0, stop: 0 }; let a = indAction; indAction = function () { window.__n.act++; return a.apply(this, arguments); }; let hh = indDigHoldStart; indDigHoldStart = function () { window.__n.hold++; return hh.apply(this, arguments); }; let sp = indDigStop; indDigStop = function () { window.__n.stop++; return sp.apply(this, arguments); }; true;`);
                     const J = async (e) => JSON.parse(await M.eval(`JSON.stringify(${e})`));
                     const send = (type, x, y, id) => M.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: id || 1 }] });
                     const n = () => J(`window.__n`), reset = () => M.eval(`window.__n = { act: 0, hold: 0, stop: 0 }; true;`);
@@ -15295,11 +15302,9 @@ async function enterExit(tab, key) {
             const bad = [];
             const M = await openTab(chrome, url, { mobile: true, query: 'hcdebug=1' });
             try {
-                await M.eval(`selectGameMode('industry'); lobbyPrimaryStart(); true;`);
-                if (!(await until(M, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 20000))) bad.push('触屏进不去');
+                if (!(await indTouchEnter(M))) bad.push('触屏进不去');
                 else {
-                    await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
-                    await W(1500); await M.eval(`let m = document.getElementById('sys-modal'); if (m) m.remove(); ind.k = {}; ind.paused = false; ind.base.rule = 'hard'; indHudUpdate(); true;`);
+                    await M.eval(`ind.k = {}; ind.paused = false; ind.base.rule = 'hard'; indHudUpdate(); true;`);
                     const J = async (e) => JSON.parse(await M.eval(`JSON.stringify(${e})`));
                     const pos = async (sel) => J(`(function(){ let e = document.querySelector(${JSON.stringify(sel)}); if (!e || !e.offsetParent) return null; let r = e.getBoundingClientRect(), h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return [r.x + r.width / 2, r.y + r.height / 2, h === e || e.contains(h), r.width, r.height]; })()`);
                     const tap = async (p, ms) => { await M.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p[0], y: p[1], id: 1 }] }); await W(ms || 60); await M.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await W(250); };
@@ -15356,11 +15361,9 @@ async function enterExit(tab, key) {
             const bad = [];
             const M = await openTab(chrome, url, { mobile: true, query: 'hcdebug=1' });
             try {
-                await M.eval(`selectGameMode('industry'); lobbyPrimaryStart(); true;`);
-                if (!(await until(M, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 20000))) bad.push('触屏进不去');
+                if (!(await indTouchEnter(M))) bad.push('触屏进不去');
                 else {
-                    await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
-                    await W(1500); await M.eval(`let m = document.getElementById('sys-modal'); if (m) m.remove(); ind.k = {}; ind.paused = false; true;`);
+                    await M.eval(`ind.k = {}; ind.paused = false; true;`);
                     const J = async (e) => JSON.parse(await M.eval(`JSON.stringify(${e})`));
                     const pos = async (t) => J(`(function(){ let e = [...document.querySelectorAll('#ind-hud button')].find(function (x) { return x.textContent.indexOf(${JSON.stringify(t)}) === 0 && x.offsetParent; }); if (!e) return null; let r = e.getBoundingClientRect(), h = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return [r.x + r.width / 2, r.y + r.height / 2, h === e]; })()`);
                     const ts = (x, y, id) => M.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: id || 1 }] });
