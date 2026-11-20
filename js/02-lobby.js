@@ -326,6 +326,7 @@
         // 点"确定"的时候 requestLobbyAccess 也会补一次，不会漏设成默认值。
         function selectControl(deviceStr) {
             gState.control = deviceStr;
+            document.body.classList.toggle('pad-ui', deviceStr === 'pad');   // 触屏界面：按钮至少 44 像素高（index.html 里 body.pad-ui 那段样式）
             applyControlHints();
             let padUI = document.querySelectorAll('.joystick-zone, .action-btn, #phone-backpack-toggle');
             if (deviceStr === 'pad') { padUI.forEach(function (e) { e.style.display = 'flex'; }); document.getElementById('crosshair').style.display = 'none'; }

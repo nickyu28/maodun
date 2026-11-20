@@ -13157,6 +13157,28 @@ async function enterExit(tab, key) {
             await T.close();
             report('IND154 煤产量：每张图总量够、出生点附近够、平原森林有煤', bad.length === 0, bad.join(' / '));
         }
+        if (want('TB1')) {
+            // TB1 触屏界面的按钮至少 44 像素高（作者的规矩，测试员 11-20 量到大厅按钮 27 到 34）：大厅左右和底下、系统弹窗、设置页；电脑界面不受影响
+            const bad = [];
+            const T = await openTab(chrome, url, { mobile: true });
+            const small = `(function(root){ return Array.prototype.slice.call(root.querySelectorAll('button')).filter(function (b) { let r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.height < 43.5; }).map(function (b) { return (b.innerText || b.id || '?').trim().slice(0, 8) + ':' + Math.round(b.getBoundingClientRect().height); }); })`;
+            const r = JSON.parse(await T.eval(`(function(){ let f = ${small}, out = {}; out.pad = gState.control === 'pad' && document.body.classList.contains('pad-ui');
+                out.lobby = f(document.getElementById('screen-lobby'));
+                showSysModal('t', 'x', [{ label: '知道了' }, { label: '取消' }]); out.modal = f(document.getElementById('sys-modal'));
+                document.getElementById('sys-modal').classList.add('hidden'); sysModalSync();
+                openSettings(); out.settings = f(document.getElementById('sys-modal'));
+                return JSON.stringify(out); })()`));
+            if (!r.pad) bad.push('触屏模式没带 pad-ui');
+            ['lobby', 'modal', 'settings'].forEach((k) => { if (r[k].length) bad.push(k + ' 还有不到 44 的按钮 ' + r[k].slice(0, 6).join(' ')); });
+            const ov = JSON.parse(await T.eval(`(function(){ let a = document.getElementById('lobby-tl').getBoundingClientRect(), j = document.getElementById('joystick-left'); if (!j || j.style.display === 'none') return JSON.stringify([0, 0]); let b = j.getBoundingClientRect(); return JSON.stringify([Math.round(a.bottom), Math.round(b.top)]); })()`));
+            if (ov[1] && ov[0] > ov[1]) bad.push('大厅左边那列压到了摇杆 ' + JSON.stringify(ov));
+            const d = JSON.parse(await T.eval(`(function(){ selectControl('laptop'); let b = document.querySelector('#lobby-tl button'); return JSON.stringify([document.body.classList.contains('pad-ui'), b.getBoundingClientRect().height]); })()`));
+            if (d[0] || !(d[1] < 40)) bad.push('电脑界面不该被撑高 ' + JSON.stringify(d));
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('TB1 触屏界面按钮至少 44 像素：大厅、系统弹窗、设置页；电脑界面不变', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('GL1')) {
             // GL1 画面（WebGL）打不开：大厅菜单照常能用、开始游戏置灰、玩家只看到一条短提示、页面上没有堆栈、堆栈在控制台；开局入口不再撞第二个错；正常浏览器照常能开局
             const bad = [];
