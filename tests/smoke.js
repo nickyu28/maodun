@@ -15170,6 +15170,54 @@ async function enterExit(tab, key) {
             report('IND217 存档导出导入接猫盾工业：登记、导出、导入、版本、不写回旧档', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND219')) {
+            // IND219 触屏万能点：右半屏短点 = 左键动作（自动判断）、按住不动一直挖、拖动不算点只转视角、左半屏是摇杆不算、点按钮和面板不穿透、教程开着不算
+            const bad = [];
+            const M = await openTab(chrome, url, { mobile: true, query: 'hcdebug=1' });
+            try {
+                await M.eval(`selectGameMode('industry'); lobbyPrimaryStart(); true;`);
+                if (!(await until(M, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 20000))) bad.push('触屏进不去');
+                else {
+                    await M.eval(`let h = [...document.querySelectorAll('#sys-modal button')].find(function (b) { return b.textContent.indexOf('硬核') >= 0; }); if (h) h.click(); true;`);
+                    await W(1500); await M.eval(`let m = document.getElementById('sys-modal'); if (m) m.remove(); ind.k = {}; ind.paused = false; indHudUpdate(); window.__n = { act: 0, hold: 0, stop: 0 }; let a = indAction; indAction = function () { window.__n.act++; return a.apply(this, arguments); }; let hh = indDigHoldStart; indDigHoldStart = function () { window.__n.hold++; return hh.apply(this, arguments); }; let sp = indDigStop; indDigStop = function () { window.__n.stop++; return sp.apply(this, arguments); }; true;`);
+                    const J = async (e) => JSON.parse(await M.eval(`JSON.stringify(${e})`));
+                    const send = (type, x, y, id) => M.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: id || 1 }] });
+                    const n = () => J(`window.__n`), reset = () => M.eval(`window.__n = { act: 0, hold: 0, stop: 0 }; true;`);
+                    const RX = 1180 * 0.75, RY = 820 * 0.4;
+                    await reset(); await send('touchStart', RX, RY); await W(50); await send('touchEnd'); await W(200);
+                    let r = await n(); if (!(r.act === 1 && r.hold === 0)) bad.push('右半屏短点一下要走一次左键动作 ' + JSON.stringify(r));
+                    await reset(); await send('touchStart', 300, RY); await W(50); await send('touchEnd'); await W(200);
+                    r = await n(); if (r.act !== 0) bad.push('左半屏是摇杆，点了不该动作 ' + JSON.stringify(r));
+                    const yaw0 = await M.eval(`camera.rotation.y`);
+                    await reset(); await send('touchStart', RX, RY); await send('touchMove', RX + 70, RY); for (let i = 2; i <= 8; i++) { await send('touchMove', RX + 70 + i * 15, RY); } await send('touchEnd'); await W(250);
+                    r = await n(); const yaw1 = await M.eval(`camera.rotation.y`);
+                    if (!(r.act === 0 && Math.abs(yaw1 - yaw0) > 0.05)) bad.push('拖动只转视角不算点 ' + JSON.stringify(r) + ' ' + yaw0 + ' → ' + yaw1);
+                    await reset(); await send('touchStart', RX, RY); await W(600); const mid = await n(); await send('touchEnd'); await W(200); r = await n();
+                    if (!(mid.act === 1 && mid.hold === 1 && r.stop >= 1)) bad.push('按住不动 0.35 秒起一直挖、松开停 ' + JSON.stringify([mid, r]));
+                    // 点按钮不穿透：点"放下"，左键动作不增加
+                    const pb = await J(`(function(){ let e = document.getElementById('ind-btn-put'); let r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
+                    await reset(); await send('touchStart', pb[0], pb[1]); await W(50); await send('touchEnd'); await W(200);
+                    r = await n(); if (r.act !== 0) bad.push('点按钮会穿透成左键动作 ' + JSON.stringify(r));
+                    // 面板开着：点右半屏空白不穿透，点面板里也不算
+                    await M.eval(`indPanelBag(); true;`); await W(200); await reset();
+                    await send('touchStart', RX, 700); await W(50); await send('touchEnd'); await W(200);
+                    r = await n(); if (r.act !== 0) bad.push('面板开着点屏幕会穿透 ' + JSON.stringify(r));
+                    await M.eval(`indCloseAll(); true;`);
+                    // 教程开着
+                    await M.eval(`gState.tutSeen = {}; indTutPlay(); true;`); await W(200); await reset();
+                    await send('touchStart', 20, 20); await W(40); await send('touchEnd'); await W(200);
+                    r = await n(); if (r.act !== 0) bad.push('教程开着点屏幕会穿透 ' + JSON.stringify(r));
+                    await M.eval(`let c = document.getElementById('tut-cards'); if (c) c.remove(); ind.tutOpen = false; true;`);
+                    // 教程里写了怎么点
+                    const tx = await J(`(function(){ return TUT_IND_PAD.join('|'); })()`);
+                    if (!/点一下右半屏/.test(tx) || !/换动作/.test(tx) || !/拖动是转视角/.test(tx)) bad.push('触屏教程要写清楚点一下、换动作、拖动 ' + tx);
+                }
+            } catch (e) { bad.push('异常 ' + e.message); }
+            if (M.errors.length) bad.push(M.errors.slice(0, 2).join(' / '));
+            await M.close();
+            report('IND219 触屏万能点：右半屏短点是左键动作、按住一直挖、拖动不算点、按钮面板教程上不穿透、教程写清楚', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND218')) {
             // IND218 触屏只有点和按钮（作者 11-20）：键盘上的每个动作都有屏幕按钮，用真实触屏事件点：配方 C、背包 E、地图 M、倍速 Z、元素表 T、进度 Tab、成就 H、暂停 P、跳 空格、跑 Shift（点一下开关）、左键动作 F、右键 R（按住也行）、放下 Q、踹炉子 V、快捷栏 1～0
             const bad = [];

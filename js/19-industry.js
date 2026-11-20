@@ -1127,11 +1127,12 @@
                 if (!document.pointerLockElement) safeLockPointer();
             };
             ind.onMouse = function (e) {
+                if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;   // 触屏点一下浏览器会补发鼠标事件，那是触屏万能点管的（indTapEnd），别算两次
                 if (!ind || ind.over || ind.paused || !document.pointerLockElement) return;
                 if (e.target && e.target.closest && e.target.closest('button, #ind-panel, #sys-modal, #ind-moonpick')) return;
                 if (e.button === 0) { indAction(); indDigHoldStart(); } else if (e.button === 2) indRightDown();
             };
-            ind.onMouseUp = function (e) { if (ind && !ind.over && e.button === 0) indDigStop(); if (ind && !ind.over && e.button === 2) indRightUp(); };
+            ind.onMouseUp = function (e) { if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return; if (ind && !ind.over && e.button === 0) indDigStop(); if (ind && !ind.over && e.button === 2) indRightUp(); };
             ind.onCtx = function (e) { if (ind) e.preventDefault(); };
             document.addEventListener('mousedown', ind.onMouse); document.addEventListener('mouseup', ind.onMouseUp); document.addEventListener('contextmenu', ind.onCtx);
             if (base.bagOver) { setTimeout(function () { if (ind) indFlash('背包装不下的放到箱子里了'); }, 600); delete base.bagOver; }   // 任务 145
@@ -3972,8 +3973,37 @@
             let k = (e.key || '').toLowerCase();
             if (IND_KEYMAP[k]) ind.k[IND_KEYMAP[k]] = false; else if (k === ' ') ind.k.jump = false; else if (k === 'shift') ind.k.run = false;
         }
-        function indBindKeys() { window.addEventListener('keydown', indKeyDown); window.addEventListener('keyup', indKeyUp); window.addEventListener('wheel', indWheel, { passive: true }); }
-        function indUnbindKeys() { window.removeEventListener('keydown', indKeyDown); window.removeEventListener('keyup', indKeyUp); window.removeEventListener('wheel', indWheel); }
+        // 触屏的万能点（作者 11-20）：右半屏短点一下（不拖）= 左键动作，对着准星指的东西自动判断，能交互就交互，不能就挖、砍、打、放、拿；
+        // 按住不动 0.35 秒 = 一直挖（跟按住左键一样）；拖动是转视角，不算点；左半屏是摇杆；按钮、面板、教程上的点不穿透。有歧义用"换动作"按钮（右键），不做双击。
+        let IND_TAP = null;
+        function indTapOk(el) { return !(el && el.closest && el.closest('button, input, select, textarea, #ind-panel, #sys-modal, #ind-bag, #ind-toprow, #ind-actrow, .joystick-zone, #tut-cards, #ind-end, #ind-count, #ind-moonpick, #ind-carve, #ind-undo, #ind-hud .ind-hot')); }
+        function indTapOn() { return !!ind && !ind.over && !ind.dead && !ind.paused && !ind.tutOpen && !ind.panel && !ind.carve; }   // 只有触屏才有 touch 事件，不用看 gState.control
+        function indTapStart(e) {
+            if (!indTapOn() || IND_TAP) return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                let t = e.changedTouches[i];
+                if (t.clientX < window.innerWidth / 2 || !indTapOk(t.target)) continue;
+                let T = IND_TAP = { id: t.identifier, x: t.clientX, y: t.clientY, t: performance.now(), moved: false, hold: false };
+                T.timer = setTimeout(function () { if (IND_TAP === T && !T.moved && indTapOn()) { T.hold = true; indAction(); indDigHoldStart(); } }, 350);
+                return;
+            }
+        }
+        function indTapMove(e) {
+            if (!IND_TAP) return;
+            for (let i = 0; i < e.changedTouches.length; i++) { let t = e.changedTouches[i]; if (t.identifier === IND_TAP.id && Math.hypot(t.clientX - IND_TAP.x, t.clientY - IND_TAP.y) > 14) { IND_TAP.moved = true; clearTimeout(IND_TAP.timer); if (IND_TAP.hold) { IND_TAP.hold = false; indDigStop(); } } }
+        }
+        function indTapEnd(e) {
+            if (!IND_TAP) return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                let t = e.changedTouches[i]; if (t.identifier !== IND_TAP.id) continue;
+                let T = IND_TAP; IND_TAP = null; clearTimeout(T.timer);
+                if (T.hold) { indDigStop(); return; }
+                if (!T.moved && performance.now() - T.t < 260 && indTapOn()) indAction();
+                return;
+            }
+        }
+        function indBindKeys() { window.addEventListener('keydown', indKeyDown); window.addEventListener('keyup', indKeyUp); window.addEventListener('wheel', indWheel, { passive: true }); document.addEventListener('touchstart', indTapStart, { passive: true }); document.addEventListener('touchmove', indTapMove, { passive: true }); document.addEventListener('touchend', indTapEnd, { passive: true }); document.addEventListener('touchcancel', indTapEnd, { passive: true }); }
+        function indUnbindKeys() { window.removeEventListener('keydown', indKeyDown); window.removeEventListener('keyup', indKeyUp); window.removeEventListener('wheel', indWheel); document.removeEventListener('touchstart', indTapStart); document.removeEventListener('touchmove', indTapMove); document.removeEventListener('touchend', indTapEnd); document.removeEventListener('touchcancel', indTapEnd); IND_TAP = null; }
         // 鼠标滚轮：只在快捷栏 10 格里转（任务 17）；开着面板不转
         function indWheel(e) { if (!ind || ind.over || ind.paused || ind.panel || !e.deltaY) return; let n = Math.max(1, Math.min(IND_HOTBAR, indSlots().length)); ind.selIdx = ((Math.min(ind.selIdx, n - 1) + (e.deltaY > 0 ? 1 : -1)) % n + n) % n; }
         // 跑：点一下开、再点一下关，不用同时按着（触屏只有点和按钮，作者 11-20）；键盘 Shift 还是按着跑
@@ -3999,7 +4029,7 @@
                 '<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;"></div>' +
                 '<div style="position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:min(96vw,720px);text-align:center;pointer-events:auto;">' +
                 '<div id="ind-bag" style="background:rgba(255,255,255,.92);border-radius:8px;padding:4px;min-height:34px;font-size:14px;"></div>' +
-                '<div id="ind-actrow" style="margin-top:2px;transform-origin:50% 100%;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onpointerdown="indRightDown()" onpointerup="indRightUp()" onpointercancel="indRightUp()">右键　用　R</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下　Q</button><button id="ind-btn-ser" style="' + IND_BTN + 'display:none;background:#00838f;" onclick="srToggleAim()">接法</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子　V</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线　Esc</button>' +
+                '<div id="ind-actrow" style="margin-top:2px;transform-origin:50% 100%;"><button id="ind-btn-act" style="' + IND_BTN + '" onpointerdown="indActDown()" onpointerup="indDigStop()" onpointerleave="indDigStop()" onpointercancel="indDigStop()" onclick="indActClick()">左键动作</button><button id="ind-btn-use" style="' + IND_BTN + '" onpointerdown="indRightDown()" onpointerup="indRightUp()" onpointercancel="indRightUp()">换动作　右键</button><button id="ind-btn-put" style="' + IND_BTN + '" onclick="indDrop()">放下　Q</button><button id="ind-btn-ser" style="' + IND_BTN + 'display:none;background:#00838f;" onclick="srToggleAim()">接法</button><button id="ind-btn-kick" style="' + IND_BTN + 'display:none;" onclick="ckKick()">踹炉子　V</button><button id="ind-btn-unwire" style="' + IND_BTN + 'display:none;background:#455a64;" onclick="indCancelWire()">取消连线　Esc</button>' +
                 '<button style="' + IND_BTN + '" ontouchstart="event.preventDefault();indHold(\'jump\',true)" ontouchend="indHold(\'jump\',false)" onmousedown="indHold(\'jump\',true)" onmouseup="indHold(\'jump\',false)">跳</button>' +
                 '<button id="ind-btn-run" style="' + IND_BTN + '" onclick="indRunToggle()">跑　Shift</button></div></div>';
             document.body.appendChild(d);
