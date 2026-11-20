@@ -24,11 +24,11 @@
                     let k = p + '_' + t, cut = Math.round(P.cut * AR.mult[t] * 1000) / 1000, nm = P.name[i];
                     AR_ITEM[k] = { part: p, tier: t, cut: cut };
                     add[k] = { name: nm, col: AR.col[t], wear: P.sl, warm: 0, armor: cut, heavy: 1 - P.w * AR.walk[t], arw: P.w * AR.stam[t], use: '穿上少受伤' + Math.round(cut * 100) + '%，每挨一下掉 1 点耐久，耐久 ' + AR.dura[t] };
-                    add['broken_' + k] = { name: '坏了的' + nm, col: 0x616161, use: '工作台：加 1 胶水修好，耐久一半' + (t === 'lth' ? '，或者回收一半皮革' : '') };
+                    add['broken_' + k] = { name: '坏了的' + nm, col: 0x616161, use: '工作台：加 1 胶水修好，耐久一半' };
                     let need = t === 'lth' ? { leather: P.n, rope: Math.ceil(P.n / 4) } : (function () { let o = {}; o[AR.mat[t]] = P.n; return o; })();
                     IND_CRAFT.push(Object.assign({ out: k, in: need, hard: true }, t === 'lth' ? {} : { need: 'hammer' }));
                     IND_CRAFT.push({ out: k, fix: true, in: { ['broken_' + k]: 1, glue: 1 }, hard: true });
-                    if (t === 'lth') IND_CRAFT.push({ out: 'leather', n: Math.floor(P.n / 2), in: { ['broken_' + k]: 1 }, hard: true });
+                    if (t === 'lth') IND_CRAFT.push({ out: 'leather', n: Math.floor(P.n / 2), in: { ['broken_' + k]: 1 }, hard: true, off: true });   // 坏的盔甲跟别的坏工具一样不在工作台拆
                 });
             });
             Object.assign(IND_ITEMS_RAW, add);

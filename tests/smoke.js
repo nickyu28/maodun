@@ -5401,7 +5401,7 @@ async function enterExit(tab, key) {
                         // 怪（任务 70）：拿刀打出门的怪掉黏液、蘑菇、毒蘑菇、云絮、蜂蜜、木炭、仙人掌、肉、皮；刀盾用坏了变断的
                         if (typeof MB_KNIFE !== 'undefined') {
                             if (Object.keys(MB_KNIFE).some(function (k) { return have[k]; })) ['goo', 'shroom', 'shroom_bad', 'fluff', 'honey', 'charcoal', 'cactus', 'meat_raw', 'hide'].forEach(add);
-                            Object.keys(MB_KNIFE).concat(Object.keys(MB_SHIELD), typeof TL_TOOL !== 'undefined' ? Object.keys(TL_TOOL) : []).forEach(function (k) { if (have[k] && RAW['broken_' + k]) add('broken_' + k); });   // 工具用坏（工具分材质）
+                            Object.keys(MB_KNIFE).concat(Object.keys(MB_SHIELD), typeof TL_TOOL !== 'undefined' ? Object.keys(TL_TOOL) : [], typeof AR_ITEM !== 'undefined' ? Object.keys(AR_ITEM) : []).forEach(function (k) { if (have[k] && RAW['broken_' + k]) add('broken_' + k); });   // 工具用坏（工具分材质）
                         }
                         if (hard && RAW.scrap_dev && power()) { add('scrap_dev'); add('battery_burnt'); }
                         if (hard && have.dev_el && power()) IND_EL_RECIPES.forEach(function (r) { if (Object.keys(r.in).every(function (k) { return have[k]; })) Object.keys(r.out).forEach(add); });
