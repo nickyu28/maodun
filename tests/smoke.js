@@ -13580,6 +13580,23 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND227')) {
+            // IND227 分馏塔认出生的灶台当热源（测试员 11-20）：灶台烧到 400°C 以上、塔在 5 米内就出东西；灶台灭了或太远不出
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const r = JSON.parse(await T.eval(`JSON.stringify((function(){ cancelAnimationFrame(ind.raf); let B = ind.base, St = IND_BASE_ST.stove; B.rule = 'hard'; B.off.stove = false; B.stove = Object.assign(ckNewState(), { fuel: 9000, fire: 3, temp: 600, spout: [], spoutTy: 'brick' }); B.cookers = [];
+                    let d = { id: ++B.dseq, ty: 'frac', x: St.x + 3, z: St.z, bats: 0, u: 0, on: true, ft: 20, st: {}, pw: true }; B.devs = [d]; let a = frHeat(d); d.x = St.x + 20; let far = frHeat(d); d.x = St.x + 3; B.stove.fire = 0; let off = frHeat(d); B.stove.fire = 3; B.stove.temp = 200; let cold = frHeat(d); return { a: a, far: far, off: off, cold: cold }; })())`));
+                if (!(r.a === true && r.far === false && r.off === false && r.cold === false)) bad.push('灶台当热源：烧着 600°C 5 米内算，太远、灭了、不够热不算 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND227 分馏塔认出生的灶台当热源', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND226')) {
             // IND226 烤蘑菇（作者 11-20）：饱食 +15（作者定的），烤的份数和野外蘑菇生成数量都不动
             const bad = [];

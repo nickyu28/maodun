@@ -11,7 +11,7 @@
         IND_DEVS.frac = { name: '分馏塔', col: 0xb0bec5, rated: 24, minV: 1.5, draw: 0, size: [1.4, 3, 1.4], nowire: true };
         // 旁边有没有够热的炉子
         function frHeat(d) {
-            return (ind.base.cookers || []).some(function (c) { let S = c.C || c; return S && S.fire > 0 && S.temp >= FR.minT && Math.hypot(c.x - d.x, c.z - d.z) <= FR.near; });
+            return indCooks().some(function (c) { let S = c.C && c.C.C ? c.C.C : c.C; return S && S.fire > 0 && S.temp >= FR.minT && Math.hypot(c.x - d.x, c.z - d.z) <= FR.near; });   // 出生的灶台也算（原来只看摆出来的炉子，测试员 11-20）
         }
         function frOilKey(d) { return Object.keys(d.st).filter(function (k) { let c = indContOf(k); return c && c.base === 'oil' && d.st[k] > 0; })[0] || null; }
         IND_DEV_BUSY.frac = function () { return false; };
