@@ -15139,6 +15139,37 @@ async function enterExit(tab, key) {
             report('IND205 Z 键面板开着也调倍速、Esc 一次关所有窗口', bad.length === 0, bad.slice(0, 8).join(' / '));
         }
 
+        if (want('IND217')) {
+            // IND217 存档导出导入接猫盾工业：登记了 industry；导出带名字和存档版本和基地存档；导入写到导入的名字下、不覆盖别人、版本太新不收；导入时内存里的旧档不会写回去
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                const A = async (e) => JSON.parse(await T.eval(`(async function(){ return JSON.stringify(${e}); })()`));
+                const r = await A(`await (async function () {
+                    let o = {}; o.reg = SAVEPORT.ext.some(function (x) { return x.name === 'industry'; });
+                    ind.base.box.zz_mark = 7;
+                    let X = SAVEPORT.ext.filter(function (x) { return x.name === 'industry'; })[0];
+                    let out = await X.out(); o.out = !!out && out.id === saveportName() && out.v === IND_SAVE_VER && out.base && out.base.box && out.base.box.zz_mark === 7;
+                    out.id = 'zztest'; window.__saveportReload = false;
+                    let ok = await X.inn(out); let back = await indPortRead('zztest'); o.inn = ok === true && !!back && back.box.zz_mark === 7;
+                    o.lock = window.__saveportReload === true; let sv = await new Promise(function (r) { indSave(r); }); o.noWrite = sv === false;
+                    let old = Object.assign({}, out, { v: IND_SAVE_VER + 5, id: 'zztest2' }); window.__saveportReload = false; let rej = false; try { await X.inn(old); } catch (e) { rej = true; } o.tooNew = rej && !(await indPortRead('zztest2')) && window.__saveportReload === false;
+                    window.__saveportReload = false;
+                    await new Promise(function (res) { indDb(function (db) { let tx = db.transaction(IND_STORE, 'readwrite'); tx.objectStore(IND_STORE).delete('p_zztest'); tx.oncomplete = function () { db.close(); res(); }; }); });
+                    return o; })()`);
+                if (!r.reg) bad.push('没登记 industry ' + JSON.stringify(r));
+                if (!r.out) bad.push('导出带名字、版本、基地存档 ' + JSON.stringify(r));
+                if (!r.inn) bad.push('导入写到导入的名字下 ' + JSON.stringify(r));
+                if (!r.lock || !r.noWrite) bad.push('导入时不把内存里的旧档写回去 ' + JSON.stringify(r));
+                if (!r.tooNew) bad.push('版本太新不收 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND217 存档导出导入接猫盾工业：登记、导出、导入、版本、不写回旧档', bad.length === 0, bad.slice(0, 8).join(' / '));
+        }
+
         if (want('IND216')) {
             // IND216 触屏猫盾工业（作者 11-20 严重 bug）：用真实触屏事件，进工业后拖右半屏转视角、点跳（短点也跳）、按住跑、点左键动作都有反应；新手教程有"退出教程"按钮，点一下关掉并记成看过，Esc 也能关
             const bad = [];

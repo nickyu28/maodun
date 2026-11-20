@@ -1377,3 +1377,8 @@ Shift+T 开关一个面板，列出所有物品，可搜名字，点哪个就往
 - 原因两条：① js/03-world.js 的 `touchLookActive()` 里没有猫盾工业，触屏拖右半屏转不了视角（别的模式各有一行，工业漏了）；② 工业教程卡片的"下一张""跳过"按钮用的 id 跟主游戏教程面板一样（tut-next、tut-skip），getElementById 拿到的是主游戏那个藏着的，点了没反应，只有电脑按 Esc 能关。
 - 修：`touchLookActive()` 加工业；教程按钮改用 class（tc-next、tc-skip），每页都有"退出教程"按钮，触屏教程文字写摇杆和按钮而不是 WASD 鼠标；跳按钮按下后至少算按着 0.15 秒，短点一下也能跳。看过记 tutMark。
 - 冒烟 IND216 用真实触屏事件（CDP touchStart/touchMove）查：拖右半屏转视角、点跳、按住跑、点左键动作、教程退出按钮和 Esc。以后给猫盾工业加触屏功能，要用这条真实触屏流程测，别只调函数。
+
+## 存档导出导入（换设备，作者 11-20）
+- 猫盾工业的存档在 IndexedDB（库 maodun_industry），登记给 js/02d-saveport.js（`saveportRegister('industry', ...)`）：导出时先存一次再读，带名字、存档版本和整个基地存档；导入时写到导入的名字下（`p_名字`），存档版本比这个版本新就不收。
+- 导入时 `window.__saveportReload = true`，`indSave` 这时直接返回，不会把内存里的旧档写回去盖掉刚导入的；导入完页面自动刷新。
+- 实验室的状态在主存档的 `lab` 字段里，已经跟着主存档走，不用另外登记。冒烟 IND217。

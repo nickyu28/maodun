@@ -648,6 +648,32 @@
             b.ver = IND_SAVE_VER;
             return b;
         }
+        // 存档导出导入（换设备，作者 11-20）：猫盾工业存在 IndexedDB，登记给 js/02d-saveport.js。out 先存一次再读，带上名字；inn 写进导入的名字下，存档版本比这个版本新就不收
+        function indPortRead(id) {
+            return new Promise(function (res) {
+                indDb(function (db) {
+                    if (!db) { res(null); return; }
+                    try { let q = db.transaction(IND_STORE, 'readonly').objectStore(IND_STORE).get('p_' + id); q.onsuccess = function () { res(q.result || null); db.close(); }; q.onerror = function () { res(null); db.close(); }; } catch (e) { res(null); }
+                });
+            });
+        }
+        saveportRegister('industry', {
+            out: function () {
+                let id = gState.id;
+                return (ind && ind.base ? new Promise(function (r) { indSave(r); }) : Promise.resolve()).then(function () { return indPortRead(id); }).then(function (b) { return b ? { id: saveportName(), v: IND_SAVE_VER, base: b } : undefined; });
+            },
+            inn: function (d) {
+                if (!d || !d.id || !d.base || typeof d.base !== 'object') return false;
+                if (!(d.v <= IND_SAVE_VER)) return Promise.reject(new Error('猫盾工业存档版本太新'));
+                window.__saveportReload = true;
+                return new Promise(function (res, rej) {
+                    indDb(function (db) {
+                        if (!db) { rej(new Error('写不进猫盾工业存档')); return; }
+                        try { let tx = db.transaction(IND_STORE, 'readwrite'); tx.objectStore(IND_STORE).put(d.base, 'p_' + d.id); tx.oncomplete = function () { db.close(); res(true); }; tx.onerror = function () { db.close(); rej(new Error('写不进猫盾工业存档')); }; } catch (e) { rej(e); }
+                    });
+                });
+            }
+        });
         function indLoad(cb) {
             indDb(function (db) {
                 if (!db) { cb(indNewBase()); return; }
@@ -660,7 +686,7 @@
         }
         let IND_SAVING = 0, IND_SAVE_SEQ = 0, IND_SAVE_PUT = 0;   // IND_SAVE_SEQ：第几次存；IND_SAVE_PUT：已经开始写的最新一次
         function indSave(cb) {
-            if (!ind || !ind.base) { if (cb) cb(false); return; }
+            if (!ind || !ind.base || window.__saveportReload) { if (cb) cb(false); return; }   // 导入存档的时候别把内存里的旧档写回去（js/02d-saveport.js）
             if (ind.where === 'base' && !ind.loading && ind.p) ind.base.me = { x: Math.round(ind.p.x * 100) / 100, z: Math.round(ind.p.z * 100) / 100, ry: Math.round(camera.rotation.y * 1000) / 1000 };   // 任务 147：基地里记下人站的位置和朝向
             let data = JSON.parse(JSON.stringify(ind.base));
             data.bag = ind.where === 'base' ? JSON.parse(JSON.stringify(ind.bag)) : {};   // 基地里背包跟着存；在远征里的不存（回不来就丢了）
