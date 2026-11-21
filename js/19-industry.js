@@ -3895,6 +3895,7 @@
             let K1 = indCookK(c.ty, S), wanted = function (k) {
                 if (ctIsMoldSafe(k)) return true;
                 if (k === 'coal' || k === 'charcoal' || k === 'char') return true;
+                if (k === 'ingot_ni') return true;   // 钢镐头铸造要 1 份镍锭放进炉膛（作者 11-21：镍锭放不进去，原来被"只显示有用的"滤掉了）
                 let q = indContOf(k), base = q && q.base ? q.base : k;
                 if (IND_RECIPES.some(function (r) { return !((r.hard && !indHard()) || (K1.only && (r.cls || 'food') !== K1.only)) && (r.in[k] > 0 || r.in[base] > 0); })) return true;
                 try { if (indHard() && typeof ctMeltUnit === 'function' && ctMeltUnit({ items: (function () { let o = {}; o[k] = 1; return o; })() })) return true; } catch (e) { }
