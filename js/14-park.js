@@ -181,7 +181,8 @@
             let varNames = Object.keys(park.vars);
             let varTxt = varNames.length ? '　' + varNames.map(function (n) { return n + ':' + park.vars[n]; }).join(' ') : '';
             document.getElementById('blaze-score').innerText = scoreTxt + '　' + Math.ceil(remain) + 's';
-            document.getElementById('blaze-round').innerText = (park.program.name || '猫盾乐园') + (padOn() ? '　摇杆移动去碰物品' : '　WASD 移动去碰物品') + varTxt;
+            let goalTxt = park.compiled.winScore !== null ? '　' + Math.round(park.compiled.duration) + ' 秒内得 ' + park.compiled.winScore + ' 分' : '　' + Math.round(park.compiled.duration) + ' 秒内多得分';
+            document.getElementById('blaze-round').innerText = (park.program.name || '猫盾乐园') + goalTxt + (padOn() ? '　摇杆移动去碰物品' : '　WASD 移动去碰物品') + varTxt;
         }
         // A3：别人玩了你做的乐园游戏，分你一份猫盾币。只认房间里的人，金额 1～30，
         // 同一个人 10 分钟内最多 3 次；不合规矩的整条丢掉。sender 由房主按连接写入（见 netDeliver）。

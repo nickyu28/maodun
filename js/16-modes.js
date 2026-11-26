@@ -1345,8 +1345,11 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
         function makerRender() {
             let el = document.getElementById('mk-stack');
             let L = maker.list;
+            // 警告（只提醒，不拦着）：「碰到某色」的积木，这局没有生成、掉落或追人的那个颜色，规则永远碰不上
+            let made = {}; L.forEach(function (b) { if ((b.type === 'spawn' || b.type === 'fall' || b.type === 'chase') && b.color) made[b.color] = 1; });
+            let warn = function (b) { return maker.kind === 'park' && b.type === 'touch' && b.color && !made[b.color] ? '<div class="mk-warn" style="width:100%; font-size:12px; color:#b71c1c; background:#ffebee; border-radius:4px; padding:2px 6px; margin-top:2px;">这局没有生成' + (MK_COLOR_OPTS[b.color] || b.color) + '物体</div>' : ''; };
             el.innerHTML = '<div class="mk-blk mk-hat">' + maker.D.hat + '</div>' +
-                L.map(function (b, i) { return makerBlockHtml(b, i, true); }).join('') +
+                L.map(function (b, i) { return makerBlockHtml(b, i, true).replace(/<\/div>$/, warn(b) + '</div>'); }).join('') +
                 (L.length ? '' : '<div class="mk-empty">把左边的积木拖到这里，点一下也行</div>') +
                 (maker.D.cap ? '<div class="mk-blk mk-cap">' + maker.D.cap + '</div>' : '');
             el.querySelectorAll('.mk-blk[data-i]').forEach(function (n) {
@@ -1357,7 +1360,7 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
             });
             document.getElementById('mk-count').innerText = L.length + ' / ' + maker.D.max;
         }
-        function makerSet(i, f, v, num) { let b = maker.list[i]; if (!b) return; b[f] = num ? (parseFloat(v) || 0) : v; makerSave(); }
+        function makerSet(i, f, v, num) { let b = maker.list[i]; if (!b) return; b[f] = num ? (parseFloat(v) || 0) : v; makerSave(); if (f === 'color' || f === 'type') makerRender(); }
         function makerAdd(k, at) {
             if (maker.list.length >= maker.D.max) { blazeFlash('最多 ' + maker.D.max + ' 块'); return; }
             let b = maker.D.blocks[k].make();

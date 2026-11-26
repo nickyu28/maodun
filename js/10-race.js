@@ -1303,7 +1303,7 @@
                 race.draw.map(function (c, i) {
                     return '<button onclick="racePick(\'' + c.id + '\')" style="margin:0; flex:1; min-width:0; max-width:170px; background:#fff; border:2px solid #7e57c2; border-radius:8px; padding:6px 6px; text-align:left; cursor:pointer;">' +
                         '<b style="color:#7e57c2; font-size:13px;">' + (pad ? '' : (i + 1) + ' ') + c.name + '</b>' +
-                        '<div style="font-size:11px; color:#666; line-height:1.35; margin-top:2px;">' + c.desc + '</div></button>';
+                        (c.fx ? '<div style="font-size:13px; font-weight:bold; color:#222; line-height:1.3; margin-top:3px;">' + c.fx + '</div>' : '') + '<div style="font-size:11px; color:#666; line-height:1.35; margin-top:2px;">' + c.desc + '</div></button>';
                 }).join('') + '</div>';
             bar.style.display = 'block';
         }

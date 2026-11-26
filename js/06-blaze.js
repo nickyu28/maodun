@@ -642,11 +642,11 @@
             { id: 'accel', kind: 'buff', name: '起步', desc: '加速到满速快 35%' },
             { id: 'brake', kind: 'buff', name: '抓地', desc: '松手刹得住，滑行少 40%' },
             { id: 'sturdy', kind: 'buff', name: '沉身', desc: '被撞飞的力度 −40%' },
-            { id: 'dbljump', kind: 'skill', name: '腾空', desc: '空中放技能冲天一跳，比正常跳高六成', cd: 12 },
-            { id: 'blink', kind: 'skill', name: '瞬移', desc: '朝正前方闪 8 身位，缺口直接跨过去', cd: 14 },
-            { id: 'hook', kind: 'skill', name: '抓钩', desc: '射程 14 身位；勾到人就拽到他身前并把他撞开，直接反超', cd: 16 },
-            { id: 'small', kind: 'skill', name: '缩小', desc: '8 秒内体积减半，期间完全撞不飞', cd: 18 },
-            { id: 'bridge', kind: 'skill', name: '浮桥', desc: '脚下往前架出一条三块的浮桥，存在 6 秒，能直接跨过断桥', cd: 14 }
+            { id: 'dbljump', kind: 'skill', fx: '冲天一跳', name: '腾空', desc: '空中放技能冲天一跳，比正常跳高六成', cd: 12 },
+            { id: 'blink', kind: 'skill', fx: '向前闪现 8 身位', name: '瞬移', desc: '朝正前方闪 8 身位，缺口直接跨过去', cd: 14 },
+            { id: 'hook', kind: 'skill', fx: '勾人超车', name: '抓钩', desc: '射程 14 身位；勾到人就拽到他身前并把他撞开，直接反超', cd: 16 },
+            { id: 'small', kind: 'skill', fx: '免击飞 8 秒', name: '缩小', desc: '8 秒内体积减半，期间完全撞不飞', cd: 18 },
+            { id: 'bridge', kind: 'skill', fx: '架浮桥 6 秒', name: '浮桥', desc: '脚下往前架出一条三块的浮桥，存在 6 秒，能直接跨过断桥', cd: 14 }
         ];
         function raceCardDef(id) { return RACE_CARDS.filter(function (c) { return c.id === id; })[0]; }
 

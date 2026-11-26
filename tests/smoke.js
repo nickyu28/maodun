@@ -13179,6 +13179,28 @@ async function enterExit(tab, key) {
             report('TB1 触屏界面按钮至少 44 像素：大厅、系统弹窗、设置页；电脑界面不变', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('UX3')) {
+            // UX3 乐园编辑器警告（碰到的颜色这局没生成）、竞速技能卡先写效果、乐园顶上写目标
+            const bad = [];
+            const T = await openTab(chrome, url);
+            const r = JSON.parse(await T.eval(`(function(){ let out = {};
+                gState.parkDraft = [{ type: 'spawn', color: 'orange', every: 1.5 }, { type: 'touch', color: 'blue', effect: 'score' }, { type: 'win', score: 8 }]; makerOpen('park');
+                let w = function () { return Array.prototype.map.call(document.querySelectorAll('#mk-stack .mk-warn'), function (n) { return n.innerText; }); };
+                out.w1 = w(); makerSet(0, 'color', 'blue', 0); out.w2 = w();
+                out.fx = RACE_CARDS.filter(function (c) { return c.kind === 'skill'; }).every(function (c) { return typeof c.fx === 'string' && c.fx.length > 0 && c.fx.length <= 10 && !/[()（）]/.test(c.fx); });
+                return JSON.stringify(out); })()`));
+            if (r.w1.length !== 1 || !/这局没有生成蓝色物体/.test(r.w1[0] || '')) bad.push('该有一条蓝色警告 ' + JSON.stringify(r.w1));
+            if (r.w2.length) bad.push('补上蓝色生成后警告该消失 ' + JSON.stringify(r.w2));
+            if (!r.fx) bad.push('技能卡缺效果短语或太长');
+            await T.eval(`${HIDE} document.getElementById('maker').classList.add('hidden'); maker = null; parkBegin({ name: '测试', blocks: [{ type: 'spawn', color: 'orange', every: 1.5 }, { type: 'win', score: 8 }, { type: 'time', seconds: 90, result: 'lose' }] }); true;`);
+            if (!(await until(T, `typeof park !== 'undefined' && park && park.compiled`, 20000))) bad.push('乐园没开起来');
+            await T.eval(`parkHud(); true;`);
+            const hud = await T.eval(`document.getElementById('blaze-round').innerText`);
+            if (!/90 秒内得 8 分/.test(hud)) bad.push('顶上没写目标 ' + hud);
+            await T.close();
+            report('UX3 乐园编辑器警告、技能卡先写效果、乐园顶上写目标', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('GL1')) {
             // GL1 画面（WebGL）打不开：大厅菜单照常能用、开始游戏置灰、玩家只看到一条短提示、页面上没有堆栈、堆栈在控制台；开局入口不再撞第二个错；正常浏览器照常能开局
             const bad = [];
