@@ -41,7 +41,7 @@
         const IND_T = { extract: 3, pickR: 2.6, gateR: 2.2, exitR: 3, speed: 7, run: 1.6 };
         const IND_BASE = { x: 30, z: 22.5, x0: -30, x1: 30, z0: -22.5, z1: 22.5 };          // 基地半宽、半深（60 × 45 米）
         const IND_FIELD = { x0: -28, x1: -6, z0: -18, z1: 18, tile: 2 };   // 农田（基地左边），2 米一格
-        const IND_MAP = 520, IND_K = 3, IND_ZOOM = Math.sqrt(3);   // 远征地图半宽（1040 × 1040 米，任务 92：面积约 3 倍）；数量 × IND_K，群系噪声放大 IND_ZOOM 倍（群系面积约 3 倍）
+        let IND_MAP = 520; const IND_MAP0 = 520, IND_K = 3, IND_ZOOM = Math.sqrt(3);   // 荒野玩法（19-industry-wild.js）进来时把 IND_MAP 改成 1000，离开改回来；   // 远征地图半宽（1040 × 1040 米，任务 92：面积约 3 倍）；数量 × IND_K，群系噪声放大 IND_ZOOM 倍（群系面积约 3 倍）
         const IND_BAG_SLOTS = 36, IND_STACK = 99, IND_CHEST_SLOTS = 30;   // 任务 146：基础背包 24 → 36 格；便宜量大的原料每格 200（物品自己的 stack），别的 99        // 背包 24 格，每格最多 99 个，同一种能占多格；新做的箱子 30 格，原来那个仓库箱不限
         const IND_EYE = 1.8;
         const IND_CAM = { back: 4.4, up: 1.2 };
@@ -543,6 +543,7 @@
             hmApply(b);   // 扩展家园：先按存档里的 ext 定基地边界（19-industry-home.js）
             IND_CTX_BASE = b;
             try { b = indFixBase0(b); } finally { IND_CTX_BASE = null; }
+            if (b.wild && !(b.wild.seed > 0)) delete b.wild;   // 荒野的种子（19-industry-wild.js）
             return b;
         }
         function indFixBase0(b) {
@@ -1076,6 +1077,7 @@
         const IND_FULL_TXT = '<b style="color:#e53935">背包满了</b>';
         const IND_GUARD = 60;
         function indEnter() {
+            if (typeof indWildLeave === 'function') indWildLeave();   // 进工业先把地图大小还原成默认
             if (!indVisible() || ind) return;
             ind = { loading: true };
             indLoad(function (base) {
@@ -1191,6 +1193,7 @@
         // 半路回大厅：在基地里身上的东西收回仓库箱；在远征里身上的东西丢掉（和寻宝队一样，没撤离就不算）
         function indExit(confirmed) {
             if (!ind) return;
+            if (typeof indWildLeave === 'function') indWildLeave();
             if (ind.loading) { ind = null; return; }
             if (ind.where === 'trip' && !ind.dead) { try { indGoBase(true); } catch (e) { } }   // 任务 145：远征、月球、矿洞里回大厅，按撤离处理，东西带回基地（死亡仍然丢）
             let R = ind; R.over = true; R.paused = false;
@@ -1411,7 +1414,7 @@
             wat.rotation.x = -Math.PI / 2; wat.position.y = IND_WATER_Y; indAdd(wat);
             // 资源点：按地貌的权重挑；悠闲世界只刷 IND_CASUAL_RES 里的
             let r = indRng(M.seed ^ 0x9e3779b9), casual = ind.base.rule === 'casual';
-            for (let i = 0; i < IND_NODE_N; i++) {
+            for (let i = 0, NN = Math.round(IND_NODE_N * Math.pow(IND_MAP / IND_MAP0, 2)); i < NN; i++) {
                 let x = (r() * 2 - 1) * (IND_MAP - 4), z = (r() * 2 - 1) * (IND_MAP - 4);
                 if (Math.hypot(x, z) < 8) continue;
                 let h = indHeight(M, x, z); if (h < -1.0) continue;
