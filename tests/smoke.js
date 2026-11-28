@@ -13673,6 +13673,38 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND232')) {
+            // IND232 荒野测试种子 67：各种地形样本摆在出生点旁边，开发时才有测试按钮，别的种子没有
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`indWildGo(67); true;`);
+                if (!(await until(T, `ind.wildMode && ind.wl && ind.wl.seed === 67 && wlCellCount() > 4`, 15000))) bad.push('进不去测试图');
+                else {
+                    let r = await J(`(function(){ let o = {}, M = ind.map, seen = {}; for (let a = 0; a < 360; a += 5) for (let d = 20; d < 85; d += 8) seen[indBiome(M, Math.cos(a / 57.3) * d, Math.sin(a / 57.3) * d)] = 1;
+                        o.biomes = Object.keys(seen).sort().join(','); o.spawn = indBiome(M, 0, 0); o.y0 = indHeight(M, 0, 0);
+                        let lake = false, hill = 0; for (let a = 0; a < 360; a += 5) for (let d = 30; d < 70; d += 4) { let x = Math.cos(a / 57.3) * d, z = Math.sin(a / 57.3) * d; if (indHeight(M, x, z) < IND_WATER_Y - 0.5) lake = true; hill = Math.max(hill, indHeight(M, x, z)); }
+                        o.lake = lake; o.hill = hill; o.panel = !!document.getElementById('wl-test');
+                        wlTestGive(); o.wood = ind.bag.wood || 0; wlTestTime(1000); o.night = indIsNight(); wlTestTime(60); o.day = !indIsNight(); wlTestWeather('雨'); o.rain = ind.wl.weather;
+                        wlTestSurv(5, 5, 30); o.surv = ind.base.surv.food + '/' + ind.base.surv.temp; ind.p.x = 50; ind.p.z = 50; wlTestHome(); o.home = ind.p.x + ',' + ind.p.z; return o; })()`);
+                    if (r.biomes.split(',').length < 7) bad.push('扇区群系不全 ' + r.biomes);
+                    if (r.spawn !== 'plain' || !(r.y0 > -1.2)) bad.push('出生点不是平地 ' + JSON.stringify(r));
+                    if (!r.lake || !(r.hill > 6)) bad.push('没有湖或山 ' + JSON.stringify(r));
+                    if (!r.panel || !(r.wood >= 40) || !r.night || !r.day || r.rain !== '雨' || r.surv !== '5/30' || r.home !== '0,0') bad.push('测试按钮 ' + JSON.stringify(r));
+                    await T.eval(`indWildGo(5); true;`);
+                    if (!(await until(T, `ind.wl && ind.wl.seed === 5 && wlCellCount() > 4`, 15000))) bad.push('别的种子进不去');
+                    else if (await T.eval(`!!document.getElementById('wl-test')`)) bad.push('别的种子不该有测试按钮');
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND232 荒野测试种子 67：七种地形在出生点旁、有湖有山、测试按钮能给东西调时间天气体温、别的种子没有按钮', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND231')) {
             // IND231 荒野 W1：无限地形，走到哪生成到哪，同一个位置永远一样，存档只存种子和位置
             const bad = [];

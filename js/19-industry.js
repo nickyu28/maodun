@@ -475,6 +475,7 @@
         function indBiome(M, x, z) {
             if (M.moon) return moonBiome(M.moon, x, z);   // 月球（19-industry-moon.js）
             if (M.pins) { let pb = odPinBiome(M, x, z); if (pb) return pb; }
+            if (M.test) { let tb = wlTestBiome(x, z); if (tb) return tb; }   // 荒野测试种子 67（19-industry-wild.js）
             for (let i = 0; i < M.volc.length; i++) { let v = M.volc[i]; if (Math.hypot(x - v.x, z - v.z) < v.r) return 'volcano'; }
             let e = indElev(M, x, z), m = indMoist(M, x, z), rr = M.wild ? (indNoise(x / 260, z / 260, M.seed + 55) > 0.5 ? 1 : 0) : Math.hypot(x, z) / IND_MAP;   // 荒野无限图：古老岩层看大噪声，不看离中心的距离
             if (e < -0.05) return 'beach';   // 海边：海岸线上一条沙滩（再往下是海底）
@@ -486,6 +487,7 @@
         function indHeight(M, x, z) {
             if (M.moon) return moonHeight(M.moon, x, z);   // 月球（19-industry-moon.js）
             let e0 = indElev(M, x, z), h = e0 * 9 + Math.max(0, e0 - 0.32) * 26;   // 山地更陡
+            if (M.test) { let w = wlTestW(x, z); if (w > 0) { let hn = Math.max(-3, wlNormalH(M, e0)); return hn + (wlTestH(x, z) - hn) * w; } }   // 荒野测试种子 67
             if (M.riv) h = wdRiverCarve(M, x, z, h);   // 河（19-industry-world.js）
             for (let i = 0; i < M.volc.length; i++) {
                 let v = M.volc[i], d = Math.hypot(x - v.x, z - v.z);

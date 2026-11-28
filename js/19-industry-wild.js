@@ -30,7 +30,7 @@
             if (ind.carve) ctCarveExit(true);
             indClearWorld(); mbReset();
             ind.where = 'trip'; ind.wildMode = true; ind.speed = 1; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
-            let M = ind.map = { seed: seed, volc: [], riv: null, rivers: [], wild: true };
+            let M = ind.map = { seed: seed, volc: [], riv: null, rivers: [], wild: true, test: seed === WL_TEST };
             ind.wl = { seed: seed, mods: (sv && sv.mods) || {}, cells: {}, saveT: 0 };
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 30, IND_VIEW.day);
             ind.chunks = []; ind.nodes = []; ind.wild = []; ind.exits = []; ind.caves = []; ind.cave = null;
@@ -42,7 +42,8 @@
             let x = sv ? sv.x : 0, z = sv ? sv.z : 0;
             ind.p.x = x; ind.p.z = z; ind.p.y = indHeight(M, x, z); ind.p.vy = 0;
             wlSync(true);
-            indFlash('荒野');
+            wlTestPanel(M.test && wlDevOn());
+            indFlash(M.test ? '荒野测试图' : '荒野');
         }
         // 地形块：64 米一块，16 段（4 米一格），边上多算一圈高度做法线
         function wlBuild(ci, cj) {
@@ -96,4 +97,46 @@
                 }
                 return r;
             };
+        })();
+
+        // ══ 测试种子 67：不按生成规则，把要测的东西摆在出生点旁边（作者 11-28）══
+        // 只有网址带 ?dev=1 或开了 ?hcdebug=1 才有测试按钮，玩家看不到。每个新世界还是随机种子
+        const WL_TEST = 67, WL_TEST_R = 90;
+        const WL_TEST_SECT = ['forest', 'beach', 'mountain', 'desert', 'volcano', 'ancient', 'plain'];
+        function wlDevOn() { try { return /[?&]dev=1(&|$)/.test(location.search) || indDebugOn(); } catch (e) { return false; } }
+        function wlNormalH(M, e0) { return e0 * 9 + Math.max(0, e0 - 0.32) * 26; }
+        function wlSmooth(a, b, x) { let t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+        function wlTestW(x, z) { return 1 - wlSmooth(WL_TEST_R - 12, WL_TEST_R + 8, Math.hypot(x, z)); }
+        function wlTestSect(x, z) { let a = (Math.atan2(z, x) + Math.PI) / (Math.PI * 2); return WL_TEST_SECT[Math.min(WL_TEST_SECT.length - 1, Math.floor(a * WL_TEST_SECT.length))]; }
+        function wlTestBiome(x, z) { let r = Math.hypot(x, z); if (r > WL_TEST_R) return null; if (r < 14) return 'plain'; return wlTestSect(x, z); }
+        // 出生点 14 米内是平地；外面一圈按方向分扇区，每个扇区一种群系：森林、海边（带一个湖）、山地（坡）、沙漠、火山、古老岩层、平原
+        function wlTestH(x, z) {
+            let r = Math.hypot(x, z), k = wlSmooth(14, 26, r), sc = r < 14 ? 'plain' : wlTestSect(x, z), t = 1;
+            if (sc === 'beach') t = r > 30 && r < 70 ? -2.4 : 1;
+            else if (sc === 'mountain') t = 1 + Math.max(0, r - 20) * 0.22;
+            return 1 + (t - 1) * k;
+        }
+        const WL_TEST_BAG = { wood: 40, stone: 40, clay: 20, rope: 10, coal: 20, ore_cu: 10, ore_sn: 10, ore_fe: 10, salt: 10, wool: 5, leather: 5, pick_stone: 1, shears: 1, bucket: 2, seeds: 5 };
+        function wlTestGive() { Object.keys(WL_TEST_BAG).forEach(function (k) { if (IND_ITEMS[k]) indGive(k, WL_TEST_BAG[k]); }); indFlash('给了一套材料和工具'); }
+        function wlTestHome() { ind.p.x = 0; ind.p.z = 0; ind.p.y = indHeight(ind.map, 0, 0); ind.p.vy = 0; wlSync(true); }
+        function wlTestTime(t) { let c = ind.base.clock; ind.base.clock = c - (c % IND_DAY) + t; indFlash(indClockTxt()); }
+        function wlTestSeason() { ind.base.clock += IND_SEASON_DAYS * IND_DAY; indFlash(indSeasonTxt()); }
+        function wlTestSurv(f, w, t) { let S = ind.base.surv; if (f !== null) S.food = f; if (w !== null) S.water = w; if (t !== null) S.temp = t; }
+        function wlTestWeather(k) { ind.wl.weather = k; indFlash('天气：' + k); }
+        function wlTestPanel(on) {
+            let id = 'wl-test', e = document.getElementById(id);
+            if (!on) { if (e && e.parentNode) e.parentNode.removeChild(e); return; }
+            if (e) return;
+            let B = [['给物品', 'wlTestGive()'], ['出生点', 'wlTestHome()'], ['白天', 'wlTestTime(60)'], ['傍晚', 'wlTestTime(870)'], ['夜里', 'wlTestTime(1000)'], ['下一季', 'wlTestSeason()'],
+                ['晴', "wlTestWeather('晴')"], ['雨', "wlTestWeather('雨')"], ['雪', "wlTestWeather('雪')"], ['冻', 'wlTestSurv(null, null, 30)'], ['热', 'wlTestSurv(null, null, 40)'], ['体温正常', 'wlTestSurv(null, null, 37)'],
+                ['饿渴', 'wlTestSurv(5, 5, null)'], ['吃饱喝足', 'wlTestSurv(100, 100, null)']];
+            e = document.createElement('div'); e.id = id;
+            e.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:90;display:flex;flex-wrap:wrap;gap:4px;max-width:340px;background:rgba(0,0,0,.55);padding:6px;border-radius:8px;';
+            e.innerHTML = '<div style="width:100%;color:#fff;font-size:12px;">荒野测试</div>' + B.map(function (b) { return '<button style="' + IND_BTN + 'font-size:12px;padding:4px 8px;min-height:30px;background:#455a64;" onclick="' + b[1] + '">' + b[0] + '</button>'; }).join('');
+            document.body.appendChild(e);
+        }
+        (function () {
+            let c0 = indClearWorld, x0 = indExit;
+            indClearWorld = function () { wlTestPanel(false); return c0.apply(this, arguments); };
+            indExit = function () { wlTestPanel(false); return x0.apply(this, arguments); };
         })();
