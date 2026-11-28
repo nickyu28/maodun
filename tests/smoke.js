@@ -13673,35 +13673,6 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
-        if (want('IND230')) {
-            // IND230 荒野 W1 世界：2000 米固定地图、种子存档、同种子同一张图、没有撤离点、出生点能站、群系 ≥ 6 种、离开还原大小
-            const bad = [];
-            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
-            await T.eval(`indEnter(); true;`);
-            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
-            else { try {
-                await T.eval(`${HIDE} indSetRule('hard'); true;`);
-                const r = JSON.parse(await T.eval(`(async function(){ cancelAnimationFrame(ind.raf); let o = {}, B = ind.base; delete B.wild;
-                    let sig = function () { let h = 0; for (let i = 0; i < 40; i++) { let x = ((i * 137) % 1900) - 950, z = ((i * 311) % 1900) - 950; h = (h * 31 + Math.round(indHeight(ind.map, x, z) * 100)) >>> 0; } return h; };
-                    let ok = indWildGo(1234); o.ok = ok; o.map = IND_MAP; o.where = ind.where; o.seed = B.wild && B.wild.seed; o.exits = ind.exits.length; let s1 = sig();
-                    o.spawn = Math.hypot(ind.p.x, ind.p.z) <= 150 && indHeight(ind.map, ind.p.x, ind.p.z) > 0.4;
-                    let bms = {}; for (let x = -900; x <= 900; x += 100) for (let z = -900; z <= 900; z += 100) bms[indBiome(ind.map, x, z)] = 1; o.biomes = Object.keys(bms).length;
-                    indWildGo(999); o.seedKept = B.wild.seed; let s2 = sig(); o.same = s1 === s2;
-                    await new Promise(function (r) { indSave(r); }); let back = await new Promise(function (r) { indLoad(r); }); o.saved = back && back.wild && back.wild.seed;
-                    indWildLeave(); o.back = IND_MAP; o.nodes = ind.nodes.length;
-                    return JSON.stringify(o); })()`));
-                if (!(r.ok && r.map === 1000 && r.where === 'trip' && r.seed === 1234 && r.exits === 0)) bad.push('进荒野：2000 米、没有撤离点、种子存下 ' + JSON.stringify(r));
-                if (!r.spawn) bad.push('出生点要在 150 米内能站 ' + JSON.stringify(r));
-                if (!(r.biomes >= 6)) bad.push('群系至少 6 种 ' + r.biomes);
-                if (!(r.seedKept === 1234 && r.same)) bad.push('同一个号再进还是同一个种子同一张图 ' + JSON.stringify([r.seedKept, r.same]));
-                if (r.saved !== 1234) bad.push('种子存档读得回来 ' + r.saved);
-                if (r.back !== 520) bad.push('离开还原地图大小 ' + r.back);
-            } catch (e) { bad.push('异常 ' + e.message); } }
-            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
-            await T.close();
-            report('IND230 荒野 W1 世界：2000 米固定地图、种子存档、出生点、群系、还原大小', bad.length === 0, bad.slice(0, 8).join(' / '));
-        }
-
         if (want('IND229')) {
             // IND229 触屏 1180x820 尺寸（测试员 11-20）：猫盾工业所有按钮高 ≥ 44、面板里的按钮和叉也 ≥ 44、右上一排不盖住左上状态栏、快捷栏 10 格在同一行
             const bad = [];

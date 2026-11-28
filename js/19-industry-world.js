@@ -1,8 +1,7 @@
 // 猫盾工业 · 世界（L）：600 米地图的指南针、地图、挖地、树、露头、河、仙人掌
 // 接在 19-industry.js 后面，用它里面的函数和表；钩子在 19-industry.js 的 indGoTrip、indTick、indKeyDown、indHudUpdate 等处。
         // ── 走过的地方（地图用）：6 米一格，100 × 100 ──
-        const WD_CELL = 6; let WD_N = Math.ceil(IND_MAP * 2 / WD_CELL);
-        function wdSizeSync() { WD_N = Math.ceil(IND_MAP * 2 / WD_CELL); }   // 地图大小变了（荒野）重算格子数
+        const WD_CELL = 6, WD_N = Math.ceil(IND_MAP * 2 / WD_CELL);
         function wdTripInit() {
             ind.seen = new Uint8Array(WD_N * WD_N); ind.seenBiome = new Uint8Array(WD_N * WD_N); ind.seenAt = null;
             ind.mapKeys = Object.keys(IND_BIOMES);
