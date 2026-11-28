@@ -13673,6 +13673,41 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND231')) {
+            // IND231 荒野 W1：无限地形，走到哪生成到哪，同一个位置永远一样，存档只存种子和位置
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`indWildGo(4242); true;`);
+                if (!(await until(T, `ind.wildMode && ind.wl && wlCellCount() > 4`, 15000))) bad.push('进荒野后没生成地形块');
+                else {
+                    let r = await J(`(function(){ let o = {}; let g = ind.wl.cells; let near = Object.keys(g).length; o.near = near; o.y0 = indHeight(ind.map, 0, 0);
+                        o.land = o.y0 > IND_WATER_Y;
+                        // 块里的顶点高度 = 坐标函数的值
+                        let k = Object.keys(g)[0], m = g[k], pa = m.geometry.attributes.position, ok = true; for (let i = 0; i < pa.count; i += 37) if (Math.abs(pa.getY(i) - indHeight(ind.map, pa.getX(i), pa.getZ(i))) > 1e-3) ok = false; o.same = ok;
+                        // 走到很远的地方：块跟着生成，原来的块被收掉
+                        ind.p.x = 7000; ind.p.z = -9000; ind.p.y = indHeight(ind.map, 7000, -9000); wlSync(true); o.far = wlCellCount(); o.farKeys = Object.keys(ind.wl.cells).every(function (q) { let ij = q.split(','); return Math.abs(ij[0] * 64 - 7000) < 400 && Math.abs(ij[1] * 64 + 9000) < 400; });
+                        o.noClamp = (function(){ return ind.p.x > 6999; })();
+                        ind.p.x = 0; ind.p.z = 0; wlSync(true); o.back = wlCellCount(); o.y1 = indHeight(ind.map, 0, 0); return o; })()`);
+                    if (!r.land) bad.push('出生点是水 ' + JSON.stringify(r));
+                    if (!r.same) bad.push('块里的高度和坐标函数对不上');
+                    if (!(r.far > 4 && r.farKeys)) bad.push('走远了块没跟着走 ' + JSON.stringify(r));
+                    if (r.y0 !== r.y1 || !(r.back > 4)) bad.push('回到原点地形变了 ' + JSON.stringify(r));
+                    await T.eval(`ind.p.x = 123.5; ind.p.z = -77.25; wlSave(); true;`);
+                    await new Promise(function (f) { setTimeout(f, 800); });
+                    await T.eval(`indWildGo(); true;`);
+                    if (!(await until(T, `ind.wl && ind.wl.seed === 4242 && Math.abs(ind.p.x - 123.5) < 0.1 && Math.abs(ind.p.z + 77.25) < 0.1`, 8000))) bad.push('重进没读到同一个种子和位置 ' + await T.eval(`JSON.stringify(ind.wl && ind.wl.seed)`));
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND231 荒野无限地形：块跟着人生成、同一位置永远一样、没有边、存档读回同一个种子和位置', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND229')) {
             // IND229 触屏 1180x820 尺寸（测试员 11-20）：猫盾工业所有按钮高 ≥ 44、面板里的按钮和叉也 ≥ 44、右上一排不盖住左上状态栏、快捷栏 10 格在同一行
             const bad = [];

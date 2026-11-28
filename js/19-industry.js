@@ -476,7 +476,7 @@
             if (M.moon) return moonBiome(M.moon, x, z);   // 月球（19-industry-moon.js）
             if (M.pins) { let pb = odPinBiome(M, x, z); if (pb) return pb; }
             for (let i = 0; i < M.volc.length; i++) { let v = M.volc[i]; if (Math.hypot(x - v.x, z - v.z) < v.r) return 'volcano'; }
-            let e = indElev(M, x, z), m = indMoist(M, x, z), rr = Math.hypot(x, z) / IND_MAP;
+            let e = indElev(M, x, z), m = indMoist(M, x, z), rr = M.wild ? (indNoise(x / 260, z / 260, M.seed + 55) > 0.5 ? 1 : 0) : Math.hypot(x, z) / IND_MAP;   // 荒野无限图：古老岩层看大噪声，不看离中心的距离
             if (e < -0.05) return 'beach';   // 海边：海岸线上一条沙滩（再往下是海底）
             if (e > 0.32) return rr > 0.78 ? 'ancient' : 'mountain';
             if (m < -0.25) return 'desert';
@@ -1752,7 +1752,7 @@
                 }
                 R.me.rotation.y = Math.atan2(mx, mz);
             }
-            let lim = R.where === 'base' ? { x0: IND_BASE.x0 + 0.6, x1: IND_BASE.x1 - 0.6, z0: IND_BASE.z0 + 0.6, z1: IND_BASE.z1 - 0.6 } : { x0: -IND_MAP + 1, x1: IND_MAP - 1, z0: -IND_MAP + 1, z1: IND_MAP - 1 };
+            let lim = R.where === 'base' ? { x0: IND_BASE.x0 + 0.6, x1: IND_BASE.x1 - 0.6, z0: IND_BASE.z0 + 0.6, z1: IND_BASE.z1 - 0.6 } : (R.wildMode ? { x0: -1e8, x1: 1e8, z0: -1e8, z1: 1e8 } : { x0: -IND_MAP + 1, x1: IND_MAP - 1, z0: -IND_MAP + 1, z1: IND_MAP - 1 });
             if (R.cave) cvClamp(R.p);   // 矿洞里只能在洞里走（任务 66）
             else {
                 R.p.x = Math.max(lim.x0, Math.min(lim.x1, R.p.x));
