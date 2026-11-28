@@ -9145,7 +9145,7 @@ async function enterExit(tab, key) {
                 if (!(pk.ni === 2 && pk.b === 2)) bad.push('收起带镍电池的电池组，镍电池还回来（原来的 2 节普通电池也还 2 节） ' + JSON.stringify(pk));
                 // 铝架背包 +24、铝线、镍稿配方
                 const rc = await J(`(function(){ ind.base.rule = 'hard'; ind.base.wear = {}; ind.bag = { pack_al: 1 }; indWear('pack_al'); let s = indBagSlots(); ind.bag = { ingot_al: 1 }; let i = IND_CRAFT.findIndex(function (r) { return r.out === 'wire' && r.in.ingot_al; }); let ok = indCraft(i); let w = ind.bag.wire; ind.bag = { ingot_ni: 3, wood: 2 }; let j = IND_CRAFT.findIndex(function (r) { return r.out === 'pick_ni'; }); indCraft(j); return { s: s, w: w, pick: ind.bag.pick_ni }; })()`);
-                if (!(rc.s === 60 && rc.w === 3 && rc.pick === 1)) bad.push('铝架背包 60 格、1 铝锭出 3 根铜线、镍稿 ' + JSON.stringify(rc));
+                if (!(rc.s === 60 && rc.w === 3 && !rc.pick)) bad.push('铝架背包 60 格、1 铝锭出 3 根铜线、镍稿配方停用做不出来 ' + JSON.stringify(rc));
             } catch (e) { bad.push('异常 ' + e.message); } }
             await T.close();
             report('IND53 铝和镍：山地有矿、镍矿进窑出镍锭、铝土矿进电解槽出铝锭、镍电池 360 U、元素表点亮、铝架背包、铝线、镍稿', bad.length === 0, bad.join(' / '));
