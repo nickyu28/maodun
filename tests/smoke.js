@@ -12355,9 +12355,9 @@ async function enterExit(tab, key) {
             else { try {
                 await T.eval(`${HIDE} indSetRule('hard'); true;`);
                 const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
-                let r = await J(`(function(){ let t = ['pick_stone', 'pick_bronze', 'pick_iron', 'pick_steel', 'pick_diamond', 'pick_ni'].map(function (k) { return IND_ITEMS[k].tool; }), n = ['ore_fe', 'ore_cu', 'ore_ni', 'ore_u', 'ore_al', 'coal'].map(function (k) { return IND_NODES[k].tool; });
+                let r = await J(`(function(){ let t = ['pick_stone', 'pick_bronze', 'pick_iron', 'pick_steel', 'pick_diamond'].map(function (k) { return IND_ITEMS[k].tool; }), n = ['ore_fe', 'ore_cu', 'ore_ni', 'ore_u', 'ore_al', 'coal'].map(function (k) { return IND_NODES[k].tool; });
                     let can = function (pick, key) { indGoBase(null); ind.bag = { [pick]: 1 }; return indTool() >= IND_NODES[key].tool; }; return { t: t, n: n, names: IND_TOOL_NAME.join(), bronzeNi: can('pick_bronze', 'ore_ni'), ironNi: can('pick_iron', 'ore_ni'), bronzeFe: can('pick_bronze', 'ore_fe'), ironU: can('pick_iron', 'ore_u'), steelU: can('pick_steel', 'ore_u'), bonus: IND_ITEMS.pick_iron.bonus }; })()`);
-                if (!(r.t.join() === '1,2,3,4,5,3' && r.n.join() === '2,1,3,4,2,1' && r.names === '空手,石稿,青铜稿,铁稿,钢稿,钻石稿' && !r.bronzeNi && r.ironNi && r.bronzeFe && !r.ironU && r.steelU && r.bonus === 1)) bad.push('镐等级重排、铀 4、镍 3、铁 2 ' + JSON.stringify(r));
+                if (!(r.t.join() === '1,2,3,4,5' && r.n.join() === '2,1,3,4,2,1' && r.names === '空手,石稿,青铜稿,铁稿,钢稿,钻石稿' && !r.bronzeNi && r.ironNi && r.bronzeFe && !r.ironU && r.steelU && r.bonus === 1)) bad.push('镐等级重排、铀 4、镍 3、铁 2 ' + JSON.stringify(r));
                 const run = (body) => J(`(function(){ let fl = [], bf = blazeFlash; blazeFlash = function (t) { fl.push(t); }; try { indGoBase(null); let B = ind.base; B.rule = 'hard'; ind.bag = {}; B.moldQ = {}; indPanelClose();
                     let st = function (ni, s) { B.stove = Object.assign(ckNewState(), { spout: [], fuel: 9000, fire: 4, temp: 1700, spoutTy: 'fire', pool: { m: 'steel', n: 4 }, items: ni ? { ingot_ni: 1 } : {}, mold: { s: s || 'pick', dura: 20, f: true } }); return B.stove; };
                     ${body} } finally { blazeFlash = bf; } })()`);
@@ -13671,6 +13671,28 @@ async function enterExit(tab, key) {
             if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
             await T.close();
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
+        }
+
+        if (want('IND234')) {
+            // IND234 镍稿删了（作者 11-28）：配方停用、下标不变，老存档里的镍稿换回 3 镍锭 + 2 木头，镍锭还能做镍电池
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let o = {}; let i = IND_CRAFT.findIndex(function (q) { return q.out === 'pick_ni'; }); o.off = i >= 0 && IND_CRAFT[i].off === true && !indCraftShow(IND_CRAFT[i]);
+                    o.bat = IND_CRAFT.some(function (q) { return q.out === 'battery_ni' && !q.off; });
+                    let b = indNewBase(); b.rule = 'hard'; b.bag = { pick_ni: 1, wood: 1 }; b.box = { pick_ni: 2 }; b.chests = [{ id: 1, x: 0, z: 0, big: true, items: { pick_ni: 1 } }]; b.ground = [{ k: 'pick_ni', n: 1, x: 1, z: 1 }]; b.wear = { pick_ni: 3 };
+                    let f = indFixBase(JSON.parse(JSON.stringify(b))); let all = {}; f.chests.forEach(function (c) { Object.keys(c.items).forEach(function (k) { all[k] = (all[k] || 0) + c.items[k]; }); }); Object.keys(f.box || {}).forEach(function (k) { if (f.chests.every(function (c) { return c.items !== f.box; })) all[k] = (all[k] || 0) + f.box[k]; });
+                    o.ni = all.ingot_ni || 0; o.bagNi = (f.bag && f.bag.pick_ni) || 0; o.lost = (f.lost && f.lost.pick_ni) || 0; o.wear = f.wear && f.wear.pick_ni; return o; })()`);
+                if (!r.off || !r.bat) bad.push('配方没停用或下标变了 ' + JSON.stringify(r));
+                if (!(r.ni >= 12) || r.bagNi || r.lost || r.wear) bad.push('老存档镍稿没换回材料 ' + JSON.stringify(r));
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND234 镍稿停用：配方不显示、老存档里的镍稿换回镍锭和木头、镍电池配方还在', bad.length === 0, bad.join(' / '));
         }
 
         if (want('IND233')) {

@@ -135,12 +135,13 @@
             let id = 'wl-test', e = document.getElementById(id);
             if (!on) { if (e && e.parentNode) e.parentNode.removeChild(e); return; }
             if (e) return;
-            let B = [['给物品', 'wlTestGive()'], ['出生点', 'wlTestHome()'], ['白天', 'wlTestTime(60)'], ['傍晚', 'wlTestTime(870)'], ['夜里', 'wlTestTime(1000)'], ['下一季', 'wlTestSeason()'],
-                ['晴', "wlTestWeather('晴')"], ['雨', "wlTestWeather('雨')"], ['雪', "wlTestWeather('雪')"], ['冻', 'wlTestSurv(null, null, 30)'], ['热', 'wlTestSurv(null, null, 40)'], ['体温正常', 'wlTestSurv(null, null, 37)'],
-                ['饿渴', 'wlTestSurv(5, 5, null)'], ['吃饱喝足', 'wlTestSurv(100, 100, null)']];
+            let B = [['给物品', wlTestGive], ['出生点', wlTestHome], ['白天', function () { wlTestTime(60); }], ['傍晚', function () { wlTestTime(870); }], ['夜里', function () { wlTestTime(1000); }], ['下一季', wlTestSeason],
+                ['晴', function () { wlTestWeather('晴'); }], ['雨', function () { wlTestWeather('雨'); }], ['雪', function () { wlTestWeather('雪'); }], ['冻', function () { wlTestSurv(null, null, 30); }], ['热', function () { wlTestSurv(null, null, 40); }], ['体温正常', function () { wlTestSurv(null, null, 37); }],
+                ['饿渴', function () { wlTestSurv(5, 5, null); }], ['吃饱喝足', function () { wlTestSurv(100, 100, null); }]];
             e = document.createElement('div'); e.id = id;
             e.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:90;display:flex;flex-wrap:wrap;gap:4px;max-width:340px;background:rgba(0,0,0,.55);padding:6px;border-radius:8px;';
-            e.innerHTML = '<div style="width:100%;color:#fff;font-size:12px;">荒野测试</div>' + B.map(function (b) { return '<button style="' + IND_BTN + 'font-size:12px;padding:4px 8px;min-height:30px;background:#455a64;" onclick="' + b[1] + '">' + b[0] + '</button>'; }).join('');
+            let t = document.createElement('div'); t.style.cssText = 'width:100%;color:#fff;font-size:12px;'; t.textContent = '荒野测试'; e.appendChild(t);
+            B.forEach(function (b) { let u = document.createElement('button'); u.style.cssText = IND_BTN + 'font-size:12px;padding:4px 8px;min-height:30px;background:#455a64;'; u.textContent = b[0]; u.addEventListener('click', b[1]); e.appendChild(u); });
             document.body.appendChild(e);
         }
         (function () {

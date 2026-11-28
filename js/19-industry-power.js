@@ -98,9 +98,9 @@
             ore_ni: { name: '镍矿', col: 0x78909c, use: '加 1 份木炭／煤／焦炭，放进大窑炼镍锭，1455°C' },
             ingot_al: { name: '铝锭', col: 0xcfd8dc, use: '做铝架背包，+24 格、铝线，1 锭出 3 根铜线' },
             hot_ni: { name: '镍锭，烫', col: 0xff7043, hot: 'ingot_ni', needTool: 'tongs' },
-            ingot_ni: { name: '镍锭', col: 0xb0bec5, use: '做镍电池，电量两倍、镍稿，采矿多拿 1 个' },
+            ingot_ni: { name: '镍锭', col: 0xb0bec5, use: '做镍电池，电量两倍，也是钢镐头的料' },
             battery_ni: { name: '镍电池', col: 0x26a69a, cellU: 360, use: '装进电池组，一节 360 U，1.5 V' },
-            pick_ni: { name: '镍稿', col: 0x78909c, tool: 3, bonus: 1, use: '跟铁稿一样：采矿一次多拿 1 个' },
+            pick_ni: { name: '镍稿', col: 0x78909c, tool: 3, bonus: 1, use: '跟铁稿一样：采矿一次多拿 1 个', later: '老存档里的镍稿，读档时换回 3 个镍锭和 2 个木头' },
             pack_al: { name: '铝架背包', col: 0xb0bec5, wear: 'back', slots: 24, warm: 0, use: '戴背上，背包 +24 格，脱下前先清空' }
         });
         IND_ELEM_OF.ingot_al = 13; IND_ELEM_OF.ingot_ni = 28;
@@ -112,7 +112,7 @@
         IND_EL_RECIPES.push({ name: '电解铝土矿', in: { ore_al: 2, salt: 1 }, out: { ingot_al: 1 }, minV: 6, hard: true });
         IND_CRAFT.push(
             { out: 'battery_ni', in: { wire: 2, ingot_ni: 2, ingot_zn: 1 }, hard: true },
-            { out: 'pick_ni', in: { ingot_ni: 3, wood: 2 }, hard: true },
+            { out: 'pick_ni', in: { ingot_ni: 3, wood: 2 }, hard: true, off: true },   // 作者 11-28：镍稿跟铁稿一样只多拿 1 个，没有独有的用处，停用（留着下标）
             { out: 'pack_al', in: { ingot_al: 6, yarn: 4, wire: 4 }, hard: true },
             { out: 'wire', n: 3, in: { ingot_al: 1 }, hard: true }
         );
@@ -214,3 +214,24 @@
         function pwShoeMul() { let w = ind.base.wear && ind.base.wear.foot; return w && IND_ITEMS[w] && IND_ITEMS[w].speed || 1; }
         // 鞋 × 药，合起来最多 ×2.0（PX.cap 是同一个常数）
         function pwMoveMul() { return Math.min(PX.cap, pwShoeMul() * pwSpeedMul()); }
+
+        // 作者 11-28：镍稿删了。老存档里的镍稿（背包、箱子、地上、搬着的箱子）读档时换回 3 个镍锭和 2 个木头，不丢东西
+        (function () {
+            let p0 = ckPreFix;
+            ckPreFix = function (b) {
+                if (b && typeof b === 'object') {
+                    let n = 0, conv = function (o) { if (o && typeof o === 'object' && o.pick_ni > 0) { n += Math.floor(o.pick_ni); delete o.pick_ni; } };
+                    conv(b.bag); conv(b.box); if (Array.isArray(b.chests)) b.chests.forEach(function (c) { if (c) conv(c.items); });
+                    if (Array.isArray(b.ground)) b.ground = b.ground.filter(function (g) { if (g && g.k === 'pick_ni') { n += Math.max(1, Math.floor(+g.n || 1)); return false; } return true; });
+                    if (b.carried && typeof b.carried === 'object') Object.keys(b.carried).forEach(function (id) { let c = b.carried[id]; if (c) conv(c.items); });
+                    if (b.wear && typeof b.wear === 'object') delete b.wear.pick_ni;
+                    if (n > 0) {
+                        if (!Array.isArray(b.chests)) b.chests = [];
+                        let big = b.chests.filter(function (c) { return c && c.big && c.items; })[0] || b.chests.filter(function (c) { return c && c.items; })[0], T;
+                        if (big) T = big.items; else { if (!b.box || typeof b.box !== 'object') b.box = {}; T = b.box; }
+                        T.ingot_ni = (T.ingot_ni || 0) + 3 * n; T.wood = (T.wood || 0) + 2 * n;
+                    }
+                }
+                return p0.apply(this, arguments);
+            };
+        })();
