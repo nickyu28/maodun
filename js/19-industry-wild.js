@@ -1,17 +1,24 @@
         // ══ 荒野（第三种玩法）W1：无限地形，走到哪生成到哪（设计页 docs/wilderness.md）══
         // 地形是 种子 + 坐标 的函数：同一个种子同一个位置永远一样。世界切成 64 米的块，只留视野内的块；存档只存种子和玩家位置（以后加改动表）
-        const WL = { C: 64, SEG: 16, keep: 150, saveT: 8 };
+        const WL = { C: 64, SEG: 16, keep: 150, saveT: 8, ver: 1, gen: 1 };   // ver：存档格式版本；gen：地形生成规则版本（以后改规则，老世界按存的 gen 走老规则，已有的世界不变）
+        // 存档升级：每改一次格式就在这里加一步，老存档只升不丢。字段不认识的原样留着（作者 11-28：不许清存档）
+        function wlMigrate(sv) {
+            if (!sv || typeof sv !== 'object') return null;
+            let v = sv.v || 0, d = Object.assign({}, sv);
+            if (v < 1) { d.bag = d.bag || d.items || {}; d.houses = d.houses || []; d.mods = d.mods || {}; d.gen = d.gen || 1; d.x = +d.x || 0; d.z = +d.z || 0; d.v = 1; v = 1; }
+            return d;
+        }
         function wlKey() { return 'w_' + indKey().slice(2); }
         function wlDb(fn) { indDb(function (db) { fn(db); }); }
         function wlLoad(cb) {
             wlDb(function (db) {
                 if (!db) { cb(null); return; }
-                try { let q = db.transaction(IND_STORE, 'readonly').objectStore(IND_STORE).get(wlKey()); q.onsuccess = function () { cb(q.result || null); db.close(); }; q.onerror = function () { cb(null); db.close(); }; } catch (e) { cb(null); }
+                try { let q = db.transaction(IND_STORE, 'readonly').objectStore(IND_STORE).get(wlKey()); q.onsuccess = function () { cb(wlMigrate(q.result)); db.close(); }; q.onerror = function () { cb(null); db.close(); }; } catch (e) { cb(null); }
             });
         }
         function wlSave(cb) {
             if (!ind || !ind.wl || window.__saveportReload) { if (cb) cb(false); return; }
-            let d = { v: 1, seed: ind.wl.seed, x: Math.round(ind.p.x * 100) / 100, z: Math.round(ind.p.z * 100) / 100, mods: ind.wl.mods };
+            let d = Object.assign({}, ind.wl.sv || {}, { v: WL.ver, gen: ind.wl.gen, seed: ind.wl.seed, x: Math.round(ind.p.x * 100) / 100, z: Math.round(ind.p.z * 100) / 100, mods: ind.wl.mods, houses: ind.wl.houses, bag: JSON.parse(JSON.stringify(ind.bag || {})) });
             wlDb(function (db) {
                 if (!db) { if (cb) cb(false); return; }
                 try { let tx = db.transaction(IND_STORE, 'readwrite'); tx.objectStore(IND_STORE).put(d, wlKey()); tx.oncomplete = function () { db.close(); if (cb) cb(true); }; tx.onerror = function () { db.close(); if (cb) cb(false); }; } catch (e) { if (cb) cb(false); }
@@ -31,7 +38,8 @@
             indClearWorld(); mbReset();
             ind.where = 'trip'; ind.wildMode = true; ind.speed = 1; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
             let M = ind.map = { seed: seed, volc: [], riv: null, rivers: [], wild: true, test: seed === WL_TEST };
-            ind.wl = { seed: seed, mods: (sv && sv.mods) || {}, cells: {}, saveT: 0 };
+            ind.wl = { seed: seed, gen: (sv && sv.gen) || WL.gen, mods: (sv && sv.mods) || {}, houses: (sv && sv.houses) || [], sv: sv, cells: {}, saveT: 0 };
+            if (sv && sv.bag) ind.bag = JSON.parse(JSON.stringify(sv.bag));
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 30, IND_VIEW.day);
             ind.chunks = []; ind.nodes = []; ind.wild = []; ind.exits = []; ind.caves = []; ind.cave = null;
             let wat = new THREE.Mesh(indGeo(new THREE.PlaneGeometry(1000, 1000)), indMat(new THREE.MeshLambertMaterial({ color: 0x1565c0, transparent: true, opacity: 0.8 })));

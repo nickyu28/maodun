@@ -13673,6 +13673,40 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND233')) {
+            // IND233 荒野存档不丢（作者 11-28）：写一份没有版本号的老格式存档，加载后物品、房子、改动都在，未知字段留着，再存一次不丢
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                await T.eval(`window.__w = null; wlDb(function (db) { let tx = db.transaction(IND_STORE, 'readwrite'); tx.objectStore(IND_STORE).put({ seed: 777, x: 31, z: -12, items: { wood: 7, stone: 3 }, houses: [{ x: 5, z: 6, ty: 'hut' }], mods: { '0,0': [{ k: 'tree', i: 3 }] }, future: { a: 1 } }, wlKey()); tx.oncomplete = function () { db.close(); window.__w = 1; }; }); true;`);
+                if (!(await until(T, `window.__w === 1`, 8000))) bad.push('写不进老存档');
+                else {
+                    await T.eval(`indWildGo(); true;`);
+                    if (!(await until(T, `ind.wl && ind.wl.seed === 777`, 10000))) bad.push('没读到老存档');
+                    else {
+                        let r = await J(`(function(){ return { bag: ind.bag, houses: ind.wl.houses, mods: ind.wl.mods, x: ind.p.x, z: ind.p.z, gen: ind.wl.gen }; })()`);
+                        if (!(r.bag.wood === 7 && r.bag.stone === 3)) bad.push('物品没了 ' + JSON.stringify(r));
+                        if (!(r.houses.length === 1 && r.houses[0].ty === 'hut')) bad.push('房子没了 ' + JSON.stringify(r));
+                        if (!(r.mods['0,0'] && r.mods['0,0'][0].k === 'tree')) bad.push('改动没了 ' + JSON.stringify(r));
+                        if (!(r.x === 31 && r.z === -12 && r.gen === 1)) bad.push('位置或生成版本不对 ' + JSON.stringify(r));
+                        await T.eval(`window.__w = null; wlSave(function () { window.__w = 2; }); true;`);
+                        await until(T, `window.__w === 2`, 8000);
+                        await T.eval(`window.__w = null; wlLoad(function (v) { window.__w = v; }); true;`);
+                        await until(T, `!!window.__w`, 8000);
+                        let v = await J(`window.__w`);
+                        if (!(v.v === 1 && v.future && v.future.a === 1 && v.bag.wood === 7 && v.houses.length === 1 && v.seed === 777)) bad.push('再存一次丢了东西 ' + JSON.stringify(v));
+                    }
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND233 荒野存档不丢：老格式存档加载后物品、房子、改动都在，未知字段留着，再存一次不丢', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND232')) {
             // IND232 荒野测试种子 67：各种地形样本摆在出生点旁边，开发时才有测试按钮，别的种子没有
             const bad = [];
