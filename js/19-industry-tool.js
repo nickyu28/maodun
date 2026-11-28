@@ -32,6 +32,7 @@
                 add['broken_' + k] = { name: '坏了的' + ((add[k] || IND_ITEMS_RAW[k] || {}).name || k), col: 0x616161, use: '工作台：回收一半主料，或者加 1 胶水修好，耐久一半' };
                 IND_CRAFT.push(Object.assign({ out: T.back, n: 1, in: { ['broken_' + k]: 1 } }, hard ? { hard: true } : {}), Object.assign({ out: k, fix: true, in: { ['broken_' + k]: 1, glue: 1 } }, hard ? { hard: true } : {}));
             });
+            if (add.broken_pick_ni) add.broken_pick_ni.later = '老存档里的碎镍稿，读档时不再换，可在工作台回收成镍锭';
             Object.keys(add).forEach(function (k) { if (!/^broken_/.test(k)) { let T = TL_TOOL[k]; add[k].use = TL_KIND_NAME[T.kind] + '：时间 ×' + TL_TIER[T.tier].mul + '，耐久 ' + T.dura; } });
             Object.assign(IND_ITEMS_RAW, add);
         })();
