@@ -1257,13 +1257,19 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
                     { name: '生成', col: '#ffab19', blocks: ['spawn'] },
                     { name: '动作', col: '#4c97ff', blocks: ['fall', 'chase'] },
                     { name: '碰到', col: '#5cb1d6', blocks: ['touch'] },
-                    { name: '输赢', col: '#59c059', blocks: ['win', 'time'] }
+                    { name: '输赢', col: '#59c059', blocks: ['win', 'time'] },
+                    { name: '地图', col: '#9966ff', blocks: ['theme'] },
+                    { name: '搭建', col: '#cf63cf', blocks: ['build'] },
+                    { name: '角色', col: '#ff6680', blocks: ['npc'] }
                 ],
                 blocks: {
                     spawn: { col: '#ffab19', make: function () { return { type: 'spawn', color: 'orange', every: 1.5 }; }, parts: ['每', ['every', 'num'], '秒出一个', ['color', MK_COLOR_OPTS]] },
                     fall: { col: '#4c97ff', make: function () { return { type: 'fall', color: 'orange', speed: 8 }; }, parts: [['color', MK_COLOR_OPTS], '往下掉，速度', ['speed', 'num']] },
                     chase: { col: '#4c97ff', make: function () { return { type: 'chase', color: 'red' }; }, parts: [['color', MK_COLOR_OPTS], '朝我走过来'] },
                     touch: { col: '#5cb1d6', make: function () { return { type: 'touch', color: 'orange', effect: 'score' }; }, parts: ['碰到', ['color', MK_COLOR_OPTS], '就', ['effect', { score: '+1 分', lose1: '-1 分', win: '赢了', lose: '输了' }]] },
+                    theme: { col: '#9966ff', make: function () { return { type: 'theme', theme: 'grass' }; }, parts: ['地图是', ['theme', { day: '白天', grass: '草地', snow: '雪地', desert: '沙漠', night: '夜晚' }]] },
+                    build: { col: '#cf63cf', make: function () { return { type: 'build', kind: 'wall', at: 'c' }; }, parts: ['放一个', ['kind', { wall: '墙', pillar: '柱子', house: '房子' }], '在', ['at', { c: '中间', ne: '右前', nw: '左前', se: '右后', sw: '左后' }]] },
+                    npc: { col: '#ff6680', make: function () { return { type: 'npc', move: 'stand', hit: 'score', at: 'ne' }; }, parts: ['放一个角色在', ['at', { c: '中间', ne: '右前', nw: '左前', se: '右后', sw: '左后' }], ['move', { stand: '站着', patrol: '来回走', chase: '追我' }], '碰到就', ['hit', { score: '加 1 分', lose1: '扣 1 分', lose: '输了' }]] },
                     win: { col: '#59c059', make: function () { return { type: 'win', score: 10 }; }, parts: ['得到', ['score', 'num'], '分就赢'] },
                     time: { col: '#59c059', make: function () { return { type: 'time', seconds: 60, result: 'lose' }; }, parts: [['seconds', 'num'], '秒后', ['result', { lose: '输了', win: '赢了' }]] }
                 },

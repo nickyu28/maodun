@@ -12,6 +12,15 @@
         const PARK_ARENA_HALF = { small: 24, medium: 40, large: 64 };
         const PARK_SPEED_NAMES = { slow: '慢', normal: '正常', fast: '快' };
         const PARK_SPEED_VAL = { slow: 20, normal: 32, fast: 46 };
+        const PARK_THEMES = { day: { name: '白天', floor: 0xb3e5fc, sky: 0x81d4fa, wall: 0x81c784 }, grass: { name: '草地', floor: 0x8bc34a, sky: 0x81d4fa, wall: 0x558b2f }, snow: { name: '雪地', floor: 0xeceff1, sky: 0xb0bec5, wall: 0x90a4ae }, desert: { name: '沙漠', floor: 0xffe082, sky: 0xffcc80, wall: 0xd7a86e }, night: { name: '夜晚', floor: 0x37474f, sky: 0x1a237e, wall: 0x5c6bc0 } };
+        const PARK_PLACES = { c: '中间', ne: '右前', nw: '左前', se: '右后', sw: '左后' };
+        const PARK_BUILDS = { wall: { name: '墙', w: 22, d: 3, h: 9, col: 0xa1887f }, pillar: { name: '柱子', w: 4, d: 4, h: 14, col: 0xbcaaa4 }, house: { name: '房子', w: 14, d: 14, h: 10, col: 0xef9a9a } };
+        const PARK_NPC_MOVES = { stand: '站着', patrol: '来回走', chase: '追我' };
+        const PARK_NPC_HIT = { score: '加 1 分', lose1: '扣 1 分', lose: '输了' };
+        function parkPlacePos(code, half) {
+            let k = half * 0.5;
+            return code === 'ne' ? { x: k, z: -k } : code === 'nw' ? { x: -k, z: -k } : code === 'se' ? { x: k, z: k } : code === 'sw' ? { x: -k, z: k } : { x: 0, z: 0 };
+        }
         const PARK_COND_OPS = { gt: '>', lt: '<', eq: '=' };
         const PARK_STEP_SPEED = 8;   // "前进 N 步"里，1 步等于走这么远，走完这么多秒结束这条指令
         const PARK_BLOCK_PRICE = { var: 30, condition: 40, turnrandom: 20 };
@@ -66,7 +75,7 @@
         // 反复循环的一套动作（没有下落也没有前进/转向的颜色，就乖乖悬在原地）。
         function parkCompile(blocks) {
             let spawnDefs = {}, scripts = {}, fallSpeeds = {}, rules = {}, vars = {}, conditions = [];
-            let winScore = null, duration = 60, timeUpResult = 'lose';
+            let winScore = null, duration = 60, timeUpResult = 'lose', theme = 'day', builds = [], npcs = [];
             let arenaHalf = PARK_ARENA_HALF.medium, playerSpeed = PARK_SPEED_VAL.normal;
             (blocks || []).forEach(function (b) {
                 let c = b.color || 'orange';
@@ -83,6 +92,9 @@
                 else if (b.type === 'win') winScore = Math.max(1, +b.score || 10);
                 else if (b.type === 'time') { duration = Math.max(10, +b.seconds || 60); timeUpResult = b.result === 'win' ? 'win' : 'lose'; }
                 else if (b.type === 'arena') arenaHalf = PARK_ARENA_HALF[b.size] || PARK_ARENA_HALF.medium;
+                else if (b.type === 'theme') theme = PARK_THEMES[b.theme] ? b.theme : 'day';
+                else if (b.type === 'build') { if (builds.length < 8) builds.push({ kind: PARK_BUILDS[b.kind] ? b.kind : 'wall', at: PARK_PLACES[b.at] ? b.at : 'c' }); }
+                else if (b.type === 'npc') { if (npcs.length < 6) npcs.push({ move: PARK_NPC_MOVES[b.move] ? b.move : 'stand', hit: PARK_NPC_HIT[b.hit] ? b.hit : 'score', at: PARK_PLACES[b.at] ? b.at : 'ne' }); }
                 else if (b.type === 'speed') playerSpeed = PARK_SPEED_VAL[b.level] || PARK_SPEED_VAL.normal;
             });
             // 规则/条件里提到的变量，就算没放"定义变量"积木也从 0 开始，不至于报废整局
@@ -99,7 +111,7 @@
             return {
                 spawners: spawners, rules: rules, vars: vars, conditions: conditions,
                 winScore: winScore, duration: duration, timeUpResult: timeUpResult,
-                arenaHalf: arenaHalf, playerSpeed: playerSpeed
+                arenaHalf: arenaHalf, playerSpeed: playerSpeed, theme: theme, builds: builds, npcs: npcs
             };
         }
 
@@ -112,13 +124,28 @@
 
         function parkBuildArena() {
             let half = park.compiled.arenaHalf, size = half * 2;
-            let floor = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshLambertMaterial({ color: 0xb3e5fc }));
+            let floor = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshLambertMaterial({ color: (PARK_THEMES[park.compiled.theme] || PARK_THEMES.day).floor }));
             floor.rotation.x = -Math.PI / 2; scene.add(floor); park.meshes.push(floor);
             function wall(x, z, w, d) {
-                let m = new THREE.Mesh(new THREE.BoxGeometry(w, 10, d), new THREE.MeshLambertMaterial({ color: 0x81c784 }));
+                let m = new THREE.Mesh(new THREE.BoxGeometry(w, 10, d), new THREE.MeshLambertMaterial({ color: (PARK_THEMES[park.compiled.theme] || PARK_THEMES.day).wall }));
                 m.position.set(x, 5, z); scene.add(m); park.meshes.push(m);
             }
             wall(0, -half, size, 3); wall(0, half, size, 3); wall(-half, 0, 3, size); wall(half, 0, 3, size);
+            // 搭建：墙、柱子、房子，玩家撞得到
+            park.solids = [];
+            park.compiled.builds.forEach(function (b) {
+                let D = PARK_BUILDS[b.kind], pos = parkPlacePos(b.at, half);
+                let m = new THREE.Mesh(new THREE.BoxGeometry(D.w, D.h, D.d), new THREE.MeshLambertMaterial({ color: D.col }));
+                m.position.set(pos.x, D.h / 2, pos.z); scene.add(m); park.meshes.push(m);
+                park.solids.push({ x: pos.x, z: pos.z, hw: D.w / 2, hd: D.d / 2 });
+            });
+            // 角色：放一个，站着、来回走或追我，碰到有结果
+            park.npcs = park.compiled.npcs.map(function (n) {
+                let pos = parkPlacePos(n.at, half);
+                let mesh = raceMakeBody(aiSkinColor(0xff8a65), 0, false, aiRandomAcc(), aiRandomFace());
+                mesh.position.set(pos.x, 0, pos.z); scene.add(mesh); park.meshes.push(mesh);
+                return { mesh: mesh, move: n.move, hit: n.hit, hx: pos.x, hz: pos.z, x: pos.x, z: pos.z, t: 0, cool: 2.5 };
+            });
         }
         // 有下落速度的从天上摔下来；没有下落（只有前进/转向脚本，或者干脆什么运动积木都没放）
         // 的直接生成在够得着的高度，不然一个不会掉的东西生成在天上就永远碰不到了。
@@ -171,6 +198,10 @@
                 park.p.x += mx / n * sp * dt; park.p.z += mz / n * sp * dt;
                 park.faceDir = { x: mx / n, z: mz / n };
             }
+            (park.solids || []).forEach(function (o) {
+                let dx = park.p.x - o.x, dz = park.p.z - o.z, ox = o.hw + 3 - Math.abs(dx), oz = o.hd + 3 - Math.abs(dz);
+                if (ox > 0 && oz > 0) { if (ox < oz) park.p.x += (dx < 0 ? -ox : ox); else park.p.z += (dz < 0 ? -oz : oz); }
+            });
             let half = park.compiled.arenaHalf - 2;
             park.p.x = Math.max(-half, Math.min(half, park.p.x));
             park.p.z = Math.max(-half, Math.min(half, park.p.z));
@@ -228,7 +259,24 @@
                 });
             }
             let outcome = null;
-            park.items = park.items.filter(function (it) {
+            (park.npcs || []).forEach(function (n) {
+                n.t += dt; n.cool = Math.max(0, n.cool - dt);
+                if (n.move === 'patrol') n.x = n.hx + Math.sin(n.t * 1.2) * 10;
+                else if (n.move === 'chase') {
+                    let dx = park.p.x - n.x, dz = park.p.z - n.z, d = Math.hypot(dx, dz) || 1;
+                    if (d > 4) { n.x += dx / d * 12 * dt; n.z += dz / d * 12 * dt; }
+                    n.mesh.rotation.y = Math.atan2(dx, dz);
+                }
+                n.mesh.position.set(n.x, 0, n.z);
+                if (n.cool <= 0 && Math.hypot(n.x - park.p.x, n.z - park.p.z) < 8) {
+                    n.cool = 2.5;
+                    if (n.hit === 'score') park.score++;
+                    else if (n.hit === 'lose1') park.score = Math.max(0, park.score - 1);
+                    else if (n.hit === 'lose') outcome = false;
+                    if (n.move === 'chase') { n.x = n.hx; n.z = n.hz; }
+                }
+            });
+            park.items =  park.items.filter(function (it) {
                 it.age += dt;
                 if (it.fallSpeed > 0) it.p.y -= it.fallSpeed * dt;
                 parkRunItemScript(it, dt);
@@ -308,8 +356,9 @@
             if (dodge) { try { dodgeExit(); } catch (e) { } }
             if (escapeRoom) { try { escapeExit(); } catch (e) { } }
             ensureScene();
-            scene.background = new THREE.Color(0x81d4fa);
-            scene.fog = new THREE.FogExp2(0x81d4fa, 0.002);
+            let th0 = (PARK_THEMES[parkCompile(program.blocks).theme] || PARK_THEMES.day);
+            scene.background = new THREE.Color(th0.sky);
+            scene.fog = new THREE.FogExp2(th0.sky, 0.002);
 
             let mesh = raceMakeBody(mySkinColor(0xffca28), 0, false, gState.acc, myFace());
             scene.add(mesh);
