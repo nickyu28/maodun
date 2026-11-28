@@ -13184,7 +13184,8 @@ async function enterExit(tab, key) {
             const bad = [];
             const T = await openTab(chrome, url);
             const r = JSON.parse(await T.eval(`(function(){ let out = {};
-                let c = parkCompile([{ type: 'theme', theme: 'snow' }, { type: 'build', kind: 'house', at: 'c' }, { type: 'npc', move: 'chase', hit: 'lose1', at: 'ne' }]);
+                let c = parkCompile([{ type: 'theme', theme: 'snow' }, { type: 'build', kind: 'house', x: 0, z: 0 }, { type: 'npc', x: 20, z: -20 }, { type: 'npcmove', n: 1, move: 'chase' }, { type: 'npchit', n: 1, hit: 'lose1' }]);
+                out.mv = c.npcs[0] && c.npcs[0].move + c.npcs[0].hit;
                 out.theme = c.theme; out.b = c.builds.length; out.n = c.npcs.length;
                 let o = parkCompile([{ type: 'spawn', color: 'orange', every: 1.5 }]);
                 out.old = o.theme === 'day' && o.builds.length === 0 && o.npcs.length === 0;
@@ -13192,8 +13193,9 @@ async function enterExit(tab, key) {
                 return JSON.stringify(out); })()`));
             if (r.theme !== 'snow' || r.b !== 1 || r.n !== 1) bad.push('新积木没编译出来 ' + JSON.stringify(r));
             if (!r.old) bad.push('老积木的默认值变了');
+            if (r.mv !== 'chaselose1') bad.push('角色走法和碰到没生效 ' + r.mv);
             if (!/地图,搭建,角色/.test(r.cats)) bad.push('分类缺 ' + r.cats);
-            await T.eval(`${HIDE} parkBegin({ name: '测试', blocks: [{ type: 'theme', theme: 'night' }, { type: 'build', kind: 'pillar', at: 'c' }, { type: 'npc', move: 'chase', hit: 'lose1', at: 'ne' }, { type: 'win', score: 99 }] }); true;`);
+            await T.eval(`${HIDE} parkBegin({ name: '测试', blocks: [{ type: 'theme', theme: 'night' }, { type: 'build', kind: 'pillar', x: 0, z: 0 }, { type: 'npc', x: 20, z: -20 }, { type: 'win', score: 99 }] }); true;`);
             if (!(await until(T, `typeof park !== 'undefined' && park && park.solids && park.npcs && park.npcs.length === 1`, 20000))) bad.push('乐园没开起来');
             const m = JSON.parse(await T.eval(`(function(){ park.p.x = -1; park.p.z = 0; parkPlayerMove(0.01); return JSON.stringify({ x: park.p.x, z: park.p.z }); })()`));
             if (Math.hypot(m.x, m.z) < 4) bad.push('柱子没挡住玩家 ' + JSON.stringify(m));

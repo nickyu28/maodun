@@ -1252,7 +1252,7 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
         const MK_COLOR_OPTS = { orange: '橙色', blue: '蓝色', red: '红色', green: '绿色' };
         const MAKER_DEFS = {
             park: {
-                title: '猫盾乐园 · 创作', max: 16, hat: '当游戏开始', cap: null,
+                title: '猫盾乐园 · 创作', max: 0, hat: '当游戏开始', cap: null,
                 cats: [
                     { name: '生成', col: '#ffab19', blocks: ['spawn'] },
                     { name: '动作', col: '#4c97ff', blocks: ['fall', 'chase'] },
@@ -1260,7 +1260,7 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
                     { name: '输赢', col: '#59c059', blocks: ['win', 'time'] },
                     { name: '地图', col: '#9966ff', blocks: ['theme'] },
                     { name: '搭建', col: '#cf63cf', blocks: ['build'] },
-                    { name: '角色', col: '#ff6680', blocks: ['npc'] }
+                    { name: '角色', col: '#ff6680', blocks: ['npc', 'npcmove', 'npchit'] }
                 ],
                 blocks: {
                     spawn: { col: '#ffab19', make: function () { return { type: 'spawn', color: 'orange', every: 1.5 }; }, parts: ['每', ['every', 'num'], '秒出一个', ['color', MK_COLOR_OPTS]] },
@@ -1268,8 +1268,10 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
                     chase: { col: '#4c97ff', make: function () { return { type: 'chase', color: 'red' }; }, parts: [['color', MK_COLOR_OPTS], '朝我走过来'] },
                     touch: { col: '#5cb1d6', make: function () { return { type: 'touch', color: 'orange', effect: 'score' }; }, parts: ['碰到', ['color', MK_COLOR_OPTS], '就', ['effect', { score: '+1 分', lose1: '-1 分', win: '赢了', lose: '输了' }]] },
                     theme: { col: '#9966ff', make: function () { return { type: 'theme', theme: 'grass' }; }, parts: ['地图是', ['theme', { day: '白天', grass: '草地', snow: '雪地', desert: '沙漠', night: '夜晚' }]] },
-                    build: { col: '#cf63cf', make: function () { return { type: 'build', kind: 'wall', at: 'c' }; }, parts: ['放一个', ['kind', { wall: '墙', pillar: '柱子', house: '房子' }], '在', ['at', { c: '中间', ne: '右前', nw: '左前', se: '右后', sw: '左后' }]] },
-                    npc: { col: '#ff6680', make: function () { return { type: 'npc', move: 'stand', hit: 'score', at: 'ne' }; }, parts: ['放一个角色在', ['at', { c: '中间', ne: '右前', nw: '左前', se: '右后', sw: '左后' }], ['move', { stand: '站着', patrol: '来回走', chase: '追我' }], '碰到就', ['hit', { score: '加 1 分', lose1: '扣 1 分', lose: '输了' }]] },
+                    build: { col: '#cf63cf', make: function () { return { type: 'build', kind: 'wall', x: 20, z: 20 }; }, parts: ['放', ['kind', { wall: '墙', pillar: '柱子', house: '房子' }], '在 x', ['x', 'num'], 'z', ['z', 'num']] },
+                    npc: { col: '#ff6680', make: function () { return { type: 'npc', x: -20, z: -20 }; }, parts: ['放一个角色在 x', ['x', 'num'], 'z', ['z', 'num']] },
+                    npcmove: { col: '#ff6680', make: function () { return { type: 'npcmove', n: 1, move: 'chase' }; }, parts: ['第', ['n', 'num'], '个角色', ['move', { stand: '站着', patrol: '来回走', chase: '追我' }]] },
+                    npchit: { col: '#ff6680', make: function () { return { type: 'npchit', n: 1, hit: 'score' }; }, parts: ['第', ['n', 'num'], '个角色碰到我就', ['hit', { score: '加 1 分', lose1: '扣 1 分', lose: '输了' }]] },
                     win: { col: '#59c059', make: function () { return { type: 'win', score: 10 }; }, parts: ['得到', ['score', 'num'], '分就赢'] },
                     time: { col: '#59c059', make: function () { return { type: 'time', seconds: 60, result: 'lose' }; }, parts: [['seconds', 'num'], '秒后', ['result', { lose: '输了', win: '赢了' }]] }
                 },
@@ -1364,11 +1366,11 @@ function towerBoardClose() { document.getElementById('tower-board').classList.ad
                     makerDragStart(e, { idx: +n.getAttribute('data-i') }, n);
                 });
             });
-            document.getElementById('mk-count').innerText = L.length + ' / ' + maker.D.max;
+            document.getElementById('mk-count').innerText = maker.D.max ? L.length + ' / ' + maker.D.max : String(L.length);
         }
         function makerSet(i, f, v, num) { let b = maker.list[i]; if (!b) return; b[f] = num ? (parseFloat(v) || 0) : v; makerSave(); if (f === 'color' || f === 'type') makerRender(); }
         function makerAdd(k, at) {
-            if (maker.list.length >= maker.D.max) { blazeFlash('最多 ' + maker.D.max + ' 块'); return; }
+            if (maker.D.max && maker.list.length >= maker.D.max) { blazeFlash('最多 ' + maker.D.max + ' 块'); return; }
             let b = maker.D.blocks[k].make();
             if (at === undefined || at > maker.list.length) at = maker.list.length;
             maker.list.splice(at, 0, b); makerSave(); makerRender();

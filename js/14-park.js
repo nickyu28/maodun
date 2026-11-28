@@ -13,13 +13,12 @@
         const PARK_SPEED_NAMES = { slow: '慢', normal: '正常', fast: '快' };
         const PARK_SPEED_VAL = { slow: 20, normal: 32, fast: 46 };
         const PARK_THEMES = { day: { name: '白天', floor: 0xb3e5fc, sky: 0x81d4fa, wall: 0x81c784 }, grass: { name: '草地', floor: 0x8bc34a, sky: 0x81d4fa, wall: 0x558b2f }, snow: { name: '雪地', floor: 0xeceff1, sky: 0xb0bec5, wall: 0x90a4ae }, desert: { name: '沙漠', floor: 0xffe082, sky: 0xffcc80, wall: 0xd7a86e }, night: { name: '夜晚', floor: 0x37474f, sky: 0x1a237e, wall: 0x5c6bc0 } };
-        const PARK_PLACES = { c: '中间', ne: '右前', nw: '左前', se: '右后', sw: '左后' };
         const PARK_BUILDS = { wall: { name: '墙', w: 22, d: 3, h: 9, col: 0xa1887f }, pillar: { name: '柱子', w: 4, d: 4, h: 14, col: 0xbcaaa4 }, house: { name: '房子', w: 14, d: 14, h: 10, col: 0xef9a9a } };
         const PARK_NPC_MOVES = { stand: '站着', patrol: '来回走', chase: '追我' };
         const PARK_NPC_HIT = { score: '加 1 分', lose1: '扣 1 分', lose: '输了' };
-        function parkPlacePos(code, half) {
-            let k = half * 0.5;
-            return code === 'ne' ? { x: k, z: -k } : code === 'nw' ? { x: -k, z: -k } : code === 'se' ? { x: k, z: k } : code === 'sw' ? { x: -k, z: k } : { x: 0, z: 0 };
+        function parkPlacePos(o, half) {
+            let k = half - 4;
+            return { x: Math.max(-k, Math.min(k, +o.x || 0)), z: Math.max(-k, Math.min(k, +o.z || 0)) };
         }
         const PARK_COND_OPS = { gt: '>', lt: '<', eq: '=' };
         const PARK_STEP_SPEED = 8;   // "前进 N 步"里，1 步等于走这么远，走完这么多秒结束这条指令
@@ -56,13 +55,7 @@
                 ]
             }
         };
-        let parkEditorBlocks = [
-            { type: 'spawn', color: 'orange', every: 1.6 },
-            { type: 'fall', color: 'orange', speed: 7 },
-            { type: 'touch', color: 'orange', effect: 'score' },
-            { type: 'win', score: 8 },
-            { type: 'time', seconds: 90, result: 'lose' }
-        ];
+        let parkEditorBlocks = [];
 
         function parkEncode(by, p) {
             try { return btoa(unescape(encodeURIComponent(JSON.stringify({ by: by, p: p })))); } catch (e) { return ''; }
@@ -75,7 +68,7 @@
         // 反复循环的一套动作（没有下落也没有前进/转向的颜色，就乖乖悬在原地）。
         function parkCompile(blocks) {
             let spawnDefs = {}, scripts = {}, fallSpeeds = {}, rules = {}, vars = {}, conditions = [];
-            let winScore = null, duration = 60, timeUpResult = 'lose', theme = 'day', builds = [], npcs = [];
+            let winScore = null, duration = 60, timeUpResult = 'lose', theme = 'day', builds = [], npcs = [], npcActs = [];
             let arenaHalf = PARK_ARENA_HALF.medium, playerSpeed = PARK_SPEED_VAL.normal;
             (blocks || []).forEach(function (b) {
                 let c = b.color || 'orange';
@@ -93,10 +86,13 @@
                 else if (b.type === 'time') { duration = Math.max(10, +b.seconds || 60); timeUpResult = b.result === 'win' ? 'win' : 'lose'; }
                 else if (b.type === 'arena') arenaHalf = PARK_ARENA_HALF[b.size] || PARK_ARENA_HALF.medium;
                 else if (b.type === 'theme') theme = PARK_THEMES[b.theme] ? b.theme : 'day';
-                else if (b.type === 'build') { if (builds.length < 8) builds.push({ kind: PARK_BUILDS[b.kind] ? b.kind : 'wall', at: PARK_PLACES[b.at] ? b.at : 'c' }); }
-                else if (b.type === 'npc') { if (npcs.length < 6) npcs.push({ move: PARK_NPC_MOVES[b.move] ? b.move : 'stand', hit: PARK_NPC_HIT[b.hit] ? b.hit : 'score', at: PARK_PLACES[b.at] ? b.at : 'ne' }); }
+                else if (b.type === 'build') builds.push({ kind: PARK_BUILDS[b.kind] ? b.kind : 'wall', x: +b.x || 0, z: +b.z || 0 });
+                else if (b.type === 'npc') npcs.push({ move: 'stand', hit: 'score', x: +b.x || 0, z: +b.z || 0 });
+                else if (b.type === 'npcmove') npcActs.push({ n: Math.floor(+b.n) || 1, k: 'move', v: PARK_NPC_MOVES[b.move] ? b.move : 'stand' });
+                else if (b.type === 'npchit') npcActs.push({ n: Math.floor(+b.n) || 1, k: 'hit', v: PARK_NPC_HIT[b.hit] ? b.hit : 'score' });
                 else if (b.type === 'speed') playerSpeed = PARK_SPEED_VAL[b.level] || PARK_SPEED_VAL.normal;
             });
+            npcActs.forEach(function (a) { let n = npcs[a.n - 1]; if (n) n[a.k] = a.v; });
             // 规则/条件里提到的变量，就算没放"定义变量"积木也从 0 开始，不至于报废整局
             Object.keys(rules).forEach(function (c) { let v = rules[c].varName; if (v && !(v in vars)) vars[v] = 0; });
             conditions.forEach(function (c) { if (c.varName && !(c.varName in vars)) vars[c.varName] = 0; });
@@ -134,14 +130,14 @@
             // 搭建：墙、柱子、房子，玩家撞得到
             park.solids = [];
             park.compiled.builds.forEach(function (b) {
-                let D = PARK_BUILDS[b.kind], pos = parkPlacePos(b.at, half);
+                let D = PARK_BUILDS[b.kind], pos = parkPlacePos(b, half);
                 let m = new THREE.Mesh(new THREE.BoxGeometry(D.w, D.h, D.d), new THREE.MeshLambertMaterial({ color: D.col }));
                 m.position.set(pos.x, D.h / 2, pos.z); scene.add(m); park.meshes.push(m);
                 park.solids.push({ x: pos.x, z: pos.z, hw: D.w / 2, hd: D.d / 2 });
             });
             // 角色：放一个，站着、来回走或追我，碰到有结果
             park.npcs = park.compiled.npcs.map(function (n) {
-                let pos = parkPlacePos(n.at, half);
+                let pos = parkPlacePos(n, half);
                 let mesh = raceMakeBody(aiSkinColor(0xff8a65), 0, false, aiRandomAcc(), aiRandomFace());
                 mesh.position.set(pos.x, 0, pos.z); scene.add(mesh); park.meshes.push(mesh);
                 return { mesh: mesh, move: n.move, hit: n.hit, hx: pos.x, hz: pos.z, x: pos.x, z: pos.z, t: 0, cool: 2.5 };
