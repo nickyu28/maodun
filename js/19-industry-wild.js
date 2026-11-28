@@ -18,7 +18,7 @@
         }
         function wlSave(cb) {
             if (!ind || !ind.wl || window.__saveportReload) { if (cb) cb(false); return; }
-            let d = Object.assign({}, ind.wl.sv || {}, { v: WL.ver, gen: ind.wl.gen, seed: ind.wl.seed, x: Math.round(ind.p.x * 100) / 100, z: Math.round(ind.p.z * 100) / 100, mods: ind.wl.mods, houses: ind.wl.houses, bag: JSON.parse(JSON.stringify(ind.bag || {})) });
+            let d = Object.assign({}, ind.wl.sv || {}, { v: WL.ver, gen: ind.wl.gen, seed: ind.wl.seed, x: Math.round(ind.p.x * 100) / 100, z: Math.round(ind.p.z * 100) / 100, mods: ind.wl.mods, houses: ind.wl.houses, bag: JSON.parse(JSON.stringify(ind.bag || {})), base: JSON.parse(JSON.stringify(ind.base)), ground: JSON.parse(JSON.stringify(ind.tripGround || [])) });
             wlDb(function (db) {
                 if (!db) { if (cb) cb(false); return; }
                 try { let tx = db.transaction(IND_STORE, 'readwrite'); tx.objectStore(IND_STORE).put(d, wlKey()); tx.oncomplete = function () { db.close(); if (cb) cb(true); }; tx.onerror = function () { db.close(); if (cb) cb(false); }; } catch (e) { if (cb) cb(false); }
@@ -35,11 +35,15 @@
         }
         function wlStart(seed, sv) {
             if (ind.carve) ctCarveExit(true);
+            if (!ind.wildMode) { indSave(); ind.homeBase = ind.base; ind.homeBag = ind.bag; }   // 荒野有自己的一份存档：先把基地存好，进去换上荒野自己的基地数据，出来再换回来
+            let B = indNewBase(); B.rule = 'hard'; B.box = {}; B.chests = []; B.sawGoal = true;
+            if (sv && sv.base && typeof sv.base === 'object') B = JSON.parse(JSON.stringify(sv.base));
+            B = indFixBase(B); B.rule = 'hard';
+            ind.base = B; ind.bag = sv && sv.bag ? JSON.parse(JSON.stringify(sv.bag)) : {};   // 空手：什么都不给
             indClearWorld(); mbReset();
-            ind.where = 'trip'; ind.wildMode = true; ind.speed = 1; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
+            ind.where = 'trip'; ind.wildMode = true; ind.speed = 1; ind.exitT = 0; ind.tripFires = []; ind.rafts = []; ind.onRaft = null; ind.tripGround = (sv && Array.isArray(sv.ground)) ? sv.ground : []; ind.tripBench = []; ind.tripBombs = []; ind.tripRad = []; ind.mush = null; ind.seen = null; ind.nodeView = null;
             let M = ind.map = { seed: seed, volc: [], riv: null, rivers: [], wild: true, test: seed === WL_TEST };
             ind.wl = { seed: seed, gen: (sv && sv.gen) || WL.gen, mods: (sv && sv.mods) || {}, houses: (sv && sv.houses) || [], sv: sv, cells: {}, saveT: 0 };
-            if (sv && sv.bag) ind.bag = JSON.parse(JSON.stringify(sv.bag));
             scene.background = new THREE.Color(0xbfe3ff); scene.fog = new THREE.Fog(0xbfe3ff, 30, IND_VIEW.day);
             ind.chunks = []; ind.nodes = []; ind.wild = []; ind.exits = []; ind.caves = []; ind.cave = null;
             let wat = new THREE.Mesh(indGeo(new THREE.PlaneGeometry(1000, 1000)), indMat(new THREE.MeshLambertMaterial({ color: 0x1565c0, transparent: true, opacity: 0.8 })));
@@ -148,4 +152,30 @@
             let c0 = indClearWorld, x0 = indExit;
             indClearWorld = function () { wlTestPanel(false); return c0.apply(this, arguments); };
             indExit = function () { wlTestPanel(false); return x0.apply(this, arguments); };
+        })();
+
+        // ══ 荒野 W2：选玩法、空手开局、没有基地和仓库、死了散落在原地、重生回出生点 ══
+        function wlEnter() { if (!ind || ind.over || ind.loading) return; let m = document.getElementById('sys-modal'); if (m) m.classList.add('hidden'); indWildGo(); }
+        function wlLeave() {
+            if (!ind || !ind.wildMode) return;
+            wlSave(); ind.base = ind.homeBase; ind.bag = ind.homeBag || {}; ind.homeBase = null; ind.homeBag = null;
+            ind.wildMode = false; ind.wl = null; ind.where = 'base'; wlTestPanel(false);
+        }
+        (function () {
+            let s0 = indSave, x0 = indExit, r0 = indRespawn, p0 = indPause;
+            indSave = function (cb) { if (ind && ind.wildMode && ind.wl) { wlSave(cb); return; } return s0.apply(this, arguments); };
+            indExit = function () { wlLeave(); return x0.apply(this, arguments); };
+            indRespawn = function () {
+                if (!(ind && ind.wildMode && ind.dead)) return r0.apply(this, arguments);
+                let e = document.getElementById('ind-dead'); if (e && e.parentNode) e.parentNode.removeChild(e);
+                ind.dead = null; wlTestHome(); wlSave();
+            };
+            indPause = function () {
+                let r = p0.apply(this, arguments), ex = document.getElementById('ind-pause-exit');
+                if (ex && ind && !ind.wildMode && ind.where === 'base') {
+                    let b = document.createElement('button'); b.id = 'ind-pause-wild'; b.style.cssText = ex.style.cssText + 'background:#37474f;'; b.textContent = '去荒野';
+                    b.addEventListener('click', function () { indResume(); wlEnter(); }); ex.parentNode.insertBefore(b, ex);
+                }
+                return r;
+            };
         })();

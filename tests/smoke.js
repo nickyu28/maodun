@@ -13696,6 +13696,44 @@ async function enterExit(tab, key) {
             report('IND166 风箱不靠皮：木 10 草绳 12 羊毛 4 铜锭 2 黏土 4 能做、皮风箱还在、野猪必掉皮', bad.length === 0, bad.join(' / '));
         }
 
+        if (want('IND235')) {
+            // IND235 荒野 W2：选玩法卡片有荒野、空手开局没有基地和仓库、死了东西散落在原地、重生回出生点、出来换回基地数据
+            const bad = [];
+            const T = await openTab(chrome, url, { query: 'hcdebug=1' }); await T.eval(`${HIDE} true;`);
+            await T.eval(`indEnter(); true;`);
+            if (!(await until(T, `ind && !ind.loading && !!document.getElementById('ind-hud')`, 15000))) bad.push('进不去');
+            else { try {
+                await T.eval(`${HIDE} indSetRule('hard'); true;`);
+                const J = async (e) => { try { return JSON.parse(await T.eval(`JSON.stringify(${e})`)); } catch (x) { throw new Error('J(' + e + '): ' + x.message); } };
+                let r = await J(`(function(){ let o = {}; indAskRule(); o.card = [].slice.call(document.querySelectorAll('#sys-modal button')).map(function (b) { return b.textContent; }).join(','); document.getElementById('sys-modal').classList.add('hidden');
+                    indGoBase(null); ind.bag = { stone: 5 }; ind.base.rule = 'hard'; ind.base.tag = 'home'; return o; })()`);
+                if (!/荒野/.test(r.card)) bad.push('选玩法卡片没有荒野按钮 ' + r.card);
+                await T.eval(`window.__w = null; wlDb(function (db) { let tx = db.transaction(IND_STORE, 'readwrite'); tx.objectStore(IND_STORE).delete(wlKey()); tx.oncomplete = function () { db.close(); window.__w = 1; }; }); true;`);
+                await until(T, `window.__w === 1`, 8000);
+                await T.eval(`wlEnter(); true;`);
+                if (!(await until(T, `ind.wildMode && ind.wl && wlCellCount() > 4`, 15000))) bad.push('进不了荒野');
+                else {
+                    r = await J(`(function(){ let o = {}; o.bag = Object.keys(ind.bag).length; o.chests = (ind.base.chests || []).length; o.box = Object.keys(ind.base.box || {}).length; o.home = ind.homeBase && ind.homeBase.tag === 'home'; o.rule = ind.base.rule; o.where = ind.where;
+                        o.fence = ind.objs.length < 60; ind.bag = { wood: 3, stone: 2 }; o.seed = ind.wl.seed; ind.p.x = 40; ind.p.z = 25; indDie('测试', ''); o.dead = !!ind.dead; o.bagAfter = Object.keys(ind.bag).length; o.ground = (ind.tripGround || []).length; return o; })()`);
+                    if (r.bag || r.chests || r.box) bad.push('开局不是空手没有仓库 ' + JSON.stringify(r));
+                    if (!r.home || r.rule !== 'hard') bad.push('基地数据没留好 ' + JSON.stringify(r));
+                    if (!(r.dead && r.bagAfter === 0 && r.ground === 5)) bad.push('死了东西没散落在原地 ' + JSON.stringify(r));
+                    r = await J(`(function(){ indRespawn(); return { dead: !!ind.dead, x: ind.p.x, z: ind.p.z, wild: ind.wildMode, ground: ind.tripGround.length }; })()`);
+                    if (r.dead || r.x !== 0 || r.z !== 0 || !r.wild || r.ground !== 5) bad.push('重生不在出生点或地上的东西没了 ' + JSON.stringify(r));
+                    await T.eval(`ind.base.clock += 500; wlSave(); true;`);
+                    await new Promise(function (f) { setTimeout(f, 800); });
+                    r = await J(`(function(){ let c = ind.base.clock, s = ind.wl.seed; wlLeave(); return { c: c, s: s, home: ind.base.tag, bag: ind.bag.stone, wild: !!ind.wildMode, where: ind.where }; })()`);
+                    if (!(r.home === 'home' && r.bag === 5 && !r.wild && r.where === 'base')) bad.push('出来后基地和背包没换回 ' + JSON.stringify(r));
+                    await T.eval(`indWildGo(); true;`);
+                    if (!(await until(T, `ind.wildMode && ind.wl && ind.tripGround.length === 5`, 10000))) bad.push('再进荒野地上的东西没读回来');
+                    else if (!(await J(`ind.wl.seed === ${r.s} && ind.base.clock >= ${r.c}`))) bad.push('再进荒野不是同一个世界或时间没存');
+                }
+            } catch (e) { bad.push('异常 ' + e.message); } }
+            if (T.errors.length) bad.push(T.errors.slice(0, 2).join(' / '));
+            await T.close();
+            report('IND235 荒野 W2：选玩法有荒野、空手没有基地仓库、死了散落原地、重生回出生点、出来换回基地、再进读回同一个世界', bad.length === 0, bad.join(' / '));
+        }
+
         if (want('IND234')) {
             // IND234 镍稿删了（作者 11-28）：配方停用、下标不变，老存档里的镍稿换回 3 镍锭 + 2 木头，镍锭还能做镍电池
             const bad = [];

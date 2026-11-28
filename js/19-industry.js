@@ -1147,9 +1147,10 @@
         }
         // 第一次进来选世界规则（只能从悠闲升级到硬核）
         function indAskRule() {
-            showSysModal('猫盾工业：选一种玩法', '悠闲：种地做饭养动物，饿了渴了只会变慢，不会死。　　硬核：全部内容，饿死渴死都会死，有冶炼、电、核和火箭。　　悠闲以后能升级成硬核，硬核不能退回。', [
+            showSysModal('猫盾工业：选一种玩法', '悠闲：种地做饭养动物，饿了渴了只会变慢，不会死。　　硬核：全部内容，饿死渴死都会死，有冶炼、电、核和火箭。　　荒野：空手上路，没有基地，自己盖房子过冬，一个人玩。　　悠闲以后能升级成硬核，硬核不能退回。', [
                 { label: '悠闲', color: '#43a047', onClick: function () { indSetRule('casual'); } },
-                { label: '硬核', color: '#d84315', onClick: function () { indSetRule('hard'); } }
+                { label: '硬核', color: '#d84315', onClick: function () { indSetRule('hard'); } },
+                { label: '荒野', color: '#37474f', onClick: function () { wlEnter(); } }   // 荒野 W2（19-industry-wild.js）
             ]);
         }
         function indSetRule(r) {
@@ -1683,7 +1684,7 @@
             if (!ind || ind.over || ind.dead) return;
             let lost = Object.keys(ind.bag).length + Object.keys(ind.base.wear).length, scattered = 0;
             // 死亡规则（作者 11-19）：在基地里死，身上的东西散落在地上，回来能捡；在外面远征死，身上的东西直接没了
-            if (ind.where === 'base' && lost) {
+            if ((ind.where === 'base' || ind.wildMode) && lost) {
                 let loot = {}; Object.keys(ind.bag).forEach(function (k) { if (IND_ITEMS[k] && ind.bag[k] > 0) loot[k] = (loot[k] || 0) + ind.bag[k]; });
                 Object.keys(ind.base.wear).forEach(function (sl) { let k = ind.base.wear[sl]; if (IND_ITEMS[k]) loot[k] = (loot[k] || 0) + 1; });
                 Object.keys(loot).forEach(function (k) { indDropAtFeet(indCool(k), loot[k]); scattered += loot[k]; });
@@ -1696,8 +1697,8 @@
             let d = document.createElement('div'); d.id = 'ind-dead';
             d.style.cssText = 'position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.85);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;text-align:center;padding:20px;';
             d.innerHTML = '<div style="font-size:44px;font-weight:bold;color:#ff5252;">' + cause + '</div>' + (detail ? '<div style="font-size:22px;margin-top:12px;">' + detail + '</div>' : '') +
-                '<div style="font-size:18px;margin-top:14px;color:#ccc;">' + (!lost ? '身上没带东西' : scattered ? '身上的东西散落在你倒下的地方，点回基地后就在脚下，点全捡一次拿完' : '身上的东西都没了') + '</div>' +
-                '<button onclick="indRespawn()" style="margin-top:26px;padding:12px 34px;font-size:20px;border:none;border-radius:8px;background:#fff;color:#222;cursor:pointer;">回基地</button>';
+                '<div style="font-size:18px;margin-top:14px;color:#ccc;">' + (!lost ? '身上没带东西' : scattered ? (ind.wildMode ? '身上的东西散落在你倒下的地方，回去点全捡一次拿完' : '身上的东西散落在你倒下的地方，点回基地后就在脚下，点全捡一次拿完') : '身上的东西都没了') + '</div>' +
+                '<button onclick="indRespawn()" style="margin-top:26px;padding:12px 34px;font-size:20px;border:none;border-radius:8px;background:#fff;color:#222;cursor:pointer;">' + (ind.wildMode ? '重生' : '回基地') + '</button>';
             document.body.appendChild(d);
             indSave();
         }
